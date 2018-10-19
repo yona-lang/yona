@@ -11,9 +11,9 @@ import java.util.Objects;
 @NodeInfo
 public final class ListNode extends ValueNode {
   @Node.Children
-  public final java.util.List<AbzuExpressionNode> expressions;
+  public final AbzuExpressionNode[] expressions;
 
-  public ListNode(java.util.List<AbzuExpressionNode> expressions) {
+  public ListNode(AbzuExpressionNode[] expressions) {
     this.expressions = expressions;
   }
 

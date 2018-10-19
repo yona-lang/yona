@@ -26,7 +26,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
     for (AbzuParser.ExpressionContext exprCtx : ctx.apply().expression()) {
       args.add(exprCtx.accept(this));
     }
-    return new FunctionApplicationNode(ctx.apply().NAME().getText(), args);
+    return new FunctionApplicationNode(ctx.apply().NAME().getText(), args.toArray(new AbzuExpressionNode[]{}));
   }
 
   @Override
@@ -50,7 +50,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
     for (AbzuParser.AliasContext aliasCtx : ctx.let().alias()) {
       aliases.add(new AliasNode(aliasCtx.NAME().getText(), aliasCtx.expression().accept(this)));
     }
-    return new LetNode(aliases, ctx.let().expression().accept(this));
+    return new LetNode(aliases.toArray(new AliasNode[]{}), ctx.let().expression().accept(this));
   }
 
   @Override
@@ -114,6 +114,6 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
     for (AbzuParser.ExpressionContext expr : ctx.expression()) {
       expressions.add(expr.accept(this));
     }
-    return new ListNode(expressions);
+    return new ListNode(expressions.toArray(new AbzuExpressionNode[]{}));
   }
 }

@@ -9,6 +9,7 @@
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
     <graalvm.version>1.0.0-rc7</graalvm.version>
+    <antlr-4.version>4.7.1</antlr-4.version>
     <maven-shade-plugin.version>3.2.0</maven-shade-plugin.version>
     <antlr4-maven-plugin.version>4.7.1</antlr4-maven-plugin.version>
     <exec-maven-plugin.version>1.6.0</exec-maven-plugin.version>
