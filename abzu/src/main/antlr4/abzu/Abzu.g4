@@ -146,7 +146,7 @@ tokens { INDENT, DEDENT }
     }
 }
 
-input : expression EOF ;
+input : NEWLINE* expression NEWLINE* EOF ;
 
 expression : left=expression BIN_OP right=expression    #binaryOperationExpression
            | UN_OP expression                           #unaryOperationExpression
@@ -157,11 +157,20 @@ expression : left=expression BIN_OP right=expression    #binaryOperationExpressi
            ;
 
 value : unit
-      | int64
-      | float64
-      | string
       | bool
+      | byte
+      | uint8
+      | int8
+      | uint16
+      | int16
+      | uint32
+      | int32
+      | uint64
+      | int64
+      | float32
+      | float64
       | function
+      | string
       | tuple
       | dict
       | list
