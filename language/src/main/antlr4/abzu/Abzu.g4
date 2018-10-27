@@ -232,7 +232,7 @@ OP_GT : '>' ;
 OP_GTE : '>=';
 OP_NOT : '!' ;
 
-OP_COMPARISON : OP_EQ | OP_NEQ | OP_LT | OP_LTE | OP_GT | OP_GTE | OP_NOT ;
+OP_COMPARISON : OP_EQ | OP_NEQ | OP_LT | OP_LTE | OP_GT | OP_GTE ;
 
 OP_PLUS : '+' ;
 OP_MINUS : '-';
