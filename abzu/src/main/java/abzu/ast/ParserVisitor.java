@@ -59,22 +59,22 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
   }
 
   @Override
-  public Int64Node visitInt64(AbzuParser.Int64Context ctx) {
+  public Int64Node visitIntegerLiteral(AbzuParser.IntegerLiteralContext ctx) {
     return new Int64Node(Long.parseLong(ctx.INTEGER().getText()));
   }
 
   @Override
-  public Float64Node visitFloat64(AbzuParser.Float64Context ctx) {
+  public Float64Node visitFloatLiteral(AbzuParser.FloatLiteralContext ctx) {
     return new Float64Node(Double.parseDouble(ctx.FLOAT().getText()));
   }
 
   @Override
-  public StringNode visitString(AbzuParser.StringContext ctx) {
+  public StringNode visitStringLiteral(AbzuParser.StringLiteralContext ctx) {
     return new StringNode(ctx.STRING().getText());
   }
 
   @Override
-  public BoolNode visitBool(AbzuParser.BoolContext ctx) {
+  public BoolNode visitBooleanLiteral(AbzuParser.BooleanLiteralContext ctx) {
     return ctx.KW_TRUE() != null ? BoolNode.TRUE : BoolNode.FALSE;
   }
 

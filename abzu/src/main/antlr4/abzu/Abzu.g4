@@ -158,11 +158,11 @@ expression : left=expression BIN_OP right=expression    #binaryOperationExpressi
            ;
 
 value : unit
-      | boolean_literal
-      | integer_literal
-      | float_literal
-      | byte_literal
-      | string_literal
+      | booleanLiteral
+      | integerLiteral
+      | floatLiteral
+      | byteLiteral
+      | stringLiteral
       | function
       | tuple
       | dict
@@ -178,11 +178,11 @@ module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS function+ ;
 nonEmptyListOfNames : NAME (COMMA expression)* ;
 
 unit : UNIT ;
-byte_literal : INTEGER 'b';
-integer_literal : INTEGER ;
-float_literal : FLOAT | INTEGER 'f';
-string_literal : STRING ;
-boolean_literal : KW_TRUE | KW_FALSE ;
+byteLiteral : INTEGER 'b';
+integerLiteral : INTEGER ;
+floatLiteral : FLOAT | INTEGER 'f';
+stringLiteral : STRING ;
+booleanLiteral : KW_TRUE | KW_FALSE ;
 function : NAME arg* OP_ASSIGN NEWLINE INDENT expression DEDENT ;
 arg : NAME ;
 tuple : PARENS_L (expression (COMMA expression)*)? PARENS_R ;
