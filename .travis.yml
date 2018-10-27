@@ -8,8 +8,8 @@ language: generic
 env:
   - JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$PATH
 install:
-  - "[ -e $HOME/jdk ] || wget -O $HOME/jdk.tar.gz https://github.com/oracle/graal/releases/download/vm-1.0.0-rc8/graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz"
-  - "[ -e $HOME/jdk ] || tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk"
+  - "[ -e $JAVA_HOME/bin ] || wget -O $HOME/jdk.tar.gz https://github.com/oracle/graal/releases/download/vm-1.0.0-rc8/graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz"
+  - "[ -e $JAVA_HOME/bin ] || tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk"
   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
 script:
   - mvn test
