@@ -154,36 +154,43 @@ expression : left=expression BIN_OP right=expression    #binaryOperationExpressi
            | conditional                                #conditionalExpression
            | apply                                      #functionApplicationExpression
            | value                                      #valueExpression
+           | module                                     #moduleExpression
            ;
 
 value : unit
-      | boolean
-      | byte
-      | integer
-      | float
+      | boolean_literal
+      | integer_literal
+      | float_literal
+      | byte_literal
+      | string_literal
       | function
-      | string
       | tuple
       | dict
       | list
+      | symbol
       ;
 
 let : KW_LET alias+ KW_IN expression ;
 alias : NAME OP_ASSIGN expression ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : NAME expression* ;
+module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS function+ ;
+nonEmptyListOfNames : NAME (COMMA expression)* ;
 
 unit : UNIT ;
-int64 : INTEGER ;
-float64 : FLOAT ;
-string : STRING ;
-bool : KW_TRUE | KW_FALSE ;
+byte_literal : INTEGER 'b';
+integer_literal : INTEGER ;
+float_literal : FLOAT | INTEGER 'f';
+string_literal : STRING ;
+boolean_literal : KW_TRUE | KW_FALSE ;
 function : NAME arg* OP_ASSIGN NEWLINE INDENT expression DEDENT ;
 arg : NAME ;
 tuple : PARENS_L (expression (COMMA expression)*)? PARENS_R ;
 dict : key COLON expression (COMMA key COLON expression)* ;
 key : STRING ;
-list : BRACKET_L expression* BRACKET_R ;
+list : BRACKET_L expression? (COMMA expression)* BRACKET_R ;
+fqn : NAME (DOT NAME)* ; // TODO add uppercase/lowercase rules here
+symbol : COLON NAME;
 
 // Keywords
 KW_LET : 'let' ;
@@ -193,6 +200,9 @@ KW_THEN : 'then' ;
 KW_ELSE : 'else' ;
 KW_TRUE : 'true' ;
 KW_FALSE : 'false' ;
+KW_MODULE : 'module' ;
+KW_EXPORTS : 'exports' ;
+KW_AS : 'as' ;
 
 BRACKET_L : '[' ;
 BRACKET_R : ']' ;
@@ -201,6 +211,7 @@ PARENS_R : ')' ;
 
 COMMA : ',' ;
 COLON : ':' ;
+DOT : '.' ;
 
 // Data
 STRING: '"' ('\\"'|.)*? '"' ;
@@ -249,7 +260,6 @@ fragment COMMENT
 fragment LINE_JOINING
  : '\\' SPACES? ( '\r'? '\n' | '\r' | '\f')
 ;
-
 SKIP_
  : ( SPACES | COMMENT | LINE_JOINING ) -> skip
 ;

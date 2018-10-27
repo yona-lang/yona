@@ -1,0 +1,14 @@
+cache:
+  directories:
+  - $HOME/.m2
+dist: trusty
+sudo: false
+language: generic
+before_install:
+  - ./install-deps.sh
+install:
+  - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+script:
+- export JAVA_HOME=$HOME/graalvm-ce-1.0.0-rc8
+- export PATH=$HOME/graalvm-ce-1.0.0-rc8/bin:$HOME/apache-maven-3.5.4/bin:$PATH
+- mvn test
