@@ -15,7 +15,7 @@ public class AbzuSimpleExpressionTest {
   private Context context;
 
   @Before
-  public void initEngine() throws Exception {
+  public void initEngine() {
     context = Context.create();
   }
 
@@ -25,19 +25,43 @@ public class AbzuSimpleExpressionTest {
   }
 
   @Test
-  public void numberValueTest() throws Exception {
-    int ret = context.eval("abzu", "5").asInt();
+  public void longValueTest() {
+    long ret = context.eval("abzu", "5").asLong();
+    assertEquals(5l, ret);
+  }
+
+  @Test
+  public void byteValueTest() {
+    byte ret = context.eval("abzu", "5b").asByte();
     assertEquals(5, ret);
   }
 
   @Test
-  public void unitValueTest() throws Exception {
+  public void floatValueTest() {
+    double ret = context.eval("abzu", "5.0").asDouble();
+    assertEquals(5.0, ret, 0);
+  }
+
+  @Test
+  public void unitValueTest() {
     assertEquals("NONE", context.eval("abzu", "()").toString());
   }
 
-  /*@Test
-  public void tupleValueTest() throws Exception {
-    List ret = context.eval("abzu", "(1, 2, 3)").as(List.class);
-    assertEquals(Arrays.asList(1l, 2l, 3l), ret);
-  }*/
+//  @Test
+//  public void stringValueTest() {
+//    String ret = context.eval("abzu", "\"string\"").asString();
+//    assertEquals("string", ret, 0);
+//  }
+//
+//  @Test
+//  public void symbolValueTest() {
+//    String ret = context.eval("abzu", ":symbol").asString();
+//    assertEquals("symbol", ret, 0);
+//  }
+//
+//  @Test
+//  public void tupleValueTest() throws Exception {
+//    List ret = context.eval("abzu", "(1, 2, 3)").as(List.class);
+//    assertEquals(Arrays.asList(1l, 2l, 3l), ret);
+//  }
 }

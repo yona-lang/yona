@@ -175,7 +175,7 @@ alias : NAME OP_ASSIGN expression ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : NAME expression* ;
 module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS function+ ;
-nonEmptyListOfNames : NAME (COMMA expression)* ;
+nonEmptyListOfNames : NAME (COMMA NAME)* ;
 
 unit : UNIT ;
 byteLiteral : INTEGER 'b';

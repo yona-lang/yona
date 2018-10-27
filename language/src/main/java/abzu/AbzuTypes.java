@@ -12,7 +12,7 @@ import abzu.runtime.AbzuNone;
  * conversion methods for all types. In this class, we only cover types where the automatically
  * generated ones would not be sufficient.
  */
-@TypeSystem({long.class, boolean.class, String.class, AbzuFunction.class, AbzuNone.class})
+@TypeSystem({long.class, boolean.class, float.class, byte.class, String.class, AbzuFunction.class, AbzuNone.class})
 public abstract class AbzuTypes {
 
     /**

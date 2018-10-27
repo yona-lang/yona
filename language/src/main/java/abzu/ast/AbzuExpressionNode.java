@@ -17,7 +17,7 @@ import abzu.AbzuTypesGen;
 import java.io.File;
 
 @TypeSystemReference(AbzuTypes.class)
-@NodeInfo(language = "abzu", description = "The abstract base node for all expressions")
+@NodeInfo(language = "abzu", description = "The abstract base node for all strings")
 @GenerateWrapper
 @ReportPolymorphism
 public abstract class AbzuExpressionNode extends Node implements InstrumentableNode {
@@ -156,8 +156,17 @@ public abstract class AbzuExpressionNode extends Node implements InstrumentableN
    * subclasses overwrite the appropriate methods.
    */
 
+
   public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
     return AbzuTypesGen.expectLong(executeGeneric(frame));
+  }
+
+  public byte executeByte(VirtualFrame frame) throws UnexpectedResultException {
+    return AbzuTypesGen.expectByte(executeGeneric(frame));
+  }
+
+  public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
+    return AbzuTypesGen.expectFloat(executeGeneric(frame));
   }
 
   public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {

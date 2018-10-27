@@ -4,12 +4,12 @@ import abzu.AbzuBaseVisitor;
 import abzu.AbzuParser;
 import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
-
   @Override
   public AbzuExpressionNode visitInput(AbzuParser.InputContext ctx) {
     return ctx.expression().accept(this);
@@ -69,6 +69,11 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
   }
 
   @Override
+  public AbzuExpressionNode visitByteLiteral(AbzuParser.ByteLiteralContext ctx) {
+    return new ByteNode(Byte.parseByte(ctx.INTEGER().getText()));
+  }
+
+  @Override
   public StringNode visitStringLiteral(AbzuParser.StringLiteralContext ctx) {
     return new StringNode(ctx.STRING().getText());
   }
@@ -115,5 +120,42 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
       expressions.add(expr.accept(this));
     }
     return new ListNode(expressions.toArray(new AbzuExpressionNode[]{}));
+  }
+
+  @Override
+  public ModuleNode visitModule(AbzuParser.ModuleContext ctx) {
+    FQNNode fqn = visitFqn(ctx.fqn());
+    NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());
+
+    int elementsCount = ctx.function().size();
+    FunctionNode[] functions = new FunctionNode[elementsCount];
+    for (int i = 0; i < elementsCount; i++) {
+      functions[i] = visitFunction(ctx.function(i));
+    }
+    return new ModuleNode(fqn, exports, functions);
+  }
+
+  @Override
+  public NonEmptyStringListNode visitNonEmptyListOfNames(AbzuParser.NonEmptyListOfNamesContext ctx) {
+    List<String> names = new ArrayList<>();
+    for (TerminalNode text : ctx.NAME()) {
+      names.add(text.getText());
+    }
+    return new NonEmptyStringListNode(names.toArray(new String[]{}));
+  }
+
+  @Override
+  public FQNNode visitFqn(AbzuParser.FqnContext ctx) {
+    int elementsCount = ctx.NAME().size();
+    String[] content = new String[elementsCount];
+    for (int i = 0; i < elementsCount; i++) {
+      content[i] = ctx.NAME(i).getText();
+    }
+    return new FQNNode(content);
+  }
+
+  @Override
+  public SymbolNode visitSymbol(AbzuParser.SymbolContext ctx) {
+    return new SymbolNode(ctx.NAME().getText());
   }
 }

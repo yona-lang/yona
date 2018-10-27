@@ -1,10 +1,10 @@
 package abzu.ast.expression.value;
 
+import abzu.ast.AbzuExpressionNode;
+import abzu.ast.expression.ValueNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import abzu.ast.AbzuExpressionNode;
-import abzu.ast.expression.ValueNode;
 
 import java.util.Arrays;
 import java.util.List;

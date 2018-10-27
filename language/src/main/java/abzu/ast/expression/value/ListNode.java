@@ -33,7 +33,7 @@ public final class ListNode extends ValueNode {
   @Override
   public String toString() {
     return "ListNode{" +
-        "expressions=" + expressions +
+        "strings=" + expressions +
         '}';
   }
 
