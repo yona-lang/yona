@@ -1,15 +1,14 @@
 cache:
   directories:
     - $HOME/.m2
-    - $HOME/jdk
 dist: trusty
 sudo: false
 language: generic
 env:
   - JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$PATH
 install:
-  - "[ -e $JAVA_HOME/bin ] || wget -O $HOME/jdk.tar.gz https://github.com/oracle/graal/releases/download/vm-1.0.0-rc8/graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz"
-  - "[ -e $JAVA_HOME/bin ] || tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk"
+  - wget -O $HOME/jdk.tar.gz https://github.com/oracle/graal/releases/download/vm-1.0.0-rc8/graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz
+  - tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk
   - ls -al $HOME
   - ls -al $HOME/jdk
   - ls -al .
