@@ -1,15 +1,14 @@
 cache:
   directories:
-  - $HOME/.m2
+    - $HOME/.m2
 dist: trusty
 sudo: false
 language: generic
 env:
-- JAVA_HOME=$HOME/graalvm-ce-1.0.0-rc8
-- PATH=$JAVA_HOME/bin:$PATH
+  - JAVA_HOME=$HOME/graalvm-ce-1.0.0-rc8 PATH=$JAVA_HOME/bin:$PATH
 install:
-- wget https://github.com/oracle/graal/releases/download/vm-1.0.0-rc8/graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz
-- tar -xzf graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz
-- mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+  - wget https://github.com/oracle/graal/releases/download/vm-1.0.0-rc8/graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz
+  - tar -xzf graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz
+  - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
 script:
-- mvn test
+  - mvn test
