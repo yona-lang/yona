@@ -165,8 +165,8 @@ public abstract class AbzuExpressionNode extends Node implements InstrumentableN
     return AbzuTypesGen.expectByte(executeGeneric(frame));
   }
 
-  public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
-    return AbzuTypesGen.expectFloat(executeGeneric(frame));
+  public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
+    return AbzuTypesGen.expectDouble(executeGeneric(frame));
   }
 
   public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {

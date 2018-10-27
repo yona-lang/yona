@@ -5,19 +5,19 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import abzu.ast.expression.ValueNode;
 
 @NodeInfo
-public final class BoolNode extends ValueNode<Boolean> {
-  public static BoolNode TRUE = new BoolNode(Boolean.TRUE);
-  public static BoolNode FALSE = new BoolNode(Boolean.FALSE);
+public final class BooleanNode extends ValueNode<Boolean> {
+  public static BooleanNode TRUE = new BooleanNode(Boolean.TRUE);
+  public static BooleanNode FALSE = new BooleanNode(Boolean.FALSE);
 
   public final Boolean value;
 
-  BoolNode(Boolean value) {
+  BooleanNode(Boolean value) {
     this.value = value;
   }
 
   @Override
   public String toString() {
-    return "BoolNode{" +
+    return "BooleanNode{" +
         "value=" + value +
         '}';
   }

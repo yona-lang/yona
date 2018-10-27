@@ -59,13 +59,13 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
   }
 
   @Override
-  public Int64Node visitIntegerLiteral(AbzuParser.IntegerLiteralContext ctx) {
-    return new Int64Node(Long.parseLong(ctx.INTEGER().getText()));
+  public IntegerNode visitIntegerLiteral(AbzuParser.IntegerLiteralContext ctx) {
+    return new IntegerNode(Long.parseLong(ctx.INTEGER().getText()));
   }
 
   @Override
-  public Float64Node visitFloatLiteral(AbzuParser.FloatLiteralContext ctx) {
-    return new Float64Node(Double.parseDouble(ctx.FLOAT().getText()));
+  public FloatNode visitFloatLiteral(AbzuParser.FloatLiteralContext ctx) {
+    return new FloatNode(Double.parseDouble(ctx.FLOAT().getText()));
   }
 
   @Override
@@ -79,8 +79,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
   }
 
   @Override
-  public BoolNode visitBooleanLiteral(AbzuParser.BooleanLiteralContext ctx) {
-    return ctx.KW_TRUE() != null ? BoolNode.TRUE : BoolNode.FALSE;
+  public BooleanNode visitBooleanLiteral(AbzuParser.BooleanLiteralContext ctx) {
+    return ctx.KW_TRUE() != null ? BooleanNode.TRUE : BooleanNode.FALSE;
   }
 
   @Override

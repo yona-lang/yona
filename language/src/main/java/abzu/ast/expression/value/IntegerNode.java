@@ -7,10 +7,10 @@ import abzu.ast.expression.ValueNode;
 import java.util.Objects;
 
 @NodeInfo
-public final class Int64Node extends ValueNode<Long> {
-  public final Long value;
+public final class IntegerNode extends ValueNode<Long> {
+  public final long value;
 
-  public Int64Node(Long value) {
+  public IntegerNode(Long value) {
     this.value = value;
   }
 
@@ -18,8 +18,8 @@ public final class Int64Node extends ValueNode<Long> {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    Int64Node int64Node = (Int64Node) o;
-    return Objects.equals(value, int64Node.value);
+    IntegerNode integerNode = (IntegerNode) o;
+    return Objects.equals(value, integerNode.value);
   }
 
   @Override
@@ -29,7 +29,7 @@ public final class Int64Node extends ValueNode<Long> {
 
   @Override
   public String toString() {
-    return "Int64Node{" +
+    return "IntegerNode{" +
         "value=" + value +
         '}';
   }

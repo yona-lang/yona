@@ -7,10 +7,10 @@ import abzu.ast.expression.ValueNode;
 import java.util.Objects;
 
 @NodeInfo
-public final class Float64Node extends ValueNode<Double> {
-  public final Double value;
+public final class FloatNode extends ValueNode<Double> {
+  public final double value;
 
-  public Float64Node(Double value) {
+  public FloatNode(Double value) {
     this.value = value;
   }
 
@@ -18,7 +18,7 @@ public final class Float64Node extends ValueNode<Double> {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    Float64Node that = (Float64Node) o;
+    FloatNode that = (FloatNode) o;
     return Objects.equals(value, that.value);
   }
 
@@ -29,7 +29,7 @@ public final class Float64Node extends ValueNode<Double> {
 
   @Override
   public String toString() {
-    return "Float64Node{" +
+    return "FloatNode{" +
         "value=" + value +
         '}';
   }

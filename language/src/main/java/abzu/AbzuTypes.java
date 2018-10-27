@@ -12,7 +12,7 @@ import abzu.runtime.AbzuFunction;
  * conversion methods for all types. In this class, we only cover types where the automatically
  * generated ones would not be sufficient.
  */
-@TypeSystem({long.class, boolean.class, float.class, byte.class, String.class, AbzuFunction.class, AbzuUnit.class})
+@TypeSystem({boolean.class, byte.class, long.class, double.class, String.class, AbzuFunction.class, AbzuUnit.class})
 public abstract class AbzuTypes {
 
     /**
