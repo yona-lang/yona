@@ -9,11 +9,6 @@ env:
 install:
   - wget -O $HOME/jdk.tar.gz https://github.com/oracle/graal/releases/download/vm-1.0.0-rc8/graalvm-ce-1.0.0-rc8-linux-amd64.tar.gz
   - mkdir $HOME/jdk && tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk --strip-components=1
-  - ls -al $HOME
-  - ls -al $HOME/jdk
-  - ls -al .
-  - echo $PATH
-  - echo $JAVA_HOME
   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
 script:
   - mvn test
