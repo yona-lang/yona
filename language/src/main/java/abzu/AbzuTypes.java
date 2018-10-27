@@ -22,7 +22,7 @@ public abstract class AbzuTypes {
      * singleton} instance.
      */
     @TypeCheck(AbzuUnit.class)
-    public static boolean isAbzuNone(Object value) {
+    public static boolean isAbzuUnit(Object value) {
         return value == AbzuUnit.INSTANCE;
     }
 
@@ -32,8 +32,8 @@ public abstract class AbzuTypes {
      * because we know that there is only a {@link AbzuUnit#INSTANCE singleton} instance.
      */
     @TypeCast(AbzuUnit.class)
-    public static AbzuUnit asAbzuNone(Object value) {
-        assert isAbzuNone(value);
+    public static AbzuUnit asAbzuUnit(Object value) {
+        assert isAbzuUnit(value);
         return AbzuUnit.INSTANCE;
     }
 }

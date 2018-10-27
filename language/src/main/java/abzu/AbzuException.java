@@ -10,7 +10,7 @@ import abzu.runtime.AbzuContext;
 import abzu.runtime.AbzuFunction;
 
 public class AbzuException extends RuntimeException implements TruffleException {
-  private static final long serialVersionUID = -6799734413727348507L;
+  private static final long serialVersionUID = -1L;
 
   private final Node location;
 
@@ -31,7 +31,7 @@ public class AbzuException extends RuntimeException implements TruffleException 
   }
 
   /**
-   * Provides a user-readable message for run-time type errors. SL is strongly typed, i.e., there
+   * Provides a user-readable message for run-time type errors. Abzu is strongly typed, i.e., there
    * are no automatic type conversions of values.
    */
   @CompilerDirectives.TruffleBoundary
@@ -62,7 +62,9 @@ public class AbzuException extends RuntimeException implements TruffleException 
       result.append(sep);
       sep = ", ";
       if (value instanceof Long) {
-        result.append("Number ").append(value);
+        result.append("Integer ").append(value);
+      } else if (value instanceof Double) {
+        result.append("Float ").append(value);
       } else if (value instanceof Boolean) {
         result.append("Boolean ").append(value);
       } else if (value instanceof String) {
@@ -70,7 +72,7 @@ public class AbzuException extends RuntimeException implements TruffleException 
       } else if (value instanceof AbzuFunction) {
         result.append("Function ").append(value);
       } else if (value == AbzuUnit.INSTANCE) {
-        result.append("NULL");
+        result.append("()");
       } else if (value == null) {
         // value is not evaluated because of short circuit evaluation
         result.append("ANY");
