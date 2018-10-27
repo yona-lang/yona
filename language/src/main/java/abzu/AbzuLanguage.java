@@ -18,11 +18,17 @@ import com.oracle.truffle.api.source.SourceSection;
 
 import java.util.*;
 
-@TruffleLanguage.Registration(id = AbzuLanguage.ID, name = "abzu", version = "0.1-SNAPSHOT", mimeType = AbzuLanguage.MIME_TYPE)
+@TruffleLanguage.Registration(id = AbzuLanguage.ID, name = "smol", defaultMimeType = AbzuLanguage.MIME_TYPE, characterMimeTypes = AbzuLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, DebuggerTags.AlwaysHalt.class})
 public class AbzuLanguage extends TruffleLanguage<AbzuContext> {
+  public static volatile int counter;
+
   public static final String ID = "abzu";
   public static final String MIME_TYPE = "application/x-abzu";
+
+  public AbzuLanguage() {
+    counter++;
+  }
 
   @Override
   protected AbzuContext createContext(Env env) {

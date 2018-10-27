@@ -6,66 +6,14 @@
   <version>0.1-SNAPSHOT</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>1.8</maven.compiler.source>
-    <maven.compiler.target>1.8</maven.compiler.target>
-    <graalvm.version>1.0.0-rc7</graalvm.version>
-    <antlr-4.version>4.7.1</antlr-4.version>
-    <maven-shade-plugin.version>3.2.0</maven-shade-plugin.version>
-    <antlr4-maven-plugin.version>4.7.1</antlr4-maven-plugin.version>
-    <exec-maven-plugin.version>1.6.0</exec-maven-plugin.version>
+    <m2e.apt.activation>jdt_apt</m2e.apt.activation>
+    <graalvm.version>1.0.0-rc8</graalvm.version>
   </properties>
   <packaging>pom</packaging>
   <modules>
-    <module>abzu</module>
+    <module>language</module>
     <module>launcher</module>
     <module>component</module>
     <module>native</module>
   </modules>
-  <build>
-    <pluginManagement>
-      <plugins>
-        <plugin>
-          <artifactId>exec-maven-plugin</artifactId>
-          <groupId>org.codehaus.mojo</groupId>
-          <version>${exec-maven-plugin.version}</version>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-shade-plugin</artifactId>
-          <version>${maven-shade-plugin.version}</version>
-        </plugin>
-        <plugin>
-          <groupId>org.antlr</groupId>
-          <artifactId>antlr4-maven-plugin</artifactId>
-          <version>${antlr4-maven-plugin.version}</version>
-        </plugin>
-      </plugins>
-    </pluginManagement>
-  </build>
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>org.graalvm</groupId>
-        <artifactId>graal-sdk</artifactId>
-        <version>${graalvm.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.oracle.truffle</groupId>
-        <artifactId>truffle-api</artifactId>
-        <version>${graalvm.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.oracle.truffle</groupId>
-        <artifactId>truffle-dsl-processor</artifactId>
-        <version>${graalvm.version}</version>
-        <scope>provided</scope>
-      </dependency>
-      <dependency>
-        <groupId>com.oracle.truffle</groupId>
-        <artifactId>truffle-tck</artifactId>
-        <version>${graalvm.version}</version>
-        <scope>provided</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
 </project>
