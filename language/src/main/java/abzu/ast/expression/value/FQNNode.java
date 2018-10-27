@@ -10,7 +10,6 @@ import java.util.Objects;
 
 @NodeInfo
 public final class FQNNode extends ValueNode<List> {
-  @Children
   public final String[] parts;
 
   public FQNNode(String[] parts) {
