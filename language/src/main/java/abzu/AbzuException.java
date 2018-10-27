@@ -1,5 +1,6 @@
 package abzu;
 
+import abzu.runtime.AbzuUnit;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
@@ -7,7 +8,6 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
 import abzu.runtime.AbzuContext;
 import abzu.runtime.AbzuFunction;
-import abzu.runtime.AbzuNone;
 
 public class AbzuException extends RuntimeException implements TruffleException {
   private static final long serialVersionUID = -6799734413727348507L;
@@ -69,7 +69,7 @@ public class AbzuException extends RuntimeException implements TruffleException 
         result.append("String \"").append(value).append("\"");
       } else if (value instanceof AbzuFunction) {
         result.append("Function ").append(value);
-      } else if (value == AbzuNone.SINGLETON) {
+      } else if (value == AbzuUnit.INSTANCE) {
         result.append("NULL");
       } else if (value == null) {
         // value is not evaluated because of short circuit evaluation

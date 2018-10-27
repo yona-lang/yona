@@ -53,7 +53,7 @@ import abzu.AbzuException;
 import abzu.ast.AbzuExpressionNode;
 import abzu.ast.interop.AbzuForeignToAbzuTypeNode;
 import abzu.runtime.AbzuFunction;
-import abzu.runtime.AbzuNone;
+import abzu.runtime.AbzuUnit;
 
 @NodeChild("child")
 public abstract class UnboxNode extends AbzuExpressionNode {
@@ -79,7 +79,7 @@ public abstract class UnboxNode extends AbzuExpressionNode {
   }
 
   @Specialization
-  protected AbzuNone unboxNull(AbzuNone value) {
+  protected AbzuUnit unboxNull(AbzuUnit value) {
     return value;
   }
 

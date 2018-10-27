@@ -3,17 +3,17 @@ package abzu.runtime;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 
-public final class AbzuNone implements TruffleObject {
+public final class AbzuUnit implements TruffleObject {
   /**
    * The canonical value to represent {@code null} in Abzu.
    */
-  public static final AbzuNone SINGLETON = new AbzuNone();
+  public static final AbzuUnit INSTANCE = new AbzuUnit();
 
   /**
-   * Disallow instantiation from outside to ensure that the {@link #SINGLETON} is the only
+   * Disallow instantiation from outside to ensure that the {@link #INSTANCE} is the only
    * instance.
    */
-  private AbzuNone() {
+  private AbzuUnit() {
   }
 
   /**
@@ -22,7 +22,7 @@ public final class AbzuNone implements TruffleObject {
    */
   @Override
   public String toString() {
-    return "NONE";
+    return "()";
   }
 
   /**

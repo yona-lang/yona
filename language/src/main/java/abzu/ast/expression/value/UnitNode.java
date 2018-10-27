@@ -1,9 +1,9 @@
 package abzu.ast.expression.value;
 
+import abzu.runtime.AbzuUnit;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import abzu.ast.expression.ValueNode;
-import abzu.runtime.AbzuNone;
 
 @NodeInfo
 public final class UnitNode extends ValueNode<Object> {
@@ -14,6 +14,6 @@ public final class UnitNode extends ValueNode<Object> {
 
   @Override
   public Object executeValue(VirtualFrame frame) {
-    return AbzuNone.SINGLETON;
+    return AbzuUnit.INSTANCE;
   }
 }

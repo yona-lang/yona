@@ -40,6 +40,7 @@
  */
 package abzu.ast.access;
 
+import abzu.runtime.AbzuUnit;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.nodes.Node;
@@ -48,7 +49,6 @@ import com.oracle.truffle.api.object.Shape;
 import abzu.AbzuTypes;
 import abzu.runtime.AbzuContext;
 import abzu.runtime.AbzuFunction;
-import abzu.runtime.AbzuNone;
 
 @TypeSystemReference(AbzuTypes.class)
 public abstract class AbzuPropertyCacheNode extends Node {
@@ -86,7 +86,7 @@ public abstract class AbzuPropertyCacheNode extends Node {
             return ((String) cachedName).equals(name);
         } else if (cachedName instanceof AbzuFunction && name instanceof AbzuFunction) {
             return cachedName == name;
-        } else if (cachedName instanceof AbzuNone && name instanceof AbzuNone) {
+        } else if (cachedName instanceof AbzuUnit && name instanceof AbzuUnit) {
             return cachedName == name;
         } else {
             assert !cachedName.equals(name);

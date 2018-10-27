@@ -1,9 +1,9 @@
 package abzu.ast.local;
 
+import abzu.runtime.AbzuUnit;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import abzu.ast.AbzuExpressionNode;
-import abzu.runtime.AbzuNone;
 
 /**
  * Reads a function argument. Arguments are passed in as an object array.
@@ -36,7 +36,7 @@ public class AbzuReadArgumentNode extends AbzuExpressionNode {
       /* In the interpreter, record profiling information that the branch was used. */
       outOfBoundsTaken.enter();
       /* Use the default null value. */
-      return AbzuNone.SINGLETON;
+      return AbzuUnit.INSTANCE;
     }
   }
 }

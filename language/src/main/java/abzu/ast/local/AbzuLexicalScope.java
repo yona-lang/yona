@@ -1,5 +1,6 @@
 package abzu.ast.local;
 
+import abzu.runtime.AbzuUnit;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -10,7 +11,6 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import abzu.ast.AbzuExpressionNode;
 import abzu.ast.expression.LexicalScopeNode;
-import abzu.runtime.AbzuNone;
 
 import java.util.*;
 
@@ -325,7 +325,7 @@ public final class AbzuLexicalScope {
         @TruffleBoundary
         public Object access(VariablesMapObject varMap, String name) {
           if (varMap.frame == null) {
-            return AbzuNone.SINGLETON;
+            return AbzuUnit.INSTANCE;
           }
           FrameSlot slot = varMap.slots.get(name);
           if (slot == null) {

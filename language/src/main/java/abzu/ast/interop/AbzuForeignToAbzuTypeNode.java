@@ -10,7 +10,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import abzu.AbzuTypes;
 import abzu.runtime.AbzuContext;
-import abzu.runtime.AbzuNone;
+import abzu.runtime.AbzuUnit;
 
 /**
  * The node for converting a foreign primitive or boxed primitive value to an SL value.
@@ -76,7 +76,7 @@ public abstract class AbzuForeignToAbzuTypeNode extends Node {
     try {
       return ForeignAccess.sendUnbox(unbox, value);
     } catch (UnsupportedMessageException e) {
-      return AbzuNone.SINGLETON;
+      return AbzuUnit.INSTANCE;
     }
   }
 

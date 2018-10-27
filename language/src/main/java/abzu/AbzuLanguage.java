@@ -4,7 +4,7 @@ import abzu.ast.builtin.AbzuBuiltinNode;
 import abzu.ast.local.AbzuLexicalScope;
 import abzu.runtime.AbzuContext;
 import abzu.runtime.AbzuFunction;
-import abzu.runtime.AbzuNone;
+import abzu.runtime.AbzuUnit;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.debug.DebuggerTags;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -50,7 +50,7 @@ public class AbzuLanguage extends TruffleLanguage<AbzuContext> {
 
   @Override
   protected boolean isVisible(AbzuContext context, Object value) {
-    return value != AbzuNone.SINGLETON;
+    return value != AbzuUnit.INSTANCE;
   }
 
   @Override
@@ -64,7 +64,7 @@ public class AbzuLanguage extends TruffleLanguage<AbzuContext> {
 
   @Override
   protected String toString(AbzuContext context, Object value) {
-    if (value == AbzuNone.SINGLETON) {
+    if (value == AbzuUnit.INSTANCE) {
       return "NONE";
     }
     if (value instanceof Long) {
@@ -84,7 +84,7 @@ public class AbzuLanguage extends TruffleLanguage<AbzuContext> {
     if (value instanceof String) {
       return "String";
     }
-    if (value == AbzuNone.SINGLETON) {
+    if (value == AbzuUnit.INSTANCE) {
       return "None";
     }
     if (value instanceof AbzuFunction) {
