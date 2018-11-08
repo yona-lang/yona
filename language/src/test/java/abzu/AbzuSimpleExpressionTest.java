@@ -1,14 +1,12 @@
 package abzu;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Value;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.List;
-
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class AbzuSimpleExpressionTest {
 
@@ -59,9 +57,14 @@ public class AbzuSimpleExpressionTest {
     assertEquals("abzuSymbol", ret);
   }
 
-//  @Test
-//  public void tupleValueTest() {
-//    List ret = context.eval("abzu", "(1, 2, 3)").as(List.class);
-//    assertEquals(Arrays.asList(1l, 2l, 3l), ret);
-//  }
+  @Test
+  public void tupleValueTest() {
+    Value tuple = context.eval("abzu", "(1, 2, 3)");
+    assertEquals(3, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+    assertEquals(3l, array[2]);
+  }
 }
