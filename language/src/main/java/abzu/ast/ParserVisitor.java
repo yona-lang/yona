@@ -75,7 +75,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
 
   @Override
   public StringNode visitStringLiteral(AbzuParser.StringLiteralContext ctx) {
-    return new StringNode(ctx.STRING().getText());
+    return new StringNode(normalizeString(ctx.STRING().getText()));
   }
 
   @Override
@@ -157,5 +157,9 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
   @Override
   public SymbolNode visitSymbol(AbzuParser.SymbolContext ctx) {
     return new SymbolNode(ctx.NAME().getText());
+  }
+
+  private String normalizeString(String str) {
+    return str.substring(1, str.length() - 1);
   }
 }

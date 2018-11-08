@@ -47,20 +47,20 @@ public class AbzuSimpleExpressionTest {
     assertEquals("NONE", context.eval("abzu", "()").toString());
   }
 
+  @Test
+  public void stringValueTest() {
+    String ret = context.eval("abzu", "\"abzu-string\"").asString();
+    assertEquals("abzu-string", ret);
+  }
+
+  @Test
+  public void symbolValueTest() {
+    String ret = context.eval("abzu", ":abzuSymbol").asString();
+    assertEquals("abzuSymbol", ret);
+  }
+
 //  @Test
-//  public void stringValueTest() {
-//    String ret = context.eval("abzu", "\"string\"").asString();
-//    assertEquals("string", ret, 0);
-//  }
-//
-//  @Test
-//  public void symbolValueTest() {
-//    String ret = context.eval("abzu", ":symbol").asString();
-//    assertEquals("symbol", ret, 0);
-//  }
-//
-//  @Test
-//  public void tupleValueTest() throws Exception {
+//  public void tupleValueTest() {
 //    List ret = context.eval("abzu", "(1, 2, 3)").as(List.class);
 //    assertEquals(Arrays.asList(1l, 2l, 3l), ret);
 //  }
