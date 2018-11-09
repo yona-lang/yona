@@ -6,8 +6,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.object.DynamicObject;
 import abzu.ast.access.AbzuReadPropertyCacheNode;
 import abzu.ast.access.AbzuReadPropertyCacheNodeGen;
-import abzu.ast.access.AbzuWritePropertyCacheNode;
-import abzu.ast.access.AbzuWritePropertyCacheNodeGen;
 import abzu.ast.call.AbzuDispatchNode;
 import abzu.ast.call.AbzuDispatchNodeGen;
 import abzu.ast.interop.AbzuForeignToAbzuTypeNode;
@@ -18,36 +16,12 @@ import abzu.ast.interop.AbzuForeignToAbzuTypeNodeGen;
  */
 @MessageResolution(receiverType = AbzuObjectType.class)
 public class AbzuObjectMessageResolution {
-  /*
-   * An Abzu object resolves the WRITE message and maps it to an object property write access.
-   */
-  @Resolve(message = "WRITE")
-  public abstract static class SLForeignWriteNode extends Node {
-
-    @Child
-    private AbzuWritePropertyCacheNode write = AbzuWritePropertyCacheNodeGen.create();
-    @Child
-    private AbzuForeignToAbzuTypeNode nameToSLType = AbzuForeignToAbzuTypeNodeGen.create();
-    @Child
-    private AbzuForeignToAbzuTypeNode valueToSLType = AbzuForeignToAbzuTypeNodeGen.create();
-
-    public Object access(DynamicObject receiver, Object name, Object value) {
-      Object convertedName = nameToSLType.executeConvert(name);
-      Object convertedValue = valueToSLType.executeConvert(value);
-      try {
-        write.executeWrite(receiver, convertedName, convertedValue);
-      } catch (AbzuUndefinedNameException undefinedName) {
-        throw UnknownIdentifierException.raise(String.valueOf(convertedName));
-      }
-      return convertedValue;
-    }
-  }
 
   /*
    * An SL object resolves the READ message and maps it to an object property read access.
    */
   @Resolve(message = "READ")
-  public abstract static class SLForeignReadNode extends Node {
+  public abstract static class AbzuForeignReadNode extends Node {
 
     @Child
     private AbzuReadPropertyCacheNode read = AbzuReadPropertyCacheNodeGen.create();
@@ -67,31 +41,12 @@ public class AbzuObjectMessageResolution {
   }
 
   /*
-   * An SL object resolves the REMOVE message and maps it to an object property delete access.
-   */
-  @Resolve(message = "REMOVE")
-  public abstract static class SLForeignRemoveNode extends Node {
-
-    @Child
-    private AbzuForeignToAbzuTypeNode nameToSLType = AbzuForeignToAbzuTypeNodeGen.create();
-
-    public Object access(DynamicObject receiver, Object name) {
-      Object convertedName = nameToSLType.executeConvert(name);
-      if (receiver.containsKey(convertedName)) {
-        return receiver.delete(convertedName);
-      } else {
-        throw UnknownIdentifierException.raise(String.valueOf(convertedName));
-      }
-    }
-  }
-
-  /*
    * An Abzu object resolves the INVOKE message and maps it to an object property read access
    * followed by an function invocation. The object property must be an SL function object, which
    * is executed eventually.
    */
   @Resolve(message = "INVOKE")
-  public abstract static class SLForeignInvokeNode extends Node {
+  public abstract static class AbzuForeignInvokeNode extends Node {
 
     @Child
     private AbzuDispatchNode dispatch = AbzuDispatchNodeGen.create();
@@ -116,7 +71,7 @@ public class AbzuObjectMessageResolution {
   }
 
   @Resolve(message = "HAS_KEYS")
-  public abstract static class SLForeignHasPropertiesNode extends Node {
+  public abstract static class AbzuForeignHasPropertiesNode extends Node {
 
     @SuppressWarnings("unused")
     public Object access(DynamicObject receiver) {
@@ -125,7 +80,7 @@ public class AbzuObjectMessageResolution {
   }
 
   @Resolve(message = "KEY_INFO")
-  public abstract static class SLForeignPropertyInfoNode extends Node {
+  public abstract static class AbzuForeignPropertyInfoNode extends Node {
 
     public int access(DynamicObject receiver, Object name) {
       Object property = receiver.get(name);
@@ -140,7 +95,7 @@ public class AbzuObjectMessageResolution {
   }
 
   @Resolve(message = "KEYS")
-  public abstract static class SLForeignPropertiesNode extends Node {
+  public abstract static class AbzuForeignPropertiesNode extends Node {
     public Object access(DynamicObject receiver) {
       return obtainKeys(receiver);
     }
