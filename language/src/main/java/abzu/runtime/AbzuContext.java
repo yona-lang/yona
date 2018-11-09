@@ -47,7 +47,7 @@ public class AbzuContext {
     for (NodeFactory<? extends AbzuBuiltinNode> builtin : externalBuiltins) {
       installBuiltin(builtin);
     }
-    this.emptyShape = LAYOUT.createShape(AbzuObjectType.SINGLETON);
+    this.emptyShape = LAYOUT.createShape(AbzuObjectType.INSTANCE);
   }
 
   /**
@@ -165,7 +165,7 @@ public class AbzuContext {
      * LAYOUT.getType() returns a concrete implementation class, i.e., a class that is more
      * precise than the base class DynamicObject. This makes the type check faster.
      */
-    return LAYOUT.getType().isInstance(value) && LAYOUT.getType().cast(value).getShape().getObjectType() == AbzuObjectType.SINGLETON;
+    return LAYOUT.getType().isInstance(value) && LAYOUT.getType().cast(value).getShape().getObjectType() == AbzuObjectType.INSTANCE;
   }
 
   /*

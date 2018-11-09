@@ -7,7 +7,7 @@ import com.oracle.truffle.api.object.ObjectType;
 
 public final class AbzuObjectType extends ObjectType {
 
-  public static final ObjectType SINGLETON = new AbzuObjectType();
+  public static final ObjectType INSTANCE = new AbzuObjectType();
 
   private AbzuObjectType() {
   }
