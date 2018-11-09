@@ -9,9 +9,9 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
+public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   @Override
-  public AbzuExpressionNode visitInput(AbzuParser.InputContext ctx) {
+  public ExpressionNode visitInput(AbzuParser.InputContext ctx) {
     return ctx.expression().accept(this);
   }
 
@@ -22,25 +22,25 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
 
   @Override
   public FunctionApplicationNode visitFunctionApplicationExpression(AbzuParser.FunctionApplicationExpressionContext ctx) {
-    List<AbzuExpressionNode> args = new ArrayList<>();
+    List<ExpressionNode> args = new ArrayList<>();
     for (AbzuParser.ExpressionContext exprCtx : ctx.apply().expression()) {
       args.add(exprCtx.accept(this));
     }
-    return new FunctionApplicationNode(ctx.apply().NAME().getText(), args.toArray(new AbzuExpressionNode[]{}));
+    return new FunctionApplicationNode(ctx.apply().NAME().getText(), args.toArray(new ExpressionNode[]{}));
   }
 
   @Override
   public ConditionNode visitConditionalExpression(AbzuParser.ConditionalExpressionContext ctx) {
-    AbzuExpressionNode ifNode = ctx.conditional().ifX.accept(this);
-    AbzuExpressionNode thenNode = ctx.conditional().thenX.accept(this);
-    AbzuExpressionNode elseNode = ctx.conditional().elseX.accept(this);
+    ExpressionNode ifNode = ctx.conditional().ifX.accept(this);
+    ExpressionNode thenNode = ctx.conditional().thenX.accept(this);
+    ExpressionNode elseNode = ctx.conditional().elseX.accept(this);
     return new ConditionNode(ifNode, thenNode, elseNode);
   }
 
   @Override
   public BinaryOperationNode visitBinaryOperationExpression(AbzuParser.BinaryOperationExpressionContext ctx) {
-    AbzuExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    AbzuExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     return new BinaryOperationNode(left, right, ctx.BIN_OP().getText());
   }
 
@@ -69,7 +69,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
   }
 
   @Override
-  public AbzuExpressionNode visitByteLiteral(AbzuParser.ByteLiteralContext ctx) {
+  public ExpressionNode visitByteLiteral(AbzuParser.ByteLiteralContext ctx) {
     return new ByteNode(Byte.parseByte(ctx.INTEGER().getText()));
   }
 
@@ -95,7 +95,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
   @Override
   public TupleNode visitTuple(AbzuParser.TupleContext ctx) {
     int elementsCount = ctx.expression().size();
-    AbzuExpressionNode[] content = new AbzuExpressionNode[elementsCount];
+    ExpressionNode[] content = new ExpressionNode[elementsCount];
     for (int i = 0; i < elementsCount; i++) {
       content[i] = ctx.expression(i).accept(this);
     }
@@ -115,11 +115,11 @@ public final class ParserVisitor extends AbzuBaseVisitor<AbzuExpressionNode> {
 
   @Override
   public ListNode visitList(AbzuParser.ListContext ctx) {
-    List<AbzuExpressionNode> expressions = new ArrayList<>();
+    List<ExpressionNode> expressions = new ArrayList<>();
     for (AbzuParser.ExpressionContext expr : ctx.expression()) {
       expressions.add(expr.accept(this));
     }
-    return new ListNode(expressions.toArray(new AbzuExpressionNode[]{}));
+    return new ListNode(expressions.toArray(new ExpressionNode[]{}));
   }
 
   @Override

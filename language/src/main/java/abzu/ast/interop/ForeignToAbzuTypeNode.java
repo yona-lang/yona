@@ -1,5 +1,7 @@
 package abzu.ast.interop;
 
+import abzu.Types;
+import abzu.runtime.Context;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
@@ -8,21 +10,19 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.AbzuTypes;
-import abzu.runtime.AbzuContext;
-import abzu.runtime.AbzuUnit;
+import abzu.runtime.Unit;
 
 /**
- * The node for converting a foreign primitive or boxed primitive value to an SL value.
+ * The node for converting a foreign primitive or boxed primitive value to an AbzuLanguage value.
  */
-@TypeSystemReference(AbzuTypes.class)
-public abstract class AbzuForeignToAbzuTypeNode extends Node {
+@TypeSystemReference(Types.class)
+public abstract class ForeignToAbzuTypeNode extends Node {
 
   public abstract Object executeConvert(Object value);
 
   @Specialization
   protected static Object fromObject(Number value) {
-    return AbzuContext.fromForeignValue(value);
+    return Context.fromForeignValue(value);
   }
 
   @Specialization
@@ -46,7 +46,7 @@ public abstract class AbzuForeignToAbzuTypeNode extends Node {
   @Specialization(guards = "isBoxedPrimitive(value)")
   public Object unbox(TruffleObject value) {
     Object unboxed = doUnbox(value);
-    return AbzuContext.fromForeignValue(unboxed);
+    return Context.fromForeignValue(unboxed);
   }
 
   @Specialization(guards = "!isBoxedPrimitive(value)")
@@ -76,11 +76,11 @@ public abstract class AbzuForeignToAbzuTypeNode extends Node {
     try {
       return ForeignAccess.sendUnbox(unbox, value);
     } catch (UnsupportedMessageException e) {
-      return AbzuUnit.INSTANCE;
+      return Unit.INSTANCE;
     }
   }
 
-  public static AbzuForeignToAbzuTypeNode create() {
-    return AbzuForeignToAbzuTypeNodeGen.create();
+  public static ForeignToAbzuTypeNode create() {
+    return ForeignToAbzuTypeNodeGen.create();
   }
 }

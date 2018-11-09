@@ -16,7 +16,7 @@ import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.ParentRunner;
 import org.junit.runners.model.InitializationError;
-import abzu.ast.builtin.AbzuBuiltinNode;
+import abzu.ast.builtin.BuiltinNode;
 
 import java.io.*;
 import java.net.URL;
@@ -36,7 +36,7 @@ public class AbzuTestRunner extends ParentRunner<AbzuTestRunner.TestCase> {
   private static final String OUTPUT_SUFFIX = ".output";
 
   private static final String LF = System.getProperty("line.separator");
-  private static final List<NodeFactory<? extends AbzuBuiltinNode>> builtins = new ArrayList<>();
+  private static final List<NodeFactory<? extends BuiltinNode>> builtins = new ArrayList<>();
   private final List<TestCase> testCases;
 
   public AbzuTestRunner(Class<?> runningClass) throws InitializationError {
@@ -194,7 +194,7 @@ public class AbzuTestRunner extends ParentRunner<AbzuTestRunner.TestCase> {
     return outFile.toString();
   }
 
-  public static void installBuiltin(NodeFactory<? extends AbzuBuiltinNode> builtin) {
+  public static void installBuiltin(NodeFactory<? extends BuiltinNode> builtin) {
     builtins.add(builtin);
   }
 
@@ -244,7 +244,7 @@ public class AbzuTestRunner extends ParentRunner<AbzuTestRunner.TestCase> {
     Context context = null;
     try {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
-      for (NodeFactory<? extends AbzuBuiltinNode> builtin : builtins) {
+      for (NodeFactory<? extends BuiltinNode> builtin : builtins) {
         AbzuLanguage.installBuiltin(builtin);
       }
 

@@ -40,14 +40,14 @@
  */
 package abzu.ast.access;
 
+import abzu.ast.ExpressionNode;
+import abzu.runtime.Context;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.object.DynamicObject;
-import abzu.ast.AbzuExpressionNode;
-import abzu.ast.interop.AbzuForeignToAbzuTypeNode;
-import abzu.runtime.AbzuContext;
+import abzu.ast.interop.ForeignToAbzuTypeNode;
 import abzu.runtime.AbzuUndefinedNameException;
 
 /**
@@ -60,12 +60,12 @@ import abzu.runtime.AbzuUndefinedNameException;
  */
 @NodeInfo(shortName = ".")
 @NodeChildren({@NodeChild("receiverNode"), @NodeChild("nameNode")})
-@ImportStatic({AbzuContext.class, Message.class})
-public abstract class AbzuReadPropertyNode extends AbzuExpressionNode {
+@ImportStatic({Context.class, Message.class})
+public abstract class ReadPropertyNode extends ExpressionNode {
 
     @Specialization(guards = "isAbzuObject(receiver)")
     protected Object read(DynamicObject receiver, Object name,
-                          @Cached("create()") AbzuReadPropertyCacheNode readNode) {
+                          @Cached("create()") ReadPropertyCacheNode readNode) {
         /**
          * The polymorphic cache node that performs the actual read. This is a separate node so that
          * it can be re-used in cases where the receiver and name are not nodes but already
@@ -83,7 +83,7 @@ public abstract class AbzuReadPropertyNode extends AbzuExpressionNode {
                                  // The child node to access the foreign object
                                  @Cached("READ.createNode()") Node foreignReadNode,
                                  // The child node to convert the result of the foreign read to a SL value
-                                 @Cached("create()") AbzuForeignToAbzuTypeNode toAbzuTypeNode) {
+                                 @Cached("create()") ForeignToAbzuTypeNode toAbzuTypeNode) {
 
         try {
             /* Perform the foreign object access. */

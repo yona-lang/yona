@@ -4,29 +4,29 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.Node;
 
-@MessageResolution(receiverType = AbzuTuple.class)
-public class AbzuTuple implements TruffleObject {
+@MessageResolution(receiverType = Tuple.class)
+public class Tuple implements TruffleObject {
   private final Object[] items;
 
-  public AbzuTuple(Object... items) {
+  public Tuple(Object... items) {
     this.items = items;
   }
 
   @Override
   public ForeignAccess getForeignAccess() {
-    return AbzuTupleForeign.ACCESS;
+    return TupleForeign.ACCESS;
   }
 
   @Resolve(message = "GET_SIZE")
   abstract static class GetSize extends Node {
-    Object access(AbzuTuple obj) {
+    Object access(Tuple obj) {
       return obj.items.length;
     }
   }
 
   @Resolve(message = "HAS_SIZE")
   abstract static class HasSize extends Node {
-    public Object access(@SuppressWarnings("unused") AbzuTuple receiver) {
+    public Object access(@SuppressWarnings("unused") Tuple receiver) {
       return true;
     }
   }
@@ -34,7 +34,7 @@ public class AbzuTuple implements TruffleObject {
   @Resolve(message = "KEY_INFO")
   public abstract static class InfoNode extends Node {
 
-    public int access(AbzuTuple receiver, int index) {
+    public int access(Tuple receiver, int index) {
       if (index < receiver.items.length) {
         return KeyInfo.READABLE;
       } else {
@@ -45,7 +45,7 @@ public class AbzuTuple implements TruffleObject {
 
   @Resolve(message = "READ")
   abstract static class Read extends Node {
-    public Object access(AbzuTuple receiver, int index) {
+    public Object access(Tuple receiver, int index) {
       try {
         Object key = receiver.items[index];
         assert key instanceof Number;
@@ -58,6 +58,6 @@ public class AbzuTuple implements TruffleObject {
   }
 
   static boolean isInstance(TruffleObject tuple) {
-    return tuple instanceof AbzuTuple;
+    return tuple instanceof Tuple;
   }
 }

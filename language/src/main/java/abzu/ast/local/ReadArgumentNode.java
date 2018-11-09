@@ -1,9 +1,9 @@
 package abzu.ast.local;
 
-import abzu.runtime.AbzuUnit;
+import abzu.ast.ExpressionNode;
+import abzu.runtime.Unit;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.BranchProfile;
-import abzu.ast.AbzuExpressionNode;
 
 /**
  * Reads a function argument. Arguments are passed in as an object array.
@@ -12,7 +12,7 @@ import abzu.ast.AbzuExpressionNode;
  * specialized and can, e.g., be accessed without unboxing, all arguments are loaded into local
  * variables {@link AbzuNodeFactory#addFormalParameter in the method prologue}.
  */
-public class AbzuReadArgumentNode extends AbzuExpressionNode {
+public class ReadArgumentNode extends ExpressionNode {
 
   /** The argument number, i.e., the index into the array of arguments. */
   private final int index;
@@ -23,7 +23,7 @@ public class AbzuReadArgumentNode extends AbzuExpressionNode {
    */
   private final BranchProfile outOfBoundsTaken = BranchProfile.create();
 
-  public AbzuReadArgumentNode(int index) {
+  public ReadArgumentNode(int index) {
     this.index = index;
   }
 
@@ -36,7 +36,7 @@ public class AbzuReadArgumentNode extends AbzuExpressionNode {
       /* In the interpreter, record profiling information that the branch was used. */
       outOfBoundsTaken.enter();
       /* Use the default null value. */
-      return AbzuUnit.INSTANCE;
+      return Unit.INSTANCE;
     }
   }
 }

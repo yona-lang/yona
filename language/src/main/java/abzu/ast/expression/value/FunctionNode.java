@@ -1,9 +1,9 @@
 package abzu.ast.expression.value;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import abzu.ast.AbzuExpressionNode;
 import abzu.ast.expression.ValueNode;
 
 import java.util.List;
@@ -14,9 +14,9 @@ public final class FunctionNode extends ValueNode<String> {
   public final String name;
   public final List<String> arguments;
   @Node.Child
-  public AbzuExpressionNode expression;
+  public ExpressionNode expression;
 
-  public FunctionNode(String name, List<String> arguments, AbzuExpressionNode expression) {
+  public FunctionNode(String name, List<String> arguments, ExpressionNode expression) {
     this.name = name;
     this.arguments = arguments;
     this.expression = expression;

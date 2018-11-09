@@ -13,11 +13,11 @@ public final class AbzuObjectType extends ObjectType {
   }
 
   public static boolean isInstance(TruffleObject obj) {
-    return AbzuContext.isAbzuObject(obj);
+    return Context.isAbzuObject(obj);
   }
 
   @Override
   public ForeignAccess getForeignAccessFactory(DynamicObject obj) {
-    return AbzuObjectMessageResolutionForeign.ACCESS;
+    return ObjectMessageResolutionForeign.ACCESS;
   }
 }

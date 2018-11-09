@@ -1,8 +1,8 @@
 package abzu.ast;
 
+import abzu.AbzuLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
-import abzu.AbzuLanguage;
 import abzu.runtime.AbzuUndefinedNameException;
 
 /**
@@ -10,8 +10,8 @@ import abzu.runtime.AbzuUndefinedNameException;
  * they are still undefined. Executing it throws an
  * {@link AbzuUndefinedNameException#undefinedFunction exception}.
  */
-public class AbzuUndefinedFunctionRootNode extends AbzuRootNode {
-  public AbzuUndefinedFunctionRootNode(AbzuLanguage language, String name) {
+public class UndefinedFunctionRootNode extends AbzuRootNode {
+  public UndefinedFunctionRootNode(AbzuLanguage language, String name) {
     super(language, null, null, null, name);
   }
 

@@ -50,13 +50,13 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import abzu.AbzuException;
-import abzu.ast.AbzuExpressionNode;
-import abzu.ast.interop.AbzuForeignToAbzuTypeNode;
-import abzu.runtime.AbzuFunction;
-import abzu.runtime.AbzuUnit;
+import abzu.ast.ExpressionNode;
+import abzu.ast.interop.ForeignToAbzuTypeNode;
+import abzu.runtime.Function;
+import abzu.runtime.Unit;
 
 @NodeChild("child")
-public abstract class UnboxNode extends AbzuExpressionNode {
+public abstract class UnboxNode extends ExpressionNode {
 
   @Specialization
   protected long unboxLong(long value) {
@@ -74,12 +74,12 @@ public abstract class UnboxNode extends AbzuExpressionNode {
   }
 
   @Specialization
-  protected AbzuFunction unboxFunction(AbzuFunction value) {
+  protected Function unboxFunction(Function value) {
     return value;
   }
 
   @Specialization
-  protected AbzuUnit unboxNull(AbzuUnit value) {
+  protected Unit unboxNull(Unit value) {
     return value;
   }
 
@@ -91,7 +91,7 @@ public abstract class UnboxNode extends AbzuExpressionNode {
   @Specialization(guards = "isBoxedPrimitive(value)")
   protected Object unboxBoxed(
       Object value,
-      @Cached("create()") AbzuForeignToAbzuTypeNode foreignToAbzu) {
+      @Cached("create()") ForeignToAbzuTypeNode foreignToAbzu) {
     return foreignToAbzu.unbox((TruffleObject) value);
   }
 

@@ -51,7 +51,7 @@ import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
 import abzu.runtime.AbzuUndefinedNameException;
 
-public abstract class AbzuReadPropertyCacheNode extends AbzuPropertyCacheNode {
+public abstract class ReadPropertyCacheNode extends PropertyCacheNode {
 
     public abstract Object executeRead(DynamicObject receiver, Object name);
 
@@ -109,8 +109,8 @@ public abstract class AbzuReadPropertyCacheNode extends AbzuPropertyCacheNode {
         return readUncached(receiver, name);
     }
 
-    public static AbzuReadPropertyCacheNode create() {
-        return AbzuReadPropertyCacheNodeGen.create();
+    public static ReadPropertyCacheNode create() {
+        return ReadPropertyCacheNodeGen.create();
     }
 
 }

@@ -1,5 +1,8 @@
 package abzu.ast.call;
 
+import abzu.Types;
+import abzu.ast.interop.ForeignToAbzuTypeNode;
+import abzu.runtime.Function;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
@@ -8,15 +11,12 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.AbzuTypes;
-import abzu.ast.interop.AbzuForeignToAbzuTypeNode;
-import abzu.ast.interop.AbzuForeignToAbzuTypeNodeGen;
-import abzu.runtime.AbzuFunction;
+import abzu.ast.interop.ForeignToAbzuTypeNodeGen;
 import abzu.runtime.AbzuUndefinedNameException;
 
 @ReportPolymorphism
-@TypeSystemReference(AbzuTypes.class)
-public abstract class AbzuDispatchNode extends Node {
+@TypeSystemReference(Types.class)
+public abstract class DispatchNode extends Node {
 
   public static final int INLINE_CACHE_SIZE = 2;
 
@@ -26,13 +26,13 @@ public abstract class AbzuDispatchNode extends Node {
    * Inline cached specialization of the dispatch.
    *
    * <p>
-   * Since Abzu is a quite simple language, the benefit of the inline cache seems small: after
+   * Since AbzuLanguage is a quite simple language, the benefit of the inline cache seems small: after
    * checking that the actual function to be executed is the same as the cachedFuntion, we can
    * safely execute the cached call target. You can reasonably argue that caching the call target
    * is overkill, since we could just retrieve it via {@code function.getCallTarget()}. However,
    * caching the call target and using a {@link DirectCallNode} allows Truffle to perform method
    * inlining. In addition, in a more complex language the lookup of the call target is usually
-   * much more complicated than in Abzu.
+   * much more complicated than in AbzuLanguage.
    * </p>
    *
    * <p>
@@ -45,8 +45,8 @@ public abstract class AbzuDispatchNode extends Node {
    * </p>
    * <p>
    * {@code assumptions = "callTargetStable"} Support for function redefinition: When a function
-   * is redefined, the call target maintained by the AbzuFunction object is changed. To avoid a
-   * check for that, we use an Assumption that is invalidated by the AbzuFunction when the change is
+   * is redefined, the call target maintained by the Function object is changed. To avoid a
+   * check for that, we use an Assumption that is invalidated by the Function when the change is
    * performed. Since checking an assumption is a no-op in compiled code, the assumption check
    * performed by the DSL does not add any overhead during optimized execution.
    * </p>
@@ -63,7 +63,7 @@ public abstract class AbzuDispatchNode extends Node {
       guards = "function.getCallTarget() == cachedTarget", //
       assumptions = "callTargetStable")
   @SuppressWarnings("unused")
-  protected static Object doDirect(AbzuFunction function, Object[] arguments,
+  protected static Object doDirect(Function function, Object[] arguments,
                                    @Cached("function.getCallTargetStable()") Assumption callTargetStable,
                                    @Cached("function.getCallTarget()") RootCallTarget cachedTarget,
                                    @Cached("create(cachedTarget)") DirectCallNode callNode) {
@@ -78,10 +78,10 @@ public abstract class AbzuDispatchNode extends Node {
    * no method inlining is performed.
    */
   @Specialization(replaces = "doDirect")
-  protected static Object doIndirect(AbzuFunction function, Object[] arguments,
+  protected static Object doIndirect(Function function, Object[] arguments,
                                      @Cached("create()") IndirectCallNode callNode) {
     /*
-     * Abzu has a quite simple call lookup: just ask the function for the current call target, and
+     * AbzuLanguage has a quite simple call lookup: just ask the function for the current call target, and
      * call it.
      */
     return callNode.call(function.getCallTarget(), arguments);
@@ -96,20 +96,20 @@ public abstract class AbzuDispatchNode extends Node {
   }
 
   /**
-   * Language interoperability: If the function is a foreign value, i.e., not a AbzuFunction, we use
+   * Language interoperability: If the function is a foreign value, i.e., not a Function, we use
    * Truffle's interop API to execute the foreign function.
    */
   @Specialization(guards = "isForeignFunction(function)")
   protected Object doForeign(TruffleObject function, Object[] arguments,
                              // The child node to call the foreign function
                              @Cached("createCrossLanguageCallNode(arguments)") Node crossLanguageCallNode,
-                             // The child node to convert the result of the foreign call to a Abzu value
-                             @Cached("createToAbzuTypeNode()") AbzuForeignToAbzuTypeNode toAbzuTypeNode) {
+                             // The child node to convert the result of the foreign call to a AbzuLanguage value
+                             @Cached("createToAbzuTypeNode()") ForeignToAbzuTypeNode toAbzuTypeNode) {
 
     try {
       /* Perform the foreign function call. */
       Object res = ForeignAccess.sendExecute(crossLanguageCallNode, function, arguments);
-      /* Convert the result to a Abzu value. */
+      /* Convert the result to a AbzuLanguage value. */
       return toAbzuTypeNode.executeConvert(res);
 
     } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
@@ -119,14 +119,14 @@ public abstract class AbzuDispatchNode extends Node {
   }
 
   protected static boolean isForeignFunction(TruffleObject function) {
-    return !(function instanceof AbzuFunction);
+    return !(function instanceof Function);
   }
 
   protected static Node createCrossLanguageCallNode(Object[] arguments) {
     return Message.createExecute(arguments.length).createNode();
   }
 
-  protected static AbzuForeignToAbzuTypeNode createToAbzuTypeNode() {
-    return AbzuForeignToAbzuTypeNodeGen.create();
+  protected static ForeignToAbzuTypeNode createToAbzuTypeNode() {
+    return ForeignToAbzuTypeNodeGen.create();
   }
 }

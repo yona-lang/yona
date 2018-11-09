@@ -47,7 +47,7 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import abzu.ast.AbzuExpressionNode;
+import abzu.ast.ExpressionNode;
 
 /**
  * Node to read a local variable from a function's {@link VirtualFrame frame}. The Truffle frame API
@@ -60,7 +60,7 @@ import abzu.ast.AbzuExpressionNode;
  * stored boxed.
  */
 @NodeField(name = "slot", type = FrameSlot.class)
-public abstract class AbzuReadLocalVariableNode extends AbzuExpressionNode {
+public abstract class ReadLocalVariableNode extends ExpressionNode {
 
     /**
      * Returns the descriptor of the accessed local variable. The implementation of this method is

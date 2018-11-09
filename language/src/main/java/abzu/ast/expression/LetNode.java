@@ -1,8 +1,8 @@
 package abzu.ast.expression;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.ast.AbzuExpressionNode;
 
 import java.util.Objects;
 
@@ -10,9 +10,9 @@ public final class LetNode extends LexicalScopeNode {
   @Node.Children
   public AliasNode[] aliases;
   @Node.Child
-  public AbzuExpressionNode expression;
+  public ExpressionNode expression;
 
-  public LetNode(AliasNode[] aliases, AbzuExpressionNode expression) {
+  public LetNode(AliasNode[] aliases, ExpressionNode expression) {
     this.aliases = aliases;
     this.expression = expression;
   }

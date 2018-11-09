@@ -1,19 +1,19 @@
 package abzu.ast.expression;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.ast.AbzuExpressionNode;
 
 import java.util.Objects;
 
-public final class BinaryOperationNode extends AbzuExpressionNode {
+public final class BinaryOperationNode extends ExpressionNode {
   @Node.Child
-  public AbzuExpressionNode left;
+  public ExpressionNode left;
   @Node.Child
-  public AbzuExpressionNode right;
+  public ExpressionNode right;
   public final String op;
 
-  public BinaryOperationNode(AbzuExpressionNode left, AbzuExpressionNode right, String op) {
+  public BinaryOperationNode(ExpressionNode left, ExpressionNode right, String op) {
     this.left = left;
     this.right = right;
     this.op = op;

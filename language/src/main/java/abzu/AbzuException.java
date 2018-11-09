@@ -1,13 +1,13 @@
 package abzu;
 
-import abzu.runtime.AbzuUnit;
+import abzu.runtime.Context;
+import abzu.runtime.Unit;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
-import abzu.runtime.AbzuContext;
-import abzu.runtime.AbzuFunction;
+import abzu.runtime.Function;
 
 public class AbzuException extends RuntimeException implements TruffleException {
   private static final long serialVersionUID = -1L;
@@ -31,7 +31,7 @@ public class AbzuException extends RuntimeException implements TruffleException 
   }
 
   /**
-   * Provides a user-readable message for run-time type errors. Abzu is strongly typed, i.e., there
+   * Provides a user-readable message for run-time type errors. AbzuLanguage is strongly typed, i.e., there
    * are no automatic type conversions of values.
    */
   @CompilerDirectives.TruffleBoundary
@@ -48,7 +48,7 @@ public class AbzuException extends RuntimeException implements TruffleException 
 
     result.append(": operation");
     if (operation != null) {
-      NodeInfo nodeInfo = AbzuContext.lookupNodeInfo(operation.getClass());
+      NodeInfo nodeInfo = Context.lookupNodeInfo(operation.getClass());
       if (nodeInfo != null) {
         result.append(" \"").append(nodeInfo.shortName()).append("\"");
       }
@@ -69,9 +69,9 @@ public class AbzuException extends RuntimeException implements TruffleException 
         result.append("Boolean ").append(value);
       } else if (value instanceof String) {
         result.append("String \"").append(value).append("\"");
-      } else if (value instanceof AbzuFunction) {
+      } else if (value instanceof Function) {
         result.append("Function ").append(value);
-      } else if (value == AbzuUnit.INSTANCE) {
+      } else if (value == Unit.INSTANCE) {
         result.append("()");
       } else if (value == null) {
         // value is not evaluated because of short circuit evaluation

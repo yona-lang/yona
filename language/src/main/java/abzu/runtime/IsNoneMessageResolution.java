@@ -7,10 +7,10 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
- * The class containing all message resolution implementations of {@link AbzuUnit}.
+ * The class containing all message resolution implementations of {@link Unit}.
  */
-@MessageResolution(receiverType = AbzuUnit.class)
-public class AbzuNoneMessageResolution {
+@MessageResolution(receiverType = Unit.class)
+public class IsNoneMessageResolution {
   /*
    * An SL function resolves the IS_NONE message.
    */
@@ -18,7 +18,7 @@ public class AbzuNoneMessageResolution {
   public abstract static class AbzuForeignIsNoneNode extends Node {
 
     public Object access(Object receiver) {
-      return AbzuUnit.INSTANCE == receiver;
+      return Unit.INSTANCE == receiver;
     }
   }
 
@@ -26,7 +26,7 @@ public class AbzuNoneMessageResolution {
   public abstract static class CheckNone extends Node {
 
     protected static boolean test(TruffleObject receiver) {
-      return receiver instanceof AbzuUnit;
+      return receiver instanceof Unit;
     }
   }
 }

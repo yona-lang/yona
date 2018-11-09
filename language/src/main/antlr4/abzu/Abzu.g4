@@ -103,7 +103,7 @@ tokens { INDENT, DEDENT }
     import com.oracle.truffle.api.source.Source;
     import com.oracle.truffle.api.RootCallTarget;
     import abzu.AbzuLanguage;
-    import abzu.ast.AbzuExpressionNode;
+    import abzu.ast.ExpressionNode;
     import abzu.ast.AbzuRootNode;
     import abzu.parser.AbzuParseError;
     import abzu.ast.ParserVisitor;
@@ -140,7 +140,7 @@ tokens { INDENT, DEDENT }
         lexer.addErrorListener(listener);
         parser.addErrorListener(listener);
         parser.source = source;
-        AbzuExpressionNode rootExpression = new ParserVisitor().visit(parser.input());
+        ExpressionNode rootExpression = new ParserVisitor().visit(parser.input());
         AbzuRootNode rootNode = new AbzuRootNode(language, new FrameDescriptor(), rootExpression, source.createSection(1), "root");
         return Truffle.getRuntime().createCallTarget(rootNode);
     }

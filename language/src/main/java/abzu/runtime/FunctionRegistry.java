@@ -1,9 +1,9 @@
 package abzu.runtime;
 
+import abzu.AbzuLanguage;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
-import abzu.AbzuLanguage;
 import abzu.AbzuParser;
 
 import java.util.ArrayList;
@@ -12,36 +12,36 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Manages the mapping from function names to {@link AbzuFunction function objects}.
+ * Manages the mapping from function names to {@link Function function objects}.
  */
-public final class AbzuFunctionRegistry {
+public final class FunctionRegistry {
   private final AbzuLanguage language;
   private final FunctionsObject functionsObject = new FunctionsObject();
 
-  public AbzuFunctionRegistry(AbzuLanguage language) {
+  public FunctionRegistry(AbzuLanguage language) {
     this.language = language;
   }
 
   /**
-   * Returns the canonical {@link AbzuFunction} object for the given name. If it does not exist yet,
+   * Returns the canonical {@link Function} object for the given name. If it does not exist yet,
    * it is created.
    */
-  public AbzuFunction lookup(String name, boolean createIfNotPresent) {
-    AbzuFunction result = functionsObject.functions.get(name);
+  public Function lookup(String name, boolean createIfNotPresent) {
+    Function result = functionsObject.functions.get(name);
     if (result == null && createIfNotPresent) {
-      result = new AbzuFunction(language, name);
+      result = new Function(language, name);
       functionsObject.functions.put(name, result);
     }
     return result;
   }
 
   /**
-   * Associates the {@link AbzuFunction} with the given name with the given implementation root
+   * Associates the {@link Function} with the given name with the given implementation root
    * node. If the function did not exist before, it defines the function. If the function existed
    * before, it redefines the function and the old implementation is discarded.
    */
-  public AbzuFunction register(String name, RootCallTarget callTarget) {
-    AbzuFunction function = lookup(name, true);
+  public Function register(String name, RootCallTarget callTarget) {
+    Function function = lookup(name, true);
     function.setCallTarget(callTarget);
     return function;
   }
@@ -57,10 +57,10 @@ public final class AbzuFunctionRegistry {
   /**
    * Returns the sorted list of all functions, for printing purposes only.
    */
-  public List<AbzuFunction> getFunctions() {
-    List<AbzuFunction> result = new ArrayList<>(functionsObject.functions.values());
-    Collections.sort(result, new Comparator<AbzuFunction>() {
-      public int compare(AbzuFunction f1, AbzuFunction f2) {
+  public List<Function> getFunctions() {
+    List<Function> result = new ArrayList<>(functionsObject.functions.values());
+    Collections.sort(result, new Comparator<Function>() {
+      public int compare(Function f1, Function f2) {
         return f1.toString().compareTo(f2.toString());
       }
     });

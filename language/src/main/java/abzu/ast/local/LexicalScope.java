@@ -1,6 +1,7 @@
 package abzu.ast.local;
 
-import abzu.runtime.AbzuUnit;
+import abzu.ast.ExpressionNode;
+import abzu.runtime.Unit;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -9,21 +10,20 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
-import abzu.ast.AbzuExpressionNode;
 import abzu.ast.expression.LexicalScopeNode;
 
 import java.util.*;
 
 /**
- * Abzu Language lexical scope. There can be a block scope, or function scope.
+ * AbzuLanguage Language lexical scope. There can be a block scope, or function scope.
  */
-public final class AbzuLexicalScope {
+public final class LexicalScope {
 
   private final Node current;
   private final LexicalScopeNode block;
   private final LexicalScopeNode parentBlock;
   private final RootNode root;
-  private AbzuLexicalScope parent;
+  private LexicalScope parent;
   private Map<String, FrameSlot> varSlots;
 
   /**
@@ -33,7 +33,7 @@ public final class AbzuLexicalScope {
    * @param block a nearest block enclosing the current node
    * @param parentBlock a next parent block
    */
-  private AbzuLexicalScope(Node current, LexicalScopeNode block, LexicalScopeNode parentBlock) {
+  private LexicalScope(Node current, LexicalScopeNode block, LexicalScopeNode parentBlock) {
     this.current = current;
     this.block = block;
     this.parentBlock = parentBlock;
@@ -47,7 +47,7 @@ public final class AbzuLexicalScope {
    * @param block a nearest block enclosing the current node
    * @param root a functional root node for top-most block
    */
-  private AbzuLexicalScope(Node current, LexicalScopeNode block, RootNode root) {
+  private LexicalScope(Node current, LexicalScopeNode block, RootNode root) {
     this.current = current;
     this.block = block;
     this.parentBlock = null;
@@ -55,23 +55,23 @@ public final class AbzuLexicalScope {
   }
 
   @SuppressWarnings("all") // The parameter node should not be assigned
-  public static AbzuLexicalScope createScope(Node node) {
+  public static LexicalScope createScope(Node node) {
     LexicalScopeNode block = getParentBlock(node);
     if (block == null) {
       // We're in the root.
       block = findChildrenBlock(node);
       if (block == null) {
         // Corrupted SL AST, no block was found
-        return new AbzuLexicalScope(null, null, (LexicalScopeNode) null);
+        return new LexicalScope(null, null, (LexicalScopeNode) null);
       }
       node = null; // node is above the block
     }
     // Test if there is a parent block. If not, we're in the root scope.
     LexicalScopeNode parentBlock = getParentBlock(block);
     if (parentBlock == null) {
-      return new AbzuLexicalScope(node, block, block.getRootNode());
+      return new LexicalScope(node, block, block.getRootNode());
     } else {
-      return new AbzuLexicalScope(node, block, parentBlock);
+      return new LexicalScope(node, block, parentBlock);
     }
   }
 
@@ -106,7 +106,7 @@ public final class AbzuLexicalScope {
     return blockPtr[0];
   }
 
-  public AbzuLexicalScope findParent() {
+  public LexicalScope findParent() {
     if (parentBlock == null) {
       // This was a root scope.
       return null;
@@ -117,9 +117,9 @@ public final class AbzuLexicalScope {
       // Test if there is a next parent block. If not, we're in the root scope.
       LexicalScopeNode newParentBlock = getParentBlock(newBlock);
       if (newParentBlock == null) {
-        parent = new AbzuLexicalScope(node, newBlock, newBlock.getRootNode());
+        parent = new LexicalScope(node, newBlock, newBlock.getRootNode());
       } else {
-        parent = new AbzuLexicalScope(node, newBlock, newParentBlock);
+        parent = new LexicalScope(node, newBlock, newParentBlock);
       }
     }
     return parent;
@@ -186,7 +186,7 @@ public final class AbzuLexicalScope {
   }
 
   private boolean hasParentVar(String name) {
-    AbzuLexicalScope p = this;
+    LexicalScope p = this;
     while ((p = p.findParent()) != null) {
       if (p.getVars().containsKey(name)) {
         return true;
@@ -198,7 +198,7 @@ public final class AbzuLexicalScope {
   private Map<String, FrameSlot> collectVars(Node varsBlock, Node currentNode) {
     // Variables are slot-based.
     // To collect declared variables, traverse the block's AST and find slots associated
-    // with AbzuWriteLocalVariableNode. The traversal stops when we hit the current node.
+    // with WriteLocalVariableNode. The traversal stops when we hit the current node.
     Map<String, FrameSlot> slots = new LinkedHashMap<>(4);
     NodeUtil.forEachChild(varsBlock, new NodeVisitor() {
       @Override
@@ -214,8 +214,8 @@ public final class AbzuLexicalScope {
           }
         }
         // Write to a variable is a declaration unless it exists already in a parent scope.
-        if (node instanceof AbzuWriteLocalVariableNode) {
-          AbzuWriteLocalVariableNode wn = (AbzuWriteLocalVariableNode) node;
+        if (node instanceof WriteLocalVariableNode) {
+          WriteLocalVariableNode wn = (WriteLocalVariableNode) node;
           String name = Objects.toString(wn.getSlot().getIdentifier());
           if (!hasParentVar(name)) {
             slots.put(name, wn.getSlot());
@@ -230,27 +230,27 @@ public final class AbzuLexicalScope {
   private static Map<String, FrameSlot> collectArgs(Node block) {
     // Arguments are pushed to frame slots at the beginning of the function block.
     // To collect argument slots, search for SLReadArgumentNode inside of
-    // AbzuWriteLocalVariableNode.
+    // WriteLocalVariableNode.
     Map<String, FrameSlot> args = new LinkedHashMap<>(4);
     NodeUtil.forEachChild(block, new NodeVisitor() {
 
-      private AbzuWriteLocalVariableNode wn; // The current write node containing a slot
+      private WriteLocalVariableNode wn; // The current write node containing a slot
 
       @Override
       public boolean visit(Node node) {
         // When there is a write node, search for SLReadArgumentNode among its children:
-        if (node instanceof AbzuWriteLocalVariableNode) {
-          wn = (AbzuWriteLocalVariableNode) node;
+        if (node instanceof WriteLocalVariableNode) {
+          wn = (WriteLocalVariableNode) node;
           boolean all = NodeUtil.forEachChild(node, this);
           wn = null;
           return all;
-        } else if (wn != null && (node instanceof AbzuReadArgumentNode)) {
+        } else if (wn != null && (node instanceof ReadArgumentNode)) {
           FrameSlot slot = wn.getSlot();
           String name = Objects.toString(slot.getIdentifier());
           assert !args.containsKey(name) : name + " argument exists already.";
           args.put(name, slot);
           return true;
-        } else if (wn == null && (node instanceof AbzuExpressionNode)) {
+        } else if (wn == null && (node instanceof ExpressionNode)) {
           // A different SL node - we're done.
           return false;
         } else {
@@ -325,7 +325,7 @@ public final class AbzuLexicalScope {
         @TruffleBoundary
         public Object access(VariablesMapObject varMap, String name) {
           if (varMap.frame == null) {
-            return AbzuUnit.INSTANCE;
+            return Unit.INSTANCE;
           }
           FrameSlot slot = varMap.slots.get(name);
           if (slot == null) {

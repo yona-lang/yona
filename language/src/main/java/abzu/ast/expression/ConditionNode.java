@@ -1,21 +1,21 @@
 package abzu.ast.expression;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import abzu.AbzuException;
-import abzu.ast.AbzuExpressionNode;
 
 import java.util.Objects;
 
-public final class ConditionNode extends AbzuExpressionNode {
+public final class ConditionNode extends ExpressionNode {
   @Node.Child
-  public AbzuExpressionNode ifExpression;
+  public ExpressionNode ifExpression;
   @Node.Child
-  public AbzuExpressionNode thenExpression;
+  public ExpressionNode thenExpression;
   @Node.Child
-  public AbzuExpressionNode elseExpression;
+  public ExpressionNode elseExpression;
 
   /**
    * Profiling information, collected by the interpreter, capturing the profiling information of
@@ -26,7 +26,7 @@ public final class ConditionNode extends AbzuExpressionNode {
    */
   private final ConditionProfile condition = ConditionProfile.createCountingProfile();
 
-  public ConditionNode(AbzuExpressionNode ifExpression, AbzuExpressionNode thenExpression, AbzuExpressionNode elseExpression) {
+  public ConditionNode(ExpressionNode ifExpression, ExpressionNode thenExpression, ExpressionNode elseExpression) {
     this.ifExpression = ifExpression;
     this.thenExpression = thenExpression;
     this.elseExpression = elseExpression;
@@ -78,7 +78,7 @@ public final class ConditionNode extends AbzuExpressionNode {
       return ifExpression.executeBoolean(frame);
     } catch (UnexpectedResultException ex) {
       /*
-       * The condition evaluated to a non-boolean result. This is a type error in the Abzu
+       * The condition evaluated to a non-boolean result. This is a type error in the AbzuLanguage
        * program.
        */
       throw AbzuException.typeError(this, ex.getResult());

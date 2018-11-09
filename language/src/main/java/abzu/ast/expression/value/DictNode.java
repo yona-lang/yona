@@ -1,8 +1,8 @@
 package abzu.ast.expression.value;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import abzu.ast.AbzuExpressionNode;
 import abzu.ast.expression.ValueNode;
 
 import java.util.List;
@@ -23,9 +23,9 @@ public final class DictNode extends ValueNode<List<DictNode.Entry>> {
 
   public static final class Entry {
     public final String key;
-    public final AbzuExpressionNode value;
+    public final ExpressionNode value;
 
-    public Entry(String key, AbzuExpressionNode value) {
+    public Entry(String key, ExpressionNode value) {
       this.key = key;
       this.value = value;
     }

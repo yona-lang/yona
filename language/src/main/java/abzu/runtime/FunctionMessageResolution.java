@@ -1,32 +1,32 @@
 package abzu.runtime;
 
+import abzu.ast.call.DispatchNode;
+import abzu.ast.call.DispatchNodeGen;
 import com.oracle.truffle.api.interop.CanResolve;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.ast.call.AbzuDispatchNode;
-import abzu.ast.call.AbzuDispatchNodeGen;
 
-import static abzu.runtime.AbzuContext.fromForeignValue;
+import static abzu.runtime.Context.fromForeignValue;
 
 /**
- * The class containing all message resolution implementations of {@link AbzuFunction}.
+ * The class containing all message resolution implementations of {@link Function}.
  */
-@MessageResolution(receiverType = AbzuFunction.class)
-public class AbzuFunctionMessageResolution {
+@MessageResolution(receiverType = Function.class)
+public class FunctionMessageResolution {
   /*
-   * An Abzu function resolves an EXECUTE message.
+   * An AbzuLanguage function resolves an EXECUTE message.
    */
   @Resolve(message = "EXECUTE")
   public abstract static class AbzuForeignFunctionExecuteNode extends Node {
 
     @Child
-    private AbzuDispatchNode dispatch = AbzuDispatchNodeGen.create();
+    private DispatchNode dispatch = DispatchNodeGen.create();
 
-    public Object access(AbzuFunction receiver, Object[] arguments) {
+    public Object access(Function receiver, Object[] arguments) {
       Object[] arr = new Object[arguments.length];
-      // Before the arguments can be used by the AbzuFunction, they need to be converted to SL
+      // Before the arguments can be used by the Function, they need to be converted to SL
       // values.
       for (int i = 0; i < arr.length; i++) {
         arr[i] = fromForeignValue(arguments[i]);
@@ -42,7 +42,7 @@ public class AbzuFunctionMessageResolution {
   @Resolve(message = "IS_EXECUTABLE")
   public abstract static class SLForeignIsExecutableNode extends Node {
     public Object access(Object receiver) {
-      return receiver instanceof AbzuFunction;
+      return receiver instanceof Function;
     }
   }
 
@@ -50,7 +50,7 @@ public class AbzuFunctionMessageResolution {
   public abstract static class CheckFunction extends Node {
 
     protected static boolean test(TruffleObject receiver) {
-      return receiver instanceof AbzuFunction;
+      return receiver instanceof Function;
     }
   }
 }

@@ -8,7 +8,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class AbzuSimpleExpressionTest {
+public class SimpleExpressionTest {
 
   private Context context;
 

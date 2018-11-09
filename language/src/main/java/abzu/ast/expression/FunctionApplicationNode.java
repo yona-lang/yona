@@ -1,17 +1,17 @@
 package abzu.ast.expression;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.ast.AbzuExpressionNode;
 
 import java.util.Objects;
 
-public class FunctionApplicationNode extends AbzuExpressionNode {
+public class FunctionApplicationNode extends ExpressionNode {
   public final String name;
   @Node.Children
-  public final AbzuExpressionNode[] arguments;
+  public final ExpressionNode[] arguments;
 
-  public FunctionApplicationNode(String name, AbzuExpressionNode[] arguments) {
+  public FunctionApplicationNode(String name, ExpressionNode[] arguments) {
     this.name = name;
     this.arguments = arguments;
   }

@@ -40,6 +40,7 @@
  */
 package abzu.ast.local;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
@@ -47,7 +48,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import abzu.ast.AbzuExpressionNode;
 
 /**
  * Node to write a local variable to a function's {@link VirtualFrame frame}. The Truffle frame API
@@ -55,7 +55,7 @@ import abzu.ast.AbzuExpressionNode;
  */
 @NodeChild("valueNode")
 @NodeField(name = "slot", type = FrameSlot.class)
-public abstract class AbzuWriteLocalVariableNode extends AbzuExpressionNode {
+public abstract class WriteLocalVariableNode extends ExpressionNode {
 
     /**
      * Returns the descriptor of the accessed local variable. The implementation of this method is

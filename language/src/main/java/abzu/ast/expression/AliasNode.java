@@ -1,17 +1,17 @@
 package abzu.ast.expression;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.ast.AbzuExpressionNode;
 
 import java.util.Objects;
 
-public final class AliasNode extends AbzuExpressionNode {
+public final class AliasNode extends ExpressionNode {
   public final String name;
   @Node.Child
-  public AbzuExpressionNode expression;
+  public ExpressionNode expression;
 
-  public AliasNode(String name, AbzuExpressionNode expression) {
+  public AliasNode(String name, ExpressionNode expression) {
     this.name = name;
     this.expression = expression;
   }

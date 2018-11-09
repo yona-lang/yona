@@ -40,6 +40,7 @@
  */
 package abzu.ast.call;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
@@ -47,26 +48,25 @@ import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import abzu.ast.AbzuExpressionNode;
 
 /**
  * The node for function invocation in SL. Since SL has first class functions, the {@link AbzuFunction
  * target function} can be computed by an arbitrary expression. This node is responsible for
  * evaluating this expression, as well as evaluating the {@link #argumentNodes arguments}. The
- * actual dispatch is then delegated to a chain of {@link AbzuDispatchNode} that form a polymorphic
+ * actual dispatch is then delegated to a chain of {@link DispatchNode} that form a polymorphic
  * inline cache.
  */
 @NodeInfo(shortName = "invoke")
-public final class AbzuInvokeNode extends AbzuExpressionNode {
+public final class InvokeNode extends ExpressionNode {
 
-  @Node.Child private AbzuExpressionNode functionNode;
-  @Node.Children private final AbzuExpressionNode[] argumentNodes;
-  @Node.Child private AbzuDispatchNode dispatchNode;
+  @Node.Child private ExpressionNode functionNode;
+  @Node.Children private final ExpressionNode[] argumentNodes;
+  @Node.Child private DispatchNode dispatchNode;
 
-  public AbzuInvokeNode(AbzuExpressionNode functionNode, AbzuExpressionNode[] argumentNodes) {
+  public InvokeNode(ExpressionNode functionNode, ExpressionNode[] argumentNodes) {
     this.functionNode = functionNode;
     this.argumentNodes = argumentNodes;
-    this.dispatchNode = AbzuDispatchNodeGen.create();
+    this.dispatchNode = DispatchNodeGen.create();
   }
 
   @ExplodeLoop

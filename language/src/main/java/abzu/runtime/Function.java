@@ -1,13 +1,13 @@
 package abzu.runtime;
 
+import abzu.AbzuLanguage;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
-import abzu.AbzuLanguage;
-import abzu.ast.AbzuUndefinedFunctionRootNode;
+import abzu.ast.UndefinedFunctionRootNode;
 
 /**
  * Represents a abzu function. On the Truffle level, a callable element is represented by a
@@ -21,12 +21,12 @@ import abzu.ast.AbzuUndefinedFunctionRootNode;
  * call node can keep the call target returned by {@link #getCallTarget()} cached until the
  * assumption returned by {@link #getCallTargetStable()} is valid.
  * <p>
- * The {@link #callTarget} can be {@code null}. To ensure that only one {@link AbzuFunction} instance
- * per name exists, the {@link AbzuFunctionRegistry} creates an instance also when performing name
+ * The {@link #callTarget} can be {@code null}. To ensure that only one {@link Function} instance
+ * per name exists, the {@link FunctionRegistry} creates an instance also when performing name
  * lookup. A function that has been looked up, i.e., used, but not defined, has a call target that
- * encapsulates a {@link AbzuUndefinedFunctionRootNode}.
+ * encapsulates a {@link UndefinedFunctionRootNode}.
  */
-public final class AbzuFunction implements TruffleObject {
+public final class Function implements TruffleObject {
 
   /**
    * The name of the function.
@@ -45,9 +45,9 @@ public final class AbzuFunction implements TruffleObject {
    */
   private final CyclicAssumption callTargetStable;
 
-  protected AbzuFunction(AbzuLanguage language, String name) {
+  protected Function(AbzuLanguage language, String name) {
     this.name = name;
-    this.callTarget = Truffle.getRuntime().createCallTarget(new AbzuUndefinedFunctionRootNode(language, name));
+    this.callTarget = Truffle.getRuntime().createCallTarget(new UndefinedFunctionRootNode(language, name));
     this.callTargetStable = new CyclicAssumption(name);
   }
 
@@ -74,7 +74,7 @@ public final class AbzuFunction implements TruffleObject {
 
   /**
    * This method is, e.g., called when using a function literal in a string concatenation. So
-   * changing it has an effect on Abzu programs.
+   * changing it has an effect on AbzuLanguage programs.
    */
   @Override
   public String toString() {
@@ -84,10 +84,10 @@ public final class AbzuFunction implements TruffleObject {
   /**
    * In case you want some of your objects to co-operate with other languages, you need to make
    * them implement {@link TruffleObject} and provide additional
-   * {@link AbzuFunctionMessageResolution foreign access implementation}.
+   * {@link FunctionMessageResolution foreign access implementation}.
    */
   @Override
   public ForeignAccess getForeignAccess() {
-    return AbzuFunctionMessageResolutionForeign.ACCESS;
+    return FunctionMessageResolutionForeign.ACCESS;
   }
 }

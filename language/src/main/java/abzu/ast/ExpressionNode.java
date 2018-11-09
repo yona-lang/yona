@@ -1,5 +1,6 @@
 package abzu.ast;
 
+import abzu.TypesGen;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
@@ -11,16 +12,15 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import abzu.AbzuTypes;
-import abzu.AbzuTypesGen;
+import abzu.Types;
 
 import java.io.File;
 
-@TypeSystemReference(AbzuTypes.class)
+@TypeSystemReference(Types.class)
 @NodeInfo(language = "abzu", description = "The abstract base node for all strings")
 @GenerateWrapper
 @ReportPolymorphism
-public abstract class AbzuExpressionNode extends Node implements InstrumentableNode {
+public abstract class ExpressionNode extends Node implements InstrumentableNode {
   private static final int NO_SOURCE = -1;
   private static final int UNAVAILABLE_SOURCE = -2;
 
@@ -136,7 +136,7 @@ public abstract class AbzuExpressionNode extends Node implements InstrumentableN
 
   @Override
   public WrapperNode createWrapper(ProbeNode probe) {
-    return new AbzuExpressionNodeWrapper(this, probe);
+    return new ExpressionNodeWrapper(this, probe);
   }
 
   @Override
@@ -158,18 +158,18 @@ public abstract class AbzuExpressionNode extends Node implements InstrumentableN
 
 
   public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-    return AbzuTypesGen.expectLong(executeGeneric(frame));
+    return TypesGen.expectLong(executeGeneric(frame));
   }
 
   public byte executeByte(VirtualFrame frame) throws UnexpectedResultException {
-    return AbzuTypesGen.expectByte(executeGeneric(frame));
+    return TypesGen.expectByte(executeGeneric(frame));
   }
 
   public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-    return AbzuTypesGen.expectDouble(executeGeneric(frame));
+    return TypesGen.expectDouble(executeGeneric(frame));
   }
 
   public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
-    return AbzuTypesGen.expectBoolean(executeGeneric(frame));
+    return TypesGen.expectBoolean(executeGeneric(frame));
   }
 }

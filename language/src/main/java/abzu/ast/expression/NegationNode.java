@@ -2,15 +2,15 @@ package abzu.ast.expression;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.ast.AbzuExpressionNode;
+import abzu.ast.ExpressionNode;
 
 import java.util.Objects;
 
-public final class NegationNode extends AbzuExpressionNode {
+public final class NegationNode extends ExpressionNode {
   @Node.Child
-  public AbzuExpressionNode expression;
+  public ExpressionNode expression;
 
-  public NegationNode(AbzuExpressionNode expression) {
+  public NegationNode(ExpressionNode expression) {
     this.expression = expression;
   }
 

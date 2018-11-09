@@ -40,18 +40,18 @@
  */
 package abzu.ast.access;
 
-import abzu.runtime.AbzuUnit;
+import abzu.Types;
+import abzu.runtime.Context;
+import abzu.runtime.Function;
+import abzu.runtime.Unit;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Shape;
-import abzu.AbzuTypes;
-import abzu.runtime.AbzuContext;
-import abzu.runtime.AbzuFunction;
 
-@TypeSystemReference(AbzuTypes.class)
-public abstract class AbzuPropertyCacheNode extends Node {
+@TypeSystemReference(Types.class)
+public abstract class PropertyCacheNode extends Node {
     protected static final int CACHE_LIMIT = 3;
 
     protected static boolean shapeCheck(Shape shape, DynamicObject receiver) {
@@ -60,7 +60,7 @@ public abstract class AbzuPropertyCacheNode extends Node {
 
     protected static Shape lookupShape(DynamicObject receiver) {
         CompilerAsserts.neverPartOfCompilation();
-        assert AbzuContext.isAbzuObject(receiver);
+        assert Context.isAbzuObject(receiver);
         return receiver.getShape();
     }
 
@@ -84,9 +84,9 @@ public abstract class AbzuPropertyCacheNode extends Node {
             return (boolean) cachedName == (boolean) name;
         } else if (cachedName instanceof String && name instanceof String) {
             return ((String) cachedName).equals(name);
-        } else if (cachedName instanceof AbzuFunction && name instanceof AbzuFunction) {
+        } else if (cachedName instanceof Function && name instanceof Function) {
             return cachedName == name;
-        } else if (cachedName instanceof AbzuUnit && name instanceof AbzuUnit) {
+        } else if (cachedName instanceof Unit && name instanceof Unit) {
             return cachedName == name;
         } else {
             assert !cachedName.equals(name);
