@@ -29,13 +29,13 @@ public final class TupleNode extends ValueNode<Tuple> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(expressions);
+    return Arrays.hashCode(expressions);
   }
 
   @Override
   public String toString() {
     return "TupleNode{" +
-        "expressions=" + expressions +
+        "expressions=" + Arrays.toString(expressions) +
         '}';
   }
 
