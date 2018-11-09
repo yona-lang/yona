@@ -27,7 +27,7 @@ public final class LexicalScope {
   private Map<String, FrameSlot> varSlots;
 
   /**
-   * Create a new block SL lexical scope.
+   * Create a new block Abzu lexical scope.
    *
    * @param current the current node
    * @param block a nearest block enclosing the current node
@@ -41,7 +41,7 @@ public final class LexicalScope {
   }
 
   /**
-   * Create a new functional SL lexical scope.
+   * Create a new functional Abzu lexical scope.
    *
    * @param current the current node, or <code>null</code> when it would be above the block
    * @param block a nearest block enclosing the current node
@@ -61,7 +61,7 @@ public final class LexicalScope {
       // We're in the root.
       block = findChildrenBlock(node);
       if (block == null) {
-        // Corrupted SL AST, no block was found
+        // Corrupted Abzu AST, no block was found
         return new LexicalScope(null, null, (LexicalScopeNode) null);
       }
       node = null; // node is above the block
@@ -251,7 +251,7 @@ public final class LexicalScope {
           args.put(name, slot);
           return true;
         } else if (wn == null && (node instanceof ExpressionNode)) {
-          // A different SL node - we're done.
+          // A different Abzu node - we're done.
           return false;
         } else {
           return NodeUtil.forEachChild(node, this);

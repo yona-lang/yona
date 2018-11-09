@@ -200,7 +200,7 @@ public class AbzuTestRunner extends ParentRunner<AbzuTestRunner.TestCase> {
 
   private static void run(Context context, Path path, PrintWriter out) throws IOException {
     try {
-      /* Parse the SL source file. */
+      /* Parse the Abzu source file. */
       Source source = Source.newBuilder(AbzuLanguage.ID, path.toFile()).interactive(true).build();
 
       /* Call the main entry point, without any arguments. */

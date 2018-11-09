@@ -57,8 +57,7 @@ public class AbzuException extends RuntimeException implements TruffleException 
     result.append(" not defined for");
 
     String sep = " ";
-    for (int i = 0; i < values.length; i++) {
-      Object value = values[i];
+    for (Object value : values) {
       result.append(sep);
       sep = ", ";
       if (value instanceof Long) {

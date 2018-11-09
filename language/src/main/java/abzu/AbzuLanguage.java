@@ -21,13 +21,12 @@ import java.util.*;
 @TruffleLanguage.Registration(id = AbzuLanguage.ID, name = "smol", defaultMimeType = AbzuLanguage.MIME_TYPE, characterMimeTypes = AbzuLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, DebuggerTags.AlwaysHalt.class})
 public class AbzuLanguage extends TruffleLanguage<Context> {
-  public static volatile int counter;
 
   public static final String ID = "abzu";
   public static final String MIME_TYPE = "application/x-abzu";
 
   public AbzuLanguage() {
-    counter++;
+    super();
   }
 
   @Override
@@ -105,32 +104,27 @@ public class AbzuLanguage extends TruffleLanguage<Context> {
   @Override
   public Iterable<Scope> findLocalScopes(Context context, Node node, Frame frame) {
     final LexicalScope scope = LexicalScope.createScope(node);
-    return new Iterable<Scope>() {
+    return () -> new Iterator<Scope>() {
+      private LexicalScope previousScope;
+      private LexicalScope nextScope = scope;
+
       @Override
-      public Iterator<Scope> iterator() {
-        return new Iterator<Scope>() {
-          private LexicalScope previousScope;
-          private LexicalScope nextScope = scope;
+      public boolean hasNext() {
+        if (nextScope == null) {
+          nextScope = previousScope.findParent();
+        }
+        return nextScope != null;
+      }
 
-          @Override
-          public boolean hasNext() {
-            if (nextScope == null) {
-              nextScope = previousScope.findParent();
-            }
-            return nextScope != null;
-          }
-
-          @Override
-          public Scope next() {
-            if (!hasNext()) {
-              throw new NoSuchElementException();
-            }
-            Scope vscope = Scope.newBuilder(nextScope.getName(), nextScope.getVariables(frame)).node(nextScope.getNode()).arguments(nextScope.getArguments(frame)).build();
-            previousScope = nextScope;
-            nextScope = null;
-            return vscope;
-          }
-        };
+      @Override
+      public Scope next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        }
+        Scope vscope = Scope.newBuilder(nextScope.getName(), nextScope.getVariables(frame)).node(nextScope.getNode()).arguments(nextScope.getArguments(frame)).build();
+        previousScope = nextScope;
+        nextScope = null;
+        return vscope;
       }
     };
   }

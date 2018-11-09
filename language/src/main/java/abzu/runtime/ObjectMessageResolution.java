@@ -12,13 +12,13 @@ import abzu.ast.interop.ForeignToAbzuTypeNode;
 import abzu.ast.interop.ForeignToAbzuTypeNodeGen;
 
 /**
- * The class containing all message resolution implementations of an SL object.
+ * The class containing all message resolution implementations of an Abzu object.
  */
 @MessageResolution(receiverType = AbzuObjectType.class)
 public class ObjectMessageResolution {
 
   /*
-   * An SL object resolves the READ message and maps it to an object property read access.
+   * An Abzu object resolves the READ message and maps it to an object property read access.
    */
   @Resolve(message = "READ")
   public abstract static class AbzuForeignReadNode extends Node {
@@ -42,7 +42,7 @@ public class ObjectMessageResolution {
 
   /*
    * An AbzuLanguage object resolves the INVOKE message and maps it to an object property read access
-   * followed by an function invocation. The object property must be an SL function object, which
+   * followed by an function invocation. The object property must be an Abzu function object, which
    * is executed eventually.
    */
   @Resolve(message = "INVOKE")

@@ -55,7 +55,7 @@ public abstract class DispatchNode extends Node {
    * @see Specialization
    *
    * @param function the dynamically provided function
-   * @param cachedFunction the cached function of the specialization instance
+   * @param cachedTarget the cached function of the specialization instance
    * @param callNode the {@link DirectCallNode} specifically created for the {@link CallTarget} in
    *            cachedFunction.
    */

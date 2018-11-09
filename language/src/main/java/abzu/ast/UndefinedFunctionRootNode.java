@@ -6,7 +6,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import abzu.runtime.AbzuUndefinedNameException;
 
 /**
- * The initial {@link RootNode} of {@link AbzuFunction functions} when they are created, i.e., when
+ * The initial {@link RootNode} of {@link abzu.runtime.Function functions} when they are created, i.e., when
  * they are still undefined. Executing it throws an
  * {@link AbzuUndefinedNameException#undefinedFunction exception}.
  */

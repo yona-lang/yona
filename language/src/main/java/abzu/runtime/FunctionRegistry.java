@@ -59,11 +59,7 @@ public final class FunctionRegistry {
    */
   public List<Function> getFunctions() {
     List<Function> result = new ArrayList<>(functionsObject.functions.values());
-    Collections.sort(result, new Comparator<Function>() {
-      public int compare(Function f1, Function f2) {
-        return f1.toString().compareTo(f2.toString());
-      }
-    });
+    result.sort(Comparator.comparing(Function::toString));
     return result;
   }
 

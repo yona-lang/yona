@@ -12,7 +12,7 @@ import com.oracle.truffle.api.nodes.Node;
 @MessageResolution(receiverType = Unit.class)
 public class IsNoneMessageResolution {
   /*
-   * An SL function resolves the IS_NONE message.
+   * An Abzu function resolves the IS_NONE message.
    */
   @Resolve(message = "IS_NONE")
   public abstract static class AbzuForeignIsNoneNode extends Node {

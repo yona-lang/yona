@@ -10,7 +10,7 @@ import com.oracle.truffle.api.profiles.BranchProfile;
  * <p>
  * Arguments are not type-specialized. To ensure that repeated accesses within a method are
  * specialized and can, e.g., be accessed without unboxing, all arguments are loaded into local
- * variables {@link AbzuNodeFactory#addFormalParameter in the method prologue}.
+ * variables.
  */
 public class ReadArgumentNode extends ExpressionNode {
 

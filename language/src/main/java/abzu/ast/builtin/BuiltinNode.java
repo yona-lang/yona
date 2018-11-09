@@ -20,7 +20,7 @@ import abzu.AbzuException;
  * <p>
  * The builtin functions are registered in {@link Context#installBuiltins}. Every builtin node
  * subclass is instantiated there, wrapped into a function, and added to the
- * {@link AbzuFunctionRegistry}. This ensures that builtin functions can be called like user-defined
+ * {@link abzu.runtime.FunctionRegistry}. This ensures that builtin functions can be called like user-defined
  * functions; there is no special function lookup or call node for builtin functions.
  */
 @NodeChild(value = "arguments", type = ExpressionNode[].class)

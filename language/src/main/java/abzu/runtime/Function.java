@@ -12,7 +12,7 @@ import abzu.ast.UndefinedFunctionRootNode;
 /**
  * Represents a abzu function. On the Truffle level, a callable element is represented by a
  * {@link RootCallTarget call target}. This class encapsulates a call target, and adds version
- * support: functions in SL can be redefined, i.e. changed at run time. When a function is
+ * support: functions in Abzu can be redefined, i.e. changed at run time. When a function is
  * redefined, the call target managed by this function object is changed (and {@link #callTarget} is
  * therefore not a final field).
  * <p>

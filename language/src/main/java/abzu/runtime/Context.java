@@ -51,7 +51,7 @@ public class Context {
   }
 
   /**
-   * Returns the default input, i.e., the source for the {@link AbzuReadlnBuiltin}. To allow unit
+   * Returns the default input. To allow unit
    * testing, we do not use {@link System#in} directly.
    */
   public BufferedReader getInput() {
@@ -59,7 +59,7 @@ public class Context {
   }
 
   /**
-   * The default default, i.e., the output for the {@link AbzuPrintlnBuiltin}. To allow unit
+   * The default output. To allow unit
    * testing, we do not use {@link System#out} directly.
    */
   public PrintWriter getOutput() {
