@@ -24,7 +24,7 @@ public final class TupleNode extends ValueNode<Tuple> {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     TupleNode tupleNode = (TupleNode) o;
-    return Objects.equals(expressions, tupleNode.expressions);
+    return Arrays.equals(expressions, tupleNode.expressions);
   }
 
   @Override
