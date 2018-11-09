@@ -18,7 +18,7 @@ import com.oracle.truffle.api.source.SourceSection;
 
 import java.util.*;
 
-@TruffleLanguage.Registration(id = AbzuLanguage.ID, name = "smol", defaultMimeType = AbzuLanguage.MIME_TYPE, characterMimeTypes = AbzuLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
+@TruffleLanguage.Registration(id = AbzuLanguage.ID, name = "abzu", defaultMimeType = AbzuLanguage.MIME_TYPE, characterMimeTypes = AbzuLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, DebuggerTags.AlwaysHalt.class})
 public class AbzuLanguage extends TruffleLanguage<Context> {
 
