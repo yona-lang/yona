@@ -1,17 +1,16 @@
 package abzu.ast.expression.value;
 
 import abzu.ast.ExpressionNode;
-import abzu.ast.expression.ValueNode;
 import abzu.runtime.Tuple;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Arrays;
-import java.util.Objects;
 
 @NodeInfo
-public final class TupleNode extends ValueNode<Tuple> {
+public final class TupleNode extends ExpressionNode {
   @Node.Children
   public final ExpressionNode[] expressions;
 
@@ -40,7 +39,16 @@ public final class TupleNode extends ValueNode<Tuple> {
   }
 
   @Override
-  public Tuple executeValue(VirtualFrame frame) {
+  public Object executeGeneric(VirtualFrame frame) {
+    return execute(frame);
+  }
+
+  @Override
+  public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
+    return execute(frame);
+  }
+
+  private Tuple execute(VirtualFrame frame) {
     return new Tuple(Arrays.stream(expressions).map((el) -> el.executeGeneric(frame)).toArray());
   }
 }

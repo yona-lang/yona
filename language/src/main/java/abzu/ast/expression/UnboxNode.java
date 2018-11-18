@@ -1,5 +1,12 @@
 package abzu.ast.expression;
 
+import abzu.AbzuException;
+import abzu.ast.ExpressionNode;
+import abzu.ast.interop.ForeignToAbzuTypeNode;
+import abzu.runtime.Function;
+import abzu.runtime.Module;
+import abzu.runtime.Tuple;
+import abzu.runtime.Unit;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
@@ -9,11 +16,6 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.AbzuException;
-import abzu.ast.ExpressionNode;
-import abzu.ast.interop.ForeignToAbzuTypeNode;
-import abzu.runtime.Function;
-import abzu.runtime.Unit;
 
 @NodeChild("child")
 public abstract class UnboxNode extends ExpressionNode {
@@ -25,6 +27,16 @@ public abstract class UnboxNode extends ExpressionNode {
 
   @Specialization
   protected boolean unboxBoolean(boolean value) {
+    return value;
+  }
+
+  @Specialization
+  protected byte unboxByte(byte value) {
+    return value;
+  }
+
+  @Specialization
+  protected float unboxFloat(float value) {
     return value;
   }
 
@@ -44,7 +56,17 @@ public abstract class UnboxNode extends ExpressionNode {
   }
 
   @Specialization
-  protected ValueNode unboxValue(ValueNode value) {
+  protected Tuple unboxTuple(Tuple value) {
+    return value;
+  }
+
+  @Specialization
+  protected Module unboxModule(Module value) {
+    return value;
+  }
+
+  @Specialization
+  protected ExpressionNode unboxValue(ExpressionNode value) {
     return value;
   }
 

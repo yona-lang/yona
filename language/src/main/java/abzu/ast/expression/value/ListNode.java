@@ -4,12 +4,11 @@ import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import abzu.ast.expression.ValueNode;
 
 import java.util.Objects;
 
 @NodeInfo
-public final class ListNode extends ValueNode {
+public final class ListNode extends ExpressionNode {
   @Node.Children
   public final ExpressionNode[] expressions;
 
@@ -38,7 +37,7 @@ public final class ListNode extends ValueNode {
   }
 
   @Override
-  public Object executeValue(VirtualFrame frame) {
+  public Object executeGeneric(VirtualFrame frame) {
     return null;
   }
 }

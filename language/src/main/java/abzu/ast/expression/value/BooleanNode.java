@@ -1,17 +1,18 @@
 package abzu.ast.expression.value;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import abzu.ast.expression.ValueNode;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 @NodeInfo
-public final class BooleanNode extends ValueNode<Boolean> {
+public final class BooleanNode extends ExpressionNode {
   public static BooleanNode TRUE = new BooleanNode(Boolean.TRUE);
   public static BooleanNode FALSE = new BooleanNode(Boolean.FALSE);
 
-  public final Boolean value;
+  public final boolean value;
 
-  BooleanNode(Boolean value) {
+  BooleanNode(boolean value) {
     this.value = value;
   }
 
@@ -23,7 +24,12 @@ public final class BooleanNode extends ValueNode<Boolean> {
   }
 
   @Override
-  public Boolean executeValue(VirtualFrame frame) {
+  public Object executeGeneric(VirtualFrame frame) {
+    return value;
+  }
+
+  @Override
+  public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
     return value;
   }
 }

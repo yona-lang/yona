@@ -1,13 +1,14 @@
 package abzu.ast.expression.value;
 
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import abzu.ast.expression.ValueNode;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Objects;
 
 @NodeInfo
-public final class StringNode extends ValueNode<String> {
+public final class StringNode extends ExpressionNode {
   public final String value;
 
   public StringNode(String value) {
@@ -35,7 +36,12 @@ public final class StringNode extends ValueNode<String> {
   }
 
   @Override
-  public String executeValue(VirtualFrame frame) {
+  public Object executeGeneric(VirtualFrame frame) {
+    return value;
+  }
+
+  @Override
+  public String executeString(VirtualFrame frame) throws UnexpectedResultException {
     return value;
   }
 }

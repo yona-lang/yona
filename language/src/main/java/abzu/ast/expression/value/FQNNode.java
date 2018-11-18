@@ -1,15 +1,13 @@
 package abzu.ast.expression.value;
 
-import abzu.ast.expression.ValueNode;
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 
 @NodeInfo
-public final class FQNNode extends ValueNode<List> {
+public final class FQNNode extends ExpressionNode {
   public final String[] parts;
 
   public FQNNode(String[] parts) {
@@ -37,7 +35,7 @@ public final class FQNNode extends ValueNode<List> {
   }
 
   @Override
-  public List executeValue(VirtualFrame frame) {
-    return Arrays.asList(parts);
+  public Object executeGeneric(VirtualFrame frame) {
+    return null;
   }
 }

@@ -1,9 +1,15 @@
 package abzu.ast;
 
 import abzu.TypesGen;
+import abzu.runtime.Function;
+import abzu.runtime.Module;
+import abzu.runtime.Tuple;
+import abzu.runtime.Unit;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.*;
 import com.oracle.truffle.api.nodes.Node;
@@ -28,6 +34,17 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   private int sourceLength;
 
   private boolean hasRootTag;
+
+  @CompilerDirectives.CompilationFinal
+  private boolean isTail = false;
+
+  public boolean isTail() {
+    return this.isTail;
+  }
+
+  public void setIsTail() {
+    this.isTail = true;
+  }
 
   /*
    * The creation of source section can be implemented lazily by looking up the root node source
@@ -171,5 +188,43 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
 
   public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
     return TypesGen.expectBoolean(executeGeneric(frame));
+  }
+
+  public String executeString(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectString(executeGeneric(frame));
+  }
+
+  public Function executeFunction(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectFunction(executeGeneric(frame));
+  }
+
+  public Unit executeUnit(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectUnit(executeGeneric(frame));
+  }
+
+  public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectTuple(executeGeneric(frame));
+  }
+
+  public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectModule(executeGeneric(frame));
+  }
+
+  protected boolean isArgumentIndexInRange(VirtualFrame virtualFrame,
+                                           int index) {
+    return (index + 1) < virtualFrame.getArguments().length;
+  }
+
+  protected Object getArgument(VirtualFrame virtualFrame, int index) {
+    return virtualFrame.getArguments()[index + 1];
+  }
+
+  protected static MaterializedFrame getLexicalScope(Frame frame) {
+    Object[] args = frame.getArguments();
+    if (args.length > 0) {
+      return (MaterializedFrame) frame.getArguments()[0];
+    } else {
+      return null;
+    }
   }
 }
