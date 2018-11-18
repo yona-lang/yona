@@ -42,7 +42,7 @@ public class Context {
     this.language = language;
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.functionRegistry = new FunctionRegistry(language);
-    this.topScopes = Collections.singleton(Scope.newBuilder("global", functionRegistry.getFunctionsObject()).build());
+    this.topScopes = Collections.singleton(Scope.newBuilder("global", functionRegistry.getModule()).build());
     installBuiltins();
     for (NodeFactory<? extends BuiltinNode> builtin : externalBuiltins) {
       installBuiltin(builtin);

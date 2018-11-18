@@ -1,9 +1,13 @@
 package abzu.runtime;
 
 import abzu.AbzuLanguage;
+import abzu.ast.AbzuRootNode;
+import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
@@ -20,11 +24,6 @@ import abzu.ast.UndefinedFunctionRootNode;
  * that the call target is stable. This is possible with the help of a Truffle {@link Assumption}: a
  * call node can keep the call target returned by {@link #getCallTarget()} cached until the
  * assumption returned by {@link #getCallTargetStable()} is valid.
- * <p>
- * The {@link #callTarget} can be {@code null}. To ensure that only one {@link Function} instance
- * per name exists, the {@link FunctionRegistry} creates an instance also when performing name
- * lookup. A function that has been looked up, i.e., used, but not defined, has a call target that
- * encapsulates a {@link UndefinedFunctionRootNode}.
  */
 public final class Function implements TruffleObject {
 
@@ -81,11 +80,6 @@ public final class Function implements TruffleObject {
     return name;
   }
 
-  /**
-   * In case you want some of your objects to co-operate with other languages, you need to make
-   * them implement {@link TruffleObject} and provide additional
-   * {@link FunctionMessageResolution foreign access implementation}.
-   */
   @Override
   public ForeignAccess getForeignAccess() {
     return FunctionMessageResolutionForeign.ACCESS;
