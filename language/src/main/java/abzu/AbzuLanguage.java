@@ -129,11 +129,6 @@ public class AbzuLanguage extends TruffleLanguage<Context> {
     };
   }
 
-  @Override
-  protected Iterable<Scope> findTopScopes(Context context) {
-    return context.getTopScopes();
-  }
-
   public static Context getCurrentContext() {
     return getCurrentContext(AbzuLanguage.class);
   }

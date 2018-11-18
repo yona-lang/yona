@@ -44,7 +44,7 @@ public final class Function implements TruffleObject {
    */
   private final CyclicAssumption callTargetStable;
 
-  protected Function(AbzuLanguage language, String name) {
+  public Function(AbzuLanguage language, String name) {
     this.name = name;
     this.callTarget = Truffle.getRuntime().createCallTarget(new UndefinedFunctionRootNode(language, name));
     this.callTargetStable = new CyclicAssumption(name);
@@ -54,7 +54,7 @@ public final class Function implements TruffleObject {
     return name;
   }
 
-  protected void setCallTarget(RootCallTarget callTarget) {
+  public void setCallTarget(RootCallTarget callTarget) {
     this.callTarget = callTarget;
     /*
      * We have a new call target. Invalidate all code that speculated that the old call target

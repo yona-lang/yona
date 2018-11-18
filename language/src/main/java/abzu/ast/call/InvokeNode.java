@@ -56,5 +56,4 @@ public final class InvokeNode extends ExpressionNode {
     }
     return super.hasTag(tag);
   }
-
 }

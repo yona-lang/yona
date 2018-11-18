@@ -1,15 +1,25 @@
 package abzu.ast;
 
 import abzu.AbzuBaseVisitor;
+import abzu.AbzuLanguage;
 import abzu.AbzuParser;
 import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
+import com.oracle.truffle.api.source.Source;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
+  private AbzuLanguage language;
+  private Source source;
+
+  public ParserVisitor(AbzuLanguage language, Source source) {
+    this.language = language;
+    this.source = source;
+  }
+
   @Override
   public ExpressionNode visitInput(AbzuParser.InputContext ctx) {
     return ctx.expression().accept(this);
@@ -89,7 +99,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     for (AbzuParser.ArgContext argCtx : ctx.arg()) {
       args.add(argCtx.NAME().getText());
     }
-    return new FunctionNode(ctx.NAME().getText(), args, ctx.expression().accept(this));
+    return new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), ctx.NAME().getText(), args, ctx.expression().accept(this));
   }
 
   @Override

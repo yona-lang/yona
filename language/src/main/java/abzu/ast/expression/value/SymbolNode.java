@@ -3,6 +3,7 @@ package abzu.ast.expression.value;
 import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Objects;
 
@@ -36,6 +37,11 @@ public final class SymbolNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return null;
+    return value;
+  }
+
+  @Override
+  public String executeString(VirtualFrame frame) throws UnexpectedResultException {
+    return value;
   }
 }

@@ -1,9 +1,7 @@
 package abzu;
 
+import abzu.runtime.*;
 import abzu.runtime.Module;
-import abzu.runtime.Tuple;
-import abzu.runtime.Function;
-import abzu.runtime.Unit;
 import com.oracle.truffle.api.dsl.TypeCast;
 import com.oracle.truffle.api.dsl.TypeCheck;
 import com.oracle.truffle.api.dsl.TypeSystem;

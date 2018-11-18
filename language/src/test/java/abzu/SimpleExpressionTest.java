@@ -1,5 +1,7 @@
 package abzu;
 
+import abzu.runtime.Module;
+import com.sun.org.apache.xpath.internal.operations.Mod;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import org.junit.After;
@@ -7,6 +9,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class SimpleExpressionTest {
 
@@ -66,5 +70,29 @@ public class SimpleExpressionTest {
     assertEquals(1l, array[0]);
     assertEquals(2l, array[1]);
     assertEquals(3l, array[2]);
+  }
+
+  @Test
+  public void zeroArgFunctionTest() {
+    long ret = context.eval("abzu", "fun = 5").execute().asLong();
+    assertEquals(5l, ret);
+  }
+
+//  @Test
+//  public void oneArgFunctionTest() {
+//    long ret = context.eval("abzu", "fun arg = arg").execute(6).asLong();
+//    assertEquals(6l, ret);
+//  }
+
+  @Test
+  public void moduleTest() {
+    String src = "module test exports fun as\n" +
+        "fun = 6\n" +
+        "other_fun = 7";
+    Value modVal = context.eval("abzu", src);
+
+    assertTrue(modVal.hasMember("fun"));
+    assertTrue(modVal.hasMember("other_fun"));
+    assertFalse(modVal.hasMember("whatever"));
   }
 }

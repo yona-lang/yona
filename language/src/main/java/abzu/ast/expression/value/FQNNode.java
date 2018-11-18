@@ -1,8 +1,10 @@
 package abzu.ast.expression.value;
 
 import abzu.ast.ExpressionNode;
+import abzu.runtime.Tuple;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Objects;
 
@@ -36,6 +38,14 @@ public final class FQNNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return null;
+    return execute(frame);
+  }
+  @Override
+  public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
+    return execute(frame);
+  }
+
+  private Tuple execute(VirtualFrame frame) {
+    return new Tuple(parts);
   }
 }

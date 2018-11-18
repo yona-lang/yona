@@ -4,15 +4,20 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.Node;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public final class Module implements TruffleObject {
+  final Tuple fqn;
+  final Tuple exports;
   final Map<String, Function> functions = new HashMap<>();
 
-  Module() {
+  public Module(Tuple fqn, Tuple exports, List<Function> functionsList) {
+    this.fqn = fqn;
+    this.exports = exports;
+
+    for (Function fun : functionsList) {
+      this.functions.put(fun.getName(), fun);
+    }
   }
 
   @Override
