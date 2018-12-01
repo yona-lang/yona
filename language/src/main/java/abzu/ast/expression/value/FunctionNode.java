@@ -10,7 +10,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 import java.util.List;
@@ -25,13 +24,15 @@ public final class FunctionNode extends ExpressionNode {
 
   private AbzuLanguage language;
   private SourceSection sourceSection;
+  private FrameDescriptor frameDescriptor;
 
-  public FunctionNode(AbzuLanguage language, SourceSection sourceSection, String name, List<String> arguments, ExpressionNode expression) {
+  public FunctionNode(AbzuLanguage language, SourceSection sourceSection, String name, List<String> arguments, FrameDescriptor frameDescriptor, ExpressionNode expression) {
     this.name = name;
     this.arguments = arguments;
     this.expression = expression;
     this.language = language;
     this.sourceSection = sourceSection;
+    this.frameDescriptor = frameDescriptor;
   }
 
   @Override
@@ -70,7 +71,7 @@ public final class FunctionNode extends ExpressionNode {
 
   private Function execute(VirtualFrame frame) {
     Function function = new Function(language, name);
-    AbzuRootNode rootNode = new AbzuRootNode(language, new FrameDescriptor(), expression, sourceSection, name);
+    AbzuRootNode rootNode = new AbzuRootNode(language, frameDescriptor, expression, sourceSection, name);
     function.setCallTarget(Truffle.getRuntime().createCallTarget(rootNode));
 
     return function;

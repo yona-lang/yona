@@ -3,21 +3,62 @@ package abzu.ast;
 import abzu.AbzuBaseVisitor;
 import abzu.AbzuLanguage;
 import abzu.AbzuParser;
+import abzu.ast.call.InvokeNode;
+import abzu.ast.controlflow.BlockNode;
 import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
+import abzu.ast.local.ReadArgumentNode;
+import abzu.ast.local.ReadLocalVariableNodeGen;
+import abzu.ast.local.WriteLocalVariableNodeGen;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.source.Source;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   private AbzuLanguage language;
   private Source source;
+  private LexicalScope lexicalScope;
+
+  /**
+   * Local variable names that are visible in the current block. Variables are not visible outside
+   * of their defining block, to prevent the usage of undefined variables.
+   */
+  static class LexicalScope {
+    private final LexicalScope outer;
+    private final Map<String, FrameSlot> locals;
+
+    LexicalScope(LexicalScope outer) {
+      this.outer = outer;
+      this.locals = new HashMap<>();
+      if (outer != null) {
+        locals.putAll(outer.locals);
+      }
+    }
+
+    FrameSlot get(String key) {
+      if (locals.containsKey(key)) {
+        return locals.get(key);
+      } else {
+        return outer.get(key);
+      }
+    }
+
+    void put(String key, FrameSlot frameSlot) {
+      locals.put(key, frameSlot);
+    }
+  }
 
   public ParserVisitor(AbzuLanguage language, Source source) {
     this.language = language;
     this.source = source;
+    this.lexicalScope = new LexicalScope(null);
   }
 
   @Override
@@ -31,12 +72,12 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public FunctionApplicationNode visitFunctionApplicationExpression(AbzuParser.FunctionApplicationExpressionContext ctx) {
+  public InvokeNode visitFunctionApplicationExpression(AbzuParser.FunctionApplicationExpressionContext ctx) {
     List<ExpressionNode> args = new ArrayList<>();
     for (AbzuParser.ExpressionContext exprCtx : ctx.apply().expression()) {
       args.add(exprCtx.accept(this));
     }
-    return new FunctionApplicationNode(ctx.apply().NAME().getText(), args.toArray(new ExpressionNode[]{}));
+    return new InvokeNode(new StringNode(ctx.apply().NAME().getText()), args.toArray(new ExpressionNode[]{}));
   }
 
   @Override
@@ -95,11 +136,28 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   @Override
   public FunctionNode visitFunction(AbzuParser.FunctionContext ctx) {
-    List<String> args = new ArrayList<>();
+    this.lexicalScope = new LexicalScope(this.lexicalScope);
+    List<String> args = new ArrayList<>(ctx.arg().size());
     for (AbzuParser.ArgContext argCtx : ctx.arg()) {
       args.add(argCtx.NAME().getText());
     }
-    return new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), ctx.NAME().getText(), args, ctx.expression().accept(this));
+
+    FrameDescriptor frameDescriptor = new FrameDescriptor();
+    ExpressionNode[] bodyStatements = new ExpressionNode[args.size() + 1];
+
+    for (int i = 0; i < args.size(); i++) {
+      ReadArgumentNode readArg = new ReadArgumentNode(i);
+      FrameSlot frameSlot = frameDescriptor.findOrAddFrameSlot(args.get(i), i, FrameSlotKind.Illegal);
+      lexicalScope.put(args.get(i), frameSlot);
+      bodyStatements[i] = WriteLocalVariableNodeGen.create(readArg, frameSlot);
+    }
+
+    ExpressionNode functionBodyNode = ctx.expression().accept(this);
+    functionBodyNode.addRootTag();
+    bodyStatements[args.size()] = functionBodyNode;
+
+    this.lexicalScope = this.lexicalScope.outer;
+    return new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), ctx.NAME().getText(), args, frameDescriptor, new BlockNode(bodyStatements));
   }
 
   @Override
@@ -167,6 +225,11 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   @Override
   public SymbolNode visitSymbol(AbzuParser.SymbolContext ctx) {
     return new SymbolNode(ctx.NAME().getText());
+  }
+
+  @Override
+  public ExpressionNode visitIdentifier(AbzuParser.IdentifierContext ctx) {
+    return ReadLocalVariableNodeGen.create(this.lexicalScope.get(ctx.NAME().getText()));
   }
 
   private String normalizeString(String str) {

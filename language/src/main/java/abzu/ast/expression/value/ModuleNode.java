@@ -10,6 +10,7 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -37,8 +38,8 @@ public final class ModuleNode extends ExpressionNode {
     if (o == null || getClass() != o.getClass()) return false;
     ModuleNode that = (ModuleNode) o;
     return Objects.equals(fqn, that.fqn) &&
-        Objects.equals(exports, that.exports) &&
-        Objects.equals(functions, that.functions);
+           Objects.equals(exports, that.exports) &&
+           Objects.equals(functions, that.functions);
   }
 
   @Override
@@ -49,10 +50,10 @@ public final class ModuleNode extends ExpressionNode {
   @Override
   public String toString() {
     return "ModuleNode{" +
-        "name='" + fqn + '\'' +
-        ", exports=" + exports +
-        ", functions=" + functions +
-        '}';
+           "name='" + fqn + '\'' +
+           ", exports=" + exports +
+           ", functions=" + Arrays.toString(functions) +
+           '}';
   }
 
   @Override

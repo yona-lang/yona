@@ -6,6 +6,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 @NodeInfo
@@ -32,14 +33,15 @@ public final class NonEmptyStringListNode extends ExpressionNode {
   @Override
   public String toString() {
     return "NonEmptyStringListNode{" +
-        "strings=" + strings +
-        '}';
+           "strings=" + Arrays.toString(strings) +
+           '}';
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     return execute(frame);
   }
+
   @Override
   public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
     return execute(frame);

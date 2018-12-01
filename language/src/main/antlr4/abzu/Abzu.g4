@@ -62,9 +62,9 @@ expression : left=expression BIN_OP right=expression    #binaryOperationExpressi
            | UN_OP expression                           #unaryOperationExpression
            | let                                        #letExpression
            | conditional                                #conditionalExpression
-           | apply                                      #functionApplicationExpression
            | value                                      #valueExpression
            | module                                     #moduleExpression
+           | apply                                      #functionApplicationExpression
            ;
 
 value : unit
@@ -78,6 +78,7 @@ value : unit
       | dict
       | list
       | symbol
+      | identifier
       ;
 
 let : KW_LET alias+ KW_IN expression ;
@@ -101,6 +102,7 @@ key : STRING ;
 list : BRACKET_L expression? (COMMA expression)* BRACKET_R ;
 fqn : NAME (DOT NAME)* ; // TODO add uppercase/lowercase rules here
 symbol : COLON NAME;
+identifier : NAME ;
 
 // Keywords
 KW_LET : 'let' ;

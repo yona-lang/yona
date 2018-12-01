@@ -78,11 +78,23 @@ public class SimpleExpressionTest {
     assertEquals(5l, ret);
   }
 
-//  @Test
-//  public void oneArgFunctionTest() {
-//    long ret = context.eval("abzu", "fun arg = arg").execute(6).asLong();
-//    assertEquals(6l, ret);
-//  }
+  @Test
+  public void oneArgFunctionTest() {
+    long ret = context.eval("abzu", "fun arg = arg").execute(6).asLong();
+    assertEquals(6l, ret);
+  }
+
+  @Test
+  public void twoArgFunctionFirstTest() {
+    long ret = context.eval("abzu", "fun argone argtwo = argone").execute(5, 6).asLong();
+    assertEquals(5l, ret);
+  }
+
+  @Test
+  public void twoArgFunctionSecondTest() {
+    long ret = context.eval("abzu", "fun argone argtwo = argtwo").execute(5, 6).asLong();
+    assertEquals(6l, ret);
+  }
 
   @Test
   public void moduleTest() {
