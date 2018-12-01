@@ -45,13 +45,13 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       }
     }
 
-    FrameSlot get(String key, Node location) {
+    FrameSlot get(String key) {
       if (locals.containsKey(key)) {
         return locals.get(key);
       } else if (outer != null) {
-        return outer.get(key, location);
+        return outer.get(key);
       } else {
-        throw new AbzuException("Identifier '" + key + "' not found in the current scope", location);
+        return null;
       }
     }
 
@@ -234,7 +234,15 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   @Override
   public ReadLocalVariableNode visitIdentifier(AbzuParser.IdentifierContext ctx) {
-    return ReadLocalVariableNodeGen.create(this.lexicalScope.get(ctx.NAME().getText(), null));
+    String name = ctx.NAME().getText();
+    FrameSlot frameSlot = this.lexicalScope.get(name);
+    ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+
+    if (frameSlot == null) {
+      throw new AbzuException("Identifier '" + name + "' not found in the current scope", node);
+    }
+
+    return node;
   }
 
   private String normalizeString(String str) {
