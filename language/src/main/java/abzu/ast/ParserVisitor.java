@@ -1,6 +1,7 @@
 package abzu.ast;
 
 import abzu.AbzuBaseVisitor;
+import abzu.AbzuException;
 import abzu.AbzuLanguage;
 import abzu.AbzuParser;
 import abzu.ast.call.InvokeNode;
@@ -8,11 +9,13 @@ import abzu.ast.controlflow.BlockNode;
 import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
 import abzu.ast.local.ReadArgumentNode;
+import abzu.ast.local.ReadLocalVariableNode;
 import abzu.ast.local.ReadLocalVariableNodeGen;
 import abzu.ast.local.WriteLocalVariableNodeGen;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
@@ -42,11 +45,13 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       }
     }
 
-    FrameSlot get(String key) {
+    FrameSlot get(String key, Node location) {
       if (locals.containsKey(key)) {
         return locals.get(key);
+      } else if (outer != null) {
+        return outer.get(key, location);
       } else {
-        return outer.get(key);
+        throw new AbzuException("Identifier '" + key + "' not found in the current scope", location);
       }
     }
 
@@ -228,8 +233,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public ExpressionNode visitIdentifier(AbzuParser.IdentifierContext ctx) {
-    return ReadLocalVariableNodeGen.create(this.lexicalScope.get(ctx.NAME().getText()));
+  public ReadLocalVariableNode visitIdentifier(AbzuParser.IdentifierContext ctx) {
+    return ReadLocalVariableNodeGen.create(this.lexicalScope.get(ctx.NAME().getText(), null));
   }
 
   private String normalizeString(String str) {
