@@ -82,7 +82,7 @@ value : unit
       ;
 
 let : KW_LET alias+ KW_IN expression ;
-alias : NAME OP_ASSIGN expression ;
+alias : NAME OP_PMATCH expression ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : NAME expression* ;
 module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS function+ ;
@@ -136,6 +136,7 @@ BIN_OP : OP_COMPARISON | OP_ARITHMETIC | OP_LIST;
 UN_OP: OP_NOT;
 
 OP_ASSIGN : '=';
+OP_PMATCH : ':=';
 OP_EQ : '==' ;
 OP_NEQ : '!=' ;
 OP_LT : '<' ;

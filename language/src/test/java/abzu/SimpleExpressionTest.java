@@ -103,4 +103,36 @@ public class SimpleExpressionTest {
     assertTrue(modVal.hasMember("other_fun"));
     assertFalse(modVal.hasMember("whatever"));
   }
+
+  @Test
+  public void letOneAliasTest() {
+    long ret = context.eval("abzu", "fun test = let alias := test in alias").execute(5).asLong();
+    assertEquals(5l, ret);
+  }
+
+  @Test
+  public void letTwoAliasesTest() {
+    Value ret = context.eval("abzu", "fun test =\n" +
+                                     "let alias    := test\n" +
+                                     "    aliastwo := 6\n" +
+                                     "in\n" +
+                                     "(alias, aliastwo)").execute(5);
+    assertEquals(2, ret.getArraySize());
+
+    Object[] array = ret.as(Object[].class);
+    assertEquals(5l, array[0]);
+    assertEquals(6l, array[1]);
+  }
+
+  @Test
+  public void letNotInFunctionTest() {
+    long ret = context.eval("abzu", "let alias := 6 in alias").asLong();
+    assertEquals(6l, ret);
+  }
+
+  @Test
+  public void letFunctionAliasTest() {
+    long ret = context.eval("abzu", "let funalias := fun arg = arg in funalias").execute(5).asLong();
+    assertEquals(5l, ret);
+  }
 }
