@@ -15,6 +15,13 @@ public final class IdentifierNode extends ExpressionNode {
   }
 
   @Override
+  public String toString() {
+    return "IdentifierNode{" +
+           "name='" + name + '\'' +
+           '}';
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(name);
     if (frameSlot == null) {

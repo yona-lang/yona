@@ -1,6 +1,8 @@
 package abzu.ast.call;
 
+import abzu.AbzuException;
 import abzu.ast.ExpressionNode;
+import abzu.runtime.Function;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
@@ -8,6 +10,7 @@ import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 /**
  * The node for function invocation in Abzu. Since Abzu has first class functions, the {@link abzu.runtime.Function
@@ -32,7 +35,12 @@ public final class InvokeNode extends ExpressionNode {
   @ExplodeLoop
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    Object function = functionNode.executeGeneric(frame);
+    Function function = null;
+    try {
+      function = functionNode.executeFunction(frame);
+    } catch (UnexpectedResultException e) {
+      throw new AbzuException("Cannot invoke non-function node: " + functionNode, this);
+    }
 
     /*
      * The number of arguments is constant for one invoke node. During compilation, the loop is
@@ -41,6 +49,11 @@ public final class InvokeNode extends ExpressionNode {
      * array length is really constant.
      */
     CompilerAsserts.compilationConstant(argumentNodes.length);
+
+    if (argumentNodes.length != function.getCardinality()) {
+      throw new AbzuException("Unexpected number of arguments when calling '" + function.getName() +
+                              "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
+    }
 
     Object[] argumentValues = new Object[argumentNodes.length];
     for (int i = 0; i < argumentNodes.length; i++) {
