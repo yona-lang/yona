@@ -12,7 +12,7 @@ import abzu.runtime.AbzuUndefinedNameException;
  */
 public class UndefinedFunctionRootNode extends AbzuRootNode {
   public UndefinedFunctionRootNode(AbzuLanguage language, String name) {
-    super(language, null, null, null, name);
+    super(language, null, null, null, name, null);
   }
 
   @Override

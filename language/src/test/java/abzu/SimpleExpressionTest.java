@@ -95,8 +95,8 @@ public class SimpleExpressionTest {
   @Test
   public void moduleTest() {
     String src = "module test exports fun as\n" +
-        "fun = 6\n" +
-        "other_fun = 7";
+                 "fun = 6\n" +
+                 "other_fun = 7";
     Value modVal = context.eval("abzu", src);
 
     assertTrue(modVal.hasMember("fun"));
@@ -132,7 +132,26 @@ public class SimpleExpressionTest {
 
   @Test
   public void letFunctionAliasTest() {
-    long ret = context.eval("abzu", "let funalias := fun arg = arg in funalias").execute(5).asLong();
+    long ret = context.eval("abzu", "let funalias := \\arg -> arg in funalias").execute(5).asLong();
     assertEquals(5l, ret);
+  }
+
+  @Test
+  public void lambdaInLetTest() {
+    long ret = context.eval("abzu", "let " +
+                                    "alias := 6" +
+                                    "funalias := \\arg -> alias " +
+                                    "in funalias").execute(5).asLong();
+    assertEquals(6l, ret);
+  }
+
+  @Test
+  public void invocationInLetTest() {
+    long ret = context.eval("abzu", "let " +
+                                    "funone := \\arg -> arg " +
+                                    "alias := 6" +
+                                    "funalias := \\arg -> funone alias " +
+                                    "in funalias").execute(5).asLong();
+    assertEquals(6l, ret);
   }
 }

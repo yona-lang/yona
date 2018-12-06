@@ -33,6 +33,11 @@ public final class Function implements TruffleObject {
   private final String name;
 
   /**
+   * Number of arguments
+   */
+  private int cardinality;
+
+  /**
    * The current implementation of this function.
    */
   private RootCallTarget callTarget;
@@ -44,23 +49,15 @@ public final class Function implements TruffleObject {
    */
   private final CyclicAssumption callTargetStable;
 
-  public Function(AbzuLanguage language, String name) {
+  public Function(String name, RootCallTarget callTarget, int cardinality) {
     this.name = name;
-    this.callTarget = Truffle.getRuntime().createCallTarget(new UndefinedFunctionRootNode(language, name));
+    this.callTarget = callTarget;
     this.callTargetStable = new CyclicAssumption(name);
+    this.cardinality = cardinality;
   }
 
   public String getName() {
     return name;
-  }
-
-  public void setCallTarget(RootCallTarget callTarget) {
-    this.callTarget = callTarget;
-    /*
-     * We have a new call target. Invalidate all code that speculated that the old call target
-     * was stable.
-     */
-    callTargetStable.invalidate();
   }
 
   public RootCallTarget getCallTarget() {
@@ -83,5 +80,9 @@ public final class Function implements TruffleObject {
   @Override
   public ForeignAccess getForeignAccess() {
     return FunctionMessageResolutionForeign.ACCESS;
+  }
+
+  public int getCardinality() {
+    return cardinality;
   }
 }

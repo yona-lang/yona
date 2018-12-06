@@ -51,7 +51,7 @@ tokens { INDENT, DEDENT }
         parser.addErrorListener(listener);
         parser.source = source;
         ExpressionNode rootExpression = new ParserVisitor(language, source).visit(parser.input());
-        AbzuRootNode rootNode = new AbzuRootNode(language, new FrameDescriptor(), rootExpression, source.createSection(1), "root");
+        AbzuRootNode rootNode = new AbzuRootNode(language, new FrameDescriptor(), rootExpression, source.createSection(1), "root", Truffle.getRuntime().createMaterializedFrame(new Object[] {}));
         return Truffle.getRuntime().createCallTarget(rootNode);
     }
 }
@@ -74,6 +74,7 @@ value : unit
       | byteLiteral
       | stringLiteral
       | function
+      | lambda
       | tuple
       | dict
       | list
@@ -103,6 +104,7 @@ list : BRACKET_L expression? (COMMA expression)* BRACKET_R ;
 fqn : NAME (DOT NAME)* ; // TODO add uppercase/lowercase rules here
 symbol : COLON NAME;
 identifier : NAME ;
+lambda : LAMBDA_START arg* OP_ARROW expression ;
 
 // Keywords
 KW_LET : 'let' ;
@@ -125,6 +127,8 @@ COMMA : ',' ;
 COLON : ':' ;
 DOT : '.' ;
 
+LAMBDA_START : '\\' ;
+
 // Data
 STRING: '"' ('\\"'|.)*? '"' ;
 NAME : [a-zA-Z_]+ ;
@@ -144,6 +148,7 @@ OP_LTE : '<=' ;
 OP_GT : '>' ;
 OP_GTE : '>=';
 OP_NOT : '!' ;
+OP_ARROW : '->' ;
 
 OP_COMPARISON : OP_EQ | OP_NEQ | OP_LT | OP_LTE | OP_GT | OP_GTE ;
 
