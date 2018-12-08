@@ -3,9 +3,11 @@ package abzu.ast.call;
 import abzu.AbzuException;
 import abzu.AbzuLanguage;
 import abzu.ast.ExpressionNode;
+import abzu.ast.controlflow.BlockNode;
 import abzu.ast.expression.IdentifierNode;
 import abzu.ast.expression.value.FunctionNode;
 import abzu.ast.local.ReadArgumentNode;
+import abzu.ast.local.WriteLocalVariableNodeGen;
 import abzu.runtime.Function;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -64,7 +66,7 @@ public final class InvokeNode extends ExpressionNode {
       /*
        * Create a closure for partially applied function
        */
-      String partiallyAppliedFunctionName = "$pa-" + argumentNodes.length + "-" + function.getName();
+      String partiallyAppliedFunctionName = "$partial-" + argumentNodes.length + "/" + function.getCardinality() + "-" + function.getName();
       ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
 
       for (int i = 0; i < argumentNodes.length; i++) {
@@ -86,7 +88,15 @@ public final class InvokeNode extends ExpressionNode {
        * of those which were provided when this closure was created and those to be read on the following application
        */
       InvokeNode invokeNode = new InvokeNode(language, new IdentifierNode(function.getName()), allArgumentNodes);
-      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName, function.getArguments().subList(argumentNodes.length - 1, function.getCardinality()), frame.getFrameDescriptor(), invokeNode);
+      BlockNode blockNode = new BlockNode(new ExpressionNode[] {
+        /*
+         * We need to make sure that the original function is still accessible within the closure, even if the partially
+         * applied function already leaves the scope with the original function
+        */
+        WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName())),
+        invokeNode
+      });
+      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName, function.getArguments().subList(argumentNodes.length - 1, function.getCardinality()), frame.getFrameDescriptor(), blockNode);
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
