@@ -71,6 +71,6 @@ public final class FunctionNode extends ExpressionNode {
 
   private Function execute(VirtualFrame frame) {
     AbzuRootNode rootNode = new AbzuRootNode(language, frameDescriptor, expression, sourceSection, name, frame.materialize());
-    return new Function(name, Truffle.getRuntime().createCallTarget(rootNode), arguments.size());
+    return new Function(name, Truffle.getRuntime().createCallTarget(rootNode), arguments);
   }
 }

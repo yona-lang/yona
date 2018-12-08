@@ -8,7 +8,6 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <m2e.apt.activation>jdt_apt</m2e.apt.activation>
     <graalvm.version>1.0.0-rc9</graalvm.version>
-    <scala.version>2.12.7</scala.version>
   </properties>
   <packaging>pom</packaging>
   <modules>

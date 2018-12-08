@@ -138,20 +138,40 @@ public class SimpleExpressionTest {
 
   @Test
   public void lambdaInLetTest() {
-    long ret = context.eval("abzu", "let " +
-                                    "alias := 6" +
-                                    "funalias := \\arg -> alias " +
+    long ret = context.eval("abzu", "let\n" +
+                                    "alias := 6\n" +
+                                    "funalias := \\arg -> alias\n" +
                                     "in funalias").execute(5).asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void invocationInLetTest() {
-    long ret = context.eval("abzu", "let " +
-                                    "funone := \\arg -> arg " +
-                                    "alias := 6" +
-                                    "funalias := \\arg -> funone alias " +
+    long ret = context.eval("abzu", "let\n" +
+                                    "funone := \\arg -> arg\n" +
+                                    "alias := 6\n" +
+                                    "funalias := \\arg -> funone alias\n" +
                                     "in funalias").execute(5).asLong();
+    assertEquals(6l, ret);
+  }
+
+  @Test
+  public void curriedLambdaInLetTest() {
+    long ret = context.eval("abzu", "let\n" +
+                                    "curriedFun := \\argone argtwo -> argone\n" +
+                                    "curriedOne := \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
+                                    "curried := \\curriedArg -> curriedOne curriedArg\n" +
+                                    "in curried").execute(5).asLong();
+    assertEquals(5l, ret);
+  }
+
+  @Test
+  public void curriedLambdaInLetSecondArgTest() {
+    long ret = context.eval("abzu", "let\n" +
+                                    "curriedFun := \\argone argtwo -> argtwo\n" +
+                                    "curriedOne := \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
+                                    "curried := \\curriedArg -> curriedOne curriedArg\n" +
+                                    "in curried").execute(6).asLong();
     assertEquals(6l, ret);
   }
 }

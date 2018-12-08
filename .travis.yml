@@ -7,7 +7,7 @@ language: generic
 env:
   - JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$PATH
 install:
-  - wget -O $HOME/jdk.tar.gz https://github.com/oracle/graal/releases/download/vm-1.0.0-rc9/graalvm-ce-1.0.0-rc9-linux-amd64.tar.gz
+  - wget -O $HOME/jdk.tar.gz https://github.com/oracle/graal/releases/download/vm-1.0.0-rc10/graalvm-ce-1.0.0-rc10-linux-amd64.tar.gz
   - mkdir $HOME/jdk && tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk --strip-components=1
   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
 script:

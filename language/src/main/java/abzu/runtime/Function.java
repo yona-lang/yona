@@ -1,17 +1,12 @@
 package abzu.runtime;
 
-import abzu.AbzuLanguage;
-import abzu.ast.AbzuRootNode;
-import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
-import abzu.ast.UndefinedFunctionRootNode;
+
+import java.util.List;
 
 /**
  * Represents a abzu function. On the Truffle level, a callable element is represented by a
@@ -38,6 +33,11 @@ public final class Function implements TruffleObject {
   private int cardinality;
 
   /**
+   * Names of arguments
+   */
+  private List<String> arguments;
+
+  /**
    * The current implementation of this function.
    */
   private RootCallTarget callTarget;
@@ -49,11 +49,12 @@ public final class Function implements TruffleObject {
    */
   private final CyclicAssumption callTargetStable;
 
-  public Function(String name, RootCallTarget callTarget, int cardinality) {
+  public Function(String name, RootCallTarget callTarget, List<String> arguments) {
     this.name = name;
     this.callTarget = callTarget;
     this.callTargetStable = new CyclicAssumption(name);
-    this.cardinality = cardinality;
+    this.cardinality = arguments.size();
+    this.arguments = arguments;
   }
 
   public String getName() {
@@ -84,5 +85,9 @@ public final class Function implements TruffleObject {
 
   public int getCardinality() {
     return cardinality;
+  }
+
+  public List<String> getArguments() {
+    return arguments;
   }
 }

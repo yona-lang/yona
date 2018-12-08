@@ -1,7 +1,11 @@
 package abzu.ast.call;
 
 import abzu.AbzuException;
+import abzu.AbzuLanguage;
 import abzu.ast.ExpressionNode;
+import abzu.ast.expression.IdentifierNode;
+import abzu.ast.expression.value.FunctionNode;
+import abzu.ast.local.ReadArgumentNode;
 import abzu.runtime.Function;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -26,10 +30,13 @@ public final class InvokeNode extends ExpressionNode {
   @Node.Children private final ExpressionNode[] argumentNodes;
   @Node.Child private DispatchNode dispatchNode;
 
-  public InvokeNode(ExpressionNode functionNode, ExpressionNode[] argumentNodes) {
+  private AbzuLanguage language;
+
+  public InvokeNode(AbzuLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes) {
     this.functionNode = functionNode;
     this.argumentNodes = argumentNodes;
     this.dispatchNode = DispatchNodeGen.create();
+    this.language = language;
   }
 
   @ExplodeLoop
@@ -50,16 +57,44 @@ public final class InvokeNode extends ExpressionNode {
      */
     CompilerAsserts.compilationConstant(argumentNodes.length);
 
-    if (argumentNodes.length != function.getCardinality()) {
+    if (argumentNodes.length > function.getCardinality()) {
       throw new AbzuException("Unexpected number of arguments when calling '" + function.getName() +
                               "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
-    }
+    } else if (argumentNodes.length < function.getCardinality()) {
+      /*
+       * Create a closure for partially applied function
+       */
+      String partiallyAppliedFunctionName = "$pa-" + argumentNodes.length + "-" + function.getName();
+      ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
 
-    Object[] argumentValues = new Object[argumentNodes.length];
-    for (int i = 0; i < argumentNodes.length; i++) {
-      argumentValues[i] = argumentNodes[i].executeGeneric(frame);
+      for (int i = 0; i < argumentNodes.length; i++) {
+        /*
+         * These arguments are already on the stack, so we just create ident nodes for them
+         */
+        allArgumentNodes[i] = new IdentifierNode(function.getArguments().get(i));
+      }
+
+      for (int i = argumentNodes.length - 1, j = 0; i < function.getCardinality(); i++, j++) {
+        /*
+         * These are the new arguments, to be read on the actual application of this new closure
+         */
+        allArgumentNodes[i] = new ReadArgumentNode(j);
+      }
+
+      /*
+       * Partially applied function will just invoke the original function with arguments constructed as a combination
+       * of those which were provided when this closure was created and those to be read on the following application
+       */
+      InvokeNode invokeNode = new InvokeNode(language, new IdentifierNode(function.getName()), allArgumentNodes);
+      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName, function.getArguments().subList(argumentNodes.length - 1, function.getCardinality()), frame.getFrameDescriptor(), invokeNode);
+      return partiallyAppliedFunctionNode.executeGeneric(frame);
+    } else {
+      Object[] argumentValues = new Object[argumentNodes.length];
+      for (int i = 0; i < argumentNodes.length; i++) {
+        argumentValues[i] = argumentNodes[i].executeGeneric(frame);
+      }
+      return dispatchNode.executeDispatch(function, argumentValues);
     }
-    return dispatchNode.executeDispatch(function, argumentValues);
   }
 
   @Override

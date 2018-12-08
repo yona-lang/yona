@@ -36,7 +36,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     functionBodyNode.addRootTag();
 
     FunctionNode mainFunctionNode = new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", Collections.emptyList(), new FrameDescriptor(), functionBodyNode);
-    return new InvokeNode(mainFunctionNode, new ExpressionNode[] {});
+    return new InvokeNode(language, mainFunctionNode, new ExpressionNode[] {});
   }
 
   @Override
@@ -50,7 +50,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     for (AbzuParser.ExpressionContext exprCtx : ctx.apply().expression()) {
       args.add(exprCtx.accept(this));
     }
-    return new InvokeNode(new IdentifierNode(ctx.apply().NAME().getText()), args.toArray(new ExpressionNode[]{}));
+    return new InvokeNode(language, new IdentifierNode(ctx.apply().NAME().getText()), args.toArray(new ExpressionNode[]{}));
   }
 
   @Override
