@@ -4,7 +4,7 @@ import abzu.AbzuException;
 import abzu.AbzuLanguage;
 import abzu.ast.ExpressionNode;
 import abzu.ast.controlflow.BlockNode;
-import abzu.ast.expression.IdentifierNode;
+import abzu.ast.expression.SimpleIdentifierNode;
 import abzu.ast.expression.value.FunctionNode;
 import abzu.ast.local.ReadArgumentNode;
 import abzu.ast.local.WriteLocalVariableNodeGen;
@@ -73,7 +73,7 @@ public final class InvokeNode extends ExpressionNode {
         /*
          * These arguments are already on the stack, so we just create ident nodes for them
          */
-        allArgumentNodes[i] = new IdentifierNode(function.getArguments().get(i));
+        allArgumentNodes[i] = new SimpleIdentifierNode(function.getArguments().get(i));
       }
 
       for (int i = argumentNodes.length - 1, j = 0; i < function.getCardinality(); i++, j++) {
@@ -87,7 +87,7 @@ public final class InvokeNode extends ExpressionNode {
        * Partially applied function will just invoke the original function with arguments constructed as a combination
        * of those which were provided when this closure was created and those to be read on the following application
        */
-      InvokeNode invokeNode = new InvokeNode(language, new IdentifierNode(function.getName()), allArgumentNodes);
+      InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(function.getName()), allArgumentNodes);
       BlockNode blockNode = new BlockNode(new ExpressionNode[] {
         /*
          * We need to make sure that the original function is still accessible within the closure, even if the partially

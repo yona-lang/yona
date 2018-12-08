@@ -178,18 +178,27 @@ public class SimpleExpressionTest {
   @Test
   public void curriedLambdaInLetOutOfScopeTest() {
     long ret = context.eval("abzu", "let\n" +
-                                    "curriedFullFun := \\ignore -> let fullFun := \\argone argtwo argthree -> argthree in fullFun 1\n" +
-                                    "curriedFun := curriedFullFun 2\n" +
+                                    "curriedFullFun := \\-> let fullFun := \\argone argtwo argthree -> argthree in fullFun 1\n" +
+                                    "curriedFun := curriedFullFun\n" +
                                     "curried := \\curriedArg -> curriedFun 3 4 curriedArg\n" +
                                     "in curried").execute(6).asLong();
     assertEquals(6l, ret);
   }
 
   @Test
+  public void curriedLambdaInLetZeroArgsTest() {
+    long ret = context.eval("abzu", "let\n" +
+                                    "curriedFun := \\ -> 1\n" +
+                                    "curried := \\curriedArg -> curriedFun\n" +
+                                    "in curried").execute(6).asLong();
+    assertEquals(1l, ret);
+  }
+
+  @Test
   public void zeroArgApplicationInLetTest() {
     long ret = context.eval("abzu", "let\n" +
                                     "zeroArgFun := \\-> 5\n" +
-                                    "in zeroArgFun").execute().asLong();
+                                    "in zeroArgFun").asLong();
     assertEquals(5l, ret);
   }
 }

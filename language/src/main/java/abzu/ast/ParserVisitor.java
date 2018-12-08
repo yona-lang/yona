@@ -50,7 +50,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     for (AbzuParser.ExpressionContext exprCtx : ctx.apply().expression()) {
       args.add(exprCtx.accept(this));
     }
-    return new InvokeNode(language, new IdentifierNode(ctx.apply().NAME().getText()), args.toArray(new ExpressionNode[]{}));
+    return new InvokeNode(language, new IdentifierNode(language, ctx.apply().NAME().getText()), args.toArray(new ExpressionNode[]{}));
   }
 
   @Override
@@ -213,7 +213,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   @Override
   public IdentifierNode visitIdentifier(AbzuParser.IdentifierContext ctx) {
     String name = ctx.NAME().getText();
-    return new IdentifierNode(name);
+    return new IdentifierNode(language, name);
   }
 
   private String normalizeString(String str) {
