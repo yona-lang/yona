@@ -35,7 +35,7 @@ public class AbzuLanguage extends TruffleLanguage<Context> {
   }
 
   @Override
-  protected CallTarget parse(ParsingRequest request) throws Exception {
+  public CallTarget parse(ParsingRequest request) throws Exception {
     Source source = request.getSource();
     RootCallTarget rootCallTarget;
     /*

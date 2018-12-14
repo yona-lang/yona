@@ -1,7 +1,7 @@
 package abzu.ast.expression.value;
 
 import abzu.ast.ExpressionNode;
-import abzu.runtime.Tuple;
+import abzu.runtime.StringList;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -39,15 +39,11 @@ public final class NonEmptyStringListNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return execute(frame);
+    return Arrays.asList(strings);
   }
 
   @Override
-  public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
-    return execute(frame);
-  }
-
-  private Tuple execute(VirtualFrame frame) {
-    return new Tuple(strings);
+  public StringList executeStringList(VirtualFrame frame) throws UnexpectedResultException {
+    return new StringList(strings);
   }
 }

@@ -3,7 +3,6 @@ package abzu.ast.expression.value;
 import abzu.ast.ExpressionNode;
 import abzu.runtime.Function;
 import abzu.runtime.Module;
-import abzu.runtime.Tuple;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -17,7 +16,7 @@ import java.util.Objects;
 @NodeInfo
 public final class ModuleNode extends ExpressionNode {
   @Node.Child
-  public FQNNode fqn;
+  public FQNNode moduleFQN;
   @Node.Child
   public NonEmptyStringListNode exports;
   @Node.Children
@@ -26,8 +25,8 @@ public final class ModuleNode extends ExpressionNode {
   @Child
   public ExpressionNode expression;
 
-  public ModuleNode(FQNNode fqn, NonEmptyStringListNode exports, FunctionNode[] functions) {
-    this.fqn = fqn;
+  public ModuleNode(FQNNode moduleFQN, NonEmptyStringListNode exports, FunctionNode[] functions) {
+    this.moduleFQN = moduleFQN;
     this.exports = exports;
     this.functions = functions;
   }
@@ -37,20 +36,20 @@ public final class ModuleNode extends ExpressionNode {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     ModuleNode that = (ModuleNode) o;
-    return Objects.equals(fqn, that.fqn) &&
+    return Objects.equals(moduleFQN, that.moduleFQN) &&
            Objects.equals(exports, that.exports) &&
            Objects.equals(functions, that.functions);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(fqn, exports, expression);
+    return Objects.hash(moduleFQN, exports, expression);
   }
 
   @Override
   public String toString() {
     return "ModuleNode{" +
-           "name='" + fqn + '\'' +
+           "moduleFQN='" + moduleFQN + '\'' +
            ", exports=" + exports +
            ", functions=" + Arrays.toString(functions) +
            '}';
@@ -67,14 +66,14 @@ public final class ModuleNode extends ExpressionNode {
 
   @Override
   public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
-    Tuple moduleFQN = fqn.executeTuple(frame);
-    Tuple executedExports = exports.executeTuple(frame);
+    List<String> executedModuleFQN = moduleFQN.executeStringList(frame).asJavaList();
+    List<String> executedExports = exports.executeStringList(frame).asJavaList();
     List<Function> executedFunctions = new ArrayList<>(functions.length);
 
     for (FunctionNode fun : functions) {
       executedFunctions.add(fun.executeFunction(frame));
     }
 
-    return new Module(moduleFQN, executedExports, executedFunctions);
+    return new Module(executedModuleFQN, executedExports, executedFunctions);
   }
 }

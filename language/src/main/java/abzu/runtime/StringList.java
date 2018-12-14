@@ -5,36 +5,41 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.Node;
 
 import java.util.Arrays;
+import java.util.List;
 
-@MessageResolution(receiverType = Tuple.class)
-public class Tuple implements TruffleObject {
-  private final Object[] items;
+@MessageResolution(receiverType = StringList.class)
+public class StringList implements TruffleObject {
+  private final String[] items;
 
-  public Tuple(Object... items) {
+  public StringList(String... items) {
     this.items = items;
+  }
+
+  public List<String> asJavaList() {
+    return Arrays.asList(items);
   }
 
   @Override
   public String toString() {
     String toStr = Arrays.toString(items);
-    return "(" + toStr.substring(1, toStr.length() - 1) + ')';
+    return "[" + toStr.substring(1, toStr.length() - 1) + ']';
   }
 
   @Override
   public ForeignAccess getForeignAccess() {
-    return TupleForeign.ACCESS;
+    return StringListForeign.ACCESS;
   }
 
   @Resolve(message = "GET_SIZE")
   abstract static class GetSize extends Node {
-    Object access(Tuple obj) {
+    Object access(StringList obj) {
       return obj.items.length;
     }
   }
 
   @Resolve(message = "HAS_SIZE")
   abstract static class HasSize extends Node {
-    public Object access(@SuppressWarnings("unused") Tuple receiver) {
+    public Object access(@SuppressWarnings("unused") StringList receiver) {
       return true;
     }
   }
@@ -42,7 +47,7 @@ public class Tuple implements TruffleObject {
   @Resolve(message = "KEY_INFO")
   public abstract static class InfoNode extends Node {
 
-    public int access(Tuple receiver, int index) {
+    public int access(StringList receiver, int index) {
       if (index < receiver.items.length) {
         return KeyInfo.READABLE;
       } else {
@@ -53,7 +58,7 @@ public class Tuple implements TruffleObject {
 
   @Resolve(message = "READ")
   abstract static class Read extends Node {
-    public Object access(Tuple receiver, int index) {
+    public Object access(StringList receiver, int index) {
       try {
         Object key = receiver.items[index];
         assert key instanceof Number;
@@ -65,7 +70,7 @@ public class Tuple implements TruffleObject {
     }
   }
 
-  static boolean isInstance(TruffleObject tuple) {
-    return tuple instanceof Tuple;
+  static boolean isInstance(TruffleObject list) {
+    return list instanceof StringList;
   }
 }

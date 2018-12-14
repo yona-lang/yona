@@ -80,12 +80,14 @@ value : unit
       | list
       | symbol
       | identifier
+      | fqn
       ;
 
 let : KW_LET alias+ KW_IN expression ;
 alias : NAME OP_PMATCH expression ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
-apply : NAME expression* ;
+apply : (NAME | moduleCall) expression* ;
+moduleCall : fqn DOT NAME ;
 module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS function+ ;
 nonEmptyListOfNames : NAME (COMMA NAME)* ;
 
@@ -101,7 +103,7 @@ tuple : PARENS_L (expression (COMMA expression)*)? PARENS_R ;
 dict : key COLON expression (COMMA key COLON expression)* ;
 key : STRING ;
 list : BRACKET_L expression? (COMMA expression)* BRACKET_R ;
-fqn : NAME (DOT NAME)* ; // TODO add uppercase/lowercase rules here
+fqn : NAME (SLASH NAME)* ;
 symbol : COLON NAME;
 identifier : NAME ;
 lambda : LAMBDA_START arg* OP_ARROW expression ;
@@ -126,6 +128,7 @@ PARENS_R : ')' ;
 COMMA : ',' ;
 COLON : ':' ;
 DOT : '.' ;
+SLASH : OP_DIVIDE ;
 
 LAMBDA_START : '\\' ;
 

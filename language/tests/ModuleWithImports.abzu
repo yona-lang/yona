@@ -1,0 +1,8 @@
+let
+    simpleModuleOne := tests/SimpleModule
+    simpleModuleTwo := tests/SimpleModuleTwo
+in
+
+module tests/ModuleWithImports exports testone as
+
+funone argone = simpleModuleOne.funone argone

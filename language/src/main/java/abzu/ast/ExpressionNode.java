@@ -1,10 +1,8 @@
 package abzu.ast;
 
 import abzu.TypesGen;
-import abzu.runtime.Function;
+import abzu.runtime.*;
 import abzu.runtime.Module;
-import abzu.runtime.Tuple;
-import abzu.runtime.Unit;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
@@ -206,5 +204,9 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
 
   public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
     return TypesGen.expectModule(executeGeneric(frame));
+  }
+
+  public StringList executeStringList(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectStringList(executeGeneric(frame));
   }
 }

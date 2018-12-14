@@ -1,0 +1,3 @@
+module tests/SimpleModuleTwo exports funone as
+
+funone argone = argone

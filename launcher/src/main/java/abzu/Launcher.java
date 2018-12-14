@@ -44,14 +44,7 @@ public final class Launcher {
     System.out.println("== running on " + context.getEngine());
 
     try {
-      Value result = context.eval(source);
-      if (context.getBindings("abzu").getMember("main") == null) {
-        System.err.println("No function main() defined in Abzu source file.");
-        return 1;
-      }
-      if (!result.isNull()) {
-        System.out.println(result.toString());
-      }
+      context.eval(source);
       return 0;
     } catch (PolyglotException ex) {
       if (ex.isInternalError()) {

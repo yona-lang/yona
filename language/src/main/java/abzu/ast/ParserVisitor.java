@@ -4,6 +4,7 @@ import abzu.AbzuBaseVisitor;
 import abzu.AbzuLanguage;
 import abzu.AbzuParser;
 import abzu.ast.call.InvokeNode;
+import abzu.ast.call.ModuleCallNode;
 import abzu.ast.controlflow.BlockNode;
 import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
@@ -45,12 +46,21 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public InvokeNode visitFunctionApplicationExpression(AbzuParser.FunctionApplicationExpressionContext ctx) {
+  public ExpressionNode visitFunctionApplicationExpression(AbzuParser.FunctionApplicationExpressionContext ctx) {
     List<ExpressionNode> args = new ArrayList<>();
     for (AbzuParser.ExpressionContext exprCtx : ctx.apply().expression()) {
       args.add(exprCtx.accept(this));
     }
-    return new InvokeNode(language, new IdentifierNode(language, ctx.apply().NAME().getText()), args.toArray(new ExpressionNode[]{}));
+
+    ExpressionNode[] argNodes = args.toArray(new ExpressionNode[]{});
+
+    if(ctx.apply().moduleCall() != null) {
+      FQNNode fqnNode = visitFqn(ctx.apply().moduleCall().fqn());
+      String functionName = ctx.apply().moduleCall().NAME().getText();
+      return new ModuleCallNode(language, fqnNode, functionName, argNodes);
+    } else {
+      return new InvokeNode(language, new IdentifierNode(language, ctx.apply().NAME().getText()), argNodes);
+    }
   }
 
   @Override
@@ -175,7 +185,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   @Override
   public ModuleNode visitModule(AbzuParser.ModuleContext ctx) {
-    FQNNode fqn = visitFqn(ctx.fqn());
+    FQNNode moduleFQN = visitFqn(ctx.fqn());
     NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());
 
     int elementsCount = ctx.function().size();
@@ -183,7 +193,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     for (int i = 0; i < elementsCount; i++) {
       functions[i] = visitFunction(ctx.function(i));
     }
-    return new ModuleNode(fqn, exports, functions);
+    return new ModuleNode(moduleFQN, exports, functions);
   }
 
   @Override
@@ -202,7 +212,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     for (int i = 0; i < elementsCount; i++) {
       content[i] = ctx.NAME(i).getText();
     }
-    return new FQNNode(content);
+    return new FQNNode(language, content);
   }
 
   @Override

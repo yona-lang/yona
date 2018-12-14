@@ -3,10 +3,8 @@ package abzu.ast.expression;
 import abzu.AbzuException;
 import abzu.ast.ExpressionNode;
 import abzu.ast.interop.ForeignToAbzuTypeNode;
-import abzu.runtime.Function;
+import abzu.runtime.*;
 import abzu.runtime.Module;
-import abzu.runtime.Tuple;
-import abzu.runtime.Unit;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
@@ -62,6 +60,11 @@ public abstract class UnboxNode extends ExpressionNode {
 
   @Specialization
   protected Module unboxModule(Module value) {
+    return value;
+  }
+
+  @Specialization
+  protected StringList unboxStringList(StringList value) {
     return value;
   }
 

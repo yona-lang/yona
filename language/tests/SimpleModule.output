@@ -1,0 +1,1 @@
+Module{fqn=[tests, SimpleModule], exports=[funone], functions={funone=funone}}

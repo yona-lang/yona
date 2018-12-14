@@ -28,14 +28,27 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 @NodeInfo(shortName = "invoke")
 public final class InvokeNode extends ExpressionNode {
 
-  @Node.Child private ExpressionNode functionNode;
-  @Node.Children private final ExpressionNode[] argumentNodes;
-  @Node.Child private DispatchNode dispatchNode;
+  @Node.Child
+  private ExpressionNode functionNode;
+  private final Function function;
+  @Node.Children
+  private final ExpressionNode[] argumentNodes;
+  @Node.Child
+  private DispatchNode dispatchNode;
 
   private AbzuLanguage language;
 
   public InvokeNode(AbzuLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes) {
     this.functionNode = functionNode;
+    this.function = null;
+    this.argumentNodes = argumentNodes;
+    this.dispatchNode = DispatchNodeGen.create();
+    this.language = language;
+  }
+
+  public InvokeNode(AbzuLanguage language, Function function, ExpressionNode[] argumentNodes) {
+    this.functionNode = null;
+    this.function = function;
     this.argumentNodes = argumentNodes;
     this.dispatchNode = DispatchNodeGen.create();
     this.language = language;
@@ -44,11 +57,15 @@ public final class InvokeNode extends ExpressionNode {
   @ExplodeLoop
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    Function function = null;
-    try {
-      function = functionNode.executeFunction(frame);
-    } catch (UnexpectedResultException e) {
-      throw new AbzuException("Cannot invoke non-function node: " + functionNode, this);
+    Function function;
+    if (this.function != null) {
+      function = this.function;
+    } else {
+      try {
+        function = functionNode.executeFunction(frame);
+      } catch (UnexpectedResultException e) {
+        throw new AbzuException("Cannot invoke non-function node: " + functionNode, this);
+      }
     }
 
     /*
@@ -88,7 +105,7 @@ public final class InvokeNode extends ExpressionNode {
        * of those which were provided when this closure was created and those to be read on the following application
        */
       InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(function.getName()), allArgumentNodes);
-      BlockNode blockNode = new BlockNode(new ExpressionNode[] {
+      BlockNode blockNode = new BlockNode(new ExpressionNode[]{
         /*
          * We need to make sure that the original function is still accessible within the closure, even if the partially
          * applied function already leaves the scope with the original function

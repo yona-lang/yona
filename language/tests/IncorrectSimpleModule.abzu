@@ -1,0 +1,3 @@
+module incorrect/tests/IncorrectSimpleModule exports funone as
+
+funone argone = argone

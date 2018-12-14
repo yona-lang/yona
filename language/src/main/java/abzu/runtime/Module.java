@@ -7,17 +7,38 @@ import com.oracle.truffle.api.nodes.Node;
 import java.util.*;
 
 public final class Module implements TruffleObject {
-  final Tuple fqn;
-  final Tuple exports;
+  final List<String> fqn;
+  final List<String> exports;
   final Map<String, Function> functions = new HashMap<>();
 
-  public Module(Tuple fqn, Tuple exports, List<Function> functionsList) {
+  public Module(List<String> fqn, List<String> exports, List<Function> functionsList) {
     this.fqn = fqn;
     this.exports = exports;
 
     for (Function fun : functionsList) {
       this.functions.put(fun.getName(), fun);
     }
+  }
+
+  @Override
+  public String toString() {
+    return "Module{" +
+           "fqn=" + fqn +
+           ", exports=" + exports +
+           ", functions=" + functions +
+           '}';
+  }
+
+  public List<String> getFqn() {
+    return fqn;
+  }
+
+  public List<String> getExports() {
+    return exports;
+  }
+
+  public Map<String, Function> getFunctions() {
+    return functions;
   }
 
   @Override
