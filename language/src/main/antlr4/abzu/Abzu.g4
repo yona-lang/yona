@@ -171,4 +171,8 @@ OP_LIST :  OP_CONS | OP_JOIN ;
 UNIT: '()' ;
 
 NEWLINE: ('\r'? '\n')+ ;
-WS: [ \t]+ -> skip ;
+
+fragment COMMENT : NEWLINE? '#' ~[\r\n\f]* ;
+fragment SPACES : [ \t]+ ;
+
+WS: (COMMENT | SPACES) -> skip ;
