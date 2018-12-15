@@ -221,7 +221,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     for (int i = 0; i < elementsCount; i++) {
       content[i] = ctx.NAME(i).getText();
     }
-    return new FQNNode(language, content);
+    return new FQNNode(content);
   }
 
   @Override
