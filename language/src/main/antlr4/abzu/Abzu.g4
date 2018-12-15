@@ -56,7 +56,7 @@ tokens { INDENT, DEDENT }
     }
 }
 
-input : expression EOF ;
+input : NEWLINE? expression NEWLINE? EOF ;
 
 expression : left=expression BIN_OP right=expression    #binaryOperationExpression
            | UN_OP expression                           #unaryOperationExpression
@@ -83,12 +83,12 @@ value : unit
       | fqn
       ;
 
-let : KW_LET alias+ KW_IN expression ;
-alias : NAME OP_PMATCH expression ;
+let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
+alias : NAME OP_PMATCH expression NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : (NAME | moduleCall) expression* ;
 moduleCall : fqn DOT NAME ;
-module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS function+ ;
+module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE function+ ;
 nonEmptyListOfNames : NAME (COMMA NAME)* ;
 
 unit : UNIT ;
@@ -97,7 +97,7 @@ integerLiteral : INTEGER ;
 floatLiteral : FLOAT | INTEGER 'f';
 stringLiteral : STRING ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
-function : NAME arg* OP_ASSIGN expression;
+function : NAME arg* OP_ASSIGN NEWLINE? expression NEWLINE?;
 arg : NAME ;
 tuple : PARENS_L (expression (COMMA expression)*)? PARENS_R ;
 dict : key COLON expression (COMMA key COLON expression)* ;
@@ -170,4 +170,5 @@ OP_LIST :  OP_CONS | OP_JOIN ;
 
 UNIT: '()' ;
 
-WS: [ \r\n\t]+ -> skip;
+NEWLINE: ('\r'? '\n')+ ;
+WS: [ \t]+ -> skip ;

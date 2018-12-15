@@ -86,4 +86,18 @@ public class ErrorsTest {
       throw ex;
     }
   }
+
+  @Test(expected = PolyglotException.class)
+  public void callOfPrivateModuleFunctionTest() {
+    try {
+      context.eval("abzu", "let\n" +
+                           "testMod := module testMod exports funone as\n" +
+                           "funone argone = funtwo argone\n" +
+                           "funtwo argone = argone\n" +
+                           "in testMod.funtwo 6").asLong();
+    } catch (PolyglotException ex) {
+      assertEquals(ex.getMessage(), "Function funtwo is not present in Module{fqn=[testMod], exports=[funone], functions={funone=funone, funtwo=funtwo}}");
+      throw ex;
+    }
+  }
 }

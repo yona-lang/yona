@@ -1,0 +1,1 @@
+Module{fqn=[tests, CallWithinModule], exports=[funtwo], functions={funone=funone, funtwo=funtwo}}

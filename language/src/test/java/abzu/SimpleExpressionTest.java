@@ -201,4 +201,14 @@ public class SimpleExpressionTest {
                                     "in zeroArgFun").asLong();
     assertEquals(5l, ret);
   }
+
+  @Test
+  public void moduleCallPrivateInLetTest() {
+    long ret = context.eval("abzu", "let\n" +
+                                    "testMod := module testMod exports funone as\n" +
+                                    "funone argone = funtwo argone\n" +
+                                    "funtwo argone = argone\n" +
+                                    "in testMod.funone 6").asLong();
+    assertEquals(6l, ret);
+  }
 }

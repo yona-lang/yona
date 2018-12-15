@@ -1,6 +1,9 @@
 package abzu.ast.expression.value;
 
 import abzu.ast.ExpressionNode;
+import abzu.ast.expression.AliasNode;
+import abzu.ast.local.WriteLocalVariableNode;
+import abzu.ast.local.WriteLocalVariableNodeGen;
 import abzu.runtime.Function;
 import abzu.runtime.Module;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -69,6 +72,14 @@ public final class ModuleNode extends ExpressionNode {
     List<String> executedModuleFQN = moduleFQN.executeStringList(frame).asJavaList();
     List<String> executedExports = exports.executeStringList(frame).asJavaList();
     List<Function> executedFunctions = new ArrayList<>(functions.length);
+
+    /*
+     * Set up module-local scope by putting all local functions on the stack
+     */
+    for (FunctionNode fun : functions) {
+      AliasNode aliasNode = new AliasNode(fun.name, fun);
+      aliasNode.executeGeneric(frame);
+    }
 
     for (FunctionNode fun : functions) {
       executedFunctions.add(fun.executeFunction(frame));
