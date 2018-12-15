@@ -3,6 +3,7 @@ package abzu.ast;
 import abzu.AbzuBaseVisitor;
 import abzu.AbzuLanguage;
 import abzu.AbzuParser;
+import abzu.ast.builtin.BuiltinNode;
 import abzu.ast.call.InvokeNode;
 import abzu.ast.call.ModuleCallNode;
 import abzu.ast.controlflow.BlockNode;
@@ -10,6 +11,7 @@ import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
 import abzu.ast.local.ReadArgumentNode;
 import abzu.ast.local.WriteLocalVariableNodeGen;
+import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
@@ -59,7 +61,14 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       String functionName = ctx.apply().moduleCall().NAME().getText();
       return new ModuleCallNode(language, fqnNode, functionName, argNodes);
     } else {
-      return new InvokeNode(language, new IdentifierNode(language, ctx.apply().NAME().getText()), argNodes);
+      String functionName = ctx.apply().NAME().getText();
+      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltins().lookup(functionName);
+
+      if (builtinFunction != null) {
+        return builtinFunction.createNode((Object) argNodes);
+      } else {
+        return new InvokeNode(language, new IdentifierNode(language, functionName), argNodes);
+      }
     }
   }
 

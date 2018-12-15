@@ -242,8 +242,8 @@ public class AbzuTestRunner extends ParentRunner<AbzuTestRunner.TestCase> {
     notifier.fireTestStarted(testCase.name);
 
     Context context = null;
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
     try {
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
       for (NodeFactory<? extends BuiltinNode> builtin : builtins) {
         AbzuLanguage.installBuiltin(builtin);
       }

@@ -4,6 +4,7 @@ import abzu.AbzuLanguage;
 import abzu.ast.ExpressionNode;
 import abzu.ast.AbzuRootNode;
 import abzu.ast.builtin.BuiltinNode;
+import abzu.ast.builtin.PrintlnBuiltinFactory;
 import abzu.ast.local.ReadArgumentNode;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -32,6 +33,7 @@ public class Context {
   private final Shape emptyShape;
   private final AbzuLanguage language;
   private final AllocationReporter allocationReporter;
+  private final Builtins builtins;
 
   public Context(AbzuLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
     this.env = env;
@@ -40,6 +42,17 @@ public class Context {
     this.language = language;
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.emptyShape = LAYOUT.createShape(AbzuObjectType.INSTANCE);
+    this.builtins = new Builtins();
+
+    installBuiltins(externalBuiltins);
+  }
+
+  private void installBuiltins(List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
+    for (NodeFactory<? extends BuiltinNode> externalBuiltin : externalBuiltins) {
+      this.builtins.register(externalBuiltin);
+    }
+
+    this.builtins.register(PrintlnBuiltinFactory.getInstance());
   }
 
   /**
@@ -133,5 +146,9 @@ public class Context {
 
   public static Context getCurrent() {
     return AbzuLanguage.getCurrentContext();
+  }
+
+  public Builtins getBuiltins() {
+    return builtins;
   }
 }
