@@ -84,7 +84,7 @@ public abstract class Sequence {
 
     private static final class Deep extends Sequence {
         final Affix prefix;
-        Object sub;
+        volatile Object sub;
         final Affix suffix;
 
         final int subLength;
