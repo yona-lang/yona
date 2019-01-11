@@ -17,11 +17,60 @@ public abstract class Sequence {
 
     public abstract Sequence removeLast();
 
-    public abstract Object foldLeft(BiFunction<Object, Object, Object> function, Object initial);
+    public abstract Object foldLeft(BiFunction function, Object initial);
 
-    public abstract Object foldRight(BiFunction<Object, Object, Object> function, Object initial);
+    public abstract Object foldRight(BiFunction function, Object initial);
 
     public abstract int length();
+
+    public static Sequence catenate(Sequence first, Sequence second) {
+        if (first instanceof Deep) {
+            if (second instanceof Deep) {
+                final Deep left = (Deep) first;
+                final Deep right = (Deep) second;
+                final Sequence forcedLeftSub = left.forceSub();
+                final Sequence forcedRightSub = right.forceSub();
+                final int newSubLength = left.subLength + left.suffix.length() + right.prefix.length() + right.subLength;
+                Supplier<Sequence> newSub = () -> {
+                    Sequence leftSub = forcedLeftSub;
+                    //noinspection ConstantConditions
+                    for (Node node : makeNodes(elementsOf(left.suffix, right.prefix))) leftSub = leftSub.inject(node);
+                    return catenate(leftSub, forcedRightSub);
+                };
+                return new Deep(left.prefix, newSub, newSubLength, right.suffix);
+            } else {
+                assert second instanceof Shallow;
+                return (Sequence) second.foldLeft((seq, v) -> ((Sequence) seq).inject(v), first);
+            }
+        } else {
+            assert first instanceof Shallow;
+            return (Sequence) first.foldRight((seq, v) -> ((Sequence) seq).push(v), second);
+        }
+    }
+
+    private static Node[] makeNodes(Object[] m) {
+        assert m.length >= 2;
+        assert m.length < 7;
+        switch (m.length) {
+            case 2: return (Node[]) new Object[]{ new Two(m[0], measure(m[0]), m[1], measure(m[1])) };
+            case 3: return (Node[]) new Object[]{ new Three(m[0], measure(m[0]), m[1], measure(m[1]), m[2], measure(m[2])) };
+            case 4: return (Node[]) new Object[]{ new Two(m[0], measure(m[0]), m[1], measure(m[1])), new Two(m[2], measure(m[2]), m[3], measure(m[3])) };
+            case 5: return (Node[]) new Object[]{ new Two(m[0], measure(m[0]), m[1], measure(m[1])), new Three(m[2], measure(m[2]), m[3], measure(m[3]), m[4], measure(m[4])) };
+            case 6: return (Node[]) new Object[]{ new Three(m[0], measure(m[0]), m[1], measure(m[1]), m[2], measure(m[2])), new Three(m[3], measure(m[3]), m[4], measure(m[4]), m[5], measure(m[5])) };
+            default: {
+                assert false;
+                return null;
+            }
+        }
+    }
+
+    private static Object[] elementsOf(Affix left, Affix right) {
+        final Object[] result = new Object[left.length() + right.length()];
+        final int[] i = {0};
+        left.foldLeft((r, m) -> { ((Object[]) r)[i[0]++] = m; return result; }, result);
+        right.foldLeft((r, m) -> { ((Object[]) r)[i[0]++] = m; return result; }, result);
+        return result;
+    }
 
     private static int measure(Object o) {
         return o instanceof Node ? ((Node) o).length() : 1;
@@ -66,13 +115,15 @@ public abstract class Sequence {
             return value == null ? null : EMPTY;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public Object foldLeft(BiFunction<Object, Object, Object> function, Object initial) {
+        public Object foldLeft(BiFunction function, Object initial) {
             return value == null ? initial : function.apply(initial, value);
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public Object foldRight(BiFunction<Object, Object, Object> function, Object initial) {
+        public Object foldRight(BiFunction function, Object initial) {
             return value == null ? initial : function.apply(initial, value);
         }
 
@@ -177,8 +228,9 @@ public abstract class Sequence {
             }
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public Object foldLeft(BiFunction<Object, Object, Object> function, Object initial) {
+        public Object foldLeft(BiFunction function, Object initial) {
             Object result = initial;
             result = prefix.foldLeft(function, result);
             result = forceSub().foldLeft((n, node) -> ((Node) node).foldLeft(function, n), result);
@@ -186,8 +238,9 @@ public abstract class Sequence {
             return result;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public Object foldRight(BiFunction<Object, Object, Object> function, Object initial) {
+        public Object foldRight(BiFunction function, Object initial) {
             Object result = initial;
             result = suffix.foldRight(function, result);
             result = forceSub().foldRight((n, node) -> ((Node) node).foldRight(function, n), result);
