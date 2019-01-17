@@ -20,7 +20,7 @@ touch "$MANIFEST"
 echo "Bundle-Name: abzu Language" >> "$MANIFEST"
 echo "Bundle-Symbolic-Name: abzu" >> "$MANIFEST"
 echo "Bundle-Version: 0.1-SNAPSHOT" >> "$MANIFEST"
-echo 'Bundle-RequireCapability: org.graalvm; filter:="(&(graalvm_version=1.0.0-rc9)(os_arch=amd64))"' >> "$MANIFEST"
+echo 'Bundle-RequireCapability: org.graalvm; filter:="(&(graalvm_version=1.0.0-rc11)(os_arch=amd64))"' >> "$MANIFEST"
 echo "x-GraalVM-Polyglot-Part: True" >> "$MANIFEST"
 
 cd $COMPONENT_DIR
