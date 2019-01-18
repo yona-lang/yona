@@ -17,11 +17,19 @@ public abstract class Sequence {
 
     public abstract Sequence removeLast();
 
-    public abstract Object foldLeft(BiFunction function, Object initial);
+    public abstract <T> T foldLeft(BiFunction<? super T, ? super Object, ? extends T> function, T initial);
 
-    public abstract Object foldRight(BiFunction function, Object initial);
+    public abstract <T> T foldRight(BiFunction<? super T, ? super Object, ? extends T> function, T initial);
+
+    public final Object lookup(int idx) {
+        SplitPoint splitPoint = new SplitPoint(false, false);
+        splitAt(idx, splitPoint);
+        return splitPoint.point;
+    }
 
     public abstract int length();
+
+    abstract int splitAt(int idx, SplitPoint splitPoint);
 
     public static Sequence catenate(Sequence first, Sequence second) {
         if (first instanceof Deep) {
@@ -40,12 +48,30 @@ public abstract class Sequence {
                 return new Deep(left.prefix, newSub, newSubLength, right.suffix);
             } else {
                 assert second instanceof Shallow;
-                return (Sequence) second.foldLeft((seq, v) -> ((Sequence) seq).inject(v), first);
+                return second.foldLeft(Sequence::inject, first);
             }
         } else {
             assert first instanceof Shallow;
-            return (Sequence) first.foldRight((seq, v) -> ((Sequence) seq).push(v), second);
+            return first.foldRight(Sequence::push, second);
         }
+    }
+
+    public static Sequence sequence() {
+        return Shallow.EMPTY;
+    }
+
+    public static Sequence sequence(Object sole) {
+        return new Shallow(sole);
+    }
+
+    public static Sequence sequence(Object first, Object second) {
+        return new Deep(first, second);
+    }
+
+    public static Sequence sequence(Object... values) {
+        Sequence result = Shallow.EMPTY;
+        for (Object value : values) result = result.inject(value);
+        return result;
     }
 
     private static Node[] makeNodes(Object[] m) {
@@ -67,9 +93,18 @@ public abstract class Sequence {
     private static Object[] elementsOf(Affix left, Affix right) {
         final Object[] result = new Object[left.length() + right.length()];
         final int[] i = {0};
-        left.foldLeft((r, m) -> { ((Object[]) r)[i[0]++] = m; return result; }, result);
-        right.foldLeft((r, m) -> { ((Object[]) r)[i[0]++] = m; return result; }, result);
+        left.foldLeft((r, m) -> { r[i[0]++] = m; return result; }, result);
+        right.foldLeft((r, m) -> { r[i[0]++] = m; return result; }, result);
         return result;
+    }
+
+    private static Sequence simplify(Sequence nodes) {
+        if (nodes instanceof Deep) {
+            final Sequence trimmed = nodes.removeFirst().removeLast();
+            assert nodes.first() instanceof Node;
+            assert nodes.last() instanceof Node;
+            return new Deep((Node) nodes.first(), trimmed, trimmed.length(), (Node) nodes.last());
+        } else return nodes.foldLeft((r, node) -> ((Node) node).foldLeft(Sequence::inject, r), (Sequence) Shallow.EMPTY);
     }
 
     private static int measure(Object o) {
@@ -115,21 +150,26 @@ public abstract class Sequence {
             return value == null ? null : EMPTY;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public Object foldLeft(BiFunction function, Object initial) {
+        public <T> T foldLeft(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
             return value == null ? initial : function.apply(initial, value);
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public Object foldRight(BiFunction function, Object initial) {
+        public <T> T foldRight(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
             return value == null ? initial : function.apply(initial, value);
         }
 
         @Override
         public int length() {
             return value == null ? 0 : measure(value);
+        }
+
+        @Override
+        int splitAt(int idx, SplitPoint pt) {
+            if (value == null) return idx;
+            if (idx < measure(value)) pt.point = value;
+            return idx;
         }
     }
 
@@ -228,20 +268,18 @@ public abstract class Sequence {
             }
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public Object foldLeft(BiFunction function, Object initial) {
-            Object result = initial;
+        public <T> T foldLeft(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
+            T result = initial;
             result = prefix.foldLeft(function, result);
             result = forceSub().foldLeft((n, node) -> ((Node) node).foldLeft(function, n), result);
             result = suffix.foldLeft(function, result);
             return result;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public Object foldRight(BiFunction function, Object initial) {
-            Object result = initial;
+        public <T> T foldRight(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
+            T result = initial;
             result = suffix.foldRight(function, result);
             result = forceSub().foldRight((n, node) -> ((Node) node).foldRight(function, n), result);
             result = prefix.foldRight(function, result);
@@ -251,6 +289,39 @@ public abstract class Sequence {
         @Override
         public int length() {
             return prefix.length() + subLength + suffix.length();
+        }
+
+        @Override
+        int splitAt(int idx, SplitPoint splitPoint) {
+            final int prefixLength = prefix.length();
+            if (idx < prefixLength) {
+                if (splitPoint.right != null) splitPoint.right = catenate(simplify(forceSub()), suffix.foldRight(Sequence::push, splitPoint.right));
+                return prefix.splitAt(idx, splitPoint);
+            }
+            idx -= prefixLength;
+            if (idx < subLength) {
+                if (splitPoint.left != null) splitPoint.left = prefix.foldLeft(Sequence::inject, splitPoint.left);
+                if (splitPoint.right != null) splitPoint.right = suffix.foldRight(Sequence::push, splitPoint.right);
+                SplitPoint deeperPt = new SplitPoint(splitPoint.left != null, splitPoint.right != null);
+                idx = forceSub().splitAt(idx, deeperPt);
+                if (splitPoint.left != null) {
+                    assert deeperPt.left != null;
+                    splitPoint.left = catenate(splitPoint.left, simplify(deeperPt.left));
+                }
+                if (splitPoint.right != null) {
+                    assert deeperPt.right != null;
+                    splitPoint.right = catenate(simplify(deeperPt.right), splitPoint.right);
+                }
+                return deeperPt.point != null ? ((Node) deeperPt.point).splitAt(idx, splitPoint) : idx;
+            }
+            idx -= subLength;
+            final int suffixLength = suffix.length();
+            if (idx < suffixLength) {
+                if (splitPoint.left != null) splitPoint.left = catenate(prefix.foldLeft(Sequence::inject, splitPoint.left), simplify(forceSub()));
+                return suffix.splitAt(idx, splitPoint);
+            }
+            idx -= suffixLength;
+            return idx;
         }
     }
 
@@ -268,9 +339,11 @@ public abstract class Sequence {
 
         abstract Affix removeLast();
 
-        abstract Object foldLeft(BiFunction<Object, Object, Object> function, Object initial);
+        abstract <T> T foldLeft(BiFunction<? super T, ? super Object, ? extends T> function, T initial);
 
-        abstract Object foldRight(BiFunction<Object, Object, Object> function, Object initial);
+        abstract <T> T foldRight(BiFunction<? super T, ? super Object, ? extends T> function, T initial);
+
+        abstract int splitAt(int idx, SplitPoint splitPoint);
 
         abstract int length();
     }
@@ -313,13 +386,24 @@ public abstract class Sequence {
         }
 
         @Override
-        Object foldLeft(BiFunction<Object, Object, Object> function, Object initial) {
+        <T> T foldLeft(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
             return function.apply(initial, sole);
         }
 
         @Override
-        Object foldRight(BiFunction<Object, Object, Object> function, Object initial) {
+        <T> T foldRight(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
             return function.apply(initial, sole);
+        }
+
+        @Override
+        int splitAt(int idx, SplitPoint splitPoint) {
+            final int soleMeasure = measure(sole);
+            if (idx < soleMeasure) {
+                splitPoint.point = sole;
+                return idx;
+            }
+            idx -= soleMeasure;
+            return idx;
         }
 
         @Override
@@ -375,19 +459,36 @@ public abstract class Sequence {
         }
 
         @Override
-        Object foldLeft(BiFunction<Object, Object, Object> function, Object initial) {
-            Object result = initial;
+        <T> T foldLeft(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
+            T result = initial;
             result = function.apply(result, first);
             result = function.apply(result, second);
             return result;
         }
 
         @Override
-        Object foldRight(BiFunction<Object, Object, Object> function, Object initial) {
-            Object result = initial;
+        <T> T foldRight(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
+            T result = initial;
             result = function.apply(result, second);
             result = function.apply(result, first);
             return result;
+        }
+
+        @Override
+        int splitAt(int idx, SplitPoint splitPoint) {
+            if (idx < firstLen) {
+                splitPoint.point = first;
+                if (splitPoint.right != null) splitPoint.right = splitPoint.right.push(second);
+                return idx;
+            }
+            idx -= firstLen;
+            if (idx < secondLen) {
+                splitPoint.point = second;
+                if (splitPoint.left != null) splitPoint.left = splitPoint.left.inject(first);
+                return idx;
+            }
+            idx -= secondLen;
+            return idx;
         }
 
         @Override
@@ -447,8 +548,8 @@ public abstract class Sequence {
         }
 
         @Override
-        Object foldLeft(BiFunction<Object, Object, Object> function, Object initial) {
-            Object result = initial;
+        <T> T foldLeft(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
+            T result = initial;
             result = function.apply(result, first);
             result = function.apply(result, second);
             result = function.apply(result, third);
@@ -456,17 +557,52 @@ public abstract class Sequence {
         }
 
         @Override
-        Object foldRight(BiFunction<Object, Object, Object> function, Object initial) {
-            Object result = initial;
+        <T> T foldRight(BiFunction<? super T, ? super Object, ? extends T> function, T initial) {
+            T result = initial;
             result = function.apply(result, third);
             result = function.apply(result, second);
             result = function.apply(result, first);
             return result;
+        }
+
+        @Override
+        int splitAt(int idx, SplitPoint splitPoint) {
+            if (idx < firstLen) {
+                splitPoint.point = first;
+                if (splitPoint.right != null) splitPoint.right = splitPoint.right.push(third).push(second);
+                return idx;
+            }
+            idx -= firstLen;
+            if (idx < secondLen) {
+                splitPoint.point = second;
+                if (splitPoint.left != null) splitPoint.left = splitPoint.left.inject(first);
+                if (splitPoint.right != null) splitPoint.right = splitPoint.right.push(third);
+                return idx;
+            }
+            idx -= secondLen;
+            if (idx < thirdLen) {
+                splitPoint.point = third;
+                if (splitPoint.left != null) splitPoint.left = splitPoint.left.inject(first).inject(second);
+                return idx;
+            }
+            idx -= thirdLen;
+            return idx;
         }
 
         @Override
         int length() {
             return firstLen + secondLen + thirdLen;
+        }
+    }
+
+    private static final class SplitPoint {
+        Sequence left;
+        Object point;
+        Sequence right;
+
+        SplitPoint(boolean trackLeft, boolean trackRight) {
+            if (trackLeft) left = Shallow.EMPTY;
+            if (trackRight) right = Shallow.EMPTY;
         }
     }
 }
