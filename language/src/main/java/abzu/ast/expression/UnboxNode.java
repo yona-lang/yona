@@ -69,6 +69,11 @@ public abstract class UnboxNode extends ExpressionNode {
   }
 
   @Specialization
+  protected Sequence unboxSequence(Sequence value) {
+    return value;
+  }
+
+  @Specialization
   protected ExpressionNode unboxValue(ExpressionNode value) {
     return value;
   }

@@ -69,6 +69,42 @@ public class SimpleExpressionTest {
   }
 
   @Test
+  public void emptySequenceValueTest() {
+    Value sequence = context.eval("abzu", "[]");
+    assertEquals(0, sequence.getArraySize());
+  }
+
+  @Test
+  public void oneSequenceValueTest() {
+    Value sequence = context.eval("abzu", "[1]");
+    assertEquals(1, sequence.getArraySize());
+
+    Object[] array = sequence.as(Object[].class);
+    assertEquals(1l, array[0]);
+  }
+
+  @Test
+  public void twoSequenceValueTest() {
+    Value sequence = context.eval("abzu", "[1, 2]");
+    assertEquals(2, sequence.getArraySize());
+
+    Object[] array = sequence.as(Object[].class);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+  }
+
+  @Test
+  public void threeSequenceValueTest() {
+    Value sequence = context.eval("abzu", "[1, 2, 3]");
+    assertEquals(3, sequence.getArraySize());
+
+    Object[] array = sequence.as(Object[].class);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+    assertEquals(3l, array[2]);
+  }
+
+  @Test
   public void zeroArgFunctionTest() {
     long ret = context.eval("abzu", "fun = 5").execute().asLong();
     assertEquals(5l, ret);

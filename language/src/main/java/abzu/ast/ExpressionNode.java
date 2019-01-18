@@ -209,4 +209,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   public StringList executeStringList(VirtualFrame frame) throws UnexpectedResultException {
     return TypesGen.expectStringList(executeGeneric(frame));
   }
+
+  public Sequence executeSequence(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectSequence(executeGeneric(frame));
+  }
 }

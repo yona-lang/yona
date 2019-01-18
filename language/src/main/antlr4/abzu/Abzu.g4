@@ -77,7 +77,7 @@ value : unit
       | lambda
       | tuple
       | dict
-      | list
+      | sequence
       | symbol
       | identifier
       | fqn
@@ -102,11 +102,16 @@ arg : NAME ;
 tuple : PARENS_L (expression (COMMA expression)*)? PARENS_R ;
 dict : key COLON expression (COMMA key COLON expression)* ;
 key : STRING ;
-list : BRACKET_L expression? (COMMA expression)* BRACKET_R ;
+sequence : emptySequence | oneSequence | twoSequence | otherSequence ;
 fqn : NAME (SLASH NAME)* ;
 symbol : COLON NAME;
 identifier : NAME ;
 lambda : LAMBDA_START arg* OP_ARROW expression ;
+
+emptySequence: BRACKET_L BRACKET_R ;
+oneSequence: BRACKET_L expression BRACKET_R ;
+twoSequence: BRACKET_L expression COMMA expression BRACKET_R ;
+otherSequence: BRACKET_L expression COMMA expression (COMMA expression)+ BRACKET_R ;
 
 // Keywords
 KW_LET : 'let' ;

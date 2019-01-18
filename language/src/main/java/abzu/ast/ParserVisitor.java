@@ -184,12 +184,27 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public ListNode visitList(AbzuParser.ListContext ctx) {
+  public ExpressionNode visitEmptySequence(AbzuParser.EmptySequenceContext ctx) {
+    return EmptySequenceNode.INSTANCE;
+  }
+
+  @Override
+  public ExpressionNode visitOneSequence(AbzuParser.OneSequenceContext ctx) {
+    return new OneSequenceNode(ctx.expression().accept(this));
+  }
+
+  @Override
+  public ExpressionNode visitTwoSequence(AbzuParser.TwoSequenceContext ctx) {
+    return new TwoSequenceNode(ctx.expression(0).accept(this), ctx.expression(1).accept(this));
+  }
+
+  @Override
+  public SequenceNode visitOtherSequence(AbzuParser.OtherSequenceContext ctx) {
     List<ExpressionNode> expressions = new ArrayList<>();
     for (AbzuParser.ExpressionContext expr : ctx.expression()) {
       expressions.add(expr.accept(this));
     }
-    return new ListNode(expressions.toArray(new ExpressionNode[]{}));
+    return new SequenceNode(expressions.toArray(new ExpressionNode[]{}));
   }
 
   @Override
