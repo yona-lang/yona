@@ -16,7 +16,7 @@ tokens { INDENT, DEDENT }
     import abzu.ast.ExpressionNode;
     import abzu.ast.AbzuRootNode;
     import abzu.parser.AbzuParseError;
-    import abzu.ast.ParserVisitor;
+    import abzu.parser.ParserVisitor;
 }
 
 @parser::members
@@ -65,14 +65,18 @@ expression : left=expression BIN_OP right=expression    #binaryOperationExpressi
            | value                                      #valueExpression
            | module                                     #moduleExpression
            | apply                                      #functionApplicationExpression
+           | caseExpr                                   #caseExpression
            ;
 
+literal : booleanLiteral
+        | integerLiteral
+        | floatLiteral
+        | byteLiteral
+        | stringLiteral
+        ;
+
 value : unit
-      | booleanLiteral
-      | integerLiteral
-      | floatLiteral
-      | byteLiteral
-      | stringLiteral
+      | literal
       | function
       | lambda
       | tuple
@@ -82,6 +86,19 @@ value : unit
       | identifier
       | fqn
       ;
+
+patternValue : unit
+             | literal
+             | symbol
+             | identifier
+             | fqn
+             ;
+
+anyPatternValue : patternValue
+                | tuplePattern
+                | sequencePattern
+                | underscore
+                ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
 alias : NAME OP_PMATCH expression NEWLINE? ;
@@ -107,11 +124,33 @@ fqn : NAME (SLASH NAME)* ;
 symbol : COLON NAME;
 identifier : NAME ;
 lambda : LAMBDA_START arg* OP_ARROW expression ;
+underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;
 oneSequence: BRACKET_L expression BRACKET_R ;
 twoSequence: BRACKET_L expression COMMA expression BRACKET_R ;
 otherSequence: BRACKET_L expression COMMA expression (COMMA expression)+ BRACKET_R ;
+
+caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ ;
+patternExpression : pattern OP_ARROW NEWLINE? expression NEWLINE ;
+pattern : underscore
+        | tuplePattern
+        | sequencePattern
+        ;
+
+tuplePattern : PARENS_L (anyPatternValue (COMMA anyPatternValue)*)? PARENS_R ;
+sequencePattern : innerSequencePattern
+                | AT identifier PARENS_L innerSequencePattern PARENS_R
+                ;
+innerSequencePattern : BRACKET_L (anyPatternValue (COMMA anyPatternValue)*)? BRACKET_R
+                | headTails
+                ;
+headTails : patternValue COLON patternValue | AT identifier PARENS_L patternValue COLON patternValue PARENS_R ;
+
+
+UNIT: '()' ;
+UNDERSCORE : '_' ;
+AT : '@' ;
 
 // Keywords
 KW_LET : 'let' ;
@@ -124,6 +163,8 @@ KW_FALSE : 'false' ;
 KW_MODULE : 'module' ;
 KW_EXPORTS : 'exports' ;
 KW_AS : 'as' ;
+KW_CASE : 'case' ;
+KW_OF : 'of' ;
 
 BRACKET_L : '[' ;
 BRACKET_R : ']' ;
@@ -172,8 +213,6 @@ OP_CONS : '::';
 OP_JOIN : '++';
 
 OP_LIST :  OP_CONS | OP_JOIN ;
-
-UNIT: '()' ;
 
 NEWLINE: ('\r'? '\n')+ ;
 

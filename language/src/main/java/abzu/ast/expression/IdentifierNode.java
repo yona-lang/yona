@@ -56,4 +56,12 @@ public final class IdentifierNode extends ExpressionNode {
       return node.executeGeneric(frame);
     }
   }
+
+  public boolean isBound(VirtualFrame frame) {
+    return frame.getFrameDescriptor().findFrameSlot(name) != null;
+  }
+
+  public String name() {
+    return name;
+  }
 }

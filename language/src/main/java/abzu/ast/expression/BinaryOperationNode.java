@@ -1,8 +1,10 @@
 package abzu.ast.expression;
 
+import abzu.AbzuException;
 import abzu.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Objects;
 
@@ -45,6 +47,33 @@ public final class BinaryOperationNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return null;
+    try {
+      try {
+        long leftVal = left.executeLong(frame);
+        long rightVal = right.executeLong(frame);
+
+        switch (op) {
+          case "+": return leftVal + rightVal;
+          case "-": return leftVal - rightVal;
+          case "*": return leftVal * rightVal;
+          case "/": return leftVal / rightVal;
+          case "%": return leftVal % rightVal;
+        }
+      } catch (UnexpectedResultException ex) {
+        double leftVal = left.executeDouble(frame);
+        double rightVal = right.executeDouble(frame);
+
+        switch (op) {
+          case "+": return leftVal + rightVal;
+          case "-": return leftVal - rightVal;
+          case "*": return leftVal * rightVal;
+          case "/": return leftVal / rightVal;
+          case "%": return leftVal % rightVal;
+        }
+      }
+    } catch (UnexpectedResultException ex) {
+      throw new AbzuException("Unable to perform binary op " + left + " " + op + " " + right, this);
+    }
+    throw new AbzuException("Unknown binary op " + left + " " + op + " " + right, this);
   }
 }

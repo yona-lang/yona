@@ -247,4 +247,10 @@ public class SimpleExpressionTest {
                                     "in testMod.funone 6").asLong();
     assertEquals(6l, ret);
   }
+
+  @Test
+  public void intSumTest() {
+    long ret = context.eval("abzu", "2 + 5").asLong();
+    assertEquals(7l, ret);
+  }
 }

@@ -1,8 +1,9 @@
-package abzu.ast;
+package abzu.parser;
 
 import abzu.AbzuBaseVisitor;
 import abzu.AbzuLanguage;
 import abzu.AbzuParser;
+import abzu.ast.ExpressionNode;
 import abzu.ast.builtin.BuiltinNode;
 import abzu.ast.call.InvokeNode;
 import abzu.ast.call.ModuleCallNode;
@@ -11,6 +12,10 @@ import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
 import abzu.ast.local.ReadArgumentNode;
 import abzu.ast.local.WriteLocalVariableNodeGen;
+import abzu.ast.pattern.MatchNode;
+import abzu.ast.pattern.PatternNode;
+import abzu.ast.pattern.TupleMatchNode;
+import abzu.ast.pattern.UnderscoreMatchNode;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -39,7 +44,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     functionBodyNode.addRootTag();
 
     FunctionNode mainFunctionNode = new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", Collections.emptyList(), new FrameDescriptor(), functionBodyNode);
-    return new InvokeNode(language, mainFunctionNode, new ExpressionNode[] {});
+    return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{});
   }
 
   @Override
@@ -56,7 +61,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
     ExpressionNode[] argNodes = args.toArray(new ExpressionNode[]{});
 
-    if(ctx.apply().moduleCall() != null) {
+    if (ctx.apply().moduleCall() != null) {
       FQNNode fqnNode = visitFqn(ctx.apply().moduleCall().fqn());
       String functionName = ctx.apply().moduleCall().NAME().getText();
       return new ModuleCallNode(language, fqnNode, functionName, argNodes);
@@ -107,6 +112,11 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
+  public UnderscoreMatchNode visitUnderscore(AbzuParser.UnderscoreContext ctx) {
+    return UnderscoreMatchNode.INSTANCE;
+  }
+
+  @Override
   public IntegerNode visitIntegerLiteral(AbzuParser.IntegerLiteralContext ctx) {
     return new IntegerNode(Long.parseLong(ctx.INTEGER().getText()));
   }
@@ -117,7 +127,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public ExpressionNode visitByteLiteral(AbzuParser.ByteLiteralContext ctx) {
+  public ByteNode visitByteLiteral(AbzuParser.ByteLiteralContext ctx) {
     return new ByteNode(Byte.parseByte(ctx.INTEGER().getText()));
   }
 
@@ -184,17 +194,17 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public ExpressionNode visitEmptySequence(AbzuParser.EmptySequenceContext ctx) {
+  public EmptySequenceNode visitEmptySequence(AbzuParser.EmptySequenceContext ctx) {
     return EmptySequenceNode.INSTANCE;
   }
 
   @Override
-  public ExpressionNode visitOneSequence(AbzuParser.OneSequenceContext ctx) {
+  public OneSequenceNode visitOneSequence(AbzuParser.OneSequenceContext ctx) {
     return new OneSequenceNode(ctx.expression().accept(this));
   }
 
   @Override
-  public ExpressionNode visitTwoSequence(AbzuParser.TwoSequenceContext ctx) {
+  public TwoSequenceNode visitTwoSequence(AbzuParser.TwoSequenceContext ctx) {
     return new TwoSequenceNode(ctx.expression(0).accept(this), ctx.expression(1).accept(this));
   }
 
@@ -252,5 +262,43 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   private String normalizeString(String str) {
     return str.substring(1, str.length() - 1);
+  }
+
+  @Override
+  public CaseNode visitCaseExpr(AbzuParser.CaseExprContext ctx) {
+    ExpressionNode expr = ctx.expression().accept(this);
+    PatternNode[] patternNodes = new PatternNode[ctx.patternExpression().size()];
+    for (int i = 0; i < ctx.patternExpression().size(); i++) {
+      patternNodes[i] = visitPatternExpression(ctx.patternExpression(i));
+    }
+    return new CaseNode(expr, patternNodes);
+  }
+
+  @Override
+  public PatternNode visitPatternExpression(AbzuParser.PatternExpressionContext ctx) {
+    MatchNode matchExpression = visitPattern(ctx.pattern());
+    ExpressionNode valueExpression = ctx.expression().accept(this);
+    return new PatternNode(matchExpression, valueExpression);
+  }
+
+  @Override
+  public MatchNode visitPattern(AbzuParser.PatternContext ctx) {
+    if (ctx.underscore() != null) {
+      return UnderscoreMatchNode.INSTANCE;
+    } else if (ctx.tuplePattern() != null) {
+      return visitTuplePattern(ctx.tuplePattern());
+    }
+    return null;
+  }
+
+  @Override
+  public TupleMatchNode visitTuplePattern(AbzuParser.TuplePatternContext ctx) {
+    ExpressionNode expressions[] = new ExpressionNode[ctx.anyPatternValue().size()];
+
+    for (int i = 0; i < ctx.anyPatternValue().size(); i++) {
+      expressions[i] = ctx.anyPatternValue(i).accept(this);
+    }
+
+    return new TupleMatchNode(expressions);
   }
 }

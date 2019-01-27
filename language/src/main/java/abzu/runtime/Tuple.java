@@ -68,4 +68,12 @@ public class Tuple implements TruffleObject {
   static boolean isInstance(TruffleObject tuple) {
     return tuple instanceof Tuple;
   }
+
+  public int size() {
+    return items.length;
+  }
+
+  public Object get(int i) {
+    return items[i];
+  }
 }

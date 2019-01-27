@@ -14,6 +14,11 @@ public final class UnitNode extends ExpressionNode {
   }
 
   @Override
+  public String toString() {
+    return "UnitNode{}";
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     return Unit.INSTANCE;
   }
