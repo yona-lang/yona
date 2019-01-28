@@ -106,14 +106,26 @@ public class ErrorsTest {
   @Test(expected = PolyglotException.class)
   public void freeVarOverridePatternTest() {
     try {
-    context.eval("abzu", "fun arg = case arg of\n" +
-        "(1, 2, 3) -> 6\n" +
-        "(1, secondArg, 3) -> 2 + secondArg\n" +
-        "(1, _, _) -> 1 + secondArg\n" +
-        "(2, 3) -> 5\n" +
-        "_ -> 9\n").execute(new Tuple(1l, 5l, 6l)).asLong();
+      context.eval("abzu", "fun arg = case arg of\n" +
+          "(1, 2, 3) -> 6\n" +
+          "(1, secondArg, 3) -> 2 + secondArg\n" +
+          "(1, _, _) -> 1 + secondArg\n" +
+          "(2, 3) -> 5\n" +
+          "_ -> 9\n").execute(new Tuple(1l, 5l, 6l)).asLong();
     } catch (PolyglotException ex) {
       assertEquals(ex.getMessage(), "Identifier 'secondArg' not found in the current scope");
+      throw ex;
+    }
+  }
+
+  @Test(expected = PolyglotException.class)
+  public void simpleIntNoMatchPatternTest() {
+    try {
+      context.eval("abzu", "fun arg = case arg of\n" +
+          "1 -> 2\n" +
+          "2 -> 3\n").execute(3l).asLong();
+    } catch (PolyglotException ex) {
+      assertEquals(ex.getMessage(), MatchException.class.getCanonicalName());
       throw ex;
     }
   }

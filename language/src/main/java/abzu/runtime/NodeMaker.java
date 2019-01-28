@@ -29,7 +29,6 @@ public class NodeMaker {
 
       return new TupleNode(expressions);
     } else {
-      System.err.println(val.getClass());
       throw new NotImplementedException();
     }
   }

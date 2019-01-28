@@ -69,8 +69,8 @@ expression : left=expression BIN_OP right=expression    #binaryOperationExpressi
            ;
 
 literal : booleanLiteral
-        | integerLiteral
         | floatLiteral
+        | integerLiteral
         | byteLiteral
         | stringLiteral
         ;
@@ -93,12 +93,6 @@ patternValue : unit
              | identifier
              | fqn
              ;
-
-anyPatternValue : patternValue
-                | tuplePattern
-                | sequencePattern
-                | underscore
-                ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
 alias : NAME OP_PMATCH expression NEWLINE? ;
@@ -134,15 +128,16 @@ otherSequence: BRACKET_L expression COMMA expression (COMMA expression)+ BRACKET
 caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ ;
 patternExpression : pattern OP_ARROW NEWLINE? expression NEWLINE ;
 pattern : underscore
+        | patternValue
         | tuplePattern
         | sequencePattern
         ;
 
-tuplePattern : PARENS_L (anyPatternValue (COMMA anyPatternValue)*)? PARENS_R ;
+tuplePattern : PARENS_L (pattern (COMMA pattern)*)? PARENS_R ;
 sequencePattern : innerSequencePattern
                 | AT identifier PARENS_L innerSequencePattern PARENS_R
                 ;
-innerSequencePattern : BRACKET_L (anyPatternValue (COMMA anyPatternValue)*)? BRACKET_R
+innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
                 | headTails
                 ;
 headTails : patternValue COLON patternValue | AT identifier PARENS_L patternValue COLON patternValue PARENS_R ;

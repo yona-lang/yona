@@ -12,10 +12,7 @@ import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
 import abzu.ast.local.ReadArgumentNode;
 import abzu.ast.local.WriteLocalVariableNodeGen;
-import abzu.ast.pattern.MatchNode;
-import abzu.ast.pattern.PatternNode;
-import abzu.ast.pattern.TupleMatchNode;
-import abzu.ast.pattern.UnderscoreMatchNode;
+import abzu.ast.pattern.*;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -287,16 +284,18 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       return UnderscoreMatchNode.INSTANCE;
     } else if (ctx.tuplePattern() != null) {
       return visitTuplePattern(ctx.tuplePattern());
+    } else if (ctx.patternValue() != null) {
+      return new ValueMatchNode(ctx.patternValue().accept(this));
     }
     return null;
   }
 
   @Override
   public TupleMatchNode visitTuplePattern(AbzuParser.TuplePatternContext ctx) {
-    ExpressionNode expressions[] = new ExpressionNode[ctx.anyPatternValue().size()];
+    ExpressionNode expressions[] = new ExpressionNode[ctx.pattern().size()];
 
-    for (int i = 0; i < ctx.anyPatternValue().size(); i++) {
-      expressions[i] = ctx.anyPatternValue(i).accept(this);
+    for (int i = 0; i < ctx.pattern().size(); i++) {
+      expressions[i] = ctx.pattern(i).accept(this);
     }
 
     return new TupleMatchNode(expressions);

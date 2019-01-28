@@ -10,6 +10,7 @@ import java.util.Objects;
  */
 public final class MatchResult {
   public static final MatchResult FALSE = new MatchResult(false);
+  public static final MatchResult TRUE = new MatchResult(true);
 
   private boolean matches;
   private AliasNode[] aliases;

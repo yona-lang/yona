@@ -2,22 +2,41 @@ package abzu.ast.pattern;
 
 import abzu.ast.ExpressionNode;
 import abzu.ast.expression.AliasNode;
-import abzu.ast.expression.IdentifierNode;
-import abzu.runtime.NodeMaker;
 import abzu.runtime.Tuple;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-public class TupleMatchNode extends MatchNode {
+public final class TupleMatchNode extends MatchNode {
   @Node.Children
   public ExpressionNode[] expressions;
 
   public TupleMatchNode(ExpressionNode[] expressions) {
     this.expressions = expressions;
+  }
+
+  @Override
+  public String toString() {
+    return "TupleMatchNode{" +
+        "expressions=" + Arrays.toString(expressions) +
+        '}';
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    TupleMatchNode that = (TupleMatchNode) o;
+    return Arrays.equals(expressions, that.expressions);
+  }
+
+  @Override
+  public int hashCode() {
+    return Arrays.hashCode(expressions);
   }
 
   @Override
@@ -39,18 +58,6 @@ public class TupleMatchNode extends MatchNode {
               for (AliasNode aliasNode : nestedMatchResult.getAliases()) {
                 aliases.add(aliasNode);
               }
-            }
-          } else if (expressions[i] instanceof IdentifierNode) {
-            IdentifierNode identifierNode = (IdentifierNode) expressions[i];
-
-            if (identifierNode.isBound(frame)) {
-              Object identifierValue = identifierNode.executeGeneric(frame);
-
-              if (!Objects.equals(identifierValue, tuple.get(i))) {
-                return MatchResult.FALSE;
-              }
-            } else {
-              aliases.add(new AliasNode(identifierNode.name(), NodeMaker.makeNode(tuple.get(i))));
             }
           } else {
             Object exprVal = expressions[i].executeGeneric(frame);

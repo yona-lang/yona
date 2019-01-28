@@ -92,4 +92,22 @@ public class PatternExpressionTest {
         "_ -> 9\n").execute(new Tuple(1l, 7l, new Tuple(9l, 5l))).asLong();
     assertEquals(16l, ret);
   }
+
+  @Test
+  public void simpleIntPatternTest() {
+    long ret = context.eval("abzu", "fun arg = case arg of\n" +
+        "1 -> 2\n" +
+        "2 -> 3\n"+
+        "_ -> 9\n").execute(1l).asLong();
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void simpleStringPatternTest() {
+    String ret = context.eval("abzu", "fun arg = case arg of\n" +
+        "\"foo\" -> \"bar\"\n"+
+        "\"hello\" -> \"world\"\n" +
+        "_ -> \"unexpected\"\n").execute("hello").asString();
+    assertEquals("world", ret);
+  }
 }
