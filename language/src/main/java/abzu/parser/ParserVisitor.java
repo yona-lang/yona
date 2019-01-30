@@ -45,6 +45,11 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
+  public ExpressionNode visitExpressionInParents(AbzuParser.ExpressionInParentsContext ctx) {
+    return ctx.expression().accept(this);
+  }
+
+  @Override
   public NegationNode visitUnaryOperationExpression(AbzuParser.UnaryOperationExpressionContext ctx) {
     return new NegationNode(ctx.expression().accept(this));
   }

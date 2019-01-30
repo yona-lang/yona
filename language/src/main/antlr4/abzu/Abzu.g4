@@ -58,7 +58,8 @@ tokens { INDENT, DEDENT }
 
 input : NEWLINE? expression NEWLINE? EOF ;
 
-expression : left=expression BIN_OP right=expression    #binaryOperationExpression
+expression : PARENS_L expression PARENS_R               #expressionInParents
+           | left=expression BIN_OP right=expression    #binaryOperationExpression
            | UN_OP expression                           #unaryOperationExpression
            | let                                        #letExpression
            | conditional                                #conditionalExpression
@@ -110,7 +111,7 @@ stringLiteral : STRING ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
 function : NAME arg* OP_ASSIGN NEWLINE? expression NEWLINE?;
 arg : NAME ;
-tuple : PARENS_L (expression (COMMA expression)*)? PARENS_R ;
+tuple : PARENS_L expression (COMMA expression)+ PARENS_R ;
 dict : key COLON expression (COMMA key COLON expression)* ;
 key : STRING ;
 sequence : emptySequence | oneSequence | twoSequence | otherSequence ;
@@ -138,7 +139,7 @@ patternWithoutSequence: underscore
                       | tuplePattern
                       ;
 
-tuplePattern : PARENS_L (pattern (COMMA pattern)*)? PARENS_R ;
+tuplePattern : PARENS_L pattern (COMMA pattern)+ PARENS_R ;
 sequencePattern : identifier AT PARENS_L innerSequencePattern PARENS_R
                 | innerSequencePattern
                 ;
