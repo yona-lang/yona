@@ -133,15 +133,20 @@ pattern : underscore
         | sequencePattern
         ;
 
+patternWithoutSequence: underscore
+                      | patternValue
+                      | tuplePattern
+                      ;
+
 tuplePattern : PARENS_L (pattern (COMMA pattern)*)? PARENS_R ;
-sequencePattern : innerSequencePattern
-                | AT identifier PARENS_L innerSequencePattern PARENS_R
+sequencePattern : identifier AT PARENS_L innerSequencePattern PARENS_R
+                | innerSequencePattern
                 ;
 innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
-                | headTails
-                ;
-headTails : patternValue COLON patternValue | AT identifier PARENS_L patternValue COLON patternValue PARENS_R ;
-
+                     | headTails
+                     ;
+headTails : patternWithoutSequence COLON tails ;
+tails : identifier | emptySequence | underscore ;
 
 UNIT: '()' ;
 UNDERSCORE : '_' ;

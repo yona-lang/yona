@@ -286,8 +286,20 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       return visitTuplePattern(ctx.tuplePattern());
     } else if (ctx.patternValue() != null) {
       return new ValueMatchNode(ctx.patternValue().accept(this));
+    } else {
+      return visitSequencePattern(ctx.sequencePattern());
     }
-    return null;
+  }
+
+  @Override
+  public MatchNode visitPatternWithoutSequence(AbzuParser.PatternWithoutSequenceContext ctx) {
+    if (ctx.underscore() != null) {
+      return UnderscoreMatchNode.INSTANCE;
+    } else if (ctx.tuplePattern() != null) {
+      return visitTuplePattern(ctx.tuplePattern());
+    } else {
+      return new ValueMatchNode(ctx.patternValue().accept(this));
+    }
   }
 
   @Override
@@ -299,5 +311,35 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     }
 
     return new TupleMatchNode(expressions);
+  }
+
+  @Override
+  public MatchNode visitSequencePattern(AbzuParser.SequencePatternContext ctx) {
+    if (ctx.identifier() != null) {
+      return new AsSequenceMatchNode(visitIdentifier(ctx.identifier()), visitInnerSequencePattern(ctx.innerSequencePattern()));
+    } else {
+      return visitInnerSequencePattern(ctx.innerSequencePattern());
+    }
+  }
+
+  @Override
+  public MatchNode visitInnerSequencePattern(AbzuParser.InnerSequencePatternContext ctx) {
+    if (ctx.headTails() != null) {
+      return visitHeadTails(ctx.headTails());
+    } else {
+      MatchNode[] matchNodes = new MatchNode[ctx.pattern().size()];
+      for (int i = 0; i < ctx.pattern().size(); i++) {
+        matchNodes[i] = visitPattern(ctx.pattern(i));
+      }
+      return new SequenceMatchPattern(matchNodes);
+    }
+  }
+
+  @Override
+  public HeadTailsMatchPattern visitHeadTails(AbzuParser.HeadTailsContext ctx) {
+    MatchNode pattern = visitPatternWithoutSequence(ctx.patternWithoutSequence());
+    ExpressionNode tails = ctx.tails().accept(this);
+
+    return new HeadTailsMatchPattern(pattern, tails);
   }
 }

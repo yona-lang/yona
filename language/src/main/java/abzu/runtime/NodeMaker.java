@@ -28,6 +28,24 @@ public class NodeMaker {
       }
 
       return new TupleNode(expressions);
+    } else if (val instanceof Sequence) {
+      Sequence sequence = (Sequence) val;
+
+      if (sequence.length() == 0) {
+        return EmptySequenceNode.INSTANCE;
+      } else if (sequence.length() == 1) {
+        return new OneSequenceNode(makeNode(sequence.first()));
+      } else if (sequence.length() == 2) {
+        return new TwoSequenceNode(makeNode(sequence.first()), makeNode(sequence.removeFirst().first()));
+      } else {
+
+        ExpressionNode[] expressions = new ExpressionNode[sequence.length()];
+        for (int i = 0; i < sequence.length(); i++) {
+          expressions[i] = makeNode(sequence.lookup(i));
+        }
+
+        return new SequenceNode(expressions);
+      }
     } else {
       throw new NotImplementedException();
     }

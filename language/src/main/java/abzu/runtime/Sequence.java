@@ -3,6 +3,7 @@ package abzu.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
@@ -237,6 +238,19 @@ public abstract class Sequence implements TruffleObject {
       if (idx < measure(value)) pt.point = value;
       return idx;
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Shallow shallow = (Shallow) o;
+      return Objects.equals(value, shallow.value);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(value);
+    }
   }
 
   private static final class Deep extends Sequence {
@@ -258,6 +272,22 @@ public abstract class Sequence implements TruffleObject {
       sub = Shallow.EMPTY;
       suffix = new One(second);
       subLength = 0;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Deep deep = (Deep) o;
+      return subLength == deep.subLength &&
+          Objects.equals(prefix, deep.prefix) &&
+          Objects.equals(sub, deep.sub) &&
+          Objects.equals(suffix, deep.suffix);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(prefix, sub, suffix, subLength);
     }
 
     Sequence forceSub() {
@@ -478,6 +508,19 @@ public abstract class Sequence implements TruffleObject {
     int length() {
       return sole instanceof Node ? ((Node) sole).length() : 1;
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      One one = (One) o;
+      return Objects.equals(sole, one.sole);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(sole);
+    }
   }
 
   private static abstract class Node extends Affix {
@@ -563,6 +606,22 @@ public abstract class Sequence implements TruffleObject {
     @Override
     int length() {
       return firstLen + secondLen;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Two two = (Two) o;
+      return firstLen == two.firstLen &&
+          secondLen == two.secondLen &&
+          Objects.equals(first, two.first) &&
+          Objects.equals(second, two.second);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(first, second, firstLen, secondLen);
     }
   }
 
@@ -661,6 +720,24 @@ public abstract class Sequence implements TruffleObject {
     @Override
     int length() {
       return firstLen + secondLen + thirdLen;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Three three = (Three) o;
+      return firstLen == three.firstLen &&
+          secondLen == three.secondLen &&
+          thirdLen == three.thirdLen &&
+          Objects.equals(first, three.first) &&
+          Objects.equals(second, three.second) &&
+          Objects.equals(third, three.third);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(first, second, third, firstLen, secondLen, thirdLen);
     }
   }
 
