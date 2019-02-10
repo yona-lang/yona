@@ -2,6 +2,7 @@ package abzu.runtime;
 
 import abzu.ast.ExpressionNode;
 import abzu.ast.expression.value.*;
+import abzu.ast.pattern.CurriedFunctionMatchException;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public class NodeMaker {
@@ -48,6 +49,8 @@ public class NodeMaker {
 
         return new SequenceNode(expressions);
       }
+    } else if (val instanceof Function) {
+      throw CurriedFunctionMatchException.INSTANCE;
     } else {
       throw new NotImplementedException();
     }

@@ -57,4 +57,8 @@ public final class ValueMatchNode extends MatchNode {
       return new MatchResult(Objects.equals(value, exprValue));
     }
   }
+
+  public ExpressionNode getExpression() {
+    return expression;
+  }
 }

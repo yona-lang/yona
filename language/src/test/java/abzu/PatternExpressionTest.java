@@ -279,4 +279,19 @@ public class PatternExpressionTest {
 
     assertEquals(2l, ret);
   }
+
+  @Test
+  public void tupleInLetPatternTest() {
+    long ret = context.eval("abzu", "let (1, x, _) = (1, 2, 3) in x").asLong();
+
+    assertEquals(2l, ret);
+  }
+
+
+  @Test
+  public void sequenceInLetPatternTest() {
+    long ret = context.eval("abzu", "let [1, x, y] = [1, 2, 3] in x + y").asLong();
+
+    assertEquals(5l, ret);
+  }
 }

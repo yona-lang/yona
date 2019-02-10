@@ -5,7 +5,6 @@ import abzu.ast.expression.LetNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 
-import java.util.Arrays;
 import java.util.Objects;
 
 public class PatternNode extends ExpressionNode {
@@ -43,11 +42,15 @@ public class PatternNode extends ExpressionNode {
   }
 
   public Object patternMatch(Object value, VirtualFrame frame) throws MatchException {
-    MatchResult matchResult = matchExpression.match(value, frame);
-    if (matchResult.isMatches()) {
-      LetNode letNode = new LetNode(matchResult.getAliases(), valueExpression);
-      return letNode.executeGeneric(frame);
-    } else {
+    try {
+      MatchResult matchResult = matchExpression.match(value, frame);
+      if (matchResult.isMatches()) {
+        LetNode letNode = new LetNode(matchResult.getAliases(), valueExpression);
+        return letNode.executeGeneric(frame);
+      } else {
+        throw MatchException.INSTANCE;
+      }
+    } catch (CurriedFunctionMatchException e) {
       throw MatchException.INSTANCE;
     }
   }

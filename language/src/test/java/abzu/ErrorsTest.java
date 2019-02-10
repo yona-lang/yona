@@ -129,4 +129,18 @@ public class ErrorsTest {
       throw ex;
     }
   }
+
+  @Test(expected = PolyglotException.class)
+  public void curriedLambdaInCaseTest() {
+    try {
+      context.eval("abzu", "let\n" +
+          "curriedFullFun = \\-> let fullFun = \\argone argtwo argthree -> argthree in fullFun 1\n" +
+          "curriedFun = curriedFullFun\n" +
+          "in case curriedFun of\n" +
+          "arg -> arg\n").execute(3l).asLong();
+    } catch (PolyglotException ex) {
+      assertEquals(ex.getMessage(), MatchException.class.getCanonicalName());
+      throw ex;
+    }
+  }
 }

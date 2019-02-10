@@ -67,6 +67,7 @@ expression : PARENS_L expression PARENS_R               #expressionInParents
            | module                                     #moduleExpression
            | apply                                      #functionApplicationExpression
            | caseExpr                                   #caseExpression
+           | lambda                                     #lambdaExpression
            ;
 
 literal : booleanLiteral
@@ -78,24 +79,25 @@ literal : booleanLiteral
 
 value : unit
       | literal
-      | lambda
       | tuple
       | dict
       | sequence
       | symbol
       | identifier
-      | fqn
       ;
 
 patternValue : unit
              | literal
              | symbol
              | identifier
-             | fqn
              ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
-alias : NAME OP_ASSIGN expression NEWLINE? ;
+alias : lambdaAlias | moduleAlias | patternAlias | fqnAlias ;
+lambdaAlias : NAME OP_ASSIGN lambda NEWLINE? ;
+moduleAlias : NAME OP_ASSIGN module NEWLINE? ;
+patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
+fqnAlias : NAME OP_ASSIGN fqn NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : (NAME | moduleCall) expression* ;
 moduleCall : fqn DOT NAME ;

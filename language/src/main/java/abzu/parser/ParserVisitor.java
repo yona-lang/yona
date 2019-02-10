@@ -90,17 +90,27 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public LetNode visitLetExpression(AbzuParser.LetExpressionContext ctx) {
-    AliasNode[] aliasNodes = new AliasNode[ctx.let().alias().size()];
+  public PatternLetNode visitLetExpression(AbzuParser.LetExpressionContext ctx) {
+    ExpressionNode[] aliasNodes = new ExpressionNode[ctx.let().alias().size()];
 
-    int i = 0;
-    for (AbzuParser.AliasContext aliasCtx : ctx.let().alias()) {
-      String alias = aliasCtx.NAME().getText();
-      aliasNodes[i] = new AliasNode(alias, aliasCtx.expression().accept(this));
-      i++;
+    for (int i = 0; i < ctx.let().alias().size(); i++) {
+      aliasNodes[i] = visitAlias(ctx.let().alias(i));
     }
 
-    return new LetNode(aliasNodes, ctx.let().expression().accept(this));
+    return new PatternLetNode(aliasNodes, ctx.let().expression().accept(this));
+  }
+
+  @Override
+  public ExpressionNode visitAlias(AbzuParser.AliasContext ctx) {
+    if (ctx.patternAlias() != null) {
+      return new PatternAliasNode(visitPattern(ctx.patternAlias().pattern()), ctx.patternAlias().expression().accept(this));
+    } else if (ctx.moduleAlias() != null) {
+      return new AliasNode(ctx.moduleAlias().NAME().getText(), visitModule(ctx.moduleAlias().module()));
+    } else if (ctx.fqnAlias() != null) {
+      return new AliasNode(ctx.fqnAlias().NAME().getText(), visitFqn(ctx.fqnAlias().fqn()));
+    } else {
+      return new AliasNode(ctx.lambdaAlias().NAME().getText(), visitLambda(ctx.lambdaAlias().lambda()));
+    }
   }
 
   @Override
