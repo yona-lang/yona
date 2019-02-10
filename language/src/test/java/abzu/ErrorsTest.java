@@ -26,7 +26,7 @@ public class ErrorsTest {
   @Test(expected = PolyglotException.class)
   public void oneArgFunctionTest() {
     try {
-      context.eval("abzu", "fun arg = argx").execute(6);
+      context.eval("abzu", "\\arg -> argx").execute(6);
     } catch (PolyglotException ex) {
       assertEquals(ex.getMessage(), "Identifier 'argx' not found in the current scope");
       throw ex;
@@ -37,9 +37,9 @@ public class ErrorsTest {
   public void invocationInLet1Test() {
     try {
       context.eval("abzu", "let " +
-          "funone := \\arg -> arg " +
-          "alias := 6" +
-          "funalias := \\arg -> funoneX alias " +
+          "funone = \\arg -> arg " +
+          "alias = 6" +
+          "funalias = \\arg -> funoneX alias " +
           "in funalias").execute(5).asLong();
     } catch (PolyglotException ex) {
       assertEquals(ex.getMessage(), "Identifier 'funoneX' not found in the current scope");
@@ -51,9 +51,9 @@ public class ErrorsTest {
   public void invocationInLet2Test() {
     try {
       context.eval("abzu", "let " +
-          "funone := \\arg -> arg " +
-          "alias := 6" +
-          "funalias := \\arg -> funoneX alias " +
+          "funone = \\arg -> arg " +
+          "alias = 6" +
+          "funalias = \\arg -> funoneX alias " +
           "in whatever").execute(5).asLong();
     } catch (PolyglotException ex) {
       assertEquals(ex.getMessage(), "Identifier 'whatever' not found in the current scope");
@@ -65,9 +65,9 @@ public class ErrorsTest {
   public void invalidNumberOfArgsTest() {
     try {
       context.eval("abzu", "let " +
-          "funone := \\arg -> arg " +
-          "alias := 6" +
-          "funalias := \\arg -> funone alias 7 " +
+          "funone = \\arg -> arg " +
+          "alias = 6" +
+          "funalias = \\arg -> funone alias 7 " +
           "in funalias").execute(5).asLong();
     } catch (PolyglotException ex) {
       assertEquals(ex.getMessage(), "Unexpected number of arguments when calling '$lambda-0': 2 expected: 1");
@@ -79,9 +79,9 @@ public class ErrorsTest {
   public void callOfNonFunctionTest() {
     try {
       context.eval("abzu", "let " +
-          "funone := \\arg -> arg " +
-          "alias := 6" +
-          "funalias := \\arg -> alias 7 funone " +
+          "funone = \\arg -> arg " +
+          "alias = 6" +
+          "funalias = \\arg -> alias 7 funone " +
           "in funalias").execute(5).asLong();
     } catch (PolyglotException ex) {
       assertEquals(ex.getMessage(), "Cannot invoke non-function node: IdentifierNode{name='alias'}");
@@ -93,7 +93,7 @@ public class ErrorsTest {
   public void callOfPrivateModuleFunctionTest() {
     try {
       context.eval("abzu", "let\n" +
-          "testMod := module testMod exports funone as\n" +
+          "testMod = module testMod exports funone as\n" +
           "funone argone = funtwo argone\n" +
           "funtwo argone = argone\n" +
           "in testMod.funtwo 6").asLong();
@@ -106,7 +106,7 @@ public class ErrorsTest {
   @Test(expected = PolyglotException.class)
   public void freeVarOverridePatternTest() {
     try {
-      context.eval("abzu", "fun arg = case arg of\n" +
+      context.eval("abzu", "\\arg -> case arg of\n" +
           "(1, 2, 3) -> 6\n" +
           "(1, secondArg, 3) -> 2 + secondArg\n" +
           "(1, _, _) -> 1 + secondArg\n" +
@@ -121,7 +121,7 @@ public class ErrorsTest {
   @Test(expected = PolyglotException.class)
   public void simpleIntNoMatchPatternTest() {
     try {
-      context.eval("abzu", "fun arg = case arg of\n" +
+      context.eval("abzu", "\\arg -> case arg of\n" +
           "1 -> 2\n" +
           "2 -> 3\n").execute(3l).asLong();
     } catch (PolyglotException ex) {

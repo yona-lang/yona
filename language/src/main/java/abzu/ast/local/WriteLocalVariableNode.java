@@ -46,6 +46,15 @@ public abstract class WriteLocalVariableNode extends ExpressionNode {
         return value;
     }
 
+    @Specialization(guards = "isByteOrIllegal(frame)")
+    protected byte writeByte(VirtualFrame frame, byte value) {
+        /* Initialize type on first write of the local variable. No-op if kind is already Long. */
+        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Byte);
+
+        frame.setByte(getSlot(), value);
+        return value;
+    }
+
     /**
      * Generic write method that works for all possible types.
      * <p>
@@ -56,7 +65,7 @@ public abstract class WriteLocalVariableNode extends ExpressionNode {
      * {@link Object}, it is guaranteed to never fail, i.e., once we are in this specialization the
      * node will never be re-specialized.
      */
-    @Specialization(replaces = {"writeLong", "writeBoolean"})
+    @Specialization(replaces = {"writeLong", "writeBoolean", "writeByte"})
     protected Object write(VirtualFrame frame, Object value) {
         /*
          * Regardless of the type before, the new and final type of the local variable is Object.
@@ -87,5 +96,15 @@ public abstract class WriteLocalVariableNode extends ExpressionNode {
     protected boolean isBooleanOrIllegal(VirtualFrame frame) {
         final FrameSlotKind kind = frame.getFrameDescriptor().getFrameSlotKind(getSlot());
         return kind == FrameSlotKind.Boolean || kind == FrameSlotKind.Illegal;
+    }
+
+    protected boolean isByteOrIllegal(VirtualFrame frame) {
+        final FrameSlotKind kind = frame.getFrameDescriptor().getFrameSlotKind(getSlot());
+        return kind == FrameSlotKind.Byte || kind == FrameSlotKind.Illegal;
+    }
+
+    @Override
+    public String toString() {
+        return "WriteLocalVariableNode{}";
     }
 }

@@ -1,4 +1,4 @@
 let
-    moduleAlias := tests/SimpleModuleTwo
+    moduleAlias = tests/SimpleModuleTwo
 in
     moduleAlias.funone 5

@@ -6,18 +6,20 @@ import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public class NodeMaker {
   public static ExpressionNode makeNode(Object val) {
-    if (val instanceof Integer) {
-      return new IntegerNode((Integer) val);
+    if (val == null) {
+      return UnitNode.INSTANCE;
+    } else if (val instanceof Integer) {
+      return new IntegerNode((int) val);
     } else if (val instanceof Long) {
-      return new IntegerNode((Long) val);
+      return new IntegerNode((long) val);
     } else if (val instanceof Float) {
       return new FloatNode((Float) val);
     } else if (val instanceof Double) {
-      return new FloatNode((Double) val);
+      return new FloatNode((double) val);
     } else if (val instanceof Boolean) {
-      return ((Boolean) val).booleanValue() ? BooleanNode.TRUE : BooleanNode.FALSE;
+      return ((boolean) val) ? BooleanNode.TRUE : BooleanNode.FALSE;
     } else if (val instanceof Byte) {
-      return new ByteNode((Byte) val);
+      return new ByteNode((byte) val);
     } else if (val instanceof String) {
       return new StringNode((String) val);
     } else if (val instanceof Tuple) {

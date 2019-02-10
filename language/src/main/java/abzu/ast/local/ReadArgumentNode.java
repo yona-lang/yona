@@ -5,6 +5,8 @@ import abzu.runtime.Unit;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.BranchProfile;
 
+import java.util.Arrays;
+
 /**
  * Reads a function argument. Arguments are passed in as an object array.
  * <p>
@@ -38,5 +40,12 @@ public class ReadArgumentNode extends ExpressionNode {
       /* Use the default null value. */
       return Unit.INSTANCE;
     }
+  }
+
+  @Override
+  public String toString() {
+    return "ReadArgumentNode{" +
+        "index=" + index +
+        '}';
   }
 }

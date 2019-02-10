@@ -18,6 +18,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
+import java.util.Arrays;
+
 /**
  * The node for function invocation in Abzu. Since Abzu has first class functions, the {@link abzu.runtime.Function
  * target function} can be computed by an arbitrary expression. This node is responsible for
@@ -90,7 +92,7 @@ public final class InvokeNode extends ExpressionNode {
         /*
          * These arguments are already on the stack, so we just create ident nodes for them
          */
-        allArgumentNodes[i] = new SimpleIdentifierNode(function.getArguments().get(i));
+        allArgumentNodes[i] = new ReadArgumentNode(i);
       }
 
       for (int i = argumentNodes.length - 1, j = 0; i < function.getCardinality(); i++, j++) {
@@ -113,7 +115,9 @@ public final class InvokeNode extends ExpressionNode {
         WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName())),
         invokeNode
       });
-      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName, function.getArguments().subList(argumentNodes.length - 1, function.getCardinality()), frame.getFrameDescriptor(), blockNode);
+
+      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName,
+          function.getCardinality() - argumentNodes.length + 1, frame.getFrameDescriptor(), blockNode);
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];

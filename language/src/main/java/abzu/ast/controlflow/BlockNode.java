@@ -7,6 +7,8 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 
+import java.util.Arrays;
+
 /**
  * A node that just executes a list of expressions and returns result of the last one.
  */
@@ -23,6 +25,13 @@ public final class BlockNode extends ExpressionNode {
 
     public BlockNode(ExpressionNode[] bodyNodes) {
         this.bodyNodes = bodyNodes;
+    }
+
+    @Override
+    public String toString() {
+        return "BlockNode{" +
+            "bodyNodes=" + Arrays.toString(bodyNodes) +
+            '}';
     }
 
     /**

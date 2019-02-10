@@ -1,10 +1,8 @@
 module tests/CommonFunctions exports factorial, fibonacci as
 
-factorial n = case n of
-    1 -> 1
-    n -> n * (factorial n - 1)
+factorial 1 =1
+factorial n = n * (factorial n - 1)
 
-fibonacci n = case n of
-    0 -> 0
-    1 -> 1
-    n -> (fibonacci n - 1) + (fibonacci n - 2)
+fibonacci 0 = 0
+fibonacci 1 = 1
+fibonacci n = (fibonacci n - 1) + (fibonacci n - 2)

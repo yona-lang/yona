@@ -42,7 +42,7 @@ public final class LetNode extends LexicalScopeNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    for (AliasNode alias: aliases) {
+    for (AliasNode alias : aliases) {
       alias.executeGeneric(frame);
     }
     return expression.executeGeneric(frame);

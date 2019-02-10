@@ -7,23 +7,18 @@ import abzu.ast.ExpressionNode;
 import abzu.ast.builtin.BuiltinNode;
 import abzu.ast.call.InvokeNode;
 import abzu.ast.call.ModuleCallNode;
-import abzu.ast.controlflow.BlockNode;
 import abzu.ast.expression.*;
 import abzu.ast.expression.value.*;
 import abzu.ast.local.ReadArgumentNode;
-import abzu.ast.local.WriteLocalVariableNodeGen;
 import abzu.ast.pattern.*;
+import abzu.runtime.UninitializedFrameSlot;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   private AbzuLanguage language;
@@ -40,7 +35,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     ExpressionNode functionBodyNode = ctx.expression().accept(this);
     functionBodyNode.addRootTag();
 
-    FunctionNode mainFunctionNode = new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", Collections.emptyList(), new FrameDescriptor(), functionBodyNode);
+    FunctionNode mainFunctionNode = new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(), functionBodyNode);
     return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{});
   }
 
@@ -144,34 +139,29 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public FunctionNode visitFunction(AbzuParser.FunctionContext ctx) {
-    return newFunction(ctx.arg(), source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), ctx.NAME().getText(), ctx.expression().accept(this));
-  }
-
-  @Override
   public FunctionNode visitLambda(AbzuParser.LambdaContext ctx) {
-    return newFunction(ctx.arg(), source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$lambda-" + lambdaCount++, ctx.expression().accept(this));
-  }
+    MatchNode[] patterns = new MatchNode[ctx.pattern().size()];
+    for (int i = 0; i < ctx.pattern().size(); i++) {
+      patterns[i] = visitPattern(ctx.pattern(i));
+    }
+    TupleMatchNode argPatterns = new TupleMatchNode(patterns);
 
-  private FunctionNode newFunction(List<AbzuParser.ArgContext> argContexts, SourceSection sourceSection, String functionName, ExpressionNode functionBodyNode) {
-    FrameDescriptor frameDescriptor = new FrameDescriptor();
-    List<String> args = new ArrayList<>(argContexts.size());
-    for (AbzuParser.ArgContext argCtx : argContexts) {
-      args.add(argCtx.NAME().getText());
+    ExpressionNode[] argumentNodes = new ExpressionNode[ctx.pattern().size()];
+    for (int j = 0; j < argumentNodes.length; j++) {
+      argumentNodes[j] = new ReadArgumentNode(j);
     }
 
-    ExpressionNode[] bodyStatements = new ExpressionNode[args.size() + 1];
+    TupleNode argsTuple = new TupleNode(argumentNodes);
+    CaseNode caseNode = new CaseNode(argsTuple, new PatternNode[]{new PatternNode(argPatterns, ctx.expression().accept(this))});
 
-    for (int i = 0; i < args.size(); i++) {
-      ReadArgumentNode readArg = new ReadArgumentNode(i);
-      FrameSlot frameSlot = frameDescriptor.findOrAddFrameSlot(args.get(i), i, FrameSlotKind.Illegal);
-      bodyStatements[i] = WriteLocalVariableNodeGen.create(readArg, frameSlot);
-    }
+    caseNode.addRootTag();
 
-    functionBodyNode.addRootTag();
-    bodyStatements[args.size()] = functionBodyNode;
-
-    return new FunctionNode(language, sourceSection, functionName, args, frameDescriptor, new BlockNode(bodyStatements));
+    return new FunctionNode(language, source.createSection(
+        ctx.LAMBDA_START().getSymbol().getLine(),
+        ctx.LAMBDA_START().getSymbol().getCharPositionInLine() + 1,
+        ctx.expression().stop.getLine(),
+        ctx.expression().stop.getCharPositionInLine() + 1
+    ), "$lambda-" + lambdaCount++, ctx.pattern().size(), new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode);
   }
 
   @Override
@@ -224,17 +214,100 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     FQNNode moduleFQN = visitFqn(ctx.fqn());
     NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());
 
-    int elementsCount = ctx.function().size();
-    FunctionNode[] functions = new FunctionNode[elementsCount];
-    for (int i = 0; i < elementsCount; i++) {
-      functions[i] = visitFunction(ctx.function(i));
+    int functionPatternsCount = ctx.function().size();
+    Map<String, List<PatternNode>> functionPatterns = new HashMap<>();
+    Map<String, Integer> functionCardinality = new HashMap<>();
+    Map<String, SourceSection> functionSourceSections = new HashMap<>();
+
+    String lastFunctionName = null;
+
+    for (int i = 0; i < functionPatternsCount; i++) {
+      AbzuParser.FunctionContext functionContext = ctx.function(i);
+
+      String functionName = functionContext.NAME().getText();
+
+      if (lastFunctionName != null && !lastFunctionName.equals(functionName) && functionPatterns.containsKey(functionName)) {
+        throw new AbzuParseError(source,
+            functionContext.NAME().getSymbol().getLine(),
+            functionContext.NAME().getSymbol().getCharPositionInLine() + 1,
+            functionContext.NAME().getText().length(), "Function " + functionName + " was already defined previously.");
+      }
+      lastFunctionName = functionName;
+
+      if (!functionPatterns.containsKey(functionName)) {
+        functionPatterns.put(functionName, new ArrayList<>());
+      }
+
+      if (!functionSourceSections.containsKey(functionName)) {
+        functionSourceSections.put(functionName, source.createSection(
+            functionContext.NAME().getSymbol().getLine(),
+            functionContext.NAME().getSymbol().getCharPositionInLine() + 1,
+            functionContext.expression().stop.getLine(),
+            functionContext.expression().stop.getCharPositionInLine() + 1)
+        );
+      } else {
+        SourceSection sourceSection = functionSourceSections.get(functionName);
+        functionSourceSections.put(functionName, source.createSection(
+            sourceSection.getStartLine(),
+            sourceSection.getStartColumn(),
+            functionContext.expression().stop.getLine(),
+            functionContext.expression().stop.getCharPositionInLine() + 1)
+        );
+      }
+
+      MatchNode[] patterns = new MatchNode[functionContext.pattern().size()];
+      for (int j = 0; j < functionContext.pattern().size(); j++) {
+        patterns[j] = visitPattern(functionContext.pattern(j));
+      }
+      TupleMatchNode argPatterns = new TupleMatchNode(patterns);
+
+      if (!functionCardinality.containsKey(functionName)) {
+        functionCardinality.put(functionName, patterns.length);
+      } else if (!functionCardinality.get(functionName).equals(patterns.length)) {
+        throw new AbzuParseError(source,
+            functionContext.NAME().getSymbol().getLine(),
+            functionContext.NAME().getSymbol().getCharPositionInLine() + 1,
+            functionContext.NAME().getText().length(), "Function " + functionName + " is defined using patterns of varying size.");
+      }
+
+      functionPatterns.get(functionName).add(new PatternNode(argPatterns, ctx.function(i).expression().accept(this)));
     }
-    return new ModuleNode(moduleFQN, exports, functions);
+
+    List<FunctionNode> functions = new ArrayList<>();
+    for (Map.Entry<String, List<PatternNode>> pair : functionPatterns.entrySet()) {
+      String functionName = pair.getKey();
+      List<PatternNode> patternNodes = pair.getValue();
+      int cardinality = functionCardinality.get(functionName);
+
+      ExpressionNode[] argumentNodes = new ExpressionNode[cardinality];
+      for (int j = 0; j < argumentNodes.length; j++) {
+        argumentNodes[j] = new ReadArgumentNode(j);
+      }
+
+      TupleNode argsTuple = new TupleNode(argumentNodes);
+      CaseNode caseNode = new CaseNode(argsTuple, patternNodes.toArray(new PatternNode[]{}));
+
+      caseNode.addRootTag();
+
+      FunctionNode functionNode = new FunctionNode(language, functionSourceSections.get(functionName), functionName, cardinality, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode);
+      functions.add(functionNode);
+    }
+
+    for (String exportedFunction : exports.strings) {
+      if (!functionCardinality.containsKey(exportedFunction)) {
+        throw new AbzuParseError(source,
+            ctx.KW_MODULE().getSymbol().getLine(),
+            ctx.KW_MODULE().getSymbol().getCharPositionInLine() + 1,
+            ctx.stop.getStopIndex() - ctx.start.getStartIndex(), "Module " + moduleFQN + " is trying to export function " + exportedFunction + " that is not defined.");
+      }
+    }
+
+    return new ModuleNode(moduleFQN, exports, functions.toArray(new FunctionNode[]{}));
   }
 
   @Override
   public NonEmptyStringListNode visitNonEmptyListOfNames(AbzuParser.NonEmptyListOfNamesContext ctx) {
-    List<String> names = new ArrayList<>();
+    Set<String> names = new HashSet<>();
     for (TerminalNode text : ctx.NAME()) {
       names.add(text.getText());
     }
@@ -336,15 +409,15 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       for (int i = 0; i < ctx.pattern().size(); i++) {
         matchNodes[i] = visitPattern(ctx.pattern(i));
       }
-      return new SequenceMatchPattern(matchNodes);
+      return new SequenceMatchPatternNode(matchNodes);
     }
   }
 
   @Override
-  public HeadTailsMatchPattern visitHeadTails(AbzuParser.HeadTailsContext ctx) {
+  public HeadTailsMatchPatternNode visitHeadTails(AbzuParser.HeadTailsContext ctx) {
     MatchNode pattern = visitPatternWithoutSequence(ctx.patternWithoutSequence());
     ExpressionNode tails = ctx.tails().accept(this);
 
-    return new HeadTailsMatchPattern(pattern, tails);
+    return new HeadTailsMatchPatternNode(pattern, tails);
   }
 }

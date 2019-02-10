@@ -78,7 +78,6 @@ literal : booleanLiteral
 
 value : unit
       | literal
-      | function
       | lambda
       | tuple
       | dict
@@ -96,7 +95,7 @@ patternValue : unit
              ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
-alias : NAME OP_PMATCH expression NEWLINE? ;
+alias : NAME OP_ASSIGN expression NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : (NAME | moduleCall) expression* ;
 moduleCall : fqn DOT NAME ;
@@ -109,8 +108,7 @@ integerLiteral : INTEGER ;
 floatLiteral : FLOAT | INTEGER 'f';
 stringLiteral : STRING ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
-function : NAME arg* OP_ASSIGN NEWLINE? expression NEWLINE?;
-arg : NAME ;
+function : NAME pattern* OP_ASSIGN NEWLINE? expression NEWLINE?;
 tuple : PARENS_L expression (COMMA expression)+ PARENS_R ;
 dict : key COLON expression (COMMA key COLON expression)* ;
 key : STRING ;
@@ -118,7 +116,7 @@ sequence : emptySequence | oneSequence | twoSequence | otherSequence ;
 fqn : NAME (SLASH NAME)* ;
 symbol : COLON NAME;
 identifier : NAME ;
-lambda : LAMBDA_START arg* OP_ARROW expression ;
+lambda : LAMBDA_START pattern* OP_ARROW expression ;
 underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;
@@ -190,7 +188,6 @@ BIN_OP : OP_COMPARISON | OP_ARITHMETIC | OP_LIST;
 UN_OP: OP_NOT;
 
 OP_ASSIGN : '=';
-OP_PMATCH : ':=';
 OP_EQ : '==' ;
 OP_NEQ : '!=' ;
 OP_LT : '<' ;

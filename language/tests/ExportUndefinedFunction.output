@@ -1,0 +1,1 @@
+Module FQNNode{strings=[tests, ExportUndefinedFunction]} is trying to export function fibonacci that is not defined.

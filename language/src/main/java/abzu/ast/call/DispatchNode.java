@@ -2,6 +2,8 @@ package abzu.ast.call;
 
 import abzu.Types;
 import abzu.ast.interop.ForeignToAbzuTypeNode;
+import abzu.ast.interop.ForeignToAbzuTypeNodeGen;
+import abzu.runtime.AbzuUndefinedNameException;
 import abzu.runtime.Function;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -11,8 +13,6 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
-import abzu.ast.interop.ForeignToAbzuTypeNodeGen;
-import abzu.runtime.AbzuUndefinedNameException;
 
 @ReportPolymorphism
 @TypeSystemReference(Types.class)

@@ -6,8 +6,6 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
 
-import java.util.List;
-
 /**
  * Represents a abzu function. On the Truffle level, a callable element is represented by a
  * {@link RootCallTarget call target}. This class encapsulates a call target, and adds version
@@ -33,11 +31,6 @@ public final class Function implements TruffleObject {
   private int cardinality;
 
   /**
-   * Names of arguments
-   */
-  private List<String> arguments;
-
-  /**
    * The current implementation of this function.
    */
   private RootCallTarget callTarget;
@@ -49,12 +42,11 @@ public final class Function implements TruffleObject {
    */
   private final CyclicAssumption callTargetStable;
 
-  public Function(String name, RootCallTarget callTarget, List<String> arguments) {
+  public Function(String name, RootCallTarget callTarget, int cardinality) {
     this.name = name;
     this.callTarget = callTarget;
     this.callTargetStable = new CyclicAssumption(name);
-    this.cardinality = arguments.size();
-    this.arguments = arguments;
+    this.cardinality = cardinality;
   }
 
   public String getName() {
@@ -85,9 +77,5 @@ public final class Function implements TruffleObject {
 
   public int getCardinality() {
     return cardinality;
-  }
-
-  public List<String> getArguments() {
-    return arguments;
   }
 }

@@ -12,13 +12,12 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 
-import java.util.List;
 import java.util.Objects;
 
 @NodeInfo
 public final class FunctionNode extends ExpressionNode {
   public final String name;
-  public final List<String> arguments;
+  private int cardinality;
   @Node.Child
   public ExpressionNode expression;
 
@@ -26,9 +25,9 @@ public final class FunctionNode extends ExpressionNode {
   private SourceSection sourceSection;
   private FrameDescriptor frameDescriptor;
 
-  public FunctionNode(AbzuLanguage language, SourceSection sourceSection, String name, List<String> arguments, FrameDescriptor frameDescriptor, ExpressionNode expression) {
+  public FunctionNode(AbzuLanguage language, SourceSection sourceSection, String name, int cardinality, FrameDescriptor frameDescriptor, ExpressionNode expression) {
     this.name = name;
-    this.arguments = arguments;
+    this.cardinality = cardinality;
     this.expression = expression;
     this.language = language;
     this.sourceSection = sourceSection;
@@ -41,20 +40,20 @@ public final class FunctionNode extends ExpressionNode {
     if (o == null || getClass() != o.getClass()) return false;
     FunctionNode that = (FunctionNode) o;
     return Objects.equals(name, that.name) &&
-        Objects.equals(arguments, that.arguments) &&
+        Objects.equals(cardinality, that.cardinality) &&
         Objects.equals(expression, that.expression);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, arguments, expression);
+    return Objects.hash(name, cardinality, expression);
   }
 
   @Override
   public String toString() {
     return "FunctionNode{" +
         "name='" + name + '\'' +
-        ", arguments=" + arguments +
+        ", cardinality=" + cardinality +
         ", expression=" + expression +
         '}';
   }
@@ -71,6 +70,6 @@ public final class FunctionNode extends ExpressionNode {
 
   private Function execute(VirtualFrame frame) {
     AbzuRootNode rootNode = new AbzuRootNode(language, frameDescriptor, expression, sourceSection, name, frame.materialize());
-    return new Function(name, Truffle.getRuntime().createCallTarget(rootNode), arguments);
+    return new Function(name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
   }
 }

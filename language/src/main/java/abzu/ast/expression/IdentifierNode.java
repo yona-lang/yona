@@ -7,6 +7,10 @@ import abzu.ast.call.InvokeNode;
 import abzu.ast.local.ReadLocalVariableNode;
 import abzu.ast.local.ReadLocalVariableNodeGen;
 import abzu.runtime.Function;
+import abzu.runtime.UninitializedFrameSlot;
+import abzu.runtime.UninitializedFrameSlotException;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -25,13 +29,13 @@ public final class IdentifierNode extends ExpressionNode {
   @Override
   public String toString() {
     return "IdentifierNode{" +
-           "name='" + name + '\'' +
-           '}';
+        "name='" + name + '\'' +
+        '}';
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(name);
+    FrameSlot frameSlot = getFrameSlot(frame);
     if (frameSlot == null) {
       throw new AbzuException("Identifier '" + name + "' not found in the current scope", this);
     }
@@ -58,7 +62,22 @@ public final class IdentifierNode extends ExpressionNode {
   }
 
   public boolean isBound(VirtualFrame frame) {
-    return frame.getFrameDescriptor().findFrameSlot(name) != null;
+    try {
+      FrameSlot frameSlot = getFrameSlot(frame);
+      if (frameSlot == null) {
+        return false;
+      } else {
+        ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+        node.executeGeneric(frame);
+        return true;
+      }
+    } catch (UninitializedFrameSlotException e) {
+      return false;
+    }
+  }
+
+  private FrameSlot getFrameSlot(VirtualFrame frame) {
+    return frame.getFrameDescriptor().findFrameSlot(name);
   }
 
   public String name() {
