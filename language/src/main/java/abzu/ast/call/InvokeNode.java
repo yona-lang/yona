@@ -88,18 +88,8 @@ public final class InvokeNode extends ExpressionNode {
       String partiallyAppliedFunctionName = "$partial-" + argumentNodes.length + "/" + function.getCardinality() + "-" + function.getName();
       ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
 
-      for (int i = 0; i < argumentNodes.length; i++) {
-        /*
-         * These arguments are already on the stack, so we just create ident nodes for them
-         */
+      for (int i = 0; i < function.getCardinality(); i++) {
         allArgumentNodes[i] = new ReadArgumentNode(i);
-      }
-
-      for (int i = argumentNodes.length - 1, j = 0; i < function.getCardinality(); i++, j++) {
-        /*
-         * These are the new arguments, to be read on the actual application of this new closure
-         */
-        allArgumentNodes[i] = new ReadArgumentNode(j);
       }
 
       /*
