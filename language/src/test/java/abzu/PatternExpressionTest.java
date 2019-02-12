@@ -294,4 +294,22 @@ public class PatternExpressionTest {
 
     assertEquals(5l, ret);
   }
+
+  @Test
+  public void guardsInCasePatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "(aa, bb)\n" +
+        "| aa <= bb -> aa\n" +
+        "| aa > bb -> bb\n").execute(new Tuple(1l, 2l)).asLong();
+    assertEquals(1l, ret);
+  }
+
+  @Test
+  public void guardsInCasePatternSecondTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "(aa, bb)\n" +
+        "| aa <= bb -> aa\n" +
+        "| aa > bb -> bb\n").execute(new Tuple(3l, 2l)).asLong();
+    assertEquals(2l, ret);
+  }
 }

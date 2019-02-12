@@ -1,21 +1,25 @@
 package abzu.ast.pattern;
 
 import abzu.ast.ExpressionNode;
+import abzu.ast.expression.ConditionNode;
 import abzu.ast.expression.LetNode;
+import abzu.ast.expression.ThrowNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
+import jdk.nashorn.internal.ir.IfNode;
 
 import java.util.Objects;
 
-public class PatternNode extends ExpressionNode implements PatternMatchable {
-  @Node.Child
+public class GuardedPattern extends ExpressionNode implements PatternMatchable {
+  @Child
   public MatchNode matchExpression;
-
-  @Node.Child
+  @Child
   public ExpressionNode valueExpression;
+  @Child
+  public ExpressionNode guardExpression;
 
-  public PatternNode(MatchNode matchExpression, ExpressionNode valueExpression) {
+  public GuardedPattern(MatchNode matchExpression, ExpressionNode guardExpression, ExpressionNode valueExpression) {
     this.matchExpression = matchExpression;
+    this.guardExpression = guardExpression;
     this.valueExpression = valueExpression;
   }
 
@@ -23,21 +27,23 @@ public class PatternNode extends ExpressionNode implements PatternMatchable {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    PatternNode that = (PatternNode) o;
+    GuardedPattern that = (GuardedPattern) o;
     return Objects.equals(matchExpression, that.matchExpression) &&
-        Objects.equals(valueExpression, that.valueExpression);
+        Objects.equals(valueExpression, that.valueExpression) &&
+        Objects.equals(guardExpression, that.guardExpression);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(matchExpression, valueExpression);
+    return Objects.hash(matchExpression, valueExpression, guardExpression);
   }
 
   @Override
   public String toString() {
-    return "PatternNode{" +
+    return "GuardedPattern{" +
         "matchExpression=" + matchExpression +
         ", valueExpression=" + valueExpression +
+        ", guardExpression=" + guardExpression +
         '}';
   }
 
@@ -46,7 +52,8 @@ public class PatternNode extends ExpressionNode implements PatternMatchable {
     try {
       MatchResult matchResult = matchExpression.match(value, frame);
       if (matchResult.isMatches()) {
-        LetNode letNode = new LetNode(matchResult.getAliases(), valueExpression);
+        ConditionNode ifNode = new ConditionNode(guardExpression, valueExpression, new ThrowNode(MatchException.INSTANCE));
+        LetNode letNode = new LetNode(matchResult.getAliases(), ifNode);
         return letNode.executeGeneric(frame);
       } else {
         throw MatchException.INSTANCE;

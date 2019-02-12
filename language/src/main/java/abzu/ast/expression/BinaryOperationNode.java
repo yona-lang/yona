@@ -48,27 +48,59 @@ public final class BinaryOperationNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     try {
-      try {
-        long leftVal = left.executeLong(frame);
-        long rightVal = right.executeLong(frame);
+      if (op.equals("==")) {
+        return Objects.equals(left.executeGeneric(frame), right.executeGeneric(frame));
+      } else if (op.equals("!=")) {
+        return !Objects.equals(left.executeGeneric(frame), right.executeGeneric(frame));
+      } else {
+        try {
+          long leftVal = left.executeLong(frame);
+          long rightVal = right.executeLong(frame);
 
-        switch (op) {
-          case "+": return leftVal + rightVal;
-          case "-": return leftVal - rightVal;
-          case "*": return leftVal * rightVal;
-          case "/": return leftVal / rightVal;
-          case "%": return leftVal % rightVal;
-        }
-      } catch (UnexpectedResultException ex) {
-        double leftVal = left.executeDouble(frame);
-        double rightVal = right.executeDouble(frame);
+          switch (op) {
+            case "+":
+              return leftVal + rightVal;
+            case "-":
+              return leftVal - rightVal;
+            case "*":
+              return leftVal * rightVal;
+            case "/":
+              return leftVal / rightVal;
+            case "%":
+              return leftVal % rightVal;
+            case "<":
+              return leftVal < rightVal;
+            case "<=":
+              return leftVal <= rightVal;
+            case ">":
+              return leftVal > rightVal;
+            case ">=":
+              return leftVal >= rightVal;
+          }
+        } catch (UnexpectedResultException ex) {
+          double leftVal = left.executeDouble(frame);
+          double rightVal = right.executeDouble(frame);
 
-        switch (op) {
-          case "+": return leftVal + rightVal;
-          case "-": return leftVal - rightVal;
-          case "*": return leftVal * rightVal;
-          case "/": return leftVal / rightVal;
-          case "%": return leftVal % rightVal;
+          switch (op) {
+            case "+":
+              return leftVal + rightVal;
+            case "-":
+              return leftVal - rightVal;
+            case "*":
+              return leftVal * rightVal;
+            case "/":
+              return leftVal / rightVal;
+            case "%":
+              return leftVal % rightVal;
+            case "<":
+              return leftVal < rightVal;
+            case "<=":
+              return leftVal <= rightVal;
+            case ">":
+              return leftVal > rightVal;
+            case ">=":
+              return leftVal >= rightVal;
+          }
         }
       }
     } catch (UnexpectedResultException ex) {

@@ -1,1 +1,1 @@
-Module{fqn=[tests, CommonFunctions], exports=[fibonacci, factorial], functions={fibonacci=fibonacci, factorial=factorial}}
+Module{fqn=[tests, CommonFunctions], exports=[fibonacci, factorial, bmiTell], functions={fibonacci=fibonacci, factorial=factorial, bmiTell=bmiTell}}

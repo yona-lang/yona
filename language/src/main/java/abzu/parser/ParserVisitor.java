@@ -225,7 +225,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());
 
     int functionPatternsCount = ctx.function().size();
-    Map<String, List<PatternNode>> functionPatterns = new HashMap<>();
+    Map<String, List<PatternMatchable>> functionPatterns = new HashMap<>();
     Map<String, Integer> functionCardinality = new HashMap<>();
     Map<String, SourceSection> functionSourceSections = new HashMap<>();
 
@@ -252,16 +252,16 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
         functionSourceSections.put(functionName, source.createSection(
             functionContext.NAME().getSymbol().getLine(),
             functionContext.NAME().getSymbol().getCharPositionInLine() + 1,
-            functionContext.expression().stop.getLine(),
-            functionContext.expression().stop.getCharPositionInLine() + 1)
+            functionContext.functionBody().stop.getLine(),
+            functionContext.functionBody().stop.getCharPositionInLine() + 1)
         );
       } else {
         SourceSection sourceSection = functionSourceSections.get(functionName);
         functionSourceSections.put(functionName, source.createSection(
             sourceSection.getStartLine(),
             sourceSection.getStartColumn(),
-            functionContext.expression().stop.getLine(),
-            functionContext.expression().stop.getCharPositionInLine() + 1)
+            functionContext.functionBody().stop.getLine(),
+            functionContext.functionBody().stop.getCharPositionInLine() + 1)
         );
       }
 
@@ -280,13 +280,27 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
             functionContext.NAME().getText().length(), "Function " + functionName + " is defined using patterns of varying size.");
       }
 
-      functionPatterns.get(functionName).add(new PatternNode(argPatterns, ctx.function(i).expression().accept(this)));
+      AbzuParser.FunctionBodyContext functionBodyContext = functionContext.functionBody();
+      if (functionBodyContext.bodyWithoutGuard() != null) {
+        functionPatterns.get(functionName).add(new PatternNode(argPatterns, functionBodyContext.bodyWithoutGuard().expression().accept(this)));
+      } else {
+        for (int j = 0; j < functionBodyContext.bodyWithGuards().size(); j++) {
+          AbzuParser.BodyWithGuardsContext bodyWithGuardsContext = functionBodyContext.bodyWithGuards(j);
+
+          ExpressionNode guardExpression = bodyWithGuardsContext.guard.accept(this);
+          ExpressionNode expression = bodyWithGuardsContext.expr.accept(this);
+
+          GuardedPattern guardedPattern = new GuardedPattern(argPatterns, guardExpression, expression);
+
+          functionPatterns.get(functionName).add(guardedPattern);
+        }
+      }
     }
 
     List<FunctionNode> functions = new ArrayList<>();
-    for (Map.Entry<String, List<PatternNode>> pair : functionPatterns.entrySet()) {
+    for (Map.Entry<String, List<PatternMatchable>> pair : functionPatterns.entrySet()) {
       String functionName = pair.getKey();
-      List<PatternNode> patternNodes = pair.getValue();
+      List<PatternMatchable> patternNodes = pair.getValue();
       int cardinality = functionCardinality.get(functionName);
 
       ExpressionNode[] argumentNodes = new ExpressionNode[cardinality];
@@ -295,7 +309,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       }
 
       TupleNode argsTuple = new TupleNode(argumentNodes);
-      CaseNode caseNode = new CaseNode(argsTuple, patternNodes.toArray(new PatternNode[]{}));
+      CaseNode caseNode = new CaseNode(argsTuple, patternNodes.toArray(new PatternMatchable[]{}));
 
       caseNode.addRootTag();
 
@@ -352,18 +366,30 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   @Override
   public CaseNode visitCaseExpr(AbzuParser.CaseExprContext ctx) {
     ExpressionNode expr = ctx.expression().accept(this);
-    PatternNode[] patternNodes = new PatternNode[ctx.patternExpression().size()];
-    for (int i = 0; i < ctx.patternExpression().size(); i++) {
-      patternNodes[i] = visitPatternExpression(ctx.patternExpression(i));
-    }
-    return new CaseNode(expr, patternNodes);
-  }
+    List<PatternMatchable> patternNodes = new ArrayList<>();
 
-  @Override
-  public PatternNode visitPatternExpression(AbzuParser.PatternExpressionContext ctx) {
-    MatchNode matchExpression = visitPattern(ctx.pattern());
-    ExpressionNode valueExpression = ctx.expression().accept(this);
-    return new PatternNode(matchExpression, valueExpression);
+    for (int i = 0; i < ctx.patternExpression().size(); i++) {
+      AbzuParser.PatternExpressionContext patternExpressionContext = ctx.patternExpression(i);
+
+      MatchNode matchExpression = visitPattern(patternExpressionContext.pattern());
+
+      if (patternExpressionContext.patternExpressionWithoutGuard() != null) {
+        patternNodes.add(new PatternNode(matchExpression, patternExpressionContext.patternExpressionWithoutGuard().expression().accept(this)));
+      } else {
+        for (int j = 0; j < patternExpressionContext.patternExpressionWithGuard().size(); j++) {
+          AbzuParser.PatternExpressionWithGuardContext withGuardContext = patternExpressionContext.patternExpressionWithGuard(j);
+
+          ExpressionNode guardExpression = withGuardContext.guard.accept(this);
+          ExpressionNode expression = withGuardContext.expr.accept(this);
+
+          GuardedPattern guardedPattern = new GuardedPattern(matchExpression, guardExpression, expression);
+
+          patternNodes.add(guardedPattern);
+        }
+      }
+    }
+
+    return new CaseNode(expr, patternNodes.toArray(new PatternMatchable[]{}));
   }
 
   @Override

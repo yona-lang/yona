@@ -2,7 +2,7 @@ package abzu.ast.expression;
 
 import abzu.ast.ExpressionNode;
 import abzu.ast.pattern.MatchException;
-import abzu.ast.pattern.PatternNode;
+import abzu.ast.pattern.PatternMatchable;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -14,9 +14,9 @@ public class CaseNode extends ExpressionNode {
   public ExpressionNode expression;
 
   @Node.Children
-  public PatternNode[] patternNodes;
+  public PatternMatchable[] patternNodes;
 
-  public CaseNode(ExpressionNode expression, PatternNode[] patternNodes) {
+  public CaseNode(ExpressionNode expression, PatternMatchable[] patternNodes) {
     this.expression = expression;
     this.patternNodes = patternNodes;
   }
@@ -50,7 +50,7 @@ public class CaseNode extends ExpressionNode {
     Object value = expression.executeGeneric(frame);
     Object retValue = null;
 
-    for (PatternNode patternNode : patternNodes) {
+    for (PatternMatchable patternNode : patternNodes) {
       try {
         retValue = patternNode.patternMatch(value, frame);
         break;

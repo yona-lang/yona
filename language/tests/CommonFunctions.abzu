@@ -1,8 +1,14 @@
-module tests/CommonFunctions exports factorial, fibonacci as
+module tests/CommonFunctions exports factorial, fibonacci, bmiTell as
 
-factorial 1 =1
+factorial 1 = 1
 factorial n = n * (factorial n - 1)
 
 fibonacci 0 = 0
 fibonacci 1 = 1
 fibonacci n = (fibonacci n - 1) + (fibonacci n - 2)
+
+bmiTell bmi
+    | bmi <= 18.5 = "You're underweight, you emo, you!"
+    | bmi <= 25.0 = "You're supposedly normal. Pffft, I bet you're ugly!"
+    | bmi <= 30.0 = "You're fat! Lose some weight, fatty!"
+    | true        = "You're a whale, congratulations!"

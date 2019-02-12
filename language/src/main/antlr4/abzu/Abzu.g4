@@ -110,7 +110,12 @@ integerLiteral : INTEGER ;
 floatLiteral : FLOAT | INTEGER 'f';
 stringLiteral : STRING ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
-function : NAME pattern* OP_ASSIGN NEWLINE? expression NEWLINE?;
+function : NAME pattern* functionBody NEWLINE?;
+functionBody : bodyWithoutGuard | bodyWithGuards+ ;
+
+bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression ;
+bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression ;
+
 tuple : PARENS_L expression (COMMA expression)+ PARENS_R ;
 dict : key COLON expression (COMMA key COLON expression)* ;
 key : STRING ;
@@ -127,7 +132,11 @@ twoSequence: BRACKET_L expression COMMA expression BRACKET_R ;
 otherSequence: BRACKET_L expression COMMA expression (COMMA expression)+ BRACKET_R ;
 
 caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ ;
-patternExpression : pattern OP_ARROW NEWLINE? expression NEWLINE ;
+patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWithGuard+) NEWLINE ;
+
+patternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
+patternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
+
 pattern : underscore
         | patternValue
         | tuplePattern
@@ -176,6 +185,7 @@ COMMA : ',' ;
 COLON : ':' ;
 DOT : '.' ;
 SLASH : OP_DIVIDE ;
+VLINE : '|';
 
 LAMBDA_START : '\\' ;
 
