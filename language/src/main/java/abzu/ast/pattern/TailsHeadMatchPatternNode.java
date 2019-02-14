@@ -12,13 +12,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
+public final class TailsHeadMatchPatternNode extends CommonSequencePatternNode {
   @Child
   public MatchNode headNode;
   @Child
   public ExpressionNode tailsNode;
 
-  public HeadTailsMatchPatternNode(MatchNode headNode, ExpressionNode tailsNode) {
+  public TailsHeadMatchPatternNode(ExpressionNode tailsNode, MatchNode headNode) {
     this.headNode = headNode;
     this.tailsNode = tailsNode;
   }
@@ -27,7 +27,7 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    HeadTailsMatchPatternNode that = (HeadTailsMatchPatternNode) o;
+    TailsHeadMatchPatternNode that = (TailsHeadMatchPatternNode) o;
     return Objects.equals(headNode, that.headNode) &&
         Objects.equals(tailsNode, that.tailsNode);
   }
@@ -39,7 +39,7 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
 
   @Override
   public String toString() {
-    return "HeadTailsMatchPatternNode{" +
+    return "TailsHeadMatchPatternNode{" +
         "headNode=" + headNode +
         ", tailsNode=" + tailsNode +
         '}';
@@ -52,7 +52,7 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
       List<AliasNode> aliases = new ArrayList<>();
 
       if (sequence.length() > 0) {
-        MatchResult headMatches = headNode.match(sequence.first(), frame);
+        MatchResult headMatches = headNode.match(sequence.last(), frame);
         if (headMatches.isMatches()) {
           for (AliasNode aliasNode : headMatches.getAliases()) {
             aliases.add(aliasNode);
@@ -68,7 +68,7 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
           if (identifierNode.isBound(frame)) {
             Sequence identifierValue = (Sequence) identifierNode.executeGeneric(frame);
 
-            if (!Objects.equals(identifierValue, sequence.removeFirst())) {
+            if (!Objects.equals(identifierValue, sequence.removeLast())) {
               return MatchResult.FALSE;
             }
           } else {

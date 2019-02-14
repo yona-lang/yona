@@ -154,8 +154,10 @@ sequencePattern : identifier AT PARENS_L innerSequencePattern PARENS_R
                 ;
 innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
                      | headTails
+                     | tailsHead
                      ;
-headTails : patternWithoutSequence COLON tails ;
+headTails : patternWithoutSequence CONS_L tails ;
+tailsHead :  tails CONS_R patternWithoutSequence ;
 tails : identifier | emptySequence | underscore ;
 
 UNIT: '()' ;
@@ -183,6 +185,10 @@ PARENS_R : ')' ;
 
 COMMA : ',' ;
 COLON : ':' ;
+
+CONS_L : '<:' ;
+CONS_R : ':>' ;
+
 DOT : '.' ;
 SLASH : OP_DIVIDE ;
 VLINE : '|';

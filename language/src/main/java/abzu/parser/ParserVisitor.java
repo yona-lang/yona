@@ -440,6 +440,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   public MatchNode visitInnerSequencePattern(AbzuParser.InnerSequencePatternContext ctx) {
     if (ctx.headTails() != null) {
       return visitHeadTails(ctx.headTails());
+    } else if (ctx.tailsHead() != null) {
+      return visitTailsHead(ctx.tailsHead());
     } else {
       MatchNode[] matchNodes = new MatchNode[ctx.pattern().size()];
       for (int i = 0; i < ctx.pattern().size(); i++) {
@@ -455,5 +457,13 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     ExpressionNode tails = ctx.tails().accept(this);
 
     return new HeadTailsMatchPatternNode(pattern, tails);
+  }
+
+  @Override
+  public TailsHeadMatchPatternNode visitTailsHead(AbzuParser.TailsHeadContext ctx) {
+    MatchNode pattern = visitPatternWithoutSequence(ctx.patternWithoutSequence());
+    ExpressionNode tails = ctx.tails().accept(this);
+
+    return new TailsHeadMatchPatternNode(tails, pattern);
   }
 }

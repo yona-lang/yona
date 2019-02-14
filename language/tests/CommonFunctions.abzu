@@ -28,11 +28,11 @@ nonLinearTupleTest (argOne, _) (_, argTwo) = argOne + argTwo
 nonLinearListTest [arg, _] [_, arg]       = arg
 nonLinearListTest [argOne, _] [_, argTwo] = argOne + argTwo
 
-nonLinearHeadTailsTest head:_ head:_       = head
-nonLinearHeadTailsTest headOne:_ headTwo:_ = headOne + headTwo
+nonLinearHeadTailsTest head <: _ head <: _       = head
+nonLinearHeadTailsTest headOne <: _ headTwo <: _ = headOne + headTwo
 
-nonLinearAsSequenceOneTest seqOne@(head:_) seqTwo@(head:_)       = head
-nonLinearAsSequenceOneTest seqOne@(headOne:_) seqTwo@(headTwo:_) = headOne + headTwo
+nonLinearAsSequenceOneTest seqOne@(head <: _) seqTwo@(head <: _)       = head
+nonLinearAsSequenceOneTest seqOne@(headOne <: _) seqTwo@(headTwo <: _) = headOne + headTwo
 
-nonLinearAsSequenceTwoTest seq@(headOne:_) seq@(headTwo:_)       = headOne
-nonLinearAsSequenceTwoTest seqOne@(headOne:_) seqTwo@(headTwo:_) = headOne + headTwo
+nonLinearAsSequenceTwoTest seq@(headOne <: _) seq@(headTwo <: _)       = headOne
+nonLinearAsSequenceTwoTest seqOne@(headOne <: _) seqTwo@(headTwo <: _) = headOne + headTwo

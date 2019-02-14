@@ -62,7 +62,7 @@ public final class AsSequenceMatchNode extends MatchNode {
           aliasNode.executeGeneric(frame);
         }
 
-        return new MatchResult(true, new AliasNode[]{});
+        return MatchResult.TRUE;
       }
     }
 

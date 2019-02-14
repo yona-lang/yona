@@ -116,7 +116,16 @@ public class PatternExpressionTest {
   @Test
   public void headTailsPatternTest() {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
-        "1:[] -> 2\n" +
+        "1 <: [] -> 2\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l)).asLong();
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void tailsHeadPatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "[] :> 1 -> 2\n" +
         "[] -> 3\n"+
         "_ -> 9\n").execute(Sequence.sequence(1l)).asLong();
     assertEquals(2l, ret);
@@ -125,8 +134,18 @@ public class PatternExpressionTest {
   @Test
   public void headTailsUnderscoreOnePatternTest() {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
-        "1:_ -> 2\n" +
-        "_:_ -> 3\n" +
+        "1 <: _ -> 2\n" +
+        "_ <: _ -> 3\n" +
+        "[] -> 4\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l)).asLong();
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void tailsHeadUnderscoreOnePatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "_ :> 1 -> 2\n" +
+        "_ :> _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n").execute(Sequence.sequence(1l)).asLong();
     assertEquals(2l, ret);
@@ -135,8 +154,18 @@ public class PatternExpressionTest {
   @Test
   public void headTailsUnderscoreTwoPatternTest() {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
-        "1:_ -> 2\n" +
-        "_:_ -> 3\n" +
+        "1 <: _ -> 2\n" +
+        "_ <: _ -> 3\n" +
+        "[] -> 4\n"+
+        "_ -> 9\n").execute(Sequence.sequence(2l)).asLong();
+    assertEquals(3l, ret);
+  }
+
+  @Test
+  public void tailsHeadUnderscoreTwoPatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "_ :> 1 -> 2\n" +
+        "_ :> _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n").execute(Sequence.sequence(2l)).asLong();
     assertEquals(3l, ret);
@@ -145,17 +174,35 @@ public class PatternExpressionTest {
   @Test
   public void headTailsUnderscoreThreePatternTest() {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
-        "1:_ -> 2\n" +
-        "_:_ -> 4\n"+
+        "1 <: _ -> 2\n" +
+        "_ <: _ -> 4\n"+
+        "_ -> 9\n").execute(Sequence.sequence()).asLong();
+    assertEquals(4l, ret);
+  }
+
+
+  @Test
+  public void tailsHeadUnderscoreThreePatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "_ :> 1 -> 2\n" +
+        "_ :> _ -> 4\n"+
+        "_ -> 9\n").execute(Sequence.sequence()).asLong();
+    assertEquals(4l, ret);
+  }
+  @Test
+  public void headTailsUnderscoreFourPatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "1 <: _ -> 2\n" +
+        "_ <: [] -> 4\n"+
         "_ -> 9\n").execute(Sequence.sequence()).asLong();
     assertEquals(4l, ret);
   }
 
   @Test
-  public void headTailsUnderscoreFourPatternTest() {
+  public void tailsHeadUnderscoreFourPatternTest() {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
-        "1:_ -> 2\n" +
-        "_:[] -> 4\n"+
+        "_ :> 1 -> 2\n" +
+        "[] :> _ -> 4\n"+
         "_ -> 9\n").execute(Sequence.sequence()).asLong();
     assertEquals(4l, ret);
   }
@@ -163,8 +210,23 @@ public class PatternExpressionTest {
   @Test
   public void headTailsFreeVarPatternTest() {
     Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
-        "1:[] -> 2\n" +
-        "1:tail -> tail\n" +
+        "1 <: [] -> 2\n" +
+        "1 <: tail -> tail\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l, 2l, 3l));
+
+    Object[] array = sequence.as(Object[].class);
+
+    assertEquals(2, array.length);
+    assertEquals(2l, array[0]);
+    assertEquals(3l, array[1]);
+  }
+
+  @Test
+  public void tailsHeadFreeVarPatternTest() {
+    Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
+        "[] :> 3 -> 2\n" +
+        "tail :> 3 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n").execute(Sequence.sequence(1l, 2l, 3l));
 
@@ -178,7 +240,19 @@ public class PatternExpressionTest {
   @Test
   public void headTailsFreeVarEmptyPatternTest() {
     Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
-        "1:tail -> tail\n" +
+        "1 <: tail -> tail\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l));
+
+    Object[] array = sequence.as(Object[].class);
+
+    assertEquals(0, array.length);
+  }
+
+  @Test
+  public void tailsHeadFreeVarEmptyPatternTest() {
+    Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
+        "tail :> 1 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n").execute(Sequence.sequence(1l));
 
@@ -190,8 +264,8 @@ public class PatternExpressionTest {
   @Test
   public void headTailsBoundVarPatternTest() {
     Value sequence = context.eval("abzu", "\\arg bound -> case arg of\n" +
-        "1:[] -> 2\n" +
-        "1:bound -> bound\n" +
+        "1 <: [] -> 2\n" +
+        "1 <: bound -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n").execute(Sequence.sequence(1l, 2l, 3l), Sequence.sequence(2l, 3l));
 
@@ -203,9 +277,36 @@ public class PatternExpressionTest {
   }
 
   @Test
+  public void tailsHeadBoundVarPatternTest() {
+    Value sequence = context.eval("abzu", "\\arg bound -> case arg of\n" +
+        "[] :> 3 -> 2\n" +
+        "bound :> 3 -> bound\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l, 2l, 3l), Sequence.sequence(1l, 2l));
+
+    Object[] array = sequence.as(Object[].class);
+
+    assertEquals(2, array.length);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+  }
+
+  @Test
   public void headTailsBoundVarEmptyPatternTest() {
     Value sequence = context.eval("abzu", "\\arg bound -> case arg of\n" +
-        "1:bound -> bound\n" +
+        "1 <: bound -> bound\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l), Sequence.sequence());
+
+    Object[] array = sequence.as(Object[].class);
+
+    assertEquals(0, array.length);
+  }
+
+  @Test
+  public void tailsHeadBoundVarEmptyPatternTest() {
+    Value sequence = context.eval("abzu", "\\arg bound -> case arg of\n" +
+        "bound :> 1 -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n").execute(Sequence.sequence(1l), Sequence.sequence());
 
