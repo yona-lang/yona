@@ -312,4 +312,13 @@ public class PatternExpressionTest {
         "| aa > bb -> bb\n").execute(new Tuple(3l, 2l)).asLong();
     assertEquals(2l, ret);
   }
+
+  @Test
+  public void guardsInCaseInLambdaTest() {
+    String ret = context.eval("abzu", "\\arg -> case () of\n" +
+        "_ | arg < 0     -> \"negative\"\n" +
+        "  | arg == 0    -> \"zero\"\n" +
+        "  | true        -> \"positive\"\n").execute(0l).asString();
+    assertEquals("zero", ret);
+  }
 }
