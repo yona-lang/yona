@@ -43,6 +43,7 @@ public final class TupleMatchNode extends MatchNode {
   public MatchResult match(Object value, VirtualFrame frame) {
     if (value instanceof Tuple) {
       Tuple tuple = (Tuple) value;
+//      System.err.println(tuple);
 
       if (tuple.size() == expressions.length) {
         List<AliasNode> aliases = new ArrayList<>();
@@ -68,7 +69,11 @@ public final class TupleMatchNode extends MatchNode {
           }
         }
 
-        return new MatchResult(true, aliases.toArray(new AliasNode[]{}));
+        for (AliasNode aliasNode : aliases) {
+          aliasNode.executeGeneric(frame);
+        }
+
+        return new MatchResult(true, new AliasNode[]{});
       }
     }
 

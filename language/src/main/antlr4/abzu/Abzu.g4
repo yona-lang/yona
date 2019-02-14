@@ -102,7 +102,7 @@ conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expres
 apply : (NAME | moduleCall) expression* ;
 moduleCall : fqn DOT NAME ;
 module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE function+ ;
-nonEmptyListOfNames : NAME (COMMA NAME)* ;
+nonEmptyListOfNames : NEWLINE? NAME NEWLINE? (COMMA NEWLINE? NAME)* NEWLINE? ;
 
 unit : UNIT ;
 byteLiteral : INTEGER 'b';

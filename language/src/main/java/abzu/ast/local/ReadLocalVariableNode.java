@@ -30,6 +30,7 @@ public abstract class ReadLocalVariableNode extends ExpressionNode {
 
     @Specialization(guards = "frame.isLong(getSlot())")
     protected long readLong(VirtualFrame frame) {
+//        System.err.println(getSlot());
         return FrameUtil.getLongSafe(frame, getSlot());
     }
 

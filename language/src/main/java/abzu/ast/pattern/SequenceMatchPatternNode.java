@@ -58,7 +58,11 @@ public final class SequenceMatchPatternNode extends MatchNode {
           }
         }
 
-        return new MatchResult(true, aliases.toArray(new AliasNode[]{}));
+        for (AliasNode aliasNode : aliases) {
+          aliasNode.executeGeneric(frame);
+        }
+
+        return new MatchResult(true, new AliasNode[]{});
       }
     }
 

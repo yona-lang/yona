@@ -58,7 +58,11 @@ public final class AsSequenceMatchNode extends MatchNode {
         }
 
         aliases.add(new AliasNode(identifierNode.name(), NodeMaker.makeNode(sequence)));
-        return new MatchResult(true, aliases.toArray(new AliasNode[]{}));
+        for (AliasNode aliasNode : aliases) {
+          aliasNode.executeGeneric(frame);
+        }
+
+        return new MatchResult(true, new AliasNode[]{});
       }
     }
 

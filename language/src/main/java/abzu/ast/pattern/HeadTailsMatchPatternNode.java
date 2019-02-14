@@ -80,7 +80,11 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
           }
         }
 
-        return new MatchResult(true, aliases.toArray(new AliasNode[]{}));
+        for (AliasNode aliasNode : aliases) {
+          aliasNode.executeGeneric(frame);
+        }
+
+        return new MatchResult(true, new AliasNode[]{});
       } else if (sequence.length() == 0) {
         MatchResult headMatches = headNode.match(sequence, frame);
         if (headMatches.isMatches()) {
@@ -110,7 +114,11 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
           }
         }
 
-        return new MatchResult(true, aliases.toArray(new AliasNode[]{}));
+        for (AliasNode aliasNode : aliases) {
+          aliasNode.executeGeneric(frame);
+        }
+
+        return new MatchResult(true, new AliasNode[]{});
       }
     }
 

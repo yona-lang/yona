@@ -46,6 +46,7 @@ public final class AliasNode extends ExpressionNode {
   public Object executeGeneric(VirtualFrame frame) {
     FrameSlot frameSlot = frame.getFrameDescriptor().findOrAddFrameSlot(name, FrameSlotKind.Illegal);
     WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(expression, frameSlot);
+//    System.err.println(this);
     return writeLocalVariableNode.executeGeneric(frame);
   }
 }

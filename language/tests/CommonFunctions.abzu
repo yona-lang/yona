@@ -1,4 +1,13 @@
-module tests/CommonFunctions exports factorial, fibonacci, bmiTell as
+module tests/CommonFunctions exports
+    factorial,
+    fibonacci,
+    bmiTell,
+    nonLinearTupleTest,
+    nonLinearListTest,
+    nonLinearHeadTailsTest,
+    nonLinearAsSequenceOneTest,
+    nonLinearAsSequenceTwoTest
+    as
 
 factorial 1 = 1
 factorial n = n * (factorial n - 1)
@@ -12,3 +21,18 @@ bmiTell bmi
     | bmi <= 25.0 = "You're supposedly normal. Pffft, I bet you're ugly!"
     | bmi <= 30.0 = "You're fat! Lose some weight, fatty!"
     | true        = "You're a whale, congratulations!"
+
+nonLinearTupleTest (arg, _) (_, arg)       = arg
+nonLinearTupleTest (argOne, _) (_, argTwo) = argOne + argTwo
+
+nonLinearListTest [arg, _] [_, arg]       = arg
+nonLinearListTest [argOne, _] [_, argTwo] = argOne + argTwo
+
+nonLinearHeadTailsTest head:_ head:_       = head
+nonLinearHeadTailsTest headOne:_ headTwo:_ = headOne + headTwo
+
+nonLinearAsSequenceOneTest seqOne@(head:_) seqTwo@(head:_)       = head
+nonLinearAsSequenceOneTest seqOne@(headOne:_) seqTwo@(headTwo:_) = headOne + headTwo
+
+nonLinearAsSequenceTwoTest seq@(headOne:_) seq@(headTwo:_)       = headOne
+nonLinearAsSequenceTwoTest seqOne@(headOne:_) seqTwo@(headTwo:_) = headOne + headTwo
