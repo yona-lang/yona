@@ -176,17 +176,16 @@ public class PatternExpressionTest {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
         "1 <: _ -> 2\n" +
         "_ <: _ -> 4\n"+
-        "_ -> 9\n").execute(Sequence.sequence()).asLong();
+        "_ -> 9\n").execute(Sequence.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
-
 
   @Test
   public void tailsHeadUnderscoreThreePatternTest() {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
         "_ :> 1 -> 2\n" +
         "_ :> _ -> 4\n"+
-        "_ -> 9\n").execute(Sequence.sequence()).asLong();
+        "_ -> 9\n").execute(Sequence.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
   @Test
@@ -194,7 +193,7 @@ public class PatternExpressionTest {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
         "1 <: _ -> 2\n" +
         "_ <: [] -> 4\n"+
-        "_ -> 9\n").execute(Sequence.sequence()).asLong();
+        "_ -> 9\n").execute(Sequence.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
 
@@ -203,7 +202,7 @@ public class PatternExpressionTest {
     long ret = context.eval("abzu", "\\arg -> case arg of\n" +
         "_ :> 1 -> 2\n" +
         "[] :> _ -> 4\n"+
-        "_ -> 9\n").execute(Sequence.sequence()).asLong();
+        "_ -> 9\n").execute(Sequence.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
 
@@ -233,8 +232,8 @@ public class PatternExpressionTest {
     Object[] array = sequence.as(Object[].class);
 
     assertEquals(2, array.length);
-    assertEquals(2l, array[0]);
-    assertEquals(3l, array[1]);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
   }
 
   @Test
@@ -421,5 +420,35 @@ public class PatternExpressionTest {
         "  | arg == 0    -> \"zero\"\n" +
         "  | true        -> \"positive\"\n").execute(0l).asString();
     assertEquals("zero", ret);
+  }
+
+  @Test
+  public void multipleHeadsOneTailPatternTest() {
+    Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
+        "1 <: 2 <: [] -> 2\n" +
+        "1 <: 2 <: tail -> tail\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l, 2l, 3l, 4l));
+
+    Object[] array = sequence.as(Object[].class);
+
+    assertEquals(2, array.length);
+    assertEquals(3l, array[0]);
+    assertEquals(4l, array[1]);
+  }
+
+  @Test
+  public void oneTailMultipleHeadsPatternTest() {
+    Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
+        "[] :> 3 :> 4  -> 2\n" +
+        "tail :> 3 :> 4 -> tail\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(1l, 2l, 3l, 4l));
+
+    Object[] array = sequence.as(Object[].class);
+
+    assertEquals(2, array.length);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
   }
 }

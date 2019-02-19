@@ -156,8 +156,8 @@ innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
                      | headTails
                      | tailsHead
                      ;
-headTails : patternWithoutSequence CONS_L tails ;
-tailsHead :  tails CONS_R patternWithoutSequence ;
+headTails : (patternWithoutSequence CONS_L)+ tails ;
+tailsHead :  tails (CONS_R patternWithoutSequence)+ ;
 tails : identifier | emptySequence | underscore ;
 
 UNIT: '()' ;

@@ -12,14 +12,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
-  @Child
-  public MatchNode headNode;
+public final class HeadTailsMatchPatternNode extends MatchNode {
+  @Children
+  public MatchNode headNodes[];
   @Child
   public ExpressionNode tailsNode;
 
-  public HeadTailsMatchPatternNode(MatchNode headNode, ExpressionNode tailsNode) {
-    this.headNode = headNode;
+  public HeadTailsMatchPatternNode(MatchNode headNodes[], ExpressionNode tailsNode) {
+    this.headNodes = headNodes;
     this.tailsNode = tailsNode;
   }
 
@@ -28,19 +28,19 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     HeadTailsMatchPatternNode that = (HeadTailsMatchPatternNode) o;
-    return Objects.equals(headNode, that.headNode) &&
+    return Objects.equals(headNodes, that.headNodes) &&
         Objects.equals(tailsNode, that.tailsNode);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(headNode, tailsNode);
+    return Objects.hash(headNodes, tailsNode);
   }
 
   @Override
   public String toString() {
     return "HeadTailsMatchPatternNode{" +
-        "headNode=" + headNode +
+        "headNodes=" + headNodes +
         ", tailsNode=" + tailsNode +
         '}';
   }
@@ -51,14 +51,22 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
       Sequence sequence = (Sequence) value;
       List<AliasNode> aliases = new ArrayList<>();
 
+      if (headNodes.length > sequence.length()) {
+        return MatchResult.FALSE;
+      }
+
       if (sequence.length() > 0) {
-        MatchResult headMatches = headNode.match(sequence.first(), frame);
-        if (headMatches.isMatches()) {
-          for (AliasNode aliasNode : headMatches.getAliases()) {
-            aliases.add(aliasNode);
+        for (int i = 0; i < headNodes.length; i++) {
+          MatchNode headNode = headNodes[i];
+          MatchResult headMatches = headNode.match(sequence.first(), frame);
+          if (headMatches.isMatches()) {
+            for (AliasNode aliasNode : headMatches.getAliases()) {
+              aliases.add(aliasNode);
+            }
+            sequence = sequence.removeFirst();
+          } else {
+            return MatchResult.FALSE;
           }
-        } else {
-          return MatchResult.FALSE;
         }
 
         // Abzu.g4: tails : identifier | emptySequence | underscore ;
@@ -68,14 +76,14 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
           if (identifierNode.isBound(frame)) {
             Sequence identifierValue = (Sequence) identifierNode.executeGeneric(frame);
 
-            if (!Objects.equals(identifierValue, sequence.removeFirst())) {
+            if (!Objects.equals(identifierValue, sequence)) {
               return MatchResult.FALSE;
             }
           } else {
-            aliases.add(new AliasNode(identifierNode.name(), NodeMaker.makeNode(sequence.removeFirst())));
+            aliases.add(new AliasNode(identifierNode.name(), NodeMaker.makeNode(sequence)));
           }
         } else if (tailsNode instanceof EmptySequenceNode) {
-          if (sequence.removeFirst().length() > 0) {
+          if (sequence.length() > 0) {
             return MatchResult.FALSE;
           }
         }
@@ -85,16 +93,6 @@ public final class HeadTailsMatchPatternNode extends CommonSequencePatternNode {
         }
 
         return MatchResult.TRUE;
-      } else if (sequence.length() == 0) {
-        MatchResult matchResult = matchEmptySequence(sequence, tailsNode, headNode, frame);
-        if (!matchResult.isMatches()) {
-          return MatchResult.FALSE;
-        } else {
-          for (AliasNode aliasNode : matchResult.getAliases()) {
-            aliasNode.executeGeneric(frame);
-          }
-          return MatchResult.TRUE;
-        }
       }
     }
 

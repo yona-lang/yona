@@ -453,17 +453,27 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   @Override
   public HeadTailsMatchPatternNode visitHeadTails(AbzuParser.HeadTailsContext ctx) {
-    MatchNode pattern = visitPatternWithoutSequence(ctx.patternWithoutSequence());
+    MatchNode[] headPatterns = new MatchNode[ctx.patternWithoutSequence().size()];
+
+    for(int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
+      headPatterns[i] = visitPatternWithoutSequence(ctx.patternWithoutSequence(i));
+    }
+
     ExpressionNode tails = ctx.tails().accept(this);
 
-    return new HeadTailsMatchPatternNode(pattern, tails);
+    return new HeadTailsMatchPatternNode(headPatterns, tails);
   }
 
   @Override
   public TailsHeadMatchPatternNode visitTailsHead(AbzuParser.TailsHeadContext ctx) {
-    MatchNode pattern = visitPatternWithoutSequence(ctx.patternWithoutSequence());
+    MatchNode[] headPatterns = new MatchNode[ctx.patternWithoutSequence().size()];
+
+    for(int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
+      headPatterns[i] = visitPatternWithoutSequence(ctx.patternWithoutSequence(i));
+    }
+
     ExpressionNode tails = ctx.tails().accept(this);
 
-    return new TailsHeadMatchPatternNode(tails, pattern);
+    return new TailsHeadMatchPatternNode(tails, headPatterns);
   }
 }
