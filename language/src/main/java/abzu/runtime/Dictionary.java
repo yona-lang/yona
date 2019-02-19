@@ -2,6 +2,8 @@ package abzu.runtime;
 
 import com.oracle.truffle.api.interop.*;
 
+import java.util.function.BiFunction;
+
 import static java.lang.Integer.bitCount;
 import static java.lang.System.arraycopy;
 
@@ -26,6 +28,8 @@ public abstract class Dictionary implements TruffleObject {
   }
 
   abstract Dictionary remove(Object key, int depth, int hash);
+
+  public abstract <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial);
 
   public abstract int size();
 
@@ -105,6 +109,15 @@ public abstract class Dictionary implements TruffleObject {
         return new Bitmap(bitmap, bmpData);
       }
       return this;
+    }
+
+    @Override
+    public <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial) {
+      T result = initial;
+      for (Dictionary dict : data) {
+        if (dict != null) result = dict.fold(function, result);
+      }
+      return result;
     }
 
     @Override
@@ -227,6 +240,21 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
+    public <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial) {
+      T result = initial;
+      for (Object o : data) {
+        if (o instanceof Dictionary) {
+          result = ((Dictionary) o).fold(function, result);
+        } else {
+          assert o instanceof Entry;
+          final Entry entry = (Entry) o;
+          result = function.apply(result, new Tuple(entry.key, entry.value));
+        }
+      }
+      return result;
+    }
+
+    @Override
     public int size() {
       if (size == -1) {
         int result = 0;
@@ -294,6 +322,21 @@ public abstract class Dictionary implements TruffleObject {
       if (idx == -1) return this;
       if (n == 1) return null;
       return new Collision(hash, n - 1, arrayRemove(data, idx));
+    }
+
+    @Override
+    public <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial) {
+      T result = initial;
+      for (Object o : data) {
+        if (o instanceof Dictionary) {
+          result = ((Dictionary) o).fold(function, result);
+        }
+        if (o instanceof Entry) {
+          final Entry entry = (Entry) o;
+          result = function.apply(result, new Tuple(entry.key, entry.value));
+        }
+      }
+      return result;
     }
 
     @Override
