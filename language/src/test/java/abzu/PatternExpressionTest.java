@@ -1,5 +1,6 @@
 package abzu;
 
+import abzu.runtime.Dictionary;
 import abzu.runtime.Sequence;
 import abzu.runtime.Tuple;
 import org.graalvm.polyglot.Context;
@@ -450,5 +451,30 @@ public class PatternExpressionTest {
     assertEquals(2, array.length);
     assertEquals(1l, array[0]);
     assertEquals(2l, array[1]);
+  }
+
+  @Test
+  public void dictPatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "{\"b\" = 3} -> 3\n" +
+        "{\"a\" = 1, \"b\" = bb} -> bb\n" +
+        "_ -> 9\n").execute(Dictionary.dictionary().insert("a", 1l).insert("b", 2l)).asLong();
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void emptyDictPatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "{} -> 3\n" +
+        "_ -> 9\n").execute(Dictionary.dictionary()).asLong();
+    assertEquals(3l, ret);
+  }
+
+  @Test
+  public void nonEmptyDictPatternTest() {
+    long ret = context.eval("abzu", "\\arg -> case arg of\n" +
+        "{} -> 3\n" +
+        "_ -> 9\n").execute(Dictionary.dictionary().insert("a", 1l)).asLong();
+    assertEquals(9l, ret);
   }
 }

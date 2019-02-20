@@ -142,11 +142,13 @@ pattern : underscore
         | patternValue
         | tuplePattern
         | sequencePattern
+        | dictPattern
         ;
 
 patternWithoutSequence: underscore
                       | patternValue
                       | tuplePattern
+                      | dictPattern
                       ;
 
 tuplePattern : PARENS_L pattern (COMMA pattern)+ PARENS_R ;
@@ -160,6 +162,8 @@ innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
 headTails : (patternWithoutSequence CONS_L)+ tails ;
 tailsHead :  tails (CONS_R patternWithoutSequence)+ ;
 tails : identifier | emptySequence | underscore ;
+
+dictPattern : CURLY_L (patternValue OP_ASSIGN pattern (COMMA patternValue OP_ASSIGN pattern)*)? CURLY_R ;
 
 UNIT: '()' ;
 UNDERSCORE : '_' ;

@@ -41,7 +41,6 @@ public class NodeMaker {
       } else if (sequence.length() == 2) {
         return new TwoSequenceNode(makeNode(sequence.first()), makeNode(sequence.removeFirst().first()));
       } else {
-
         ExpressionNode[] expressions = new ExpressionNode[sequence.length()];
         for (int i = 0; i < sequence.length(); i++) {
           expressions[i] = makeNode(sequence.lookup(i));
@@ -49,6 +48,17 @@ public class NodeMaker {
 
         return new SequenceNode(expressions);
       }
+    } else if (val instanceof Dictionary) {
+      Dictionary dictionary = (Dictionary) val;
+      final DictNode.Entry[] entries = new DictNode.Entry[dictionary.size()];
+
+      dictionary.fold((i, tuple) -> {
+        entries[i] = new DictNode.Entry(tuple.get(0), makeNode(tuple.get(1)));
+        i += 1;
+        return i;
+      }, 0);
+
+      return new DictNode(entries);
     } else if (val instanceof Function) {
       throw CurriedFunctionMatchException.INSTANCE;
     } else {

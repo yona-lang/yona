@@ -186,11 +186,11 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   @Override
   public DictNode visitDict(AbzuParser.DictContext ctx) {
-    List<DictNode.Entry> entries = new ArrayList<>();
+    DictNode.Entry[] entries = new DictNode.Entry[ctx.dictKey().size()];
     for (int i = 0; i < ctx.dictKey().size(); i++) {
       AbzuParser.DictKeyContext keyCtx = ctx.dictKey(i);
       AbzuParser.DictValContext expressionCtx = ctx.dictVal(i);
-      entries.add(new DictNode.Entry(keyCtx.accept(this), expressionCtx.accept(this)));
+      entries[i] = new DictNode.Entry(keyCtx.accept(this), expressionCtx.accept(this));
     }
     return new DictNode(entries);
   }
@@ -400,6 +400,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       return visitTuplePattern(ctx.tuplePattern());
     } else if (ctx.patternValue() != null) {
       return new ValueMatchNode(ctx.patternValue().accept(this));
+    } else if (ctx.dictPattern() != null) {
+      return visitDictPattern(ctx.dictPattern());
     } else {
       return visitSequencePattern(ctx.sequencePattern());
     }
@@ -411,6 +413,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       return UnderscoreMatchNode.INSTANCE;
     } else if (ctx.tuplePattern() != null) {
       return visitTuplePattern(ctx.tuplePattern());
+    } else if (ctx.dictPattern() != null) {
+      return visitDictPattern(ctx.dictPattern());
     } else {
       return new ValueMatchNode(ctx.patternValue().accept(this));
     }
@@ -455,7 +459,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   public HeadTailsMatchPatternNode visitHeadTails(AbzuParser.HeadTailsContext ctx) {
     MatchNode[] headPatterns = new MatchNode[ctx.patternWithoutSequence().size()];
 
-    for(int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
+    for (int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
       headPatterns[i] = visitPatternWithoutSequence(ctx.patternWithoutSequence(i));
     }
 
@@ -468,12 +472,26 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   public TailsHeadMatchPatternNode visitTailsHead(AbzuParser.TailsHeadContext ctx) {
     MatchNode[] headPatterns = new MatchNode[ctx.patternWithoutSequence().size()];
 
-    for(int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
+    for (int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
       headPatterns[i] = visitPatternWithoutSequence(ctx.patternWithoutSequence(i));
     }
 
     ExpressionNode tails = ctx.tails().accept(this);
 
     return new TailsHeadMatchPatternNode(tails, headPatterns);
+  }
+
+  @Override
+  public DictMatchNode visitDictPattern(AbzuParser.DictPatternContext ctx) {
+    int cnt = ctx.patternValue().size();
+    ExpressionNode[] expressionNodes = new ExpressionNode[cnt];
+    MatchNode[] matchNodes = new MatchNode[cnt];
+
+    for (int i = 0; i < cnt; i++) {
+      expressionNodes[i] = ctx.patternValue(i).accept(this);
+      matchNodes[i] = visitPattern(ctx.pattern(i));
+    }
+
+    return new DictMatchNode(expressionNodes, matchNodes);
   }
 }

@@ -6,14 +6,13 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
-import java.util.List;
 import java.util.Objects;
 
 @NodeInfo
 public final class DictNode extends ExpressionNode {
-  public final List<Entry> items;
+  public final Entry[] items;
 
-  public DictNode(List<Entry> items) {
+  public DictNode(Entry[] items) {
     this.items = items;
   }
 
@@ -38,6 +37,14 @@ public final class DictNode extends ExpressionNode {
     @Override
     public int hashCode() {
       return Objects.hash(key, value);
+    }
+
+    @Override
+    public String toString() {
+      return "Entry{" +
+          "key=" + key +
+          ", value=" + value +
+          '}';
     }
   }
 
@@ -71,7 +78,7 @@ public final class DictNode extends ExpressionNode {
     return execute(frame);
   }
 
-  private Dictionary execute(VirtualFrame frame)  {
+  private Dictionary execute(VirtualFrame frame) {
     Dictionary dictionary = Dictionary.dictionary();
 
     for (Entry entry : items) {
