@@ -117,8 +117,9 @@ bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression ;
 bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression ;
 
 tuple : PARENS_L expression (COMMA expression)+ PARENS_R ;
-dict : key COLON expression (COMMA key COLON expression)* ;
-key : STRING ;
+dict : CURLY_L (dictKey OP_ASSIGN dictVal (COMMA dictKey OP_ASSIGN dictVal)*)? CURLY_R ;
+dictKey : expression ;
+dictVal : expression ;
 sequence : emptySequence | oneSequence | twoSequence | otherSequence ;
 fqn : NAME (SLASH NAME)* ;
 symbol : COLON NAME;
@@ -182,6 +183,8 @@ BRACKET_L : '[' ;
 BRACKET_R : ']' ;
 PARENS_L : '(' ;
 PARENS_R : ')' ;
+CURLY_L : '{' ;
+CURLY_R : '}' ;
 
 COMMA : ',' ;
 COLON : ':' ;

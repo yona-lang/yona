@@ -253,4 +253,16 @@ public class SimpleExpressionTest {
     long ret = context.eval("abzu", "2 + 5").asLong();
     assertEquals(7l, ret);
   }
+
+  @Test
+  public void emptyDictValueTest() {
+    Value dict = context.eval("abzu", "{}");
+    assertEquals(0, dict.getArraySize());
+  }
+
+  @Test
+  public void dictValueTest() {
+    Value dict = context.eval("abzu", "{:aa = 1, :bb = 2}");
+    assertEquals(2, dict.getArraySize());
+  }
 }

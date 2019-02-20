@@ -187,10 +187,10 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   @Override
   public DictNode visitDict(AbzuParser.DictContext ctx) {
     List<DictNode.Entry> entries = new ArrayList<>();
-    for (int i = 0; i < ctx.key().size(); i++) {
-      AbzuParser.KeyContext keyCtx = ctx.key(i);
-      AbzuParser.ExpressionContext expressionCtx = ctx.expression(i);
-      entries.add(new DictNode.Entry(keyCtx.STRING().getText(), expressionCtx.accept(this)));
+    for (int i = 0; i < ctx.dictKey().size(); i++) {
+      AbzuParser.DictKeyContext keyCtx = ctx.dictKey(i);
+      AbzuParser.DictValContext expressionCtx = ctx.dictVal(i);
+      entries.add(new DictNode.Entry(keyCtx.accept(this), expressionCtx.accept(this)));
     }
     return new DictNode(entries);
   }

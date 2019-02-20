@@ -12,7 +12,7 @@ import com.oracle.truffle.api.dsl.TypeSystem;
  * conversion methods for all types. In this class, we only cover types where the automatically
  * generated ones would not be sufficient.
  */
-@TypeSystem({boolean.class, byte.class, long.class, double.class, String.class, Function.class, Unit.class, Tuple.class, Module.class, StringList.class, Sequence.class})
+@TypeSystem({boolean.class, byte.class, long.class, double.class, String.class, Function.class, Unit.class, Tuple.class, Module.class, StringList.class, Sequence.class, Dictionary.class})
 public abstract class Types {
 
   /**

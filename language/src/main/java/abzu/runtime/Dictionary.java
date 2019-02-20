@@ -1,7 +1,13 @@
 package abzu.runtime;
 
-import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
 
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.function.BiFunction;
 
 import static java.lang.Integer.bitCount;
@@ -36,6 +42,20 @@ public abstract class Dictionary implements TruffleObject {
   @Override
   public ForeignAccess getForeignAccess() {
     return DictionaryForeign.ACCESS;
+  }
+
+  @Resolve(message = "GET_SIZE")
+  abstract static class GetSize extends Node {
+    Object access(Dictionary obj) {
+      return obj.size();
+    }
+  }
+
+  @Resolve(message = "HAS_SIZE")
+  abstract static class HasSize extends Node {
+    public Object access(@SuppressWarnings("unused") Dictionary receiver) {
+      return true;
+    }
   }
 
   static boolean isInstance(TruffleObject dictionary) {
@@ -265,6 +285,30 @@ public abstract class Dictionary implements TruffleObject {
       }
       return size;
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Bitmap bitmap1 = (Bitmap) o;
+      return bitmap == bitmap1.bitmap &&
+          size == bitmap1.size &&
+          Arrays.equals(data, bitmap1.data);
+    }
+
+    @Override
+    public int hashCode() {
+      int result = Objects.hash(bitmap, size);
+      result = 31 * result + Arrays.hashCode(data);
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return "Bitmap{" +
+          "data=" + Arrays.toString(data) +
+          '}';
+    }
   }
 
   private static final class Collision extends Dictionary {
@@ -343,6 +387,30 @@ public abstract class Dictionary implements TruffleObject {
     public int size() {
       return n;
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Collision collision = (Collision) o;
+      return hash == collision.hash &&
+          n == collision.n &&
+          Arrays.equals(data, collision.data);
+    }
+
+    @Override
+    public int hashCode() {
+      int result = Objects.hash(hash, n);
+      result = 31 * result + Arrays.hashCode(data);
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return "Collision{" +
+          "data=" + Arrays.toString(data) +
+          '}';
+    }
   }
 
   private static final class Entry {
@@ -352,6 +420,28 @@ public abstract class Dictionary implements TruffleObject {
     Entry(Object key, Object value) {
       this.key = key;
       this.value = value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Entry entry = (Entry) o;
+      return Objects.equals(key, entry.key) &&
+          Objects.equals(value, entry.value);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(key, value);
+    }
+
+    @Override
+    public String toString() {
+      return "Entry{" +
+          "key=" + key +
+          ", value=" + value +
+          '}';
     }
   }
 }

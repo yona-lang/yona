@@ -74,6 +74,11 @@ public abstract class UnboxNode extends ExpressionNode {
   }
 
   @Specialization
+  protected Dictionary unboxDictionary(Dictionary value) {
+    return value;
+  }
+
+  @Specialization
   protected ExpressionNode unboxValue(ExpressionNode value) {
     return value;
   }
