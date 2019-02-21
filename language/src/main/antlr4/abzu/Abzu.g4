@@ -92,17 +92,20 @@ patternValue : unit
              | identifier
              ;
 
+name : LOWERCASE_NAME | UPPERCASE_NAME ;
+
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
 alias : lambdaAlias | moduleAlias | patternAlias | fqnAlias ;
-lambdaAlias : NAME OP_ASSIGN lambda NEWLINE? ;
-moduleAlias : NAME OP_ASSIGN module NEWLINE? ;
+lambdaAlias : name OP_ASSIGN lambda NEWLINE? ;
+moduleAlias : name OP_ASSIGN module NEWLINE? ;
 patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
-fqnAlias : NAME OP_ASSIGN fqn NEWLINE? ;
+fqnAlias : name OP_ASSIGN fqn NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
-apply : (NAME | moduleCall) expression* ;
-moduleCall : fqn DOT NAME ;
+apply : (name | moduleCall | nameCall) expression* ;
+moduleCall : fqn DOT name ;
+nameCall : var=name DOT fun=name;
 module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE function+ ;
-nonEmptyListOfNames : NEWLINE? NAME NEWLINE? (COMMA NEWLINE? NAME)* NEWLINE? ;
+nonEmptyListOfNames : NEWLINE? name NEWLINE? (COMMA NEWLINE? name)* NEWLINE? ;
 
 unit : UNIT ;
 byteLiteral : INTEGER 'b';
@@ -110,7 +113,7 @@ integerLiteral : INTEGER ;
 floatLiteral : FLOAT | INTEGER 'f';
 stringLiteral : STRING ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
-function : NAME pattern* functionBody NEWLINE?;
+function : name pattern* functionBody NEWLINE?;
 functionBody : bodyWithoutGuard | bodyWithGuards+ ;
 
 bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression ;
@@ -121,10 +124,14 @@ dict : CURLY_L (dictKey OP_ASSIGN dictVal (COMMA dictKey OP_ASSIGN dictVal)*)? C
 dictKey : expression ;
 dictVal : expression ;
 sequence : emptySequence | oneSequence | twoSequence | otherSequence ;
-fqn : NAME (SLASH NAME)* ;
-symbol : COLON NAME;
-identifier : NAME ;
-lambda : LAMBDA_START pattern* OP_ARROW expression ;
+
+fqn : (packageName BACKSLASH)? moduleName ;
+packageName : LOWERCASE_NAME (BACKSLASH LOWERCASE_NAME)* ;
+moduleName : UPPERCASE_NAME ;
+
+symbol : COLON name;
+identifier : name ;
+lambda : BACKSLASH pattern* OP_ARROW expression ;
 underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;
@@ -199,12 +206,12 @@ CONS_R : ':>' ;
 DOT : '.' ;
 SLASH : OP_DIVIDE ;
 VLINE : '|';
-
-LAMBDA_START : '\\' ;
+BACKSLASH : '\\' ;
 
 // Data
 STRING: '"' ('\\"'|.)*? '"' ;
-NAME : [a-zA-Z_]+ ;
+LOWERCASE_NAME : 'a'..'z' [a-zA-Z_]* ;
+UPPERCASE_NAME : 'A'..'Z' [a-zA-Z_]* ;
 INTEGER : '-'?[0-9]+ ;
 FLOAT : ('0' .. '9') + ('.' ('0' .. '9') +)? ;
 

@@ -1,4 +1,4 @@
-module test exports funone, funtwo as
+module Test exports funone, funtwo as
 
 funone 5 = 5
 funtwo 1 = 2

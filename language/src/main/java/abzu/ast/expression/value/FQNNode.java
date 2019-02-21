@@ -1,27 +1,26 @@
 package abzu.ast.expression.value;
 
-import abzu.AbzuLanguage;
 import abzu.ast.ExpressionNode;
 import abzu.ast.call.ModuleCacheNode;
 import abzu.ast.call.ModuleCacheNodeGen;
-import abzu.ast.expression.SimpleIdentifierNode;
 import abzu.runtime.Module;
-import abzu.runtime.StringList;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.profiles.BranchProfile;
 
 import java.util.Arrays;
 import java.util.Objects;
 
 @NodeInfo
 public final class FQNNode extends ExpressionNode {
-  @Child private ModuleCacheNode moduleCacheNode;
-  private final String[] parts;
+  @Child
+  private ModuleCacheNode moduleCacheNode;
+  private final String[] packageParts;
+  private final String moduleName;
 
-  public FQNNode(String[] parts) {
-    this.parts = parts;
+  public FQNNode(String[] packageParts, String moduleName) {
+    this.packageParts = packageParts;
+    this.moduleName = moduleName;
     this.moduleCacheNode = ModuleCacheNodeGen.create();
   }
 
@@ -30,45 +29,37 @@ public final class FQNNode extends ExpressionNode {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     FQNNode fqnNode = (FQNNode) o;
-    return Objects.equals(parts, fqnNode.parts);
+    return Arrays.equals(packageParts, fqnNode.packageParts) &&
+        Objects.equals(moduleName, fqnNode.moduleName);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(parts);
+    int result = Objects.hash(moduleName);
+    result = 31 * result + Arrays.hashCode(packageParts);
+    return result;
   }
 
   @Override
   public String toString() {
     return "FQNNode{" +
-           "strings=" + Arrays.toString(parts) +
-           '}';
+        "packageParts=" + Arrays.toString(packageParts) +
+        ", moduleName='" + moduleName + '\'' +
+        '}';
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return moduleCacheNode.executeLoad(parts);
+    return moduleCacheNode.executeLoad(packageParts, moduleName);
   }
 
   @Override
-  public StringList executeStringList(VirtualFrame frame) throws UnexpectedResultException {
-    return new StringList(parts);
+  public String executeString(VirtualFrame frame) throws UnexpectedResultException {
+    return ModuleCacheNode.getFQN(packageParts, moduleName);
   }
-
-  private final BranchProfile branchProfile = BranchProfile.create();
 
   @Override
   public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
-    if (parts.length == 1) {
-      try {
-        SimpleIdentifierNode simpleIdentifierNode = new SimpleIdentifierNode(parts[0]);
-        branchProfile.enter();
-        return simpleIdentifierNode.executeModule(frame);
-      } catch(UnexpectedResultException ex) {
-        // no-action, read module as usual
-      }
-    }
-    branchProfile.enter();
-    return moduleCacheNode.executeLoad(parts);
+    return moduleCacheNode.executeLoad(packageParts, moduleName);
   }
 }

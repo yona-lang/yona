@@ -1,7 +1,7 @@
 #!/usr/bin/abzu
 
 # This is a testing module
-module tests/CommentsModule exports funone as
+module tests\CommentsModule exports funone as
 
 # Identity function of one argument
 funone argone = argone  # why not put a comment here as well

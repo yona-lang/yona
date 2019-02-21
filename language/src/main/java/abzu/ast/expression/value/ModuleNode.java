@@ -2,8 +2,6 @@ package abzu.ast.expression.value;
 
 import abzu.ast.ExpressionNode;
 import abzu.ast.expression.AliasNode;
-import abzu.ast.local.WriteLocalVariableNode;
-import abzu.ast.local.WriteLocalVariableNodeGen;
 import abzu.runtime.Function;
 import abzu.runtime.Module;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -69,7 +67,7 @@ public final class ModuleNode extends ExpressionNode {
 
   @Override
   public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
-    List<String> executedModuleFQN = moduleFQN.executeStringList(frame).asJavaList();
+    String executedModuleFQN = moduleFQN.executeString(frame);
     List<String> executedExports = exports.executeStringList(frame).asJavaList();
     List<Function> executedFunctions = new ArrayList<>(functions.length);
 

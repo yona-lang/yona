@@ -16,7 +16,6 @@ import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.*;
 
@@ -60,10 +59,14 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
     if (ctx.apply().moduleCall() != null) {
       FQNNode fqnNode = visitFqn(ctx.apply().moduleCall().fqn());
-      String functionName = ctx.apply().moduleCall().NAME().getText();
+      String functionName = ctx.apply().moduleCall().name().getText();
       return new ModuleCallNode(language, fqnNode, functionName, argNodes);
+    } else if (ctx.apply().nameCall() != null) {
+      SimpleIdentifierNode nameNode = new SimpleIdentifierNode(ctx.apply().nameCall().var.getText());
+      String functionName = ctx.apply().nameCall().fun.getText();
+      return new ModuleCallNode(language, nameNode, functionName, argNodes);
     } else {
-      String functionName = ctx.apply().NAME().getText();
+      String functionName = ctx.apply().name().getText();
       NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltins().lookup(functionName);
 
       if (builtinFunction != null) {
@@ -105,11 +108,11 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     if (ctx.patternAlias() != null) {
       return new PatternAliasNode(visitPattern(ctx.patternAlias().pattern()), ctx.patternAlias().expression().accept(this));
     } else if (ctx.moduleAlias() != null) {
-      return new AliasNode(ctx.moduleAlias().NAME().getText(), visitModule(ctx.moduleAlias().module()));
+      return new AliasNode(ctx.moduleAlias().name().getText(), visitModule(ctx.moduleAlias().module()));
     } else if (ctx.fqnAlias() != null) {
-      return new AliasNode(ctx.fqnAlias().NAME().getText(), visitFqn(ctx.fqnAlias().fqn()));
+      return new AliasNode(ctx.fqnAlias().name().getText(), visitFqn(ctx.fqnAlias().fqn()));
     } else {
-      return new AliasNode(ctx.lambdaAlias().NAME().getText(), visitLambda(ctx.lambdaAlias().lambda()));
+      return new AliasNode(ctx.lambdaAlias().name().getText(), visitLambda(ctx.lambdaAlias().lambda()));
     }
   }
 
@@ -167,8 +170,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     caseNode.addRootTag();
 
     return new FunctionNode(language, source.createSection(
-        ctx.LAMBDA_START().getSymbol().getLine(),
-        ctx.LAMBDA_START().getSymbol().getCharPositionInLine() + 1,
+        ctx.BACKSLASH().getSymbol().getLine(),
+        ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
         ctx.expression().stop.getLine(),
         ctx.expression().stop.getCharPositionInLine() + 1
     ), "$lambda-" + lambdaCount++, ctx.pattern().size(), new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode);
@@ -234,13 +237,13 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     for (int i = 0; i < functionPatternsCount; i++) {
       AbzuParser.FunctionContext functionContext = ctx.function(i);
 
-      String functionName = functionContext.NAME().getText();
+      String functionName = functionContext.name().getText();
 
       if (lastFunctionName != null && !lastFunctionName.equals(functionName) && functionPatterns.containsKey(functionName)) {
         throw new AbzuParseError(source,
-            functionContext.NAME().getSymbol().getLine(),
-            functionContext.NAME().getSymbol().getCharPositionInLine() + 1,
-            functionContext.NAME().getText().length(), "Function " + functionName + " was already defined previously.");
+            functionContext.name().start.getLine(),
+            functionContext.name().start.getCharPositionInLine() + 1,
+            functionContext.name().getText().length(), "Function " + functionName + " was already defined previously.");
       }
       lastFunctionName = functionName;
 
@@ -250,8 +253,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
       if (!functionSourceSections.containsKey(functionName)) {
         functionSourceSections.put(functionName, source.createSection(
-            functionContext.NAME().getSymbol().getLine(),
-            functionContext.NAME().getSymbol().getCharPositionInLine() + 1,
+            functionContext.name().start.getLine(),
+            functionContext.name().start.getCharPositionInLine() + 1,
             functionContext.functionBody().stop.getLine(),
             functionContext.functionBody().stop.getCharPositionInLine() + 1)
         );
@@ -275,9 +278,9 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
         functionCardinality.put(functionName, patterns.length);
       } else if (!functionCardinality.get(functionName).equals(patterns.length)) {
         throw new AbzuParseError(source,
-            functionContext.NAME().getSymbol().getLine(),
-            functionContext.NAME().getSymbol().getCharPositionInLine() + 1,
-            functionContext.NAME().getText().length(), "Function " + functionName + " is defined using patterns of varying size.");
+            functionContext.name().start.getLine(),
+            functionContext.name().start.getCharPositionInLine() + 1,
+            functionContext.name().getText().length(), "Function " + functionName + " is defined using patterns of varying size.");
       }
 
       AbzuParser.FunctionBodyContext functionBodyContext = functionContext.functionBody();
@@ -332,7 +335,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   @Override
   public NonEmptyStringListNode visitNonEmptyListOfNames(AbzuParser.NonEmptyListOfNamesContext ctx) {
     Set<String> names = new HashSet<>();
-    for (TerminalNode text : ctx.NAME()) {
+    for (AbzuParser.NameContext text : ctx.name()) {
       names.add(text.getText());
     }
     return new NonEmptyStringListNode(names.toArray(new String[]{}));
@@ -340,22 +343,22 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   @Override
   public FQNNode visitFqn(AbzuParser.FqnContext ctx) {
-    int elementsCount = ctx.NAME().size();
-    String[] content = new String[elementsCount];
-    for (int i = 0; i < elementsCount; i++) {
-      content[i] = ctx.NAME(i).getText();
+    int packagePartsCount = ctx.packageName() != null ? ctx.packageName().LOWERCASE_NAME().size() : 0;
+    String[] packageParts = new String[packagePartsCount];
+    for (int i = 0; i < packagePartsCount; i++) {
+      packageParts[i] = ctx.packageName().LOWERCASE_NAME(i).getText();
     }
-    return new FQNNode(content);
+    return new FQNNode(packageParts, ctx.moduleName().getText());
   }
 
   @Override
   public SymbolNode visitSymbol(AbzuParser.SymbolContext ctx) {
-    return new SymbolNode(ctx.NAME().getText());
+    return new SymbolNode(ctx.name().getText());
   }
 
   @Override
   public IdentifierNode visitIdentifier(AbzuParser.IdentifierContext ctx) {
-    String name = ctx.NAME().getText();
+    String name = ctx.name().getText();
     return new IdentifierNode(language, name);
   }
 

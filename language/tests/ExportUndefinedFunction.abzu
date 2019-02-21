@@ -1,4 +1,4 @@
-module tests/ExportUndefinedFunction exports factorial, fibonacci as
+module tests\ExportUndefinedFunction exports factorial, fibonacci as
 
 factorial 1 =1
 factorial n = n * (factorial n - 1)

@@ -7,11 +7,11 @@ import com.oracle.truffle.api.nodes.Node;
 import java.util.*;
 
 public final class Module implements TruffleObject {
-  final List<String> fqn;
+  final String fqn;
   final List<String> exports;
   final Map<String, Function> functions = new HashMap<>();
 
-  public Module(List<String> fqn, List<String> exports, List<Function> functionsList) {
+  public Module(String fqn, List<String> exports, List<Function> functionsList) {
     this.fqn = fqn;
     this.exports = exports;
 
@@ -29,7 +29,7 @@ public final class Module implements TruffleObject {
            '}';
   }
 
-  public List<String> getFqn() {
+  public String getFqn() {
     return fqn;
   }
 

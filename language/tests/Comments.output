@@ -1,1 +1,1 @@
-Module{fqn=[tests, CommentsModule], exports=[funone], functions={funone=funone}}
+Module{fqn=tests\CommentsModule, exports=[funone], functions={funone=funone}}

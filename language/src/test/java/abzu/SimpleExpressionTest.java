@@ -130,7 +130,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void moduleTest() {
-    String src = "module test exports fun as\n" +
+    String src = "module Test exports fun as\n" +
         "fun = 6\n" +
         "other_fun = 7";
     Value modVal = context.eval("abzu", src);
@@ -241,7 +241,7 @@ public class SimpleExpressionTest {
   @Test
   public void moduleCallPrivateInLetTest() {
     long ret = context.eval("abzu", "let\n" +
-        "testMod = module testMod exports funone as\n" +
+        "testMod = module TestMod exports funone as\n" +
         "funone argone = funtwo argone\n" +
         "funtwo argone = argone\n" +
         "in testMod.funone 6").asLong();

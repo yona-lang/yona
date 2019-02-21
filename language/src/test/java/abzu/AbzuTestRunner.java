@@ -97,7 +97,6 @@ public class AbzuTestRunner extends ParentRunner<AbzuTestRunner.TestCase> {
             expectedOutput = readAllLines(outputFile);
           }
 
-//          if("NonLinearPatternTest".equals(baseName))
           foundCases.add(new TestCase(c, baseName, sourceName, sourceFile, testInput, expectedOutput));
         }
         return FileVisitResult.CONTINUE;

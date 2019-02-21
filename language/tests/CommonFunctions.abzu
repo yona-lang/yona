@@ -1,4 +1,4 @@
-module tests/CommonFunctions exports
+module tests\CommonFunctions exports
     factorial,
     fibonacci,
     bmiTell,

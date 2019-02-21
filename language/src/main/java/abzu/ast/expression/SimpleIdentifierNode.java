@@ -17,8 +17,8 @@ public class SimpleIdentifierNode extends ExpressionNode {
   @Override
   public String toString() {
     return "IdentifierNode{" +
-           "name='" + name + '\'' +
-           '}';
+        "name='" + name + '\'' +
+        '}';
   }
 
   @Override
