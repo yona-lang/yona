@@ -1,1 +1,1 @@
-Function funtwo is not present in Module{fqn=tests\SimpleModule, exports=[funone], functions={funone=funone}}
+Function funtwo is not present in Module{fqn=tests\SimpleModule, exports=[funone, funthree], functions={funone=funone, funthree=funthree}}

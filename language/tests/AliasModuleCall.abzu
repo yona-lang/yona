@@ -1,4 +1,4 @@
-let
-    moduleAlias = tests\SimpleModuleTwo
+import
+    tests\SimpleModuleTwo as moduleAlias
 in
     moduleAlias.funone 5

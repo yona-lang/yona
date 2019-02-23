@@ -1,6 +1,6 @@
-let
-    simpleModuleOne = tests\SimpleModule
-    simpleModuleTwo = tests\SimpleModuleTwo
+import
+    tests\SimpleModule as simpleModuleOne
+    tests\SimpleModuleTwo as simpleModuleTwo
 in
 
 module tests\ModuleWithImports exports funone as

@@ -6,6 +6,7 @@ import abzu.Types;
 import abzu.runtime.Module;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.nodes.Node;
@@ -16,19 +17,18 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 @NodeInfo
 @TypeSystemReference(Types.class)
 public abstract class ModuleCacheNode extends Node {
-  private Map<String, Module> moduleCache = new HashMap<>();
+  protected Map<String, Module> moduleCache = new HashMap<>();
 
   public abstract Module executeLoad(String[] packageParts, String moduleName);
 
   @Specialization(guards = {
-      "isCached(FQN)"
+      "moduleCache.containsKey(FQN)"
   })
   protected Module loadCached(@SuppressWarnings("unused") String[] packageParts,
                               @SuppressWarnings("unused") String moduleName,
@@ -38,24 +38,18 @@ public abstract class ModuleCacheNode extends Node {
     return module;
   }
 
-  @Specialization(guards = {
-      "!isCached(FQN)"
-  })
-  protected Module loadNotCached(@SuppressWarnings("unused") String[] packageParts,
-                                 @SuppressWarnings("unused") String moduleName,
-                                 @Cached("getFQN(packageParts, moduleName)") String FQN,
-                                 @Cached("lookupModule(packageParts, moduleName, FQN)") Module module) {
+  @Fallback
+  protected Module loadNotCached(String[] packageParts,
+                                 String moduleName) {
 
+    String FQN = getFQN(packageParts, moduleName);
+    Module module = lookupModule(packageParts, moduleName, FQN);
     moduleCache.put(FQN, module);
     return module;
   }
 
   protected Module retrieveModule(String FQN) {
     return moduleCache.get(FQN);
-  }
-
-  protected boolean isCached(String FQN) {
-    return moduleCache.containsKey(FQN);
   }
 
   protected Module lookupModule(String[] packageParts, String moduleName, String FQN) {

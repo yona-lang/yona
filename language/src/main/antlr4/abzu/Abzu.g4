@@ -68,6 +68,7 @@ expression : PARENS_L expression PARENS_R               #expressionInParents
            | apply                                      #functionApplicationExpression
            | caseExpr                                   #caseExpression
            | lambda                                     #lambdaExpression
+           | importExpr                                 #importExpression
            ;
 
 literal : booleanLiteral
@@ -92,7 +93,7 @@ patternValue : unit
              | identifier
              ;
 
-name : LOWERCASE_NAME | UPPERCASE_NAME ;
+name : LOWERCASE_NAME ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
 alias : lambdaAlias | moduleAlias | patternAlias | fqnAlias ;
@@ -172,6 +173,14 @@ tails : identifier | emptySequence | underscore ;
 
 dictPattern : CURLY_L (patternValue OP_ASSIGN pattern (COMMA patternValue OP_ASSIGN pattern)*)? CURLY_R ;
 
+
+importExpr : KW_IMPORT NEWLINE? (importClause NEWLINE?)+ KW_IN NEWLINE? expression ;
+importClause : moduleImport | functionsImport ;
+moduleImport : fqn (KW_AS name)? ;
+functionsImport : functionAlias (COMMA functionAlias)* KW_FROM fqn ;
+functionAlias : funName=name (KW_AS funAlias=name)? ;
+
+
 UNIT: '()' ;
 UNDERSCORE : '_' ;
 AT : '@' ;
@@ -189,6 +198,8 @@ KW_EXPORTS : 'exports' ;
 KW_AS : 'as' ;
 KW_CASE : 'case' ;
 KW_OF : 'of' ;
+KW_IMPORT : 'import' ;
+KW_FROM : 'from' ;
 
 BRACKET_L : '[' ;
 BRACKET_R : ']' ;

@@ -1,0 +1,3 @@
+import
+    funone as onefun, funthree from tests\SimpleModule
+in onefun 5

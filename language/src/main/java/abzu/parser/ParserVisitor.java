@@ -497,4 +497,37 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
     return new DictMatchNode(expressionNodes, matchNodes);
   }
+
+  @Override
+  public LetNode visitImportExpr(AbzuParser.ImportExprContext ctx) {
+    List<AliasNode> aliasNodes = new ArrayList<>();
+
+    for (int i = 0; i < ctx.importClause().size(); i++) {
+      AbzuParser.ImportClauseContext importClauseContext = ctx.importClause(i);
+
+      if (importClauseContext.moduleImport() != null) {
+        aliasNodes.add(visitModuleImport(importClauseContext.moduleImport()));
+      } else {
+        FQNNode fqnNode = visitFqn(importClauseContext.functionsImport().fqn());
+        for (AbzuParser.FunctionAliasContext nameContext : importClauseContext.functionsImport().functionAlias()) {
+          String functionName = nameContext.funName.getText();
+          String functionAlias = nameContext.funAlias != null ? nameContext.funAlias.getText() : functionName;
+          aliasNodes.add(new AliasNode(functionAlias, new FunctionIdentifierNode(fqnNode, functionName)));
+        }
+      }
+    }
+
+    ExpressionNode expressionNode = ctx.expression().accept(this);
+    return new LetNode(aliasNodes.toArray(new AliasNode[]{}), expressionNode);
+  }
+
+  @Override
+  public AliasNode visitModuleImport(AbzuParser.ModuleImportContext ctx) {
+    FQNNode fqnNode = visitFqn(ctx.fqn());
+    if (ctx.name() == null) {
+      return new AliasNode(fqnNode.moduleName, fqnNode);
+    } else {
+      return new AliasNode(ctx.name().getText(), fqnNode);
+    }
+  }
 }

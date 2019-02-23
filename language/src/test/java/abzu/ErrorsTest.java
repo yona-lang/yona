@@ -84,7 +84,7 @@ public class ErrorsTest {
           "funalias = \\arg -> alias 7 funone " +
           "in funalias").execute(5).asLong();
     } catch (PolyglotException ex) {
-      assertEquals(ex.getMessage(), "Cannot invoke non-function node: IdentifierNode{name='alias'}");
+      assertEquals(ex.getMessage(), "Cannot invoke non-function node: SimpleIdentifierNode{name='alias'}");
       throw ex;
     }
   }

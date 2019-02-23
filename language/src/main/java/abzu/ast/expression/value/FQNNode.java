@@ -15,8 +15,8 @@ import java.util.Objects;
 public final class FQNNode extends ExpressionNode {
   @Child
   private ModuleCacheNode moduleCacheNode;
-  private final String[] packageParts;
-  private final String moduleName;
+  public final String[] packageParts;
+  public final String moduleName;
 
   public FQNNode(String[] packageParts, String moduleName) {
     this.packageParts = packageParts;

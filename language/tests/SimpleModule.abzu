@@ -1,3 +1,5 @@
-module tests\SimpleModule exports funone as
+module tests\SimpleModule exports funone, funthree as
 
 funone argone = argone
+
+funthree argone = argone
