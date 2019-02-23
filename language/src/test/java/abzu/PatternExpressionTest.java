@@ -477,4 +477,20 @@ public class PatternExpressionTest {
         "_ -> 9\n").execute(Dictionary.dictionary().insert("a", 1l)).asLong();
     assertEquals(9l, ret);
   }
+
+  @Test
+  public void headTailsHeadPatternTest() {
+    Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
+        "1 <: 2 <: 3 <: tail :> 3 :> 4 -> 1 \n" +
+        "1 <: 2 <: [] :> 3 :> 4  -> 2\n" +
+        "0 <: tail :> 3 :> 4 -> tail\n" +
+        "[] -> 3\n"+
+        "_ -> 9\n").execute(Sequence.sequence(0l, 1l, 2l, 3l, 4l));
+
+    Object[] array = sequence.as(Object[].class);
+
+    assertEquals(2, array.length);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+  }
 }

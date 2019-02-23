@@ -166,9 +166,15 @@ sequencePattern : identifier AT PARENS_L innerSequencePattern PARENS_R
 innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
                      | headTails
                      | tailsHead
+                     | headTailsHead
                      ;
 headTails : (patternWithoutSequence CONS_L)+ tails ;
 tailsHead :  tails (CONS_R patternWithoutSequence)+ ;
+
+headTailsHead : leftPattern+ tails rightPattern+ ;
+leftPattern : patternWithoutSequence CONS_L ;
+rightPattern : CONS_R patternWithoutSequence ;
+
 tails : identifier | emptySequence | underscore ;
 
 dictPattern : CURLY_L (patternValue OP_ASSIGN pattern (COMMA patternValue OP_ASSIGN pattern)*)? CURLY_R ;

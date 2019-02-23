@@ -449,6 +449,8 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       return visitHeadTails(ctx.headTails());
     } else if (ctx.tailsHead() != null) {
       return visitTailsHead(ctx.tailsHead());
+    } else if (ctx.headTailsHead() != null) {
+      return visitHeadTailsHead(ctx.headTailsHead());
     } else {
       MatchNode[] matchNodes = new MatchNode[ctx.pattern().size()];
       for (int i = 0; i < ctx.pattern().size(); i++) {
@@ -482,6 +484,24 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     ExpressionNode tails = ctx.tails().accept(this);
 
     return new TailsHeadMatchPatternNode(tails, headPatterns);
+  }
+
+  @Override
+  public HeadTailsHeadPatternNode visitHeadTailsHead(AbzuParser.HeadTailsHeadContext ctx) {
+    MatchNode[] leftPatterns = new MatchNode[ctx.leftPattern().size()];
+    MatchNode[] rightPatterns = new MatchNode[ctx.rightPattern().size()];
+
+    ExpressionNode tails = ctx.tails().accept(this);
+
+    for (int i = 0; i < ctx.leftPattern().size(); i++) {
+      leftPatterns[i] = visitPatternWithoutSequence(ctx.leftPattern(i).patternWithoutSequence());
+    }
+
+    for (int i = 0; i < ctx.rightPattern().size(); i++) {
+      rightPatterns[i] = visitPatternWithoutSequence(ctx.rightPattern(i).patternWithoutSequence());
+    }
+
+    return new HeadTailsHeadPatternNode(leftPatterns, tails, rightPatterns);
   }
 
   @Override
