@@ -479,6 +479,15 @@ public class PatternExpressionTest {
   }
 
   @Test
+  public void dictBoundVarPatternTest() {
+    long ret = context.eval("abzu", "\\arg bound -> case arg of\n" +
+        "{\"b\" = 3} -> 3\n" +
+        "{\"a\" = 1, \"b\" = bound} -> bound\n" +
+        "_ -> 9\n").execute(Dictionary.dictionary().insert("a", 1l).insert("b", 2l), 2l).asLong();
+    assertEquals(2l, ret);
+  }
+
+  @Test
   public void headTailsHeadPatternTest() {
     Value sequence = context.eval("abzu", "\\arg -> case arg of\n" +
         "1 <: 2 <: 3 <: tail :> 3 :> 4 -> 1 \n" +

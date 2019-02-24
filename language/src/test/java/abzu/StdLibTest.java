@@ -31,4 +31,10 @@ public class StdLibTest {
     long ret = context.eval("abzu", "sfoldr [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
     assertEquals(6l, ret);
   }
+
+  @Test
+  public void sequenceFoldLeftWithinLetTest() {
+    long ret = context.eval("abzu", "let xx = 5 in sfoldl [1, 2, 3] (\\acc val -> acc + val + xx) 0").asLong();
+    assertEquals(21l, ret);
+  }
 }
