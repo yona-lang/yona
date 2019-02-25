@@ -1,5 +1,6 @@
 package abzu.runtime;
 
+import abzu.ast.call.DispatchNode;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
@@ -8,7 +9,6 @@ import com.oracle.truffle.api.nodes.Node;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.function.BiFunction;
 
 import static java.lang.Integer.bitCount;
 import static java.lang.System.arraycopy;
@@ -35,7 +35,7 @@ public abstract class Dictionary implements TruffleObject {
 
   abstract Dictionary remove(Object key, int depth, int hash);
 
-  public abstract <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial);
+  public abstract Object fold(Function fn3, Object initial, DispatchNode dispatchNode);
 
   public abstract int size();
 
@@ -44,17 +44,10 @@ public abstract class Dictionary implements TruffleObject {
     return DictionaryForeign.ACCESS;
   }
 
-  @Resolve(message = "GET_SIZE")
-  abstract static class GetSize extends Node {
-    Object access(Dictionary obj) {
-      return obj.size();
-    }
-  }
-
   @Resolve(message = "HAS_SIZE")
   abstract static class HasSize extends Node {
     public Object access(@SuppressWarnings("unused") Dictionary receiver) {
-      return true;
+      return false;
     }
   }
 
@@ -64,22 +57,6 @@ public abstract class Dictionary implements TruffleObject {
 
   public static Dictionary dictionary() {
     return Bitmap.EMPTY;
-  }
-
-  private static <A> A[] arraySet(A[] src, int idx, A val) {
-    assert idx < src.length;
-    final A[] result = src.clone();
-    result[idx] = val;
-    return result;
-  }
-
-  @SuppressWarnings("unchecked")
-  private static <A> A[] arrayRemove(A[] src, int idx) {
-    assert idx < src.length;
-    A[] result = (A[]) new Object[src.length - 1];
-    arraycopy(src, 0, result, 0, idx);
-    arraycopy(src, idx + 1, result, idx, result.length - idx);
-    return result;
   }
 
   private static final class Array extends Dictionary {
@@ -96,9 +73,18 @@ public abstract class Dictionary implements TruffleObject {
     Dictionary insert(Object key, Object value, int depth, int hash) {
       final int idx = (hash >>> depth) & 0x01f;
       final Dictionary dict = data[idx];
-      if (dict == null) return new Array(n + 1, arraySet(data, idx, new Bitmap(key, value, depth + 5, hash)));
+      if (dict == null) {
+        final Dictionary[] newData = data.clone();
+        newData[idx] = new Bitmap(key, value, depth + 5, hash);
+        return new Array(n + 1, newData);
+      }
       final Dictionary newDict = dict.insert(key, value, depth + 5, hash);
-      return dict == newDict ? this : new Array(n, arraySet(data, idx, newDict));
+      if (dict != newDict) {
+        final Dictionary[] newData = data.clone();
+        newData[idx] = newDict;
+        return new Array(n, newData);
+      }
+      return this;
     }
 
     @Override
@@ -114,8 +100,16 @@ public abstract class Dictionary implements TruffleObject {
       if (dict == null) return this;
       final Dictionary newDict = dict.remove(key, depth + 5, hash);
       if (dict != newDict) {
-        if (newDict != null) return new Array(n, arraySet(data, idx, newDict));
-        if (n > 8) return new Array(n, arraySet(data, idx, null));
+        if (newDict != null) {
+          final Dictionary[] newData = data.clone();
+          newData[idx] = newDict;
+          return new Array(n, newData);
+        }
+        if (n > 8) {
+          final Dictionary[] newData = data.clone();
+          newData[idx] = null;
+          return new Array(n, newData);
+        }
         final Object[] bmpData = new Object[n - 1];
         int bitmap = 0;
         Object cursor;
@@ -132,10 +126,10 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial) {
-      T result = initial;
+    public Object fold(Function fn3, Object initial, DispatchNode dispatchNode) {
+      Object result = initial;
       for (Dictionary dict : data) {
-        if (dict != null) result = dict.fold(function, result);
+        if (dict != null) result = dict.fold(fn3, result, dispatchNode);
       }
       return result;
     }
@@ -181,18 +175,32 @@ public abstract class Dictionary implements TruffleObject {
         if (o instanceof Dictionary) {
           final Dictionary oldDict = (Dictionary) o;
           Dictionary newDict = oldDict.insert(key, value, depth + 5, hash);
-          return oldDict != newDict ? new Bitmap(bitmap, arraySet(data, idx, newDict)) : this;
+          if (oldDict != newDict) {
+            final Object[] newData = data.clone();
+            newData[idx] = newDict;
+            return new Bitmap(bitmap, newData);
+          }
+          return this;
         } else {
           assert o instanceof Entry;
           final Entry entry = (Entry) o;
           final Object oldKey = entry.key;
           final Object oldValue = entry.value;
           if (key.equals(oldKey)) {
-            return value != oldValue ? new Bitmap(bitmap, arraySet(data, idx, new Entry(key, value))) : this;
+            if (value != oldValue) {
+              final Object[] newData = data.clone();
+              newData[idx] = new Entry(key, value);
+              return new Bitmap(bitmap, newData);
+            }
+            return this;
           } else {
             final int newDepth = depth + 5;
             final int oldHash = oldKey.hashCode();
-            if (oldHash != hash) return new Bitmap(bitmap, arraySet(data, idx, new Bitmap(oldKey, oldValue, newDepth, oldHash).insert(key, value, newDepth, hash)));
+            if (oldHash != hash) {
+              final Object[] newData = data.clone();
+              newData[idx] = new Bitmap(oldKey, oldValue, newDepth, oldHash).insert(key, value, newDepth, hash);
+              return new Bitmap(bitmap, newData);
+            }
             return new Collision(hash, 2, new Entry[]{ entry, new Entry(key, value) });
           }
         }
@@ -250,25 +258,38 @@ public abstract class Dictionary implements TruffleObject {
       if (o instanceof Dictionary) {
         Dictionary newDict = ((Dictionary) o).remove(key, depth + 5, hash);
         if (o == newDict) return this;
-        if (newDict != null) return new Bitmap(bitmap, arraySet(data, idx, newDict));
+        if (newDict != null) {
+          final Object[] newData = data.clone();
+          newData[idx] = newDict;
+          return new Bitmap(bitmap, newData);
+        }
         if (bitmap == bit) return null;
-        return new Bitmap(bitmap ^ bit, arrayRemove(data, idx));
+        final Object[] newData = new Object[data.length - 1];
+        arraycopy(data, 0, newData, 0, idx);
+        arraycopy(data, idx + 1, newData, idx, data.length - 1 - idx);
+        return new Bitmap(bitmap ^ bit, newData);
       } else {
         assert o instanceof Entry;
-        return key.equals(((Entry) o).key) ? new Bitmap(bitmap ^ bit, arrayRemove(data, idx)) : this;
+        if (key.equals(((Entry)o).key)) {
+          final Object[] newData = new Object[data.length - 1];
+          arraycopy(data, 0, newData, 0, idx);
+          arraycopy(data, idx + 1, newData, idx, data.length - 1 - idx);
+          return new Bitmap(bitmap ^ bit, newData);
+        }
+        return this;
       }
     }
 
     @Override
-    public <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial) {
-      T result = initial;
+    public Object fold(Function fn3, Object initial, DispatchNode dispatchNode) {
+      Object result = initial;
       for (Object o : data) {
         if (o instanceof Dictionary) {
-          result = ((Dictionary) o).fold(function, result);
+          result = ((Dictionary) o).fold(fn3, result, dispatchNode);
         } else {
           assert o instanceof Entry;
           final Entry entry = (Entry) o;
-          result = function.apply(result, new Tuple(entry.key, entry.value));
+          result = dispatchNode.executeDispatch(fn3, new Object[]{result, entry.key, entry.value});
         }
       }
       return result;
@@ -322,17 +343,16 @@ public abstract class Dictionary implements TruffleObject {
       this.data = data;
     }
 
-    private int idxOf(Object key) {
-      for (int i = 0; i < n; i++) {
-        if (key.equals(data[i].key)) return i;
-      }
-      return -1;
-    }
-
     @Override
     Dictionary insert(Object key, Object value, int depth, int hash) {
       if(hash == this.hash) {
-        final int idx = idxOf(key);
+        int idx = -1;
+        for (int i = 0; i < n; i++) {
+          if (key.equals(data[i].key)) {
+            idx = i;
+            break;
+          }
+        }
         if (idx != -1) {
           if (data[idx].value != value) {
             final Entry[] newData = data.clone();
@@ -352,7 +372,13 @@ public abstract class Dictionary implements TruffleObject {
 
     @Override
     Object lookup(Object key, int depth, int hash) {
-      final int idx = idxOf(key);
+      int idx = -1;
+      for (int i = 0; i < n; i++) {
+        if (key.equals(data[i].key)) {
+          idx = i;
+          break;
+        }
+      }
       if (idx == -1) {
         return null;
       } else if (key.equals(data[idx].key)) {
@@ -362,22 +388,31 @@ public abstract class Dictionary implements TruffleObject {
 
     @Override
     Dictionary remove(Object key, int depth, int hash) {
-      final int idx = idxOf(key);
+      int idx = -1;
+      for (int i = 0; i < n; i++) {
+        if (key.equals(data[i].key)) {
+          idx = i;
+          break;
+        }
+      }
       if (idx == -1) return this;
       if (n == 1) return null;
-      return new Collision(hash, n - 1, arrayRemove(data, idx));
+      final Dictionary.Entry[] newData = new Dictionary.Entry[data.length - 1];
+      arraycopy(data, 0, newData, 0, idx);
+      arraycopy(data, idx + 1, newData, idx, data.length - 1 - idx);
+      return new Collision(hash, n - 1, newData);
     }
 
     @Override
-    public <T> T fold(BiFunction<? super T, ? super Tuple, ? extends T> function, T initial) {
-      T result = initial;
+    public Object fold(Function fn3, Object initial, DispatchNode dispatchNode) {
+      Object result = initial;
       for (Object o : data) {
         if (o instanceof Dictionary) {
-          result = ((Dictionary) o).fold(function, result);
+          result = ((Dictionary) o).fold(fn3, result, dispatchNode);
         }
         if (o instanceof Entry) {
           final Entry entry = (Entry) o;
-          result = function.apply(result, new Tuple(entry.key, entry.value));
+          result = dispatchNode.executeDispatch(result, new Object[]{result, entry.key, entry.value});
         }
       }
       return result;

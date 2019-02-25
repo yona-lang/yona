@@ -254,7 +254,13 @@ public class SimpleExpressionTest {
     assertEquals(7l, ret);
   }
 
-  @Test
+  //docs state:
+  //If the {@link #HAS_SIZE} message
+  //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with
+  //     * {@link Integer} parameters from range <code>0</code> to <code>GET_SIZE - 1</code> are
+  //     * required.
+  //which dictionary-like structures can't support by their nature
+  /*@Test
   public void emptyDictValueTest() {
     Value dict = context.eval("abzu", "{}");
     assertEquals(0, dict.getArraySize());
@@ -264,5 +270,5 @@ public class SimpleExpressionTest {
   public void dictValueTest() {
     Value dict = context.eval("abzu", "{:aa = 1, :bb = 2}");
     assertEquals(2, dict.getArraySize());
-  }
+  }*/
 }
