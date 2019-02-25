@@ -37,6 +37,8 @@ public abstract class Dictionary implements TruffleObject {
 
   public abstract Object fold(Function fn3, Object initial, DispatchNode dispatchNode);
 
+  public abstract Dictionary map(Function fn1, DispatchNode dispatchNode);
+
   public abstract int size();
 
   @Override
@@ -132,6 +134,18 @@ public abstract class Dictionary implements TruffleObject {
         if (dict != null) result = dict.fold(fn3, result, dispatchNode);
       }
       return result;
+    }
+
+    @Override
+    public Dictionary map(Function fn1, DispatchNode dispatchNode) {
+      final int len = data.length;
+      final Dictionary[] newData = new Dictionary[len];
+      Dictionary cursor;
+      for (int i = 0; i < len; i++) {
+        cursor = data[i];
+        if (cursor != null) newData[i] = cursor.map(fn1, dispatchNode);
+      }
+      return new Array(n, newData);
     }
 
     @Override
@@ -296,6 +310,24 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
+    public Dictionary map(Function fn1, DispatchNode dispatchNode) {
+      final int len = data.length;
+      final Object[] newData = new Object[len];
+      Object cursor;
+      for (int i = 0; i < len; i++) {
+        cursor = data[i];
+        if (cursor instanceof Dictionary) {
+          newData[i] = ((Dictionary) cursor).map(fn1, dispatchNode);
+        } else {
+          assert cursor instanceof Entry;
+          final Entry entry = (Entry) cursor;
+          newData[i] = new Entry(entry.key, dispatchNode.executeDispatch(fn1, new Object[]{entry.value}));
+        }
+      }
+      return new Bitmap(bitmap, newData);
+    }
+
+    @Override
     public int size() {
       if (size == -1) {
         int result = 0;
@@ -397,7 +429,7 @@ public abstract class Dictionary implements TruffleObject {
       }
       if (idx == -1) return this;
       if (n == 1) return null;
-      final Dictionary.Entry[] newData = new Dictionary.Entry[data.length - 1];
+      final Entry[] newData = new Entry[data.length - 1];
       arraycopy(data, 0, newData, 0, idx);
       arraycopy(data, idx + 1, newData, idx, data.length - 1 - idx);
       return new Collision(hash, n - 1, newData);
@@ -416,6 +448,18 @@ public abstract class Dictionary implements TruffleObject {
         }
       }
       return result;
+    }
+
+    @Override
+    public Dictionary map(Function fn1, DispatchNode dispatchNode) {
+      final int len = data.length;
+      final Entry[] newData = new Entry[len];
+      Entry cursor;
+      for (int i = 0; i < len; i++) {
+        cursor = data[i];
+        newData[i] = new Entry(cursor.key, dispatchNode.executeDispatch(fn1, new Object[]{cursor.value}));
+      }
+      return new Collision(hash, n, newData);
     }
 
     @Override
