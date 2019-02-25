@@ -3,8 +3,8 @@ package abzu.ast.pattern;
 import abzu.ast.ExpressionNode;
 import abzu.ast.expression.AliasNode;
 import abzu.ast.expression.IdentifierNode;
+import abzu.ast.expression.value.AnyValueNode;
 import abzu.ast.expression.value.EmptySequenceNode;
-import abzu.runtime.NodeMaker;
 import abzu.runtime.Sequence;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
@@ -80,7 +80,7 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
               return MatchResult.FALSE;
             }
           } else {
-            aliases.add(new AliasNode(identifierNode.name(), NodeMaker.makeNode(sequence)));
+            aliases.add(new AliasNode(identifierNode.name(), new AnyValueNode(sequence)));
           }
         } else if (tailsNode instanceof EmptySequenceNode) {
           if (sequence.length() > 0) {

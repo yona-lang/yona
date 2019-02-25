@@ -3,7 +3,7 @@ package abzu.ast.pattern;
 import abzu.ast.ExpressionNode;
 import abzu.ast.expression.AliasNode;
 import abzu.ast.expression.IdentifierNode;
-import abzu.runtime.NodeMaker;
+import abzu.ast.expression.value.AnyValueNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 import java.util.Objects;
@@ -50,7 +50,7 @@ public final class ValueMatchNode extends MatchNode {
           return MatchResult.TRUE;
         }
       } else {
-        return new MatchResult(true, new AliasNode[]{new AliasNode(identifierNode.name(), NodeMaker.makeNode(value))});
+        return new MatchResult(true, new AliasNode[]{new AliasNode(identifierNode.name(), new AnyValueNode(value))});
       }
     } else {
       Object exprValue = expression.executeGeneric(frame);

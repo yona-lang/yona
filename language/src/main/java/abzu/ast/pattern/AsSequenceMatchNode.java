@@ -2,7 +2,7 @@ package abzu.ast.pattern;
 
 import abzu.ast.expression.AliasNode;
 import abzu.ast.expression.IdentifierNode;
-import abzu.runtime.NodeMaker;
+import abzu.ast.expression.value.AnyValueNode;
 import abzu.runtime.Sequence;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
@@ -57,7 +57,7 @@ public final class AsSequenceMatchNode extends MatchNode {
           aliases.add(aliasNode);
         }
 
-        aliases.add(new AliasNode(identifierNode.name(), NodeMaker.makeNode(sequence)));
+        aliases.add(new AliasNode(identifierNode.name(), new AnyValueNode(sequence)));
         for (AliasNode aliasNode : aliases) {
           aliasNode.executeGeneric(frame);
         }
