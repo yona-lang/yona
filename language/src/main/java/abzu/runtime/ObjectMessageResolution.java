@@ -33,7 +33,7 @@ public class ObjectMessageResolution {
       Object result;
       try {
         result = read.executeRead(receiver, convertedName);
-      } catch (AbzuUndefinedNameException undefinedName) {
+      } catch (UndefinedNameException undefinedName) {
         throw UnknownIdentifierException.raise(String.valueOf(convertedName));
       }
       return result;

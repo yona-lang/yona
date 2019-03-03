@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.object.DynamicObject;
 import abzu.ast.interop.ForeignToAbzuTypeNode;
-import abzu.runtime.AbzuUndefinedNameException;
+import abzu.runtime.UndefinedNameException;
 
 /**
  * The node for reading a property of an object. When executed, this node:
@@ -53,7 +53,7 @@ public abstract class ReadPropertyNode extends ExpressionNode {
 
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             /* Foreign access was not successful. */
-            throw AbzuUndefinedNameException.undefinedProperty(this, name);
+            throw UndefinedNameException.undefinedProperty(this, name);
         }
     }
 
@@ -64,7 +64,7 @@ public abstract class ReadPropertyNode extends ExpressionNode {
     @Fallback
     protected Object typeError(@SuppressWarnings("unused") Object r, Object name) {
         /* Non-object types do not have properties. */
-        throw AbzuUndefinedNameException.undefinedProperty(this, name);
+        throw UndefinedNameException.undefinedProperty(this, name);
     }
 
 }

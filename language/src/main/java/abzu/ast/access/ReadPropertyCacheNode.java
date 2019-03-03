@@ -9,7 +9,7 @@ import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
-import abzu.runtime.AbzuUndefinedNameException;
+import abzu.runtime.UndefinedNameException;
 
 public abstract class ReadPropertyCacheNode extends PropertyCacheNode {
 
@@ -41,7 +41,7 @@ public abstract class ReadPropertyCacheNode extends PropertyCacheNode {
         Property property = shape.getProperty(name);
         if (property == null) {
             /* Property does not exist. */
-            throw AbzuUndefinedNameException.undefinedProperty(this, name);
+            throw UndefinedNameException.undefinedProperty(this, name);
         }
 
         return property.getLocation();
@@ -57,7 +57,7 @@ public abstract class ReadPropertyCacheNode extends PropertyCacheNode {
         Object result = receiver.get(name);
         if (result == null) {
             /* Property does not exist. */
-            throw AbzuUndefinedNameException.undefinedProperty(this, name);
+            throw UndefinedNameException.undefinedProperty(this, name);
         }
         return result;
     }

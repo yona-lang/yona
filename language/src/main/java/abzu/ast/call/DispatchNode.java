@@ -3,7 +3,7 @@ package abzu.ast.call;
 import abzu.Types;
 import abzu.ast.interop.ForeignToAbzuTypeNode;
 import abzu.ast.interop.ForeignToAbzuTypeNodeGen;
-import abzu.runtime.AbzuUndefinedNameException;
+import abzu.runtime.UndefinedNameException;
 import abzu.runtime.Function;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -92,7 +92,7 @@ public abstract class DispatchNode extends Node {
    */
   @Fallback
   protected Object unknownFunction(Object function, @SuppressWarnings("unused") Object[] arguments) {
-    throw AbzuUndefinedNameException.undefinedFunction(this, function);
+    throw UndefinedNameException.undefinedFunction(this, function);
   }
 
   /**
@@ -114,7 +114,7 @@ public abstract class DispatchNode extends Node {
 
     } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
       /* Foreign access was not successful. */
-      throw AbzuUndefinedNameException.undefinedFunction(this, function);
+      throw UndefinedNameException.undefinedFunction(this, function);
     }
   }
 
