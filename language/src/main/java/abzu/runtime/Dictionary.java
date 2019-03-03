@@ -215,7 +215,7 @@ public abstract class Dictionary implements TruffleObject {
               newData[idx] = new Bitmap(oldKey, oldValue, newDepth, oldHash).insert(key, value, newDepth, hash);
               return new Bitmap(bitmap, newData);
             }
-            return new Collision(hash, 2, new Entry[]{ entry, new Entry(key, value) });
+            return new Collision(hash, 2, new Entry[] { entry, new Entry(key, value) });
           }
         }
       } else {
@@ -303,7 +303,7 @@ public abstract class Dictionary implements TruffleObject {
         } else {
           assert o instanceof Entry;
           final Entry entry = (Entry) o;
-          result = dispatchNode.executeDispatch(fn3, new Object[]{result, entry.key, entry.value});
+          result = dispatchNode.executeDispatch(fn3, new Object[] { result, entry.key, entry.value });
         }
       }
       return result;
@@ -321,7 +321,7 @@ public abstract class Dictionary implements TruffleObject {
         } else {
           assert cursor instanceof Entry;
           final Entry entry = (Entry) cursor;
-          newData[i] = new Entry(entry.key, dispatchNode.executeDispatch(fn1, new Object[]{entry.value}));
+          newData[i] = new Entry(entry.key, dispatchNode.executeDispatch(fn1, new Object[] { entry.value }));
         }
       }
       return new Bitmap(bitmap, newData);
@@ -345,13 +345,12 @@ public abstract class Dictionary implements TruffleObject {
       if (o == null || getClass() != o.getClass()) return false;
       Bitmap bitmap1 = (Bitmap) o;
       return bitmap == bitmap1.bitmap &&
-          size == bitmap1.size &&
           Arrays.equals(data, bitmap1.data);
     }
 
     @Override
     public int hashCode() {
-      int result = Objects.hash(bitmap, size);
+      int result = Objects.hash(bitmap);
       result = 31 * result + Arrays.hashCode(data);
       return result;
     }
@@ -399,7 +398,7 @@ public abstract class Dictionary implements TruffleObject {
           return new Collision(hash, n + 1, newData);
         }
       }
-      return new Bitmap(1 << ((hash >>> depth) & 0x01f), new Object[]{ this });
+      return new Bitmap(1 << ((hash >>> depth) & 0x01f), new Object[] { this });
     }
 
     @Override
@@ -444,7 +443,7 @@ public abstract class Dictionary implements TruffleObject {
         }
         if (o instanceof Entry) {
           final Entry entry = (Entry) o;
-          result = dispatchNode.executeDispatch(result, new Object[]{result, entry.key, entry.value});
+          result = dispatchNode.executeDispatch(result, new Object[] { result, entry.key, entry.value });
         }
       }
       return result;
@@ -457,7 +456,7 @@ public abstract class Dictionary implements TruffleObject {
       Entry cursor;
       for (int i = 0; i < len; i++) {
         cursor = data[i];
-        newData[i] = new Entry(cursor.key, dispatchNode.executeDispatch(fn1, new Object[]{cursor.value}));
+        newData[i] = new Entry(cursor.key, dispatchNode.executeDispatch(fn1, new Object[] { cursor.value }));
       }
       return new Collision(hash, n, newData);
     }
