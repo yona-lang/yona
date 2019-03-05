@@ -26,6 +26,36 @@ public abstract class OuterSequence {
     return 1;
   }
 
+  static int varIntLength(int value) {
+    assert value >= 0;
+    int result = 1;
+    while (result < 5) {
+      if (((~0 << (7 * result)) & value) == 0) return result;
+      result++;
+    }
+    return 5;
+  }
+
+  static void varIntWrite(int value, byte[] destination, int offset) {
+    assert value >= 0;
+    while ((~0x7f & value) != 0) {
+      destination[offset++] = (byte) ((0x7f & value) | 0x80);
+      value >>>= 7;
+    }
+    destination[offset] = (byte) value;
+  }
+
+  static int varIntRead(byte[] source, int offset) {
+    int result = 0;
+    byte piece;
+    for (int shift = 0; shift <= 28; shift += 7) {
+      piece = source[offset++];
+      result |= (0x7f & piece) << shift;
+      if ((0x80 & piece) == 0) return result;
+    }
+    return -1;
+  }
+
   private static final class Shallow extends OuterSequence {
     static final Shallow EMPTY = new Shallow();
 
@@ -96,7 +126,8 @@ public abstract class OuterSequence {
     final InnerSequence innerSequence;
     final Object suffixInner;
     final Object suffixOuter;
-    volatile int length = -1;
+    int prefixLength = -1;
+    int suffixLength = -1;
 
     Deep(Object first, Object second) {
       prefixOuter = first;
@@ -117,14 +148,28 @@ public abstract class OuterSequence {
     @Override
     public OuterSequence push(Object o) {
       if (prefixInner == null) return new Deep(o, prefixOuter, innerSequence, suffixInner, suffixOuter);
-      final Object[] node = new Object[] { prefixOuter, prefixInner, new int[] { measure(prefixOuter), measure(prefixInner) } };
+      final int firstMeasure = measure(prefixOuter);
+      final int secondMeasure = measure(prefixInner);
+      final int firstMeasureLength = varIntLength(firstMeasure);
+      final int secondMeasureLength = varIntLength(secondMeasure);
+      final byte[] measures = new byte[firstMeasureLength + secondMeasureLength];
+      varIntWrite(firstMeasure, measures, 0);
+      varIntWrite(secondMeasure, measures, firstMeasureLength);
+      final Object[] node = new Object[] { prefixOuter, prefixInner, measures };
       return new Deep(o, null, innerSequence.push(node), suffixInner, suffixOuter);
     }
 
     @Override
     public OuterSequence inject(Object o) {
       if (suffixInner == null) return new Deep(prefixOuter, prefixInner, innerSequence, suffixOuter, o);
-      final Object[] node = new Object[] { suffixInner, suffixOuter, new int[] { measure(suffixInner), measure(suffixOuter) } };
+      final int firstMeasure = measure(suffixInner);
+      final int secondMeasure = measure(suffixOuter);
+      final int firstMeasureLength = varIntLength(firstMeasure);
+      final int secondMeasureLength = varIntLength(secondMeasure);
+      final byte[] measures = new byte[firstMeasureLength + secondMeasureLength];
+      varIntWrite(firstMeasure, measures, 0);
+      varIntWrite(secondMeasure, measures, firstMeasureLength);
+      final Object[] node = new Object[] { suffixInner, suffixOuter, measures };
       return new Deep(prefixOuter, prefixInner, innerSequence.inject(node), null, o);
     }
 
@@ -183,16 +228,27 @@ public abstract class OuterSequence {
 
     @Override
     public int length() {
-      if (length == -1) {
+      return prefixLength() + innerSequence.measure() + suffixLength();
+    }
+
+    private int prefixLength() {
+      if (prefixLength == -1) {
         int result = 0;
         result += measure(prefixOuter);
         if (prefixInner != null) result += measure(prefixInner);
-        result += innerSequence.measure();
+        prefixLength = result;
+      }
+      return prefixLength;
+    }
+
+    private int suffixLength() {
+      if (suffixLength == -1) {
+        int result = 0;
         if (suffixInner != null) result += measure(suffixInner);
         result += measure(suffixOuter);
-        length = result;
+        suffixLength = result;
       }
-      return length;
+      return suffixLength;
     }
 
     @Override

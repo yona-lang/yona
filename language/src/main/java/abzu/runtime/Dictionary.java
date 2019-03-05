@@ -64,7 +64,7 @@ public abstract class Dictionary implements TruffleObject {
   private static final class Array extends Dictionary {
     final int n;
     final Dictionary[] data;
-    volatile int size;
+    int size;
 
     Array(int n, Dictionary[] data) {
       this.n = n;
@@ -166,7 +166,7 @@ public abstract class Dictionary implements TruffleObject {
 
     final int bitmap;
     final Object[] data;
-    volatile int size = -1;
+    int size = -1;
 
     Bitmap(int bitmap, Object[] data) {
       this.bitmap = bitmap;
