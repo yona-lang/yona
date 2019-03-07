@@ -28,10 +28,8 @@ public abstract class OuterSequence {
 
   static int varIntLength(int value) {
     assert value >= 0;
-    int result = 1;
-    while (result < 5) {
-      if (((~0 << (7 * result)) & value) == 0) return result;
-      result++;
+    for (int i = 1; i < 5; i++) {
+      if (((~0 << (7 * i)) & value) == 0) return i;
     }
     return 5;
   }
@@ -54,6 +52,35 @@ public abstract class OuterSequence {
       if ((0x80 & piece) == 0) return result;
     }
     return -1;
+  }
+
+  static int intRead(byte[] source, int offset) {
+    final byte b0 = source[offset];
+    final byte b1 = source[offset + 1];
+    final byte b2 = source[offset + 2];
+    final byte b3 = source[offset + 3];
+    return b0 << 24 | (b1 & 255) << 16 | (b2 & 255) << 8 | b3 & 255;
+  }
+
+  static void intWrite(int value, byte[] destination, int offset) {
+    destination[offset] = (byte)(value >> 24);
+    destination[offset + 1] = (byte)(value >> 16);
+    destination[offset + 2] = (byte)(value >> 8);
+    destination[offset + 3] = (byte) value;
+  }
+
+  static int decodeType(int encoded) {
+    return (encoded & 0x80000000) >>> 31;
+  }
+
+  static int decodeLength(int encoded) {
+    return encoded & 0x7fffffff;
+  }
+
+  static int encode(int type, int length) {
+    assert type == 0 || type == 1;
+    assert length >= 0;
+    return (type << 31) | length;
   }
 
   private static final class Shallow extends OuterSequence {
@@ -132,7 +159,7 @@ public abstract class OuterSequence {
     Deep(Object first, Object second) {
       prefixOuter = first;
       prefixInner = null;
-      innerSequence = InnerSequence.empty();
+      innerSequence = InnerSequence.Shallow.EMPTY;
       suffixInner = null;
       suffixOuter = second;
     }
@@ -186,7 +213,7 @@ public abstract class OuterSequence {
     @Override
     public OuterSequence removeFirst() {
       if (prefixInner != null) return new Deep(prefixInner, null, innerSequence, suffixInner, suffixOuter);
-      if (!innerSequence.isEmpty()) {
+      if (!innerSequence.empty()) {
         final Object[] node = innerSequence.first();
         switch (node.length) {
           case 2: return new Deep(node[0], null, innerSequence.removeFirst(), suffixInner, suffixOuter);
@@ -204,7 +231,7 @@ public abstract class OuterSequence {
     @Override
     public OuterSequence removeLast() {
       if (suffixInner != null) return new Deep(prefixOuter, prefixInner, innerSequence, null, suffixInner);
-      if (!innerSequence.isEmpty()) {
+      if (!innerSequence.empty()) {
         final Object[] node = innerSequence.last();
         switch (node.length) {
           case 2: return new Deep(prefixOuter, prefixInner, innerSequence.removeLast(), null, node[0]);
