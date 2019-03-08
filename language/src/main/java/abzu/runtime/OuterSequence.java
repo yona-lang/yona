@@ -38,7 +38,7 @@ public abstract class OuterSequence {
 
   static void varIntWrite(int value, byte[] destination, int offset) {
     assert value >= 0;
-    while ((~0x7f & value) != 0) {
+    while ((0xffffff80 & value) != 0) {
       destination[offset++] = (byte) ((0x7f & value) | 0x80);
       value >>>= 7;
     }
@@ -61,7 +61,7 @@ public abstract class OuterSequence {
     final byte b1 = source[offset + 1];
     final byte b2 = source[offset + 2];
     final byte b3 = source[offset + 3];
-    return b0 << 24 | (b1 & 255) << 16 | (b2 & 255) << 8 | b3 & 255;
+    return b0 << 24 | (b1 & 0xff) << 16 | (b2 & 0xff) << 8 | b3 & 0xff;
   }
 
   static void intWrite(int value, byte[] destination, int offset) {
@@ -80,27 +80,70 @@ public abstract class OuterSequence {
   }
 
   static int encode(int type, int length) {
-    assert type == 0 || type == 1;
-    assert length >= 0;
     return (type << 31) | length;
   }
 
   static Char charAt(byte[] bytes, int offset, int idx) {
-    assert idx >= 0;
     byte cursor;
     while (idx > 0) {
       cursor = bytes[offset];
-      if ((0x80 & cursor) == 0) offset += 1;
-      else if ((0x20 & cursor) == 0) offset += 2;
-      else if ((0x10 & cursor) == 0) offset += 3;
-      else offset += 4;
+      switch ((0xf0 & cursor) >>> 4) {
+        case 0x0:
+        case 0x1:
+        case 0x2:
+        case 0x3:
+        case 0x4:
+        case 0x5:
+        case 0x6:
+        case 0x7:
+          offset += 1;
+          break;
+        case 0x8:
+        case 0x9:
+        case 0xA:
+        case 0xB:
+          throw new AssertionError();
+        case 0xC:
+        case 0xD:
+          offset += 2;
+          break;
+        case 0xE:
+          offset += 3;
+          break;
+        case 0xF:
+          offset += 4;
+          break;
+        default:
+          throw new AssertionError();
+      }
       idx--;
     }
     cursor = bytes[offset];
-    if ((0x80 & cursor) == 0) return new Char(bytes[offset]);
-    else if ((0x20 & cursor) == 0) return new Char(bytes[offset], bytes[offset + 1]);
-    else if ((0x10 & cursor) == 0) return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2]);
-    else return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+    switch ((0xf0 & cursor) >>> 4) {
+      case 0x0:
+      case 0x1:
+      case 0x2:
+      case 0x3:
+      case 0x4:
+      case 0x5:
+      case 0x6:
+      case 0x7:
+        return new Char(bytes[offset]);
+      case 0x8:
+      case 0x9:
+      case 0xA:
+      case 0xB:
+        throw new AssertionError();
+      case 0xC:
+      case 0xD:
+        return new Char(bytes[offset], bytes[offset + 1]);
+      case 0xE:
+        return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2]);
+      case 0xF:
+        return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+      default:
+        throw new AssertionError();
+    }
   }
 
   private static final class Shallow extends OuterSequence {
