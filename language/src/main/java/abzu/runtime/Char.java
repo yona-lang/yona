@@ -1,10 +1,9 @@
 package abzu.runtime;
 
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 public class Char {
-  private static final Charset UTF_8 = Charset.forName("UTF-8");
-
   private final byte b0;
   private final byte b1;
   private final byte b2;
@@ -52,9 +51,9 @@ public class Char {
 
   @Override
   public String toString() {
-    if (b3 != 0) return new String(new byte[]{ b0, b1, b2, b3 }, UTF_8);
-    if (b2 != 0) return new String(new byte[]{ b0, b1, b2 }, UTF_8);
-    if (b1 != 0) return new String(new byte[]{ b0, b1 }, UTF_8);
-    return new String(new byte[]{ b0 }, UTF_8);
+    if (b3 != 0) return new String(new byte[]{ b0, b1, b2, b3 }, StandardCharsets.UTF_8);
+    if (b2 != 0) return new String(new byte[]{ b0, b1, b2 }, StandardCharsets.UTF_8);
+    if (b1 != 0) return new String(new byte[]{ b0, b1 }, StandardCharsets.UTF_8);
+    return new String(new byte[]{ b0 }, StandardCharsets.UTF_8);
   }
 }

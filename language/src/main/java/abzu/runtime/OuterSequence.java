@@ -23,6 +23,8 @@ public abstract class OuterSequence {
   public abstract boolean empty();
 
   private static int measure(Object o) {
+    assert o != null;
+    if (o instanceof byte[]) return decodeLength(intRead((byte[]) o, 0));
     return 1;
   }
 
@@ -81,6 +83,24 @@ public abstract class OuterSequence {
     assert type == 0 || type == 1;
     assert length >= 0;
     return (type << 31) | length;
+  }
+
+  static Char charAt(byte[] bytes, int offset, int idx) {
+    assert idx >= 0;
+    byte cursor;
+    while (idx > 0) {
+      cursor = bytes[offset];
+      if ((0x80 & cursor) == 0) offset += 1;
+      else if ((0x20 & cursor) == 0) offset += 2;
+      else if ((0x10 & cursor) == 0) offset += 3;
+      else offset += 4;
+      idx--;
+    }
+    cursor = bytes[offset];
+    if ((0x80 & cursor) == 0) return new Char(bytes[offset]);
+    else if ((0x20 & cursor) == 0) return new Char(bytes[offset], bytes[offset + 1]);
+    else if ((0x10 & cursor) == 0) return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2]);
+    else return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
   }
 
   private static final class Shallow extends OuterSequence {
@@ -283,4 +303,35 @@ public abstract class OuterSequence {
       return false;
     }
   }
+
+  /*public static void main(String[] args) {
+    String src = generateUtf16();
+    int len = src.codePointCount(0, src.length());
+    byte[] orig = src.getBytes(StandardCharsets.UTF_8);
+    Char[] chars = bytesToChars(orig, len);
+    byte[] copy = charsToBytes(chars);
+    if (!Arrays.equals(orig, copy)) throw new AssertionError();
+  }
+
+  private static String generateUtf16() {
+    StringBuilder bldr = new StringBuilder();
+    for (int i = 0; i < Integer.MAX_VALUE; i++) {
+      if (Character.isValidCodePoint(i)) bldr.append(Character.toChars(i));
+    }
+    return bldr.toString();
+  }
+
+  private static Char[] bytesToChars(byte[] bytes, int n) {
+    Char[] result = new Char[n];
+    for (int i = 0; i < n; i++) {
+      result[i] = charAt(bytes, 0, i);
+    }
+    return result;
+  }
+
+  private static byte[] charsToBytes(Char[] chars) {
+    StringBuilder builder = new StringBuilder();
+    for (Char c : chars) builder.append(c.toString());
+    return builder.toString().getBytes(StandardCharsets.UTF_8);
+  }*/
 }
