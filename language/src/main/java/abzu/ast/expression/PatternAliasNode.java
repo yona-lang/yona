@@ -42,6 +42,12 @@ public final class PatternAliasNode extends ExpressionNode {
   }
 
   @Override
+  public void setIsTail() {
+    super.setIsTail();
+    this.expression.setIsTail();
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object value = expression.executeGeneric(frame);
     MatchResult matchResult = matchNode.match(value, frame);

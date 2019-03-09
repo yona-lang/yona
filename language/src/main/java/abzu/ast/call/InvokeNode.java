@@ -18,6 +18,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
+import java.util.Arrays;
+
 /**
  * The node for function invocation in Abzu. Since Abzu has first class functions, the {@link abzu.runtime.Function
  * target function} can be computed by an arbitrary expression. This node is responsible for
@@ -52,6 +54,15 @@ public final class InvokeNode extends ExpressionNode {
     this.argumentNodes = argumentNodes;
     this.dispatchNode = DispatchNodeGen.create();
     this.language = language;
+  }
+
+  @Override
+  public String toString() {
+    return "InvokeNode{" +
+        "functionNode=" + functionNode +
+        ", function=" + function +
+        ", argumentNodes=" + Arrays.toString(argumentNodes) +
+        '}';
   }
 
   @ExplodeLoop
@@ -112,7 +123,18 @@ public final class InvokeNode extends ExpressionNode {
       for (int i = 0; i < argumentNodes.length; i++) {
         argumentValues[i] = argumentNodes[i].executeGeneric(frame);
       }
-      return dispatchNode.executeDispatch(function, argumentValues);
+
+      if (this.isTail()) {
+        throw new TailCallException(function, argumentValues);
+      }
+      while (true) {
+        try {
+          return dispatchNode.executeDispatch(function, argumentValues);
+        } catch (TailCallException e) {
+          function = e.function;
+          argumentValues = e.arguments;
+        }
+      }
     }
   }
 

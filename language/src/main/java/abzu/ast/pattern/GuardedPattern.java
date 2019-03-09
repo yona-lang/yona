@@ -47,6 +47,12 @@ public class GuardedPattern extends ExpressionNode implements PatternMatchable {
   }
 
   @Override
+  public void setIsTail() {
+    super.setIsTail();
+    valueExpression.setIsTail();
+  }
+
+  @Override
   public Object patternMatch(Object value, VirtualFrame frame) throws MatchException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {

@@ -41,6 +41,12 @@ public final class LetNode extends LexicalScopeNode {
   }
 
   @Override
+  public void setIsTail() {
+    super.setIsTail();
+    this.expression.setIsTail();
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     for (AliasNode alias : aliases) {
       alias.executeGeneric(frame);

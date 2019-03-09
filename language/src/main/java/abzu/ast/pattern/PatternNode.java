@@ -42,6 +42,12 @@ public class PatternNode extends ExpressionNode implements PatternMatchable {
   }
 
   @Override
+  public void setIsTail() {
+    super.setIsTail();
+    this.valueExpression.setIsTail();
+  }
+
+  @Override
   public Object patternMatch(Object value, VirtualFrame frame) throws MatchException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {

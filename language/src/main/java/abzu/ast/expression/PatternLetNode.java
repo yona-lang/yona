@@ -40,6 +40,12 @@ public final class PatternLetNode extends LexicalScopeNode {
   }
 
   @Override
+  public void setIsTail() {
+    super.setIsTail();
+    this.expression.setIsTail();
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     for (ExpressionNode patternAlias : patternAliases) {
       patternAlias.executeGeneric(frame);

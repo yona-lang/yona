@@ -92,15 +92,12 @@ public final class LexicalScope {
 
   private static LexicalScopeNode findChildrenBlock(Node node) {
     LexicalScopeNode[] blockPtr = new LexicalScopeNode[1];
-    node.accept(new NodeVisitor() {
-      @Override
-      public boolean visit(Node n) {
-        if (n instanceof LexicalScopeNode) {
-          blockPtr[0] = (LexicalScopeNode) n;
-          return false;
-        } else {
-          return true;
-        }
+    node.accept(n -> {
+      if (n instanceof LexicalScopeNode) {
+        blockPtr[0] = (LexicalScopeNode) n;
+        return false;
+      } else {
+        return true;
       }
     });
     return blockPtr[0];

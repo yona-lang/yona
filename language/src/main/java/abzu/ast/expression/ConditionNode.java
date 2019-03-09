@@ -57,6 +57,13 @@ public final class ConditionNode extends ExpressionNode {
   }
 
   @Override
+  public void setIsTail() {
+    super.setIsTail();
+    this.thenExpression.setIsTail();
+    this.elseExpression.setIsTail();
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     /*
      * In the interpreter, record profiling information that the condition was executed and with

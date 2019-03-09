@@ -187,7 +187,7 @@ public class SimpleExpressionTest {
         "funone = \\arg -> arg\n" +
         "alias = 6\n" +
         "funalias = \\arg -> funone alias\n" +
-        "in funalias").execute(5l).asLong();
+        "in funalias 5").asLong();
     assertEquals(6l, ret);
   }
 
@@ -197,7 +197,7 @@ public class SimpleExpressionTest {
         "curriedFun = \\argone argtwo -> argone\n" +
         "curriedOne = \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
         "curried = \\curriedArg -> curriedOne curriedArg\n" +
-        "in curried").execute(5l).asLong();
+        "in curried 5").asLong();
     assertEquals(5l, ret);
   }
 
@@ -207,7 +207,7 @@ public class SimpleExpressionTest {
         "curriedFun = \\argone argtwo -> argtwo\n" +
         "curriedOne = \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
         "curried = \\curriedArg -> curriedOne curriedArg\n" +
-        "in curried").execute(6l).asLong();
+        "in curried 6").asLong();
     assertEquals(6l, ret);
   }
 
@@ -217,7 +217,7 @@ public class SimpleExpressionTest {
         "curriedFullFun = \\-> let fullFun = \\argone argtwo argthree -> argthree in fullFun 1\n" +
         "curriedFun = curriedFullFun\n" +
         "curried = \\curriedArg -> curriedFun 3 4 curriedArg\n" +
-        "in curried").execute(6l).asLong();
+        "in curried 6").asLong();
     assertEquals(6l, ret);
   }
 

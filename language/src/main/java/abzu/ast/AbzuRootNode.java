@@ -1,12 +1,8 @@
 package abzu.ast;
 
 import abzu.AbzuLanguage;
-import abzu.ast.local.WriteLocalVariableNode;
-import abzu.ast.local.WriteLocalVariableNodeGen;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -53,6 +49,7 @@ public class AbzuRootNode extends RootNode {
 
   @Override
   public Object execute(VirtualFrame frame) {
+    CompilerDirectives.transferToInterpreter();
     for (Object identifier : lexicalScope.getFrameDescriptor().getIdentifiers()) {
       FrameSlot oldFrameSlot = lexicalScope.getFrameDescriptor().findFrameSlot(identifier);
       FrameSlot newFrameSlot = frame.getFrameDescriptor().findOrAddFrameSlot(identifier, FrameSlotKind.Illegal);

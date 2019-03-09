@@ -46,6 +46,14 @@ public class CaseNode extends ExpressionNode {
   }
 
   @Override
+  public void setIsTail() {
+    super.setIsTail();
+    for (PatternMatchable patternMatchable : patternNodes) {
+      ((ExpressionNode) patternMatchable).setIsTail();
+    }
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object value = expression.executeGeneric(frame);
     Object retValue = null;

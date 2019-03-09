@@ -6,11 +6,20 @@ module tests\CommonFunctions exports
     nonLinearListTest,
     nonLinearHeadTailsTest,
     nonLinearAsSequenceOneTest,
-    nonLinearAsSequenceTwoTest
+    nonLinearAsSequenceTwoTest,
+    countdown
     as
 
-factorial 1 = 1
-factorial n = n * (factorial n - 1)
+#factorial 1 = 1
+#factorial n = n * (factorial n - 1)
+
+# A tail recursive function to calculate factorial
+factTR n a
+    | n == 0 = a
+factTR n a = factTR (n - 1) (n * a)
+
+# A wrapper over factTR
+factorial n = factTR n 1
 
 fibonacci 0 = 0
 fibonacci 1 = 1
@@ -36,3 +45,7 @@ nonLinearAsSequenceOneTest seqOne@(headOne <: _) seqTwo@(headTwo <: _) = headOne
 
 nonLinearAsSequenceTwoTest seq@(headOne <: _) seq@(headTwo <: _)       = headOne
 nonLinearAsSequenceTwoTest seqOne@(headOne <: _) seqTwo@(headTwo <: _) = headOne + headTwo
+
+countdown n
+    | n < 1 = 0
+countdown n = countdown (n - 1)
