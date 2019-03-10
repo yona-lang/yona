@@ -23,7 +23,8 @@ public abstract class Dictionary implements TruffleObject {
   abstract Dictionary insert(Object key, Object value, int depth, int hash);
 
   public final Object lookup(Object key) {
-    return lookup(key, 0, key.hashCode());
+    final Object result = lookup(key, 0, key.hashCode());
+    return result == null ? Unit.INSTANCE : result;
   }
 
   abstract Object lookup(Object key, int depth, int hash);
@@ -92,7 +93,7 @@ public abstract class Dictionary implements TruffleObject {
     @Override
     Object lookup(Object key, int depth, int hash) {
       final Dictionary dict = data[(hash >>> depth) & 0x01f];
-      return dict == null ? Unit.INSTANCE : dict.lookup(key, depth + 5, hash);
+      return dict == null ? null : dict.lookup(key, depth + 5, hash);
     }
 
     @Override
@@ -259,7 +260,7 @@ public abstract class Dictionary implements TruffleObject {
       } else {
         assert o instanceof Entry;
         final Entry entry = (Entry) o;
-        return key.equals(entry.key) ? entry.value : Unit.INSTANCE;
+        return key.equals(entry.key) ? entry.value : null;
       }
     }
 
@@ -410,11 +411,9 @@ public abstract class Dictionary implements TruffleObject {
           break;
         }
       }
-      if (idx == -1) {
+      if (idx == -1 || !key.equals(data[idx].key)) {
         return null;
-      } else if (key.equals(data[idx].key)) {
-        return data[idx].value;
-      } else return Unit.INSTANCE;
+      } else return data[idx].value;
     }
 
     @Override
