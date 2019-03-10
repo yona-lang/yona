@@ -22,6 +22,10 @@ public abstract class OuterSequence {
 
   public abstract boolean empty();
 
+  public static OuterSequence sequence() {
+    return Shallow.EMPTY;
+  }
+
   private static int measure(Object o) {
     return o instanceof byte[] ? 0x7fffffff & readMeta((byte[]) o) : 1;
   }
@@ -238,8 +242,15 @@ public abstract class OuterSequence {
 
     @Override
     public Object lookup(int idx, Node node) {
-      if (val == null || idx != 0) throw new BadArgException("Index out of bounds", node);
-      return val; // TODO
+      if (val == null) throw new BadArgException("Index out of bounds", node);
+      if (val instanceof byte[]) {
+        final byte[] bytes = (byte[]) val;
+        final int len = 0x7fffffff & readMeta(bytes);
+        if (idx < 0 || idx >= len) throw new BadArgException("Index out of bounds", node);
+        return fromBytes(bytes, idx);
+      }
+      if (idx == 0) return val;
+      throw new BadArgException("Index out of bounds", node);
     }
 
     @Override

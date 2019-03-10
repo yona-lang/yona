@@ -36,6 +36,20 @@ public class Char {
     b3 = fth;
   }
 
+  int byteLen() {
+    if (b3 != 0) return 4;
+    if (b2 != 0) return 3;
+    if (b1 != 0) return 2;
+    return 1;
+  }
+
+  void toBytes(byte[] dst, int offset) {
+    if (b3 != 0) dst[offset + 3] = b3;
+    if (b2 != 0) dst[offset + 2] = b2;
+    if (b1 != 0) dst[offset + 1] = b1;
+    dst[offset] = b0;
+  }
+
   @Override
   public int hashCode() {
     return b0 << 24 | b1 << 16 | b2 << 8 | b3;
@@ -50,9 +64,8 @@ public class Char {
 
   @Override
   public String toString() {
-    if (b3 != 0) return new String(new byte[]{ b0, b1, b2, b3 }, StandardCharsets.UTF_8);
-    if (b2 != 0) return new String(new byte[]{ b0, b1, b2 }, StandardCharsets.UTF_8);
-    if (b1 != 0) return new String(new byte[]{ b0, b1 }, StandardCharsets.UTF_8);
-    return new String(new byte[]{ b0 }, StandardCharsets.UTF_8);
+    final byte[] bytes = new byte[byteLen()];
+    toBytes(bytes, 0);
+    return new String(bytes, StandardCharsets.UTF_8);
   }
 }

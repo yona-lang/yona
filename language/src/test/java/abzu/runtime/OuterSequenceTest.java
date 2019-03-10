@@ -7,13 +7,14 @@ import static org.junit.Assert.assertEquals;
 
 public class OuterSequenceTest {
 
+  private static final byte UTF8_1B = (byte) 0x05;
+  private static final byte UTF8_2B = (byte) 0xc5;
+  private static final byte UTF8_3B = (byte) 0xe5;
+  private static final byte UTF8_4B = (byte) 0xf5;
+  private static final byte UTF8_CC = (byte) 0x85;
+
   @Test
   public void testOffsetOf() {
-    final byte UTF8_1B = (byte) 0x05;
-    final byte UTF8_2B = (byte) 0xc5;
-    final byte UTF8_3B = (byte) 0xe5;
-    final byte UTF8_4B = (byte) 0xf5;
-    final byte UTF8_CC = (byte) 0x85;
     byte[] bytes;
     // leftmost, U+0000 - U+007F
     bytes = new byte[] { 0, 0, 0, 0, UTF8_1B, 0 };
@@ -112,5 +113,51 @@ public class OuterSequenceTest {
   private static void testReadWriteMeta(byte[] bytes, int value) {
     writeMeta(bytes, value);
     assertEquals(value, readMeta(bytes));
+  }
+
+  @Test
+  public void testPush() {
+    final OuterSequence nil = OuterSequence.sequence();
+    assertEquals("a", nil.push("a").lookup(0, null));
+    assertEquals("a", nil.inject("a").lookup(0, null));
+    final byte[] bytes = fourBytes(0xa, 0xb, 0xc, 0xd);
+    assertEquals((byte) 0xa, nil.push(bytes).lookup(0, null));
+    assertEquals((byte) 0xb, nil.push(bytes).lookup(1, null));
+    assertEquals((byte) 0xc, nil.push(bytes).lookup(2, null));
+    assertEquals((byte) 0xd, nil.push(bytes).lookup(3, null));
+    final Char c0 = new Char(UTF8_1B);
+    final Char c1 = new Char(UTF8_2B, UTF8_CC);
+    final Char c2 = new Char(UTF8_3B, UTF8_CC, UTF8_CC);
+    final Char c3 = new Char(UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC);
+    final byte[] chars = fourChars(c0, c1, c2, c3);
+    assertEquals(c0, nil.push(chars).lookup(0, null));
+    assertEquals(c1, nil.push(chars).lookup(1, null));
+    assertEquals(c2, nil.push(chars).lookup(2, null));
+    assertEquals(c3, nil.push(chars).lookup(3, null));
+    // TODO
+  }
+
+  private static byte[] fourBytes(int b0, int b1, int b2, int b3) {
+    final byte[] result = new byte[8];
+    writeMeta(result, 4);
+    result[4] = (byte) b0;
+    result[5] = (byte) b1;
+    result[6] = (byte) b2;
+    result[7] = (byte) b3;
+    return result;
+  }
+
+  private static byte[] fourChars(Char c0, Char c1, Char c2, Char c3) {
+    final int c0Len = c0.byteLen();
+    final int c1Len = c1.byteLen();
+    final int c2Len = c2.byteLen();
+    final int c3Len = c3.byteLen();
+    final byte[] result = new byte[4 + c0Len + c1Len + c2Len + c3Len];
+    writeMeta(result, (1 << 31) | 4);
+    c0.toBytes(result, 4);
+    c1.toBytes(result, 4 + c0Len);
+    c2.toBytes(result, 4 + c0Len + c1Len);
+    c3.toBytes(result, 4 + c0Len + c1Len + c2Len);
+    return result;
   }
 }
