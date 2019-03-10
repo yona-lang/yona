@@ -23,9 +23,7 @@ public abstract class OuterSequence {
   public abstract boolean empty();
 
   private static int measure(Object o) {
-    assert o != null;
-    if (o instanceof byte[]) return decodeLength(intRead((byte[]) o, 0));
-    return 1;
+    return o instanceof byte[] ? 0x7fffffff & readMeta((byte[]) o) : 1;
   }
 
   static int varIntLength(int value) {
@@ -56,90 +54,101 @@ public abstract class OuterSequence {
     return -1;
   }
 
-  static int intRead(byte[] source, int offset) {
-    final byte b0 = source[offset];
-    final byte b1 = source[offset + 1];
-    final byte b2 = source[offset + 2];
-    final byte b3 = source[offset + 3];
-    return b0 << 24 | (b1 & 0xff) << 16 | (b2 & 0xff) << 8 | b3 & 0xff;
+  static int readMeta(byte[] source) {
+    int result = 0;
+    for (int i = 0; i < 4; i++) {
+      result |= (0xff & source[i]) << (8 * i);
+    }
+    return result;
   }
 
-  static void intWrite(int value, byte[] destination, int offset) {
-    destination[offset] = (byte)(value >> 24);
-    destination[offset + 1] = (byte)(value >> 16);
-    destination[offset + 2] = (byte)(value >> 8);
-    destination[offset + 3] = (byte) value;
+  static void writeMeta(byte[] destination, int value) {
+    destination[0] = (byte) value;
+    destination[1] = (byte)(value >> 8);
+    destination[2] = (byte)(value >> 16);
+    destination[3] = (byte)(value >> 24);
   }
 
-  static int decodeType(int encoded) {
-    return (encoded & 0x80000000) >>> 31;
+  /*static boolean decodeType(int meta) {
+    return ((meta & 0x80000000) >>> 31) == 1;
   }
 
-  static int decodeLength(int encoded) {
-    return encoded & 0x7fffffff;
+  static int decodeLength(int meta) {
+    return 0x7fffffff & meta;
   }
 
   static int encode(int type, int length) {
     return (type << 31) | length;
+  }*/
+
+  static int offsetOf(byte[] bytes, int idx) {
+    final int len = 0x7fffffff & readMeta(bytes);
+    if (idx < len/2) {
+      int offset = 4;
+      while (idx > 0) {
+        switch ((0xf0 & bytes[offset]) >>> 4) {
+          case 0b0000:
+          case 0b0001:
+          case 0b0010:
+          case 0b0011:
+          case 0b0100:
+          case 0b0101:
+          case 0b0110:
+          case 0b0111:
+            offset += 1;
+            break;
+          case 0b1000:
+          case 0b1001:
+          case 0b1010:
+          case 0b1011:
+            throw new AssertionError();
+          case 0b1100:
+          case 0b1101:
+            offset += 2;
+            break;
+          case 0b1110:
+            offset += 3;
+            break;
+          case 0b1111:
+            offset += 4;
+        }
+        idx--;
+      }
+      return offset;
+    } else {
+      idx = len - idx - 1;
+      int offset = bytes.length;
+      while (idx >= 0) {
+        if (((0xf0 & bytes[--offset]) >>> 6) != 0b10) idx--;
+      }
+      return offset;
+    }
   }
 
-  static Char charAt(byte[] bytes, int offset, int idx) {
-    byte cursor;
-    while (idx > 0) {
-      cursor = bytes[offset];
-      switch ((0xf0 & cursor) >>> 4) {
-        case 0x0:
-        case 0x1:
-        case 0x2:
-        case 0x3:
-        case 0x4:
-        case 0x5:
-        case 0x6:
-        case 0x7:
-          offset += 1;
-          break;
-        case 0x8:
-        case 0x9:
-        case 0xA:
-        case 0xB:
-          throw new AssertionError();
-        case 0xC:
-        case 0xD:
-          offset += 2;
-          break;
-        case 0xE:
-          offset += 3;
-          break;
-        case 0xF:
-          offset += 4;
-          break;
-        default:
-          throw new AssertionError();
-      }
-      idx--;
-    }
-    cursor = bytes[offset];
-    switch ((0xf0 & cursor) >>> 4) {
-      case 0x0:
-      case 0x1:
-      case 0x2:
-      case 0x3:
-      case 0x4:
-      case 0x5:
-      case 0x6:
-      case 0x7:
+  static Object fromBytes(byte[] bytes, int offset) {
+    final int meta = readMeta(bytes);
+    if (meta > 0) return bytes[offset + 4];
+    switch ((0xf0 & bytes[offset]) >>> 4) {
+      case 0b0000:
+      case 0b0001:
+      case 0b0010:
+      case 0b0011:
+      case 0b0100:
+      case 0b0101:
+      case 0b0110:
+      case 0b0111:
         return new Char(bytes[offset]);
-      case 0x8:
-      case 0x9:
-      case 0xA:
-      case 0xB:
+      case 0b1000:
+      case 0b1001:
+      case 0b1010:
+      case 0b1011:
         throw new AssertionError();
-      case 0xC:
-      case 0xD:
+      case 0b1100:
+      case 0b1101:
         return new Char(bytes[offset], bytes[offset + 1]);
-      case 0xE:
+      case 0b1110:
         return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2]);
-      case 0xF:
+      case 0b1111:
         return new Char(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
       default:
         throw new AssertionError();
@@ -171,25 +180,43 @@ public abstract class OuterSequence {
 
     @Override
     public Object first() {
-      assert val != null;
+      if (val instanceof byte[]) {
+        final byte[] bytes = (byte[]) val;
+        return fromBytes(bytes, offsetOf(bytes, 0));
+      }
       return val;
     }
 
     @Override
     public Object last() {
-      assert val != null;
+      if (val instanceof byte[]) {
+        final byte[] bytes = (byte[]) val;
+        return fromBytes(bytes, offsetOf(bytes, (0x7fffffff & readMeta(bytes)) - 1));
+      }
       return val;
     }
 
     @Override
     public OuterSequence removeFirst() {
-      assert val != null;
+      if (val instanceof byte[]) {
+        final byte[] bytes = (byte[]) val;
+        final int meta = readMeta(bytes);
+        switch (meta & 0x7fffffff) {
+          case 1: return EMPTY;
+          case 2: return new Shallow(fromBytes(bytes, offsetOf(bytes, 1)));
+          default:
+            final int newMeta = meta - 1;
+            // TODO
+        }
+      }
       return EMPTY;
     }
 
     @Override
     public OuterSequence removeLast() {
-      assert val != null;
+      if (val instanceof byte[]) {
+        // TODO
+      }
       return EMPTY;
     }
 
@@ -346,35 +373,4 @@ public abstract class OuterSequence {
       return false;
     }
   }
-
-  /*public static void main(String[] args) {
-    String src = generateUtf16();
-    int len = src.codePointCount(0, src.length());
-    byte[] orig = src.getBytes(StandardCharsets.UTF_8);
-    Char[] chars = bytesToChars(orig, len);
-    byte[] copy = charsToBytes(chars);
-    if (!Arrays.equals(orig, copy)) throw new AssertionError();
-  }
-
-  private static String generateUtf16() {
-    StringBuilder bldr = new StringBuilder();
-    for (int i = 0; i < Integer.MAX_VALUE; i++) {
-      if (Character.isValidCodePoint(i)) bldr.append(Character.toChars(i));
-    }
-    return bldr.toString();
-  }
-
-  private static Char[] bytesToChars(byte[] bytes, int n) {
-    Char[] result = new Char[n];
-    for (int i = 0; i < n; i++) {
-      result[i] = charAt(bytes, 0, i);
-    }
-    return result;
-  }
-
-  private static byte[] charsToBytes(Char[] chars) {
-    StringBuilder builder = new StringBuilder();
-    for (Char c : chars) builder.append(c.toString());
-    return builder.toString().getBytes(StandardCharsets.UTF_8);
-  }*/
 }
