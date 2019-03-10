@@ -125,9 +125,10 @@ public abstract class OuterSequence {
     }
   }
 
-  static Object fromBytes(byte[] bytes, int offset) {
+  static Object fromBytes(byte[] bytes, int idx) {
     final int meta = readMeta(bytes);
-    if (meta > 0) return bytes[offset + 4];
+    if (meta > 0) return bytes[idx + 4];
+    final int offset = offsetOf(bytes, idx);
     switch ((0xf0 & bytes[offset]) >>> 4) {
       case 0b0000:
       case 0b0001:
@@ -182,7 +183,7 @@ public abstract class OuterSequence {
     public Object first() {
       if (val instanceof byte[]) {
         final byte[] bytes = (byte[]) val;
-        return fromBytes(bytes, offsetOf(bytes, 0));
+        return fromBytes(bytes, 0);
       }
       return val;
     }
@@ -191,7 +192,7 @@ public abstract class OuterSequence {
     public Object last() {
       if (val instanceof byte[]) {
         final byte[] bytes = (byte[]) val;
-        return fromBytes(bytes, offsetOf(bytes, (0x7fffffff & readMeta(bytes)) - 1));
+        return fromBytes(bytes, (0x7fffffff & readMeta(bytes)) - 1);
       }
       return val;
     }
@@ -201,12 +202,15 @@ public abstract class OuterSequence {
       if (val instanceof byte[]) {
         final byte[] bytes = (byte[]) val;
         final int meta = readMeta(bytes);
-        switch (meta & 0x7fffffff) {
+        switch (0x7fffffff & meta) {
           case 1: return EMPTY;
-          case 2: return new Shallow(fromBytes(bytes, offsetOf(bytes, 1)));
+          case 2: return new Shallow(fromBytes(bytes, 1));
           default:
-            final int newMeta = meta - 1;
-            // TODO
+            final int offset = meta > 0 ? 5 : offsetOf(bytes, 1);
+            final byte[] newBytes = new byte[bytes.length - offset + 4];
+            writeMeta(newBytes, meta - 1);
+            System.arraycopy(bytes, offset,  newBytes, 4, newBytes.length);
+            return new Shallow(newBytes);
         }
       }
       return EMPTY;
@@ -215,7 +219,19 @@ public abstract class OuterSequence {
     @Override
     public OuterSequence removeLast() {
       if (val instanceof byte[]) {
-        // TODO
+        final byte[] bytes = (byte[]) val;
+        final int meta = readMeta(bytes);
+        final int len = 0x7fffffff & meta;
+        switch (len) {
+          case 1: return EMPTY;
+          case 2: return new Shallow(fromBytes(bytes, 0));
+          default:
+            final int offset = meta > 0 ? len - 1 : offsetOf(bytes, len - 1);
+            final byte[] newBytes = new byte[offset];
+            writeMeta(newBytes, meta - 1);
+            System.arraycopy(bytes, 4,  newBytes, 4, newBytes.length - 4);
+            return new Shallow(newBytes);
+        }
       }
       return EMPTY;
     }
@@ -223,7 +239,7 @@ public abstract class OuterSequence {
     @Override
     public Object lookup(int idx, Node node) {
       if (val == null || idx != 0) throw new BadArgException("Index out of bounds", node);
-      return val;
+      return val; // TODO
     }
 
     @Override
@@ -292,16 +308,25 @@ public abstract class OuterSequence {
 
     @Override
     public Object first() {
+      if (prefixOuter instanceof byte[]) {
+        final byte[] bytes = (byte[]) prefixOuter;
+        return fromBytes(bytes, 0);
+      }
       return prefixOuter;
     }
 
     @Override
     public Object last() {
+      if (suffixOuter instanceof byte[]) {
+        final byte[] bytes = (byte[]) suffixOuter;
+        return fromBytes(bytes, (0x7fffffff & readMeta(bytes)) - 1);
+      }
       return suffixOuter;
     }
 
     @Override
     public OuterSequence removeFirst() {
+      // TODO
       if (prefixInner != null) return new Deep(prefixInner, null, innerSequence, suffixInner, suffixOuter);
       if (!innerSequence.empty()) {
         final Object[] node = innerSequence.first();
@@ -320,6 +345,7 @@ public abstract class OuterSequence {
 
     @Override
     public OuterSequence removeLast() {
+      // TODO
       if (suffixInner != null) return new Deep(prefixOuter, prefixInner, innerSequence, null, suffixInner);
       if (!innerSequence.empty()) {
         final Object[] node = innerSequence.last();
