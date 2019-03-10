@@ -125,4 +125,72 @@ abstract class InnerSequence {
       return false; // TODO
     }
   }
+
+  /*
+      @Override
+    public OuterSequenceOLD push(Object value) {
+      assert prefix.length <= 3;
+      if (prefix.length == 3) return new Deep(new Object[] { value }, inner.push(prefix), suffix);
+      final Object[] newPrefix = new Object[prefix.length + 1];
+      newPrefix[0] = value;
+      arraycopy(prefix, 0, newPrefix, 1, prefix.length);
+      return new Deep(newPrefix, inner, suffix);
+    }
+
+    @Override
+    public OuterSequenceOLD inject(Object value) {
+      assert suffix.length <= 3;
+      if (suffix.length == 3) return new Deep(prefix, inner.inject(suffix), new Object[] { value });
+      final Object[] newSuffix = new Object[suffix.length + 1];
+      arraycopy(suffix, 0, newSuffix, 0, suffix.length);
+      newSuffix[suffix.length] = value;
+      return new Deep(prefix, inner, newSuffix);
+    }
+
+    @Override
+    public Object first() {
+      return prefix[0];
+    }
+
+    @Override
+    public Object last() {
+      return suffix[suffix.length - 1];
+    }
+
+    @Override
+    public OuterSequenceOLD removeFirst() {
+      assert prefix.length <= 3;
+      if (prefix.length > 1) {
+        final Object[] newPrefix = new Object[prefix.length - 1];
+        arraycopy(prefix, 1, newPrefix, 0, prefix.length - 1);
+        return new Deep(newPrefix, inner, suffix);
+      }
+      if (!inner.empty()) return new Deep(inner.first(), inner.removeFirst(), suffix);
+      if (suffix.length > 1) {
+        final Object[] newPrefix = new Object[] { suffix[0] };
+        final Object[] newSuffix = new Object[suffix.length - 1];
+        arraycopy(suffix, 1, newSuffix, 0, suffix.length - 1);
+        return new Deep(newPrefix, InnerSequence.Shallow.EMPTY, newSuffix);
+      }
+      return new Shallow(suffix[0]);
+    }
+
+    @Override
+    public OuterSequenceOLD removeLast() {
+      assert suffix.length <= 3;
+      if (suffix.length > 1) {
+        final Object[] newSuffix = new Object[suffix.length - 1];
+        arraycopy(suffix, 0, newSuffix, 0, suffix.length - 1);
+        return new Deep(prefix, inner, newSuffix);
+      }
+      if (!inner.empty()) return new Deep(prefix, inner.removeLast(), inner.last());
+      if (prefix.length > 1) {
+        final Object[] newPrefix = new Object[prefix.length - 1];
+        arraycopy(prefix, 0, newPrefix, 0, prefix.length - 1);
+        final Object[] newSuffix = new Object[] { prefix[prefix.length - 1] };
+        return new Deep(newPrefix, InnerSequence.Shallow.EMPTY, newSuffix);
+      }
+      return new Shallow(prefix[0]);
+    }
+   */
 }
