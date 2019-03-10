@@ -213,7 +213,7 @@ public abstract class OuterSequence {
             final int offset = meta > 0 ? 5 : offsetOf(bytes, 1);
             final byte[] newBytes = new byte[bytes.length - offset + 4];
             writeMeta(newBytes, meta - 1);
-            System.arraycopy(bytes, offset,  newBytes, 4, newBytes.length);
+            System.arraycopy(bytes, offset,  newBytes, 4, newBytes.length - 4);
             return new Shallow(newBytes);
         }
       }
@@ -230,7 +230,7 @@ public abstract class OuterSequence {
           case 1: return EMPTY;
           case 2: return new Shallow(fromBytes(bytes, 0));
           default:
-            final int offset = meta > 0 ? len - 1 : offsetOf(bytes, len - 1);
+            final int offset = meta > 0 ? bytes.length - 1 : offsetOf(bytes, len - 1);
             final byte[] newBytes = new byte[offset];
             writeMeta(newBytes, meta - 1);
             System.arraycopy(bytes, 4,  newBytes, 4, newBytes.length - 4);
@@ -261,6 +261,14 @@ public abstract class OuterSequence {
     @Override
     public boolean empty() {
       return val == null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof OuterSequence.Shallow)) return false;
+      final OuterSequence.Shallow that = (OuterSequence.Shallow) o;
+      if (this.val == null) return that.val == null;
+      return this.val.equals(that.val);
     }
   }
 

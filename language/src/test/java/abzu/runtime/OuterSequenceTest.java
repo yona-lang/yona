@@ -13,6 +13,8 @@ public class OuterSequenceTest {
   private static final byte UTF8_4B = (byte) 0xf5;
   private static final byte UTF8_CC = (byte) 0x85;
 
+  private static final OuterSequence NIL = OuterSequence.sequence();
+
   @Test
   public void testOffsetOf() {
     byte[] bytes;
@@ -117,23 +119,95 @@ public class OuterSequenceTest {
 
   @Test
   public void testPush() {
-    final OuterSequence nil = OuterSequence.sequence();
-    assertEquals("a", nil.push("a").lookup(0, null));
-    assertEquals("a", nil.inject("a").lookup(0, null));
+    assertEquals("a", NIL.push("a").lookup(0, null));
     final byte[] bytes = fourBytes(0xa, 0xb, 0xc, 0xd);
-    assertEquals((byte) 0xa, nil.push(bytes).lookup(0, null));
-    assertEquals((byte) 0xb, nil.push(bytes).lookup(1, null));
-    assertEquals((byte) 0xc, nil.push(bytes).lookup(2, null));
-    assertEquals((byte) 0xd, nil.push(bytes).lookup(3, null));
+    assertEquals((byte) 0xa, NIL.push(bytes).lookup(0, null));
+    assertEquals((byte) 0xb, NIL.push(bytes).lookup(1, null));
+    assertEquals((byte) 0xc, NIL.push(bytes).lookup(2, null));
+    assertEquals((byte) 0xd, NIL.push(bytes).lookup(3, null));
     final Char c0 = new Char(UTF8_1B);
     final Char c1 = new Char(UTF8_2B, UTF8_CC);
     final Char c2 = new Char(UTF8_3B, UTF8_CC, UTF8_CC);
     final Char c3 = new Char(UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC);
     final byte[] chars = fourChars(c0, c1, c2, c3);
-    assertEquals(c0, nil.push(chars).lookup(0, null));
-    assertEquals(c1, nil.push(chars).lookup(1, null));
-    assertEquals(c2, nil.push(chars).lookup(2, null));
-    assertEquals(c3, nil.push(chars).lookup(3, null));
+    assertEquals(c0, NIL.push(chars).lookup(0, null));
+    assertEquals(c1, NIL.push(chars).lookup(1, null));
+    assertEquals(c2, NIL.push(chars).lookup(2, null));
+    assertEquals(c3, NIL.push(chars).lookup(3, null));
+    // TODO
+  }
+
+  @Test
+  public void testInject() {
+    assertEquals("a", NIL.inject("a").lookup(0, null));
+    final byte[] bytes = fourBytes(0xa, 0xb, 0xc, 0xd);
+    assertEquals((byte) 0xa, NIL.inject(bytes).lookup(0, null));
+    assertEquals((byte) 0xb, NIL.inject(bytes).lookup(1, null));
+    assertEquals((byte) 0xc, NIL.inject(bytes).lookup(2, null));
+    assertEquals((byte) 0xd, NIL.inject(bytes).lookup(3, null));
+    final Char c0 = new Char(UTF8_1B);
+    final Char c1 = new Char(UTF8_2B, UTF8_CC);
+    final Char c2 = new Char(UTF8_3B, UTF8_CC, UTF8_CC);
+    final Char c3 = new Char(UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC);
+    final byte[] chars = fourChars(c0, c1, c2, c3);
+    assertEquals(c0, NIL.inject(chars).lookup(0, null));
+    assertEquals(c1, NIL.inject(chars).lookup(1, null));
+    assertEquals(c2, NIL.inject(chars).lookup(2, null));
+    assertEquals(c3, NIL.inject(chars).lookup(3, null));
+    // TODO
+  }
+
+  @Test
+  public void testFirst() {
+    OuterSequence seq;
+    seq = NIL.inject("a");
+    assertEquals(seq.lookup(0, null), seq.first());
+    seq = NIL.inject(fourBytes(0xa, 0x0, 0x0, 0x0));
+    assertEquals(seq.lookup(0, null), seq.first());
+    seq = NIL.inject(fourChars(new Char(UTF8_2B, UTF8_CC), new Char((byte) 0), new Char((byte) 0), new Char((byte) 0)));
+    assertEquals(seq.lookup(0, null), seq.first());
+    // TODO
+  }
+
+  @Test
+  public void testRemoveFirst() {
+    assertEquals(NIL, NIL.push(new Object()).removeFirst());
+    final byte[] bytes = fourBytes(0xa, 0xb, 0xc, 0xd);
+    assertEquals((byte) 0xb, NIL.push(bytes).removeFirst().lookup(0, null));
+    assertEquals((byte) 0xd, NIL.push(bytes).removeFirst().lookup(2, null));
+    final Char c1 = new Char(UTF8_2B, UTF8_CC);
+    final Char c2 = new Char(UTF8_3B, UTF8_CC, UTF8_CC);
+    final Char c3 = new Char(UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC);
+    final byte[] chars = fourChars(new Char(UTF8_1B), c1, c2, c3);
+    assertEquals(c1, NIL.push(chars).removeFirst().lookup(0, null));
+    assertEquals(c3, NIL.push(chars).removeFirst().lookup(2, null));
+    // TODO
+  }
+
+  @Test
+  public void testLast() {
+    OuterSequence seq;
+    seq = NIL.push("a");
+    assertEquals(seq.lookup(0, null), seq.last());
+    seq = NIL.push(fourBytes(0x0, 0x0, 0x0, 0xa));
+    assertEquals(seq.lookup(3, null), seq.last());
+    seq = NIL.push(fourChars(new Char((byte) 0), new Char((byte) 0), new Char((byte) 0), new Char(UTF8_2B, UTF8_CC)));
+    assertEquals(seq.lookup(3, null), seq.last());
+    // TODO
+  }
+
+  @Test
+  public void testRemoveLast() {
+    assertEquals(NIL, NIL.push(new Object()).removeLast());
+    final byte[] bytes = fourBytes(0xa, 0xb, 0xc, 0xd);
+    assertEquals((byte) 0xa, NIL.push(bytes).removeLast().lookup(0, null));
+    assertEquals((byte) 0xc, NIL.push(bytes).removeLast().lookup(2, null));
+    final Char c0 = new Char(UTF8_1B);
+    final Char c1 = new Char(UTF8_2B, UTF8_CC);
+    final Char c2 = new Char(UTF8_3B, UTF8_CC, UTF8_CC);
+    final byte[] chars = fourChars(c0, c1, c2, new Char(UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC));
+    assertEquals(c0, NIL.push(chars).removeLast().lookup(0, null));
+    assertEquals(c2, NIL.push(chars).removeLast().lookup(2, null));
     // TODO
   }
 
