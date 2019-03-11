@@ -14,6 +14,8 @@ abstract class InnerSequence {
 
   public abstract InnerSequence removeLast();
 
+  abstract int splitAt(int idx, Split split);
+
   abstract int measure();
 
   abstract boolean empty();
@@ -66,6 +68,11 @@ abstract class InnerSequence {
     }
 
     @Override
+    int splitAt(int idx, Split split) {
+      return 0; // TODO
+    }
+
+    @Override
     int measure() {
       if (val == null) return 0;
       int result = 0;
@@ -113,6 +120,11 @@ abstract class InnerSequence {
     @Override
     public InnerSequence removeLast() {
       return null; // TODO
+    }
+
+    @Override
+    int splitAt(int idx, Split split) {
+      return 0; // TODO
     }
 
     @Override
@@ -193,4 +205,15 @@ abstract class InnerSequence {
       return new Shallow(prefix[0]);
     }
    */
+
+  static final class Split {
+    InnerSequence left;
+    Object[] point;
+    InnerSequence right;
+
+    Split(boolean trackLeft, boolean trackRight) {
+      left = trackLeft ? Shallow.EMPTY : null;
+      right = trackRight ? Shallow.EMPTY : null;
+    }
+  }
 }

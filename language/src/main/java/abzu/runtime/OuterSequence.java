@@ -160,6 +160,35 @@ public abstract class OuterSequence {
     }
   }
 
+  static Object removeFirst(byte[] bytes) {
+    final int meta = readMeta(bytes);
+    switch (0x7fffffff & meta) {
+      case 1: throw new AssertionError();
+      case 2: return fromBytes(bytes, 1);
+      default:
+        final int offset = meta > 0 ? 5 : offsetOf(bytes, 1);
+        final byte[] newBytes = new byte[bytes.length - offset + 4];
+        writeMeta(newBytes, meta - 1);
+        System.arraycopy(bytes, offset,  newBytes, 4, newBytes.length - 4);
+        return newBytes;
+    }
+  }
+
+  static Object removeLast(byte[] bytes) {
+    final int meta = readMeta(bytes);
+    final int len = 0x7fffffff & meta;
+    switch (len) {
+      case 1: throw new AssertionError();
+      case 2: return fromBytes(bytes, 0);
+      default:
+        final int offset = meta > 0 ? bytes.length - 1 : offsetOf(bytes, len - 1);
+        final byte[] newBytes = new byte[offset];
+        writeMeta(newBytes, meta - 1);
+        System.arraycopy(bytes, 4,  newBytes, 4, newBytes.length - 4);
+        return newBytes;
+    }
+  }
+
   private static final class Shallow extends OuterSequence {
     static final Shallow EMPTY = new Shallow();
 
@@ -203,40 +232,13 @@ public abstract class OuterSequence {
 
     @Override
     public OuterSequence removeFirst() {
-      if (val instanceof byte[]) {
-        final byte[] bytes = (byte[]) val;
-        final int meta = readMeta(bytes);
-        switch (0x7fffffff & meta) {
-          case 1: return EMPTY;
-          case 2: return new Shallow(fromBytes(bytes, 1));
-          default:
-            final int offset = meta > 0 ? 5 : offsetOf(bytes, 1);
-            final byte[] newBytes = new byte[bytes.length - offset + 4];
-            writeMeta(newBytes, meta - 1);
-            System.arraycopy(bytes, offset,  newBytes, 4, newBytes.length - 4);
-            return new Shallow(newBytes);
-        }
-      }
+      if (val instanceof byte[]) return new Shallow(removeFirst((byte[]) val));
       return EMPTY;
     }
 
     @Override
     public OuterSequence removeLast() {
-      if (val instanceof byte[]) {
-        final byte[] bytes = (byte[]) val;
-        final int meta = readMeta(bytes);
-        final int len = 0x7fffffff & meta;
-        switch (len) {
-          case 1: return EMPTY;
-          case 2: return new Shallow(fromBytes(bytes, 0));
-          default:
-            final int offset = meta > 0 ? bytes.length - 1 : offsetOf(bytes, len - 1);
-            final byte[] newBytes = new byte[offset];
-            writeMeta(newBytes, meta - 1);
-            System.arraycopy(bytes, 4,  newBytes, 4, newBytes.length - 4);
-            return new Shallow(newBytes);
-        }
-      }
+      if (val instanceof byte[]) return new Shallow(removeLast((byte[]) val));
       return EMPTY;
     }
 
@@ -345,17 +347,14 @@ public abstract class OuterSequence {
 
     @Override
     public OuterSequence removeFirst() {
-      // TODO
+      if (prefixOuter instanceof byte[]) return new Deep(removeFirst((byte[]) prefixOuter), prefixInner, innerSequence, suffixInner, suffixOuter);
       if (prefixInner != null) return new Deep(prefixInner, null, innerSequence, suffixInner, suffixOuter);
       if (!innerSequence.empty()) {
         final Object[] node = innerSequence.first();
         switch (node.length) {
           case 2: return new Deep(node[0], null, innerSequence.removeFirst(), suffixInner, suffixOuter);
           case 3: return new Deep(node[0], node[1], innerSequence.removeFirst(), suffixInner, suffixOuter);
-          default: {
-            assert false;
-            return null;
-          }
+          default: throw new AssertionError();
         }
       }
       if (suffixInner != null) return new Deep(suffixInner, suffixOuter);
@@ -364,17 +363,14 @@ public abstract class OuterSequence {
 
     @Override
     public OuterSequence removeLast() {
-      // TODO
+      if (suffixOuter instanceof byte[]) return new Deep(prefixOuter, prefixInner, innerSequence, suffixInner, removeLast((byte[]) suffixOuter));
       if (suffixInner != null) return new Deep(prefixOuter, prefixInner, innerSequence, null, suffixInner);
       if (!innerSequence.empty()) {
         final Object[] node = innerSequence.last();
         switch (node.length) {
           case 2: return new Deep(prefixOuter, prefixInner, innerSequence.removeLast(), null, node[0]);
           case 3: return new Deep(prefixOuter, prefixInner, innerSequence.removeLast(), node[0], node[1]);
-          default: {
-            assert false;
-            return null;
-          }
+          default: throw new AssertionError();
         }
       }
       if (prefixInner != null) return new Deep(prefixOuter, prefixInner);
@@ -384,7 +380,28 @@ public abstract class OuterSequence {
     @Override
     public Object lookup(int idx, Node node) {
       if (idx < 0) throw new BadArgException("Index out of bounds", node);
-      // TODO
+      int measure = measure(prefixOuter);
+      if (idx < measure) return prefixOuter instanceof byte[] ? fromBytes((byte[]) prefixOuter, idx) : prefixOuter;
+      idx -= measure;
+      measure = measure(prefixInner);
+      if (idx < measure) return prefixInner instanceof byte[] ? fromBytes((byte[]) prefixInner, idx) : prefixInner;
+      idx -= measure;
+      measure = innerSequence.measure();
+      if (idx < measure) {
+        final InnerSequence.Split split = new InnerSequence.Split(false, false);
+        idx = innerSequence.splitAt(idx, split);
+        for (Object o : split.point) {
+          measure = measure(o);
+          if (idx < measure) return o instanceof byte[] ? fromBytes((byte[]) o, idx) : o;
+          idx -= measure;
+        }
+      }
+      idx -= measure;
+      measure = measure(suffixInner);
+      if (idx < measure) return suffixInner instanceof byte[] ? fromBytes((byte[]) suffixInner, idx) : suffixInner;
+      idx -= measure;
+      measure = measure(suffixOuter);
+      if (idx < measure) return suffixOuter instanceof byte[] ? fromBytes((byte[]) suffixOuter, idx) : suffixOuter;
       throw new BadArgException("Index out of bounds", node);
     }
 
