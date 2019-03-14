@@ -13,10 +13,8 @@ public final class Promise {
     do {
       snapshot = value;
     } while (!UPDATER.compareAndSet(this, snapshot, o));
-    try {
+    if (snapshot instanceof Callbacks) {
       ((Callbacks) snapshot).run(o);
-    } catch (ClassCastException e) {
-      throw new AssertionError();
     }
   }
 
