@@ -390,11 +390,14 @@ public abstract class OuterSequence {
       if (idx < measure) {
         final InnerSequence.Split split = new InnerSequence.Split(false, false);
         idx = innerSequence.splitAt(idx, split);
-        for (Object o : split.point) {
+        Object o;
+        for (int i = 0; i < split.point.length - 1; i++) {
+          o = split.point[i];
           measure = measure(o);
           if (idx < measure) return o instanceof byte[] ? fromBytes((byte[]) o, idx) : o;
           idx -= measure;
         }
+        throw new AssertionError();
       }
       idx -= measure;
       measure = measure(suffixInner);
