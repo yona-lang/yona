@@ -284,7 +284,7 @@ public abstract class OuterSequence {
       final byte[] measures = new byte[firstMeasureLength + secondMeasureLength];
       varIntWrite(firstMeasure, measures, 0);
       varIntWrite(secondMeasure, measures, firstMeasureLength);
-      final Object[] node = new Object[] { prefixOuter, prefixInner, measures };
+      final Object[] node = new Object[] { measures, prefixOuter, prefixInner };
       final int totalMeasure = firstMeasure + secondMeasure;
       return new Deep(o, null, innerSequence.push(node, totalMeasure), suffixInner, suffixOuter);
     }
@@ -299,7 +299,7 @@ public abstract class OuterSequence {
       final byte[] measures = new byte[firstMeasureLength + secondMeasureLength];
       varIntWrite(firstMeasure, measures, 0);
       varIntWrite(secondMeasure, measures, firstMeasureLength);
-      final Object[] node = new Object[] { suffixInner, suffixOuter, measures };
+      final Object[] node = new Object[] { measures, suffixInner, suffixOuter };
       final int totalMeasure = firstMeasure + secondMeasure;
       return new Deep(prefixOuter, prefixInner, innerSequence.inject(node, totalMeasure), null, o);
     }
@@ -329,8 +329,8 @@ public abstract class OuterSequence {
       if (!innerSequence.empty()) {
         final Object[] node = innerSequence.first();
         switch (node.length) {
-          case 2: return new Deep(node[0], null, innerSequence.removeFirst(), suffixInner, suffixOuter);
-          case 3: return new Deep(node[0], node[1], innerSequence.removeFirst(), suffixInner, suffixOuter);
+          case 2: return new Deep(node[1], null, innerSequence.removeFirst(), suffixInner, suffixOuter);
+          case 3: return new Deep(node[1], node[2], innerSequence.removeFirst(), suffixInner, suffixOuter);
           default: throw new AssertionError();
         }
       }
@@ -345,8 +345,8 @@ public abstract class OuterSequence {
       if (!innerSequence.empty()) {
         final Object[] node = innerSequence.last();
         switch (node.length) {
-          case 2: return new Deep(prefixOuter, prefixInner, innerSequence.removeLast(), null, node[0]);
-          case 3: return new Deep(prefixOuter, prefixInner, innerSequence.removeLast(), node[0], node[1]);
+          case 2: return new Deep(prefixOuter, prefixInner, innerSequence.removeLast(), null, node[1]);
+          case 3: return new Deep(prefixOuter, prefixInner, innerSequence.removeLast(), node[1], node[2]);
           default: throw new AssertionError();
         }
       }
@@ -360,7 +360,7 @@ public abstract class OuterSequence {
       int measure = measure(prefixOuter);
       if (idx < measure) return prefixOuter instanceof byte[] ? fromBytes((byte[]) prefixOuter, idx) : prefixOuter;
       idx -= measure;
-      measure = measure(prefixInner);
+      measure = prefixInner == null ? 0 : measure(prefixInner);
       if (idx < measure) return prefixInner instanceof byte[] ? fromBytes((byte[]) prefixInner, idx) : prefixInner;
       idx -= measure;
       measure = innerSequence.measure();
@@ -377,7 +377,7 @@ public abstract class OuterSequence {
         throw new AssertionError();
       }
       idx -= measure;
-      measure = measure(suffixInner);
+      measure = suffixInner == null ? 0 : measure(suffixInner);
       if (idx < measure) return suffixInner instanceof byte[] ? fromBytes((byte[]) suffixInner, idx) : suffixInner;
       idx -= measure;
       measure = measure(suffixOuter);
