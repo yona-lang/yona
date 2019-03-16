@@ -2,6 +2,9 @@ package abzu.runtime;
 
 import com.oracle.truffle.api.nodes.Node;
 
+import static abzu.runtime.Util.varIntLen;
+import static abzu.runtime.Util.varIntWrite;
+
 public abstract class OuterSequence {
 
   public abstract OuterSequence push(Object o);
@@ -28,34 +31,6 @@ public abstract class OuterSequence {
 
   private static int measure(Object o) {
     return o instanceof byte[] ? 0x7fffffff & readMeta((byte[]) o) : 1;
-  }
-
-  static int varIntLength(int value) {
-    assert value >= 0;
-    for (int i = 1; i < 5; i++) {
-      if (((~0 << (7 * i)) & value) == 0) return i;
-    }
-    return 5;
-  }
-
-  static void varIntWrite(int value, byte[] destination, int offset) {
-    assert value >= 0;
-    while ((0xffffff80 & value) != 0) {
-      destination[offset++] = (byte) ((0x7f & value) | 0x80);
-      value >>>= 7;
-    }
-    destination[offset] = (byte) value;
-  }
-
-  static int varIntRead(byte[] source, int offset) {
-    int result = 0;
-    byte piece;
-    for (int shift = 0; shift <= 28; shift += 7) {
-      piece = source[offset++];
-      result |= (0x7f & piece) << shift;
-      if ((0x80 & piece) == 0) return result;
-    }
-    return -1;
   }
 
   static int readMeta(byte[] source) {
@@ -304,13 +279,14 @@ public abstract class OuterSequence {
       if (prefixInner == null) return new Deep(o, prefixOuter, innerSequence, suffixInner, suffixOuter);
       final int firstMeasure = measure(prefixOuter);
       final int secondMeasure = measure(prefixInner);
-      final int firstMeasureLength = varIntLength(firstMeasure);
-      final int secondMeasureLength = varIntLength(secondMeasure);
+      final int firstMeasureLength = varIntLen(firstMeasure);
+      final int secondMeasureLength = varIntLen(secondMeasure);
       final byte[] measures = new byte[firstMeasureLength + secondMeasureLength];
       varIntWrite(firstMeasure, measures, 0);
       varIntWrite(secondMeasure, measures, firstMeasureLength);
       final Object[] node = new Object[] { prefixOuter, prefixInner, measures };
-      return new Deep(o, null, innerSequence.push(node), suffixInner, suffixOuter);
+      final int totalMeasure = firstMeasure + secondMeasure;
+      return new Deep(o, null, innerSequence.push(node, totalMeasure), suffixInner, suffixOuter);
     }
 
     @Override
@@ -318,13 +294,14 @@ public abstract class OuterSequence {
       if (suffixInner == null) return new Deep(prefixOuter, prefixInner, innerSequence, suffixOuter, o);
       final int firstMeasure = measure(suffixInner);
       final int secondMeasure = measure(suffixOuter);
-      final int firstMeasureLength = varIntLength(firstMeasure);
-      final int secondMeasureLength = varIntLength(secondMeasure);
+      final int firstMeasureLength = varIntLen(firstMeasure);
+      final int secondMeasureLength = varIntLen(secondMeasure);
       final byte[] measures = new byte[firstMeasureLength + secondMeasureLength];
       varIntWrite(firstMeasure, measures, 0);
       varIntWrite(secondMeasure, measures, firstMeasureLength);
       final Object[] node = new Object[] { suffixInner, suffixOuter, measures };
-      return new Deep(prefixOuter, prefixInner, innerSequence.inject(node), null, o);
+      final int totalMeasure = firstMeasure + secondMeasure;
+      return new Deep(prefixOuter, prefixInner, innerSequence.inject(node, totalMeasure), null, o);
     }
 
     @Override
@@ -389,7 +366,7 @@ public abstract class OuterSequence {
       measure = innerSequence.measure();
       if (idx < measure) {
         final InnerSequence.Split split = new InnerSequence.Split(false, false);
-        idx = innerSequence.splitAt(idx, split);
+        idx = innerSequence.split(idx, split);
         Object o;
         for (int i = 0; i < split.point.length - 1; i++) {
           o = split.point[i];
