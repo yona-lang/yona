@@ -28,4 +28,15 @@ final class Util {
     }
     return -1;
   }
+
+  static int codePointAt(byte[] array, int offset) {
+    final byte b0 = array[offset++];
+    if ((0x80 & b0) == 0) return b0;
+    final byte b1 = array[offset++];
+    if ((0xe0 & b0) == 0xc0) return ((0x1f & b0) << 6) | (0x3f & b1);
+    final byte b2 = array[offset++];
+    if ((0xf0 & b0) == 0xe0) return ((0x0f & b0) << 12) | ((0x3f & b1) << 6) | (0x3f & b2);
+    final byte b3 = array[offset];
+    return ((0x7 & b0) << 18) | ((0x3f & b1) << 12) | ((0x3f & b2) << 6) | (0x3f & b3);
+  }
 }
