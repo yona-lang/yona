@@ -5,7 +5,7 @@ final class Util {
 
   static int varIntLen(int value) {
     for (int i = 1; i < 5; i++) {
-      if (((~0 << (7 * i)) & value) == 0) return i;
+      if (((0xffffffff << (7 * i)) & value) == 0) return i;
     }
     return 5;
   }
@@ -38,5 +38,13 @@ final class Util {
     if ((0xf0 & b0) == 0xe0) return ((0x0f & b0) << 12) | ((0x3f & b1) << 6) | (0x3f & b2);
     final byte b3 = array[offset];
     return ((0x7 & b0) << 18) | ((0x3f & b1) << 12) | ((0x3f & b2) << 6) | (0x3f & b3);
+  }
+
+  static int codePointLen(int codePoint) {
+    if (codePoint < 0x80) return 1;
+    if (codePoint < 0x800) return 2;
+    if (codePoint < 0x10000) return 3;
+    if (codePoint < 0x10ffff) return 4;
+    throw new AssertionError();
   }
 }
