@@ -1,5 +1,6 @@
 package abzu.runtime;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Function;
 
@@ -18,18 +19,38 @@ public final class Promise {
     }
   }
 
-  public Promise map(Function<? super Object, ?> function) {
-    final Promise result = new Promise();
+  public Object map(Function<? super Object, ?> function) {
+    Promise result = null;
     Object snapshot;
     Object update;
     do {
       snapshot = value;
-      if (!(snapshot instanceof Callbacks) && snapshot != null) {
-        result.fulfil(snapshot);
-        break;
-      }
+      if (!(snapshot instanceof Callbacks) && snapshot != null) return function.apply(snapshot);
+      if (result == null) result = new Promise();
       update = new Callbacks(function, result, (Callbacks) snapshot);
     } while (!UPDATER.compareAndSet(this, snapshot, update));
+    return result;
+  }
+
+  public static Promise all(Object[] os) {
+    Promise result = new Promise();
+    Object[] data = new Object[os.length];
+    AtomicInteger counter = new AtomicInteger(os.length);
+    Object o;
+    for (int i = 0; i < os.length; i++) {
+      o = os[i];
+      if (o instanceof Promise) {
+        final int idx = i;
+        ((Promise) o).map(v -> {
+          data[idx] = v;
+          if (counter.decrementAndGet() == 0) result.fulfil(data);
+          return v;
+        });
+      } else {
+        data[i] = o;
+        if (counter.decrementAndGet() == 0) result.fulfil(data);
+      }
+    }
     return result;
   }
 
