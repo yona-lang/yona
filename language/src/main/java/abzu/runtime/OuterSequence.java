@@ -133,7 +133,7 @@ public final class OuterSequence {
     return o;
   }
 
-  public OuterSequence removeFirst() {
+  public OuterSequence pop() {
     if (prefixOuter != null) return new OuterSequence(removeFirst(prefixOuter), prefixInner, innerSequence, suffixInner, suffixOuter);
     if (prefixInner != null) return new OuterSequence(null, removeFirst(prefixInner), innerSequence, suffixInner, suffixOuter);
     if (!innerSequence.empty()) {
@@ -178,7 +178,7 @@ public final class OuterSequence {
     return null;
   }
 
-  public OuterSequence removeLast() {
+  public OuterSequence eject() {
     if (suffixOuter != null) return new OuterSequence(prefixOuter, prefixInner, innerSequence, suffixInner, null);
     if (suffixInner != null) return new OuterSequence(prefixOuter, prefixInner, innerSequence, null, null);
     if (!innerSequence.empty()) {
@@ -364,6 +364,45 @@ public final class OuterSequence {
     return prefixOuter == null && prefixInner == null && innerSequence.empty() && suffixInner == null && suffixOuter == null;
   }
 
+  public static OuterSequence catenate(OuterSequence left, OuterSequence right) {
+    final InnerSequence leftInner;
+    if (left.suffixOuter != null) {
+      final int fstMeasure = left.suffixInner instanceof byte[] ?  0x7fffffff & readMeta((byte[]) left.suffixInner) : 1;
+      final int sndMeasure = left.suffixOuter instanceof byte[] ?  0x7fffffff & readMeta((byte[]) left.suffixOuter) : 1;
+      final int fstMeasureLen = varIntLen(fstMeasure);
+      final int sndMeasureLen = varIntLen(sndMeasure);
+      final byte[] measures = new byte[fstMeasureLen + sndMeasureLen];
+      int offset = 0;
+      varIntWrite(fstMeasure, measures, offset);
+      offset += fstMeasureLen;
+      varIntWrite(sndMeasure, measures, offset);
+      leftInner = left.innerSequence.inject(new Object[]{ measures, left.suffixInner, left.suffixOuter }, fstMeasure + sndMeasure);
+    } else if (left.suffixInner != null) {
+      final int measure = left.suffixInner instanceof byte[] ?  0x7fffffff & readMeta((byte[]) left.suffixInner) : 1;
+      final byte[] measures = new byte[varIntLen(measure)];
+      varIntWrite(measure, measures, 0);
+      leftInner = left.innerSequence.inject(new Object[]{ measures, left.suffixInner }, measure);
+    } else leftInner = left.innerSequence;
+    final InnerSequence rightInner;
+    if (right.prefixOuter != null) {
+      final int fstMeasure = right.prefixOuter instanceof byte[] ?  0x7fffffff & readMeta((byte[]) right.prefixOuter) : 1;
+      final int sndMeasure = right.prefixInner instanceof byte[] ?  0x7fffffff & readMeta((byte[]) right.prefixInner) : 1;
+      final int fstMeasureLen = varIntLen(fstMeasure);
+      final int sndMeasureLen = varIntLen(sndMeasure);
+      final byte[] measures = new byte[fstMeasureLen + sndMeasureLen];
+      int offset = 0;
+      varIntWrite(fstMeasure, measures, offset);
+      offset += fstMeasureLen;
+      varIntWrite(sndMeasure, measures, offset);
+      rightInner = right.innerSequence.push(new Object[]{ measures, right.prefixOuter, right.prefixInner }, fstMeasure + sndMeasure);
+    } else if (right.prefixInner != null) {
+      final int measure = right.prefixInner instanceof byte[] ?  0x7fffffff & readMeta((byte[]) right.prefixInner) : 1;
+      final byte[] measures = new byte[varIntLen(measure)];
+      varIntWrite(measure, measures, 0);
+      rightInner = right.innerSequence.push(new Object[]{ measures, right.prefixInner }, measure);
+    } else rightInner = right.innerSequence;
+    return new OuterSequence(left.prefixOuter, left.prefixInner, InnerSequence.catenate(leftInner, rightInner), right.suffixInner, right.suffixOuter);
+  }
 
   static int readMeta(byte[] source) {
     int result = 0;
