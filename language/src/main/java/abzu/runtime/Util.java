@@ -24,9 +24,9 @@ final class Util {
     for (int shift = 0; shift <= 28; shift += 7) {
       piece = source[offset++];
       result |= (0x7f & piece) << shift;
-      if ((0x80 & piece) == 0) return result;
+      if ((0x80 & piece) == 0) break;
     }
-    return -1;
+    return result;
   }
 
   static int codePointAt(byte[] array, int offset) {

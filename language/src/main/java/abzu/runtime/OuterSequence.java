@@ -138,7 +138,7 @@ public final class OuterSequence {
     if (prefixInner != null) return new OuterSequence(null, removeFirst(prefixInner), innerSequence, suffixInner, suffixOuter);
     if (!innerSequence.empty()) {
       final Object[] node = innerSequence.first();
-      InnerSequence newInnerSequence = innerSequence.removeFirst();
+      InnerSequence newInnerSequence = innerSequence.pop();
       switch (node.length) {
         case 2: return new OuterSequence(null, removeFirst(node[1]), newInnerSequence, suffixInner, suffixOuter);
         case 3: return new OuterSequence(removeFirst(node[1]), node[2], newInnerSequence, suffixInner, suffixOuter);
@@ -183,7 +183,7 @@ public final class OuterSequence {
     if (suffixInner != null) return new OuterSequence(prefixOuter, prefixInner, innerSequence, null, null);
     if (!innerSequence.empty()) {
       final Object[] node = innerSequence.last();
-      InnerSequence newInnerSequence = innerSequence.removeLast();
+      InnerSequence newInnerSequence = innerSequence.eject();
       switch (node.length) {
         case 2: return new OuterSequence(prefixOuter, prefixInner, newInnerSequence, removeLast(node[1]), null);
         case 3: return new OuterSequence(prefixOuter, prefixInner, newInnerSequence, node[1], removeLast(node[2]));
@@ -223,7 +223,7 @@ public final class OuterSequence {
     return null;
   }
 
-  public Object lookup(int idx, Node node) {
+  public Object lookup(final int idx, Node node) {
     int i = idx;
     if (i < 0) throw new BadArgException("Index out of bounds: " + idx, node);
     int measure;
@@ -260,7 +260,7 @@ public final class OuterSequence {
     measure = innerSequence.measure();
     if (i < measure) {
       final InnerSequence.Split split = new InnerSequence.Split(false, false);
-      idx = innerSequence.split(idx, split);
+      i = innerSequence.split(i, split);
       Object cursor;
       for (int j = 1; j < split.point.length; j++) {
         cursor = split.point[j];

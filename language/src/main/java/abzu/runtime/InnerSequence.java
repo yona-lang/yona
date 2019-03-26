@@ -13,9 +13,9 @@ abstract class InnerSequence {
 
   abstract Object[] last();
 
-  abstract InnerSequence removeFirst();
+  abstract InnerSequence pop();
 
-  abstract InnerSequence removeLast();
+  abstract InnerSequence eject();
 
   abstract int split(int idx, Split split);
 
@@ -24,7 +24,55 @@ abstract class InnerSequence {
   abstract boolean empty();
 
   static InnerSequence catenate(InnerSequence left, InnerSequence right) {
-    return null; // TODO
+    if (left instanceof Deep) {
+      final Deep leftDeep = (Deep) left;
+      if (right instanceof Deep) {
+       final Deep rightDeep = (Deep) right;
+       final InnerSequence leftDeeper = leftDeep.deeper();
+       final InnerSequence rightDeeper = rightDeep.deeper();
+       final InnerSequence newDeeper = catenate(leftDeeper.inject(leftDeep.sfx, leftDeep.sfxMeasure), rightDeeper.push(rightDeep.pfx, rightDeep.pfxMeasure));
+       final int newDeeperMeasure = leftDeep.deeperMeasure + leftDeep.sfxMeasure + rightDeep.pfxMeasure + rightDeep.deeperMeasure;
+       return new Deep(leftDeep.pfx, leftDeep.pfxMeasure, newDeeper, newDeeperMeasure, rightDeep.sfx, rightDeep.sfxMeasure);
+      } else {
+        final Shallow rightShallow = (Shallow) right;
+        return rightShallow.value == null ? leftDeep : leftDeep.inject(rightShallow.value, total((byte[]) rightShallow.value[0]));
+      }
+    } else {
+      final Shallow leftShallow = (Shallow) left;
+      if (right instanceof Deep) {
+        final Deep rightDeep = (Deep) right;
+        return leftShallow.value == null ? rightDeep : rightDeep.push(leftShallow.value, total((byte[]) leftShallow.value[0]));
+      } else {
+        final Shallow rightShallow = (Shallow) right;
+        if (leftShallow.value == null) return rightShallow;
+        if (rightShallow.value == null) return leftShallow;
+        return new Deep(leftShallow.value, total((byte[]) leftShallow.value[0]), rightShallow.value, total((byte[]) rightShallow.value[0]));
+      }
+    }
+  }
+
+  private static InnerSequence simplify(InnerSequence sequence) {
+    if (sequence instanceof Shallow) {
+      final Shallow shallow = (Shallow) sequence;
+      if (shallow.value == null) return shallow;
+      InnerSequence result = Shallow.EMPTY;
+      final byte[] measures = (byte[]) shallow.value[0];
+      int offset = 0;
+      int measure;
+      for (int i = 1; i < shallow.value.length; i++) {
+        measure = varIntRead(measures, offset);
+        result = result.inject((Object[]) shallow.value[i], measure);
+        offset += varIntLen(measure);
+      }
+      return result;
+    } else {
+      final Object[] first = sequence.first();
+      final int firstMeasure = total((byte[]) first[0]);
+      final InnerSequence deeper = sequence.pop().eject();
+      final Object[] last = sequence.last();
+      final int lastMeasure = total((byte[]) last[0]);
+      return new Deep(first, firstMeasure, deeper, deeper.measure(), last, lastMeasure);
+    }
   }
 
   private static int total(byte[] measures) {
@@ -69,12 +117,12 @@ abstract class InnerSequence {
     }
 
     @Override
-    InnerSequence removeFirst() {
+    InnerSequence pop() {
       return EMPTY;
     }
 
     @Override
-    InnerSequence removeLast() {
+    InnerSequence eject() {
       return EMPTY;
     }
 
@@ -96,15 +144,15 @@ abstract class InnerSequence {
   }
 
   static final class Deep extends InnerSequence {
-    private final Object[] prefix;
+    private final Object[] pfx;
     private volatile Object suspended;
-    private final Object[] suffix;
+    private final Object[] sfx;
 
-    private final int prefixMeasure;
-    private final int innerMeasure;
-    private final int suffixMeasure;
+    private final int pfxMeasure;
+    private final int deeperMeasure;
+    private final int sfxMeasure;
 
-    InnerSequence innerSequence() {
+    InnerSequence deeper() {
       boolean done = (suspended instanceof InnerSequence);
       if (!done) {
         synchronized (this) {
@@ -118,182 +166,266 @@ abstract class InnerSequence {
     }
 
     Deep(Object[] first, int firstMeasure, Object[] second, int secondMeasure) {
-      prefixMeasure = firstMeasure;
-      final byte[] prefixMeta = new byte[varIntLen(firstMeasure)];
-      varIntWrite(firstMeasure, prefixMeta, 0);
-      prefix = new Object[]{ prefixMeta, first };
-      suffixMeasure = secondMeasure;
-      final byte[] suffixMeta = new byte[varIntLen(secondMeasure)];
-      varIntWrite(secondMeasure, suffixMeta, 0);
-      suffix = new Object[]{ suffixMeta, second };
+      final byte[] pfxMeasures = new byte[varIntLen(firstMeasure)];
+      varIntWrite(firstMeasure, pfxMeasures, 0);
+      pfx = new Object[]{ pfxMeasures, first };
       suspended = Shallow.EMPTY;
-      innerMeasure = 0;
+      final byte[] sfxMeasures = new byte[varIntLen(secondMeasure)];
+      varIntWrite(secondMeasure, sfxMeasures, 0);
+      sfx = new Object[]{ sfxMeasures, second };
+      pfxMeasure = firstMeasure;
+      deeperMeasure = 0;
+      sfxMeasure = secondMeasure;
     }
 
-    Deep(Object[] prefix, int prefixMeasure, Object suspended, int innerMeasure, Object[] suffix, int suffixMeasure) {
-      this.prefix = prefix;
+    Deep(Object[] pfx, int pfxMeasure, Object suspended, int deeperMeasure, Object[] sfx, int sfxMeasure) {
+      this.pfx = pfx;
       this.suspended = suspended;
-      this.suffix = suffix;
-      this.prefixMeasure = prefixMeasure;
-      this.innerMeasure = innerMeasure;
-      this.suffixMeasure = suffixMeasure;
+      this.sfx = sfx;
+      this.pfxMeasure = pfxMeasure;
+      this.deeperMeasure = deeperMeasure;
+      this.sfxMeasure = sfxMeasure;
     }
 
     @Override
     InnerSequence push(Object[] o, int measure) {
-      final byte[] newPrefixMeta;
-      final Object[] newPrefix;
-      if (prefix.length == 5) {
-        newPrefixMeta = new byte[varIntLen(measure)];
-        varIntWrite(measure, newPrefixMeta, 0);
-        newPrefix = new Object[] { newPrefixMeta, o };
-        final SuspendedSequence newSuspended = new SuspendedPush(innerSequence(), prefix, prefixMeasure, false);
-        return new Deep(newPrefix, measure, newSuspended, innerMeasure + prefixMeasure, suffix, suffixMeasure);
+      final byte[] newPfxMeasures;
+      final Object[] newPfx;
+      if (pfx.length == 5) {
+        newPfxMeasures = new byte[varIntLen(measure)];
+        varIntWrite(measure, newPfxMeasures, 0);
+        newPfx = new Object[] { newPfxMeasures, o };
+        final SuspendedSequence newSuspended = new SuspendedPush(deeper(), pfx, pfxMeasure, false);
+        return new Deep(newPfx, measure, newSuspended, deeperMeasure + pfxMeasure, sfx, sfxMeasure);
       }
-      final byte[] prefixMeta = (byte[]) prefix[0];
+      final byte[] pfxMeasures = (byte[]) pfx[0];
       final int measureLen = varIntLen(measure);
-      newPrefixMeta = new byte[prefixMeta.length + measureLen];
-      varIntWrite(measure, newPrefixMeta, 0);
-      arraycopy(prefixMeta, 0, newPrefixMeta, measureLen, prefixMeta.length);
-      newPrefix = new Object[prefix.length + 1];
-      newPrefix[0] = newPrefixMeta;
-      newPrefix[1] = o;
-      arraycopy(prefix, 1, newPrefix, 2, prefix.length - 1);
-      return new Deep(newPrefix, prefixMeasure + measure, suspended, innerMeasure, suffix, suffixMeasure);
+      newPfxMeasures = new byte[pfxMeasures.length + measureLen];
+      varIntWrite(measure, newPfxMeasures, 0);
+      arraycopy(pfxMeasures, 0, newPfxMeasures, measureLen, pfxMeasures.length);
+      newPfx = new Object[pfx.length + 1];
+      newPfx[0] = newPfxMeasures;
+      newPfx[1] = o;
+      arraycopy(pfx, 1, newPfx, 2, pfx.length - 1);
+      return new Deep(newPfx, pfxMeasure + measure, suspended, deeperMeasure, sfx, sfxMeasure);
     }
 
     @Override
     InnerSequence inject(Object[] o, int measure) {
-      final byte[] newSuffixMeta;
-      final Object[] newSuffix;
-      if (suffix.length == 5) {
-        newSuffixMeta = new byte[varIntLen(measure)];
-        varIntWrite(measure, newSuffixMeta, 0);
-        newSuffix = new Object[] { newSuffixMeta, o };
-        final SuspendedSequence newSuspended = new SuspendedPush(innerSequence(), suffix, suffixMeasure, true);
-        return new Deep(prefix, prefixMeasure, newSuspended, innerMeasure + suffixMeasure, newSuffix, measure);
+      final byte[] newSfxMeasures;
+      final Object[] newSfx;
+      if (sfx.length == 5) {
+        newSfxMeasures = new byte[varIntLen(measure)];
+        varIntWrite(measure, newSfxMeasures, 0);
+        newSfx = new Object[] { newSfxMeasures, o };
+        final SuspendedSequence newSuspended = new SuspendedPush(deeper(), sfx, sfxMeasure, true);
+        return new Deep(pfx, pfxMeasure, newSuspended, deeperMeasure + sfxMeasure, newSfx, measure);
       }
-      final byte[] suffixMeta = (byte[]) suffix[0];
+      final byte[] sfxMeasures = (byte[]) sfx[0];
       final int measureLen = varIntLen(measure);
-      newSuffixMeta = new byte[suffixMeta.length + measureLen];
-      arraycopy(suffixMeta, 0, newSuffixMeta, 0, suffixMeta.length);
-      varIntWrite(measure, newSuffixMeta, suffixMeta.length);
-      newSuffix = new Object[suffix.length + 1];
-      newSuffix[0] = newSuffixMeta;
-      arraycopy(suffix, 1, newSuffix, 1, suffix.length - 1);
-      newSuffix[suffix.length] = o;
-      return new Deep(prefix, prefixMeasure, suspended, innerMeasure, newSuffix, suffixMeasure + measure);
+      newSfxMeasures = new byte[sfxMeasures.length + measureLen];
+      arraycopy(sfxMeasures, 0, newSfxMeasures, 0, sfxMeasures.length);
+      varIntWrite(measure, newSfxMeasures, sfxMeasures.length);
+      newSfx = new Object[sfx.length + 1];
+      newSfx[0] = newSfxMeasures;
+      arraycopy(sfx, 1, newSfx, 1, sfx.length - 1);
+      newSfx[sfx.length] = o;
+      return new Deep(pfx, pfxMeasure, suspended, deeperMeasure, newSfx, sfxMeasure + measure);
     }
 
     @Override
     Object[] first() {
-      return (Object[]) prefix[1];
+      return (Object[]) pfx[1];
     }
 
     @Override
     Object[] last() {
-      return (Object[]) suffix[suffix.length - 1];
+      return (Object[]) sfx[sfx.length - 1];
     }
 
     @Override
-    InnerSequence removeFirst() {
-      final byte[] newPrefixMeta;
-      final Object[] newPrefix;
-      if (prefix.length > 2) {
-        final byte[] prefixMeta = (byte[]) prefix[0];
-        final int firstMeasure = varIntRead(prefixMeta, 0);
+    InnerSequence pop() {
+      final byte[] newPfxMeasures;
+      final Object[] newPfx;
+      if (pfx.length > 2) {
+        final byte[] pfxMeasures = (byte[]) pfx[0];
+        final int firstMeasure = varIntRead(pfxMeasures, 0);
         final int firstMeasureLen = varIntLen(firstMeasure);
-        newPrefixMeta = new byte[prefixMeta.length - firstMeasureLen];
-        arraycopy(prefixMeta, firstMeasureLen, newPrefixMeta, 0, newPrefixMeta.length);
-        newPrefix = new Object[prefix.length - 1];
-        newPrefix[0] = newPrefixMeta;
-        arraycopy(prefix, 2, newPrefix, 1, newPrefix.length - 1);
-        return new Deep(newPrefix, prefixMeasure - firstMeasure, suspended, innerMeasure, suffix, suffixMeasure);
+        newPfxMeasures = new byte[pfxMeasures.length - firstMeasureLen];
+        arraycopy(pfxMeasures, firstMeasureLen, newPfxMeasures, 0, newPfxMeasures.length);
+        newPfx = new Object[pfx.length - 1];
+        newPfx[0] = newPfxMeasures;
+        arraycopy(pfx, 2, newPfx, 1, newPfx.length - 1);
+        return new Deep(newPfx, pfxMeasure - firstMeasure, suspended, deeperMeasure, sfx, sfxMeasure);
       }
-      if (innerMeasure != 0) {
-        final InnerSequence innerSequence = innerSequence();
-        newPrefix = innerSequence.first();
-        final int newPrefixMeasure = total((byte[]) newPrefix[0]);
-        final SuspendedSequence newSuspended = new SuspendedPop(innerSequence, false);
-        return new Deep(newPrefix, newPrefixMeasure, newSuspended, innerMeasure - newPrefixMeasure, suffix, suffixMeasure);
+      if (deeperMeasure != 0) {
+        final InnerSequence deeper = deeper();
+        newPfx = deeper.first();
+        final int newPfxMeasure = total((byte[]) newPfx[0]);
+        final SuspendedSequence newSuspended = new SuspendedPop(deeper, false);
+        return new Deep(newPfx, newPfxMeasure, newSuspended, deeperMeasure - newPfxMeasure, sfx, sfxMeasure);
       }
-      if (suffix.length > 2) {
-        final byte[] suffixMeta = (byte[]) suffix[0];
-        final int newPrefixMeasure = varIntRead(suffixMeta, 0);
-        final int newPrefixMeasureLen = varIntLen(newPrefixMeasure);
-        newPrefixMeta = new byte[newPrefixMeasureLen];
-        varIntWrite(newPrefixMeasure, newPrefixMeta, 0);
-        newPrefix = new Object[] { newPrefixMeta, suffix[1] };
-        final byte[] newSuffixMeta = new byte[suffixMeta.length - newPrefixMeasureLen];
-        arraycopy(suffixMeta, newPrefixMeasureLen, newSuffixMeta, 0, newSuffixMeta.length);
-        final Object[] newSuffix = new Object[suffix.length - 1];
-        newSuffix[0] = newSuffixMeta;
-        arraycopy(suffix, 2, newSuffix, 1, newSuffix.length - 1);
-        return new Deep(newPrefix, newPrefixMeasure, Shallow.EMPTY, 0, newSuffix, suffixMeasure - newPrefixMeasure);
+      if (sfx.length > 2) {
+        final byte[] sfxMeasures = (byte[]) sfx[0];
+        final int newPfxMeasure = varIntRead(sfxMeasures, 0);
+        final int newPfxMeasureLen = varIntLen(newPfxMeasure);
+        newPfxMeasures = new byte[newPfxMeasureLen];
+        varIntWrite(newPfxMeasure, newPfxMeasures, 0);
+        newPfx = new Object[] { newPfxMeasures, sfx[1] };
+        final byte[] newSfxMeasures = new byte[sfxMeasures.length - newPfxMeasureLen];
+        arraycopy(sfxMeasures, newPfxMeasureLen, newSfxMeasures, 0, newSfxMeasures.length);
+        final Object[] newSfx = new Object[sfx.length - 1];
+        newSfx[0] = newSfxMeasures;
+        arraycopy(sfx, 2, newSfx, 1, newSfx.length - 1);
+        return new Deep(newPfx, newPfxMeasure, Shallow.EMPTY, 0, newSfx, sfxMeasure - newPfxMeasure);
       }
-      return new Shallow((Object[]) suffix[1]);
+      return new Shallow((Object[]) sfx[1]);
     }
 
-
     @Override
-    InnerSequence removeLast() {
-      final byte[] newSuffixMeta;
-      final Object[] newSuffix;
-      if (suffix.length > 2) {
-        final byte[] suffixMeta = (byte[]) suffix[0];
+    InnerSequence eject() {
+      final byte[] newSfxMeasures;
+      final Object[] newSfx;
+      if (sfx.length > 2) {
+        final byte[] sfxMeasures = (byte[]) sfx[0];
         int lastMeasure = 0;
         int lastMeasureLen = 0;
         int offset = 0;
-        while (offset < suffixMeta.length) {
-          lastMeasure = varIntRead(suffixMeta, offset);
+        while (offset < sfxMeasures.length) {
+          lastMeasure = varIntRead(sfxMeasures, offset);
           lastMeasureLen = varIntLen(lastMeasure);
           offset += lastMeasureLen;
         }
-        newSuffixMeta = new byte[suffixMeta.length - lastMeasureLen];
-        arraycopy(suffixMeta, 0, newSuffixMeta, 0, newSuffixMeta.length);
-        newSuffix = new Object[suffix.length - 1];
-        newSuffix[0] = newSuffixMeta;
-        arraycopy(suffix, 1, newSuffix, 1, newSuffix.length - 1);
-        return new Deep(prefix, prefixMeasure, suspended, innerMeasure, newSuffix, suffixMeasure - lastMeasure);
+        newSfxMeasures = new byte[sfxMeasures.length - lastMeasureLen];
+        arraycopy(sfxMeasures, 0, newSfxMeasures, 0, newSfxMeasures.length);
+        newSfx = new Object[sfx.length - 1];
+        newSfx[0] = newSfxMeasures;
+        arraycopy(sfx, 1, newSfx, 1, newSfx.length - 1);
+        return new Deep(pfx, pfxMeasure, suspended, deeperMeasure, newSfx, sfxMeasure - lastMeasure);
       }
-      if (innerMeasure != 0) {
-        final InnerSequence innerSequence = innerSequence();
-        newSuffix = innerSequence.last();
-        final int newSuffixMeasure = total((byte[]) newSuffix[0]);
-        final SuspendedSequence newSuspended = new SuspendedPop(innerSequence, true);
-        return new Deep(prefix, prefixMeasure, newSuspended, innerMeasure - newSuffixMeasure, newSuffix, newSuffixMeasure);
+      if (deeperMeasure != 0) {
+        final InnerSequence deeper = deeper();
+        newSfx = deeper.last();
+        final int newSfxMeasure = total((byte[]) newSfx[0]);
+        final SuspendedSequence newSuspended = new SuspendedPop(deeper, true);
+        return new Deep(pfx, pfxMeasure, newSuspended, deeperMeasure - newSfxMeasure, newSfx, newSfxMeasure);
       }
-      if (prefix.length > 2) {
-        final byte[] prefixMeta = (byte[]) prefix[0];
+      if (pfx.length > 2) {
+        final byte[] pfxMeasures = (byte[]) pfx[0];
         int newSuffixMeasure = 0;
         int newSuffixMasureLen = 0;
         int offset = 0;
-        while (offset < prefixMeta.length) {
-          newSuffixMeasure = varIntRead(prefixMeta, offset);
+        while (offset < pfxMeasures.length) {
+          newSuffixMeasure = varIntRead(pfxMeasures, offset);
           newSuffixMasureLen = varIntLen(newSuffixMeasure);
           offset += newSuffixMasureLen;
         }
-        newSuffixMeta = new byte[newSuffixMasureLen];
-        varIntWrite(newSuffixMeasure, newSuffixMeta, 0);
-        newSuffix = new Object[] { newSuffixMeta, prefix[prefix.length - 1] };
-        final byte[] newPrefixMeta = new byte[prefixMeta.length - newSuffixMasureLen];
-        arraycopy(prefixMeta, 0, newPrefixMeta, 0, newPrefixMeta.length);
-        final Object[] newPrefix = new Object[prefix.length - 1];
-        newPrefix[0] = newPrefixMeta;
-        arraycopy(prefix, 1, newPrefix, 1, newPrefix.length - 1);
-        return new Deep(newPrefix, prefixMeasure - newSuffixMeasure, Shallow.EMPTY, 0, newSuffix, newSuffixMeasure);
+        newSfxMeasures = new byte[newSuffixMasureLen];
+        varIntWrite(newSuffixMeasure, newSfxMeasures, 0);
+        newSfx = new Object[] { newSfxMeasures, pfx[pfx.length - 1] };
+        final byte[] newPfxMeasures = new byte[pfxMeasures.length - newSuffixMasureLen];
+        arraycopy(pfxMeasures, 0, newPfxMeasures, 0, newPfxMeasures.length);
+        final Object[] newPrefix = new Object[pfx.length - 1];
+        newPrefix[0] = newPfxMeasures;
+        arraycopy(pfx, 1, newPrefix, 1, newPrefix.length - 1);
+        return new Deep(newPrefix, pfxMeasure - newSuffixMeasure, Shallow.EMPTY, 0, newSfx, newSuffixMeasure);
       }
-      return new Shallow((Object[]) prefix[1]);
+      return new Shallow((Object[]) pfx[1]);
     }
 
     @Override
     int split(int idx, Split split) {
-      return 0; // TODO
+      final boolean trackLeft = split.left != null;
+      final boolean trackRight = split.right != null;
+      if (idx < pfxMeasure) {
+        if (trackRight) {
+          split.right = catenate(sfx, split.right);
+          split.right = catenate(simplify(deeper()), split.right);
+        }
+        return split(pfx, idx, split);
+      }
+      idx -= pfxMeasure;
+      if (idx < deeperMeasure) {
+        if (trackLeft) split.left = catenate(split.left, pfx);
+        if (trackRight) split.right = catenate(sfx, split.right);
+        final Split deeperSplit = new Split(trackLeft, trackRight);
+        idx = deeper().split(idx, deeperSplit);
+        if (trackLeft) split.left = catenate(split.left, simplify(deeperSplit.left));
+        if (trackRight) split.right = catenate(simplify(deeperSplit.right), split.right);
+        return split(deeperSplit.point, idx, split);
+      }
+      idx -= deeperMeasure;
+      if (idx < sfxMeasure) {
+        if (trackLeft) {
+          split.left = catenate(split.left, pfx);
+          split.left = catenate(split.left, simplify(deeper()));
+        }
+        return split(sfx, idx, split);
+      }
+      idx -= sfxMeasure;
+      return idx;
+    }
+
+    private static InnerSequence catenate(Object[] sfx, InnerSequence seq) {
+      final byte[] measures = (byte[]) sfx[0];
+      int offset = measures.length - 1;
+      for (int i = sfx.length - 1; i > 0; i--) {
+        while (offset != 0) {
+          if ((0x80 & measures[offset - 1]) == 0) break;
+          offset--;
+        }
+        seq = seq.push((Object[]) sfx[i], varIntRead(measures, offset));
+        offset--;
+      }
+      return seq;
+    }
+
+    private static InnerSequence catenate(InnerSequence seq, Object[] pfx) {
+      final byte[] measures = (byte[]) pfx[0];
+      int offset = 0;
+      int measure;
+      for (int i = 1; i < pfx.length; i++) {
+        measure = varIntRead(measures, offset);
+        seq = seq.inject((Object[]) pfx[i], measure);
+        offset += varIntLen(measure);
+      }
+      return seq;
+    }
+
+    private static int split(Object[] afx, int idx, Split split) {
+      final boolean trackLeft = split.left != null;
+      final boolean trackRight = split.right != null;
+      final byte[] measures = (byte[]) afx[0];
+      int offset = 0;
+      int afxIdx = 1;
+      int measure;
+      while (afxIdx < afx.length) {
+        measure = varIntRead(measures, offset);
+        if (idx < measure) break;
+        if (trackLeft) split.left = split.left.inject((Object[]) afx[afxIdx], measure);
+        idx -= measure;
+        offset += varIntLen(measure);
+        afxIdx++;
+      }
+      split.point = (Object[]) afx[afxIdx];
+      if (trackRight) {
+        offset = measures.length - 1;
+        for (int i = afx.length - 1; i > afxIdx; i--) {
+          while (offset != 0) {
+            if ((0x80 & measures[offset - 1]) == 0) break;
+            offset--;
+          }
+          measure = varIntRead(measures, offset);
+          split.right = split.right.push((Object[]) afx[i], measure);
+          offset--;
+        }
+      }
+      return idx;
     }
 
     @Override
     int measure() {
-      return prefixMeasure + innerMeasure + suffixMeasure;
+      return pfxMeasure + deeperMeasure + sfxMeasure;
     }
 
     @Override
@@ -336,7 +468,7 @@ abstract class InnerSequence {
 
     @Override
     InnerSequence get() {
-      return inverted ? sequence.removeLast() : sequence.removeFirst();
+      return inverted ? sequence.pop() : sequence.eject();
     }
   }
 
