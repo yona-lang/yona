@@ -130,10 +130,10 @@ public class OuterSequenceTest {
 
   @Test
   public void testRemoveFirst() {
-    assertTrue(EMPTY.push(new Object()).removeFirst().empty());
+    assertTrue(EMPTY.push(new Object()).pop().empty());
     final byte[] bytes = fourBytes(0xa, 0xb, 0xc, 0xd);
-    assertEquals((byte) 0xb, EMPTY.push(bytes).removeFirst().lookup(0, null));
-    assertEquals((byte) 0xd, EMPTY.push(bytes).removeFirst().lookup(2, null));
+    assertEquals((byte) 0xb, EMPTY.push(bytes).pop().lookup(0, null));
+    assertEquals((byte) 0xd, EMPTY.push(bytes).pop().lookup(2, null));
     // TODO
   }
 
@@ -149,10 +149,10 @@ public class OuterSequenceTest {
 
   @Test
   public void testRemoveLast() {
-    assertTrue(EMPTY.push(new Object()).removeLast().empty());
+    assertTrue(EMPTY.push(new Object()).eject().empty());
     final byte[] bytes = fourBytes(0xa, 0xb, 0xc, 0xd);
-    assertEquals((byte) 0xa, EMPTY.push(bytes).removeLast().lookup(0, null));
-    assertEquals((byte) 0xc, EMPTY.push(bytes).removeLast().lookup(2, null));
+    assertEquals((byte) 0xa, EMPTY.push(bytes).eject().lookup(0, null));
+    assertEquals((byte) 0xc, EMPTY.push(bytes).eject().lookup(2, null));
     // TODO
   }
 
