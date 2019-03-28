@@ -4,8 +4,6 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.TruffleObject;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.LockSupport;
@@ -27,9 +25,6 @@ public final class Promise implements TruffleObject {
   private volatile Object value;
 
   public void fulfil(Object o) {
-    StringWriter sw = new StringWriter();
-    new Throwable("\n").printStackTrace(new PrintWriter(sw));
-    System.err.println(sw.toString());
     Object snapshot;
     do {
       snapshot = value;
