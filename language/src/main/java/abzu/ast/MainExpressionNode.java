@@ -13,11 +13,9 @@ public final class MainExpressionNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object result = expressionNode.executeGeneric(frame);
-
-    while (result instanceof Promise) {
-      result = ((Promise) result).map((res) -> res);
+    if (result instanceof Promise) {
+      result = Promise.await((Promise) result);
     }
-
     return result;
   }
 }

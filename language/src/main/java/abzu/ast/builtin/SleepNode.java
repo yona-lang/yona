@@ -14,9 +14,7 @@ public abstract class SleepNode extends BuiltinNode {
     Context.getCurrent().getExecutor().submit(() -> {
       try {
         Thread.sleep(millis);
-      } catch (InterruptedException e) {
-        promise.fulfil(Unit.INSTANCE);
-      }
+      } catch (InterruptedException ignored) { }
       promise.fulfil(Unit.INSTANCE);
     });
     return promise;

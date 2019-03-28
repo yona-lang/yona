@@ -9,6 +9,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
 @MessageResolution(receiverType = Promise.class)
@@ -70,6 +71,16 @@ public final class Promise implements TruffleObject {
         data[i] = o;
         if (counter.decrementAndGet() == 0) result.fulfil(data);
       }
+    }
+    return result;
+  }
+
+  public static Object await(Promise promise) {
+   Object result;
+    while (true) {
+      result = promise.value;
+      if (!(result instanceof Callbacks) && result != null) break;
+      LockSupport.park();
     }
     return result;
   }
