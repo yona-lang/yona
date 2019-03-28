@@ -1,6 +1,5 @@
 package abzu.runtime.async;
 
-import abzu.runtime.PromiseForeign;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -80,7 +79,7 @@ public final class Promise implements TruffleObject {
     while (true) {
       result = promise.value;
       if (!(result instanceof Callbacks) && result != null) break;
-      LockSupport.park();
+      LockSupport.parkNanos(1);
     }
     return result;
   }
