@@ -1,10 +1,7 @@
 package abzu.runtime;
 
 import abzu.AbzuLanguage;
-import abzu.ast.builtin.BuiltinNode;
-import abzu.ast.builtin.PrintlnBuiltinFactory;
-import abzu.ast.builtin.SequenceFoldLeftBuiltinFactory;
-import abzu.ast.builtin.SequenceFoldRightBuiltinFactory;
+import abzu.ast.builtin.*;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -21,6 +18,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Context {
   private static final Source BUILTIN_SOURCE = Source.newBuilder(AbzuLanguage.ID, "", "abzu builtin").build();
@@ -33,6 +32,7 @@ public class Context {
   private final AbzuLanguage language;
   private final AllocationReporter allocationReporter;
   private final Builtins builtins;
+  private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
   public Context(AbzuLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
     this.env = env;
@@ -54,6 +54,7 @@ public class Context {
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
     this.builtins.register(SequenceFoldLeftBuiltinFactory.getInstance());
     this.builtins.register(SequenceFoldRightBuiltinFactory.getInstance());
+    this.builtins.register(SleepNodeFactory.getInstance());
   }
 
   /**
@@ -151,5 +152,9 @@ public class Context {
 
   public Builtins getBuiltins() {
     return builtins;
+  }
+
+  public ExecutorService getExecutor() {
+    return executor;
   }
 }

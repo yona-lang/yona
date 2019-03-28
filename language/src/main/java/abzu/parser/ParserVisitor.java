@@ -4,6 +4,7 @@ import abzu.AbzuBaseVisitor;
 import abzu.AbzuLanguage;
 import abzu.AbzuParser;
 import abzu.ast.ExpressionNode;
+import abzu.ast.MainExpressionNode;
 import abzu.ast.builtin.BuiltinNode;
 import abzu.ast.call.InvokeNode;
 import abzu.ast.call.ModuleCallNode;
@@ -31,7 +32,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
 
   @Override
   public ExpressionNode visitInput(AbzuParser.InputContext ctx) {
-    ExpressionNode functionBodyNode = ctx.expression().accept(this);
+    ExpressionNode functionBodyNode = new MainExpressionNode(ctx.expression().accept(this));
     functionBodyNode.addRootTag();
 
     FunctionNode mainFunctionNode = new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(), functionBodyNode);

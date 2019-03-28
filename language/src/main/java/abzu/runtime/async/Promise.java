@@ -1,15 +1,35 @@
-package abzu.runtime;
+package abzu.runtime.async;
 
+import abzu.runtime.PromiseForeign;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.TruffleObject;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Function;
 
-public final class Promise {
+@MessageResolution(receiverType = Promise.class)
+public final class Promise implements TruffleObject {
   private static final AtomicReferenceFieldUpdater<Promise, Object> UPDATER = AtomicReferenceFieldUpdater.newUpdater(Promise.class, Object.class, "value");
+
+  @Override
+  public ForeignAccess getForeignAccess() {
+    return PromiseForeign.ACCESS;
+  }
+
+  static boolean isInstance(TruffleObject promise) {
+    return promise instanceof Promise;
+  }
 
   private volatile Object value;
 
   public void fulfil(Object o) {
+    StringWriter sw = new StringWriter();
+    new Throwable("\n").printStackTrace(new PrintWriter(sw));
+    System.err.println(sw.toString());
     Object snapshot;
     do {
       snapshot = value;

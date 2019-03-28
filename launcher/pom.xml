@@ -39,7 +39,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <finalName>sl-launcher</finalName>
+              <finalName>abzu-launcher</finalName>
               <artifactSet>
                 <excludes>
                   <exclude>junit:junit</exclude>
