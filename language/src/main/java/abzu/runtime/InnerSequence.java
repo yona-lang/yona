@@ -468,7 +468,7 @@ abstract class InnerSequence {
 
     @Override
     InnerSequence get() {
-      return inverted ? sequence.pop() : sequence.eject();
+      return inverted ? sequence.eject() : sequence.pop();
     }
   }
 
