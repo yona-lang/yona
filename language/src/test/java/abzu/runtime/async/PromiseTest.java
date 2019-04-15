@@ -32,8 +32,7 @@ public class PromiseTest {
 
   @Test
   public void testMapFulfilled() {
-    Promise promise = new Promise();
-    promise.fulfil(1);
+    Promise promise = new Promise(1);
     assertEquals(1, promise.map(i -> i));
   }
 
@@ -46,19 +45,15 @@ public class PromiseTest {
 
   @Test
   public void testMapOtherPromise() {
-    Promise one = new Promise();
-    Promise two = new Promise();
-    one.fulfil(1);
-    two.fulfil(2);
+    Promise one = new Promise(1);
+    Promise two = new Promise(2);
     assertEquals(2, one.map(ignore -> two));
   }
 
   @Test
   public void testMapPureOtherPromise() {
-    Promise one = new Promise();
-    Promise two = new Promise();
-    one.fulfil(1);
-    two.fulfil(2);
+    Promise one = new Promise(1);
+    Promise two = new Promise(2);
     assertEquals(2, Promise.await(one.mapPure(ignore -> two)));
   }
 

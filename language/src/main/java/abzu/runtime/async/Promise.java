@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
+import static java.util.function.Function.identity;
+
 @MessageResolution(receiverType = Promise.class)
 public final class Promise implements TruffleObject {
   private static final AtomicReferenceFieldUpdater<Promise, Object> UPDATER = AtomicReferenceFieldUpdater.newUpdater(Promise.class, Object.class, "value");
@@ -21,6 +23,14 @@ public final class Promise implements TruffleObject {
 
   static boolean isInstance(TruffleObject promise) {
     return promise instanceof Promise;
+  }
+
+  public Promise() {
+    value = null;
+  }
+
+  Promise(Object value) {
+    this.value = value;
   }
 
   private volatile Object value;
@@ -35,32 +45,34 @@ public final class Promise implements TruffleObject {
     }
   }
 
-  public Promise mapPure(Function<? super Object, ?> function) {
-    final Promise result = new Promise();
+  private Object attachCallback(Function<? super Object, ?> function, Promise promise) {
     Object snapshot;
     Object update;
     do {
       snapshot = value;
       if (!(snapshot instanceof Callback) && snapshot != null) {
-        result.fulfil(snapshot);
-        break;
+        Object o = function.apply(snapshot);
+        if (!(o instanceof Promise)) return o;
+        o = ((Promise) o).attachCallback(identity(), promise);
+        return o != null ? o : promise;
       }
-      update = new Callback(function, result, (Callback) snapshot);
+      update = new Callback(function, promise, (Callback) snapshot);
     } while (!UPDATER.compareAndSet(this, snapshot, update));
+    return null;
+  }
+
+  public Promise mapPure(Function<? super Object, ?> function) {
+    final Promise result = new Promise();
+    Object o = attachCallback(function, result);
+    if (o == null) return result;
+    result.fulfil(o);
     return result;
   }
 
   public Object map(Function<? super Object, ?> function) {
-    Promise result = null;
-    Object snapshot;
-    Object update;
-    do {
-      snapshot = value;
-      if (!(snapshot instanceof Callback) && snapshot != null) return function.apply(snapshot);
-      if (result == null) result = new Promise();
-      update = new Callback(function, result, (Callback) snapshot);
-    } while (!UPDATER.compareAndSet(this, snapshot, update));
-    return result;
+    final Promise result = new Promise();
+    Object o = attachCallback(function, result);
+    return o != null ? o : result;
   }
 
   public static Promise all(Object[] os) {
@@ -109,7 +121,11 @@ public final class Promise implements TruffleObject {
     void run(Object result) {
       Callback cursor = this;
       do {
-        promise.fulfil(function.apply(result));
+        Object o = function.apply(result);
+        if (o instanceof Promise) {
+          o = ((Promise) o).attachCallback(identity(), promise);
+          if (o != null) promise.fulfil(o);
+        } else promise.fulfil(o);
         cursor = cursor.next;
       } while (cursor != null);
     }
