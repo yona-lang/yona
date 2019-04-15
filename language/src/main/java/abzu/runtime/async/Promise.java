@@ -1,5 +1,6 @@
 package abzu.runtime.async;
 
+import abzu.AbzuException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -29,9 +30,24 @@ public final class Promise implements TruffleObject {
     do {
       snapshot = value;
     } while (!UPDATER.compareAndSet(this, snapshot, o));
-    if (snapshot instanceof Callbacks) {
-      ((Callbacks) snapshot).run(o);
+    if (snapshot instanceof Callback && !(o instanceof AbzuException)) {
+      ((Callback) snapshot).run(o);
     }
+  }
+
+  public Promise mapPure(Function<? super Object, ?> function) {
+    final Promise result = new Promise();
+    Object snapshot;
+    Object update;
+    do {
+      snapshot = value;
+      if (!(snapshot instanceof Callback) && snapshot != null) {
+        result.fulfil(snapshot);
+        break;
+      }
+      update = new Callback(function, result, (Callback) snapshot);
+    } while (!UPDATER.compareAndSet(this, snapshot, update));
+    return result;
   }
 
   public Object map(Function<? super Object, ?> function) {
@@ -40,9 +56,9 @@ public final class Promise implements TruffleObject {
     Object update;
     do {
       snapshot = value;
-      if (!(snapshot instanceof Callbacks) && snapshot != null) return function.apply(snapshot);
+      if (!(snapshot instanceof Callback) && snapshot != null) return function.apply(snapshot);
       if (result == null) result = new Promise();
-      update = new Callbacks(function, result, (Callbacks) snapshot);
+      update = new Callback(function, result, (Callback) snapshot);
     } while (!UPDATER.compareAndSet(this, snapshot, update));
     return result;
   }
@@ -70,28 +86,28 @@ public final class Promise implements TruffleObject {
   }
 
   public static Object await(Promise promise) {
-   Object result;
+    Object result;
     while (true) {
       result = promise.value;
-      if (!(result instanceof Callbacks) && result != null) break;
+      if (!(result instanceof Callback) && result != null) break;
       LockSupport.parkNanos(1);
     }
     return result;
   }
 
-  private static final class Callbacks {
+  private static final class Callback {
     final Function<? super Object, ?> function;
     final Promise promise;
-    final Callbacks next;
+    final Callback next;
 
-    Callbacks(Function<? super Object, ?> function, Promise promise, Callbacks next) {
+    Callback(Function<? super Object, ?> function, Promise promise, Callback next) {
       this.function = function;
       this.promise = promise;
       this.next = next;
     }
 
     void run(Object result) {
-      Callbacks cursor = this;
+      Callback cursor = this;
       do {
         promise.fulfil(function.apply(result));
         cursor = cursor.next;

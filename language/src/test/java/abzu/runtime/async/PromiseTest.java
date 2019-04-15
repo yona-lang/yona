@@ -1,5 +1,6 @@
 package abzu.runtime.async;
 
+import abzu.AbzuException;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -37,6 +38,31 @@ public class PromiseTest {
   }
 
   @Test
+  public void testMapPure() {
+    Promise promise = new Promise();
+    promise.fulfil(1);
+    assertEquals(1, Promise.await(promise.mapPure(i -> i)));
+  }
+
+  @Test
+  public void testMapOtherPromise() {
+    Promise one = new Promise();
+    Promise two = new Promise();
+    one.fulfil(1);
+    two.fulfil(2);
+    assertEquals(2, one.map(ignore -> two));
+  }
+
+  @Test
+  public void testMapPureOtherPromise() {
+    Promise one = new Promise();
+    Promise two = new Promise();
+    one.fulfil(1);
+    two.fulfil(2);
+    assertEquals(2, Promise.await(one.mapPure(ignore -> two)));
+  }
+
+  @Test
   public void testAwaitNotFulfilled() {
     Promise promise = new Promise();
     exec.schedule(() -> promise.fulfil(1), 1, TimeUnit.SECONDS);
@@ -48,6 +74,15 @@ public class PromiseTest {
     Promise promise = new Promise();
     promise.fulfil(1);
     assertEquals(1, Promise.await(promise));
+  }
+
+  @Test
+  public void testMapException() {
+    Promise promise = new Promise();
+    final Object[] holder = {null};
+    promise.map(value -> holder[0] = value);
+    promise.fulfil(new AbzuException("test", null));
+    assertNull(holder[0]);
   }
 
   @Test
