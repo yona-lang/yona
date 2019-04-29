@@ -46,15 +46,19 @@ public final class Promise implements TruffleObject {
   public Promise map(Function<? super Object, ?> function) {
     final Promise result = new Promise();
     Object o = attachCallback(function, identity(), result);
-    if (o == null) return result;
-    result.fulfil(o);
+    if (o instanceof Promise) return (Promise) o;
+    if (o != null) result.fulfil(o);
     return result;
   }
 
   public Object mapUnwrap(Function<? super Object, ?> function) {
-    final Promise result = new Promise();
+    Promise result = new Promise();
     Object o = attachCallback(function, identity(), result);
-    return o != null ? o : result;
+    if (o == null) return result;
+    if (o instanceof Promise) {
+      result = (Promise) o;
+      return result.value instanceof Callback ? result : result.value;
+    } else return o;
   }
 
   // returns null if promise is not fulfilled yet, otherwise executes onSuccess/onFailure and returns the result
@@ -64,14 +68,7 @@ public final class Promise implements TruffleObject {
     do {
       snapshot = value;
       if (snapshot instanceof Callback) update = new Callback.Cons(onSuccess, onFailure, promise, (Callback) snapshot);
-      else {
-        Object result = snapshot instanceof Exception ? onFailure.apply(snapshot) : onSuccess.apply(snapshot);
-        // flatMap, we need to unwrap
-        if (result instanceof Promise) {
-          result = ((Promise) result).attachCallback(identity(), identity(), promise);
-        }
-        return result == null ? promise : result;
-      }
+      else return snapshot instanceof Exception ? onFailure.apply(snapshot) : onSuccess.apply(snapshot);
     } while (!UPDATER.compareAndSet(this, snapshot, update));
     return null;
   }
