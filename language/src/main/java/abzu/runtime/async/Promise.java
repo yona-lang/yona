@@ -42,6 +42,14 @@ public final class Promise implements TruffleObject {
           Frame oldFrames = frames;
           Callback.Cons cons = (Callback.Cons) frames.callback;
           result = frames.result instanceof Exception ? cons.onFailure.apply((Exception) frames.result) : cons.onSuccess.apply(frames.result);
+          if (result instanceof Promise) {
+            Object inner = ((Promise) result).value;
+            if (inner instanceof Callback) {
+              if (cons.promise != null) ((Promise) result).attachCallback(identity(), identity(), cons.promise);
+              oldFrames.callback = cons.next;
+              continue;
+            } else result = inner;
+          }
           if (cons.promise != null) {
             do {
               snapshot = cons.promise.value;

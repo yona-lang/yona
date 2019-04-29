@@ -8,7 +8,6 @@ import org.junit.Test;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 
 import static java.util.function.Function.identity;
 import static org.junit.Assert.assertEquals;
@@ -16,6 +15,8 @@ import static org.junit.Assert.assertNull;
 
 public class PromiseTest {
   private static ScheduledExecutorService exec;
+
+  private static final int N = 131072;
 
   @BeforeClass
   public static void setup() {
@@ -108,6 +109,40 @@ public class PromiseTest {
     assertEquals(e, promise.mapUnwrap(identity()));
   }
 
+  @Test
+  public void testMapChain() {
+    Promise original = new Promise();
+    Promise promise = original;
+    for (int i = 0; i < N; i++) {
+      promise = promise.map(identity());
+    }
+    original.fulfil(1);
+    assertEquals(1, Promise.await(promise));
+  }
+
+  @Test
+  public void testFlatMapChainImmediate() {
+    Promise original = new Promise();
+    Promise promise = original;
+    for (int i = 0; i < N; i++) {
+      promise = promise.map(Promise::new);
+    }
+    original.fulfil(1);
+    assertEquals(1, Promise.await(promise));
+  }
+
+  @Test
+  public void testFlatMapChainDelayed() {
+    Promise original = new Promise();
+    Promise intermediate = new Promise();
+    Promise promise = original;
+    for (int i = 0; i < N; i++) {
+      promise = promise.map(v -> intermediate);
+    }
+    original.fulfil(1);
+    intermediate.fulfil(1);
+    assertEquals(1, Promise.await(promise));
+  }
 
   @AfterClass
   public static void teardown() {
