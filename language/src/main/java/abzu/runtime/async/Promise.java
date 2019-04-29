@@ -41,7 +41,7 @@ public final class Promise implements TruffleObject {
         while (frames.callback instanceof Callback.Cons) {
           Frame oldFrames = frames;
           Callback.Cons cons = (Callback.Cons) frames.callback;
-          result = cons.function.apply(frames.result);
+          result = frames.result instanceof Exception ? cons.onFailure.apply((Exception) frames.result) : cons.onSuccess.apply(frames.result);
           if (cons.promise != null) {
             do {
               snapshot = cons.promise.value;
@@ -59,7 +59,7 @@ public final class Promise implements TruffleObject {
 
   public Promise map(Function<? super Object, ?> function) {
     final Promise result = new Promise();
-    Object o = attachCallback(function, result);
+    Object o = attachCallback(function, identity(), result);
     if (o == null) return result;
     result.fulfil(o);
     return result;
@@ -67,20 +67,19 @@ public final class Promise implements TruffleObject {
 
   public Object mapUnwrap(Function<? super Object, ?> function) {
     final Promise result = new Promise();
-    Object o = attachCallback(function, result);
+    Object o = attachCallback(function, identity(), result);
     return o != null ? o : result;
   }
 
-  private Object attachCallback(Function<? super Object, ?> function, Promise promise) {
+  private Object attachCallback(Function<? super Object, ?> onSuccess, Function<? super Exception, ?> onFailure, Promise promise) {
     Object snapshot;
     Object update;
     do {
       snapshot = value;
-      if (snapshot instanceof Callback) update = new Callback.Cons(function, promise, (Callback) snapshot);
-      else if (snapshot instanceof RuntimeException) throw (RuntimeException) snapshot;
+      if (snapshot instanceof Callback) update = new Callback.Cons(onSuccess, onFailure, promise, (Callback) snapshot);
       else {
-        Object result = function.apply(snapshot);
-        if (result instanceof Promise) result = ((Promise) result).attachCallback(identity(), promise);
+        Object result = snapshot instanceof Exception ? onFailure.apply((Exception) snapshot) : onSuccess.apply(snapshot);
+        if (result instanceof Promise) result = ((Promise) result).attachCallback(identity(), identity(), promise);
         return result == null ? promise : result;
       }
     } while (!UPDATER.compareAndSet(this, snapshot, update));
@@ -100,6 +99,9 @@ public final class Promise implements TruffleObject {
           data[idx] = v;
           if (counter.decrementAndGet() == 0) result.fulfil(data);
           return null;
+        }, e -> {
+          result.fulfil(e);
+          return null;
         }, null);
       } else {
         data[i] = o;
@@ -109,15 +111,15 @@ public final class Promise implements TruffleObject {
     return result;
   }
 
-  public static Object await(Promise promise) throws InterruptedException {
+  public static Object await(Promise promise) {
     CountDownLatch cdl = new CountDownLatch(1);
     Object[] data = new Object[1];
-    promise.attachCallback(v -> {
-      data[0] = v;
-      cdl.countDown();
-      return null;
-      }, null);
-    cdl.await();
+    promise.attachCallback(v -> { data[0] = v; cdl.countDown(); return null; }, e -> { data[0] = e; cdl.countDown(); return null; }, null);
+    try {
+      cdl.await();
+    } catch (InterruptedException e) {
+      return e;
+    }
     return data[0];
   }
 
@@ -127,12 +129,14 @@ public final class Promise implements TruffleObject {
 
   private interface Callback {
     final class Cons implements Callback {
-      final Function<? super Object, ?> function;
+      final Function<? super Object, ?> onSuccess;
+      final Function<? super Exception, ?> onFailure;
       final Promise promise;
       final Callback next;
 
-      Cons(Function<? super Object, ?> function, Promise promise, Callback next) {
-        this.function = function;
+      Cons(Function<? super Object, ?> onSuccess, Function<? super Exception, ?> onFailure, Promise promise, Callback next) {
+        this.onSuccess = onSuccess;
+        this.onFailure = onFailure;
         this.promise = promise;
         this.next = next;
       }

@@ -78,9 +78,8 @@ public class PromiseTest {
     Promise promise = new Promise();
     final Object[] holder = {null};
     promise.mapUnwrap(value -> holder[0] = value);
-    AbzuException exception = new AbzuException("test", null);
-    promise.fulfil(exception);
-    assertEquals(exception, holder[0]);
+    promise.fulfil(new AbzuException("test", null));
+    assertNull(holder[0]);
   }
 
   @Test
@@ -97,6 +96,16 @@ public class PromiseTest {
     assertEquals(1, ((Object[]) holder[0])[0]);
     assertEquals(2, ((Object[]) holder[0])[1]);
     assertEquals(3, ((Object[]) holder[0])[2]);
+  }
+
+  @Test
+  public void testAllException() {
+    Promise fst = new Promise();
+    Promise snd = new Promise();
+    Promise promise = Promise.all(new Object[]{ fst, snd });
+    Exception e = new Exception();
+    fst.fulfil(e);
+    assertEquals(e, promise.mapUnwrap(identity()));
   }
 
 
