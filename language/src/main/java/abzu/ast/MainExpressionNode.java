@@ -14,7 +14,11 @@ public final class MainExpressionNode extends ExpressionNode {
   public Object executeGeneric(VirtualFrame frame) {
     Object result = expressionNode.executeGeneric(frame);
     if (result instanceof Promise) {
-      result = Promise.await((Promise) result);
+      try {
+        result = Promise.await((Promise) result);
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
     }
     return result;
   }
