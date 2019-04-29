@@ -36,32 +36,10 @@ public final class Promise implements TruffleObject {
       snapshot = value;
     } while (!UPDATER.compareAndSet(this, snapshot, result));
     if (snapshot instanceof Callback) {
-      Frame frames = new Frame(result, (Callback) snapshot, null);
+      Frame frame = new Frame(result, (Callback) snapshot, null);
       do {
-        while (frames.callback instanceof Callback.Cons) {
-          Frame oldFrames = frames;
-          Callback.Cons cons = (Callback.Cons) frames.callback;
-          result = frames.result instanceof Exception ? cons.onFailure.apply((Exception) frames.result) : cons.onSuccess.apply(frames.result);
-          if (result instanceof Promise) {
-            Object inner = ((Promise) result).value;
-            if (inner instanceof Callback) {
-              if (cons.promise != null) ((Promise) result).attachCallback(identity(), identity(), cons.promise);
-              oldFrames.callback = cons.next;
-              continue;
-            } else result = inner;
-          }
-          if (cons.promise != null) {
-            do {
-              snapshot = cons.promise.value;
-            } while (!UPDATER.compareAndSet(cons.promise, snapshot, result));
-            if (snapshot instanceof Callback) {
-              frames = new Frame(result, (Callback) snapshot, frames);
-            }
-          }
-          oldFrames.callback = cons.next;
-        }
-        frames = frames.next;
-      } while (frames != null);
+        frame = frame.exec();
+      } while (frame != null);
     }
   }
 
@@ -79,15 +57,19 @@ public final class Promise implements TruffleObject {
     return o != null ? o : result;
   }
 
-  private Object attachCallback(Function<? super Object, ?> onSuccess, Function<? super Exception, ?> onFailure, Promise promise) {
+  // returns null if promise is not fulfilled yet, otherwise executes onSuccess/onFailure and returns the result
+  private Object attachCallback(Function<? super Object, ?> onSuccess, Function<? super Object, ?> onFailure, Promise promise) {
     Object snapshot;
     Object update;
     do {
       snapshot = value;
       if (snapshot instanceof Callback) update = new Callback.Cons(onSuccess, onFailure, promise, (Callback) snapshot);
       else {
-        Object result = snapshot instanceof Exception ? onFailure.apply((Exception) snapshot) : onSuccess.apply(snapshot);
-        if (result instanceof Promise) result = ((Promise) result).attachCallback(identity(), identity(), promise);
+        Object result = snapshot instanceof Exception ? onFailure.apply(snapshot) : onSuccess.apply(snapshot);
+        // flatMap, we need to unwrap
+        if (result instanceof Promise) {
+          result = ((Promise) result).attachCallback(identity(), identity(), promise);
+        }
         return result == null ? promise : result;
       }
     } while (!UPDATER.compareAndSet(this, snapshot, update));
@@ -138,11 +120,11 @@ public final class Promise implements TruffleObject {
   private interface Callback {
     final class Cons implements Callback {
       final Function<? super Object, ?> onSuccess;
-      final Function<? super Exception, ?> onFailure;
+      final Function<? super Object, ?> onFailure;
       final Promise promise;
       final Callback next;
 
-      Cons(Function<? super Object, ?> onSuccess, Function<? super Exception, ?> onFailure, Promise promise, Callback next) {
+      Cons(Function<? super Object, ?> onSuccess, Function<? super Object, ?> onFailure, Promise promise, Callback next) {
         this.onSuccess = onSuccess;
         this.onFailure = onFailure;
         this.promise = promise;
@@ -164,6 +146,28 @@ public final class Promise implements TruffleObject {
       this.result = result;
       this.callback = callback;
       this.next = next;
+    }
+
+    Frame exec() {
+      while (callback instanceof Callback.Cons) {
+        Callback.Cons cons = (Callback.Cons) callback;
+        this.callback = cons.next;
+        Object result = this.result instanceof Exception ? cons.onFailure.apply(this.result) : cons.onSuccess.apply(this.result);
+        if (result instanceof Promise) {
+          result = ((Promise) result).attachCallback(identity(), identity(), cons.promise);
+          if (result instanceof Promise) continue;
+        }
+        if (cons.promise != null) {
+          Object snapshot;
+          do {
+            snapshot = cons.promise.value;
+          } while (!UPDATER.compareAndSet(cons.promise, snapshot, result));
+          if (snapshot instanceof Callback) {
+            return new Frame(result, (Callback) snapshot, this);
+          }
+        }
+      }
+      return next;
     }
   }
 

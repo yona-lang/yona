@@ -23,55 +23,61 @@ public class PromiseTest {
     exec = Executors.newSingleThreadScheduledExecutor();
   }
 
+
   @Test
-  public void testMapUnwrapNotFulfilled() {
-    Promise promise = new Promise();
-    Object[] holder = new Object[1];
-    promise.mapUnwrap(i -> { holder[0] = i; return null; });
-    assertNull(holder[0]);
-    promise.fulfil(1);
-    assertEquals(1, holder[0]);
+  public void testMapImmediate() {
+    assertEquals(1, Promise.await(new Promise(1).map(i -> i)));
   }
 
   @Test
-  public void testMapUnwrapFulfilled() {
-    Promise promise = new Promise(1);
-    assertEquals(1, promise.mapUnwrap(i -> i));
+  public void testMapDelayed() {
+    Promise src = new Promise();
+    Promise dst = src.map(i -> i);
+    src.fulfil(1);
+    assertEquals(1, Promise.await(dst));
   }
 
   @Test
-  public void testMap() throws InterruptedException {
-    Promise promise = new Promise();
-    promise.fulfil(1);
-    assertEquals(1, Promise.await(promise.map(i -> i)));
+  public void testFlatMapImmediate() {
+    assertEquals(2, Promise.await(new Promise(1).map(whatever -> new Promise(2))));
   }
 
   @Test
-  public void testMapUnwrapOtherPromise() {
-    Promise one = new Promise(1);
-    Promise two = new Promise(2);
-    assertEquals(2, one.mapUnwrap(ignore -> two));
+  public void testFlatMapDelayed() {
+    Promise srcOne = new Promise();
+    Promise srcTwo = new Promise();
+    Promise dst = srcOne.map(whatever -> srcTwo);
+    srcOne.fulfil(1);
+    srcTwo.fulfil(2);
+    assertEquals(2, Promise.await(dst));
   }
 
   @Test
-  public void testMapOtherPromise() throws InterruptedException {
-    Promise one = new Promise(1);
-    Promise two = new Promise(2);
-    assertEquals(2, Promise.await(one.map(ignore -> two)));
+  public void testMapUnwrapImmediate() {
+    assertEquals(1, new Promise(1).mapUnwrap(i -> i));
   }
 
   @Test
-  public void testAwaitNotFulfilled() throws InterruptedException {
-    Promise promise = new Promise();
-    exec.schedule(() -> promise.fulfil(1), 1, TimeUnit.SECONDS);
-    assertEquals(1, Promise.await(promise));
+  public void testMapUnwrapDelayed() {
+    Promise src = new Promise();
+    Promise dst = (Promise) src.mapUnwrap(i -> i);
+    src.fulfil(1);
+    assertEquals(1, Promise.await(dst));
   }
 
   @Test
-  public void testAwaitFulfilled() throws InterruptedException {
-    Promise promise = new Promise();
-    promise.fulfil(1);
-    assertEquals(1, Promise.await(promise));
+  public void testFlatMapUnwrapImmediate() {
+    assertEquals(2, new Promise(1).mapUnwrap(whatever -> new Promise(2)));
+  }
+
+  @Test
+  public void testFlatMapUnwrapDelayed() {
+    Promise srcOne = new Promise();
+    Promise srcTwo = new Promise();
+    Promise dst = (Promise) srcOne.mapUnwrap(whatever -> srcTwo);
+    srcOne.fulfil(1);
+    srcTwo.fulfil(2);
+    assertEquals(2, Promise.await(dst));
   }
 
   @Test
@@ -81,6 +87,18 @@ public class PromiseTest {
     promise.mapUnwrap(value -> holder[0] = value);
     promise.fulfil(new AbzuException("test", null));
     assertNull(holder[0]);
+  }
+
+  @Test
+  public void testAwaitImmediate() {
+    assertEquals(1, Promise.await(new Promise(1)));
+  }
+
+  @Test
+  public void testAwaitDelayed() {
+    Promise promise = new Promise();
+    exec.schedule(() -> promise.fulfil(1), 1, TimeUnit.SECONDS);
+    assertEquals(1, Promise.await(promise));
   }
 
   @Test
@@ -140,8 +158,8 @@ public class PromiseTest {
       promise = promise.map(v -> intermediate);
     }
     original.fulfil(1);
-    intermediate.fulfil(1);
-    assertEquals(1, Promise.await(promise));
+    intermediate.fulfil(2);
+    assertEquals(2, Promise.await(promise));
   }
 
   @AfterClass
