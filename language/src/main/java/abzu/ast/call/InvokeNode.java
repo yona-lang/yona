@@ -9,7 +9,9 @@ import abzu.ast.expression.value.FunctionNode;
 import abzu.ast.local.ReadArgumentNode;
 import abzu.ast.local.WriteLocalVariableNodeGen;
 import abzu.runtime.Function;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
@@ -19,6 +21,7 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * The node for function invocation in Abzu. Since Abzu has first class functions, the {@link abzu.runtime.Function
@@ -68,13 +71,14 @@ public final class InvokeNode extends ExpressionNode {
   @ExplodeLoop
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    Function function;
+    final Function function;
     if (this.function != null) {
       function = this.function;
     } else {
       try {
         function = functionNode.executeFunction(frame);
       } catch (UnexpectedResultException e) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new AbzuException("Cannot invoke non-function node: " + functionNode, this);
       }
     }
@@ -86,11 +90,15 @@ public final class InvokeNode extends ExpressionNode {
      * array length is really constant.
      */
     CompilerAsserts.compilationConstant(argumentNodes.length);
+    CompilerAsserts.compilationConstant(this.isTail());
+    CompilerAsserts.compilationConstant(this.inPromise());
 
     if (argumentNodes.length > function.getCardinality()) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new AbzuException("Unexpected number of arguments when calling '" + function.getName() +
-                              "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
+          "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
     } else if (argumentNodes.length < function.getCardinality()) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       /*
        * Create a closure for partially applied function
        */
@@ -107,12 +115,12 @@ public final class InvokeNode extends ExpressionNode {
        */
       InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(function.getName()), allArgumentNodes);
       BlockNode blockNode = new BlockNode(new ExpressionNode[]{
-        /*
-         * We need to make sure that the original function is still accessible within the closure, even if the partially
-         * applied function already leaves the scope with the original function
-        */
-        WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName())),
-        invokeNode
+          /*
+           * We need to make sure that the original function is still accessible within the closure, even if the partially
+           * applied function already leaves the scope with the original function
+          */
+          WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName())),
+          invokeNode
       });
 
       FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName,
@@ -120,18 +128,39 @@ public final class InvokeNode extends ExpressionNode {
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
+      StringBuilder sb = new StringBuilder();
+      boolean isPromise = false;
       for (int i = 0; i < argumentNodes.length; i++) {
         argumentValues[i] = argumentNodes[i].executeGeneric(frame);
+        if (argumentValues[i] instanceof Promise) {
+          Promise promise = (Promise) argumentValues[i];
+          isPromise = true;
+//          sb.append(promise.getId() + " _ ");
+        } else {
+//          sb.append(argumentValues[i].toString() + " _ ");
+        }
       }
+
+//      if (this.inPromise() != null) {
+//        Promise argsPromise = Promise.all(argumentValues);
+//        return argsPromise.mapUnwrap(fulfilledValues -> dispatchNode.executeDispatch(function, (Object[]) fulfilledValues));
+//      }
+
+//      if (isPromise) {
+//        Promise argsPromise = Promise.all(argumentValues);
+//        return argsPromise.mapUnwrap(fulfilledValues -> dispatchNode.executeDispatch(function, (Object[]) fulfilledValues));
+//      }
 
       if (this.isTail()) {
         throw new TailCallException(function, argumentValues);
       }
+
+      Function dispatchFunction = function;
       while (true) {
         try {
-          return dispatchNode.executeDispatch(function, argumentValues);
+          return dispatchNode.executeDispatch(dispatchFunction, argumentValues);
         } catch (TailCallException e) {
-          function = e.function;
+          dispatchFunction = e.function;
           argumentValues = e.arguments;
         }
       }

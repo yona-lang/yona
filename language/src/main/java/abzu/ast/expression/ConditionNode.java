@@ -1,6 +1,7 @@
 package abzu.ast.expression;
 
 import abzu.ast.ExpressionNode;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -57,10 +58,17 @@ public final class ConditionNode extends ExpressionNode {
   }
 
   @Override
-  public void setIsTail() {
-    super.setIsTail();
-    this.thenExpression.setIsTail();
-    this.elseExpression.setIsTail();
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    this.thenExpression.setIsTail(isTail);
+    this.elseExpression.setIsTail(isTail);
+  }
+
+  @Override
+  public void setInPromise(Promise inPromise) {
+    super.setInPromise(inPromise);
+    this.thenExpression.setInPromise(inPromise);
+    this.elseExpression.setInPromise(inPromise);
   }
 
   @Override

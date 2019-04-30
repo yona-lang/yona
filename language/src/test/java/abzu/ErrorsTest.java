@@ -125,7 +125,7 @@ public class ErrorsTest {
           "1 -> 2\n" +
           "2 -> 3\n").execute(3l).asLong();
     } catch (PolyglotException ex) {
-      assertEquals(ex.getMessage(), MatchException.class.getCanonicalName());
+      assertEquals(ex.getMessage(), MatchException.class.getSimpleName());
       throw ex;
     }
   }

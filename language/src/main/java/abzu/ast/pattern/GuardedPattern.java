@@ -4,6 +4,7 @@ import abzu.ast.ExpressionNode;
 import abzu.ast.expression.ConditionNode;
 import abzu.ast.expression.LetNode;
 import abzu.ast.expression.ThrowNode;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 import java.util.Objects;
@@ -47,9 +48,15 @@ public class GuardedPattern extends ExpressionNode implements PatternMatchable {
   }
 
   @Override
-  public void setIsTail() {
-    super.setIsTail();
-    valueExpression.setIsTail();
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    valueExpression.setIsTail(isTail);
+  }
+
+  @Override
+  public void setInPromise(Promise inPromise) {
+    super.setInPromise(inPromise);
+    valueExpression.setInPromise(inPromise);
   }
 
   @Override

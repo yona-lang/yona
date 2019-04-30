@@ -1,10 +1,15 @@
 package abzu.ast.expression;
 
 import abzu.ast.ExpressionNode;
+import abzu.runtime.Unit;
+import abzu.runtime.async.AbzuFuture;
+import abzu.runtime.async.Promise;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 public final class PatternLetNode extends LexicalScopeNode {
   @Children
@@ -40,17 +45,38 @@ public final class PatternLetNode extends LexicalScopeNode {
   }
 
   @Override
-  public void setIsTail() {
-    super.setIsTail();
-    this.expression.setIsTail();
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    this.expression.setIsTail(isTail);
+  }
+
+  @Override
+  public void setInPromise(Promise inPromise) {
+    super.setInPromise(inPromise);
+    this.expression.setInPromise(inPromise);
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    for (ExpressionNode patternAlias : patternAliases) {
-      patternAlias.executeGeneric(frame);
+    CompletableFuture firstFuture = null;
+    MaterializedFrame materializedFrame = frame.materialize();
+
+    for (int i = 0; i < patternAliases.length; i++) {
+      Object aliasValue = patternAliases[i].executeGeneric(materializedFrame);
+      if (aliasValue instanceof AbzuFuture) {
+        AbzuFuture future = (AbzuFuture) aliasValue;
+        if (firstFuture == null) {
+          firstFuture = future.completableFuture;
+        } else {
+          firstFuture = firstFuture.thenCompose(ignore -> future.completableFuture);
+        }
+      }
     }
 
-    return expression.executeGeneric(frame);
+    if (firstFuture != null) {
+      return new AbzuFuture(firstFuture);
+    } else {
+      return expression.executeGeneric(frame);
+    }
   }
 }

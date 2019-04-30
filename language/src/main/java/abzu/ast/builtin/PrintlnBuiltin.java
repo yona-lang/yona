@@ -1,5 +1,6 @@
 package abzu.ast.builtin;
 
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -49,6 +50,19 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
 
     @TruffleBoundary
     private static void doPrint(PrintWriter out, String value) {
+        out.println(value);
+    }
+
+    @Specialization
+    public Object println(Promise value) {
+        return value.map(val -> {
+            doPrint(getContext().getOutput(), val);
+            return val;
+        });
+    }
+
+    @TruffleBoundary
+    private static void doPrint(PrintWriter out, Promise value) {
         out.println(value);
     }
 

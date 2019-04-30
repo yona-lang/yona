@@ -2,6 +2,7 @@ package abzu.ast.pattern;
 
 import abzu.ast.ExpressionNode;
 import abzu.ast.expression.LetNode;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -42,9 +43,15 @@ public class PatternNode extends ExpressionNode implements PatternMatchable {
   }
 
   @Override
-  public void setIsTail() {
-    super.setIsTail();
-    this.valueExpression.setIsTail();
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    this.valueExpression.setIsTail(isTail);
+  }
+
+  @Override
+  public void setInPromise(Promise inPromise) {
+    super.setInPromise(inPromise);
+    this.valueExpression.setInPromise(inPromise);
   }
 
   @Override

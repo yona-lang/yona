@@ -1,13 +1,22 @@
 package abzu.ast.expression;
 
+import abzu.AbzuException;
 import abzu.ast.ExpressionNode;
 import abzu.ast.pattern.MatchException;
 import abzu.ast.pattern.PatternMatchable;
+import abzu.runtime.async.AbzuFuture;
+import abzu.runtime.async.Promise;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 public class CaseNode extends ExpressionNode {
   @Node.Child
@@ -46,21 +55,51 @@ public class CaseNode extends ExpressionNode {
   }
 
   @Override
-  public void setIsTail() {
-    super.setIsTail();
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
     for (PatternMatchable patternMatchable : patternNodes) {
-      ((ExpressionNode) patternMatchable).setIsTail();
+      ((ExpressionNode) patternMatchable).setIsTail(isTail);
+    }
+  }
+
+  @Override
+  public void setInPromise(Promise inPromise) {
+    super.setInPromise(inPromise);
+    for (PatternMatchable patternMatchable : patternNodes) {
+      ((ExpressionNode) patternMatchable).setInPromise(inPromise);
     }
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object value = expression.executeGeneric(frame);
-    Object retValue = null;
 
-    for (PatternMatchable patternNode : patternNodes) {
+    if (value instanceof AbzuFuture) {
+      AbzuFuture future = (AbzuFuture) value;
+      CompilerDirectives.transferToInterpreterAndInvalidate();
+//      setInPromise(future);
+      setIsTail(false);
+      MaterializedFrame materializedFrame = frame.materialize();
+//      return new AbzuFuture(future.completableFuture.thenApply(val -> execute(val, materializedFrame)).thenCompose(Function.identity()));
+      return new AbzuFuture(future.completableFuture.thenCompose(val -> {
+        Object res = execute(val, materializedFrame);
+        if (res instanceof AbzuFuture)
+          return ((AbzuFuture) res).completableFuture;
+        else
+          return CompletableFuture.completedFuture(res);
+      }));
+    } else {
+      return execute(value, frame);
+    }
+  }
+
+  @ExplodeLoop
+  private Object execute(Object value, VirtualFrame frame) {
+    CompilerAsserts.compilationConstant(patternNodes.length);
+    Object retValue = null;
+    for (int i = 0; i < patternNodes.length; i++) {
       try {
-        retValue = patternNode.patternMatch(value, frame);
+        retValue = patternNodes[i].patternMatch(value, frame);
         break;
       } catch (MatchException ex) {
         continue;
@@ -70,7 +109,7 @@ public class CaseNode extends ExpressionNode {
     if (retValue != null) {
       return retValue;
     } else {
-      throw MatchException.INSTANCE;
+      throw new AbzuException("MatchException", this);
     }
   }
 }

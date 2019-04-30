@@ -3,9 +3,10 @@ package abzu;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,12 +48,7 @@ public final class Launcher {
       context.eval(source);
       return 0;
     } catch (PolyglotException ex) {
-      if (ex.isInternalError()) {
-        // for internal errors we print the full stack trace
-        ex.printStackTrace();
-      } else {
-        System.err.println(ex.getMessage());
-      }
+      ex.printStackTrace();
       return 1;
     } finally {
       context.close();

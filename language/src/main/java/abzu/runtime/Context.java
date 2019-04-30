@@ -2,6 +2,7 @@ package abzu.runtime;
 
 import abzu.AbzuLanguage;
 import abzu.ast.builtin.*;
+import abzu.runtime.async.AsyncSelectorThread;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -33,6 +34,7 @@ public class Context {
   private final AllocationReporter allocationReporter;
   private final Builtins builtins;
   private final ExecutorService executor = Executors.newFixedThreadPool(4);
+  private final AsyncSelectorThread asyncSelectorThread = new AsyncSelectorThread();
 
   public Context(AbzuLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
     this.env = env;
@@ -42,6 +44,7 @@ public class Context {
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.emptyShape = LAYOUT.createShape(AbzuObjectType.INSTANCE);
     this.builtins = new Builtins();
+    this.asyncSelectorThread.start();
 
     installBuiltins(externalBuiltins);
   }
@@ -55,6 +58,8 @@ public class Context {
     this.builtins.register(SequenceFoldLeftBuiltinFactory.getInstance());
     this.builtins.register(SequenceFoldRightBuiltinFactory.getInstance());
     this.builtins.register(SleepNodeFactory.getInstance());
+    this.builtins.register(FileOpenNodeFactory.getInstance());
+    this.builtins.register(FileReadLineNodeFactory.getInstance());
   }
 
   /**

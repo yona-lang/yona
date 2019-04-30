@@ -169,7 +169,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     CaseNode caseNode = new CaseNode(argsTuple, new PatternNode[]{new PatternNode(argPatterns, ctx.expression().accept(this))});
 
     caseNode.addRootTag();
-    caseNode.setIsTail();
+    caseNode.setIsTail(true);
 
     return new FunctionNode(language, source.createSection(
         ctx.BACKSLASH().getSymbol().getLine(),
@@ -317,7 +317,7 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       CaseNode caseNode = new CaseNode(argsTuple, patternNodes.toArray(new PatternMatchable[]{}));
 
       caseNode.addRootTag();
-      caseNode.setIsTail();
+      caseNode.setIsTail(true);
 
       FunctionNode functionNode = new FunctionNode(language, functionSourceSections.get(functionName), functionName, cardinality, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode);
       functions.add(functionNode);
