@@ -23,7 +23,6 @@ public class PromiseTest {
     exec = Executors.newSingleThreadScheduledExecutor();
   }
 
-
   @Test
   public void testMapImmediate() {
     assertEquals(1, Promise.await(new Promise(1).map(i -> i)));

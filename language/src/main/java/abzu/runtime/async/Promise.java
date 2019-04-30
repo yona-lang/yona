@@ -4,6 +4,7 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.TruffleObject;
 
+import java.util.ArrayDeque;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
@@ -31,16 +32,32 @@ public final class Promise implements TruffleObject {
   }
 
   public void fulfil(Object result) {
-    Object snapshot;
-    do {
-      snapshot = value;
-    } while (!UPDATER.compareAndSet(this, snapshot, result));
-    if (snapshot instanceof Callback) {
-      Frame frame = new Frame(result, (Callback) snapshot, null);
+    ArrayDeque<Completion> arg = new ArrayDeque<>();
+    arg.add(new Completion(this, result));
+    while (!arg.isEmpty()) arg = fulfil(new ArrayDeque<>(arg));
+  }
+
+  private static ArrayDeque<Completion> fulfil(ArrayDeque<Completion> in) {
+    ArrayDeque<Completion> out = new ArrayDeque<>();
+    for (Completion completion : in) {
+      Object snapshot;
       do {
-        frame = frame.exec();
-      } while (frame != null);
+        snapshot = completion.promise.value;
+      } while (!UPDATER.compareAndSet(completion.promise, snapshot, completion.result));
+      Callback callbacks = (Callback) snapshot;
+      while (callbacks instanceof Callback.Cons) {
+        Callback.Cons cons = (Callback.Cons) callbacks;
+        Object o;
+        if (completion.result instanceof Exception) o = cons.onFailure.apply(completion.result);
+        else o = cons.onSuccess.apply(completion.result);
+        if (cons.promise != null) {
+          if (o instanceof Promise) o = ((Promise) o).attachCallback(identity(), identity(), cons.promise);
+          if (o != null) out.add(new Completion(cons.promise, o));
+        }
+        callbacks = cons.next;
+      }
     }
+    return out;
   }
 
   public Promise map(Function<? super Object, ?> function) {
@@ -134,38 +151,116 @@ public final class Promise implements TruffleObject {
     }
   }
 
-  private static final class Frame {
-    final Object result;
-    Callback callback;
-    final Frame next;
+  /*private static abstract class Trampoline<V> implements Supplier<V> {
 
-    Frame(Object result, Callback callback, Frame next) {
-      this.result = result;
-      this.callback = callback;
-      this.next = next;
+    Trampoline<V> flatMap(Function<? super V, ? extends Trampoline<V>> kleisli) {
+      return new More<>(this, kleisli);
     }
 
-    Frame exec() {
-      while (callback instanceof Callback.Cons) {
-        Callback.Cons cons = (Callback.Cons) callback;
-        this.callback = cons.next;
-        Object result = this.result instanceof Exception ? cons.onFailure.apply(this.result) : cons.onSuccess.apply(this.result);
-        if (result instanceof Promise) {
-          result = ((Promise) result).attachCallback(identity(), identity(), cons.promise);
-          if (result instanceof Promise) continue;
-        }
-        if (cons.promise != null) {
-          Object snapshot;
-          do {
-            snapshot = cons.promise.value;
-          } while (!UPDATER.compareAndSet(cons.promise, snapshot, result));
-          if (snapshot instanceof Callback) {
-            return new Frame(result, (Callback) snapshot, this);
+    abstract boolean done();
+
+    static <V> Trampoline<V> done(V value) {
+      return new Done<>(value);
+    }
+
+    static <V> Trampoline<V> suspend(Supplier<Trampoline<V>> supplier) {
+      return new More<>(Done.nothing(), nothing -> supplier.get());
+    }
+
+    static final class Done<V> extends Trampoline<V> {
+      static final Done<?> NOTHING = new Done<>(new Object());
+
+      final V value;
+
+      Done(V value) {
+        this.value = value;
+      }
+
+      @Override
+      public V get() {
+        return value;
+      }
+
+      @Override
+      boolean done() {
+        return true;
+      }
+
+      @SuppressWarnings("unchecked")
+      static <V> Done<V> nothing() {
+        return (Done<V>) NOTHING;
+      }
+    }
+
+    static final class More<V> extends Trampoline<V> {
+      final Trampoline<V> previous;
+      final Function<? super V, ? extends Trampoline<V>> kleisli;
+
+      More(Trampoline<V> previous, Function<? super V, ? extends Trampoline<V>> kleisli) {
+        this.previous = previous;
+        this.kleisli = kleisli;
+      }
+
+      @Override
+      public V get() {
+        Trampoline<V> current = this;
+        Stack<Function<? super V, ? extends Trampoline<V>>> stack = Stack.nil();
+        V result = null;
+        while (result == null) {
+          if (current.done()) {
+            V value = current.get();
+            if (stack instanceof Stack.Cons) {
+              Stack.Cons<Function<? super V, ? extends Trampoline<V>>> cons = (Stack.Cons<Function<? super V, ? extends Trampoline<V>>>) stack;
+              current = cons.head.apply(value);
+              stack = cons.tail;
+            } else {
+              result = value;
+            }
+          } else {
+            More<V> more = (More<V>) current;
+            current = more.previous;
+            stack = new Stack.Cons<>(more.kleisli, stack);
           }
         }
+        return result;
       }
-      return next;
+
+      @Override
+      boolean done() {
+        return false;
+      }
+    }
+  }*/
+
+  private static final class Completion {
+    final Promise promise;
+    final Object result;
+
+    Completion(Promise promise, Object result) {
+      this.promise = promise;
+      this.result = result;
     }
   }
+
+  /*private interface Stack<V> {
+    final class Cons<V> implements Stack<V> {
+      final V head;
+      final Stack<V> tail;
+
+      Cons(V head, Stack<V> tail) {
+        this.head = head;
+        this.tail = tail;
+      }
+    }
+
+    enum Nil implements Stack<Object> {
+      INSTANCE
+    }
+
+    @SuppressWarnings("unchecked")
+    static <V> Stack<V> nil() {
+      return (Stack<V>) Nil.INSTANCE;
+    }
+  }*/
 
 }
