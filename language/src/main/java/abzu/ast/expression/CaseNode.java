@@ -4,7 +4,6 @@ import abzu.AbzuException;
 import abzu.ast.ExpressionNode;
 import abzu.ast.pattern.MatchException;
 import abzu.ast.pattern.PatternMatchable;
-import abzu.runtime.async.AbzuFuture;
 import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -15,8 +14,6 @@ import com.oracle.truffle.api.nodes.Node;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
 public class CaseNode extends ExpressionNode {
   @Node.Child
@@ -74,20 +71,13 @@ public class CaseNode extends ExpressionNode {
   public Object executeGeneric(VirtualFrame frame) {
     Object value = expression.executeGeneric(frame);
 
-    if (value instanceof AbzuFuture) {
-      AbzuFuture future = (AbzuFuture) value;
+    if (value instanceof Promise) {
+      Promise promise = (Promise) value;
       CompilerDirectives.transferToInterpreterAndInvalidate();
 //      setInPromise(future);
       setIsTail(false);
       MaterializedFrame materializedFrame = frame.materialize();
-//      return new AbzuFuture(future.completableFuture.thenApply(val -> execute(val, materializedFrame)).thenCompose(Function.identity()));
-      return new AbzuFuture(future.completableFuture.thenCompose(val -> {
-        Object res = execute(val, materializedFrame);
-        if (res instanceof AbzuFuture)
-          return ((AbzuFuture) res).completableFuture;
-        else
-          return CompletableFuture.completedFuture(res);
-      }));
+      return promise.mapUnwrap(val -> execute(val, materializedFrame));
     } else {
       return execute(value, frame);
     }

@@ -1,7 +1,6 @@
 package abzu;
 
 import abzu.runtime.*;
-import abzu.runtime.async.AbzuFuture;
 import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.TypeCast;
 import com.oracle.truffle.api.dsl.TypeCheck;
@@ -14,7 +13,7 @@ import com.oracle.truffle.api.dsl.TypeSystem;
  * generated ones would not be sufficient.
  */
 @TypeSystem({boolean.class, byte.class, long.class, double.class, String.class, Function.class, Unit.class, Tuple.class,
-    Module.class, StringList.class, Sequence.class, Dictionary.class, Promise.class, NativeObject.class, AbzuFuture.class})
+    Module.class, StringList.class, Sequence.class, Dictionary.class, Promise.class, NativeObject.class})
 public abstract class Types {
 
   /**

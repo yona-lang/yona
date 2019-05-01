@@ -1,15 +1,12 @@
 package abzu.ast.expression;
 
 import abzu.ast.ExpressionNode;
-import abzu.runtime.Unit;
-import abzu.runtime.async.AbzuFuture;
 import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
 public final class PatternLetNode extends LexicalScopeNode {
   @Children
@@ -58,23 +55,23 @@ public final class PatternLetNode extends LexicalScopeNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    CompletableFuture firstFuture = null;
+    Promise firstPromise = null;
     MaterializedFrame materializedFrame = frame.materialize();
 
     for (int i = 0; i < patternAliases.length; i++) {
       Object aliasValue = patternAliases[i].executeGeneric(materializedFrame);
-      if (aliasValue instanceof AbzuFuture) {
-        AbzuFuture future = (AbzuFuture) aliasValue;
-        if (firstFuture == null) {
-          firstFuture = future.completableFuture;
+      if (aliasValue instanceof Promise) {
+        Promise promise = (Promise) aliasValue;
+        if (firstPromise == null) {
+          firstPromise = promise;
         } else {
-          firstFuture = firstFuture.thenCompose(ignore -> future.completableFuture);
+          firstPromise = firstPromise.map(ignore -> promise);
         }
       }
     }
 
-    if (firstFuture != null) {
-      return new AbzuFuture(firstFuture);
+    if (firstPromise != null) {
+      return firstPromise;
     } else {
       return expression.executeGeneric(frame);
     }
