@@ -4,11 +4,12 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.TruffleObject;
 
-import java.util.ArrayDeque;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static java.util.function.Function.identity;
 
@@ -32,83 +33,138 @@ public final class Promise implements TruffleObject {
   }
 
   public void fulfil(Object result) {
-    ArrayDeque<Completion> arg = new ArrayDeque<>();
-    arg.add(new Completion(this, result));
-    while (!arg.isEmpty()) arg = fulfil(new ArrayDeque<>(arg));
+    fulfil(this, result).run();
   }
 
-  private static ArrayDeque<Completion> fulfil(ArrayDeque<Completion> in) {
-    ArrayDeque<Completion> out = new ArrayDeque<>();
-    for (Completion completion : in) {
-      Object snapshot;
-      do {
-        snapshot = completion.promise.value;
-      } while (!UPDATER.compareAndSet(completion.promise, snapshot, completion.result));
-      Callback callbacks = (Callback) snapshot;
-      while (callbacks instanceof Callback.Cons) {
-        Callback.Cons cons = (Callback.Cons) callbacks;
-        Object o;
-        if (completion.result instanceof Exception) o = cons.onFailure.apply(completion.result);
-        else o = cons.onSuccess.apply(completion.result);
-        if (cons.promise != null) {
-          if (o instanceof Promise) o = ((Promise) o).attachCallback(identity(), identity(), cons.promise);
-          if (o != null) out.add(new Completion(cons.promise, o));
+  private static Trampoline fulfil(Promise promise, Object result) {
+    Object snapshot;
+    do {
+      snapshot = promise.value;
+      if (!(snapshot instanceof Callback)) throw new AssertionError();
+    } while (!UPDATER.compareAndSet(promise, snapshot, result));
+    Trampoline trampoline = Trampoline.Done.INSTANCE;
+    Callback callback = (Callback) snapshot;
+    while (callback != Callback.Nil.INSTANCE) {
+      if (callback instanceof Callback.Transform) {
+        Callback.Transform transform = (Callback.Transform) callback;
+        if (result instanceof Exception) {
+          // result is exception, no mapping is done, just fulfil callbacks's promise with it
+          trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, result));
+        } else {
+          try {
+            Object o = transform.function.apply(result);
+            if (o instanceof Promise) {
+              // function returned a Promise, unwrap it
+              trampoline = new Trampoline.More(trampoline, () -> ((Promise) o).propagate(transform.result));
+            } else {
+              // otherwise, fulfil with what function returned
+              trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, o));
+            }
+          } catch (Exception e) {
+            // function threw an exception, fulfil callbacks's promise with it
+            trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, e));
+          }
         }
-        callbacks = cons.next;
+        callback = transform.next;
+      } else {
+        Callback.Consume consume = (Callback.Consume) callback;
+        // just execute callback right here
+        if (result instanceof Exception) consume.onFailure.accept(result);
+        else consume.onSuccess.accept(result);
+        callback = consume.next;
       }
     }
-    return out;
+    return trampoline;
   }
 
-  public Promise map(Function<? super Object, ?> function) {
-    final Promise result = new Promise();
-    Object o = attachCallback(function, identity(), result);
-    if (o instanceof Promise) return (Promise) o;
-    if (o != null) result.fulfil(o);
-    return result;
-  }
-
-  public Object mapUnwrap(Function<? super Object, ?> function) {
-    Promise result = new Promise();
-    Object o = attachCallback(function, identity(), result);
-    if (o == null) return result;
-    if (o instanceof Promise) {
-      result = (Promise) o;
-      return result.value instanceof Callback ? result : result.value;
-    } else return o;
-  }
-
-  // returns null if promise is not fulfilled yet, otherwise executes onSuccess/onFailure and returns the result
-  private Object attachCallback(Function<? super Object, ?> onSuccess, Function<? super Object, ?> onFailure, Promise promise) {
+  // fulfils arg promise with this promise's result
+  private Trampoline propagate(Promise promise) {
     Object snapshot;
     Object update;
     do {
       snapshot = value;
-      if (snapshot instanceof Callback) update = new Callback.Cons(onSuccess, onFailure, promise, (Callback) snapshot);
-      else return snapshot instanceof Exception ? onFailure.apply(snapshot) : onSuccess.apply(snapshot);
+      if (snapshot instanceof Callback) {
+        // not yet
+        update = new Callback.Transform(promise, identity(), (Callback) snapshot);
+      } else {
+        // already done
+        final Object result = snapshot;
+        return new Trampoline.More(Trampoline.Done.INSTANCE, () -> fulfil(promise, result));
+      }
     } while (!UPDATER.compareAndSet(this, snapshot, update));
-    return null;
+    return Trampoline.Done.INSTANCE;
   }
 
-  public static Promise all(Object[] os) {
+  public Promise map(Function<? super Object, ?> function) {
     Promise result = new Promise();
-    Object[] data = new Object[os.length];
-    AtomicInteger counter = new AtomicInteger(os.length);
-    Object o;
-    for (int i = 0; i < os.length; i++) {
-      o = os[i];
-      if (o instanceof Promise) {
-        final int idx = i;
-        ((Promise) o).attachCallback(v -> {
-          data[idx] = v;
-          if (counter.decrementAndGet() == 0) result.fulfil(data);
-          return null;
-        }, e -> {
-          result.fulfil(e);
-          return null;
-        }, null);
+    Object snapshot;
+    Object update;
+    do {
+      snapshot = value;
+      if (snapshot instanceof Callback) {
+        // promise is not fulfilled yet
+        update = new Callback.Transform(result, function, (Callback) snapshot);
       } else {
-        data[i] = o;
+        // promise is fulfilled
+        if (snapshot instanceof Exception) {
+          result.value = snapshot;
+          return result;
+        } else { Object o;
+          try {
+            o = function.apply(snapshot);
+            // if function returned a promise, return it unwrapped
+            if (o instanceof Promise) return (Promise) o;
+            // otherwise, fulfil the result with the value function returned
+            result.value = snapshot;
+            return result;
+          } catch (Exception e) {
+            // propagate the exception
+            result.value = e;
+            return result;
+          }
+        }
+      }
+    } while (!UPDATER.compareAndSet(this, snapshot, update));
+    return result;
+  }
+
+  public Object mapUnwrap(Function<? super Object, ?> function) {
+    Promise result = map(function);
+    return result.value instanceof Callback ? result : result.value;
+  }
+
+  public Promise then(Promise promise) {
+    return null; // TODO
+  }
+
+  public static Promise all(Object[] args) {
+    Promise result = new Promise();
+    Object[] data = args.clone();
+    AtomicInteger counter = new AtomicInteger(data.length);
+    for (int i = 0; i < data.length; i++) {
+      Object arg = data[i];
+      if (arg instanceof Promise) {
+        int idx = i;
+        Promise promise = (Promise) arg;
+        Object snapshot;
+        Object update;
+        do {
+          snapshot = promise.value;
+          if (snapshot instanceof Callback) {
+            update = new Callback.Consume(o -> {
+              data[idx] = o;
+              if (counter.decrementAndGet() == 0) result.fulfil(data);
+            }, result::fulfil, (Callback) snapshot);
+          } else {
+            if (snapshot instanceof Exception) result.fulfil(snapshot);
+            else {
+              data[idx] = snapshot;
+              if (counter.decrementAndGet() == 0) result.fulfil(data);
+            }
+            break;
+          }
+        } while (!UPDATER.compareAndSet(promise, snapshot, update));
+      } else {
         if (counter.decrementAndGet() == 0) result.fulfil(data);
       }
     }
@@ -116,15 +172,21 @@ public final class Promise implements TruffleObject {
   }
 
   public static Object await(Promise promise) {
-    CountDownLatch cdl = new CountDownLatch(1);
-    Object[] data = new Object[1];
-    promise.attachCallback(v -> { data[0] = v; cdl.countDown(); return null; }, e -> { data[0] = e; cdl.countDown(); return null; }, null);
+    CountDownLatch latch = new CountDownLatch(1);
+    Object snapshot;
+    Object update;
+    do {
+      snapshot = promise.value;
+      if (snapshot instanceof Callback) {
+        update = new Callback.Consume(o -> latch.countDown(), e -> latch.countDown(), (Callback) snapshot);
+      } else return snapshot;
+    } while (!UPDATER.compareAndSet(promise, snapshot, update));
     try {
-      cdl.await();
+      latch.await();
     } catch (InterruptedException e) {
       return e;
     }
-    return data[0];
+    return promise.value;
   }
 
   static boolean isInstance(TruffleObject promise) {
@@ -132,16 +194,26 @@ public final class Promise implements TruffleObject {
   }
 
   private interface Callback {
-    final class Cons implements Callback {
-      final Function<? super Object, ?> onSuccess;
-      final Function<? super Object, ?> onFailure;
-      final Promise promise;
+    final class Transform implements Callback {
+      final Promise result;
+      final Function<? super Object, ?> function;
       final Callback next;
 
-      Cons(Function<? super Object, ?> onSuccess, Function<? super Object, ?> onFailure, Promise promise, Callback next) {
+      Transform(Promise result, Function<? super Object, ?> function, Callback next) {
+        this.result = result;
+        this.function = function;
+        this.next = next;
+      }
+    }
+
+    final class Consume implements Callback {
+      final Consumer<? super Object> onSuccess;
+      final Consumer<? super Object> onFailure;
+      final Callback next;
+
+      Consume(Consumer<? super Object> onSuccess, Consumer<? super Object> onFailure, Callback next) {
         this.onSuccess = onSuccess;
         this.onFailure = onFailure;
-        this.promise = promise;
         this.next = next;
       }
     }
@@ -151,116 +223,59 @@ public final class Promise implements TruffleObject {
     }
   }
 
-  /*private static abstract class Trampoline<V> implements Supplier<V> {
+  private static abstract class Trampoline implements Runnable {
 
-    Trampoline<V> flatMap(Function<? super V, ? extends Trampoline<V>> kleisli) {
-      return new More<>(this, kleisli);
+    static final class Done extends Trampoline {
+      static final Done INSTANCE = new Done();
+
+      @Override
+      public void run() {}
     }
 
-    abstract boolean done();
+    static final class More extends Trampoline {
+      final Trampoline prev;
+      final Supplier<? extends Trampoline> step;
 
-    static <V> Trampoline<V> done(V value) {
-      return new Done<>(value);
-    }
-
-    static <V> Trampoline<V> suspend(Supplier<Trampoline<V>> supplier) {
-      return new More<>(Done.nothing(), nothing -> supplier.get());
-    }
-
-    static final class Done<V> extends Trampoline<V> {
-      static final Done<?> NOTHING = new Done<>(new Object());
-
-      final V value;
-
-      Done(V value) {
-        this.value = value;
+      More(Trampoline prev, Supplier<? extends Trampoline> step) {
+        this.prev = prev;
+        this.step = step;
       }
 
       @Override
-      public V get() {
-        return value;
-      }
-
-      @Override
-      boolean done() {
-        return true;
-      }
-
-      @SuppressWarnings("unchecked")
-      static <V> Done<V> nothing() {
-        return (Done<V>) NOTHING;
-      }
-    }
-
-    static final class More<V> extends Trampoline<V> {
-      final Trampoline<V> previous;
-      final Function<? super V, ? extends Trampoline<V>> kleisli;
-
-      More(Trampoline<V> previous, Function<? super V, ? extends Trampoline<V>> kleisli) {
-        this.previous = previous;
-        this.kleisli = kleisli;
-      }
-
-      @Override
-      public V get() {
-        Trampoline<V> current = this;
-        Stack<Function<? super V, ? extends Trampoline<V>>> stack = Stack.nil();
-        V result = null;
-        while (result == null) {
-          if (current.done()) {
-            V value = current.get();
-            if (stack instanceof Stack.Cons) {
-              Stack.Cons<Function<? super V, ? extends Trampoline<V>>> cons = (Stack.Cons<Function<? super V, ? extends Trampoline<V>>>) stack;
-              current = cons.head.apply(value);
-              stack = cons.tail;
-            } else {
-              result = value;
-            }
+      public void run() {
+        Trampoline current = this;
+        Stack stack = Stack.Nil.INSTANCE;
+        while (true) {
+          if (current instanceof More) {
+            More more = (More) current;
+            current = more.prev;
+            stack = new Stack.Cons(more.step, stack);
           } else {
-            More<V> more = (More<V>) current;
-            current = more.previous;
-            stack = new Stack.Cons<>(more.kleisli, stack);
+            if (stack instanceof Stack.Cons) {
+              Stack.Cons cons = (Stack.Cons) stack;
+              current = cons.head.get();
+              stack = cons.tail;
+            } else break;
           }
         }
-        return result;
       }
-
-      @Override
-      boolean done() {
-        return false;
-      }
-    }
-  }*/
-
-  private static final class Completion {
-    final Promise promise;
-    final Object result;
-
-    Completion(Promise promise, Object result) {
-      this.promise = promise;
-      this.result = result;
     }
   }
 
-  /*private interface Stack<V> {
-    final class Cons<V> implements Stack<V> {
-      final V head;
-      final Stack<V> tail;
+  private interface Stack {
+    final class Cons implements Stack {
+      final Supplier<? extends Trampoline> head;
+      final Stack tail;
 
-      Cons(V head, Stack<V> tail) {
+      Cons(Supplier<? extends Trampoline> head, Stack tail) {
         this.head = head;
         this.tail = tail;
       }
     }
 
-    enum Nil implements Stack<Object> {
+    enum Nil implements Stack {
       INSTANCE
     }
-
-    @SuppressWarnings("unchecked")
-    static <V> Stack<V> nil() {
-      return (Stack<V>) Nil.INSTANCE;
-    }
-  }*/
+  }
 
 }
