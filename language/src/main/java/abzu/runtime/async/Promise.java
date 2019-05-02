@@ -17,7 +17,7 @@ import static java.util.function.Function.identity;
 public final class Promise implements TruffleObject {
   private static final AtomicReferenceFieldUpdater<Promise, Object> UPDATER = AtomicReferenceFieldUpdater.newUpdater(Promise.class, Object.class, "value");
 
-  private volatile Object value;
+  volatile Object value;
 
   public Promise() {
     value = Callback.Nil.INSTANCE;
@@ -48,13 +48,13 @@ public final class Promise implements TruffleObject {
       if (callback instanceof Callback.Transform) {
         Callback.Transform transform = (Callback.Transform) callback;
         if (result instanceof Exception) {
-          // result is exception, no mapping is done, just fulfil callbacks's promise with it
+          // result is an exception, no mapping is done, just fulfil callback's promise with it
           trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, result));
         } else {
           try {
             Object o = transform.function.apply(result);
             if (o instanceof Promise) {
-              // function returned a Promise, unwrap it
+              // function returned a Promise, make it pass its result to callback's promise when done
               trampoline = new Trampoline.More(trampoline, () -> ((Promise) o).propagate(transform.result));
             } else {
               // otherwise, fulfil with what function returned
@@ -68,7 +68,7 @@ public final class Promise implements TruffleObject {
         callback = transform.next;
       } else {
         Callback.Consume consume = (Callback.Consume) callback;
-        // just execute callback right here
+        // just execute right here
         if (result instanceof Exception) consume.onFailure.accept(result);
         else consume.onSuccess.accept(result);
         callback = consume.next;
@@ -77,7 +77,6 @@ public final class Promise implements TruffleObject {
     return trampoline;
   }
 
-  // fulfils arg promise with this promise's result
   private Trampoline propagate(Promise promise) {
     Object snapshot;
     Object update;
@@ -96,32 +95,32 @@ public final class Promise implements TruffleObject {
   }
 
   public Promise map(Function<? super Object, ?> function) {
-    Promise result = new Promise();
+    Promise result = null;
     Object snapshot;
     Object update;
     do {
       snapshot = value;
       if (snapshot instanceof Callback) {
         // promise is not fulfilled yet
+        if (result == null) result = new Promise();
         update = new Callback.Transform(result, function, (Callback) snapshot);
       } else {
-        // promise is fulfilled
-        if (snapshot instanceof Exception) {
-          result.value = snapshot;
+        // if this promise failed, propagate the exception
+        if (snapshot instanceof Exception) return this;
+        // if this promise succeeded, apply the function
+        try {
+          Object o = function.apply(snapshot);
+          // if it's a promise, don't wrap it
+          if (o instanceof Promise) return (Promise) o;
+          // otherwise, fulfil the result with the value function returned
+          if (result == null) result = new Promise();
+          result.value = o;
           return result;
-        } else { Object o;
-          try {
-            o = function.apply(snapshot);
-            // if function returned a promise, return it unwrapped
-            if (o instanceof Promise) return (Promise) o;
-            // otherwise, fulfil the result with the value function returned
-            result.value = snapshot;
-            return result;
-          } catch (Exception e) {
-            // propagate the exception
-            result.value = e;
-            return result;
-          }
+        } catch (Exception e) {
+          // propagate the exception
+          if (result == null) result = new Promise();
+          result.value = e;
+          return result;
         }
       }
     } while (!UPDATER.compareAndSet(this, snapshot, update));
@@ -129,12 +128,39 @@ public final class Promise implements TruffleObject {
   }
 
   public Object mapUnwrap(Function<? super Object, ?> function) {
-    Promise result = map(function);
-    return result.value instanceof Callback ? result : result.value;
+    Promise result = null;
+    Object snapshot;
+    Object update;
+    do {
+      snapshot = value;
+      if (snapshot instanceof Callback) {
+        if (result == null) result = new Promise();
+        update = new Callback.Transform(result, function, (Callback) snapshot);
+      } else {
+        if (snapshot instanceof Exception) return this;
+        try {
+          return function.apply(snapshot);
+        } catch (Exception e) {
+          return e;
+        }
+      }
+    } while (!UPDATER.compareAndSet(this, snapshot, update));
+    return result;
   }
 
   public Promise then(Promise promise) {
-    return null; // TODO
+    Promise result = null;
+    Object snapshot;
+    Object update;
+    do {
+      snapshot = value;
+      if (snapshot instanceof Callback) {
+        if (result == null) result = new Promise();
+        update = new Callback.Transform(result, whatever -> promise, (Callback) snapshot);
+      }
+      else return snapshot instanceof Exception ? this : promise;
+    } while (!UPDATER.compareAndSet(this, snapshot, update));
+    return result;
   }
 
   public static Promise all(Object[] args) {
@@ -224,7 +250,6 @@ public final class Promise implements TruffleObject {
   }
 
   private static abstract class Trampoline implements Runnable {
-
     static final class Done extends Trampoline {
       static final Done INSTANCE = new Done();
 
@@ -277,5 +302,4 @@ public final class Promise implements TruffleObject {
       INSTANCE
     }
   }
-
 }

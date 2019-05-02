@@ -66,7 +66,9 @@ public class PromiseTest {
 
   @Test
   public void testFlatMapUnwrapImmediate() {
-    assertEquals(2, new Promise(1).mapUnwrap(whatever -> new Promise(2)));
+    // unwrapping does not happen in case of flatMap
+    Promise p = new Promise(2);
+    assertEquals(p, new Promise(1).mapUnwrap(whatever -> p));
   }
 
   @Test
@@ -82,10 +84,9 @@ public class PromiseTest {
   @Test
   public void testMapUnwrapException() {
     Promise promise = new Promise();
-    final Object[] holder = {null};
-    promise.mapUnwrap(value -> holder[0] = value);
-    promise.fulfil(new AbzuException("test", null));
-    assertNull(holder[0]);
+    Exception e = new AbzuException("test", null);
+    promise.fulfil(e);
+    assertEquals(e, promise.value);
   }
 
   @Test
@@ -123,7 +124,7 @@ public class PromiseTest {
     Promise promise = Promise.all(new Object[]{ fst, snd });
     Exception e = new Exception();
     fst.fulfil(e);
-    assertEquals(e, promise.mapUnwrap(identity()));
+    assertEquals(e, promise.value);
   }
 
   @Test
