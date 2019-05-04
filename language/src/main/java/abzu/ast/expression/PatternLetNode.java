@@ -65,7 +65,7 @@ public final class PatternLetNode extends LexicalScopeNode {
         if (firstPromise == null) {
           firstPromise = promise;
         } else {
-          firstPromise = firstPromise.map(ignore -> promise);
+          firstPromise = firstPromise.then(promise);
         }
       }
     }

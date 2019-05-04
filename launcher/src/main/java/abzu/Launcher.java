@@ -49,7 +49,7 @@ public final class Launcher {
       return 0;
     } catch (PolyglotException ex) {
       ex.printStackTrace();
-      return 1;
+      return ex.getExitStatus();
     } finally {
       context.close();
     }

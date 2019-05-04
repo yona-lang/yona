@@ -19,7 +19,6 @@ public final class MainExpressionNode extends ExpressionNode {
       Promise promise = (Promise) result;
       CompilerDirectives.transferToInterpreter();
       result = Promise.await(promise);
-      System.err.println(promise);
     }
 
     return result;

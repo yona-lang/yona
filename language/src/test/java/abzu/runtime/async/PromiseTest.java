@@ -1,24 +1,24 @@
 package abzu.runtime.async;
 
 import abzu.AbzuException;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.function.Function.identity;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 public class PromiseTest {
   private static ScheduledExecutorService exec;
 
   private static final int N = 131072;
 
-  @BeforeClass
+  @BeforeAll
   public static void setup() {
     exec = Executors.newSingleThreadScheduledExecutor();
   }
@@ -162,7 +162,7 @@ public class PromiseTest {
     assertEquals(2, Promise.await(promise));
   }
 
-  @AfterClass
+  @AfterAll
   public static void teardown() {
     exec.shutdownNow();
   }
