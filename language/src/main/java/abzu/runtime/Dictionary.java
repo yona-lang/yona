@@ -1,7 +1,6 @@
 package abzu.runtime;
 
 import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 
 import java.util.Arrays;
@@ -33,9 +32,9 @@ public abstract class Dictionary implements TruffleObject {
 
   abstract Dictionary remove(Object key, int depth, int hash);
 
-  public abstract Object fold(Function fn3, Object initial, @CachedLibrary(limit = "3") InteropLibrary dispatch);
+  public abstract Object fold(Function fn3, Object initial, InteropLibrary dispatch);
 
-  public abstract Dictionary map(Function fn1, @CachedLibrary(limit = "3") InteropLibrary dispatch);
+  public abstract Dictionary map(Function fn1, InteropLibrary dispatch);
 
   public abstract int size();
 
@@ -126,7 +125,7 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Object fold(Function fn3, Object initial, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object fold(Function fn3, Object initial, InteropLibrary dispatch) {
       Object result = initial;
       for (Dictionary dict : data) {
         if (dict != null) result = dict.fold(fn3, result, dispatch);
@@ -135,7 +134,7 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Dictionary map(Function fn1, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Dictionary map(Function fn1, InteropLibrary dispatch) {
       final int len = data.length;
       final Dictionary[] newData = new Dictionary[len];
       Dictionary cursor;
@@ -293,7 +292,7 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Object fold(Function fn3, Object initial, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object fold(Function fn3, Object initial, InteropLibrary dispatch) {
       Object result = initial;
       for (Object o : data) {
         if (o instanceof Dictionary) {
@@ -314,7 +313,7 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Dictionary map(Function fn1, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Dictionary map(Function fn1, InteropLibrary dispatch) {
       final int len = data.length;
       final Object[] newData = new Object[len];
       Object cursor;
@@ -443,7 +442,7 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Object fold(Function fn3, Object initial, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object fold(Function fn3, Object initial, InteropLibrary dispatch) {
       Object result = initial;
       for (Object o : data) {
         if (o instanceof Dictionary) {
@@ -464,7 +463,7 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Dictionary map(Function fn1, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Dictionary map(Function fn1, InteropLibrary dispatch) {
       final int len = data.length;
       final Entry[] newData = new Entry[len];
       Entry cursor;

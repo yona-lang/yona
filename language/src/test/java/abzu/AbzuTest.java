@@ -39,7 +39,7 @@ public class AbzuTest {
         if (sourceName.endsWith(SOURCE_SUFFIX)) {
           String baseName = sourceName.substring(0, sourceName.length() - SOURCE_SUFFIX.length());
 
-          foundCases.add(DynamicTest.dynamicTest(baseName, sourceFile.toUri(), () -> {
+          DynamicTest dynamicTest = DynamicTest.dynamicTest(baseName, sourceFile.toUri(), () -> {
             Path inputFile = sourceFile.resolveSibling(baseName + INPUT_SUFFIX);
             String testInput = "";
             if (Files.exists(inputFile)) {
@@ -76,7 +76,9 @@ public class AbzuTest {
             assertEquals(expectedOutput, actualOutput, sourceName);
 
             context.close();
-          }));
+          });
+
+          foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;
       }

@@ -8,6 +8,8 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <m2e.apt.activation>jdt_apt</m2e.apt.activation>
     <graalvm.version>1.0.0-rc16</graalvm.version>
+    <junit.version>5.4.2</junit.version>
+    <antlr.version>4.7.2</antlr.version>
   </properties>
   <packaging>pom</packaging>
   <modules>
