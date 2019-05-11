@@ -152,7 +152,7 @@ public class SimpleExpressionTest {
         "    alias = test\n" +
         "    aliastwo = 6\n" +
         "in\n" +
-        "(alias, aliastwo)").execute(5);
+        "(alias, aliastwo)").execute(5l);
     assertEquals(2, ret.getArraySize());
 
     Object[] array = ret.as(Object[].class);

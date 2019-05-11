@@ -54,12 +54,6 @@ public class GuardedPattern extends ExpressionNode implements PatternMatchable {
   }
 
   @Override
-  public void setInPromise(Promise inPromise) {
-    super.setInPromise(inPromise);
-    valueExpression.setInPromise(inPromise);
-  }
-
-  @Override
   public Object patternMatch(Object value, VirtualFrame frame) throws MatchException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {

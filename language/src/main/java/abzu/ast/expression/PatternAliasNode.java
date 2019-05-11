@@ -52,19 +52,20 @@ public final class PatternAliasNode extends ExpressionNode {
   }
 
   @Override
-  public void setInPromise(Promise inPromise) {
-    super.setInPromise(inPromise);
-    this.expression.setInPromise(inPromise);
-  }
-
-  @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object value = expression.executeGeneric(frame);
 
     if (value instanceof Promise) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-      MaterializedFrame materializedFrame = frame.materialize();
-      return ((Promise) value).mapUnwrap(val -> execute(val, materializedFrame));
+      Promise promise = (Promise) value;
+      Object unwrappedValue = promise.unwrap();
+
+      if (unwrappedValue != null) {
+        return execute(unwrappedValue, frame);
+      } else {
+        CompilerDirectives.transferToInterpreter();
+        MaterializedFrame materializedFrame = frame.materialize();
+        return promise.map(val -> execute(val, materializedFrame), this);
+      }
     } else {
       return execute(value, frame);
     }

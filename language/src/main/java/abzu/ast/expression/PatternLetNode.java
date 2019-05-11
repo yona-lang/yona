@@ -4,6 +4,7 @@ import abzu.ast.ExpressionNode;
 import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -48,12 +49,7 @@ public final class PatternLetNode extends LexicalScopeNode {
   }
 
   @Override
-  public void setInPromise(Promise inPromise) {
-    super.setInPromise(inPromise);
-    this.expression.setInPromise(inPromise);
-  }
-
-  @Override
+  @ExplodeLoop
   public Object executeGeneric(VirtualFrame frame) {
     Promise firstPromise = null;
     MaterializedFrame materializedFrame = frame.materialize();

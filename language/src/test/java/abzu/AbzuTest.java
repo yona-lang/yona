@@ -54,7 +54,7 @@ public class AbzuTest {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
-            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes("UTF-8"))).out(out).build();
+            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes("UTF-8"))).out(out).allowAllAccess(true).build();
 
             /* Parse the Abzu source file. */
             Source source = Source.newBuilder(AbzuLanguage.ID, sourceFile.toFile()).interactive(true).build();

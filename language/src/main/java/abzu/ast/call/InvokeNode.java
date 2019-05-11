@@ -9,19 +9,23 @@ import abzu.ast.expression.value.FunctionNode;
 import abzu.ast.local.ReadArgumentNode;
 import abzu.ast.local.WriteLocalVariableNodeGen;
 import abzu.runtime.Function;
+import abzu.runtime.UndefinedNameException;
 import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Arrays;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * The node for function invocation in Abzu. Since Abzu has first class functions, the {@link abzu.runtime.Function
@@ -38,8 +42,7 @@ public final class InvokeNode extends ExpressionNode {
   private final Function function;
   @Node.Children
   private final ExpressionNode[] argumentNodes;
-  @Node.Child
-  private DispatchNode dispatchNode;
+  @Child private InteropLibrary library;
 
   private AbzuLanguage language;
 
@@ -47,7 +50,7 @@ public final class InvokeNode extends ExpressionNode {
     this.functionNode = functionNode;
     this.function = null;
     this.argumentNodes = argumentNodes;
-    this.dispatchNode = DispatchNodeGen.create();
+    this.library = InteropLibrary.getFactory().createDispatched(3);
     this.language = language;
   }
 
@@ -55,7 +58,7 @@ public final class InvokeNode extends ExpressionNode {
     this.functionNode = null;
     this.function = function;
     this.argumentNodes = argumentNodes;
-    this.dispatchNode = DispatchNodeGen.create();
+    this.library = InteropLibrary.getFactory().createDispatched(3);
     this.language = language;
   }
 
@@ -91,7 +94,6 @@ public final class InvokeNode extends ExpressionNode {
      */
     CompilerAsserts.compilationConstant(argumentNodes.length);
     CompilerAsserts.compilationConstant(this.isTail());
-    CompilerAsserts.compilationConstant(this.inPromise());
 
     if (argumentNodes.length > function.getCardinality()) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -128,28 +130,11 @@ public final class InvokeNode extends ExpressionNode {
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
-      StringBuilder sb = new StringBuilder();
-      boolean isPromise = false;
       for (int i = 0; i < argumentNodes.length; i++) {
         argumentValues[i] = argumentNodes[i].executeGeneric(frame);
-        if (argumentValues[i] instanceof Promise) {
-          Promise promise = (Promise) argumentValues[i];
-          isPromise = true;
-//          sb.append(promise.getId() + " _ ");
-        } else {
-//          sb.append(argumentValues[i].toString() + " _ ");
-        }
       }
 
-//      if (this.inPromise() != null) {
-//        Promise argsPromise = Promise.all(argumentValues);
-//        return argsPromise.mapUnwrap(fulfilledValues -> dispatchNode.executeDispatch(function, (Object[]) fulfilledValues));
-//      }
-
-//      if (isPromise) {
-//        Promise argsPromise = Promise.all(argumentValues);
-//        return argsPromise.mapUnwrap(fulfilledValues -> dispatchNode.executeDispatch(function, (Object[]) fulfilledValues));
-//      }
+      // TODO Promise.all(argumentValues)
 
       if (this.isTail()) {
         throw new TailCallException(function, argumentValues);
@@ -158,10 +143,13 @@ public final class InvokeNode extends ExpressionNode {
       Function dispatchFunction = function;
       while (true) {
         try {
-          return dispatchNode.executeDispatch(dispatchFunction, argumentValues);
+          return library.execute(dispatchFunction, argumentValues);
         } catch (TailCallException e) {
           dispatchFunction = e.function;
           argumentValues = e.arguments;
+        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+          /* Execute was not successful. */
+          throw UndefinedNameException.undefinedFunction(this, dispatchFunction);
         }
       }
     }

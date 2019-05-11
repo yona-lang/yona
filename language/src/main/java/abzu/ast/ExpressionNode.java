@@ -35,23 +35,12 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   @CompilerDirectives.CompilationFinal
   private boolean isTail = false;
 
-  @CompilerDirectives.CompilationFinal
-  private Promise inPromise;
-
   public boolean isTail() {
     return this.isTail;
   }
 
-  public Promise inPromise() {
-    return this.inPromise;
-  }
-
   public void setIsTail(boolean isTail) {
     this.isTail = isTail;
-  }
-
-  public void setInPromise(Promise inPromise) {
-    this.inPromise = inPromise;
   }
 
   /*

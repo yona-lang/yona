@@ -1,6 +1,7 @@
 package abzu.runtime.async;
 
 import abzu.AbzuException;
+import com.oracle.truffle.api.nodes.Node;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -18,6 +19,8 @@ public class PromiseTest {
 
   private static final int N = 131072;
 
+  private Node node = null;
+
   @BeforeAll
   public static void setup() {
     exec = Executors.newSingleThreadScheduledExecutor();
@@ -25,67 +28,42 @@ public class PromiseTest {
 
   @Test
   public void testMapImmediate() {
-    assertEquals(1, Promise.await(new Promise(1).map(i -> i)));
+    assertEquals(1, Promise.await(new Promise(1).map(i -> i, node)));
   }
 
   @Test
   public void testMapDelayed() {
     Promise src = new Promise();
-    Promise dst = src.map(i -> i);
-    src.fulfil(1);
+    Promise dst = src.map(i -> i, node);
+    src.fulfil(1, node);
     assertEquals(1, Promise.await(dst));
   }
 
   @Test
   public void testFlatMapImmediate() {
-    assertEquals(2, Promise.await(new Promise(1).map(whatever -> new Promise(2))));
+    assertEquals(2, Promise.await(new Promise(1).map(whatever -> new Promise(2), node)));
   }
 
   @Test
   public void testFlatMapDelayed() {
     Promise srcOne = new Promise();
     Promise srcTwo = new Promise();
-    Promise dst = srcOne.map(whatever -> srcTwo);
-    srcOne.fulfil(1);
-    srcTwo.fulfil(2);
+    Promise dst = srcOne.map(whatever -> srcTwo, node);
+    srcOne.fulfil(1, node);
+    srcTwo.fulfil(2, node);
     assertEquals(2, Promise.await(dst));
   }
 
   @Test
   public void testMapUnwrapImmediate() {
-    assertEquals(1, new Promise(1).mapUnwrap(i -> i));
-  }
-
-  @Test
-  public void testMapUnwrapDelayed() {
-    Promise src = new Promise();
-    Promise dst = (Promise) src.mapUnwrap(i -> i);
-    src.fulfil(1);
-    assertEquals(1, Promise.await(dst));
-  }
-
-  @Test
-  public void testFlatMapUnwrapImmediate() {
-    // unwrapping does not happen in case of flatMap
-    Promise p = new Promise(2);
-    assertEquals(p, new Promise(1).mapUnwrap(whatever -> p));
-  }
-
-  @Test
-  public void testFlatMapUnwrapDelayed() {
-    Promise srcOne = new Promise();
-    Promise srcTwo = new Promise();
-    Promise dst = (Promise) srcOne.mapUnwrap(whatever -> srcTwo);
-    srcOne.fulfil(1);
-    srcTwo.fulfil(2);
-    assertEquals(2, Promise.await(dst));
+    assertEquals(1, new Promise(1).unwrap());
   }
 
   @Test
   public void testMapUnwrapException() {
     Promise promise = new Promise();
     Exception e = new AbzuException("test", null);
-    promise.fulfil(e);
+    promise.fulfil(e, node);
     assertEquals(e, promise.value);
   }
 
@@ -97,7 +75,7 @@ public class PromiseTest {
   @Test
   public void testAwaitDelayed() {
     Promise promise = new Promise();
-    exec.schedule(() -> promise.fulfil(1), 1, TimeUnit.SECONDS);
+    exec.schedule(() -> promise.fulfil(1, node), 1, TimeUnit.SECONDS);
     assertEquals(1, Promise.await(promise));
   }
 
@@ -105,25 +83,26 @@ public class PromiseTest {
   public void testAll() {
     Promise fst = new Promise();
     Promise snd = new Promise();
-    Promise promise = Promise.all(new Object[]{ fst, snd, 3 });
-    Object[] holder = new Object[1];
-    promise.mapUnwrap(v -> { holder[0] = v; return null;});
-    assertNull(holder[0]);
-    fst.fulfil(1);
-    assertNull(holder[0]);
-    snd.fulfil(2);
-    assertEquals(1, ((Object[]) holder[0])[0]);
-    assertEquals(2, ((Object[]) holder[0])[1]);
-    assertEquals(3, ((Object[]) holder[0])[2]);
+    Promise promise = Promise.all(new Object[]{ fst, snd, 3 }, node);
+    Object[] value = (Object[]) promise.unwrap();
+    assertNull(value);
+    fst.fulfil(1, node);
+    value = (Object[]) promise.unwrap();
+    assertNull(value);
+    snd.fulfil(2, node);
+    value = (Object[]) promise.unwrap();
+    assertEquals(1, value[0]);
+    assertEquals(2, value[1]);
+    assertEquals(3, value[2]);
   }
 
   @Test
   public void testAllException() {
     Promise fst = new Promise();
     Promise snd = new Promise();
-    Promise promise = Promise.all(new Object[]{ fst, snd });
+    Promise promise = Promise.all(new Object[]{ fst, snd }, node);
     Exception e = new Exception();
-    fst.fulfil(e);
+    fst.fulfil(e, node);
     assertEquals(e, promise.value);
   }
 
@@ -132,9 +111,9 @@ public class PromiseTest {
     Promise original = new Promise();
     Promise promise = original;
     for (int i = 0; i < N; i++) {
-      promise = promise.map(identity());
+      promise = promise.map(identity(), node);
     }
-    original.fulfil(1);
+    original.fulfil(1, node);
     assertEquals(1, Promise.await(promise));
   }
 
@@ -143,9 +122,9 @@ public class PromiseTest {
     Promise original = new Promise();
     Promise promise = original;
     for (int i = 0; i < N; i++) {
-      promise = promise.map(Promise::new);
+      promise = promise.map(Promise::new, node);
     }
-    original.fulfil(1);
+    original.fulfil(1, node);
     assertEquals(1, Promise.await(promise));
   }
 
@@ -155,10 +134,10 @@ public class PromiseTest {
     Promise intermediate = new Promise();
     Promise promise = original;
     for (int i = 0; i < N; i++) {
-      promise = promise.map(v -> intermediate);
+      promise = promise.map(v -> intermediate, node);
     }
-    original.fulfil(1);
-    intermediate.fulfil(2);
+    original.fulfil(1, node);
+    intermediate.fulfil(2, node);
     assertEquals(2, Promise.await(promise));
   }
 

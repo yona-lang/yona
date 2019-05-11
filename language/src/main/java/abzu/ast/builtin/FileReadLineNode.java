@@ -27,7 +27,7 @@ public abstract class FileReadLineNode extends BuiltinNode {
       public void completed(Integer result, ByteBuffer attachment) {
         boolean fulfilled = false;
         if (result <= 0) {
-          promise.fulfil("eof");
+          promise.fulfil("eof", thisNode);
           return;
         }
 
@@ -40,7 +40,7 @@ public abstract class FileReadLineNode extends BuiltinNode {
         for (int i = 0; i < length; i++) {
           char ch = ((char) attachment.get());
           if (ch == '\n') {
-            promise.fulfil(new Tuple("ok", output.toString(), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)));
+            promise.fulfil(new Tuple("ok", output.toString(), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
             fulfilled = true;
             break;
           } else {
@@ -51,15 +51,15 @@ public abstract class FileReadLineNode extends BuiltinNode {
 
         if (!fulfilled) {
           freadline(new Tuple(new NativeObject(asynchronousFileChannel), output, position + length)).map(res -> {
-            promise.fulfil(res);
+            promise.fulfil(res, thisNode);
             return res;
-          });
+          }, thisNode);
         }
       }
 
       @Override
       public void failed(Throwable exc, ByteBuffer attachment) {
-        promise.fulfil(new AbzuException(exc.getMessage(), thisNode));
+        promise.fulfil(new AbzuException(exc.getMessage(), thisNode), thisNode);
       }
     });
 

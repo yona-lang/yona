@@ -1,20 +1,19 @@
 package abzu;
 
 import abzu.runtime.Context;
-import abzu.runtime.Unit;
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
-import abzu.runtime.Function;
 
 public class AbzuException extends RuntimeException implements TruffleException {
-  private static final long serialVersionUID = -1L;
+  private static final long serialVersionUID = -6799734410727348507L;
 
   private final Node location;
 
-  @CompilerDirectives.TruffleBoundary
+  @TruffleBoundary
   public AbzuException(String message, Node location) {
     super(message);
     this.location = location;
@@ -22,8 +21,8 @@ public class AbzuException extends RuntimeException implements TruffleException 
 
   @SuppressWarnings("sync-override")
   @Override
-  public Throwable fillInStackTrace() {
-    return null;
+  public final Throwable fillInStackTrace() {
+    return this;
   }
 
   public Node getLocation() {
@@ -31,10 +30,10 @@ public class AbzuException extends RuntimeException implements TruffleException 
   }
 
   /**
-   * Provides a user-readable message for run-time type errors. AbzuLanguage is strongly typed, i.e., there
+   * Provides a user-readable message for run-time type errors. SL is strongly typed, i.e., there
    * are no automatic type conversions of values.
    */
-  @CompilerDirectives.TruffleBoundary
+  @TruffleBoundary
   public static AbzuException typeError(Node operation, Object... values) {
     StringBuilder result = new StringBuilder();
     result.append("Type error");
@@ -57,26 +56,22 @@ public class AbzuException extends RuntimeException implements TruffleException 
     result.append(" not defined for");
 
     String sep = " ";
-    for (Object value : values) {
+    for (int i = 0; i < values.length; i++) {
+      Object value = values[i];
       result.append(sep);
       sep = ", ";
-      if (value instanceof Long) {
-        result.append("Integer ").append(value);
-      } else if (value instanceof Double) {
-        result.append("Float ").append(value);
-      } else if (value instanceof Boolean) {
-        result.append("Boolean ").append(value);
-      } else if (value instanceof String) {
-        result.append("String \"").append(value).append("\"");
-      } else if (value instanceof Function) {
-        result.append("Function ").append(value);
-      } else if (value == Unit.INSTANCE) {
-        result.append("()");
-      } else if (value == null) {
-        // value is not evaluated because of short circuit evaluation
-        result.append("ANY");
+      if (value == null || InteropLibrary.getFactory().getUncached().isNull(value)) {
+        result.append(AbzuLanguage.toString(value));
       } else {
-        result.append(value);
+        result.append(AbzuLanguage.getMetaObject(value));
+        result.append(" ");
+        if (InteropLibrary.getFactory().getUncached().isString(value)) {
+          result.append("\"");
+        }
+        result.append(AbzuLanguage.toString(value));
+        if (InteropLibrary.getFactory().getUncached().isString(value)) {
+          result.append("\"");
+        }
       }
     }
     return new AbzuException(result.toString(), operation);

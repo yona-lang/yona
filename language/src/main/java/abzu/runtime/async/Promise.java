@@ -1,8 +1,9 @@
 package abzu.runtime.async;
 
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.TruffleObject;
+import abzu.ast.call.TailCallException;
+import abzu.runtime.UndefinedNameException;
+import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.nodes.Node;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,11 +33,11 @@ public final class Promise implements TruffleObject {
     return PromiseForeign.ACCESS;
   }
 
-  public void fulfil(Object result) {
-    fulfil(this, result).run();
+  public void fulfil(Object result, Node node) {
+    fulfil(this, result, node).run();
   }
 
-  private static Trampoline fulfil(Promise promise, Object result) {
+  private static Trampoline fulfil(Promise promise, Object result, Node node) {
     Object snapshot;
     do {
       snapshot = promise.value;
@@ -49,20 +50,20 @@ public final class Promise implements TruffleObject {
         Callback.Transform transform = (Callback.Transform) callback;
         if (result instanceof Exception) {
           // result is an exception, no mapping is done, just fulfil callback's promise with it
-          trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, result));
+          trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, result, node));
         } else {
           try {
-            Object o = transform.function.apply(result);
+            Object o = applyTCOToFunction(transform.function, result, node);
             if (o instanceof Promise) {
               // function returned a Promise, make it pass its result to callback's promise when done
-              trampoline = new Trampoline.More(trampoline, () -> ((Promise) o).propagate(transform.result));
+              trampoline = new Trampoline.More(trampoline, () -> ((Promise) o).propagate(transform.result, node));
             } else {
               // otherwise, fulfil with what function returned
-              trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, o));
+              trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, o, node));
             }
           } catch (Exception e) {
             // function threw an exception, fulfil callbacks's promise with it
-            trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, e));
+            trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, e, node));
           }
         }
         callback = transform.next;
@@ -77,7 +78,7 @@ public final class Promise implements TruffleObject {
     return trampoline;
   }
 
-  private Trampoline propagate(Promise promise) {
+  private Trampoline propagate(Promise promise, Node node) {
     Object snapshot;
     Object update;
     do {
@@ -88,13 +89,13 @@ public final class Promise implements TruffleObject {
       } else {
         // already done
         final Object result = snapshot;
-        return new Trampoline.More(Trampoline.Done.INSTANCE, () -> fulfil(promise, result));
+        return new Trampoline.More(Trampoline.Done.INSTANCE, () -> fulfil(promise, result, node));
       }
     } while (!UPDATER.compareAndSet(this, snapshot, update));
     return Trampoline.Done.INSTANCE;
   }
 
-  public Promise map(Function<? super Object, ?> function) {
+  public Promise map(Function<? super Object, ?> function, Node node) {
     Promise result = null;
     Object snapshot;
     Object update;
@@ -109,7 +110,7 @@ public final class Promise implements TruffleObject {
         if (snapshot instanceof Exception) return this;
         // if this promise succeeded, apply the function
         try {
-          Object o = function.apply(snapshot);
+          Object o = applyTCOToFunction(function, snapshot, node);
           // if it's a promise, don't wrap it
           if (o instanceof Promise) return (Promise) o;
           // otherwise, fulfil the result with the value function returned
@@ -127,25 +128,20 @@ public final class Promise implements TruffleObject {
     return result;
   }
 
-  public Object mapUnwrap(Function<? super Object, ?> function) {
-    Promise result = null;
+  /**
+   * @return value of the promise, if it was fulfilled, otherwise returns null
+   */
+  public Object unwrap() {
     Object snapshot;
     Object update;
     do {
       snapshot = value;
       if (snapshot instanceof Callback) {
-        if (result == null) result = new Promise();
-        update = new Callback.Transform(result, function, (Callback) snapshot);
+        return null;
       } else {
-        if (snapshot instanceof Exception) return this;
-        try {
-          return function.apply(snapshot);
-        } catch (Exception e) {
-          return e;
-        }
+        return snapshot;
       }
     } while (!UPDATER.compareAndSet(this, snapshot, update));
-    return result;
   }
 
   public Promise then(Promise promise) {
@@ -163,7 +159,7 @@ public final class Promise implements TruffleObject {
     return result;
   }
 
-  public static Promise all(Object[] args) {
+  public static Promise all(Object[] args, Node node) {
     Promise result = new Promise();
     Object[] data = args.clone();
     AtomicInteger counter = new AtomicInteger(data.length);
@@ -179,19 +175,19 @@ public final class Promise implements TruffleObject {
           if (snapshot instanceof Callback) {
             update = new Callback.Consume(o -> {
               data[idx] = o;
-              if (counter.decrementAndGet() == 0) result.fulfil(data);
-            }, result::fulfil, (Callback) snapshot);
+              if (counter.decrementAndGet() == 0) result.fulfil(data, node);
+            }, (val) -> result.fulfil(val, node), (Callback) snapshot);
           } else {
-            if (snapshot instanceof Exception) result.fulfil(snapshot);
+            if (snapshot instanceof Exception) result.fulfil(snapshot, node);
             else {
               data[idx] = snapshot;
-              if (counter.decrementAndGet() == 0) result.fulfil(data);
+              if (counter.decrementAndGet() == 0) result.fulfil(data, node);
             }
             break;
           }
         } while (!UPDATER.compareAndSet(promise, snapshot, update));
       } else {
-        if (counter.decrementAndGet() == 0) result.fulfil(data);
+        if (counter.decrementAndGet() == 0) result.fulfil(data, node);
       }
     }
     return result;
@@ -300,6 +296,29 @@ public final class Promise implements TruffleObject {
 
     enum Nil implements Stack {
       INSTANCE
+    }
+  }
+
+  private static <T, R> Object applyTCOToFunction(Function<T, R> function, T argument, Node node) {
+    InteropLibrary library = InteropLibrary.getFactory().createDispatched(3);
+
+    try {
+      return function.apply(argument);
+    } catch (TailCallException e) {
+      abzu.runtime.Function dispatchFunction = e.function;
+      Object[] argumentValues = e.arguments;
+      while (true) {
+        try {
+          return library.execute(dispatchFunction, argumentValues);
+        } catch (TailCallException te) {
+          dispatchFunction = te.function;
+          argumentValues = te.arguments;
+        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException _) {
+          /* Execute was not successful. */
+          // TODO add node
+          throw UndefinedNameException.undefinedFunction(node, dispatchFunction);
+        }
+      }
     }
   }
 }

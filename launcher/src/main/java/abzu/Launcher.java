@@ -37,7 +37,7 @@ public final class Launcher {
   private static int executeSource(Source source, Map<String, String> options) {
     Context context;
     try {
-      context = Context.newBuilder("abzu").in(System.in).out(System.out).options(options).build();
+      context = Context.newBuilder("abzu").in(System.in).out(System.out).options(options).allowAllAccess(true).build();
     } catch (IllegalArgumentException e) {
       System.err.println(e.getMessage());
       return 1;

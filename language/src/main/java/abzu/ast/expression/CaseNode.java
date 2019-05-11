@@ -60,24 +60,20 @@ public class CaseNode extends ExpressionNode {
   }
 
   @Override
-  public void setInPromise(Promise inPromise) {
-    super.setInPromise(inPromise);
-    for (PatternMatchable patternMatchable : patternNodes) {
-      ((ExpressionNode) patternMatchable).setInPromise(inPromise);
-    }
-  }
-
-  @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object value = expression.executeGeneric(frame);
 
     if (value instanceof Promise) {
       Promise promise = (Promise) value;
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-//      setInPromise(future);
-      setIsTail(false);
-      MaterializedFrame materializedFrame = frame.materialize();
-      return promise.mapUnwrap(val -> execute(val, materializedFrame));
+      Object unwrappedValue = promise.unwrap();
+
+      if (unwrappedValue != null) {
+        return execute(unwrappedValue, frame);
+      } else {
+        CompilerDirectives.transferToInterpreter();
+        MaterializedFrame materializedFrame = frame.materialize();
+        return promise.map(val -> execute(val, materializedFrame), this);
+      }
     } else {
       return execute(value, frame);
     }

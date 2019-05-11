@@ -56,7 +56,7 @@ public class AbzuRootNode extends RootNode {
       frame.setObject(newFrameSlot, lexicalScope.getValue(oldFrameSlot));
     }
 
-    assert getLanguage(AbzuLanguage.class).getContextReference().get() != null;
+    assert lookupContextReference(AbzuLanguage.class).get() != null;
     return bodyNode.executeGeneric(frame);
   }
 

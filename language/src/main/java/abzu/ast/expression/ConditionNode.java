@@ -65,13 +65,6 @@ public final class ConditionNode extends ExpressionNode {
   }
 
   @Override
-  public void setInPromise(Promise inPromise) {
-    super.setInPromise(inPromise);
-    this.thenExpression.setInPromise(inPromise);
-    this.elseExpression.setInPromise(inPromise);
-  }
-
-  @Override
   public Object executeGeneric(VirtualFrame frame) {
     /*
      * In the interpreter, record profiling information that the condition was executed and with

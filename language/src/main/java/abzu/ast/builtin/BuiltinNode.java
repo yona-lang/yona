@@ -21,15 +21,6 @@ import abzu.AbzuException;
 @NodeChild(value = "arguments", type = ExpressionNode[].class)
 @GenerateNodeFactory
 public abstract class BuiltinNode extends ExpressionNode {
-
-  /**
-   * Accessor for the {@link Context}. The implementation of this method is generated
-   * automatically based on the {@link NodeField} annotation on the class.
-   */
-  public final Context getContext() {
-    return getRootNode().getLanguage(AbzuLanguage.class).getContextReference().get();
-  }
-
   @Override
   public final Object executeGeneric(VirtualFrame frame) {
     try {
