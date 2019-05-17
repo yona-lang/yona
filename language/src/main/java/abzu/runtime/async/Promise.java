@@ -24,7 +24,7 @@ public final class Promise implements TruffleObject {
     value = Callback.Nil.INSTANCE;
   }
 
-  Promise(Object value) {
+  public Promise(Object value) {
     this.value = value;
   }
 
@@ -132,31 +132,11 @@ public final class Promise implements TruffleObject {
    * @return value of the promise, if it was fulfilled, otherwise returns null
    */
   public Object unwrap() {
-    Object snapshot;
-    Object update;
-    do {
-      snapshot = value;
-      if (snapshot instanceof Callback) {
-        return null;
-      } else {
-        return snapshot;
-      }
-    } while (!UPDATER.compareAndSet(this, snapshot, update));
-  }
-
-  public Promise then(Promise promise) {
-    Promise result = null;
-    Object snapshot;
-    Object update;
-    do {
-      snapshot = value;
-      if (snapshot instanceof Callback) {
-        if (result == null) result = new Promise();
-        update = new Callback.Transform(result, whatever -> promise, (Callback) snapshot);
-      }
-      else return snapshot instanceof Exception ? this : promise;
-    } while (!UPDATER.compareAndSet(this, snapshot, update));
-    return result;
+    if (value instanceof Callback) {
+      return null;
+    } else {
+      return value;
+    }
   }
 
   public static Promise all(Object[] args, Node node) {
@@ -250,7 +230,8 @@ public final class Promise implements TruffleObject {
       static final Done INSTANCE = new Done();
 
       @Override
-      public void run() {}
+      public void run() {
+      }
     }
 
     static final class More extends Trampoline {

@@ -5,6 +5,7 @@ import abzu.AbzuLanguage;
 import abzu.AbzuParser;
 import abzu.ast.ExpressionNode;
 import abzu.ast.MainExpressionNode;
+import abzu.ast.binary.*;
 import abzu.ast.builtin.BuiltinNode;
 import abzu.ast.call.InvokeNode;
 import abzu.ast.call.ModuleCallNode;
@@ -87,10 +88,29 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public BinaryOperationNode visitBinaryOperationExpression(AbzuParser.BinaryOperationExpressionContext ctx) {
+  public ExpressionNode visitBinaryOperationExpression(AbzuParser.BinaryOperationExpressionContext ctx) {
     ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    return new BinaryOperationNode(left, right, ctx.BIN_OP().getText());
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    switch (ctx.BIN_OP().getText()) {
+      case "==": return EqualsNodeGen.create(args);
+      case "!=": return NotEqualsNodeGen.create(args);
+      case "+": return PlusNodeGen.create(args);
+      case "-": return MinusNodeGen.create(args);
+      case "*": return MultiplyNodeGen.create(args);
+      case "/": return DivideNodeGen.create(args);
+      case "%": return ModuloNodeGen.create(args);
+      case "<": return LowerThanNodeGen.create(args);
+      case "<=": return LowerThanOrEqualsNodeGen.create(args);
+      case ">": return GreaterThanNodeGen.create(args);
+      case ">=": return GreaterThanOrEqualsNodeGen.create(args);
+      default: throw new AbzuParseError(source,
+          ctx.BIN_OP().getSymbol().getLine(),
+          ctx.BIN_OP().getSymbol().getCharPositionInLine(),
+          ctx.BIN_OP().getText().length(),
+          "Binary operation '" + ctx.BIN_OP().getText() + "' not supported");
+    }
   }
 
   @Override

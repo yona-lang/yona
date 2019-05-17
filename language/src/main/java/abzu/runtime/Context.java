@@ -56,6 +56,7 @@ public class Context {
     this.builtins.register(SleepNodeFactory.getInstance());
     this.builtins.register(FileOpenNodeFactory.getInstance());
     this.builtins.register(FileReadLineNodeFactory.getInstance());
+    this.builtins.register(AsyncNodeFactory.getInstance());
   }
 
   /**

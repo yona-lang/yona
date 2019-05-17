@@ -130,11 +130,26 @@ public final class InvokeNode extends ExpressionNode {
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
+      boolean argsArePromise = false;
       for (int i = 0; i < argumentNodes.length; i++) {
-        argumentValues[i] = argumentNodes[i].executeGeneric(frame);
+        Object argValue = argumentNodes[i].executeGeneric(frame);
+        if (argValue instanceof Promise) {
+            argsArePromise = true;
+        }
+        argumentValues[i] = argValue;
       }
 
-      // TODO Promise.all(argumentValues)
+      if (argsArePromise) {
+        Promise argsPromise = Promise.all(argumentValues, this);
+        return argsPromise.map(argValues -> {
+          try {
+            return library.execute(function, (Object[]) argValues);
+          } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+            /* Execute was not successful. */
+            return UndefinedNameException.undefinedFunction(this, function);
+          }
+        }, this);
+      }
 
       if (this.isTail()) {
         throw new TailCallException(function, argumentValues);

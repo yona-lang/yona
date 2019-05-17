@@ -2,6 +2,7 @@ package abzu.ast.expression;
 
 import abzu.ast.ExpressionNode;
 import abzu.runtime.async.Promise;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -51,23 +52,31 @@ public final class PatternLetNode extends LexicalScopeNode {
   @Override
   @ExplodeLoop
   public Object executeGeneric(VirtualFrame frame) {
-    Promise firstPromise = null;
-    MaterializedFrame materializedFrame = frame.materialize();
+    Promise promise = null;
+    MaterializedFrame materializedFrame = null;
 
-    for (int i = 0; i < patternAliases.length; i++) {
-      Object aliasValue = patternAliases[i].executeGeneric(materializedFrame);
-      if (aliasValue instanceof Promise) {
-        Promise promise = (Promise) aliasValue;
-        if (firstPromise == null) {
-          firstPromise = promise;
-        } else {
-          firstPromise = firstPromise.then(promise);
+    for (ExpressionNode patternAlias : patternAliases) {
+      if (promise == null) {
+        Object aliasValue = patternAlias.executeGeneric(frame);
+
+        if (aliasValue instanceof Promise) {
+          promise = (Promise) aliasValue;
         }
+      } else {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+
+        if (materializedFrame == null) {
+          materializedFrame = frame.materialize();
+        }
+
+        final MaterializedFrame finalMaterializedFrame = materializedFrame;
+        promise = promise.map(ignore -> patternAlias.executeGeneric(finalMaterializedFrame), this);
       }
     }
 
-    if (firstPromise != null) {
-      return firstPromise;
+    if (promise != null) {
+      final MaterializedFrame finalMaterializedFrame = materializedFrame;
+      return promise.map(ignore -> expression.executeGeneric(finalMaterializedFrame), this);
     } else {
       return expression.executeGeneric(frame);
     }

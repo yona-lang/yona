@@ -2,6 +2,8 @@ package abzu.ast.expression;
 
 import abzu.ast.ExpressionNode;
 import abzu.runtime.async.Promise;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -70,26 +72,29 @@ public final class ConditionNode extends ExpressionNode {
      * In the interpreter, record profiling information that the condition was executed and with
      * which outcome.
      */
-    if (condition.profile(evaluateCondition(frame))) {
-      return thenExpression.executeGeneric(frame);
-    } else {
-      return elseExpression.executeGeneric(frame);
-    }
-  }
 
-  private boolean evaluateCondition(VirtualFrame frame) {
-    try {
-      /*
-       * The condition must evaluate to a boolean value, so we call the boolean-specialized
-       * execute method.
-       */
-      return ifExpression.executeBoolean(frame);
-    } catch (UnexpectedResultException ex) {
-      /*
-       * The condition evaluated to a non-boolean result. This is a type error in the AbzuLanguage
-       * program.
-       */
-      throw AbzuException.typeError(this, ex.getResult());
+    Object condValue = ifExpression.executeGeneric(frame);
+
+    if (condValue instanceof Promise) {
+      Promise promise = (Promise) condValue;
+      CompilerDirectives.transferToInterpreter();
+      MaterializedFrame materializedFrame = frame.materialize();
+
+      return promise.map(val -> {
+        if ((boolean) val) {
+          return thenExpression.executeGeneric(materializedFrame);
+        } else {
+          return elseExpression.executeGeneric(materializedFrame);
+        }
+      }, this);
+    } else if (condValue instanceof Boolean) {
+      if (condition.profile((boolean) condValue)) {
+        return thenExpression.executeGeneric(frame);
+      } else {
+        return elseExpression.executeGeneric(frame);
+      }
+    } else {
+      throw AbzuException.typeError(this, condValue);
     }
   }
 }
