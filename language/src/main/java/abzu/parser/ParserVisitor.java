@@ -62,7 +62,14 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
     if (ctx.apply().moduleCall() != null) {
       FQNNode fqnNode = visitFqn(ctx.apply().moduleCall().fqn());
       String functionName = ctx.apply().moduleCall().name().getText();
-      return new ModuleCallNode(language, fqnNode, functionName, argNodes);
+
+      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltinModules().lookup(fqnNode, functionName);
+
+      if (builtinFunction != null) {
+        return builtinFunction.createNode((Object) argNodes);
+      } else {
+        return new ModuleCallNode(language, fqnNode, functionName, argNodes);
+      }
     } else if (ctx.apply().nameCall() != null) {
       SimpleIdentifierNode nameNode = new SimpleIdentifierNode(ctx.apply().nameCall().var.getText());
       String functionName = ctx.apply().nameCall().fun.getText();

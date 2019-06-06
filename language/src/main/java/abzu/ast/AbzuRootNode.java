@@ -2,7 +2,6 @@ package abzu.ast;
 
 import abzu.AbzuLanguage;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -25,9 +24,6 @@ public class AbzuRootNode extends RootNode {
    * The name of the function, for printing purposes only.
    */
   private String name;
-
-  @CompilationFinal
-  private boolean isCloningAllowed;
 
   private final SourceSection sourceSection;
 
@@ -60,10 +56,6 @@ public class AbzuRootNode extends RootNode {
     return bodyNode.executeGeneric(frame);
   }
 
-  public ExpressionNode getBodyNode() {
-    return bodyNode;
-  }
-
   @Override
   public String getName() {
     return name;
@@ -73,15 +65,6 @@ public class AbzuRootNode extends RootNode {
     if (this.name == null) {
       this.name = name;
     }
-  }
-
-  public void setCloningAllowed(boolean isCloningAllowed) {
-    this.isCloningAllowed = isCloningAllowed;
-  }
-
-  @Override
-  public boolean isCloningAllowed() {
-    return isCloningAllowed;
   }
 
   @Override

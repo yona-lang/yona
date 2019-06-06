@@ -7,11 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Builtins {
-  private final Map<Object, NodeFactory<? extends BuiltinNode>> builtins;
-
-  public Builtins() {
-    builtins = new HashMap<>();
-  }
+  private final Map<Object, NodeFactory<? extends BuiltinNode>> builtins = new HashMap<>();
 
   public void register(NodeFactory<? extends BuiltinNode> node) {
     this.builtins.put(Context.lookupNodeInfo(node.getNodeClass()).shortName(), node);

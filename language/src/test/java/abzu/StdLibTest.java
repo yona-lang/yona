@@ -22,19 +22,19 @@ public class StdLibTest {
 
   @Test
   public void sequenceFoldLeftTest() {
-    long ret = context.eval("abzu", "sfoldl [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
+    long ret = context.eval("abzu", "Sequence.foldl [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void sequenceFoldRightTest() {
-    long ret = context.eval("abzu", "sfoldr [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
+    long ret = context.eval("abzu", "Sequence.foldr [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void sequenceFoldLeftWithinLetTest() {
-    long ret = context.eval("abzu", "let xx = 5 in sfoldl [1, 2, 3] (\\acc val -> acc + val + xx) 0").asLong();
+    long ret = context.eval("abzu", "let xx = 5 in Sequence.foldl [1, 2, 3] (\\acc val -> acc + val + xx) 0").asLong();
     assertEquals(21l, ret);
   }
 }

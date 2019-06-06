@@ -2,6 +2,8 @@ package abzu.runtime;
 
 import abzu.AbzuLanguage;
 import abzu.ast.builtin.*;
+import abzu.ast.builtin.modules.BuiltinModuleInfo;
+import abzu.ast.builtin.modules.SequenceBuiltinModule;
 import abzu.runtime.async.AsyncSelectorThread;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -30,6 +32,7 @@ public class Context {
   private final AbzuLanguage language;
   private final AllocationReporter allocationReporter;
   private final Builtins builtins;
+  private final BuiltinModules builtinModules;
   private final ExecutorService executor = Executors.newFixedThreadPool(4);
   private final AsyncSelectorThread asyncSelectorThread = new AsyncSelectorThread();
 
@@ -40,9 +43,11 @@ public class Context {
     this.language = language;
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
+    this.builtinModules = new BuiltinModules();
     this.asyncSelectorThread.start();
 
     installBuiltins(externalBuiltins);
+    installBuiltinModules();
   }
 
   private void installBuiltins(List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
@@ -51,12 +56,14 @@ public class Context {
     }
 
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
-    this.builtins.register(SequenceFoldLeftBuiltinFactory.getInstance());
-    this.builtins.register(SequenceFoldRightBuiltinFactory.getInstance());
     this.builtins.register(SleepNodeFactory.getInstance());
     this.builtins.register(FileOpenNodeFactory.getInstance());
     this.builtins.register(FileReadLineNodeFactory.getInstance());
     this.builtins.register(AsyncNodeFactory.getInstance());
+  }
+
+  private void installBuiltinModules() {
+    this.builtinModules.register(new SequenceBuiltinModule());
   }
 
   /**
@@ -84,6 +91,18 @@ public class Context {
       return info;
     } else {
       return lookupNodeInfo(clazz.getSuperclass());
+    }
+  }
+
+  public static BuiltinModuleInfo lookupBuiltinModuleInfo(Class<?> clazz) {
+    if (clazz == null) {
+      return null;
+    }
+    BuiltinModuleInfo info = clazz.getAnnotation(BuiltinModuleInfo.class);
+    if (info != null) {
+      return info;
+    } else {
+      return lookupBuiltinModuleInfo(clazz.getSuperclass());
     }
   }
 
@@ -126,6 +145,10 @@ public class Context {
 
   public Builtins getBuiltins() {
     return builtins;
+  }
+
+  public BuiltinModules getBuiltinModules() {
+    return builtinModules;
   }
 
   public ExecutorService getExecutor() {
