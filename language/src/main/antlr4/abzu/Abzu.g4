@@ -67,6 +67,7 @@ expression : PARENS_L expression PARENS_R               #expressionInParents
            | module                                     #moduleExpression
            | apply                                      #functionApplicationExpression
            | caseExpr                                   #caseExpression
+           | doExpr                                     #doExpression
            | lambda                                     #lambdaExpression
            | importExpr                                 #importExpression
            ;
@@ -143,6 +144,9 @@ otherSequence: BRACKET_L expression COMMA expression (COMMA expression)+ BRACKET
 caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ NEWLINE? KW_END ;
 patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWithGuard+) NEWLINE ;
 
+doExpr : KW_DO NEWLINE? doOneStep+ NEWLINE? KW_END ;
+doOneStep : (alias | expression) NEWLINE ;
+
 patternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
 patternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
 
@@ -207,6 +211,7 @@ KW_OF : 'of' ;
 KW_IMPORT : 'import' ;
 KW_FROM : 'from' ;
 KW_END : 'end' ;
+KW_DO : 'do' ;
 
 BRACKET_L : '[' ;
 BRACKET_R : ']' ;

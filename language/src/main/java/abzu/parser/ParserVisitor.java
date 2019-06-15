@@ -580,4 +580,24 @@ public final class ParserVisitor extends AbzuBaseVisitor<ExpressionNode> {
       return new AliasNode(ctx.name().getText(), fqnNode);
     }
   }
+
+  @Override
+  public ExpressionNode visitDoExpr(AbzuParser.DoExprContext ctx) {
+    ExpressionNode[] steps = new ExpressionNode[ctx.doOneStep().size()];
+
+    for (int i = 0; i < ctx.doOneStep().size(); i++) {
+      steps[i] = visitDoOneStep(ctx.doOneStep(i));
+    }
+
+    return new DoNode(steps);
+  }
+
+  @Override
+  public ExpressionNode visitDoOneStep(AbzuParser.DoOneStepContext ctx) {
+    if (ctx.alias() != null) {
+      return visitAlias(ctx.alias());
+    } else {
+      return ctx.expression().accept(this);
+    }
+  }
 }

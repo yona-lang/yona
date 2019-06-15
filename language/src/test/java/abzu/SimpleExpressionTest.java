@@ -254,6 +254,17 @@ public class SimpleExpressionTest {
     assertEquals(7l, ret);
   }
 
+  @Test
+  public void simpleDoTest() {
+    long ret = context.eval("abzu", "do\n" +
+        "one = 1\n" +
+        "println one\n" +
+        "two = 2\n" +
+        "one + two\n" +
+        "end\n").asLong();
+    assertEquals(3l, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with

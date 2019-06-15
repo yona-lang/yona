@@ -115,4 +115,15 @@ public class AsyncTest {
         "in z").asLong();
     assertEquals(3l, ret);
   }
+
+  @Test
+  public void simpleDoTest() {
+    long ret = context.eval("abzu", "do\n" +
+        "one = async \\-> 1\n" +
+        "println one\n" +
+        "two = async \\-> 2\n" +
+        "one + two\n" +
+        "end\n").asLong();
+    assertEquals(3l, ret);
+  }
 }
