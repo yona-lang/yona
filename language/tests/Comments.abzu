@@ -1,4 +1,4 @@
-#!/usr/bin/abzu
+#!/usr/bin/yatta
 
 # This is a testing module
 module tests\CommentsModule exports funone as

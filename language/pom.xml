@@ -2,11 +2,11 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>abzu</groupId>
-    <artifactId>abzu-parent</artifactId>
+    <groupId>yatta</groupId>
+    <artifactId>yatta-parent</artifactId>
     <version>0.1-SNAPSHOT</version>
   </parent>
-  <artifactId>abzu</artifactId>
+  <artifactId>yatta</artifactId>
   <build>
     <plugins>
       <plugin>
@@ -32,7 +32,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <finalName>abzu</finalName>
+              <finalName>yatta</finalName>
               <artifactSet>
                 <excludes>
                   <exclude>org.junit.jupiter:junit-jupiter-api</exclude>

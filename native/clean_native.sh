@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-[ -f abzunative ] && rm abzunative || echo "abzunative not found."
+[ -f yattanative ] && rm yattanative || echo "yattanative not found."
