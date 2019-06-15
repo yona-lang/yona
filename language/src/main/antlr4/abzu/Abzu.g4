@@ -140,7 +140,7 @@ oneSequence: BRACKET_L expression BRACKET_R ;
 twoSequence: BRACKET_L expression COMMA expression BRACKET_R ;
 otherSequence: BRACKET_L expression COMMA expression (COMMA expression)+ BRACKET_R ;
 
-caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ ;
+caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ NEWLINE? KW_END ;
 patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWithGuard+) NEWLINE ;
 
 patternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
@@ -206,6 +206,7 @@ KW_CASE : 'case' ;
 KW_OF : 'of' ;
 KW_IMPORT : 'import' ;
 KW_FROM : 'from' ;
+KW_END : 'end' ;
 
 BRACKET_L : '[' ;
 BRACKET_R : ']' ;

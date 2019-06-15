@@ -124,7 +124,8 @@ public class ErrorsTest {
             "(1, secondArg, 3) -> 2 + secondArg\n" +
             "(1, _, _) -> 1 + secondArg\n" +
             "(2, 3) -> 5\n" +
-            "_ -> 9\n").execute(new Tuple(1l, 5l, 6l)).asLong();
+            "_ -> 9\n" +
+            "end\n").execute(new Tuple(1l, 5l, 6l)).asLong();
       } catch (PolyglotException ex) {
         assertEquals(ex.getMessage(), "Identifier 'secondArg' not found in the current scope");
         throw ex;
@@ -138,7 +139,8 @@ public class ErrorsTest {
       try {
         context.eval("abzu", "\\arg -> case arg of\n" +
             "1 -> 2\n" +
-            "2 -> 3\n").execute(3l).asLong();
+            "2 -> 3\n" +
+            "end\n").execute(3l).asLong();
       } catch (PolyglotException ex) {
         assertEquals(ex.getMessage(), MatchException.class.getSimpleName());
         throw ex;

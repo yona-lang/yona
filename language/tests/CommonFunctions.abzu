@@ -58,3 +58,4 @@ read_lines file acc =
     case freadline file of
         ("ok", _, new_file)  -> read_lines new_file (acc + 1)
         "eof"                -> acc
+    end

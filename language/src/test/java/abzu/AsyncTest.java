@@ -32,7 +32,8 @@ public class AsyncTest {
     long ret = context.eval("abzu", "case (async \\-> (1, 2)) of\n" +
         "(1, 3) -> 5\n" +
         "(1, 2) -> 4\n" +
-        "_      -> 3\n").asLong();
+        "_      -> 3\n" +
+        "end\n").asLong();
     assertEquals(4l, ret);
   }
 
