@@ -15,7 +15,7 @@ Yatta aims to solve some of the shortcomings, both practical and theoretical, of
 
 * **Clojure** - doesn't provide an implicit non-blocking IO, nor built-in pattern matching
 * **Scala** - very complicated type system due to object oriented paradigm (OOP) combined with functional programming, notoriously slow compilation times, lack of support for built-in language level asynchronous IO / concurrency
-* **Eta / Haskell** - pure, lazy evaluation and related memory leaks \cite{mitchell2013leaking}, monads for side-effects
+* **Eta / Haskell** - pure, lazy evaluation and related memory leaks, monads for side-effects
 * **Erlang** - although not a JVM language, it is a language with a built in concurrency model in form of actor system. From Yatta's point of view, actor model is still a low-level approach that requires significant control of the user to model concurrent execution
 
 ## Motivation
@@ -128,7 +128,7 @@ import
 in onefun :something
 ```
 
-### Exception raising & catching expression (ticket #4)
+### Exception raising & catching expression (ticket yatta-lang/yatta#4)
 `raise` is an expression for raising exceptions:
 
 ```haskell
@@ -155,8 +155,8 @@ Yatta has a rich set of built-in types, in addition to ability to define custom 
 
 * integer - signed 64 bit number
 * float - signed 64 bit floating point number
-* big integer - arbitrary-precision integers (ticket #12)
-* big decimal - arbitrary-precision signed decimal numbers (ticket #12)
+* big integer - arbitrary-precision integers (ticket yatta-lang/yatta#12)
+* big decimal - arbitrary-precision signed decimal numbers (ticket yatta-lang/yatta#12)
 * byte
 * symbol (ticket #12)
 * char - UTF-8 code point
