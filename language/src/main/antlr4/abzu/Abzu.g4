@@ -221,7 +221,6 @@ CONS_L : '<:' ;
 CONS_R : ':>' ;
 
 DOT : '.' ;
-SLASH : OP_DIVIDE ;
 VLINE : '|';
 BACKSLASH : '\\' ;
 

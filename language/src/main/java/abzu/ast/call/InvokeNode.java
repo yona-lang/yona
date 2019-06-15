@@ -9,10 +9,17 @@ import abzu.ast.expression.value.FunctionNode;
 import abzu.ast.local.ReadArgumentNode;
 import abzu.ast.local.WriteLocalVariableNodeGen;
 import abzu.runtime.Function;
+import abzu.runtime.UndefinedNameException;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -35,8 +42,7 @@ public final class InvokeNode extends ExpressionNode {
   private final Function function;
   @Node.Children
   private final ExpressionNode[] argumentNodes;
-  @Node.Child
-  private DispatchNode dispatchNode;
+  @Child private InteropLibrary library;
 
   private AbzuLanguage language;
 
@@ -44,7 +50,7 @@ public final class InvokeNode extends ExpressionNode {
     this.functionNode = functionNode;
     this.function = null;
     this.argumentNodes = argumentNodes;
-    this.dispatchNode = DispatchNodeGen.create();
+    this.library = InteropLibrary.getFactory().createDispatched(3);
     this.language = language;
   }
 
@@ -52,7 +58,7 @@ public final class InvokeNode extends ExpressionNode {
     this.functionNode = null;
     this.function = function;
     this.argumentNodes = argumentNodes;
-    this.dispatchNode = DispatchNodeGen.create();
+    this.library = InteropLibrary.getFactory().createDispatched(3);
     this.language = language;
   }
 
@@ -68,13 +74,14 @@ public final class InvokeNode extends ExpressionNode {
   @ExplodeLoop
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    Function function;
+    final Function function;
     if (this.function != null) {
       function = this.function;
     } else {
       try {
         function = functionNode.executeFunction(frame);
       } catch (UnexpectedResultException e) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new AbzuException("Cannot invoke non-function node: " + functionNode, this);
       }
     }
@@ -86,11 +93,14 @@ public final class InvokeNode extends ExpressionNode {
      * array length is really constant.
      */
     CompilerAsserts.compilationConstant(argumentNodes.length);
+    CompilerAsserts.compilationConstant(this.isTail());
 
     if (argumentNodes.length > function.getCardinality()) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new AbzuException("Unexpected number of arguments when calling '" + function.getName() +
-                              "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
+          "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
     } else if (argumentNodes.length < function.getCardinality()) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       /*
        * Create a closure for partially applied function
        */
@@ -107,12 +117,12 @@ public final class InvokeNode extends ExpressionNode {
        */
       InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(function.getName()), allArgumentNodes);
       BlockNode blockNode = new BlockNode(new ExpressionNode[]{
-        /*
-         * We need to make sure that the original function is still accessible within the closure, even if the partially
-         * applied function already leaves the scope with the original function
-        */
-        WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName())),
-        invokeNode
+          /*
+           * We need to make sure that the original function is still accessible within the closure, even if the partially
+           * applied function already leaves the scope with the original function
+          */
+          WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName())),
+          invokeNode
       });
 
       FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName,
@@ -120,19 +130,41 @@ public final class InvokeNode extends ExpressionNode {
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
+      boolean argsArePromise = false;
       for (int i = 0; i < argumentNodes.length; i++) {
-        argumentValues[i] = argumentNodes[i].executeGeneric(frame);
+        Object argValue = argumentNodes[i].executeGeneric(frame);
+        if (argValue instanceof Promise) {
+            argsArePromise = true;
+        }
+        argumentValues[i] = argValue;
+      }
+
+      if (argsArePromise) {
+        Promise argsPromise = Promise.all(argumentValues, this);
+        return argsPromise.map(argValues -> {
+          try {
+            return library.execute(function, (Object[]) argValues);
+          } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+            /* Execute was not successful. */
+            return UndefinedNameException.undefinedFunction(this, function);
+          }
+        }, this);
       }
 
       if (this.isTail()) {
         throw new TailCallException(function, argumentValues);
       }
+
+      Function dispatchFunction = function;
       while (true) {
         try {
-          return dispatchNode.executeDispatch(function, argumentValues);
+          return library.execute(dispatchFunction, argumentValues);
         } catch (TailCallException e) {
-          function = e.function;
+          dispatchFunction = e.function;
           argumentValues = e.arguments;
+        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+          /* Execute was not successful. */
+          throw UndefinedNameException.undefinedFunction(this, dispatchFunction);
         }
       }
     }

@@ -1,7 +1,9 @@
 package abzu.ast.expression;
 
 import abzu.ast.ExpressionNode;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 
 import java.util.Arrays;
@@ -41,12 +43,13 @@ public final class LetNode extends LexicalScopeNode {
   }
 
   @Override
-  public void setIsTail() {
-    super.setIsTail();
-    this.expression.setIsTail();
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    this.expression.setIsTail(isTail);
   }
 
   @Override
+  @ExplodeLoop
   public Object executeGeneric(VirtualFrame frame) {
     for (AliasNode alias : aliases) {
       alias.executeGeneric(frame);

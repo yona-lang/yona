@@ -21,6 +21,19 @@ public class Tuple implements TruffleObject {
   }
 
   @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    Tuple tuple = (Tuple) o;
+    return Arrays.equals(items, tuple.items);
+  }
+
+  @Override
+  public int hashCode() {
+    return Arrays.hashCode(items);
+  }
+
+  @Override
   public ForeignAccess getForeignAccess() {
     return TupleForeign.ACCESS;
   }

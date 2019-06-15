@@ -7,7 +7,8 @@ module tests\CommonFunctions exports
     nonLinearHeadTailsTest,
     nonLinearAsSequenceOneTest,
     nonLinearAsSequenceTwoTest,
-    countdown
+    countdown,
+    read_file
     as
 
 #factorial 1 = 1
@@ -49,3 +50,11 @@ nonLinearAsSequenceTwoTest seqOne@(headOne <: _) seqTwo@(headTwo <: _) = headOne
 countdown n
     | n < 1 = 0
 countdown n = countdown (n - 1)
+
+
+read_file file = read_lines file 0
+
+read_lines file acc =
+    case freadline file of
+        ("ok", _, new_file)  -> read_lines new_file (acc + 1)
+        "eof"                -> acc

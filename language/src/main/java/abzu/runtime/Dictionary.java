@@ -1,10 +1,6 @@
 package abzu.runtime;
 
-import abzu.ast.call.DispatchNode;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
-import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.Node;
 
 import java.util.Arrays;
@@ -36,9 +32,9 @@ public abstract class Dictionary implements TruffleObject {
 
   abstract Dictionary remove(Object key, int depth, int hash);
 
-  public abstract Object fold(Function fn3, Object initial, DispatchNode dispatchNode);
+  public abstract Object fold(Function fn3, Object initial, InteropLibrary dispatch);
 
-  public abstract Dictionary map(Function fn1, DispatchNode dispatchNode);
+  public abstract Dictionary map(Function fn1, InteropLibrary dispatch);
 
   public abstract int size();
 
@@ -129,22 +125,22 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Object fold(Function fn3, Object initial, DispatchNode dispatchNode) {
+    public Object fold(Function fn3, Object initial, InteropLibrary dispatch) {
       Object result = initial;
       for (Dictionary dict : data) {
-        if (dict != null) result = dict.fold(fn3, result, dispatchNode);
+        if (dict != null) result = dict.fold(fn3, result, dispatch);
       }
       return result;
     }
 
     @Override
-    public Dictionary map(Function fn1, DispatchNode dispatchNode) {
+    public Dictionary map(Function fn1, InteropLibrary dispatch) {
       final int len = data.length;
       final Dictionary[] newData = new Dictionary[len];
       Dictionary cursor;
       for (int i = 0; i < len; i++) {
         cursor = data[i];
-        if (cursor != null) newData[i] = cursor.map(fn1, dispatchNode);
+        if (cursor != null) newData[i] = cursor.map(fn1, dispatch);
       }
       return new Array(n, newData);
     }
@@ -296,33 +292,45 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Object fold(Function fn3, Object initial, DispatchNode dispatchNode) {
+    public Object fold(Function fn3, Object initial, InteropLibrary dispatch) {
       Object result = initial;
       for (Object o : data) {
         if (o instanceof Dictionary) {
-          result = ((Dictionary) o).fold(fn3, result, dispatchNode);
+          result = ((Dictionary) o).fold(fn3, result, dispatch);
         } else {
           assert o instanceof Entry;
           final Entry entry = (Entry) o;
-          result = dispatchNode.executeDispatch(fn3, new Object[] { result, entry.key, entry.value });
+          try {
+            result = dispatch.execute(fn3, new Object[] { result, entry.key, entry.value });
+          } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+            /* Execute was not successful. */
+            // TODO node should not be null
+            throw UndefinedNameException.undefinedFunction(null, fn3);
+          }
         }
       }
       return result;
     }
 
     @Override
-    public Dictionary map(Function fn1, DispatchNode dispatchNode) {
+    public Dictionary map(Function fn1, InteropLibrary dispatch) {
       final int len = data.length;
       final Object[] newData = new Object[len];
       Object cursor;
       for (int i = 0; i < len; i++) {
         cursor = data[i];
         if (cursor instanceof Dictionary) {
-          newData[i] = ((Dictionary) cursor).map(fn1, dispatchNode);
+          newData[i] = ((Dictionary) cursor).map(fn1, dispatch);
         } else {
           assert cursor instanceof Entry;
           final Entry entry = (Entry) cursor;
-          newData[i] = new Entry(entry.key, dispatchNode.executeDispatch(fn1, new Object[] { entry.value }));
+          try {
+            newData[i] = new Entry(entry.key, dispatch.execute(fn1, new Object[] { entry.value }));
+          } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+            /* Execute was not successful. */
+            // TODO node should not be null
+            throw UndefinedNameException.undefinedFunction(null, fn1);
+          }
         }
       }
       return new Bitmap(bitmap, newData);
@@ -434,28 +442,40 @@ public abstract class Dictionary implements TruffleObject {
     }
 
     @Override
-    public Object fold(Function fn3, Object initial, DispatchNode dispatchNode) {
+    public Object fold(Function fn3, Object initial, InteropLibrary dispatch) {
       Object result = initial;
       for (Object o : data) {
         if (o instanceof Dictionary) {
-          result = ((Dictionary) o).fold(fn3, result, dispatchNode);
+          result = ((Dictionary) o).fold(fn3, result, dispatch);
         }
         if (o instanceof Entry) {
           final Entry entry = (Entry) o;
-          result = dispatchNode.executeDispatch(result, new Object[] { result, entry.key, entry.value });
+          try {
+            result = dispatch.execute(result, new Object[] { result, entry.key, entry.value });
+          } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+            /* Execute was not successful. */
+            // TODO node should not be null
+            throw UndefinedNameException.undefinedFunction(null, fn3);
+          }
         }
       }
       return result;
     }
 
     @Override
-    public Dictionary map(Function fn1, DispatchNode dispatchNode) {
+    public Dictionary map(Function fn1, InteropLibrary dispatch) {
       final int len = data.length;
       final Entry[] newData = new Entry[len];
       Entry cursor;
       for (int i = 0; i < len; i++) {
         cursor = data[i];
-        newData[i] = new Entry(cursor.key, dispatchNode.executeDispatch(fn1, new Object[] { cursor.value }));
+        try {
+          newData[i] = new Entry(cursor.key, dispatch.execute(fn1, new Object[] { cursor.value }));
+        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+          /* Execute was not successful. */
+          // TODO node should not be null
+          throw UndefinedNameException.undefinedFunction(null, fn1);
+        }
       }
       return new Collision(hash, n, newData);
     }

@@ -1,6 +1,9 @@
 package abzu.ast.builtin;
 
+import abzu.AbzuLanguage;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import abzu.runtime.Context;
@@ -20,8 +23,8 @@ import java.io.PrintWriter;
 public abstract class PrintlnBuiltin extends BuiltinNode {
 
     @Specialization
-    public long println(long value) {
-        doPrint(getContext().getOutput(), value);
+    public long println(long value, @CachedContext(AbzuLanguage.class) Context context) {
+        doPrint(context.getOutput(), value);
         return value;
     }
 
@@ -31,8 +34,8 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @Specialization
-    public boolean println(boolean value) {
-        doPrint(getContext().getOutput(), value);
+    public boolean println(boolean value, @CachedContext(AbzuLanguage.class) Context context) {
+        doPrint(context.getOutput(), value);
         return value;
     }
 
@@ -42,8 +45,8 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @Specialization
-    public String println(String value) {
-        doPrint(getContext().getOutput(), value);
+    public String println(String value, @CachedContext(AbzuLanguage.class) Context context) {
+        doPrint(context.getOutput(), value);
         return value;
     }
 
@@ -53,8 +56,21 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @Specialization
-    public Object println(Object value) {
-        doPrint(getContext().getOutput(), value);
+    public Object println(Promise value, @CachedContext(AbzuLanguage.class) Context context) {
+        return value.map(val -> {
+            doPrint(context.getOutput(), val);
+            return val;
+        }, this);
+    }
+
+    @TruffleBoundary
+    private static void doPrint(PrintWriter out, Promise value) {
+        out.println(value);
+    }
+
+    @Specialization
+    public Object println(Object value, @CachedContext(AbzuLanguage.class) Context context) {
+        doPrint(context.getOutput(), value);
         return value;
     }
 

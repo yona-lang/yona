@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 VERSION="0.1"
-EXPECTED_GRAALVM_VERSION="1.0.0-rc12"
+EXPECTED_GRAALVM_VERSION="19.0.0"
+TRUFFLE_VERSION="19.0.0"
 
 MAIN_CLASS="abzu.Launcher"
 SCRIPT_HOME="$(cd "$(dirname "$0")" && pwd -P)"
@@ -71,7 +72,7 @@ if [[ "$GRAALVM_VERSION" != "" ]]; then
           PROGRAM_ARGS="$PROGRAM_ARGS $opt" ;;
       esac
     done
-    $JAVACMD $JAVA_ARGS -Dtruffle.class.path.append=$LANGUAGE_PATH -cp $LAUNCHER_PATH $MAIN_CLASS $PROGRAM_ARGS
+    "$JAVACMD" $JAVA_ARGS -Dtruffle.class.path.append="$LANGUAGE_PATH" -cp "$LAUNCHER_PATH" "$MAIN_CLASS" $PROGRAM_ARGS
 else
     echo "Warning: Could not find GraalVM on $JAVA_HOME. Running on JDK without support for compilation."
     echo
@@ -98,8 +99,8 @@ else
         echo "Could not find mvn cache at $HOME/.m2"
         exit
     fi
-    GRAAL_SDK_PATH="$HOME/.m2/repository/org/graalvm/graal-sdk/$VERSION/graal-sdk-$VERSION.jar"
-    TRUFFLE_API_PATH="$HOME/.m2/repository/com/oracle/truffle/truffle-api/$VERSION/truffle-api-$VERSION.jar"
-    ANTLR_PATH="$HOME/.m2/repository/org/antlr/antlr4-runtime/4.7.1/antlr4-runtime-4.7.1.jar"
-    $JAVACMD -cp $GRAAL_SDK_PATH:$LAUNCHER_PATH:$LANGUAGE_PATH:$TRUFFLE_API_PATH:$ANTLR_PATH $MAIN_CLASS $PROGRAM_ARGS
+    GRAAL_SDK_PATH="$HOME/.m2/repository/org/graalvm/graal-sdk/sdk/$TRUFFLE_VERSION/graal-sdk-$TRUFFLE_VERSION.jar"
+    TRUFFLE_API_PATH="$HOME/.m2/repository/org/graalvm/truffle/truffle-api/$TRUFFLE_VERSION/truffle-api-$TRUFFLE_VERSION.jar"
+    ANTLR_PATH="$HOME/.m2/repository/org/antlr/antlr4-runtime/4.7.2/antlr4-runtime-4.7.2.jar"
+    "$JAVACMD" -cp "$GRAAL_SDK_PATH":"$LAUNCHER_PATH":"$LANGUAGE_PATH":"$TRUFFLE_API_PATH":"$ANTLR_PATH" "$MAIN_CLASS" $PROGRAM_ARGS
 fi

@@ -2,22 +2,22 @@ package abzu;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class SimpleExpressionTest {
 
   private Context context;
 
-  @Before
+  @BeforeEach
   public void initEngine() {
     context = Context.create();
   }
 
-  @After
+  @AfterEach
   public void dispose() {
     context.close();
   }
@@ -152,7 +152,7 @@ public class SimpleExpressionTest {
         "    alias = test\n" +
         "    aliastwo = 6\n" +
         "in\n" +
-        "(alias, aliastwo)").execute(5);
+        "(alias, aliastwo)").execute(5l);
     assertEquals(2, ret.getArraySize());
 
     Object[] array = ret.as(Object[].class);

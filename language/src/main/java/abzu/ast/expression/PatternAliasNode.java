@@ -1,9 +1,13 @@
 package abzu.ast.expression;
 
+import abzu.AbzuException;
 import abzu.ast.ExpressionNode;
-import abzu.ast.pattern.MatchException;
 import abzu.ast.pattern.MatchNode;
 import abzu.ast.pattern.MatchResult;
+import abzu.runtime.Unit;
+import abzu.runtime.async.Promise;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 import java.util.Objects;
@@ -42,23 +46,41 @@ public final class PatternAliasNode extends ExpressionNode {
   }
 
   @Override
-  public void setIsTail() {
-    super.setIsTail();
-    this.expression.setIsTail();
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    this.expression.setIsTail(isTail);
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object value = expression.executeGeneric(frame);
+
+    if (value instanceof Promise) {
+      Promise promise = (Promise) value;
+      Object unwrappedValue = promise.unwrap();
+
+      if (unwrappedValue != null) {
+        return execute(unwrappedValue, frame);
+      } else {
+        CompilerDirectives.transferToInterpreter();
+        MaterializedFrame materializedFrame = frame.materialize();
+        return promise.map(val -> execute(val, materializedFrame), this);
+      }
+    } else {
+      return execute(value, frame);
+    }
+  }
+
+  private Object execute(Object value, VirtualFrame frame) {
     MatchResult matchResult = matchNode.match(value, frame);
     if (matchResult.isMatches()) {
       for (AliasNode aliasNode : matchResult.getAliases()) {
         aliasNode.executeGeneric(frame);
       }
 
-      return null;
+      return Unit.INSTANCE;
     } else {
-      throw MatchException.INSTANCE;
+      throw new AbzuException("MatchException", this);
     }
   }
 }

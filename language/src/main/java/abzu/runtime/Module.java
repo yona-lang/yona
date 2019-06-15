@@ -1,11 +1,18 @@
 package abzu.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+@ExportLibrary(InteropLibrary.class)
+@SuppressWarnings("static-method")
 public final class Module implements TruffleObject {
   final String fqn;
   final List<String> exports;
@@ -23,10 +30,10 @@ public final class Module implements TruffleObject {
   @Override
   public String toString() {
     return "Module{" +
-           "fqn=" + fqn +
-           ", exports=" + exports +
-           ", functions=" + functions +
-           '}';
+        "fqn=" + fqn +
+        ", exports=" + exports +
+        ", functions=" + functions +
+        '}';
   }
 
   public String getFqn() {
@@ -41,118 +48,64 @@ public final class Module implements TruffleObject {
     return functions;
   }
 
-  @Override
-  public ForeignAccess getForeignAccess() {
-    return ModuleMessageResolutionForeign.ACCESS;
+  @ExportMessage
+  boolean hasMembers() {
+    return true;
+  }
+
+  @ExportMessage
+  @CompilerDirectives.TruffleBoundary
+  Object readMember(String member) {
+    return functions.get(member);
+  }
+
+  @ExportMessage
+  @CompilerDirectives.TruffleBoundary
+  boolean isMemberReadable(String member) {
+    return functions.containsKey(member);
+  }
+
+  @ExportMessage
+  @CompilerDirectives.TruffleBoundary
+  Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+    return new FunctionNamesObject(functions.keySet().toArray());
   }
 
   public static boolean isInstance(TruffleObject obj) {
     return obj instanceof Module;
   }
 
-  @MessageResolution(receiverType = Module.class)
-  static final class ModuleMessageResolution {
+  @ExportLibrary(InteropLibrary.class)
+  static final class FunctionNamesObject implements TruffleObject {
 
-    @Resolve(message = "HAS_KEYS")
-    abstract static class ModuleHasKeysNode extends Node {
+    private final Object[] names;
 
-      @SuppressWarnings("unused")
-      public Object access(Module fo) {
-        return true;
-      }
+    FunctionNamesObject(Object[] names) {
+      this.names = names;
     }
 
-    @Resolve(message = "KEYS")
-    abstract static class ModuleKeysNode extends Node {
-
-      @CompilerDirectives.TruffleBoundary
-      public Object access(Module fo) {
-        return new ModuleMessageResolution.FunctionNamesObject(fo.functions.keySet());
-      }
+    @ExportMessage
+    boolean hasArrayElements() {
+      return true;
     }
 
-    @Resolve(message = "KEY_INFO")
-    abstract static class ModuleKeyInfoNode extends Node {
-
-      @CompilerDirectives.TruffleBoundary
-      public Object access(Module fo, String name) {
-        if (fo.functions.containsKey(name)) {
-          return 3;
-        } else {
-          return 0;
-        }
-      }
+    @ExportMessage
+    boolean isArrayElementReadable(long index) {
+      return index >= 0 && index < names.length;
     }
 
-    @Resolve(message = "READ")
-    abstract static class ModuleReadNode extends Node {
-
-      @CompilerDirectives.TruffleBoundary
-      public Object access(Module fo, String name) {
-        try {
-          return fo.functions.get(name);
-        } catch (IndexOutOfBoundsException ioob) {
-          return null;
-        }
-      }
+    @ExportMessage
+    long getArraySize() {
+      return names.length;
     }
 
-    static final class FunctionNamesObject implements TruffleObject {
-
-      private final Set<String> names;
-
-      private FunctionNamesObject(Set<String> names) {
-        this.names = names;
+    @ExportMessage
+    Object readArrayElement(long index) throws InvalidArrayIndexException {
+      if (!isArrayElementReadable(index)) {
+        CompilerDirectives.transferToInterpreter();
+        throw InvalidArrayIndexException.create(index);
       }
-
-      @Override
-      public ForeignAccess getForeignAccess() {
-        return FunctionNamesMessageResolutionForeign.ACCESS;
-      }
-
-      public static boolean isInstance(TruffleObject obj) {
-        return obj instanceof ModuleMessageResolution.FunctionNamesObject;
-      }
-
-      @MessageResolution(receiverType = ModuleMessageResolution.FunctionNamesObject.class)
-      static final class FunctionNamesMessageResolution {
-
-        @Resolve(message = "HAS_SIZE")
-        abstract static class FunctionNamesHasSizeNode extends Node {
-
-          @SuppressWarnings("unused")
-          public Object access(ModuleMessageResolution.FunctionNamesObject namesObject) {
-            return true;
-          }
-        }
-
-        @Resolve(message = "GET_SIZE")
-        abstract static class FunctionNamesGetSizeNode extends Node {
-
-          @CompilerDirectives.TruffleBoundary
-          public Object access(ModuleMessageResolution.FunctionNamesObject namesObject) {
-            return namesObject.names.size();
-          }
-        }
-
-        @Resolve(message = "READ")
-        abstract static class FunctionNamesReadNode extends Node {
-
-          @CompilerDirectives.TruffleBoundary
-          public Object access(ModuleMessageResolution.FunctionNamesObject namesObject, int index) {
-            if (index >= namesObject.names.size()) {
-              throw UnknownIdentifierException.raise(Integer.toString(index));
-            }
-            Iterator<String> iterator = namesObject.names.iterator();
-            int i = index;
-            while (i-- > 0) {
-              iterator.next();
-            }
-            return iterator.next();
-          }
-        }
-
-      }
+      return names[(int) index];
     }
   }
 }

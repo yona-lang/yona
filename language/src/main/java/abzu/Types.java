@@ -1,7 +1,7 @@
 package abzu;
 
 import abzu.runtime.*;
-import abzu.runtime.Module;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.TypeCast;
 import com.oracle.truffle.api.dsl.TypeCheck;
 import com.oracle.truffle.api.dsl.TypeSystem;
@@ -12,7 +12,8 @@ import com.oracle.truffle.api.dsl.TypeSystem;
  * conversion methods for all types. In this class, we only cover types where the automatically
  * generated ones would not be sufficient.
  */
-@TypeSystem({boolean.class, byte.class, long.class, double.class, String.class, Function.class, Unit.class, Tuple.class, Module.class, StringList.class, Sequence.class, Dictionary.class})
+@TypeSystem({boolean.class, byte.class, long.class, double.class, String.class, Function.class, Unit.class, Tuple.class,
+    Module.class, StringList.class, Sequence.class, Dictionary.class, Promise.class, NativeObject.class})
 public abstract class Types {
 
   /**

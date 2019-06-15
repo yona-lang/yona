@@ -1,9 +1,14 @@
 package abzu.runtime;
 
-import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
+@ExportLibrary(InteropLibrary.class)
+@SuppressWarnings("static-method")
 public final class Unit implements TruffleObject {
+
   /**
    * The canonical value to represent {@code null} in AbzuLanguage.
    */
@@ -26,12 +31,10 @@ public final class Unit implements TruffleObject {
   }
 
   /**
-   * In case you want some of your objects to co-operate with other languages, you need to make
-   * them implement {@link TruffleObject} and provide additional {@link IsNoneMessageResolution
-   * foreign access implementation}.
+   * {@link Unit} values are interpreted as null values by other languages.
    */
-  @Override
-  public ForeignAccess getForeignAccess() {
-    return IsNoneMessageResolutionForeign.ACCESS;
+  @ExportMessage
+  boolean isNull() {
+    return true;
   }
 }

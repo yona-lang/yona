@@ -3,6 +3,7 @@ package abzu.ast;
 import abzu.TypesGen;
 import abzu.runtime.*;
 import abzu.runtime.Module;
+import abzu.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
@@ -38,8 +39,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
     return this.isTail;
   }
 
-  public void setIsTail() {
-    this.isTail = true;
+  public void setIsTail(boolean isTail) {
+    this.isTail = isTail;
   }
 
   /*

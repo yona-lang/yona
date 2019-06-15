@@ -1,10 +1,10 @@
 package abzu.runtime;
 
 import abzu.AbzuLanguage;
-import abzu.ast.builtin.BuiltinNode;
-import abzu.ast.builtin.PrintlnBuiltinFactory;
-import abzu.ast.builtin.SequenceFoldLeftBuiltinFactory;
-import abzu.ast.builtin.SequenceFoldRightBuiltinFactory;
+import abzu.ast.builtin.*;
+import abzu.ast.builtin.modules.BuiltinModuleInfo;
+import abzu.ast.builtin.modules.SequenceBuiltinModule;
+import abzu.runtime.async.AsyncSelectorThread;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -12,27 +12,29 @@ import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Layout;
-import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.source.Source;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Context {
   private static final Source BUILTIN_SOURCE = Source.newBuilder(AbzuLanguage.ID, "", "abzu builtin").build();
-  private static final Layout LAYOUT = Layout.createLayout();
+  static final Layout LAYOUT = Layout.createLayout();
 
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
   private final PrintWriter output;
-  private final Shape emptyShape;
   private final AbzuLanguage language;
   private final AllocationReporter allocationReporter;
   private final Builtins builtins;
+  private final BuiltinModules builtinModules;
+  private final ExecutorService executor = Executors.newFixedThreadPool(4);
+  private final AsyncSelectorThread asyncSelectorThread = new AsyncSelectorThread();
 
   public Context(AbzuLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
     this.env = env;
@@ -40,10 +42,12 @@ public class Context {
     this.output = new PrintWriter(env.out(), true);
     this.language = language;
     this.allocationReporter = env.lookup(AllocationReporter.class);
-    this.emptyShape = LAYOUT.createShape(AbzuObjectType.INSTANCE);
     this.builtins = new Builtins();
+    this.builtinModules = new BuiltinModules();
+    this.asyncSelectorThread.start();
 
     installBuiltins(externalBuiltins);
+    installBuiltinModules();
   }
 
   private void installBuiltins(List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
@@ -52,8 +56,14 @@ public class Context {
     }
 
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
-    this.builtins.register(SequenceFoldLeftBuiltinFactory.getInstance());
-    this.builtins.register(SequenceFoldRightBuiltinFactory.getInstance());
+    this.builtins.register(SleepNodeFactory.getInstance());
+    this.builtins.register(FileOpenNodeFactory.getInstance());
+    this.builtins.register(FileReadLineNodeFactory.getInstance());
+    this.builtins.register(AsyncNodeFactory.getInstance());
+  }
+
+  private void installBuiltinModules() {
+    this.builtinModules.register(new SequenceBuiltinModule());
   }
 
   /**
@@ -84,32 +94,16 @@ public class Context {
     }
   }
 
-  /*
-   * Methods for object creation / object property access.
-   */
-
-  public AllocationReporter getAllocationReporter() {
-    return allocationReporter;
-  }
-
-  /**
-   * Allocate an empty object. All new objects initially have no properties. Properties are added
-   * when they are first stored, i.e., the store triggers a shape change of the object.
-   */
-  public DynamicObject createObject() {
-    DynamicObject object = null;
-    allocationReporter.onEnter(null, 0, AllocationReporter.SIZE_UNKNOWN);
-    object = emptyShape.newInstance();
-    allocationReporter.onReturnValue(object, 0, AllocationReporter.SIZE_UNKNOWN);
-    return object;
-  }
-
-  public static boolean isAbzuObject(TruffleObject value) {
-    /*
-     * LAYOUT.getType() returns a concrete implementation class, i.e., a class that is more
-     * precise than the base class DynamicObject. This makes the type check faster.
-     */
-    return LAYOUT.getType().isInstance(value) && LAYOUT.getType().cast(value).getShape().getObjectType() == AbzuObjectType.INSTANCE;
+  public static BuiltinModuleInfo lookupBuiltinModuleInfo(Class<?> clazz) {
+    if (clazz == null) {
+      return null;
+    }
+    BuiltinModuleInfo info = clazz.getAnnotation(BuiltinModuleInfo.class);
+    if (info != null) {
+      return info;
+    } else {
+      return lookupBuiltinModuleInfo(clazz.getSuperclass());
+    }
   }
 
   /*
@@ -151,5 +145,13 @@ public class Context {
 
   public Builtins getBuiltins() {
     return builtins;
+  }
+
+  public BuiltinModules getBuiltinModules() {
+    return builtinModules;
+  }
+
+  public ExecutorService getExecutor() {
+    return executor;
   }
 }
