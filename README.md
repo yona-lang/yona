@@ -128,7 +128,7 @@ import
 in onefun :something
 ```
 
-### Exception raising & catching expression (ticket yatta-lang/yatta#4)
+### Exception raising & catching expression (ticket [#4](/../../issues/4))
 `raise` is an expression for raising exceptions:
 
 ```haskell
@@ -155,10 +155,10 @@ Yatta has a rich set of built-in types, in addition to ability to define custom 
 
 * integer - signed 64 bit number
 * float - signed 64 bit floating point number
-* big integer - arbitrary-precision integers (ticket yatta-lang/yatta#12)
-* big decimal - arbitrary-precision signed decimal numbers (ticket yatta-lang/yatta#12)
+* big integer - arbitrary-precision integers (ticket [#12](/../../issues/12))
+* big decimal - arbitrary-precision signed decimal numbers (ticket [#12](/../../issues/12))
 * byte
-* symbol (ticket #12)
+* symbol (ticket [#12](/../../issues/12))
 * char - UTF-8 code point
 * string - UTF-8 strings
 * tuple
