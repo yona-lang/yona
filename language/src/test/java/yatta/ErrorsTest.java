@@ -27,7 +27,7 @@ public class ErrorsTest {
   public void oneArgFunctionTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "\\arg -> argx").execute(6);
+        context.eval(YattaLanguage.ID, "\\arg -> argx").execute(6);
       } catch (PolyglotException ex) {
         assertEquals(ex.getMessage(), "Identifier 'argx' not found in the current scope");
         throw ex;
@@ -39,7 +39,7 @@ public class ErrorsTest {
   public void invocationInLet1Test() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "let " +
+        context.eval(YattaLanguage.ID, "let " +
             "funone = \\arg -> arg " +
             "alias = 6" +
             "funalias = \\arg -> funoneX alias " +
@@ -55,7 +55,7 @@ public class ErrorsTest {
   public void invocationInLet2Test() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "let " +
+        context.eval(YattaLanguage.ID, "let " +
             "funone = \\arg -> arg " +
             "alias = 6" +
             "funalias = \\arg -> funoneX alias " +
@@ -71,7 +71,7 @@ public class ErrorsTest {
   public void invalidNumberOfArgsTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "let " +
+        context.eval(YattaLanguage.ID, "let " +
             "funone = \\arg -> arg " +
             "alias = 6" +
             "funalias = \\arg -> funone alias 7 " +
@@ -87,7 +87,7 @@ public class ErrorsTest {
   public void callOfNonFunctionTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "let " +
+        context.eval(YattaLanguage.ID, "let " +
             "funone = \\arg -> arg " +
             "alias = 6" +
             "funalias = \\arg -> alias 7 funone " +
@@ -103,7 +103,7 @@ public class ErrorsTest {
   public void callOfPrivateModuleFunctionTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "let\n" +
+        context.eval(YattaLanguage.ID, "let\n" +
             "testMod = module TestMod exports funone as\n" +
             "funone argone = funtwo argone\n" +
             "funtwo argone = argone\n" +
@@ -119,7 +119,7 @@ public class ErrorsTest {
   public void freeVarOverridePatternTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "\\arg -> case arg of\n" +
+        context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
             "(1, 2, 3) -> 6\n" +
             "(1, secondArg, 3) -> 2 + secondArg\n" +
             "(1, _, _) -> 1 + secondArg\n" +
@@ -137,7 +137,7 @@ public class ErrorsTest {
   public void simpleIntNoMatchPatternTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval("yatta", "\\arg -> case arg of\n" +
+        context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
             "1 -> 2\n" +
             "2 -> 3\n" +
             "end\n").execute(3l).asLong();

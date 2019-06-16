@@ -29,7 +29,7 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("equalsOps")
   void testEqualsOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("==")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("==")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
@@ -37,7 +37,7 @@ public class BinaryOperatorsTest {
   @MethodSource("equalsOps")
   void testNotEqualsOps(BinaryArgsHolder args) {
     BinaryArgsHolder newArgs = args.mapExpected(exp -> !(boolean) exp);
-    Object ret = context.eval("yatta", newArgs.format("!=")).as(newArgs.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, newArgs.format("!=")).as(newArgs.expectedType);
     assertEquals(newArgs.expected, ret);
   }
 
@@ -71,14 +71,14 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("lowerThanOps")
   void testLowerThanOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("<")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("<")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
   @ParameterizedTest
   @MethodSource("greaterThanOps")
   void testGreaterThanOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format(">")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format(">")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
@@ -125,14 +125,14 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("lowerOrEqualsOps")
   void testLowerThanEqualsOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("<=")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("<=")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
   @ParameterizedTest
   @MethodSource("greaterOrEqualsOps")
   void testGreaterThanEqualsOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format(">=")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format(">=")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
@@ -193,7 +193,7 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("plusOps")
   void testPlusOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("+")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("+")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
@@ -212,7 +212,7 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("minusOps")
   void testMinusOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("-")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("-")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
@@ -230,7 +230,7 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("multiplyOps")
   void testMultiplyOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("*")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("*")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
@@ -247,7 +247,7 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("divideOps")
   void testDivideOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("/")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("/")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
@@ -264,7 +264,7 @@ public class BinaryOperatorsTest {
   @ParameterizedTest
   @MethodSource("moduloOps")
   void testModuloOps(BinaryArgsHolder args) {
-    Object ret = context.eval("yatta", args.format("%")).as(args.expectedType);
+    Object ret = context.eval(YattaLanguage.ID, args.format("%")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 

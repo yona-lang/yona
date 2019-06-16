@@ -24,42 +24,42 @@ public class SimpleExpressionTest {
 
   @Test
   public void longValueTest() {
-    long ret = context.eval("yatta", "5").asLong();
+    long ret = context.eval(YattaLanguage.ID, "5").asLong();
     assertEquals(5l, ret);
   }
 
   @Test
   public void byteValueTest() {
-    byte ret = context.eval("yatta", "5b").asByte();
+    byte ret = context.eval(YattaLanguage.ID, "5b").asByte();
     assertEquals(5, ret);
   }
 
   @Test
   public void floatValueTest() {
-    double ret = context.eval("yatta", "5.0").asDouble();
+    double ret = context.eval(YattaLanguage.ID, "5.0").asDouble();
     assertEquals(5.0, ret, 0);
   }
 
   @Test
   public void unitValueTest() {
-    assertEquals("NONE", context.eval("yatta", "()").toString());
+    assertEquals("NONE", context.eval(YattaLanguage.ID, "()").toString());
   }
 
   @Test
   public void stringValueTest() {
-    String ret = context.eval("yatta", "\"yatta-string\"").asString();
+    String ret = context.eval(YattaLanguage.ID, "\"yatta-string\"").asString();
     assertEquals("yatta-string", ret);
   }
 
   @Test
   public void symbolValueTest() {
-    String ret = context.eval("yatta", ":yattaSymbol").asString();
+    String ret = context.eval(YattaLanguage.ID, ":yattaSymbol").asString();
     assertEquals("yattaSymbol", ret);
   }
 
   @Test
   public void tupleValueTest() {
-    Value tuple = context.eval("yatta", "(1, 2, 3)");
+    Value tuple = context.eval(YattaLanguage.ID, "(1, 2, 3)");
     assertEquals(3, tuple.getArraySize());
 
     Object[] array = tuple.as(Object[].class);
@@ -70,13 +70,13 @@ public class SimpleExpressionTest {
 
   @Test
   public void emptySequenceValueTest() {
-    Value sequence = context.eval("yatta", "[]");
+    Value sequence = context.eval(YattaLanguage.ID, "[]");
     assertEquals(0, sequence.getArraySize());
   }
 
   @Test
   public void oneSequenceValueTest() {
-    Value sequence = context.eval("yatta", "[1]");
+    Value sequence = context.eval(YattaLanguage.ID, "[1]");
     assertEquals(1, sequence.getArraySize());
 
     Object[] array = sequence.as(Object[].class);
@@ -85,7 +85,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void twoSequenceValueTest() {
-    Value sequence = context.eval("yatta", "[1, 2]");
+    Value sequence = context.eval(YattaLanguage.ID, "[1, 2]");
     assertEquals(2, sequence.getArraySize());
 
     Object[] array = sequence.as(Object[].class);
@@ -95,7 +95,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void threeSequenceValueTest() {
-    Value sequence = context.eval("yatta", "[1, 2, 3]");
+    Value sequence = context.eval(YattaLanguage.ID, "[1, 2, 3]");
     assertEquals(3, sequence.getArraySize());
 
     Object[] array = sequence.as(Object[].class);
@@ -106,25 +106,25 @@ public class SimpleExpressionTest {
 
   @Test
   public void zeroArgFunctionTest() {
-    long ret = context.eval("yatta", "\\ -> 5").execute().asLong();
+    long ret = context.eval(YattaLanguage.ID, "\\ -> 5").execute().asLong();
     assertEquals(5l, ret);
   }
 
   @Test
   public void oneArgFunctionTest() {
-    long ret = context.eval("yatta", "\\arg -> arg").execute(6).asLong();
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> arg").execute(6).asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void twoArgFunctionFirstTest() {
-    long ret = context.eval("yatta", "\\argone argtwo -> argone").execute(5, 6).asLong();
+    long ret = context.eval(YattaLanguage.ID, "\\argone argtwo -> argone").execute(5, 6).asLong();
     assertEquals(5l, ret);
   }
 
   @Test
   public void twoArgFunctionSecondTest() {
-    long ret = context.eval("yatta", "\\argone argtwo -> argtwo").execute(5, 6).asLong();
+    long ret = context.eval(YattaLanguage.ID, "\\argone argtwo -> argtwo").execute(5, 6).asLong();
     assertEquals(6l, ret);
   }
 
@@ -133,7 +133,7 @@ public class SimpleExpressionTest {
     String src = "module Test exports fun as\n" +
         "fun = 6\n" +
         "other_fun = 7";
-    Value modVal = context.eval("yatta", src);
+    Value modVal = context.eval(YattaLanguage.ID, src);
 
     assertTrue(modVal.hasMember("fun"));
     assertTrue(modVal.hasMember("other_fun"));
@@ -142,13 +142,13 @@ public class SimpleExpressionTest {
 
   @Test
   public void letOneAliasTest() {
-    long ret = context.eval("yatta", "\\test -> let alias = test in alias").execute(5).asLong();
+    long ret = context.eval(YattaLanguage.ID, "\\test -> let alias = test in alias").execute(5).asLong();
     assertEquals(5l, ret);
   }
 
   @Test
   public void letTwoAliasesTest() {
-    Value ret = context.eval("yatta", "\\test -> let \n" +
+    Value ret = context.eval(YattaLanguage.ID, "\\test -> let \n" +
         "    alias = test\n" +
         "    aliastwo = 6\n" +
         "in\n" +
@@ -162,19 +162,19 @@ public class SimpleExpressionTest {
 
   @Test
   public void letNotInFunctionTest() {
-    long ret = context.eval("yatta", "let alias = 6 in alias").asLong();
+    long ret = context.eval(YattaLanguage.ID, "let alias = 6 in alias").asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void letFunctionAliasTest() {
-    long ret = context.eval("yatta", "let funalias = \\arg -> arg in funalias").execute(5).asLong();
+    long ret = context.eval(YattaLanguage.ID, "let funalias = \\arg -> arg in funalias").execute(5).asLong();
     assertEquals(5l, ret);
   }
 
   @Test
   public void lambdaInLetTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "alias = 6\n" +
         "funalias = \\arg -> alias\n" +
         "in funalias").execute(5l).asLong();
@@ -183,7 +183,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void invocationInLetTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "funone = \\arg -> arg\n" +
         "alias = 6\n" +
         "funalias = \\arg -> funone alias\n" +
@@ -193,7 +193,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void curriedLambdaInLetTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "curriedFun = \\argone argtwo -> argone\n" +
         "curriedOne = \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
         "curried = \\curriedArg -> curriedOne curriedArg\n" +
@@ -203,7 +203,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void curriedLambdaInLetSecondArgTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "curriedFun = \\argone argtwo -> argtwo\n" +
         "curriedOne = \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
         "curried = \\curriedArg -> curriedOne curriedArg\n" +
@@ -213,7 +213,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void curriedLambdaInLetOutOfScopeTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "curriedFullFun = \\-> let fullFun = \\argone argtwo argthree -> argthree in fullFun 1\n" +
         "curriedFun = curriedFullFun\n" +
         "curried = \\curriedArg -> curriedFun 3 4 curriedArg\n" +
@@ -223,7 +223,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void curriedLambdaInLetZeroArgsTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "curriedFun = \\ -> 1\n" +
         "curried = \\curriedArg -> curriedFun\n" +
         "in curried").execute(6).asLong();
@@ -232,7 +232,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void zeroArgApplicationInLetTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "zeroArgFun = \\-> 5\n" +
         "in zeroArgFun").asLong();
     assertEquals(5l, ret);
@@ -240,7 +240,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void moduleCallPrivateInLetTest() {
-    long ret = context.eval("yatta", "let\n" +
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
         "testMod = module TestMod exports funone as\n" +
         "funone argone = funtwo argone\n" +
         "funtwo argone = argone\n" +
@@ -250,13 +250,13 @@ public class SimpleExpressionTest {
 
   @Test
   public void intSumTest() {
-    long ret = context.eval("yatta", "2 + 5").asLong();
+    long ret = context.eval(YattaLanguage.ID, "2 + 5").asLong();
     assertEquals(7l, ret);
   }
 
   @Test
   public void simpleDoTest() {
-    long ret = context.eval("yatta", "do\n" +
+    long ret = context.eval(YattaLanguage.ID, "do\n" +
         "one = 1\n" +
         "println one\n" +
         "two = 2\n" +
@@ -273,13 +273,13 @@ public class SimpleExpressionTest {
   //which dictionary-like structures can't support by their nature
   /*@Test
   public void emptyDictValueTest() {
-    Value dict = context.eval("yatta", "{}");
+    Value dict = context.eval(YattaLanguage.ID, "{}");
     assertEquals(0, dict.getArraySize());
   }
 
   @Test
   public void dictValueTest() {
-    Value dict = context.eval("yatta", "{:aa = 1, :bb = 2}");
+    Value dict = context.eval(YattaLanguage.ID, "{:aa = 1, :bb = 2}");
     assertEquals(2, dict.getArraySize());
   }*/
 }

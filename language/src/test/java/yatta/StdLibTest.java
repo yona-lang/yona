@@ -22,19 +22,19 @@ public class StdLibTest {
 
   @Test
   public void sequenceFoldLeftTest() {
-    long ret = context.eval("yatta", "Sequence.foldl [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Sequence.foldl [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void sequenceFoldRightTest() {
-    long ret = context.eval("yatta", "Sequence.foldr [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Sequence.foldr [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void sequenceFoldLeftWithinLetTest() {
-    long ret = context.eval("yatta", "let xx = 5 in Sequence.foldl [1, 2, 3] (\\acc val -> acc + val + xx) 0").asLong();
+    long ret = context.eval(YattaLanguage.ID, "let xx = 5 in Sequence.foldl [1, 2, 3] (\\acc val -> acc + val + xx) 0").asLong();
     assertEquals(21l, ret);
   }
 }

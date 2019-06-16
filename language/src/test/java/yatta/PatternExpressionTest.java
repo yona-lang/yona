@@ -27,7 +27,7 @@ public class PatternExpressionTest {
 
   @Test
   public void simpleTuplePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(1, 2, 3) -> 6\n" +
         "(1, 2) -> 3\n"+
         "(2, 3) -> 5\n"+
@@ -38,7 +38,7 @@ public class PatternExpressionTest {
 
   @Test
   public void underscorePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(1, 2, 3) -> 6\n" +
         "(1, 2) -> 3\n"+
         "(2, 3) -> 5\n"+
@@ -49,7 +49,7 @@ public class PatternExpressionTest {
 
   @Test
   public void nestedTuplePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(1, 2, 3) -> 6\n" +
         "((1, 2), 3) -> 3\n"+
         "(2, 3) -> 5\n"+
@@ -60,7 +60,7 @@ public class PatternExpressionTest {
 
   @Test
   public void nestedUnderscorePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(1, 2, 3) -> 6\n" +
         "(1, _) -> 3\n"+
         "(2, 3) -> 5\n"+
@@ -69,10 +69,9 @@ public class PatternExpressionTest {
     assertEquals(3l, ret);
   }
 
-
   @Test
   public void boundVarPatternTest() {
-    long ret = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "(1, 2, 3) -> 6\n" +
         "(1, bound) -> 1 + bound\n"+
         "(2, 3) -> 5\n"+
@@ -83,7 +82,7 @@ public class PatternExpressionTest {
 
   @Test
   public void freeVarPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(1, 2, 3) -> 6\n" +
         "(1, secondArg) -> 1 + secondArg\n"+
         "(2, 3) -> 5\n"+
@@ -94,7 +93,7 @@ public class PatternExpressionTest {
 
   @Test
   public void freeNestedVarsPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(1, 2, 3) -> 6\n" +
         "(1, secondArg, (nestedThird, 5)) -> nestedThird + secondArg\n"+
         "(2, 3) -> 5\n"+
@@ -105,7 +104,7 @@ public class PatternExpressionTest {
 
   @Test
   public void simpleIntPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 -> 2\n" +
         "2 -> 3\n"+
         "_ -> 9\n" +
@@ -115,7 +114,7 @@ public class PatternExpressionTest {
 
   @Test
   public void simpleStringPatternTest() {
-    String ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    String ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "\"foo\" -> \"bar\"\n"+
         "\"hello\" -> \"world\"\n" +
         "_ -> \"unexpected\"\n" +
@@ -125,7 +124,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: [] -> 2\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
@@ -135,7 +134,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] :> 1 -> 2\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
@@ -145,7 +144,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsUnderscoreOnePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: _ -> 2\n" +
         "_ <: _ -> 3\n" +
         "[] -> 4\n"+
@@ -156,7 +155,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadUnderscoreOnePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "_ :> 1 -> 2\n" +
         "_ :> _ -> 3\n" +
         "[] -> 4\n"+
@@ -167,7 +166,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsUnderscoreTwoPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: _ -> 2\n" +
         "_ <: _ -> 3\n" +
         "[] -> 4\n"+
@@ -178,7 +177,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadUnderscoreTwoPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "_ :> 1 -> 2\n" +
         "_ :> _ -> 3\n" +
         "[] -> 4\n"+
@@ -189,7 +188,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsUnderscoreThreePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: _ -> 2\n" +
         "_ <: _ -> 4\n"+
         "_ -> 9\n" +
@@ -199,7 +198,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadUnderscoreThreePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "_ :> 1 -> 2\n" +
         "_ :> _ -> 4\n"+
         "_ -> 9\n" +
@@ -208,7 +207,7 @@ public class PatternExpressionTest {
   }
   @Test
   public void headTailsUnderscoreFourPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: _ -> 2\n" +
         "_ <: [] -> 4\n"+
         "_ -> 9\n" +
@@ -218,7 +217,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadUnderscoreFourPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "_ :> 1 -> 2\n" +
         "[] :> _ -> 4\n"+
         "_ -> 9\n" +
@@ -228,7 +227,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsFreeVarPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: [] -> 2\n" +
         "1 <: tail -> tail\n" +
         "[] -> 3\n"+
@@ -244,7 +243,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadFreeVarPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] :> 3 -> 2\n" +
         "tail :> 3 -> tail\n" +
         "[] -> 3\n"+
@@ -260,7 +259,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsFreeVarEmptyPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: tail -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
@@ -273,7 +272,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadFreeVarEmptyPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "tail :> 1 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
@@ -286,7 +285,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsBoundVarPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "1 <: [] -> 2\n" +
         "1 <: bound -> bound\n" +
         "[] -> 3\n"+
@@ -302,7 +301,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadBoundVarPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "[] :> 3 -> 2\n" +
         "bound :> 3 -> bound\n" +
         "[] -> 3\n"+
@@ -318,7 +317,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsBoundVarEmptyPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "1 <: bound -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
@@ -331,7 +330,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tailsHeadBoundVarEmptyPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "bound :> 1 -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
@@ -344,7 +343,7 @@ public class PatternExpressionTest {
 
   @Test
   public void sequenceMatchPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] -> 3\n"+
         "[1, _, 3] -> 1\n" +
         "_ -> 9\n" +
@@ -355,7 +354,7 @@ public class PatternExpressionTest {
 
   @Test
   public void sequenceMatchFreeVarPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] -> 3\n"+
         "[1, second, 3] -> second\n" +
         "_ -> 9\n" +
@@ -366,7 +365,7 @@ public class PatternExpressionTest {
 
   @Test
   public void sequenceMatchBoundVarPatternTest() {
-    long ret = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "[] -> 3\n"+
         "[1, bound, 3] -> bound\n" +
         "_ -> 9\n" +
@@ -378,7 +377,7 @@ public class PatternExpressionTest {
 
   @Test
   public void namedSequenceMatchPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] -> 3\n"+
         "seq@([1, _, 3]) -> seq\n" +
         "_ -> 9\n" +
@@ -394,7 +393,7 @@ public class PatternExpressionTest {
 
   @Test
   public void namedSequenceMatchFreeVarPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] -> 3\n"+
         "seq@([1, second, 3]) -> second\n" +
         "_ -> 9\n" +
@@ -405,7 +404,7 @@ public class PatternExpressionTest {
 
   @Test
   public void namedSequenceMatchBoundVarPatternTest() {
-    long ret = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "[] -> 3\n"+
         "seq@([1, bound, 3]) -> bound\n" +
         "_ -> 9\n" +
@@ -416,7 +415,7 @@ public class PatternExpressionTest {
 
   @Test
   public void tupleInLetPatternTest() {
-    long ret = context.eval("yatta", "let (1, x, _) = (1, 2, 3) in x").asLong();
+    long ret = context.eval(YattaLanguage.ID, "let (1, x, _) = (1, 2, 3) in x").asLong();
 
     assertEquals(2l, ret);
   }
@@ -424,14 +423,14 @@ public class PatternExpressionTest {
 
   @Test
   public void sequenceInLetPatternTest() {
-    long ret = context.eval("yatta", "let [1, x, y] = [1, 2, 3] in x + y").asLong();
+    long ret = context.eval(YattaLanguage.ID, "let [1, x, y] = [1, 2, 3] in x + y").asLong();
 
     assertEquals(5l, ret);
   }
 
   @Test
   public void guardsInCasePatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(aa, bb)\n" +
         "| aa <= bb -> aa\n" +
         "| aa > bb -> bb\n" +
@@ -441,7 +440,7 @@ public class PatternExpressionTest {
 
   @Test
   public void guardsInCasePatternSecondTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "(aa, bb)\n" +
         "| aa <= bb -> aa\n" +
         "| aa > bb -> bb\n" +
@@ -451,7 +450,7 @@ public class PatternExpressionTest {
 
   @Test
   public void guardsInCaseInLambdaTest() {
-    String ret = context.eval("yatta", "\\arg -> case () of\n" +
+    String ret = context.eval(YattaLanguage.ID, "\\arg -> case () of\n" +
         "_ | arg < 0     -> \"negative\"\n" +
         "  | arg == 0    -> \"zero\"\n" +
         "  | true        -> \"positive\"\n" +
@@ -461,7 +460,7 @@ public class PatternExpressionTest {
 
   @Test
   public void multipleHeadsOneTailPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: 2 <: [] -> 2\n" +
         "1 <: 2 <: tail -> tail\n" +
         "[] -> 3\n"+
@@ -477,7 +476,7 @@ public class PatternExpressionTest {
 
   @Test
   public void oneTailMultipleHeadsPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] :> 3 :> 4  -> 2\n" +
         "tail :> 3 :> 4 -> tail\n" +
         "[] -> 3\n"+
@@ -493,7 +492,7 @@ public class PatternExpressionTest {
 
   @Test
   public void dictPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "{\"b\" = 3} -> 3\n" +
         "{\"a\" = 1, \"b\" = bb} -> bb\n" +
         "_ -> 9\n" +
@@ -503,7 +502,7 @@ public class PatternExpressionTest {
 
   @Test
   public void emptyDictPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "{} -> 3\n" +
         "_ -> 9\n" +
         "end\n").execute(Dictionary.dictionary()).asLong();
@@ -512,7 +511,7 @@ public class PatternExpressionTest {
 
   @Test
   public void nonEmptyDictPatternTest() {
-    long ret = context.eval("yatta", "\\arg -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "{} -> 3\n" +
         "_ -> 9\n" +
         "end\n").execute(Dictionary.dictionary().insert("a", 1l)).asLong();
@@ -521,7 +520,7 @@ public class PatternExpressionTest {
 
   @Test
   public void dictBoundVarPatternTest() {
-    long ret = context.eval("yatta", "\\arg bound -> case arg of\n" +
+    long ret = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "{\"b\" = 3} -> 3\n" +
         "{\"a\" = 1, \"b\" = bound} -> bound\n" +
         "_ -> 9\n" +
@@ -531,7 +530,7 @@ public class PatternExpressionTest {
 
   @Test
   public void headTailsHeadPatternTest() {
-    Value sequence = context.eval("yatta", "\\arg -> case arg of\n" +
+    Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "1 <: 2 <: 3 <: tail :> 3 :> 4 -> 1 \n" +
         "1 <: 2 <: [] :> 3 :> 4  -> 2\n" +
         "0 <: tail :> 3 :> 4 -> tail\n" +
@@ -544,5 +543,19 @@ public class PatternExpressionTest {
     assertEquals(2, array.length);
     assertEquals(1l, array[0]);
     assertEquals(2l, array[1]);
+  }
+  
+  @Test
+  public void nestedCaseSyntaxTest() {
+    long ret = context.eval(YattaLanguage.ID, "case [1, 2, 3] of\n" +
+        "[1, 2] -> 0\n" +
+        "[1, middle, 3] -> case middle of\n" +
+        "    1 -> 1\n" +
+        "    2 -> 2\n" +
+        "end\n" +
+        "_ -> 3\n" +
+        "end").asLong();
+
+    assertEquals(2l, ret);
   }
 }

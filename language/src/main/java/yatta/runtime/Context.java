@@ -109,7 +109,6 @@ public class Context {
   /*
    * Methods for language interoperability.
    */
-
   public static Object fromForeignValue(Object a) {
     if (a instanceof Long || a instanceof String || a instanceof Boolean) {
       return a;
