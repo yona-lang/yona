@@ -3,6 +3,7 @@ package yatta.runtime;
 import yatta.YattaLanguage;
 import yatta.ast.builtin.*;
 import yatta.ast.builtin.modules.BuiltinModuleInfo;
+import yatta.ast.builtin.modules.FileBuiltinModule;
 import yatta.ast.builtin.modules.SequenceBuiltinModule;
 import yatta.runtime.async.AsyncSelectorThread;
 import com.oracle.truffle.api.CallTarget;
@@ -57,13 +58,12 @@ public class Context {
 
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
     this.builtins.register(SleepNodeFactory.getInstance());
-    this.builtins.register(FileOpenNodeFactory.getInstance());
-    this.builtins.register(FileReadLineNodeFactory.getInstance());
     this.builtins.register(AsyncNodeFactory.getInstance());
   }
 
   private void installBuiltinModules() {
     this.builtinModules.register(new SequenceBuiltinModule());
+    this.builtinModules.register(new FileBuiltinModule());
   }
 
   /**

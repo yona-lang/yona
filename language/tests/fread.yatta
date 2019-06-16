@@ -1,4 +1,4 @@
 let
-	file = fopen "tests/big.txt" "r"
+	file = File.open"tests/big.txt" "r"
 in
 tests\CommonFunctions.read_file file
