@@ -1,12 +1,13 @@
 package yatta.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
 import java.util.Arrays;
 
-@MessageResolution(receiverType = Tuple.class)
+@ExportLibrary(InteropLibrary.class)
 public class Tuple implements TruffleObject {
   private final Object[] items;
 
@@ -33,49 +34,24 @@ public class Tuple implements TruffleObject {
     return Arrays.hashCode(items);
   }
 
-  @Override
-  public ForeignAccess getForeignAccess() {
-    return TupleForeign.ACCESS;
+  @ExportMessage
+  public final long getArraySize() {
+    return items.length;
   }
 
-  @Resolve(message = "GET_SIZE")
-  abstract static class GetSize extends Node {
-    Object access(Tuple obj) {
-      return obj.items.length;
-    }
+  @ExportMessage
+  public final Object readArrayElement(long index) {
+    return items[(int) index];
   }
 
-  @Resolve(message = "HAS_SIZE")
-  abstract static class HasSize extends Node {
-    public Object access(@SuppressWarnings("unused") Tuple receiver) {
-      return true;
-    }
+  @ExportMessage
+  public final boolean isArrayElementReadable(long index) {
+    return index < items.length;
   }
 
-  @Resolve(message = "KEY_INFO")
-  public abstract static class InfoNode extends Node {
-
-    public int access(Tuple receiver, int index) {
-      if (index < receiver.items.length) {
-        return KeyInfo.READABLE;
-      } else {
-        return KeyInfo.NONE;
-      }
-    }
-  }
-
-  @Resolve(message = "READ")
-  abstract static class Read extends Node {
-    public Object access(Tuple receiver, int index) {
-      try {
-        Object key = receiver.items[index];
-        assert key instanceof Number;
-        return key;
-      } catch (IndexOutOfBoundsException e) {
-        CompilerDirectives.transferToInterpreter();
-        throw UnknownIdentifierException.raise(String.valueOf(index));
-      }
-    }
+  @ExportMessage
+  public final boolean hasArrayElements() {
+    return true;
   }
 
   static boolean isInstance(TruffleObject tuple) {

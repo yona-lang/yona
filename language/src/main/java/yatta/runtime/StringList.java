@@ -1,13 +1,14 @@
 package yatta.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
 import java.util.Arrays;
 import java.util.List;
 
-@MessageResolution(receiverType = StringList.class)
+@ExportLibrary(InteropLibrary.class)
 public class StringList implements TruffleObject {
   private final String[] items;
 
@@ -25,49 +26,24 @@ public class StringList implements TruffleObject {
     return "[" + toStr.substring(1, toStr.length() - 1) + ']';
   }
 
-  @Override
-  public ForeignAccess getForeignAccess() {
-    return StringListForeign.ACCESS;
+  @ExportMessage
+  public final long getArraySize() {
+    return items.length;
   }
 
-  @Resolve(message = "GET_SIZE")
-  abstract static class GetSize extends Node {
-    Object access(StringList obj) {
-      return obj.items.length;
-    }
+  @ExportMessage
+  public final Object readArrayElement(long index) {
+    return items[(int) index];
   }
 
-  @Resolve(message = "HAS_SIZE")
-  abstract static class HasSize extends Node {
-    public Object access(@SuppressWarnings("unused") StringList receiver) {
-      return true;
-    }
+  @ExportMessage
+  public final boolean isArrayElementReadable(long index) {
+    return index < items.length;
   }
 
-  @Resolve(message = "KEY_INFO")
-  public abstract static class InfoNode extends Node {
-
-    public int access(StringList receiver, int index) {
-      if (index < receiver.items.length) {
-        return KeyInfo.READABLE;
-      } else {
-        return KeyInfo.NONE;
-      }
-    }
-  }
-
-  @Resolve(message = "READ")
-  abstract static class Read extends Node {
-    public Object access(StringList receiver, int index) {
-      try {
-        Object key = receiver.items[index];
-        assert key instanceof Number;
-        return key;
-      } catch (IndexOutOfBoundsException e) {
-        CompilerDirectives.transferToInterpreter();
-        throw UnknownIdentifierException.raise(String.valueOf(index));
-      }
-    }
+  @ExportMessage
+  public final boolean hasArrayElements() {
+    return true;
   }
 
   static boolean isInstance(TruffleObject list) {

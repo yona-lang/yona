@@ -1,20 +1,15 @@
 package yatta.runtime;
 
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
 
-@MessageResolution(receiverType = NativeObject.class)
+@ExportLibrary(InteropLibrary.class)
 public class NativeObject implements TruffleObject {
   private Object value;
 
   public NativeObject(Object value) {
     this.value = value;
-  }
-
-  @Override
-  public ForeignAccess getForeignAccess() {
-    return NativeObjectForeign.ACCESS;
   }
 
   static boolean isInstance(TruffleObject nativeObject) {
