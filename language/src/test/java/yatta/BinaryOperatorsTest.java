@@ -1,12 +1,12 @@
 package yatta;
 
-import yatta.runtime.Tuple;
-import yatta.runtime.Unit;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import yatta.runtime.Tuple;
+import yatta.runtime.Unit;
 
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -56,6 +56,8 @@ public class BinaryOperatorsTest {
         new BinaryArgsHolder(new Tuple(1, 2), new Tuple(1, 2), true, Boolean.class),
         new BinaryArgsHolder("[1, 2]", "[1, 2, 3]", false, Boolean.class),
         new BinaryArgsHolder("[1, 2]", "[1, 2, 3]", false, Boolean.class),
+        new BinaryArgsHolder(":yes", ":yes", true, Boolean.class),
+        new BinaryArgsHolder(":yes", ":no", false, Boolean.class),
         // TODO add dictionary
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 1l, true, Boolean.class),

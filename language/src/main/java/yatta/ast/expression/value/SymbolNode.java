@@ -4,15 +4,17 @@ import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.runtime.Symbol;
+import yatta.runtime.SymbolMap;
 
 import java.util.Objects;
 
 @NodeInfo
 public final class SymbolNode extends ExpressionNode {
-  public final String value;
+  public final Symbol value;
 
   public SymbolNode(String value) {
-    this.value = value;
+    this.value = SymbolMap.symbol(value);
   }
 
   @Override
@@ -41,7 +43,7 @@ public final class SymbolNode extends ExpressionNode {
   }
 
   @Override
-  public String executeString(VirtualFrame frame) throws UnexpectedResultException {
+  public Symbol executeSymbol(VirtualFrame frame) throws UnexpectedResultException {
     return value;
   }
 }

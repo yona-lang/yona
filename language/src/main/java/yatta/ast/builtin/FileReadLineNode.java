@@ -4,6 +4,7 @@ import yatta.YattaException;
 import yatta.runtime.NativeObject;
 import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
+import yatta.runtime.SymbolMap;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -27,7 +28,7 @@ public abstract class FileReadLineNode extends BuiltinNode {
       public void completed(Integer result, ByteBuffer attachment) {
         boolean fulfilled = false;
         if (result <= 0) {
-          promise.fulfil("eof", thisNode);
+          promise.fulfil(SymbolMap.symbol("eof"), thisNode);
           return;
         }
 
@@ -40,7 +41,7 @@ public abstract class FileReadLineNode extends BuiltinNode {
         for (int i = 0; i < length; i++) {
           char ch = ((char) attachment.get());
           if (ch == '\n') {
-            promise.fulfil(new Tuple("ok", output.toString(), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
+            promise.fulfil(new Tuple(SymbolMap.symbol("ok"), output.toString(), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
             fulfilled = true;
             break;
           } else {
