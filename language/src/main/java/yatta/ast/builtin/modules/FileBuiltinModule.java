@@ -1,14 +1,16 @@
 package yatta.ast.builtin.modules;
 
 
+import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
+import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.Builtins;
+import yatta.runtime.Context;
 import yatta.runtime.NativeObject;
-import yatta.runtime.SymbolMap;
 import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
 
@@ -46,7 +48,7 @@ public final class FileBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "readline")
   abstract static class FileReadLineNode extends BuiltinNode {
     @Specialization
-    public Promise readline(Tuple fileTuple) {
+    public Promise readline(Tuple fileTuple, @CachedContext(YattaLanguage.class) Context context) {
       AsynchronousFileChannel asynchronousFileChannel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
       ByteBuffer buffer = ByteBuffer.allocate(1024 * 10);
       long position = (long) fileTuple.get(2);
@@ -58,7 +60,7 @@ public final class FileBuiltinModule implements BuiltinModule {
         public void completed(Integer result, ByteBuffer attachment) {
           boolean fulfilled = false;
           if (result <= 0) {
-            promise.fulfil(SymbolMap.symbol("eof"), thisNode);
+            promise.fulfil(context.symbol("eof"), thisNode);
             return;
           }
 
@@ -71,7 +73,7 @@ public final class FileBuiltinModule implements BuiltinModule {
           for (int i = 0; i < length; i++) {
             char ch = ((char) attachment.get());
             if (ch == '\n') {
-              promise.fulfil(new Tuple(SymbolMap.symbol("ok"), output.toString(), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
+              promise.fulfil(new Tuple(context.symbol("ok"), output.toString(), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
               fulfilled = true;
               break;
             } else {
@@ -81,7 +83,7 @@ public final class FileBuiltinModule implements BuiltinModule {
           attachment.clear();
 
           if (!fulfilled) {
-            readline(new Tuple(new NativeObject(asynchronousFileChannel), output, position + length)).map(res -> {
+            readline(new Tuple(new NativeObject(asynchronousFileChannel), output, position + length), context).map(res -> {
               promise.fulfil(res, thisNode);
               return res;
             }, thisNode);

@@ -20,6 +20,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -36,6 +38,7 @@ public class Context {
   private final BuiltinModules builtinModules;
   private final ExecutorService executor = Executors.newFixedThreadPool(4);
   private final AsyncSelectorThread asyncSelectorThread = new AsyncSelectorThread();
+  private final ConcurrentMap<String, Symbol> symbols = new ConcurrentHashMap<>();
 
   public Context(YattaLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
     this.env = env;
@@ -152,5 +155,9 @@ public class Context {
 
   public ExecutorService getExecutor() {
     return executor;
+  }
+
+  public Symbol symbol(String name) {
+    return symbols.computeIfAbsent(name, Symbol::new);
   }
 }
