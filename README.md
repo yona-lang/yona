@@ -1,6 +1,7 @@
 # Yatta
 
 [![Build Status](https://travis-ci.org/yatta-lang/yatta.svg?branch=master)](https://travis-ci.org/yatta-lang/yatta)
+[![Gitter](https://badges.gitter.im/yattalang/community.svg)](https://gitter.im/yattalang/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 ## Introduction
 Yatta is a minimalistic, opiniated, (strongly) dynamically typed, strict, functional programming language, with ML-like syntax, for GraalVM polyglot virtual machine (VM).
