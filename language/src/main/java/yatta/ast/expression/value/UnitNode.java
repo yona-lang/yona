@@ -8,9 +8,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 @NodeInfo
 public final class UnitNode extends ExpressionNode {
-  public static UnitNode INSTANCE = new UnitNode();
-
-  private UnitNode() {
+  public UnitNode() {
   }
 
   @Override

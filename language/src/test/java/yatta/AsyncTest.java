@@ -126,4 +126,16 @@ public class AsyncTest {
         "end\n").asLong();
     assertEquals(3l, ret);
   }
+
+//  @Test
+//  public void simpleTryCatchTest() {
+//    String ret = context.eval(YattaLanguage.ID, "try\n" +
+//        "async \\-> raise :random_error \"something happened\"\n" +
+//        "catch\n" +
+//        "(:not_this, _, _) -> \"nothing\"\n" +
+//        "(:random_error, message, stacktrace) -> message\n" +
+//        "end\n").asString();
+//
+//    assertEquals("YattaError <random_error>: something happened", ret);
+//  }
 }

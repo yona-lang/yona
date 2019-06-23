@@ -21,10 +21,12 @@ public abstract class AsyncNode extends BuiltinNode {
     Promise promise = new Promise();
     context.getExecutor().submit(() -> {
       try {
-        promise.fulfil(dispatch.execute(function, new Object[] {}), this);
+        promise.fulfil(dispatch.execute(function), this);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         promise.fulfil(UndefinedNameException.undefinedFunction(this, function), this);
+      } catch (Throwable e) {
+        promise.fulfil(e, this);
       }
     });
 

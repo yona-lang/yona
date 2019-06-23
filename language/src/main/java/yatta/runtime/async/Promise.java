@@ -1,9 +1,10 @@
 package yatta.runtime.async;
 
+import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.nodes.Node;
 import yatta.ast.call.TailCallException;
 import yatta.runtime.UndefinedNameException;
-import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.nodes.Node;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,7 +15,7 @@ import java.util.function.Supplier;
 
 import static java.util.function.Function.identity;
 
-@MessageResolution(receiverType = Promise.class)
+@ExportLibrary(InteropLibrary.class)
 public final class Promise implements TruffleObject {
   private static final AtomicReferenceFieldUpdater<Promise, Object> UPDATER = AtomicReferenceFieldUpdater.newUpdater(Promise.class, Object.class, "value");
 
@@ -26,11 +27,6 @@ public final class Promise implements TruffleObject {
 
   public Promise(Object value) {
     this.value = value;
-  }
-
-  @Override
-  public ForeignAccess getForeignAccess() {
-    return PromiseForeign.ACCESS;
   }
 
   public void fulfil(Object result, Node node) {
@@ -189,10 +185,6 @@ public final class Promise implements TruffleObject {
       return e;
     }
     return promise.value;
-  }
-
-  static boolean isInstance(TruffleObject promise) {
-    return promise instanceof Promise;
   }
 
   private interface Callback {

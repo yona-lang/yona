@@ -1,6 +1,7 @@
 package yatta;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
@@ -263,6 +264,42 @@ public class SimpleExpressionTest {
         "one + two\n" +
         "end\n").asLong();
     assertEquals(3l, ret);
+  }
+
+  @Test
+  public void simpleRaiseTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "raise :random_error \"something happened\"\n");
+      } catch (PolyglotException ex) {
+        assertEquals(ex.getMessage(), "YattaError <random_error>: something happened");
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void simpleTryCatchTest() {
+    String ret = context.eval(YattaLanguage.ID, "try\n" +
+        "raise :random_error \"something happened\"\n" +
+        "catch\n" +
+        "(:not_this, _, _) -> \"nothing\"\n" +
+        "(:random_error, message, stacktrace) -> message\n" +
+        "end\n").asString();
+
+    assertEquals("YattaError <random_error>: something happened", ret);
+  }
+
+  @Test
+  public void simpleTryCatchNoErrorTest() {
+    String ret = context.eval(YattaLanguage.ID, "try\n" +
+        "\"no error\"\n" +
+        "catch\n" +
+        "(:not_this, _, _) -> \"nothing\"\n" +
+        "(:random_error, message, stacktrace) -> message\n" +
+        "end\n").asString();
+
+    assertEquals("no error", ret);
   }
 
   //docs state:

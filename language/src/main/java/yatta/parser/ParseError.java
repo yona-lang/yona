@@ -23,7 +23,7 @@ public class ParseError extends RuntimeException implements TruffleException {
 
   @Override
   public SourceSection getSourceLocation() {
-    return source.createSection(1);
+    return source.createSection(line, column, length);
   }
 
   @Override

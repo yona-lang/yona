@@ -8,7 +8,9 @@ module tests\CommonFunctions exports
     nonLinearAsSequenceOneTest,
     nonLinearAsSequenceTwoTest,
     countdown,
-    read_file
+    read_file,
+    print_sequence,
+    raise_error
     as
 
 #factorial 1 = 1
@@ -59,3 +61,14 @@ read_lines file acc =
         (:ok, _, new_file)  -> read_lines new_file (acc + 1)
         :eof                -> acc
     end
+
+
+print_sequence []  = ()
+print_sequence h<:t =
+    do
+        println h
+        print_sequence t
+    end
+
+
+raise_error = raise :test_error "testing error"

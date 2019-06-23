@@ -7,7 +7,7 @@ import yatta.ast.local.ReadLocalVariableNodeGen;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
-public class SimpleIdentifierNode extends ExpressionNode {
+public final class SimpleIdentifierNode extends ExpressionNode {
   private final String name;
 
   public SimpleIdentifierNode(String name) {

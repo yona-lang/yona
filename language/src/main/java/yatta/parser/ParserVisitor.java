@@ -1,5 +1,6 @@
 package yatta.parser;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import yatta.YattaBaseVisitor;
 import yatta.YattaLanguage;
 import yatta.YattaParser;
@@ -36,13 +37,13 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     ExpressionNode functionBodyNode = new MainExpressionNode(ctx.expression().accept(this));
     functionBodyNode.addRootTag();
 
-    FunctionNode mainFunctionNode = new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(), functionBodyNode);
+    FunctionNode mainFunctionNode = withSourceSection(ctx, new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(), functionBodyNode));
     return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{});
   }
 
   @Override
   public ExpressionNode visitExpressionInParents(YattaParser.ExpressionInParentsContext ctx) {
-    return ctx.expression().accept(this);
+    return  ctx.expression().accept(this);
   }
 
   @Override
@@ -68,12 +69,12 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       if (builtinFunction != null) {
         return builtinFunction.createNode((Object) argNodes);
       } else {
-        return new ModuleCallNode(language, fqnNode, functionName, argNodes);
+        return withSourceSection(ctx, new ModuleCallNode(language, fqnNode, functionName, argNodes));
       }
     } else if (ctx.apply().nameCall() != null) {
       SimpleIdentifierNode nameNode = new SimpleIdentifierNode(ctx.apply().nameCall().var.getText());
       String functionName = ctx.apply().nameCall().fun.getText();
-      return new ModuleCallNode(language, nameNode, functionName, argNodes);
+      return withSourceSection(ctx, new ModuleCallNode(language, nameNode, functionName, argNodes));
     } else {
       String functionName = ctx.apply().name().getText();
       NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltins().lookup(functionName);
@@ -81,7 +82,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       if (builtinFunction != null) {
         return builtinFunction.createNode((Object) argNodes);
       } else {
-        return new InvokeNode(language, new IdentifierNode(language, functionName), argNodes);
+        return withSourceSection(ctx, new InvokeNode(language, withSourceSection(ctx.apply().name(), new IdentifierNode(language, functionName)), argNodes));
       }
     }
   }
@@ -91,7 +92,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     ExpressionNode ifNode = ctx.conditional().ifX.accept(this);
     ExpressionNode thenNode = ctx.conditional().thenX.accept(this);
     ExpressionNode elseNode = ctx.conditional().elseX.accept(this);
-    return new ConditionNode(ifNode, thenNode, elseNode);
+    return withSourceSection(ctx, new ConditionNode(ifNode, thenNode, elseNode));
   }
 
   @Override
@@ -101,22 +102,34 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
     switch (ctx.BIN_OP().getText()) {
-      case "==": return EqualsNodeGen.create(args);
-      case "!=": return NotEqualsNodeGen.create(args);
-      case "+": return PlusNodeGen.create(args);
-      case "-": return MinusNodeGen.create(args);
-      case "*": return MultiplyNodeGen.create(args);
-      case "/": return DivideNodeGen.create(args);
-      case "%": return ModuloNodeGen.create(args);
-      case "<": return LowerThanNodeGen.create(args);
-      case "<=": return LowerThanOrEqualsNodeGen.create(args);
-      case ">": return GreaterThanNodeGen.create(args);
-      case ">=": return GreaterThanOrEqualsNodeGen.create(args);
-      default: throw new ParseError(source,
-          ctx.BIN_OP().getSymbol().getLine(),
-          ctx.BIN_OP().getSymbol().getCharPositionInLine(),
-          ctx.BIN_OP().getText().length(),
-          "Binary operation '" + ctx.BIN_OP().getText() + "' not supported");
+      case "==":
+        return withSourceSection(ctx, EqualsNodeGen.create(args));
+      case "!=":
+        return withSourceSection(ctx, NotEqualsNodeGen.create(args));
+      case "+":
+        return withSourceSection(ctx, PlusNodeGen.create(args));
+      case "-":
+        return withSourceSection(ctx, MinusNodeGen.create(args));
+      case "*":
+        return withSourceSection(ctx, MultiplyNodeGen.create(args));
+      case "/":
+        return withSourceSection(ctx, DivideNodeGen.create(args));
+      case "%":
+        return withSourceSection(ctx, ModuloNodeGen.create(args));
+      case "<":
+        return withSourceSection(ctx, LowerThanNodeGen.create(args));
+      case "<=":
+        return withSourceSection(ctx, LowerThanOrEqualsNodeGen.create(args));
+      case ">":
+        return withSourceSection(ctx, GreaterThanNodeGen.create(args));
+      case ">=":
+        return withSourceSection(ctx, GreaterThanOrEqualsNodeGen.create(args));
+      default:
+        throw new ParseError(source,
+            ctx.BIN_OP().getSymbol().getLine(),
+            ctx.BIN_OP().getSymbol().getCharPositionInLine(),
+            ctx.BIN_OP().getText().length(),
+            "Binary operation '" + ctx.BIN_OP().getText() + "' not supported");
     }
   }
 
@@ -128,55 +141,55 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       aliasNodes[i] = visitAlias(ctx.let().alias(i));
     }
 
-    return new PatternLetNode(aliasNodes, ctx.let().expression().accept(this));
+    return withSourceSection(ctx, new PatternLetNode(aliasNodes, ctx.let().expression().accept(this)));
   }
 
   @Override
   public ExpressionNode visitAlias(YattaParser.AliasContext ctx) {
     if (ctx.patternAlias() != null) {
-      return new PatternAliasNode(visitPattern(ctx.patternAlias().pattern()), ctx.patternAlias().expression().accept(this));
+      return withSourceSection(ctx, new PatternAliasNode(visitPattern(ctx.patternAlias().pattern()), ctx.patternAlias().expression().accept(this)));
     } else if (ctx.moduleAlias() != null) {
-      return new AliasNode(ctx.moduleAlias().name().getText(), visitModule(ctx.moduleAlias().module()));
+      return withSourceSection(ctx, new AliasNode(ctx.moduleAlias().name().getText(), visitModule(ctx.moduleAlias().module())));
     } else if (ctx.fqnAlias() != null) {
-      return new AliasNode(ctx.fqnAlias().name().getText(), visitFqn(ctx.fqnAlias().fqn()));
+      return withSourceSection(ctx, new AliasNode(ctx.fqnAlias().name().getText(), visitFqn(ctx.fqnAlias().fqn())));
     } else {
-      return new AliasNode(ctx.lambdaAlias().name().getText(), visitLambda(ctx.lambdaAlias().lambda()));
+      return withSourceSection(ctx, new AliasNode(ctx.lambdaAlias().name().getText(), visitLambda(ctx.lambdaAlias().lambda())));
     }
   }
 
   @Override
   public UnitNode visitUnit(YattaParser.UnitContext ctx) {
-    return UnitNode.INSTANCE;
+    return withSourceSection(ctx, new UnitNode());
   }
 
   @Override
   public UnderscoreMatchNode visitUnderscore(YattaParser.UnderscoreContext ctx) {
-    return UnderscoreMatchNode.INSTANCE;
+    return withSourceSection(ctx, new UnderscoreMatchNode());
   }
 
   @Override
   public IntegerNode visitIntegerLiteral(YattaParser.IntegerLiteralContext ctx) {
-    return new IntegerNode(Long.parseLong(ctx.INTEGER().getText()));
+    return withSourceSection(ctx, new IntegerNode(Long.parseLong(ctx.INTEGER().getText())));
   }
 
   @Override
   public FloatNode visitFloatLiteral(YattaParser.FloatLiteralContext ctx) {
-    return new FloatNode(Double.parseDouble(ctx.FLOAT().getText()));
+    return withSourceSection(ctx, new FloatNode(Double.parseDouble(ctx.FLOAT().getText())));
   }
 
   @Override
   public ByteNode visitByteLiteral(YattaParser.ByteLiteralContext ctx) {
-    return new ByteNode(Byte.parseByte(ctx.INTEGER().getText()));
+    return withSourceSection(ctx, new ByteNode(Byte.parseByte(ctx.INTEGER().getText())));
   }
 
   @Override
   public StringNode visitStringLiteral(YattaParser.StringLiteralContext ctx) {
-    return new StringNode(normalizeString(ctx.STRING().getText()));
+    return withSourceSection(ctx, new StringNode(normalizeString(ctx.STRING().getText())));
   }
 
   @Override
   public BooleanNode visitBooleanLiteral(YattaParser.BooleanLiteralContext ctx) {
-    return ctx.KW_TRUE() != null ? BooleanNode.TRUE : BooleanNode.FALSE;
+    return withSourceSection(ctx, ctx.KW_TRUE() != null ? new BooleanNode(true) : new BooleanNode(false));
   }
 
   @Override
@@ -198,12 +211,12 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     caseNode.addRootTag();
     caseNode.setIsTail(true);
 
-    return new FunctionNode(language, source.createSection(
+    return withSourceSection(ctx, new FunctionNode(language, source.createSection(
         ctx.BACKSLASH().getSymbol().getLine(),
         ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
         ctx.expression().stop.getLine(),
         ctx.expression().stop.getCharPositionInLine() + 1
-    ), "$lambda-" + lambdaCount++, ctx.pattern().size(), new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode);
+    ), "$lambda-" + lambdaCount++, ctx.pattern().size(), new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode));
   }
 
   @Override
@@ -213,7 +226,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     for (int i = 0; i < elementsCount; i++) {
       content[i] = ctx.expression(i).accept(this);
     }
-    return new TupleNode(content);
+    return withSourceSection(ctx, new TupleNode(content));
   }
 
   @Override
@@ -224,22 +237,22 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       YattaParser.DictValContext expressionCtx = ctx.dictVal(i);
       entries[i] = new DictNode.Entry(keyCtx.accept(this), expressionCtx.accept(this));
     }
-    return new DictNode(entries);
+    return withSourceSection(ctx, new DictNode(entries));
   }
 
   @Override
   public EmptySequenceNode visitEmptySequence(YattaParser.EmptySequenceContext ctx) {
-    return EmptySequenceNode.INSTANCE;
+    return withSourceSection(ctx, new EmptySequenceNode());
   }
 
   @Override
   public OneSequenceNode visitOneSequence(YattaParser.OneSequenceContext ctx) {
-    return new OneSequenceNode(ctx.expression().accept(this));
+    return withSourceSection(ctx, new OneSequenceNode(ctx.expression().accept(this)));
   }
 
   @Override
   public TwoSequenceNode visitTwoSequence(YattaParser.TwoSequenceContext ctx) {
-    return new TwoSequenceNode(ctx.expression(0).accept(this), ctx.expression(1).accept(this));
+    return withSourceSection(ctx, new TwoSequenceNode(ctx.expression(0).accept(this), ctx.expression(1).accept(this)));
   }
 
   @Override
@@ -248,7 +261,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     for (YattaParser.ExpressionContext expr : ctx.expression()) {
       expressions.add(expr.accept(this));
     }
-    return new SequenceNode(expressions.toArray(new ExpressionNode[]{}));
+    return withSourceSection(ctx, new SequenceNode(expressions.toArray(new ExpressionNode[]{})));
   }
 
   @Override
@@ -322,7 +335,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
           ExpressionNode guardExpression = bodyWithGuardsContext.guard.accept(this);
           ExpressionNode expression = bodyWithGuardsContext.expr.accept(this);
 
-          GuardedPattern guardedPattern = new GuardedPattern(argPatterns, guardExpression, expression);
+          GuardedPattern guardedPattern = withSourceSection(bodyWithGuardsContext, new GuardedPattern(argPatterns, guardExpression, expression));
 
           functionPatterns.get(functionName).add(guardedPattern);
         }
@@ -359,7 +372,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       }
     }
 
-    return new ModuleNode(moduleFQN, exports, functions.toArray(new FunctionNode[]{}));
+    return withSourceSection(ctx, new ModuleNode(moduleFQN, exports, functions.toArray(new FunctionNode[]{})));
   }
 
   @Override
@@ -368,7 +381,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     for (YattaParser.NameContext text : ctx.name()) {
       names.add(text.getText());
     }
-    return new NonEmptyStringListNode(names.toArray(new String[]{}));
+    return withSourceSection(ctx, new NonEmptyStringListNode(names.toArray(new String[]{})));
   }
 
   @Override
@@ -378,18 +391,18 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     for (int i = 0; i < packagePartsCount; i++) {
       packageParts[i] = ctx.packageName().LOWERCASE_NAME(i).getText();
     }
-    return new FQNNode(packageParts, ctx.moduleName().getText());
+    return withSourceSection(ctx, new FQNNode(packageParts, ctx.moduleName().getText()));
   }
 
   @Override
   public SymbolNode visitSymbol(YattaParser.SymbolContext ctx) {
-    return new SymbolNode(ctx.name().getText());
+    return withSourceSection(ctx, new SymbolNode(ctx.name().getText()));
   }
 
   @Override
   public IdentifierNode visitIdentifier(YattaParser.IdentifierContext ctx) {
     String name = ctx.name().getText();
-    return new IdentifierNode(language, name);
+    return withSourceSection(ctx, new IdentifierNode(language, name));
   }
 
   private String normalizeString(String str) {
@@ -407,7 +420,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       MatchNode matchExpression = visitPattern(patternExpressionContext.pattern());
 
       if (patternExpressionContext.patternExpressionWithoutGuard() != null) {
-        patternNodes.add(new PatternNode(matchExpression, patternExpressionContext.patternExpressionWithoutGuard().expression().accept(this)));
+        patternNodes.add(withSourceSection(patternExpressionContext.patternExpressionWithoutGuard(), new PatternNode(matchExpression, patternExpressionContext.patternExpressionWithoutGuard().expression().accept(this))));
       } else {
         for (int j = 0; j < patternExpressionContext.patternExpressionWithGuard().size(); j++) {
           YattaParser.PatternExpressionWithGuardContext withGuardContext = patternExpressionContext.patternExpressionWithGuard(j);
@@ -415,20 +428,20 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
           ExpressionNode guardExpression = withGuardContext.guard.accept(this);
           ExpressionNode expression = withGuardContext.expr.accept(this);
 
-          GuardedPattern guardedPattern = new GuardedPattern(matchExpression, guardExpression, expression);
+          GuardedPattern guardedPattern = withSourceSection(withGuardContext, new GuardedPattern(matchExpression, guardExpression, expression));
 
           patternNodes.add(guardedPattern);
         }
       }
     }
 
-    return new CaseNode(expr, patternNodes.toArray(new PatternMatchable[]{}));
+    return withSourceSection(ctx, new CaseNode(expr, patternNodes.toArray(new PatternMatchable[]{})));
   }
 
   @Override
   public MatchNode visitPattern(YattaParser.PatternContext ctx) {
     if (ctx.underscore() != null) {
-      return UnderscoreMatchNode.INSTANCE;
+      return withSourceSection(ctx.underscore(), new UnderscoreMatchNode());
     } else if (ctx.tuplePattern() != null) {
       return visitTuplePattern(ctx.tuplePattern());
     } else if (ctx.patternValue() != null) {
@@ -443,13 +456,13 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
   @Override
   public MatchNode visitPatternWithoutSequence(YattaParser.PatternWithoutSequenceContext ctx) {
     if (ctx.underscore() != null) {
-      return UnderscoreMatchNode.INSTANCE;
+      return withSourceSection(ctx.underscore(), new UnderscoreMatchNode());
     } else if (ctx.tuplePattern() != null) {
       return visitTuplePattern(ctx.tuplePattern());
     } else if (ctx.dictPattern() != null) {
       return visitDictPattern(ctx.dictPattern());
     } else {
-      return new ValueMatchNode(ctx.patternValue().accept(this));
+      return withSourceSection(ctx, new ValueMatchNode(ctx.patternValue().accept(this)));
     }
   }
 
@@ -461,13 +474,13 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       expressions[i] = ctx.pattern(i).accept(this);
     }
 
-    return new TupleMatchNode(expressions);
+    return withSourceSection(ctx, new TupleMatchNode(expressions));
   }
 
   @Override
   public MatchNode visitSequencePattern(YattaParser.SequencePatternContext ctx) {
     if (ctx.identifier() != null) {
-      return new AsSequenceMatchNode(visitIdentifier(ctx.identifier()), visitInnerSequencePattern(ctx.innerSequencePattern()));
+      return withSourceSection(ctx, new AsSequenceMatchNode(visitIdentifier(ctx.identifier()), visitInnerSequencePattern(ctx.innerSequencePattern())));
     } else {
       return visitInnerSequencePattern(ctx.innerSequencePattern());
     }
@@ -486,7 +499,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       for (int i = 0; i < ctx.pattern().size(); i++) {
         matchNodes[i] = visitPattern(ctx.pattern(i));
       }
-      return new SequenceMatchPatternNode(matchNodes);
+      return withSourceSection(ctx, new SequenceMatchPatternNode(matchNodes));
     }
   }
 
@@ -500,7 +513,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
 
     ExpressionNode tails = ctx.tails().accept(this);
 
-    return new HeadTailsMatchPatternNode(headPatterns, tails);
+    return withSourceSection(ctx, new HeadTailsMatchPatternNode(headPatterns, tails));
   }
 
   @Override
@@ -513,7 +526,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
 
     ExpressionNode tails = ctx.tails().accept(this);
 
-    return new TailsHeadMatchPatternNode(tails, headPatterns);
+    return withSourceSection(ctx, new TailsHeadMatchPatternNode(tails, headPatterns));
   }
 
   @Override
@@ -531,7 +544,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       rightPatterns[i] = visitPatternWithoutSequence(ctx.rightPattern(i).patternWithoutSequence());
     }
 
-    return new HeadTailsHeadPatternNode(leftPatterns, tails, rightPatterns);
+    return withSourceSection(ctx, new HeadTailsHeadPatternNode(leftPatterns, tails, rightPatterns));
   }
 
   @Override
@@ -545,7 +558,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       matchNodes[i] = visitPattern(ctx.pattern(i));
     }
 
-    return new DictMatchNode(expressionNodes, matchNodes);
+    return withSourceSection(ctx, new DictMatchNode(expressionNodes, matchNodes));
   }
 
   @Override
@@ -562,22 +575,22 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
         for (YattaParser.FunctionAliasContext nameContext : importClauseContext.functionsImport().functionAlias()) {
           String functionName = nameContext.funName.getText();
           String functionAlias = nameContext.funAlias != null ? nameContext.funAlias.getText() : functionName;
-          aliasNodes.add(new AliasNode(functionAlias, new FunctionIdentifierNode(fqnNode, functionName)));
+          aliasNodes.add(withSourceSection(nameContext, new AliasNode(functionAlias, new FunctionIdentifierNode(fqnNode, functionName))));
         }
       }
     }
 
     ExpressionNode expressionNode = ctx.expression().accept(this);
-    return new LetNode(aliasNodes.toArray(new AliasNode[]{}), expressionNode);
+    return withSourceSection(ctx, new LetNode(aliasNodes.toArray(new AliasNode[]{}), expressionNode));
   }
 
   @Override
   public AliasNode visitModuleImport(YattaParser.ModuleImportContext ctx) {
     FQNNode fqnNode = visitFqn(ctx.fqn());
     if (ctx.name() == null) {
-      return new AliasNode(fqnNode.moduleName, fqnNode);
+      return withSourceSection(ctx, new AliasNode(fqnNode.moduleName, fqnNode));
     } else {
-      return new AliasNode(ctx.name().getText(), fqnNode);
+      return withSourceSection(ctx, new AliasNode(ctx.name().getText(), fqnNode));
     }
   }
 
@@ -589,7 +602,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
       steps[i] = visitDoOneStep(ctx.doOneStep(i));
     }
 
-    return new DoNode(steps);
+    return withSourceSection(ctx, new DoNode(steps));
   }
 
   @Override
@@ -599,5 +612,58 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     } else {
       return ctx.expression().accept(this);
     }
+  }
+
+  @Override
+  public ExpressionNode visitTryCatchExpr(YattaParser.TryCatchExprContext ctx) {
+    ExpressionNode tryExpression = ctx.expression().accept(this);
+    List<PatternMatchable> patternNodes = new ArrayList<>();
+
+    for (int i = 0; i < ctx.catchExpr().catchPatternExpression().size(); i++) {
+      YattaParser.CatchPatternExpressionContext patternExpressionContext = ctx.catchExpr().catchPatternExpression(i);
+
+      MatchNode matchExpression = visitTripplePattern(patternExpressionContext.tripplePattern());
+
+      if (patternExpressionContext.catchPatternExpressionWithoutGuard() != null) {
+        patternNodes.add(withSourceSection(patternExpressionContext.catchPatternExpressionWithoutGuard(), new PatternNode(matchExpression, patternExpressionContext.catchPatternExpressionWithoutGuard().expression().accept(this))));
+      } else {
+        for (int j = 0; j < patternExpressionContext.catchPatternExpressionWithGuard().size(); j++) {
+          YattaParser.CatchPatternExpressionWithGuardContext withGuardContext = patternExpressionContext.catchPatternExpressionWithGuard(j);
+
+          ExpressionNode guardExpression = withGuardContext.guard.accept(this);
+          ExpressionNode expression = withGuardContext.expr.accept(this);
+
+          GuardedPattern guardedPattern = withSourceSection(withGuardContext, new GuardedPattern(matchExpression, guardExpression, expression));
+
+          patternNodes.add(guardedPattern);
+        }
+      }
+    }
+
+    return withSourceSection(ctx, new TryCatchNode(tryExpression, patternNodes.toArray(new PatternMatchable[]{})));
+  }
+
+  @Override
+  public TupleMatchNode visitTripplePattern(YattaParser.TripplePatternContext ctx) {
+    ExpressionNode expressions[] = new ExpressionNode[ctx.pattern().size()];
+
+    for (int i = 0; i < ctx.pattern().size(); i++) {
+      expressions[i] = ctx.pattern(i).accept(this);
+    }
+
+    return withSourceSection(ctx, new TupleMatchNode(expressions));
+  }
+
+  @Override
+  public ThrowYattaExceptionNode visitRaiseExpr(YattaParser.RaiseExprContext ctx) {
+    return withSourceSection(ctx, new ThrowYattaExceptionNode(visitSymbol(ctx.symbol()), visitStringLiteral(ctx.stringLiteral())));
+  }
+
+  private <T extends ExpressionNode> T withSourceSection(ParserRuleContext parserRuleContext, T expressionNode) {
+    expressionNode.setSourceSection(
+        parserRuleContext.start.getStartIndex(),
+        parserRuleContext.stop.getStopIndex() - parserRuleContext.start.getStartIndex()
+    );
+    return expressionNode;
   }
 }

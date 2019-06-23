@@ -1,0 +1,7 @@
+import
+    print_sequence, raise_error from tests\CommonFunctions
+in try
+    raise_error
+catch
+    (:test_error, msg, stacktrace) -> print_sequence stacktrace
+end

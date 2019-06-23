@@ -37,4 +37,12 @@ public abstract class Types {
     assert isYattaUnit(value);
     return Unit.INSTANCE;
   }
+
+  public static Object ensureNotNull(Object value) {
+    if (value == null) {
+      return Unit.INSTANCE;
+    } else {
+      return value;
+    }
+  }
 }

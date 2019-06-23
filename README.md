@@ -145,8 +145,8 @@ raise :bad_arg "Message string"
 try
     expression
 catch
-    (:bad_arg, error_msg)  -> :error
-    (:io_error, error_msg) -> :error
+    (:bad_arg, error_msg, stacktrace)  -> :error
+    (:io_error, error_msg, stacktrace) -> :error
 end
 ```
 

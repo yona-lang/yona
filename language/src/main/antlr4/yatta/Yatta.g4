@@ -70,6 +70,8 @@ expression : PARENS_L expression PARENS_R               #expressionInParents
            | doExpr                                     #doExpression
            | lambda                                     #lambdaExpression
            | importExpr                                 #importExpression
+           | tryCatchExpr                               #tryCatchExpression
+           | raiseExpr                                  #raiseExpression
            ;
 
 literal : booleanLiteral
@@ -191,6 +193,18 @@ functionsImport : functionAlias (COMMA functionAlias)* KW_FROM fqn ;
 functionAlias : funName=name (KW_AS funAlias=name)? ;
 
 
+tryCatchExpr : KW_TRY NEWLINE? expression NEWLINE? catchExpr NEWLINE? KW_END ;
+catchExpr : KW_CATCH NEWLINE? catchPatternExpression+ ;
+
+catchPatternExpression : tripplePattern (catchPatternExpressionWithoutGuard | catchPatternExpressionWithGuard+) NEWLINE ;
+tripplePattern : PARENS_L pattern COMMA pattern COMMA pattern PARENS_R ;
+catchPatternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
+catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
+
+
+raiseExpr : KW_RAISE symbol stringLiteral NEWLINE ;
+
+
 UNIT: '()' ;
 UNDERSCORE : '_' ;
 AT : '@' ;
@@ -212,6 +226,9 @@ KW_IMPORT : 'import' ;
 KW_FROM : 'from' ;
 KW_END : 'end' ;
 KW_DO : 'do' ;
+KW_TRY : 'try' ;
+KW_CATCH : 'catch' ;
+KW_RAISE : 'raise' ;
 
 BRACKET_L : '[' ;
 BRACKET_R : ']' ;

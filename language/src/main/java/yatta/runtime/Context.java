@@ -5,6 +5,7 @@ import yatta.ast.builtin.*;
 import yatta.ast.builtin.modules.BuiltinModuleInfo;
 import yatta.ast.builtin.modules.FileBuiltinModule;
 import yatta.ast.builtin.modules.SequenceBuiltinModule;
+import yatta.runtime.annotations.ExceptionSymbol;
 import yatta.runtime.async.AsyncSelectorThread;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -94,6 +95,18 @@ public class Context {
       return info;
     } else {
       return lookupNodeInfo(clazz.getSuperclass());
+    }
+  }
+
+  public Symbol lookupExceptionSymbol(Class<?> clazz) {
+    if (clazz == null) {
+      return null;
+    }
+    ExceptionSymbol info = clazz.getAnnotation(ExceptionSymbol.class);
+    if (info != null) {
+      return symbol(info.value());
+    } else {
+      return lookupExceptionSymbol(clazz.getSuperclass());
     }
   }
 

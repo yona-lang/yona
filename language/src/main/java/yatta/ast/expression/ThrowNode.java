@@ -6,7 +6,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.Objects;
 
 public class ThrowNode extends ExpressionNode {
-  public final RuntimeException exception;
+  private final RuntimeException exception;
 
   public ThrowNode(RuntimeException exception) {
     this.exception = exception;

@@ -12,7 +12,7 @@ public final class BooleanNode extends ExpressionNode {
 
   public final boolean value;
 
-  BooleanNode(boolean value) {
+  public BooleanNode(boolean value) {
     this.value = value;
   }
 

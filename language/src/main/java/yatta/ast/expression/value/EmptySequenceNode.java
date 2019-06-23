@@ -8,9 +8,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 @NodeInfo
 public final class EmptySequenceNode extends ExpressionNode {
-  public static EmptySequenceNode INSTANCE = new EmptySequenceNode();
-
-  private EmptySequenceNode() {
+  public EmptySequenceNode() {
   }
 
   @Override
