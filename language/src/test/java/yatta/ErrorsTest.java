@@ -1,6 +1,6 @@
 package yatta;
 
-import yatta.ast.pattern.MatchException;
+import yatta.ast.pattern.MatchControlFlowException;
 import yatta.runtime.Tuple;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
@@ -142,7 +142,7 @@ public class ErrorsTest {
             "2 -> 3\n" +
             "end\n").execute(3l).asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), MatchException.class.getSimpleName());
+        assertEquals(ex.getMessage(), "NoMatchException");
         throw ex;
       }
     });

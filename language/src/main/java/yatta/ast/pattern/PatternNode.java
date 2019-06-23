@@ -48,13 +48,13 @@ public class PatternNode extends ExpressionNode implements PatternMatchable {
   }
 
   @Override
-  public Object patternMatch(Object value, VirtualFrame frame) throws MatchException {
+  public Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {
       LetNode letNode = new LetNode(matchResult.getAliases(), valueExpression);
       return letNode.executeGeneric(frame);
     } else {
-      throw MatchException.INSTANCE;
+      throw MatchControlFlowException.INSTANCE;
     }
   }
 

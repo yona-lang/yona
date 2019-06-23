@@ -7,11 +7,12 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
-import yatta.ast.pattern.MatchException;
+import yatta.ast.pattern.MatchControlFlowException;
 import yatta.ast.pattern.PatternMatchable;
 import yatta.runtime.Context;
 import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
+import yatta.runtime.exceptions.NoMatchException;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -97,7 +98,7 @@ public final class TryCatchNode extends ExpressionNode {
       try {
         retValue = catchPatterns[i].patternMatch(throwableToTuple(throwable), frame);
         break;
-      } catch (MatchException ex) {
+      } catch (MatchControlFlowException ex) {
         continue;
       }
     }
@@ -105,7 +106,7 @@ public final class TryCatchNode extends ExpressionNode {
     if (retValue != null) {
       return retValue;
     } else {
-      throw new YattaException("MatchException", this);
+      throw new NoMatchException(this);
     }
   }
 

@@ -9,6 +9,7 @@ import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import yatta.runtime.exceptions.NoMatchException;
 
 import java.util.Objects;
 
@@ -80,7 +81,7 @@ public final class PatternAliasNode extends ExpressionNode {
 
       return Unit.INSTANCE;
     } else {
-      throw new YattaException("MatchException", this);
+      throw new NoMatchException(this);
     }
   }
 }

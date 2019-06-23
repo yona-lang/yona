@@ -1,6 +1,7 @@
 package yatta.runtime;
 
 import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.exceptions.BadArgException;
 
 import static yatta.runtime.Util.*;
 import static java.lang.System.arraycopy;

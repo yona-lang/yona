@@ -1,8 +1,7 @@
 package yatta.ast.expression;
 
-import yatta.YattaException;
 import yatta.ast.ExpressionNode;
-import yatta.ast.pattern.MatchException;
+import yatta.ast.pattern.MatchControlFlowException;
 import yatta.ast.pattern.PatternMatchable;
 import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -11,6 +10,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.exceptions.NoMatchException;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -87,7 +87,7 @@ public class CaseNode extends ExpressionNode {
       try {
         retValue = patternNodes[i].patternMatch(value, frame);
         break;
-      } catch (MatchException ex) {
+      } catch (MatchControlFlowException ex) {
         continue;
       }
     }
@@ -95,7 +95,7 @@ public class CaseNode extends ExpressionNode {
     if (retValue != null) {
       return retValue;
     } else {
-      throw new YattaException("MatchException", this);
+      throw new NoMatchException(this);
     }
   }
 }

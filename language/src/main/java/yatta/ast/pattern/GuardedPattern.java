@@ -53,14 +53,14 @@ public class GuardedPattern extends ExpressionNode implements PatternMatchable {
   }
 
   @Override
-  public Object patternMatch(Object value, VirtualFrame frame) throws MatchException {
+  public Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {
-      ConditionNode ifNode = new ConditionNode(guardExpression, valueExpression, new ThrowNode(MatchException.INSTANCE));
+      ConditionNode ifNode = new ConditionNode(guardExpression, valueExpression, new ThrowNode(MatchControlFlowException.INSTANCE));
       LetNode letNode = new LetNode(matchResult.getAliases(), ifNode);
       return letNode.executeGeneric(frame);
     } else {
-      throw MatchException.INSTANCE;
+      throw MatchControlFlowException.INSTANCE;
     }
   }
 
