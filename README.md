@@ -132,11 +132,11 @@ in onefun :something
 `raise` is an expression for raising exceptions:
 
 ```haskell
-raise :bad_arg
+raise :badarg
 
 # alternatively with a message
 
-raise :bad_arg "Message string"
+raise :badarg "Message string"
 ```
 
 `try`/`catch` is an expression for catching exceptions:
@@ -145,7 +145,7 @@ raise :bad_arg "Message string"
 try
     expression
 catch
-    (:bad_arg, error_msg, stacktrace)  -> :error
+    (:badarg, error_msg, stacktrace)  -> :error
     (:io_error, error_msg, stacktrace) -> :error
 end
 ```
