@@ -242,7 +242,7 @@ try
     in
         File\write_line f3 (line1 ++ line2)
 catch
-    (:match_error, _)  -> :error
+    (:nomatch, _)  -> :error
     (:io_error, _)     -> :error
 end
 ```
