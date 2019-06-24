@@ -27,12 +27,12 @@ public class PromiseTest {
   }
 
   @Test
-  public void testMapImmediate() {
+  public void testMapImmediate() throws Exception {
     assertEquals(1, Promise.await(new Promise(1).map(i -> i, node)));
   }
 
   @Test
-  public void testMapDelayed() {
+  public void testMapDelayed() throws Exception {
     Promise src = new Promise();
     Promise dst = src.map(i -> i, node);
     src.fulfil(1, node);
@@ -40,12 +40,12 @@ public class PromiseTest {
   }
 
   @Test
-  public void testFlatMapImmediate() {
+  public void testFlatMapImmediate() throws Exception {
     assertEquals(2, Promise.await(new Promise(1).map(whatever -> new Promise(2), node)));
   }
 
   @Test
-  public void testFlatMapDelayed() {
+  public void testFlatMapDelayed() throws Exception {
     Promise srcOne = new Promise();
     Promise srcTwo = new Promise();
     Promise dst = srcOne.map(whatever -> srcTwo, node);
@@ -68,12 +68,12 @@ public class PromiseTest {
   }
 
   @Test
-  public void testAwaitImmediate() {
+  public void testAwaitImmediate() throws Exception {
     assertEquals(1, Promise.await(new Promise(1)));
   }
 
   @Test
-  public void testAwaitDelayed() {
+  public void testAwaitDelayed() throws Exception {
     Promise promise = new Promise();
     exec.schedule(() -> promise.fulfil(1, node), 1, TimeUnit.SECONDS);
     assertEquals(1, Promise.await(promise));
@@ -107,7 +107,7 @@ public class PromiseTest {
   }
 
   @Test
-  public void testMapChain() {
+  public void testMapChain() throws Exception {
     Promise original = new Promise();
     Promise promise = original;
     for (int i = 0; i < N; i++) {
@@ -118,7 +118,7 @@ public class PromiseTest {
   }
 
   @Test
-  public void testFlatMapChainImmediate() {
+  public void testFlatMapChainImmediate() throws Exception {
     Promise original = new Promise();
     Promise promise = original;
     for (int i = 0; i < N; i++) {
@@ -129,7 +129,7 @@ public class PromiseTest {
   }
 
   @Test
-  public void testFlatMapChainDelayed() {
+  public void testFlatMapChainDelayed() throws Exception {
     Promise original = new Promise();
     Promise intermediate = new Promise();
     Promise promise = original;

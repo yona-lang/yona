@@ -18,7 +18,11 @@ public final class MainExpressionNode extends ExpressionNode {
     if (result instanceof Promise) {
       Promise promise = (Promise) result;
       CompilerDirectives.transferToInterpreter();
-      result = Promise.await(promise);
+      try {
+        result = Promise.await(promise);
+      } catch (Exception e) {
+        e.printStackTrace(); // TODO what do we do here?
+      }
     }
 
     return result;

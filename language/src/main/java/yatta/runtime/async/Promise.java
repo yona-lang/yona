@@ -128,6 +128,14 @@ public final class Promise implements TruffleObject {
    * @return value of the promise, if it was fulfilled, otherwise returns null
    */
   public Object unwrap() {
+    if (value instanceof Callback || value instanceof Exception) {
+      return null;
+    } else {
+      return value;
+    }
+  }
+
+  public Object unwrapWithError() {
     if (value instanceof Callback) {
       return null;
     } else {
@@ -169,7 +177,7 @@ public final class Promise implements TruffleObject {
     return result;
   }
 
-  public static Object await(Promise promise) {
+  public static Object await(Promise promise) throws Exception {
     CountDownLatch latch = new CountDownLatch(1);
     Object snapshot;
     Object update;
@@ -177,13 +185,12 @@ public final class Promise implements TruffleObject {
       snapshot = promise.value;
       if (snapshot instanceof Callback) {
         update = new Callback.Consume(o -> latch.countDown(), e -> latch.countDown(), (Callback) snapshot);
-      } else return snapshot;
+      } else {
+        if (snapshot instanceof Exception) throw (Exception) snapshot;
+        else return snapshot;
+      }
     } while (!UPDATER.compareAndSet(promise, snapshot, update));
-    try {
-      latch.await();
-    } catch (InterruptedException e) {
-      return e;
-    }
+    latch.await();
     return promise.value;
   }
 
