@@ -26,6 +26,12 @@ public class YattaException extends RuntimeException implements TruffleException
     this.location = location;
   }
 
+  @TruffleBoundary
+  public YattaException(Throwable cause, Node location) {
+    super(cause);
+    this.location = location;
+  }
+
   @SuppressWarnings("sync-override")
   @Override
   public final Throwable fillInStackTrace() {
