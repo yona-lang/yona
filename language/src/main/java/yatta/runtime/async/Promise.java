@@ -44,29 +44,29 @@ public final class Promise implements TruffleObject {
     while (callback != Callback.Nil.INSTANCE) {
       if (callback instanceof Callback.Transform) {
         Callback.Transform transform = (Callback.Transform) callback;
-        if (result instanceof Exception) {
-          // result is an exception, no mapping is done, just fulfil callback's promise with it
-          trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, result, node));
-        } else {
-          try {
-            Object o = applyTCOToFunction(transform.function, result, node);
-            if (o instanceof Promise) {
-              // function returned a Promise, make it pass its result to callback's promise when done
-              trampoline = new Trampoline.More(trampoline, () -> ((Promise) o).propagate(transform.result, node));
-            } else {
-              // otherwise, fulfil with what function returned
-              trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, o, node));
-            }
-          } catch (Exception e) {
-            // function threw an exception, fulfil callbacks's promise with it
-            trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, e, node));
+        try {
+          final Object o;
+          if (result instanceof Throwable) {
+            o = applyTCOToFunction(transform.onFailure, (Throwable) result, node);
+          } else {
+            o = applyTCOToFunction(transform.onSuccess, result, node);
           }
+          if (o instanceof Promise) {
+            // function returned a Promise, make it pass its result to callback's promise when done
+            trampoline = new Trampoline.More(trampoline, () -> ((Promise) o).propagate(transform.result, node));
+          } else {
+            // otherwise, fulfil with what function returned
+            trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, o, node));
+          }
+        } catch (Exception e) {
+          // function threw an exception, fulfil callbacks's promise with it
+          trampoline = new Trampoline.More(trampoline, () -> fulfil(transform.result, e, node));
         }
         callback = transform.next;
       } else {
         Callback.Consume consume = (Callback.Consume) callback;
         // just execute right here
-        if (result instanceof Exception) consume.onFailure.accept(result);
+        if (result instanceof Throwable) consume.onFailure.accept(result);
         else consume.onSuccess.accept(result);
         callback = consume.next;
       }
@@ -81,7 +81,7 @@ public final class Promise implements TruffleObject {
       snapshot = value;
       if (snapshot instanceof Callback) {
         // not yet
-        update = new Callback.Transform(promise, identity(), (Callback) snapshot);
+        update = new Callback.Transform(promise, identity(), identity(), (Callback) snapshot);
       } else {
         // already done
         final Object result = snapshot;
@@ -100,13 +100,48 @@ public final class Promise implements TruffleObject {
       if (snapshot instanceof Callback) {
         // promise is not fulfilled yet
         if (result == null) result = new Promise();
-        update = new Callback.Transform(result, function, (Callback) snapshot);
+        update = new Callback.Transform(result, function, identity(), (Callback) snapshot);
       } else {
         // if this promise failed, propagate the exception
-        if (snapshot instanceof Exception) return this;
+        if (snapshot instanceof Throwable) return this;
         // if this promise succeeded, apply the function
         try {
           Object o = applyTCOToFunction(function, snapshot, node);
+          // if it's a promise, don't wrap it
+          if (o instanceof Promise) return (Promise) o;
+          // otherwise, fulfil the result with the value function returned
+          if (result == null) result = new Promise();
+          result.value = o;
+          return result;
+        } catch (Exception e) {
+          // propagate the exception
+          if (result == null) result = new Promise();
+          result.value = e;
+          return result;
+        }
+      }
+    } while (!UPDATER.compareAndSet(this, snapshot, update));
+    return result;
+  }
+
+  public Promise map(Function<? super Object, ?> onSuccess, Function<? super Throwable, ?> onFailure, Node node) {
+    Promise result = null;
+    Object snapshot;
+    Object update;
+    do {
+      snapshot = value;
+      if (snapshot instanceof Callback) {
+        // promise is not fulfilled yet
+        if (result == null) result = new Promise();
+        update = new Callback.Transform(result, onSuccess, onFailure, (Callback) snapshot);
+      } else {
+        try {
+          final Object o;
+          if (snapshot instanceof Throwable) {
+            o = applyTCOToFunction(onFailure, (Throwable) snapshot, node);
+          } else {
+            o = applyTCOToFunction(onSuccess, snapshot, node);
+          }
           // if it's a promise, don't wrap it
           if (o instanceof Promise) return (Promise) o;
           // otherwise, fulfil the result with the value function returned
@@ -128,7 +163,7 @@ public final class Promise implements TruffleObject {
    * @return value of the promise, if it was fulfilled, otherwise returns null
    */
   public Object unwrap() {
-    if (value instanceof Callback || value instanceof Exception) {
+    if (value instanceof Callback || value instanceof Throwable) {
       return null;
     } else {
       return value;
@@ -162,7 +197,7 @@ public final class Promise implements TruffleObject {
               if (counter.decrementAndGet() == 0) result.fulfil(data, node);
             }, (val) -> result.fulfil(val, node), (Callback) snapshot);
           } else {
-            if (snapshot instanceof Exception) result.fulfil(snapshot, node);
+            if (snapshot instanceof Throwable) result.fulfil(snapshot, node);
             else {
               data[idx] = snapshot;
               if (counter.decrementAndGet() == 0) result.fulfil(data, node);
@@ -177,7 +212,7 @@ public final class Promise implements TruffleObject {
     return result;
   }
 
-  public static Object await(Promise promise) throws Exception {
+  public static Object await(Promise promise) throws Throwable {
     CountDownLatch latch = new CountDownLatch(1);
     Object snapshot;
     Object update;
@@ -186,7 +221,7 @@ public final class Promise implements TruffleObject {
       if (snapshot instanceof Callback) {
         update = new Callback.Consume(o -> latch.countDown(), e -> latch.countDown(), (Callback) snapshot);
       } else {
-        if (snapshot instanceof Exception) throw (Exception) snapshot;
+        if (snapshot instanceof Throwable) throw (Throwable) snapshot;
         else return snapshot;
       }
     } while (!UPDATER.compareAndSet(promise, snapshot, update));
@@ -197,12 +232,14 @@ public final class Promise implements TruffleObject {
   private interface Callback {
     final class Transform implements Callback {
       final Promise result;
-      final Function<? super Object, ?> function;
+      final Function<? super Object, ?> onSuccess;
+      final Function<? super Throwable, ?> onFailure;
       final Callback next;
 
-      Transform(Promise result, Function<? super Object, ?> function, Callback next) {
+      Transform(Promise result, Function<? super Object, ?> onSuccess, Function<? super Throwable, ?> onFailure, Callback next) {
         this.result = result;
-        this.function = function;
+        this.onSuccess = onSuccess;
+        this.onFailure = onFailure;
         this.next = next;
       }
     }
@@ -279,7 +316,7 @@ public final class Promise implements TruffleObject {
     }
   }
 
-  private static <T, R> Object applyTCOToFunction(Function<T, R> function, T argument, Node node) {
+  private static <T, R> Object applyTCOToFunction(Function<? super T, ? extends R> function, T argument, Node node) {
     InteropLibrary library = InteropLibrary.getFactory().createDispatched(3);
 
     try {
@@ -293,7 +330,7 @@ public final class Promise implements TruffleObject {
         } catch (TailCallException te) {
           dispatchFunction = te.function;
           argumentValues = te.arguments;
-        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException _) {
+        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException ignored) {
           /* Execute was not successful. */
           // TODO add node
           throw UndefinedNameException.undefinedFunction(node, dispatchFunction);

@@ -27,12 +27,12 @@ public class PromiseTest {
   }
 
   @Test
-  public void testMapImmediate() throws Exception {
+  public void testMapImmediate() throws Throwable {
     assertEquals(1, Promise.await(new Promise(1).map(i -> i, node)));
   }
 
   @Test
-  public void testMapDelayed() throws Exception {
+  public void testMapDelayed() throws Throwable {
     Promise src = new Promise();
     Promise dst = src.map(i -> i, node);
     src.fulfil(1, node);
@@ -40,12 +40,12 @@ public class PromiseTest {
   }
 
   @Test
-  public void testFlatMapImmediate() throws Exception {
+  public void testFlatMapImmediate() throws Throwable {
     assertEquals(2, Promise.await(new Promise(1).map(whatever -> new Promise(2), node)));
   }
 
   @Test
-  public void testFlatMapDelayed() throws Exception {
+  public void testFlatMapDelayed() throws Throwable {
     Promise srcOne = new Promise();
     Promise srcTwo = new Promise();
     Promise dst = srcOne.map(whatever -> srcTwo, node);
@@ -68,12 +68,12 @@ public class PromiseTest {
   }
 
   @Test
-  public void testAwaitImmediate() throws Exception {
+  public void testAwaitImmediate() throws Throwable {
     assertEquals(1, Promise.await(new Promise(1)));
   }
 
   @Test
-  public void testAwaitDelayed() throws Exception {
+  public void testAwaitDelayed() throws Throwable {
     Promise promise = new Promise();
     exec.schedule(() -> promise.fulfil(1, node), 1, TimeUnit.SECONDS);
     assertEquals(1, Promise.await(promise));
@@ -107,7 +107,7 @@ public class PromiseTest {
   }
 
   @Test
-  public void testMapChain() throws Exception {
+  public void testMapChain() throws Throwable {
     Promise original = new Promise();
     Promise promise = original;
     for (int i = 0; i < N; i++) {
@@ -118,7 +118,7 @@ public class PromiseTest {
   }
 
   @Test
-  public void testFlatMapChainImmediate() throws Exception {
+  public void testFlatMapChainImmediate() throws Throwable {
     Promise original = new Promise();
     Promise promise = original;
     for (int i = 0; i < N; i++) {
@@ -129,7 +129,7 @@ public class PromiseTest {
   }
 
   @Test
-  public void testFlatMapChainDelayed() throws Exception {
+  public void testFlatMapChainDelayed() throws Throwable {
     Promise original = new Promise();
     Promise intermediate = new Promise();
     Promise promise = original;
