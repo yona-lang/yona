@@ -147,4 +147,16 @@ public class ErrorsTest {
       }
     });
   }
+
+  @Test
+  public void asyncRaiseTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "async \\-> raise :something \"Error description\"\n");
+      } catch (PolyglotException ex) {
+        assertEquals(ex.getMessage(), "yatta.YattaSymbolException: YattaError <something>: Error description");
+        throw ex;
+      }
+    });
+  }
 }

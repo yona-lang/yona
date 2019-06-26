@@ -72,9 +72,9 @@ in
 
 ```haskell
 do
-    start_time  = Time\now
-    (:ok, line) = File\read_line f
-    end_time    = Time\now
+    start_time  = Time.now
+    (:ok, line) = File.read_line f
+    end_time    = Time.now
     printf line
     printf (end_time - start_time)
 end
@@ -84,7 +84,7 @@ end
 `case` expression is used for pattern matching on an expression.
 
 ```haskell
-case File\read_line f of
+case File.read_line f of
     (:ok, line)       -> line
     (:ok, :eof)       -> :eof
     err@(:error, _)   -> err
@@ -199,10 +199,10 @@ The important point of this rather simple example is to demonstrate how easy it 
 
 ```haskell
 let
-    (:ok, line1) = File\read_line f1
-    (:ok, line2) = File\read_line f2
+    (:ok, line1) = File.read_line f1
+    (:ok, line2) = File.read_line f2
 in
-    File\write_line f3 (line1 ++ line2)
+    File.write_line f3 (line1 ++ line2)
 ```
 
 This allows programmers to focus on expressing concurrent programs much more easily and not having to deal with the details of the actual execution order. Additionally, when code must be executed sequentially, without explicit dependencies, a special expression `do` is available.
@@ -237,10 +237,10 @@ Previous example extended by error handling:
 ```haskell
 try
     let
-        (:ok, line1) = File\read_line f1
-        (:ok, line2) = File\read_line f2
+        (:ok, line1) = File.read_line f1
+        (:ok, line2) = File.read_line f2
     in
-        File\write_line f3 (line1 ++ line2)
+        File.write_line f3 (line1 ++ line2)
 catch
     (:nomatch, _, _)  -> :error
     (:io_error, _, _)     -> :error

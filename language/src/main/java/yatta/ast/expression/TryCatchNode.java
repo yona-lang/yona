@@ -66,14 +66,17 @@ public final class TryCatchNode extends ExpressionNode {
 
       if (value instanceof Promise) {
         Promise promise = (Promise) value;
-        Object unwrappedValue = promise.unwrap();
+        Object unwrappedValue = promise.unwrapWithError();
 
         if (unwrappedValue != null) {
           return execute(unwrappedValue, frame);
         } else {
           CompilerDirectives.transferToInterpreter();
           MaterializedFrame materializedFrame = frame.materialize();
-          return promise.map((val) -> execute(val, materializedFrame), this);
+          return promise.map(
+              (val) -> execute(val, materializedFrame),
+              (val) -> execute(val, materializedFrame),
+              this);
         }
       } else {
         return value;

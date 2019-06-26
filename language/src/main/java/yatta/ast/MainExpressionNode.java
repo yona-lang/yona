@@ -1,6 +1,7 @@
 package yatta.ast;
 
 import yatta.YattaException;
+import yatta.runtime.Unit;
 import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -21,6 +22,8 @@ public final class MainExpressionNode extends ExpressionNode {
       CompilerDirectives.transferToInterpreter();
       try {
         result = Promise.await(promise);
+
+        if (result instanceof Throwable) throw (Throwable) result;
       } catch (Throwable e) {
         throw new YattaException(e, this);
       }

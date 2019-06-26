@@ -5,6 +5,7 @@ import com.oracle.truffle.api.nodes.Node;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import yatta.ast.ExpressionNode;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -32,6 +33,11 @@ public class PromiseTest {
   }
 
   @Test
+  public void testMapExceptionImmediate() throws Throwable {
+    assertThrows(Exception.class, () -> Promise.await(new Promise(new Exception()).map(i -> i, e -> e, node)));
+  }
+
+  @Test
   public void testMapDelayed() throws Throwable {
     Promise src = new Promise();
     Promise dst = src.map(i -> i, node);
@@ -42,6 +48,14 @@ public class PromiseTest {
   @Test
   public void testFlatMapImmediate() throws Throwable {
     assertEquals(2, Promise.await(new Promise(1).map(whatever -> new Promise(2), node)));
+  }
+
+  @Test
+  public void testFlatMapErrorImmediate() throws Throwable {
+    assertEquals(3, Promise.await(new Promise(new Exception()).map(
+        whatever -> new Promise(2),
+        whetever -> new Promise(3),
+        node)));
   }
 
   @Test
@@ -60,6 +74,17 @@ public class PromiseTest {
   }
 
   @Test
+  public void testMapUnwrapErrorImmediate() {
+    assertNull(new Promise(new Exception()).unwrap());
+  }
+
+  @Test
+  public void testMapUnwrapWithErrorImmediate() {
+    Exception e = new Exception();
+    assertEquals(e, new Promise(e).unwrapWithError());
+  }
+
+  @Test
   public void testMapUnwrapException() {
     Promise promise = new Promise();
     Exception e = new YattaException("test", null);
@@ -70,6 +95,11 @@ public class PromiseTest {
   @Test
   public void testAwaitImmediate() throws Throwable {
     assertEquals(1, Promise.await(new Promise(1)));
+  }
+
+  @Test
+  public void testAwaitError() throws Throwable {
+    assertThrows(Exception.class, () -> Promise.await(new Promise(new Exception())));
   }
 
   @Test

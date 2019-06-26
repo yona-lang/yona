@@ -332,7 +332,6 @@ public final class Promise implements TruffleObject {
           argumentValues = te.arguments;
         } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException ignored) {
           /* Execute was not successful. */
-          // TODO add node
           throw UndefinedNameException.undefinedFunction(node, dispatchFunction);
         }
       }

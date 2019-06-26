@@ -30,15 +30,15 @@ tokens { INDENT, DEDENT }
         }
         @Override
         public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
-            String location = "-- line " + line + " col " + (charPositionInLine + 1) + ": ";
-            throw new ParseError(source, line, charPositionInLine + 1, offendingSymbol == null ? 1 : ((Token) offendingSymbol).getText().length(), "Error(s) parsing script:\n" + location + msg);
+            throwParseError(source, line, charPositionInLine, (Token) offendingSymbol, msg);
         }
     }
 
-    public void SemErr(Token token, String message) {
-        int col = token.getCharPositionInLine() + 1;
-        String location = "-- line " + token.getLine() + " col " + col + ": ";
-        throw new ParseError(source, token.getLine(), col, token.getText().length(), "Error(s) parsing script:\n" + location + message);
+    private static void throwParseError(Source source, int line, int charPositionInLine, Token token, String message) {
+        int col = charPositionInLine + 1;
+        String location = "-- line " + line + " col " + col + ": ";
+        int length = token == null ? 1 : Math.max(token.getStopIndex() - token.getStartIndex(), 0);
+        throw new ParseError(source, line, col, length, String.format("Error(s) parsing script:%n" + location + message));
     }
 
     public static RootCallTarget parseYatta(YattaLanguage language, Source source) {
