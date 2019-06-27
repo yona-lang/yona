@@ -220,13 +220,15 @@ public final class Promise implements TruffleObject {
       snapshot = promise.value;
       if (snapshot instanceof Callback) {
         update = new Callback.Consume(o -> latch.countDown(), e -> latch.countDown(), (Callback) snapshot);
-      } else {
-        if (snapshot instanceof Throwable) throw (Throwable) snapshot;
-        else return snapshot;
-      }
+      } else return throwIfThrowable(snapshot);
     } while (!UPDATER.compareAndSet(promise, snapshot, update));
     latch.await();
-    return promise.value;
+    return throwIfThrowable(promise.value);
+  }
+
+  private static Object throwIfThrowable(Object value) throws Throwable {
+    if (value instanceof Throwable) throw (Throwable) value;
+    return value;
   }
 
   private interface Callback {
