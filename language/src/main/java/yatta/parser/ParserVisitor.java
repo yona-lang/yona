@@ -622,7 +622,13 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
     for (int i = 0; i < ctx.catchExpr().catchPatternExpression().size(); i++) {
       YattaParser.CatchPatternExpressionContext patternExpressionContext = ctx.catchExpr().catchPatternExpression(i);
 
-      MatchNode matchExpression = visitTripplePattern(patternExpressionContext.tripplePattern());
+      MatchNode matchExpression = null;
+
+      if (patternExpressionContext.tripplePattern() != null) {
+        matchExpression = visitTripplePattern(patternExpressionContext.tripplePattern());
+      } else {
+        matchExpression = visitUnderscore(patternExpressionContext.underscore());
+      }
 
       if (patternExpressionContext.catchPatternExpressionWithoutGuard() != null) {
         patternNodes.add(withSourceSection(patternExpressionContext.catchPatternExpressionWithoutGuard(), new PatternNode(matchExpression, patternExpressionContext.catchPatternExpressionWithoutGuard().expression().accept(this))));

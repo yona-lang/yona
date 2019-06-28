@@ -196,7 +196,7 @@ functionAlias : funName=name (KW_AS funAlias=name)? ;
 tryCatchExpr : KW_TRY NEWLINE? expression NEWLINE? catchExpr NEWLINE? KW_END ;
 catchExpr : KW_CATCH NEWLINE? catchPatternExpression+ ;
 
-catchPatternExpression : tripplePattern (catchPatternExpressionWithoutGuard | catchPatternExpressionWithGuard+) NEWLINE ;
+catchPatternExpression : (tripplePattern | underscore) (catchPatternExpressionWithoutGuard | catchPatternExpressionWithGuard+) NEWLINE ;
 tripplePattern : PARENS_L pattern COMMA pattern COMMA pattern PARENS_R ;
 catchPatternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
 catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;

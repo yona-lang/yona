@@ -315,6 +315,19 @@ public class SimpleExpressionTest {
     assertEquals("NoMatchException", ret);
   }
 
+  @Test
+  public void matchAnyExceptionTest() {
+    long ret = context.eval(YattaLanguage.ID, "try case 1 of\n" +
+        "2 -> 0\n" +
+        "end\n" +
+        "catch\n" +
+        "(:not_this, _, _) -> 1\n" +
+        "_ -> 2\n" +
+        "end\n").asLong();
+
+    assertEquals(2l, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with
