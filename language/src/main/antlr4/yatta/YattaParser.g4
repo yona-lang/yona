@@ -1,6 +1,6 @@
-grammar Yatta;
+parser grammar YattaParser;
 
-tokens { INDENT, DEDENT }
+options { tokenVocab=YattaLexer; }
 
 @parser::header
 {
@@ -79,6 +79,7 @@ literal : booleanLiteral
         | integerLiteral
         | byteLiteral
         | stringLiteral
+        | characterLiteral
         ;
 
 value : unit
@@ -112,10 +113,24 @@ module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE function+ ;
 nonEmptyListOfNames : NEWLINE? name NEWLINE? (COMMA NEWLINE? name)* NEWLINE? ;
 
 unit : UNIT ;
-byteLiteral : INTEGER 'b';
+byteLiteral : INTEGER BYTE_SUFFIX;
+floatLiteral : FLOAT | (INTEGER FLOAT_SUFFIX);
 integerLiteral : INTEGER ;
-floatLiteral : FLOAT | INTEGER 'f';
-stringLiteral : STRING ;
+
+stringLiteral: INTERPOLATED_REGULAR_STRING_START interpolatedStringPart* DOUBLE_QUOTE_INSIDE ;
+interpolatedStringPart
+	: interpolatedStringExpression
+	| DOUBLE_CURLY_INSIDE
+	| REGULAR_CHAR_INSIDE
+	| REGULAR_STRING_INSIDE
+	;
+
+interpolatedStringExpression
+	: interpolationExpression=expression (COMMA alignment=expression)?
+	;
+
+
+characterLiteral : CHARACTER_LITERAL ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
 function : name pattern* functionBody NEWLINE?;
 functionBody : bodyWithoutGuard | bodyWithGuards+ ;
@@ -203,89 +218,3 @@ catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLI
 
 
 raiseExpr : KW_RAISE symbol stringLiteral NEWLINE ;
-
-
-UNIT: '()' ;
-UNDERSCORE : '_' ;
-AT : '@' ;
-
-// Keywords
-KW_LET : 'let' ;
-KW_IN : 'in' ;
-KW_IF : 'if' ;
-KW_THEN : 'then' ;
-KW_ELSE : 'else' ;
-KW_TRUE : 'true' ;
-KW_FALSE : 'false' ;
-KW_MODULE : 'module' ;
-KW_EXPORTS : 'exports' ;
-KW_AS : 'as' ;
-KW_CASE : 'case' ;
-KW_OF : 'of' ;
-KW_IMPORT : 'import' ;
-KW_FROM : 'from' ;
-KW_END : 'end' ;
-KW_DO : 'do' ;
-KW_TRY : 'try' ;
-KW_CATCH : 'catch' ;
-KW_RAISE : 'raise' ;
-
-BRACKET_L : '[' ;
-BRACKET_R : ']' ;
-PARENS_L : '(' ;
-PARENS_R : ')' ;
-CURLY_L : '{' ;
-CURLY_R : '}' ;
-
-COMMA : ',' ;
-COLON : ':' ;
-
-CONS_L : '<:' ;
-CONS_R : ':>' ;
-
-DOT : '.' ;
-VLINE : '|';
-BACKSLASH : '\\' ;
-
-// Data
-STRING: '"' ('\\"'|.)*? '"' ;
-LOWERCASE_NAME : 'a'..'z' [a-zA-Z_]* ;
-UPPERCASE_NAME : 'A'..'Z' [a-zA-Z_]* ;
-INTEGER : '-'?[0-9]+ ;
-FLOAT : ('0' .. '9') + ('.' ('0' .. '9') +)? ;
-
-// Operators
-BIN_OP : OP_COMPARISON | OP_ARITHMETIC | OP_LIST;
-UN_OP: OP_NOT;
-
-OP_ASSIGN : '=';
-OP_EQ : '==' ;
-OP_NEQ : '!=' ;
-OP_LT : '<' ;
-OP_LTE : '<=' ;
-OP_GT : '>' ;
-OP_GTE : '>=';
-OP_NOT : '!' ;
-OP_ARROW : '->' ;
-
-OP_COMPARISON : OP_EQ | OP_NEQ | OP_LT | OP_LTE | OP_GT | OP_GTE ;
-
-OP_PLUS : '+' ;
-OP_MINUS : '-';
-OP_MULTIPLY : '*';
-OP_DIVIDE : '/';
-OP_MODULO : '%';
-
-OP_ARITHMETIC : OP_PLUS | OP_MINUS | OP_MULTIPLY | OP_DIVIDE | OP_MODULO ;
-
-OP_CONS : '::';
-OP_JOIN : '++';
-
-OP_LIST :  OP_CONS | OP_JOIN ;
-
-NEWLINE: ('\r'? '\n')+ ;
-
-fragment COMMENT : NEWLINE? '#' ~[\r\n\f]* ;
-fragment SPACES : [ \t]+ ;
-
-WS: (COMMENT | SPACES) -> skip ;

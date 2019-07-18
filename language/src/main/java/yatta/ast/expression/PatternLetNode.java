@@ -61,14 +61,10 @@ public final class PatternLetNode extends LexicalScopeNode {
 
         if (aliasValue instanceof Promise) {
           promise = (Promise) aliasValue;
-        }
-      } else {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-
-        if (materializedFrame == null) {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           materializedFrame = frame.materialize();
         }
-
+      } else {
         final MaterializedFrame finalMaterializedFrame = materializedFrame;
         promise = promise.map(ignore -> patternAlias.executeGeneric(finalMaterializedFrame), this);
       }

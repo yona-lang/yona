@@ -5,16 +5,15 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.YattaSymbolException;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.value.StringNode;
 import yatta.ast.expression.value.SymbolNode;
 
 import java.util.Objects;
 
 public class ThrowYattaExceptionNode extends ExpressionNode {
   @Child private SymbolNode symbolNode;
-  @Child private StringNode stringNode;
+  @Child private ExpressionNode stringNode;
 
-  public ThrowYattaExceptionNode(SymbolNode symbolNode, StringNode stringNode) {
+  public ThrowYattaExceptionNode(SymbolNode symbolNode, ExpressionNode stringNode) {
     this.symbolNode = symbolNode;
     this.stringNode = stringNode;
   }
@@ -44,6 +43,7 @@ public class ThrowYattaExceptionNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     try {
+      // TODO what if stringNode/symbolNode returns a promise
       throw new YattaSymbolException(stringNode.executeString(frame), this, symbolNode.executeSymbol(frame));
     } catch (UnexpectedResultException ex) {
       throw new YattaException("Unexpected error while constructing an Exception: " + ex.getMessage(), this);

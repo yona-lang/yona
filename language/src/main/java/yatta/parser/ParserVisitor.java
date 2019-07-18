@@ -1,11 +1,16 @@
 package yatta.parser;
 
+import com.oracle.truffle.api.dsl.NodeFactory;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 import org.antlr.v4.runtime.ParserRuleContext;
-import yatta.YattaBaseVisitor;
 import yatta.YattaLanguage;
 import yatta.YattaParser;
+import yatta.YattaParserBaseVisitor;
 import yatta.ast.ExpressionNode;
 import yatta.ast.MainExpressionNode;
+import yatta.ast.StringPartsNode;
 import yatta.ast.binary.*;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.ast.call.InvokeNode;
@@ -15,14 +20,10 @@ import yatta.ast.expression.value.*;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.pattern.*;
 import yatta.runtime.UninitializedFrameSlot;
-import com.oracle.truffle.api.dsl.NodeFactory;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 
 import java.util.*;
 
-public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
+public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> {
   private YattaLanguage language;
   private Source source;
   private int lambdaCount = 0;
@@ -43,7 +44,7 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
 
   @Override
   public ExpressionNode visitExpressionInParents(YattaParser.ExpressionInParentsContext ctx) {
-    return  ctx.expression().accept(this);
+    return ctx.expression().accept(this);
   }
 
   @Override
@@ -174,7 +175,8 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
 
   @Override
   public FloatNode visitFloatLiteral(YattaParser.FloatLiteralContext ctx) {
-    return withSourceSection(ctx, new FloatNode(Double.parseDouble(ctx.FLOAT().getText())));
+    String text = ctx.FLOAT() != null ? ctx.FLOAT().getText() : ctx.INTEGER().getText();
+    return withSourceSection(ctx, new FloatNode(Double.parseDouble(text)));
   }
 
   @Override
@@ -183,8 +185,35 @@ public final class ParserVisitor extends YattaBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public StringNode visitStringLiteral(YattaParser.StringLiteralContext ctx) {
-    return withSourceSection(ctx, new StringNode(normalizeString(ctx.STRING().getText())));
+  public ExpressionNode visitStringLiteral(YattaParser.StringLiteralContext ctx) {
+    ExpressionNode[] expressionNodes = new ExpressionNode[ctx.interpolatedStringPart().size()];
+
+    for (int i = 0; i < ctx.interpolatedStringPart().size(); i++) {
+      expressionNodes[i] = ctx.interpolatedStringPart(i).accept(this);
+    }
+
+    return new StringPartsNode(expressionNodes);
+  }
+
+  @Override
+  public ExpressionNode visitInterpolatedStringPart(YattaParser.InterpolatedStringPartContext ctx) {
+    if (ctx.interpolatedStringExpression() != null) {
+      return visitInterpolatedStringExpression(ctx.interpolatedStringExpression());
+    } else if (ctx.DOUBLE_CURLY_INSIDE() != null) {
+      return withSourceSection(ctx, new StringNode("{"));
+    } else if (ctx.REGULAR_CHAR_INSIDE() != null) {
+      return withSourceSection(ctx, new StringNode(ctx.REGULAR_CHAR_INSIDE().getText()));
+    } else {
+      return withSourceSection(ctx, new StringNode(ctx.REGULAR_STRING_INSIDE().getText()));
+    }
+  }
+
+  @Override
+  public ExpressionNode visitInterpolatedStringExpression(YattaParser.InterpolatedStringExpressionContext ctx) {
+    ExpressionNode expressionNode = ctx.interpolationExpression.accept(this);
+    ExpressionNode alignmentNode = (ctx.alignment != null) ? ctx.alignment.accept(this) : null;
+
+    return new StringInterpolationNode(expressionNode, alignmentNode);
   }
 
   @Override

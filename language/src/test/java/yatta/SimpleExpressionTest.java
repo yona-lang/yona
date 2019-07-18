@@ -42,6 +42,12 @@ public class SimpleExpressionTest {
   }
 
   @Test
+  public void floatSuffixValueTest() {
+    double ret = context.eval(YattaLanguage.ID, "5f").asDouble();
+    assertEquals(5.0, ret, 0);
+  }
+
+  @Test
   public void unitValueTest() {
     assertEquals("NONE", context.eval(YattaLanguage.ID, "()").toString());
   }

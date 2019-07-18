@@ -11,4 +11,9 @@ public final class NoMatchException extends YattaException {
   public NoMatchException(Node location) {
     super("NoMatchException", location);
   }
+
+  @CompilerDirectives.TruffleBoundary
+  public NoMatchException(Throwable cause, Node location) {
+    super(cause, location);
+  }
 }

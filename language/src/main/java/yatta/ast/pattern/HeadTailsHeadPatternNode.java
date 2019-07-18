@@ -91,7 +91,7 @@ public class HeadTailsHeadPatternNode extends MatchNode {
           }
         }
 
-        // Yatta.g4: tails : identifier | emptySequence | underscore ;
+        // YattaParser.g4: tails : identifier | emptySequence | underscore ;
         if (tailsNode instanceof IdentifierNode) {
           IdentifierNode identifierNode = (IdentifierNode) tailsNode;
 

@@ -63,6 +63,7 @@ public class Context {
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
     this.builtins.register(SleepNodeFactory.getInstance());
     this.builtins.register(AsyncNodeFactory.getInstance());
+    this.builtins.register(ToStringBuiltinFactory.getInstance());
   }
 
   private void installBuiltinModules() {

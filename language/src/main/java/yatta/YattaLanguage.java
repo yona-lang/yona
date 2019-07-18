@@ -41,10 +41,6 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   public CallTarget parse(ParsingRequest request) throws Exception {
     Source source = request.getSource();
     RootCallTarget rootCallTarget;
-    /*
-     * Parse the provided source. At this point, we do not have a Context yet. Registration of
-     * the functions with the Context happens lazily in YattaEvalRootNode.
-     */
     rootCallTarget = YattaParser.parseYatta(this, source);
 
     return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
