@@ -154,7 +154,7 @@ public class ErrorsTest {
       try {
         context.eval(YattaLanguage.ID, "async \\-> raise :something \"Error description\"\n");
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "yatta.YattaSymbolException: YattaError <something>: Error description");
+        assertEquals(ex.getMessage(), "YattaError <something>: Error description");
         throw ex;
       }
     });

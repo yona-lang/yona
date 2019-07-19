@@ -285,6 +285,18 @@ public class SimpleExpressionTest {
   }
 
   @Test
+  public void promiseRaiseTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "raise :random_error \"something {(async \\-> \"happened\")}\"\n");
+      } catch (PolyglotException ex) {
+        assertEquals(ex.getMessage(), "YattaError <random_error>: something happened");
+        throw ex;
+      }
+    });
+  }
+
+  @Test
   public void simpleTryCatchTest() {
     String ret = context.eval(YattaLanguage.ID, "try\n" +
         "raise :random_error \"something happened\"\n" +

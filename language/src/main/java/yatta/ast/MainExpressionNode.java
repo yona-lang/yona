@@ -22,6 +22,8 @@ public final class MainExpressionNode extends ExpressionNode {
       CompilerDirectives.transferToInterpreter();
       try {
         result = Promise.await(promise);
+      } catch (YattaException e) {
+        throw e;
       } catch (Throwable e) {
         throw new YattaException(e, this);
       }
