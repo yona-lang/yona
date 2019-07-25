@@ -13,14 +13,43 @@ public final class Util {
   }
 
   public static int int32Read(final byte[] src, int offset) {
-    return (src[offset] << 24) | ((src[++offset] & 0xff) << 16) | ((src[++offset] & 0xff) <<  8) | (src[++offset] & 0xff);
+    int result = 0;
+    result |= src[offset] << 24;
+    result |= (src[++offset] & 0xff) << 16;
+    result |= (src[++offset] & 0xff) <<  8;
+    result |= src[++offset] & 0xff;
+    return result;
   }
 
-  public static void int32Write(int value, final byte[] destination, int offset) {
-    destination[offset] = (byte)(value >> 24);
-    destination[++offset] = (byte)(value >> 16);
-    destination[++offset] = (byte)(value >> 8);
-    destination[++offset] = (byte) value;
+  public static void int32Write(int value, final byte[] dst, int offset) {
+    dst[offset] = (byte)(value >> 24);
+    dst[++offset] = (byte)(value >> 16);
+    dst[++offset] = (byte)(value >> 8);
+    dst[++offset] = (byte) value;
+  }
+
+  public static long int64Read(final byte[] src, int offset) {
+    long result = 0;
+    result |= ((long) src[offset]) << 56;
+    result |= ((long) src[++offset] & 0xff) << 48;
+    result |= ((long) src[++offset] & 0xff) << 40;
+    result |= ((long) src[++offset] & 0xff) << 32;
+    result |= ((long) src[++offset] & 0xff) << 24;
+    result |= ((long) src[++offset] & 0xff) << 16;
+    result |= ((long) src[++offset] & 0xff) <<  8;
+    result |= (long) src[++offset] & 0xff;
+    return result;
+  }
+
+  public static void int64Write(long value, final byte[] dst, int offset) {
+    dst[offset] = (byte)(value >> 56);
+    dst[++offset] = (byte)(value >> 48);
+    dst[++offset] = (byte)(value >> 40);
+    dst[++offset] = (byte)(value >> 32);
+    dst[++offset] = (byte)(value >> 24);
+    dst[++offset] = (byte)(value >> 16);
+    dst[++offset] = (byte)(value >> 8);
+    dst[++offset] = (byte) value;
   }
 
   public static long varInt63Read(final byte[] source, int offset) {
@@ -51,10 +80,6 @@ public final class Util {
     destination[offset] = (byte) value;
   }
 
-  public static boolean nthBit(final short value, final int n) {
-    return ((value << n) & 0x8000) != 0;
-  }
-
   public static int codePointAt(byte[] array, int offset) {
     final byte b0 = array[offset++];
     if ((0x80 & b0) == 0) return b0;
@@ -74,11 +99,17 @@ public final class Util {
     throw new AssertionError();
   }
 
+  public static short setBit(final short bitmap, final int shift) {
+    return (short) ((short) (0x8000 >>> shift) | (bitmap & 0xffff));
+  }
 
+  public static short clearBit(final short bitmap, final int shift) {
+    return (short) ((short) ~(0x8000 >>> shift) & (bitmap & 0xffff));
+  }
 
-
-
-
+  public static boolean testBit(final short bitmap, final int shift) {
+    return ((bitmap << shift) & 0x8000) != 0;
+  }
 
 
 

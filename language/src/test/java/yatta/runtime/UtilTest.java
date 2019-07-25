@@ -47,6 +47,35 @@ public class UtilTest {
   }
 
   @Test
+  public void testInt64ReadWrite() {
+    final byte[] data = new byte[8];
+    Util.int64Write(0, data, 0);
+    assertEquals(0, Util.int64Read(data, 0));
+    final long[] vals = new long[]{
+     0x1, 0x2, 0x4, 0x8,
+     0x1a, 0x2a, 0x4a, 0x8a,
+     0x1ab, 0x2ab, 0x4ab, 0x8ab,
+     0x1abc, 0x2abc, 0x4abc, 0x8abc,
+     0x1abcd, 0x2abcd, 0x4abcd, 0x8abcd,
+     0x1abcde, 0x2abcde, 0x4abcde, 0x8abcde,
+     0x1abcdef, 0x2abcdef, 0x4abcdef, 0x8abcdef,
+     0x1abcdef0, 0x2abcdef0, 0x4abcdef0, 0x8abcdef0,
+     0x1abcdef01L, 0x2abcdef01L, 0x4abcdef01L, 0x8abcdef01L,
+     0x1abcdef012L, 0x2abcdef012L, 0x4abcdef012L, 0x8abcdef012L,
+     0x1abcdef0123L, 0x2abcdef0123L, 0x4abcdef0123L, 0x8abcdef0123L,
+     0x1abcdef01234L, 0x2abcdef01234L, 0x4abcdef01234L, 0x8abcdef01234L,
+     0x1abcdef012345L, 0x2abcdef012345L, 0x4abcdef012345L, 0x8abcdef012345L,
+     0x1abcdef0123456L, 0x2abcdef0123456L, 0x4abcdef0123456L, 0x8abcdef0123456L,
+     0x1abcdef01234567L, 0x2abcdef01234567L, 0x4abcdef01234567L, 0x8abcdef01234567L,
+     0x1abcdef012345678L, 0x2abcdef012345678L, 0x4abcdef012345678L, 0x8abcdef012345678L
+    };
+    for (long val : vals) {
+      Util.int64Write(val, data, 0);
+      assertEquals(val, Util.int64Read(data, 0));
+    }
+  }
+
+  @Test
   public void testVarInt63Len() {
     assertEquals(1, Util.varInt63Len(0x0L));
     assertEquals(1, Util.varInt63Len(0x7aL));
@@ -107,5 +136,23 @@ public class UtilTest {
     assertEquals(0x7aL, Util.varInt63Read(data, 0));
     Util.varInt63Write(0x0L, data, 0);
     assertEquals(0x0L, Util.varInt63Read(data, 0));
+  }
+
+  @Test
+  public void testSetBit() {
+    short bitmap;
+    for (int i = 0; i < 15; i++) {
+      bitmap = setBit((short) 0, i);
+      assertTrue(testBit(bitmap, i));
+    }
+  }
+
+  @Test
+  public void testClearBit() {
+    short bitmap;
+    for (int i = 0; i < 15; i++) {
+      bitmap = clearBit((short) 0xffff, i);
+      assertFalse(testBit(bitmap, i));
+    }
   }
 }
