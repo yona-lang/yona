@@ -48,7 +48,7 @@ public class YattaException extends RuntimeException implements TruffleException
   }
 
   /**
-   * Provides a user-readable message for run-time type errors. SL is strongly typed, i.e., there
+   * Provides a user-readable message for run-time type errors. Yatta is strongly typed, i.e., there
    * are no automatic type conversions of values.
    */
   @TruffleBoundary

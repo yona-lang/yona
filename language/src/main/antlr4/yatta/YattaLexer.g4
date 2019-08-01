@@ -14,6 +14,7 @@ private Stack<Integer> curlyLevels = new Stack<Integer>();
 UNIT: '()' ;
 UNDERSCORE : '_' ;
 AT : '@' ;
+BACKTICK : '`' ;
 
 // Keywords
 KW_LET : 'let' ;
@@ -95,13 +96,13 @@ OP_ARROW : '->' ;
 
 OP_COMPARISON : OP_EQ | OP_NEQ | OP_LT | OP_LTE | OP_GT | OP_GTE ;
 
-OP_PLUS : '+' ;
-OP_MINUS : '-';
 OP_MULTIPLY : '*';
 OP_DIVIDE : '/';
 OP_MODULO : '%';
+OP_PLUS : '+' ;
+OP_MINUS : '-';
 
-OP_ARITHMETIC : OP_PLUS | OP_MINUS | OP_MULTIPLY | OP_DIVIDE | OP_MODULO ;
+OP_ARITHMETIC : OP_MULTIPLY | OP_DIVIDE | OP_MODULO | OP_PLUS | OP_MINUS ;
 
 OP_CONS : '::';
 OP_JOIN : '++';

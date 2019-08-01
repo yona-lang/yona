@@ -72,7 +72,9 @@ expression : PARENS_L expression PARENS_R               #expressionInParents
            | importExpr                                 #importExpression
            | tryCatchExpr                               #tryCatchExpression
            | raiseExpr                                  #raiseExpression
+           | backtickExpr                               #backtickExpression
            ;
+
 
 literal : booleanLiteral
         | floatLiteral
@@ -106,7 +108,8 @@ moduleAlias : name OP_ASSIGN module NEWLINE? ;
 patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
 fqnAlias : name OP_ASSIGN fqn NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
-apply : (name | moduleCall | nameCall) expression* ;
+apply : call expression* ;
+call : name | moduleCall | nameCall ;
 moduleCall : fqn DOT name ;
 nameCall : var=name DOT fun=name;
 module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE function+ ;
@@ -216,5 +219,8 @@ tripplePattern : PARENS_L pattern COMMA pattern COMMA pattern PARENS_R ;
 catchPatternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
 catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
 
-
 raiseExpr : KW_RAISE symbol stringLiteral NEWLINE ;
+
+
+backtickExpr : backtickLeft BACKTICK call BACKTICK right=expression ;
+backtickLeft : value | PARENS_L expression PARENS_R ;

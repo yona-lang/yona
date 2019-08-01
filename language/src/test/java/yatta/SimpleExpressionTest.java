@@ -113,7 +113,7 @@ public class SimpleExpressionTest {
 
   @Test
   public void zeroArgFunctionTest() {
-    long ret = context.eval(YattaLanguage.ID, "\\ -> 5").execute().asLong();
+    long ret = context.eval(YattaLanguage.ID, "\\ -> 5").asLong();
     assertEquals(5l, ret);
   }
 
@@ -221,9 +221,8 @@ public class SimpleExpressionTest {
   @Test
   public void curriedLambdaInLetOutOfScopeTest() {
     long ret = context.eval(YattaLanguage.ID, "let\n" +
-        "curriedFullFun = \\-> let fullFun = \\argone argtwo argthree -> argthree in fullFun 1\n" +
-        "curriedFun = curriedFullFun\n" +
-        "curried = \\curriedArg -> curriedFun 3 4 curriedArg\n" +
+        "curriedFun = let fullFun = \\argone argtwo argthree -> argthree in fullFun 1\n" +
+        "curried = \\curriedArg -> curriedFun 3 curriedArg\n" +
         "in curried 6").asLong();
     assertEquals(6l, ret);
   }
@@ -344,6 +343,34 @@ public class SimpleExpressionTest {
         "end\n").asLong();
 
     assertEquals(2l, ret);
+  }
+
+  @Test
+  public void simpleBackTickTest() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    func = \\aa bb -> aa + bb\n" +
+        "in 2 `func` 3").asLong();
+
+    assertEquals(5l, ret);
+  }
+
+  @Test
+  public void leftExpressionBackTickTest() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    func = \\aa bb -> aa + bb\n" +
+        "in (let xx = 2 in xx) `func` 3").asLong();
+
+    assertEquals(5l, ret);
+  }
+
+  @Test
+  public void curryingBackTickTest() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    func = \\aa bb cc -> aa + bb + cc\n" +
+        "    curried = 2 `func` 3\n" +
+        "in curried 4").asLong();
+
+    assertEquals(9l, ret);
   }
 
   //docs state:

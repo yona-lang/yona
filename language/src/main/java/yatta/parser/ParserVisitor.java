@@ -54,38 +54,13 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public ExpressionNode visitFunctionApplicationExpression(YattaParser.FunctionApplicationExpressionContext ctx) {
-    List<ExpressionNode> args = new ArrayList<>();
-    for (YattaParser.ExpressionContext exprCtx : ctx.apply().expression()) {
-      args.add(exprCtx.accept(this));
+    ExpressionNode[] argNodes = new ExpressionNode[ctx.apply().expression().size()];
+    for (int i = 0; i < ctx.apply().expression().size(); i++) {
+      argNodes[i] = ctx.apply().expression(i).accept(this);
     }
 
-    ExpressionNode[] argNodes = args.toArray(new ExpressionNode[]{});
-
-    if (ctx.apply().moduleCall() != null) {
-      FQNNode fqnNode = visitFqn(ctx.apply().moduleCall().fqn());
-      String functionName = ctx.apply().moduleCall().name().getText();
-
-      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltinModules().lookup(fqnNode, functionName);
-
-      if (builtinFunction != null) {
-        return builtinFunction.createNode((Object) argNodes);
-      } else {
-        return withSourceSection(ctx, new ModuleCallNode(language, fqnNode, functionName, argNodes));
-      }
-    } else if (ctx.apply().nameCall() != null) {
-      SimpleIdentifierNode nameNode = new SimpleIdentifierNode(ctx.apply().nameCall().var.getText());
-      String functionName = ctx.apply().nameCall().fun.getText();
-      return withSourceSection(ctx, new ModuleCallNode(language, nameNode, functionName, argNodes));
-    } else {
-      String functionName = ctx.apply().name().getText();
-      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltins().lookup(functionName);
-
-      if (builtinFunction != null) {
-        return builtinFunction.createNode((Object) argNodes);
-      } else {
-        return withSourceSection(ctx, new InvokeNode(language, withSourceSection(ctx.apply().name(), new IdentifierNode(language, functionName)), argNodes));
-      }
-    }
+    YattaParser.CallContext callCtx = ctx.apply().call();
+    return createCallNode(ctx, argNodes, callCtx);
   }
 
   @Override
@@ -286,11 +261,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public SequenceNode visitOtherSequence(YattaParser.OtherSequenceContext ctx) {
-    List<ExpressionNode> expressions = new ArrayList<>();
-    for (YattaParser.ExpressionContext expr : ctx.expression()) {
-      expressions.add(expr.accept(this));
+    ExpressionNode[] expressionNodes = new ExpressionNode[ctx.expression().size()];
+    for (int i = 0; i < ctx.expression().size(); i++) {
+      expressionNodes[i] = ctx.expression(i).accept(this);
     }
-    return withSourceSection(ctx, new SequenceNode(expressions.toArray(new ExpressionNode[]{})));
+    return withSourceSection(ctx, new SequenceNode(expressionNodes));
   }
 
   @Override
@@ -432,10 +407,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   public IdentifierNode visitIdentifier(YattaParser.IdentifierContext ctx) {
     String name = ctx.name().getText();
     return withSourceSection(ctx, new IdentifierNode(language, name));
-  }
-
-  private String normalizeString(String str) {
-    return str.substring(1, str.length() - 1);
   }
 
   @Override
@@ -700,5 +671,52 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
         parserRuleContext.stop.getStopIndex() - parserRuleContext.start.getStartIndex()
     );
     return expressionNode;
+  }
+
+  @Override
+  public ExpressionNode visitBacktickExpression(YattaParser.BacktickExpressionContext ctx) {
+    ExpressionNode[] argNodes = new ExpressionNode[2];
+    argNodes[0] = ctx.backtickExpr().backtickLeft().accept(this);
+    argNodes[1] = ctx.backtickExpr().right.accept(this);
+
+    YattaParser.CallContext callCtx = ctx.backtickExpr().call();
+    return createCallNode(ctx, argNodes, callCtx);
+  }
+
+  @Override
+  public ExpressionNode visitBacktickLeft(YattaParser.BacktickLeftContext ctx) {
+    if (ctx.value() != null) {
+      return ctx.value().accept(this);
+    } else {
+      return ctx.expression().accept(this);
+    }
+  }
+
+  private ExpressionNode createCallNode(ParserRuleContext ctx, ExpressionNode[] argNodes, YattaParser.CallContext callCtx) {
+    if (callCtx.moduleCall() != null) {
+      FQNNode fqnNode = visitFqn(callCtx.moduleCall().fqn());
+      String functionName = callCtx.moduleCall().name().getText();
+
+      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltinModules().lookup(fqnNode, functionName);
+
+      if (builtinFunction != null) {
+        return builtinFunction.createNode((Object) argNodes);
+      } else {
+        return withSourceSection(ctx, new ModuleCallNode(language, fqnNode, functionName, argNodes));
+      }
+    } else if (callCtx.nameCall() != null) {
+      SimpleIdentifierNode nameNode = new SimpleIdentifierNode(callCtx.nameCall().var.getText());
+      String functionName = callCtx.nameCall().fun.getText();
+      return withSourceSection(ctx, new ModuleCallNode(language, nameNode, functionName, argNodes));
+    } else {
+      String functionName = callCtx.name().getText();
+      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltins().lookup(functionName);
+
+      if (builtinFunction != null) {
+        return builtinFunction.createNode((Object) argNodes);
+      } else {
+        return withSourceSection(ctx, new InvokeNode(language, withSourceSection(callCtx.name(), new IdentifierNode(language, functionName)), argNodes));
+      }
+    }
   }
 }

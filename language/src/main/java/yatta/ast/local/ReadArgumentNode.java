@@ -1,5 +1,6 @@
 package yatta.ast.local;
 
+import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.Unit;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -36,7 +37,7 @@ public class ReadArgumentNode extends ExpressionNode {
       /* In the interpreter, record profiling information that the branch was used. */
       outOfBoundsTaken.enter();
       /* Use the default null value. */
-      return Unit.INSTANCE;
+      throw new YattaException("Trying to read argument #" + (index + 1) + ", when only " + args.length + " arguments provided", this);
     }
   }
 

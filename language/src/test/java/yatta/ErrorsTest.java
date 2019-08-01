@@ -1,14 +1,14 @@
 package yatta;
 
-import yatta.ast.pattern.MatchControlFlowException;
-import yatta.runtime.Tuple;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import yatta.runtime.Tuple;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ErrorsTest {
   private Context context;

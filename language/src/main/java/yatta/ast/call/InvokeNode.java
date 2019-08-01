@@ -1,16 +1,5 @@
 package yatta.ast.call;
 
-import yatta.YattaException;
-import yatta.YattaLanguage;
-import yatta.ast.ExpressionNode;
-import yatta.ast.controlflow.BlockNode;
-import yatta.ast.expression.SimpleIdentifierNode;
-import yatta.ast.expression.value.FunctionNode;
-import yatta.ast.local.ReadArgumentNode;
-import yatta.ast.local.WriteLocalVariableNodeGen;
-import yatta.runtime.Function;
-import yatta.runtime.UndefinedNameException;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -24,6 +13,18 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.YattaException;
+import yatta.YattaLanguage;
+import yatta.ast.ExpressionNode;
+import yatta.ast.controlflow.BlockNode;
+import yatta.ast.expression.SimpleIdentifierNode;
+import yatta.ast.expression.value.AnyValueNode;
+import yatta.ast.expression.value.FunctionNode;
+import yatta.ast.local.ReadArgumentNode;
+import yatta.ast.local.WriteLocalVariableNodeGen;
+import yatta.runtime.Function;
+import yatta.runtime.UndefinedNameException;
+import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
 
@@ -107,8 +108,18 @@ public final class InvokeNode extends ExpressionNode {
       String partiallyAppliedFunctionName = "$partial-" + argumentNodes.length + "/" + function.getCardinality() + "-" + function.getName();
       ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
 
-      for (int i = 0; i < function.getCardinality(); i++) {
-        allArgumentNodes[i] = new ReadArgumentNode(i);
+      for (int i = 0; i < argumentNodes.length; i++) {
+        /*
+         * These arguments are already on the stack, so we just copy them
+         */
+        allArgumentNodes[i] = argumentNodes[i];
+      }
+
+      for (int i = argumentNodes.length, j = 0; i < function.getCardinality(); i++, j++) {
+        /*
+         * These are the new arguments, to be read on the actual application of this new closure
+         */
+        allArgumentNodes[i] = new ReadArgumentNode(j);
       }
 
       /*
@@ -126,7 +137,7 @@ public final class InvokeNode extends ExpressionNode {
       });
 
       FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName,
-          function.getCardinality() - argumentNodes.length + 1, frame.getFrameDescriptor(), blockNode);
+          function.getCardinality() - argumentNodes.length, frame.getFrameDescriptor(), blockNode);
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
