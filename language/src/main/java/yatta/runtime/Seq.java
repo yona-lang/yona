@@ -160,14 +160,14 @@ public final class Seq {
   }
 
   public Object lookup(final long idx, final com.oracle.truffle.api.nodes.Node node) {
-    if (idx < 0) throw new BadArgException(IOOB_MSG + idx, node);
+    if (idx < 0) throw new BadArgException(String.format(IOOB_MSG, idx), node);
     long i = idx;
     if (i < prefixSize) return lookupLeaf(prefix, i);
     i -= prefixSize;
     if (i < rootSize) return lookupTree(root, i);
     i -= rootSize;
     if (i < suffixSize) return lookupLeaf(suffix, i);
-    throw new BadArgException(IOOB_MSG + idx, node);
+    throw new BadArgException(String.format(IOOB_MSG, idx), node);
   }
 
   private static Object lookupLeaf(final Object[] leaf, long idx) {
