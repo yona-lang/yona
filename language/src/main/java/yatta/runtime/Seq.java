@@ -39,7 +39,7 @@ public final class Seq {
     this.suffix = suffix;
   }
 
-  public Seq inject(final Object o) {
+  public Seq insertLast(final Object o) {
     if (Node.readLength(suffix) != Node.MAX_LEN) return new Seq(prefix, prefixSize, root, rootSize, nodeAppend(suffix, o), suffixSize + 1);
     final Object[] newSuffix = newNode(newMeta(0), o);
     Object[] newRoot = treeAppend(root, suffix);
@@ -138,7 +138,7 @@ public final class Seq {
     return newNode(meta, root, leaf);
   }
 
-  public Seq injectSpecial(final byte[] b, final int size, final SpecialType type) {
+  public Seq insertLastEncoded(final byte[] b, final int size, final EncodedType type) {
     final long sizeAndType = encodeSizeAndType(size, type);
     if (Node.readLength(suffix) != Node.MAX_LEN) {
       final byte[] oldMeta = Node.readMeta(suffix);
@@ -153,7 +153,7 @@ public final class Seq {
     final byte[] newMeta = newMeta(0, 1);
     Meta.writeBitmap(newMeta, Util.setBit(Meta.EMPTY_BITMAP, 0));
     Meta.writeAt(newMeta, 0, sizeAndType);
-    final Object[] newSuffix = newNode(newMeta(0), b);
+    final Object[] newSuffix = newNode(newMeta, b);
     Object[] newRoot = treeAppend(root, suffix);
     if (newRoot == null) newRoot = newLevelAppend(root, suffix);
     return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newSuffix, size);
@@ -181,7 +181,7 @@ public final class Seq {
         final int size = (int) decodeSize(sizeAndType);
         if (idx < size) {
           final byte[] bytes = (byte[]) Node.readAt(leaf, i);
-          if (decodeType(sizeAndType) == SpecialType.UTF8) {
+          if (decodeType(sizeAndType) == EncodedType.UTF8) {
             return Util.codePointAt(bytes, offsetUtf8(bytes, (int) idx, size));
           } else {
             return bytes[(int) idx];
@@ -200,7 +200,7 @@ public final class Seq {
     throw new AssertionError();
   }
 
-  private static int offsetUtf8(final byte[] bytes, int idx, final int len) {
+  static int offsetUtf8(final byte[] bytes, int idx, final int len) {
     if (idx < len / 2) {
       int offset = 0;
       while (idx > 0) {
@@ -386,19 +386,19 @@ public final class Seq {
     }
   }
 
-  private static long encodeSizeAndType(final long size, final SpecialType type) {
-    return size | ((type == SpecialType.UTF8) ? 0x8000000000000000L : 0x0L);
+  private static long encodeSizeAndType(final long size, final EncodedType type) {
+    return size | ((type == EncodedType.UTF8) ? 0x8000000000000000L : 0x0L);
   }
 
   private static long decodeSize(final long sizeAndType) {
     return sizeAndType & 0x7fffffffffffffffL;
   }
 
-  private static SpecialType decodeType(final long sizeAndType) {
-    return (sizeAndType & 0x8000000000000000L) == 0 ? SpecialType.BYTES : SpecialType.UTF8;
+  private static EncodedType decodeType(final long sizeAndType) {
+    return (sizeAndType & 0x8000000000000000L) == 0 ? EncodedType.BYTES : EncodedType.UTF8;
   }
 
-  public enum SpecialType {
+  public enum EncodedType {
     BYTES, UTF8
   }
 }
