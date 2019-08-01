@@ -5,10 +5,7 @@ import yatta.runtime.exceptions.BadArgException;
 import static java.lang.System.arraycopy;
 
 public final class Seq {
-  private static final int MAX_NODE_LENGTH = 16;
-
-  private static final byte[] EMPTY_LEAF_META = Meta.newMeta(0);
-  private static final byte[] EMPTY_ROOT_META = Meta.newMeta(1);
+  private static final String IOOB_MSG = "Index out of bounds: %d";
 
   public static final Seq EMPTY = new Seq();
 
@@ -26,9 +23,9 @@ public final class Seq {
     prefixSize = 0;
     rootSize = 0;
     suffixSize = 0;
-    prefix = Node.newEmptyNode(0);
-    root = Node.newEmptyNode(1);
-    suffix = Node.newEmptyNode(0);
+    prefix = newNode(newMeta(0));
+    root = newNode(newMeta(1));
+    suffix = newNode(newMeta(0));
   }
 
   private Seq(final Object[] prefix, final int prefixSize,
@@ -42,296 +39,366 @@ public final class Seq {
     this.suffix = suffix;
   }
 
-  public Object lookup(final long index, final com.oracle.truffle.api.nodes.Node node) {
-    long idx = index;
-    if (idx < 0) throw new BadArgException("Index out of bounds: " + index, node);
-    if (idx < prefixSize) {
-      return leafLookup(prefix, (int) idx);
-    }
-    idx -= prefixSize;
-    if (idx < rootSize) {
-
-    }
-    idx -= rootSize;
-    if (idx < suffixSize) {
-      return leafLookup(suffix, (int) idx);
-    }
-    throw new BadArgException("Index out of bounds: " + index, node);
-  }
-
-  private static Object leafLookup(final Object[] leaf, final int idx) {
-    return leaf[idx]; // TODO: adapt for bytestr
-  }
-
-  private static Object treeLookup(final Object[] tree, final int idx) {
-    return null; // TODO
-  }
-
   public Seq inject(final Object o) {
-    if (Node.getLength(suffix) == MAX_NODE_LENGTH) {
-      // suffix overflow
-      final Object[] newSuffix = Node.newSingletonLeaf(o);
-      Object[] newRoot = treeAppend(root, suffix);
-      if (newRoot == null) {
-        // root overflow
-        final int oldDepth = Meta.getDepth(Node.getMeta(root));
-        newRoot = createParent(root, createPath(suffix, oldDepth), oldDepth + 1);
-      }
-      return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newSuffix, 1);
-    } else {
-      return new Seq(prefix, prefixSize, root, rootSize, Node.leafAppend(suffix, o), suffixSize + 1);
-    }
+    if (Node.readLength(suffix) != Node.MAX_LEN) return new Seq(prefix, prefixSize, root, rootSize, nodeAppend(suffix, o), suffixSize + 1);
+    final Object[] newSuffix = newNode(newMeta(0), o);
+    Object[] newRoot = treeAppend(root, suffix);
+    if (newRoot == null) newRoot = newLevelAppend(root, suffix);
+    return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newSuffix, 1);
   }
 
   private static Object[] treeAppend(final Object[] tree, final Object[] leaf) {
-    final int treeDepth = Meta.getDepth(Node.getMeta(tree));
-    if (treeDepth == 1) {
-      // just append now
-      return Node.getLength(tree) == MAX_NODE_LENGTH ? null : Node.append(tree, leaf);
-    }
-    // fetch rightmost child and go deeper
-    final Object[] rightmostChild = (Object[]) Node.lookup(tree, Node.getLength(tree) - 1);
+    final int depth = Meta.readDepth(Node.readMeta(tree));
+    if (depth == 1) return Node.readLength(tree) == Node.MAX_LEN ? null : treeAppendTerminal(tree, leaf);
+    final Object[] rightmostChild = (Object[]) Node.readAt(tree, Node.readLength(tree) - 1);
     Object[] updatedChild = treeAppend(rightmostChild, leaf);
-    if (updatedChild == null) {
-      // overflow in rightmost child
-      return Node.getLength(tree) == MAX_NODE_LENGTH ? null : Node.append(tree, createPath(leaf, treeDepth - 1));
-    } else {
-      return replaceRightmostChild(tree, updatedChild);
-    }
+    if (updatedChild == null) return Node.readLength(tree) == Node.MAX_LEN ? null : treeAppendTerminal(tree, createPath(leaf, depth - 1));
+    return treeReplaceLast(tree, updatedChild);
   }
 
-  private static Object[] replaceRightmostChild(final Object[] parent, final Object[] replacement) {
-    final Object[] result = parent.clone();
-    result[result.length - 1] = replacement;
-    final byte[] parentMeta = Node.getMeta(parent);
-    final short parentBitmap = Meta.getBitmap(parentMeta);
-    final int idx = parent.length - 2;
-    final byte[] resultMeta;
-    if (Node.isNormal(replacement)) {
-      // replacement node is normal, make sure it is not marked in parent's meta
-      final short resultBitmap = Util.clearBit(parentBitmap, idx);
-      if (resultBitmap != parentBitmap) {
-        // old meta had this bit marked, we need to remove last varInt from it
-        resultMeta = metaCopyEjectVarInt(parentMeta);
-        Util.int16Write(resultBitmap, resultMeta, 1);
-      } else {
-        resultMeta = parentMeta;
-      }
-    } else {
-      // replacement node is special, make sure it's marked in parent's meta
-      final short resultBitmap = Util.setBit(parentBitmap, idx);
-      final long replacementLength = Node.calculateSize(replacement, elementSize(Meta.getDepth(Node.getMeta(replacement))));
-      if (resultBitmap != parentBitmap) {
-        // old bitmap didn't have this bit marked, so we add
-        resultMeta = metaCopyInjectVarInt(parentMeta, replacementLength);
-        Util.int16Write(resultBitmap, resultMeta, 1);
-      } else {
-        resultMeta = metaCopyReplaceLastVarInt(parentMeta, replacementLength);
-      }
-    }
-    result[0] = resultMeta;
-    return result;
-  }
-
-  private static byte[] metaCopyInjectVarInt(final byte[] meta, final long value) {
-    final byte[] result = new byte[meta.length + Util.varInt63Len(value)];
-    arraycopy(meta, 0, result, 0, meta.length);
-    Util.varInt63Write(value, result, meta.length);
-    return result;
-  }
-
-  private static byte[] metaCopyEjectVarInt(final byte[] meta) {
-    int len = lastVarIntIdx(meta);
-    final byte[] result = new byte[len];
-    arraycopy(meta, 0, result, 0, len);
-    return result;
-  }
-
-  private static byte[] metaCopyReplaceLastVarInt(final byte[] meta, final long value) {
-    int len = lastVarIntIdx(meta);
-    final byte[] result = new byte[len + Util.varInt63Len(value)];
-    arraycopy(meta, 0, result, 0, len);
-    Util.varInt63Write(value, result, len);
-    return result;
-  }
-
-  private static int lastVarIntIdx(final byte[] meta) {
-    int result = 3;
-    for (int offset = result; offset < meta.length;) {
-      result = offset;
-      offset += Util.varInt63Len(Util.varInt63Read(meta, offset));
+  private static Object[] treeAppendTerminal(final Object[] tree, final Object[] leaf) {
+    final Object[] result = nodeAppend(tree, leaf);
+    if (!Node.isNormal(leaf)) {
+      final byte[] meta = metaAppend(Node.readMeta(tree), Node.calculateSize(leaf));
+      Meta.writeBitmap(meta, Util.setBit(Meta.readBitmap(meta), Node.readLength(tree)));
+      Node.writeMeta(result, meta);
     }
     return result;
-  }
-
-  private static Object[] createParent(final Object[] left, final Object[] right, final int depth) {
-    return Node.newBranch(Meta.newMeta(depth, left, right), left, right);
   }
 
   private static Object[] createPath(Object[] leaf, int depth) {
     while (depth != 0) {
-      final byte[] meta = Meta.newMeta(Meta.getDepth(Node.getMeta(leaf)) + 1, leaf);
-      leaf = Node.newBranch(meta, leaf);
+      final byte[] meta;
+      if (Node.isNormal(leaf)) {
+        meta = newMeta(Meta.readDepth(Node.readMeta(leaf)) + 1);
+      } else {
+        meta = newMeta(Meta.readDepth(Node.readMeta(leaf)) + 1, 1);
+        Meta.writeBitmap(meta, Util.setBit(Meta.EMPTY_BITMAP, 0));
+        Meta.writeAt(meta, 0, Node.calculateSize(leaf));
+      }
+      leaf = newNode(meta, leaf);
       depth--;
     }
     return leaf;
   }
 
-  private static int elementSize(final int depth) {
-    return 1 << (depth << 2);
+  private static Object[] treeReplaceLast(final Object[] tree, final Object[] replacement) {
+    final Object[] result = tree.clone();
+    final Object[] old = (Object[]) Node.readAt(tree, Node.readLength(tree) - 1);
+    if (Node.isNormal(old)) {
+      if (!Node.isNormal(replacement)) {
+        final byte[] meta = metaAppend(Node.readMeta(tree), Node.calculateSize(replacement));
+        Meta.writeBitmap(meta, Util.setBit(Meta.readBitmap(meta), Node.readLength(tree) - 1));
+        Node.writeMeta(result, meta);
+      }
+    } else {
+      if (Node.isNormal(replacement)) {
+        final byte[] meta = metaRemoveLast(Node.readMeta(tree));
+        Meta.writeBitmap(meta, Util.clearBit(Meta.readBitmap(meta), Node.readLength(tree) - 1));
+        Node.writeMeta(result, meta);
+      } else {
+        final byte[] meta = Node.readMeta(tree).clone();
+        Meta.writeAt(meta, Meta.readLength(meta) - 1, Node.calculateSize(replacement));
+        Node.writeMeta(result, meta);
+      }
+    }
+    Node.writeAt(result, Node.readLength(result) - 1, replacement);
+    return result;
+  }
+
+  private static Object[] newLevelAppend(final Object[] root, Object[] leaf) {
+    final int rootDepth = Meta.readDepth(Node.readMeta(root));
+    leaf = createPath(leaf, rootDepth);
+    final byte[] meta;
+    if (Node.isNormal(root)) {
+      if (Node.isNormal(leaf)) {
+        meta = newMeta(rootDepth + 1);
+      } else {
+        meta = newMeta(rootDepth + 1, 1);
+        final short bitmap = Util.setBit(Meta.EMPTY_BITMAP, 1);
+        Meta.writeBitmap(meta, bitmap);
+        Meta.writeAt(meta, 0, Node.calculateSize(leaf));
+      }
+    } else {
+      if (Node.isNormal(leaf)) {
+        meta = newMeta(rootDepth + 1, 1);
+        final short bitmap = Util.setBit(Meta.EMPTY_BITMAP, 0);
+        Meta.writeBitmap(meta, bitmap);
+        Meta.writeAt(meta, 0, Node.calculateSize(root));
+      } else {
+        meta = newMeta(rootDepth + 1, 2);
+        short bitmap = Meta.EMPTY_BITMAP;
+        bitmap = Util.setBit(bitmap, 0);
+        bitmap = Util.setBit(bitmap, 1);
+        Meta.writeBitmap(meta, bitmap);
+        Meta.writeAt(meta, 0, Node.calculateSize(root));
+        Meta.writeAt(meta, 1, Node.calculateSize(leaf));
+      }
+    }
+    return newNode(meta, root, leaf);
+  }
+
+  public Seq injectSpecial(final byte[] b, final int size, final SpecialType type) {
+    final long sizeAndType = encodeSizeAndType(size, type);
+    if (Node.readLength(suffix) != Node.MAX_LEN) {
+      final byte[] oldMeta = Node.readMeta(suffix);
+      final byte[] newMeta = metaAppend(Node.readMeta(suffix), sizeAndType);
+      final short oldBitmap = Meta.readBitmap(oldMeta);
+      final short newBitmap = Util.setBit(oldBitmap, Node.readLength(suffix));
+      Meta.writeBitmap(newMeta, newBitmap);
+      final Object[] newSuffix = nodeAppend(suffix, b);
+      Node.writeMeta(newSuffix, newMeta);
+      return new Seq(prefix, prefixSize, root, rootSize, newSuffix, suffixSize + size);
+    }
+    final byte[] newMeta = newMeta(0, 1);
+    Meta.writeBitmap(newMeta, Util.setBit(Meta.EMPTY_BITMAP, 0));
+    Meta.writeAt(newMeta, 0, sizeAndType);
+    final Object[] newSuffix = newNode(newMeta(0), b);
+    Object[] newRoot = treeAppend(root, suffix);
+    if (newRoot == null) newRoot = newLevelAppend(root, suffix);
+    return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newSuffix, size);
+  }
+
+  public Object lookup(final long idx, final com.oracle.truffle.api.nodes.Node node) {
+    if (idx < 0) throw new BadArgException(IOOB_MSG + idx, node);
+    long i = idx;
+    if (i < prefixSize) return lookupLeaf(prefix, i);
+    i -= prefixSize;
+    if (i < rootSize) return lookupTree(root, i);
+    i -= rootSize;
+    if (i < suffixSize) return lookupLeaf(suffix, i);
+    throw new BadArgException(IOOB_MSG + idx, node);
+  }
+
+  private static Object lookupLeaf(final Object[] leaf, long idx) {
+    final byte[] meta = Node.readMeta(leaf);
+    final short bitmap = Meta.readBitmap(meta);
+    if (bitmap == 0) return Node.readAt(leaf, (int) idx);
+    int j = 0;
+    for (int i = 0; i < Node.readLength(leaf); i++) {
+      if (Util.testBit(bitmap, i)) {
+        final long sizeAndType = Meta.readAt(meta, j++);
+        final int size = (int) decodeSize(sizeAndType);
+        if (idx < size) {
+          final byte[] bytes = (byte[]) Node.readAt(leaf, i);
+          if (decodeType(sizeAndType) == SpecialType.UTF8) {
+            return Util.codePointAt(bytes, offsetUtf8(bytes, (int) idx, size));
+          } else {
+            return bytes[(int) idx];
+          }
+        } else {
+          idx -= size;
+        }
+      } else {
+        if (idx < 1) {
+          return Node.readAt(leaf, i);
+        } else {
+          idx--;
+        }
+      }
+    }
+    throw new AssertionError();
+  }
+
+  private static int offsetUtf8(final byte[] bytes, int idx, final int len) {
+    if (idx < len / 2) {
+      int offset = 0;
+      while (idx > 0) {
+        switch ((0xf0 & bytes[offset]) >>> 4) {
+          case 0b0000:
+          case 0b0001:
+          case 0b0010:
+          case 0b0011:
+          case 0b0100:
+          case 0b0101:
+          case 0b0110:
+          case 0b0111:
+            offset += 1;
+            break;
+          case 0b1000:
+          case 0b1001:
+          case 0b1010:
+          case 0b1011:
+            throw new AssertionError();
+          case 0b1100:
+          case 0b1101:
+            offset += 2;
+            break;
+          case 0b1110:
+            offset += 3;
+            break;
+          case 0b1111:
+            offset += 4;
+        }
+        idx--;
+      }
+      return offset;
+    } else {
+      idx = len - idx - 1;
+      int offset = bytes.length;
+      while (idx >= 0) {
+        if (((0xf0 & bytes[--offset]) >>> 6) != 0b10) idx--;
+      }
+      return offset;
+    }
+  }
+
+  private static Object lookupTree(Object[] node, long idx) {
+    final byte[] meta = Node.readMeta(node);
+    int depth = Meta.readDepth(meta);
+    if (depth == 0) return lookupLeaf(node, idx);
+    final short bitmap = Meta.readBitmap(meta);
+    if (bitmap == 0) {
+      do {
+        final long elementSize = defaultElementSize(depth);
+        node = (Object[]) Node.readAt(node, (int) (idx / elementSize));
+        idx = idx % elementSize;
+        depth--;
+      } while (depth != 0);
+      return Node.readAt(node, (int) idx);
+    } else {
+      int j = 0;
+      for (int i = 0; i < Node.readLength(node); i++) {
+        final long size = Util.testBit(bitmap, i) ? Meta.readAt(meta, j++) : defaultElementSize(depth);
+        if (idx < size) return lookupTree((Object[]) Node.readAt(node, i), idx);
+        idx -= size;
+      }
+    }
+    throw new AssertionError();
+  }
+
+  private static long defaultElementSize(final int depth) {
+    return 1L << (depth << 2);
+  }
+
+  private static Object[] newNode(final byte[] meta) {
+    return new Object[]{ meta };
+  }
+
+  private static Object[] newNode(final byte[] meta, final Object sole) {
+    return new Object[]{ meta, sole };
+  }
+
+  private static Object[] newNode(final byte[] meta, final Object first, final Object second) {
+    return new Object[]{ meta, first, second };
+  }
+
+  private static Object[] nodeAppend(final Object[] node, final Object o) {
+    final Object[] result = new Object[node.length + 1];
+    arraycopy(node, 0, result, 0, node.length);
+    result[node.length] = o;
+    return result;
   }
 
   private static final class Node {
+    static final int MAX_LEN = 16;
 
-    static Object[] newEmptyNode(final int depth) {
-      return new Object[]{ Meta.newMeta(depth) };
-    }
-
-    static Object[] newSingletonLeaf(final Object o) {
-      return new Object[]{ Meta.newMeta(0), o };
-    }
-
-    static Object[] newBranch(final byte[] meta, final Object[] node) {
-      return new Object[]{ meta, node };
-    }
-
-    static Object[] newBranch(final byte[] meta, final Object[] first, final Object[] second) {
-      return new Object[]{ meta, first, second };
-    }
-
-    static boolean isNormal(final Object[] node) {
-      return getLength(node) == MAX_NODE_LENGTH && Meta.getBitmap(getMeta(node)) == Meta.EMPTY_BITMAP;
-    }
-
-    static byte[] getMeta(final Object[] node) {
-      return (byte[]) node[0];
-    }
-
-    static int getLength(final Object[] node) {
+    static int readLength(final Object[] node) {
       return node.length - 1;
     }
 
-    static Object lookup(final Object[] node, final int idx) {
+    static byte[] readMeta(final Object[] node) {
+      return (byte[]) node[0];
+    }
+
+    static void writeMeta(final Object[] node, final byte[] meta) {
+      node[0] = meta;
+    }
+
+    static Object readAt(final Object[] node, final int idx) {
       return node[idx + 1];
     }
 
-    static Object[] leafAppend(final Object[] node, final Object o) {
-      final Object[] result = new Object[node.length + 1];
-      arraycopy(node, 0, result, 0, node.length);
-      result[node.length] = o;
-      return result;
+    static void writeAt(final Object[] node, final int idx, final Object o) {
+      node[idx + 1] = o;
     }
 
-    static long calculateSize(final Object[] node, final long defaultElementSize) {
+    static boolean isNormal(final Object[] node) {
+      return readLength(node) == MAX_LEN && Meta.readBitmap(readMeta(node)) == 0;
+    }
+
+    static long calculateSize(final Object[] node) {
+      final byte[] meta = readMeta(node);
+      final int depth = Meta.readDepth(meta);
+      final long defaultSize = defaultElementSize(depth);
+      final short bitmap = Meta.readBitmap(meta);
       long result = 0;
-      final byte[] meta = getMeta(node);
-      final short bitmap = Meta.getBitmap(meta);
-      int offset = Meta.EXTRA_OFFSET;
-      for (int i = 0; i < getLength(node); i++) {
+      int extraIdx = 0;
+      for (int i = 0; i < readLength(node); i++) {
         if (Util.testBit(bitmap, i)) {
-          final long increment = Util.varInt63Read(meta, offset);
-          offset += Util.varInt63Len(increment);
-          result += increment;
+          result += decodeSize(Meta.readAt(meta, extraIdx++));
         } else {
-          result += defaultElementSize;
+          result += defaultSize;
         }
       }
       return result;
     }
+  }
 
-    static Object[] append(final Object[] parent, final Object[] child) {
-      final Object[] result = new Object[parent.length + 1];
-      arraycopy(parent, 0, result, 0, parent.length);
-      result[parent.length] = child;
-      final byte[] childMeta = Node.getMeta(child);
-      if (!isNormal(child)) {
-        final long childSize = calculateSize(child, elementSize(Meta.getDepth(childMeta)));
-        final byte[] oldMeta = Node.getMeta(parent);
-        final byte[] resultMeta = new byte[oldMeta.length + Util.varInt63Len(childSize)];
-        resultMeta[0] = oldMeta[0];
-        Util.int16Write(Util.setBit(Meta.getBitmap(oldMeta), Node.getLength(result) - 1), resultMeta, 1);
-        Util.varInt63Write(childSize, resultMeta, oldMeta.length);
-      }
-      return result;
-    }
+  private static byte[] newMeta(final int depth) {
+    return new byte[]{(byte) depth, 0, 0 };
+  }
+
+  private static byte[] newMeta(final int depth, final int len) {
+    final byte[] result = new byte[3 + len * 8];
+    result[0] = (byte) depth;
+    return result;
+  }
+
+  private static byte[] metaAppend(final byte[] meta, final long value) {
+    final byte[] result = new byte[meta.length + 8];
+    arraycopy(meta, 0, result, 0, meta.length);
+    Util.int64Write(value, result, meta.length);
+    return result;
+  }
+
+  private static byte[] metaRemoveLast(final byte[] meta) {
+    final byte[] result = new byte[meta.length - 8];
+    arraycopy(meta, 0, result, 0, result.length);
+    return result;
   }
 
   private static final class Meta {
-    static final int EXTRA_OFFSET = 3;
     static final short EMPTY_BITMAP = 0;
 
-    static byte[] newMeta(final int depth) {
-      return new byte[]{ (byte) depth, 0, 0 };
+    static int readLength(final byte[] meta) {
+      return (meta.length - 3) / 8;
     }
 
-    static byte[] newMeta(final int depth, final Object[] child) {
-      if (Node.isNormal(child)) {
-        return new byte[]{(byte) depth, 0, 0 };
-      } else {
-        final long childSize = Node.calculateSize(child, elementSize(depth - 1));
-        final byte[] result = new byte[3 + Util.varInt63Len(childSize)];
-        result[0] = (byte) depth;
-        Util.int16Write(Util.setBit(EMPTY_BITMAP, 0), result, 1);
-        Util.varInt63Write(childSize, result, 3);
-        return result;
-      }
-    }
-
-    static byte[] newMeta(final int depth, final Object[] firstChild, final Object[] secondChild) {
-      final boolean firstNormal = Node.isNormal(firstChild);
-      final boolean secondNormal = Node.isNormal(secondChild);
-      final int elementSize = elementSize(depth - 1);
-      short bitmap = EMPTY_BITMAP;
-      final byte[] result;
-      if (!firstNormal) {
-        bitmap = Util.setBit(bitmap, 0);
-        final long firstSize = Node.calculateSize(firstChild, elementSize);
-        if (!secondNormal) {
-          bitmap = Util.setBit(bitmap, 1);
-          final long secondSize = Node.calculateSize(secondChild, elementSize);
-          final int firstSizeLen = Util.varInt63Len(firstSize);
-          final int secondSizeLen = Util.varInt63Len(secondSize);
-          result = new byte[3 + firstSizeLen + secondSizeLen];
-          result[0] = (byte) depth;
-          Util.int16Write(bitmap, result, 1);
-          Util.varInt63Write(firstSize, result, 3);
-          Util.varInt63Write(secondSize, result, 3 + firstSizeLen);
-        } else {
-          result = new byte[3 + Util.varInt63Len(firstSize)];
-          result[0] = (byte) depth;
-          Util.int16Write(bitmap, result, 1);
-          Util.varInt63Write(firstSize, result, 3);
-        }
-      } else {
-        if (!secondNormal) {
-          bitmap = Util.setBit(bitmap, 1);
-          final long secondSize = Node.calculateSize(secondChild, elementSize);
-          result = new byte[3 + Util.varInt63Len(secondSize)];
-          result[0] = (byte) depth;
-          Util.int16Write(bitmap, result, 1);
-          Util.varInt63Write(secondSize, result, 3);
-        } else {
-          result = new byte[3];
-          result[0] = (byte) depth;
-          Util.int16Write(bitmap, result, 1);
-        }
-      }
-      return result;
-    }
-
-    static int getDepth(final byte[] meta) {
+    static int readDepth(final byte[] meta) {
       return meta[0];
     }
 
-    static short getBitmap(final byte[] meta) {
+    static short readBitmap(final byte[] meta) {
       return Util.int16Read(meta, 1);
+    }
+
+    static void writeBitmap(final byte[] meta, final short bitmap) {
+      Util.int16Write(bitmap, meta, 1);
+    }
+
+    static long readAt(final byte[] meta, final int idx) {
+      return Util.int64Read(meta, 3 + 8 * idx);
+    }
+
+    static void writeAt(final byte[] meta, final int idx, final long value) {
+      Util.int64Write(value, meta, 3 + 8 * idx);
     }
   }
 
-  public static void main(String[] args) {
-    Seq seq = new Seq();
-    for (int i = 0; i < Integer.MAX_VALUE; i++) {
-      seq = seq.inject(i);
-    }
+  private static long encodeSizeAndType(final long size, final SpecialType type) {
+    return size | ((type == SpecialType.UTF8) ? 0x8000000000000000L : 0x0L);
+  }
+
+  private static long decodeSize(final long sizeAndType) {
+    return sizeAndType & 0x7fffffffffffffffL;
+  }
+
+  private static SpecialType decodeType(final long sizeAndType) {
+    return (sizeAndType & 0x8000000000000000L) == 0 ? SpecialType.BYTES : SpecialType.UTF8;
+  }
+
+  public enum SpecialType {
+    BYTES, UTF8
   }
 }
