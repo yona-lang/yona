@@ -110,9 +110,9 @@ public final class InvokeNode extends ExpressionNode {
 
       for (int i = 0; i < argumentNodes.length; i++) {
         /*
-         * These arguments are already on the stack, so we just copy them
+         * These arguments are already on the stack, so they are evaluated and stored for later
          */
-        allArgumentNodes[i] = argumentNodes[i];
+        allArgumentNodes[i] = new AnyValueNode(argumentNodes[i].executeGeneric(frame));
       }
 
       for (int i = argumentNodes.length, j = 0; i < function.getCardinality(); i++, j++) {
