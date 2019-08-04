@@ -81,9 +81,6 @@ INTEGER : '-'?[0-9]+ ;
 FLOAT : ('0' .. '9') + ('.' ('0' .. '9') +)? ;
 
 // Operators
-BIN_OP : OP_COMPARISON | OP_ARITHMETIC | OP_LIST;
-UN_OP: OP_NOT;
-
 OP_ASSIGN : '=';
 OP_EQ : '==' ;
 OP_NEQ : '!=' ;
@@ -91,10 +88,7 @@ OP_LT : '<' ;
 OP_LTE : '<=' ;
 OP_GT : '>' ;
 OP_GTE : '>=';
-OP_NOT : '!' ;
 OP_ARROW : '->' ;
-
-OP_COMPARISON : OP_EQ | OP_NEQ | OP_LT | OP_LTE | OP_GT | OP_GTE ;
 
 OP_MULTIPLY : '*';
 OP_DIVIDE : '/';
@@ -102,12 +96,21 @@ OP_MODULO : '%';
 OP_PLUS : '+' ;
 OP_MINUS : '-';
 
-OP_ARITHMETIC : OP_MULTIPLY | OP_DIVIDE | OP_MODULO | OP_PLUS | OP_MINUS ;
-
 OP_CONS : '::';
 OP_JOIN : '++';
 
-OP_LIST :  OP_CONS | OP_JOIN ;
+OP_LEFTSHIFT : '<<';
+OP_RIGHTSHIFT : '>>';
+OP_ZEROFILL_RIGHTSHIFT : '>>>';
+
+OP_BIN_AND : '&';
+OP_BIN_OR : VLINE;
+OP_BIN_XOR : '^';
+OP_BIN_NOT : '~';
+
+OP_LOGIC_AND : '&&';
+OP_LOGIC_OR : '||';
+OP_LOGIC_NOT : '!' ;
 
 COMMENT: '#' InputCharacter* NEWLINE -> channel(COMMENTS_CHANNEL);
 

@@ -48,8 +48,12 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public NegationNode visitUnaryOperationExpression(YattaParser.UnaryOperationExpressionContext ctx) {
-    return new NegationNode(ctx.expression().accept(this));
+  public ExpressionNode visitNegation(YattaParser.NegationContext ctx) {
+    if (ctx.OP_LOGIC_NOT() != null) {
+      return new NegationNode(ctx.expression().accept(this));
+    } else {
+      return new BinaryNegationNode(ctx.expression().accept(this));
+    }
   }
 
   @Override
@@ -72,40 +76,98 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitBinaryOperationExpression(YattaParser.BinaryOperationExpressionContext ctx) {
+  public ExpressionNode visitAdditiveExpression(YattaParser.AdditiveExpressionContext ctx) {
     ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    switch (ctx.BIN_OP().getText()) {
-      case "==":
-        return withSourceSection(ctx, EqualsNodeGen.create(args));
-      case "!=":
-        return withSourceSection(ctx, NotEqualsNodeGen.create(args));
-      case "+":
-        return withSourceSection(ctx, PlusNodeGen.create(args));
-      case "-":
-        return withSourceSection(ctx, MinusNodeGen.create(args));
-      case "*":
-        return withSourceSection(ctx, MultiplyNodeGen.create(args));
-      case "/":
-        return withSourceSection(ctx, DivideNodeGen.create(args));
-      case "%":
-        return withSourceSection(ctx, ModuloNodeGen.create(args));
-      case "<":
-        return withSourceSection(ctx, LowerThanNodeGen.create(args));
-      case "<=":
-        return withSourceSection(ctx, LowerThanOrEqualsNodeGen.create(args));
-      case ">":
-        return withSourceSection(ctx, GreaterThanNodeGen.create(args));
-      case ">=":
-        return withSourceSection(ctx, GreaterThanOrEqualsNodeGen.create(args));
+    switch (ctx.op.getText()) {
+      case "+": return PlusNodeGen.create(args);
+      case "-": return MinusNodeGen.create(args);
       default:
         throw new ParseError(source,
-            ctx.BIN_OP().getSymbol().getLine(),
-            ctx.BIN_OP().getSymbol().getCharPositionInLine(),
-            ctx.BIN_OP().getText().length(),
-            "Binary operation '" + ctx.BIN_OP().getText() + "' not supported");
+            ctx.op.getLine(),
+            ctx.op.getCharPositionInLine(),
+            ctx.op.getText().length(),
+            "Binary operation '" + ctx.op.getText() + "' not supported");
+    }
+  }
+
+  @Override
+  public ExpressionNode visitBinaryShiftExpression(YattaParser.BinaryShiftExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    switch (ctx.op.getText()) {
+      case "<<": return LeftShiftNodeGen.create(args);
+      case ">>": return RightShiftNodeGen.create(args);
+      case ">>>": return ZerofillRightShiftNodeGen.create(args);
+      default:
+        throw new ParseError(source,
+            ctx.op.getLine(),
+            ctx.op.getCharPositionInLine(),
+            ctx.op.getText().length(),
+            "Binary operation '" + ctx.op.getText() + "' not supported");
+    }
+  }
+
+  @Override
+  public ExpressionNode visitMultiplicativeExpression(YattaParser.MultiplicativeExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    switch (ctx.op.getText()) {
+      case "*": return MultiplyNodeGen.create(args);
+      case "/": return DivideNodeGen.create(args);
+      case "%": return ModuloNodeGen.create(args);
+      default:
+        throw new ParseError(source,
+            ctx.op.getLine(),
+            ctx.op.getCharPositionInLine(),
+            ctx.op.getText().length(),
+            "Binary operation '" + ctx.op.getText() + "' not supported");
+    }
+  }
+
+  @Override
+  public ExpressionNode visitComparativeExpression(YattaParser.ComparativeExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    switch (ctx.op.getText()) {
+      case "==": return EqualsNodeGen.create(args);
+      case "!=": return NotEqualsNodeGen.create(args);
+      case "<=": return LowerThanOrEqualsNodeGen.create(args);
+      case "<": return LowerThanNodeGen.create(args);
+      case ">=": return GreaterThanOrEqualsNodeGen.create(args);
+      case ">": return GreaterThanNodeGen.create(args);
+      default:
+        throw new ParseError(source,
+            ctx.op.getLine(),
+            ctx.op.getCharPositionInLine(),
+            ctx.op.getText().length(),
+            "Binary operation '" + ctx.op.getText() + "' not supported");
+    }
+  }
+
+  @Override
+  public ExpressionNode visitLogicalExpression(YattaParser.LogicalExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    switch (ctx.op.getText()) {
+      case "&&": return LogicalAndNodeGen.create(args);
+      case "||": return LogicalOrNodeGen.create(args);
+      default:
+        throw new ParseError(source,
+            ctx.op.getLine(),
+            ctx.op.getCharPositionInLine(),
+            ctx.op.getText().length(),
+            "Binary operation '" + ctx.op.getText() + "' not supported");
     }
   }
 
@@ -676,7 +738,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public ExpressionNode visitBacktickExpression(YattaParser.BacktickExpressionContext ctx) {
     ExpressionNode[] argNodes = new ExpressionNode[2];
-    argNodes[0] = ctx.backtickExpr().backtickLeft().accept(this);
+    argNodes[0] = ctx.backtickExpr().leftSideOp().accept(this);
     argNodes[1] = ctx.backtickExpr().right.accept(this);
 
     YattaParser.CallContext callCtx = ctx.backtickExpr().call();
@@ -684,7 +746,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitBacktickLeft(YattaParser.BacktickLeftContext ctx) {
+  public ExpressionNode visitLeftSideOp(YattaParser.LeftSideOpContext ctx) {
     if (ctx.value() != null) {
       return ctx.value().accept(this);
     } else {

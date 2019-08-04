@@ -159,4 +159,52 @@ public class ErrorsTest {
       }
     });
   }
+
+  @Test
+  public void logicalNotOnNonBooleanValueTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "!\"hello\"");
+      } catch (PolyglotException ex) {
+        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"");
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void logicalNotOnNonBooleanPromiseTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "!(async \\->\"hello\")");
+      } catch (PolyglotException ex) {
+        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"");
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void binaryNotOnNonIntegerValueTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "~\"hello\"");
+      } catch (PolyglotException ex) {
+        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"");
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void binaryNotOnNonIntegerPromiseTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "~(async \\->\"hello\")");
+      } catch (PolyglotException ex) {
+        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"");
+        throw ex;
+      }
+    });
+  }
 }

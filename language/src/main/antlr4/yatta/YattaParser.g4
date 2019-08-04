@@ -58,21 +58,25 @@ options { tokenVocab=YattaLexer; }
 
 input : NEWLINE? expression NEWLINE? EOF ;
 
-expression : PARENS_L expression PARENS_R               #expressionInParents
-           | left=expression BIN_OP right=expression    #binaryOperationExpression
-           | UN_OP expression                           #unaryOperationExpression
-           | let                                        #letExpression
-           | conditional                                #conditionalExpression
-           | value                                      #valueExpression
-           | module                                     #moduleExpression
-           | apply                                      #functionApplicationExpression
-           | caseExpr                                   #caseExpression
-           | doExpr                                     #doExpression
-           | lambda                                     #lambdaExpression
-           | importExpr                                 #importExpression
-           | tryCatchExpr                               #tryCatchExpression
-           | raiseExpr                                  #raiseExpression
-           | backtickExpr                               #backtickExpression
+expression : PARENS_L expression PARENS_R                                                                #expressionInParents
+           | op=(OP_LOGIC_NOT | OP_BIN_NOT) expression                                                   #negation
+           | left=expression op=(OP_MULTIPLY | OP_DIVIDE | OP_MODULO) right=expression                   #multiplicativeExpression
+           | left=expression op=(OP_PLUS | OP_MINUS) right=expression                                    #additiveExpression
+           | left=expression op=(OP_LEFTSHIFT | OP_RIGHTSHIFT | OP_ZEROFILL_RIGHTSHIFT) right=expression #binaryShiftExpression
+           | left=expression op=(OP_GTE | OP_LTE| OP_GT | OP_LT | OP_EQ | OP_NEQ) right=expression       #comparativeExpression
+           | left=expression op=(OP_LOGIC_AND | OP_LOGIC_OR) right=expression                            #logicalExpression
+           | let                                                                                         #letExpression
+           | conditional                                                                                 #conditionalExpression
+           | value                                                                                       #valueExpression
+           | module                                                                                      #moduleExpression
+           | apply                                                                                       #functionApplicationExpression
+           | caseExpr                                                                                    #caseExpression
+           | doExpr                                                                                      #doExpression
+           | lambda                                                                                      #lambdaExpression
+           | importExpr                                                                                  #importExpression
+           | tryCatchExpr                                                                                #tryCatchExpression
+           | raiseExpr                                                                                   #raiseExpression
+           | backtickExpr                                                                                #backtickExpression
            ;
 
 
@@ -100,6 +104,8 @@ patternValue : unit
              ;
 
 name : LOWERCASE_NAME ;
+
+leftSideOp : value | PARENS_L expression PARENS_R ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
 alias : lambdaAlias | moduleAlias | patternAlias | fqnAlias ;
@@ -222,5 +228,4 @@ catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLI
 raiseExpr : KW_RAISE symbol stringLiteral NEWLINE ;
 
 
-backtickExpr : backtickLeft BACKTICK call BACKTICK right=expression ;
-backtickLeft : value | PARENS_L expression PARENS_R ;
+backtickExpr : leftSideOp BACKTICK call BACKTICK right=expression ;

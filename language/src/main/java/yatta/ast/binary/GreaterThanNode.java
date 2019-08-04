@@ -7,7 +7,7 @@ import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 
-@NodeInfo
+@NodeInfo(shortName = ">")
 public abstract class GreaterThanNode extends BinaryOpNode {
   @Specialization
   public boolean longs(long left, long right) {

@@ -3,9 +3,9 @@ package yatta;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -371,6 +371,36 @@ public class SimpleExpressionTest {
         "in curried 4").asLong();
 
     assertEquals(9l, ret);
+  }
+
+  @Test
+  public void logicalNotTrueTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "!true").asBoolean();
+    assertFalse(ret);
+  }
+
+  @Test
+  public void logicalNotTruePromiseTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "!(async \\->true)").asBoolean();
+    assertFalse(ret);
+  }
+
+  @Test
+  public void logicalNotFalseTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "!false").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void binaryNotTest() {
+    long ret = context.eval(YattaLanguage.ID, "~0").asLong();
+    assertEquals(-1l, ret);
+  }
+
+  @Test
+  public void binaryNotPromiseTest() {
+    long ret = context.eval(YattaLanguage.ID, "~(async \\->0)").asLong();
+    assertEquals(-1l, ret);
   }
 
   //docs state:

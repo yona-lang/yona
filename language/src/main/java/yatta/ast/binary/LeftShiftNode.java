@@ -1,27 +1,15 @@
 package yatta.ast.binary;
 
-import yatta.YattaException;
-import yatta.runtime.Dictionary;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.YattaException;
+import yatta.runtime.async.Promise;
 
-@NodeInfo(shortName = "-")
-public abstract class MinusNode extends BinaryOpNode {
+@NodeInfo(shortName = "<<")
+public abstract class LeftShiftNode extends BinaryOpNode {
   @Specialization
   public long longs(long left, long right) {
-    return left - right;
-  }
-
-  @Specialization
-  public double doubles(double left, double right) {
-    return left - right;
-  }
-
-  @Specialization
-  public Dictionary dictionaries(Dictionary left, Dictionary right) {
-    // TODO implement
-    return null;
+    return left << right;
   }
 
   protected Promise promise(Object left, Object right) {
@@ -34,12 +22,7 @@ public abstract class MinusNode extends BinaryOpNode {
       }
 
       if (argValues[0] instanceof Long) {
-        return (long) argValues[0] - (long) argValues[1];
-      } else if (argValues[0] instanceof Double) {
-        return (double) argValues[0] - (double) argValues[1];
-        // TODO implement
-//      } else if (argValues[0] instanceof Dictionary) {
-//        return null;
+        return (long) argValues[0] << (long) argValues[1];
       } else {
         return YattaException.typeError(this, argValues);
       }

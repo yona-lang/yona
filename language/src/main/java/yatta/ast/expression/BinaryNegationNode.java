@@ -1,21 +1,19 @@
 package yatta.ast.expression;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.async.Promise;
 
 import java.util.Objects;
 
-@NodeInfo(shortName = "!")
-public final class NegationNode extends ExpressionNode {
-  @Node.Child
+@NodeInfo(shortName = "~")
+public final class BinaryNegationNode extends ExpressionNode {
+  @Child
   public ExpressionNode expression;
 
-  public NegationNode(ExpressionNode expression) {
+  public BinaryNegationNode(ExpressionNode expression) {
     this.expression = expression;
   }
 
@@ -23,7 +21,7 @@ public final class NegationNode extends ExpressionNode {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    NegationNode that = (NegationNode) o;
+    BinaryNegationNode that = (BinaryNegationNode) o;
     return Objects.equals(expression, that.expression);
   }
 
@@ -34,7 +32,7 @@ public final class NegationNode extends ExpressionNode {
 
   @Override
   public String toString() {
-    return "NegationNode{" +
+    return "BinaryNegationNode{" +
         "expression=" + expression +
         '}';
   }
@@ -46,14 +44,14 @@ public final class NegationNode extends ExpressionNode {
     if (result instanceof Promise) {
       Promise promise = (Promise) result;
       return promise.map((res) -> {
-        if (res instanceof Boolean) {
-          return !(boolean) res;
+        if (res instanceof Long) {
+          return ~(long) res;
         } else {
           throw YattaException.typeError(this, res);
         }
       }, this);
-    } else if (result instanceof Boolean) {
-      return !(boolean) result;
+    } else if (result instanceof Long) {
+      return ~(long) result;
     } else {
       throw YattaException.typeError(this, result);
     }

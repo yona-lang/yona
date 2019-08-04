@@ -5,7 +5,7 @@ import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 
-@NodeInfo
+@NodeInfo(shortName = "*")
 public abstract class MultiplyNode extends BinaryOpNode {
   @Specialization
   public long longs(long left, long right) {

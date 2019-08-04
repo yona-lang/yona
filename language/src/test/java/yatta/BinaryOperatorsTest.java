@@ -4,6 +4,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
@@ -278,6 +279,101 @@ public class BinaryOperatorsTest {
     );
   }
 
+  @ParameterizedTest
+  @CsvSource({
+      "2 + 3 * 4, 14",
+      "7 * 3 + 24 / 3 - 5, 24"
+  })
+  public void testOperatorPrecedence(String expression, String expected) {
+    assertEquals(expected, context.eval(YattaLanguage.ID, expression).toString());
+  }
+
+  @ParameterizedTest
+  @MethodSource("leftShiftOps")
+  void testLeftShiftOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("<<")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> leftShiftOps() {
+    return Stream.of(
+        new BinaryArgsHolder(8l, 2l, 8l<<2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(8l), 2l, 8l<<2l, Long.class),
+        new BinaryArgsHolder(8l, new PromiseHolder(2l), 8l<<2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(8l), new PromiseHolder(2l), 8l<<2l, Long.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("rightShiftOps")
+  void testRightShiftOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format(">>")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> rightShiftOps() {
+    return Stream.of(
+        new BinaryArgsHolder(8l, 2l, 8l>>2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(8l), 2l, 8l>>2l, Long.class),
+        new BinaryArgsHolder(8l, new PromiseHolder(2l), 8l>>2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(8l), new PromiseHolder(2l), 8l>>2l, Long.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("zerofillRightShiftOps")
+  void testZerofillRightShiftOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format(">>>")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> zerofillRightShiftOps() {
+    return Stream.of(
+        new BinaryArgsHolder(8l, 2l, 8l>>>2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(8l), 2l, 8l>>>2l, Long.class),
+        new BinaryArgsHolder(8l, new PromiseHolder(2l), 8l>>>2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(8l), new PromiseHolder(2l), 8l>>>2l, Long.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("logicalAndOps")
+  void testLogicalAndOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("&&")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> logicalAndOps() {
+    return Stream.of(
+        new BinaryArgsHolder(true, true, true, Boolean.class),
+        new BinaryArgsHolder(true, false, false, Boolean.class),
+        new BinaryArgsHolder(false, true, false, Boolean.class),
+        new BinaryArgsHolder(false, false, false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(true), true, true, Boolean.class),
+        new BinaryArgsHolder(true, new PromiseHolder(false), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(false), new PromiseHolder(true), false, Boolean.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("logicalOrOps")
+  void testLogicalOrOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("||")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> logicalOrOps() {
+    return Stream.of(
+        new BinaryArgsHolder(true, true, true, Boolean.class),
+        new BinaryArgsHolder(true, false, true, Boolean.class),
+        new BinaryArgsHolder(false, true, true, Boolean.class),
+        new BinaryArgsHolder(false, false, false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(true), true, true, Boolean.class),
+        new BinaryArgsHolder(true, new PromiseHolder(false), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(false), new PromiseHolder(true), true, Boolean.class)
+    );
+  }
+
   private static final class BinaryArgsHolder {
     final Object left, right, expected;
     final Class expectedType;
@@ -289,12 +385,12 @@ public class BinaryOperatorsTest {
       this.expectedType = expectedType;
     }
 
+    private static String format(PromiseHolder obj) {
+      return String.format("async \\->%s", obj);
+    }
+
     private static String format(Object obj) {
-      if (obj instanceof PromiseHolder) {
-        return String.format("async \\->%s", obj);
-      } else {
-        return String.format("%s", obj);
-      }
+      return String.format("%s", obj);
     }
 
     public String format(String op) {
