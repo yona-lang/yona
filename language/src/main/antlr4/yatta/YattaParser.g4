@@ -64,7 +64,11 @@ expression : PARENS_L expression PARENS_R                                       
            | left=expression op=(OP_PLUS | OP_MINUS) right=expression                                    #additiveExpression
            | left=expression op=(OP_LEFTSHIFT | OP_RIGHTSHIFT | OP_ZEROFILL_RIGHTSHIFT) right=expression #binaryShiftExpression
            | left=expression op=(OP_GTE | OP_LTE| OP_GT | OP_LT | OP_EQ | OP_NEQ) right=expression       #comparativeExpression
-           | left=expression op=(OP_LOGIC_AND | OP_LOGIC_OR) right=expression                            #logicalExpression
+           | left=expression OP_BIN_AND right=expression                                                 #bitwiseAndExpression
+           | left=expression OP_BIN_XOR right=expression                                                 #bitwiseXorExpression
+           | left=expression VLINE right=expression                                                      #bitwiseOrExpression
+           | left=expression OP_LOGIC_AND right=expression                                               #logicalAndExpression
+           | left=expression OP_LOGIC_OR right=expression                                                #logicalOrExpression
            | let                                                                                         #letExpression
            | conditional                                                                                 #conditionalExpression
            | value                                                                                       #valueExpression

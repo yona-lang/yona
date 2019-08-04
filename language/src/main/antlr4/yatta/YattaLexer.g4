@@ -104,7 +104,6 @@ OP_RIGHTSHIFT : '>>';
 OP_ZEROFILL_RIGHTSHIFT : '>>>';
 
 OP_BIN_AND : '&';
-OP_BIN_OR : VLINE;
 OP_BIN_XOR : '^';
 OP_BIN_NOT : '~';
 

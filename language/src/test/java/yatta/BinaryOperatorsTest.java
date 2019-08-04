@@ -374,6 +374,54 @@ public class BinaryOperatorsTest {
     );
   }
 
+  @ParameterizedTest
+  @MethodSource("bitwiseAndOps")
+  void testBitwiseAndOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("&")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> bitwiseAndOps() {
+    return Stream.of(
+        new BinaryArgsHolder(4l, 2l, 4l & 2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(4l), 2l, 4l & 2l, Long.class),
+        new BinaryArgsHolder(4l, new PromiseHolder(2l), 4l & 2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l & 2l, Long.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("bitwiseOrOps")
+  void testBitwiseOrOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("|")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> bitwiseOrOps() {
+    return Stream.of(
+        new BinaryArgsHolder(4l, 2l, 4l | 2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(4l), 2l, 4l | 2l, Long.class),
+        new BinaryArgsHolder(4l, new PromiseHolder(2l), 4l | 2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l | 2l, Long.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("bitwiseXorOps")
+  void testBitwiseXorOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("^")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> bitwiseXorOps() {
+    return Stream.of(
+        new BinaryArgsHolder(4l, 2l, 4l ^ 2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(4l), 2l, 4l ^ 2l, Long.class),
+        new BinaryArgsHolder(4l, new PromiseHolder(2l), 4l ^ 2l, Long.class),
+        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l ^ 2l, Long.class)
+    );
+  }
+
   private static final class BinaryArgsHolder {
     final Object left, right, expected;
     final Class expectedType;

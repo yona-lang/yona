@@ -154,21 +154,48 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitLogicalExpression(YattaParser.LogicalExpressionContext ctx) {
+  public ExpressionNode visitBitwiseXorExpression(YattaParser.BitwiseXorExpressionContext ctx) {
     ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    switch (ctx.op.getText()) {
-      case "&&": return LogicalAndNodeGen.create(args);
-      case "||": return LogicalOrNodeGen.create(args);
-      default:
-        throw new ParseError(source,
-            ctx.op.getLine(),
-            ctx.op.getCharPositionInLine(),
-            ctx.op.getText().length(),
-            "Binary operation '" + ctx.op.getText() + "' not supported");
-    }
+    return BitwiseXorNodeGen.create(args);
+  }
+
+  @Override
+  public ExpressionNode visitBitwiseOrExpression(YattaParser.BitwiseOrExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    return BitwiseOrNodeGen.create(args);
+  }
+
+  @Override
+  public ExpressionNode visitBitwiseAndExpression(YattaParser.BitwiseAndExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    return BitwiseAndNodeGen.create(args);
+  }
+
+  @Override
+  public ExpressionNode visitLogicalOrExpression(YattaParser.LogicalOrExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    return LogicalOrNodeGen.create(args);
+  }
+
+  @Override
+  public ExpressionNode visitLogicalAndExpression(YattaParser.LogicalAndExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    return LogicalAndNodeGen.create(args);
   }
 
   @Override
