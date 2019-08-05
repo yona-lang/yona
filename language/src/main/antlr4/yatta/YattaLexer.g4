@@ -65,9 +65,6 @@ if (interpolatedStringLevel > 0)
 COMMA : ',' ;
 COLON : ':' ;
 
-CONS_L : '<:' ;
-CONS_R : ':>' ;
-
 DOT : '.' ;
 VLINE : '|';
 BACKSLASH : '\\' ;
@@ -96,9 +93,6 @@ OP_MODULO : '%';
 OP_PLUS : '+' ;
 OP_MINUS : '-';
 
-OP_CONS : '::';
-OP_JOIN : '++';
-
 OP_LEFTSHIFT : '<<';
 OP_RIGHTSHIFT : '>>';
 OP_ZEROFILL_RIGHTSHIFT : '>>>';
@@ -110,6 +104,10 @@ OP_BIN_NOT : '~';
 OP_LOGIC_AND : '&&';
 OP_LOGIC_OR : '||';
 OP_LOGIC_NOT : '!' ;
+
+OP_CONS_L : '<:' ;
+OP_CONS_R : ':>' ;
+OP_JOIN : '++';
 
 COMMENT: '#' InputCharacter* NEWLINE -> channel(COMMENTS_CHANNEL);
 

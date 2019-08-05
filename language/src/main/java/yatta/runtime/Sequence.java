@@ -2,12 +2,14 @@ package yatta.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
-@MessageResolution(receiverType = Sequence.class)
+@ExportLibrary(InteropLibrary.class)
 public abstract class Sequence implements TruffleObject {
 
   public abstract Sequence push(Object value);
@@ -36,54 +38,28 @@ public abstract class Sequence implements TruffleObject {
 
   abstract int splitAt(int idx, SplitPoint splitPoint);
 
-  @Override
-  public ForeignAccess getForeignAccess() {
-    return SequenceForeign.ACCESS;
-  }
-
   static boolean isInstance(TruffleObject sequence) {
     return sequence instanceof Sequence;
   }
 
-  @Resolve(message = "GET_SIZE")
-  abstract static class GetSize extends com.oracle.truffle.api.nodes.Node {
-    Object access(Sequence obj) {
-      return obj.length();
-    }
+  @ExportMessage
+  public final long getArraySize() {
+    return length();
   }
 
-  @Resolve(message = "HAS_SIZE")
-  abstract static class HasSize extends com.oracle.truffle.api.nodes.Node {
-    public Object access(@SuppressWarnings("unused") Sequence receiver) {
-      return true;
-    }
+  @ExportMessage
+  public final Object readArrayElement(long index) {
+    return lookup((int) index);
   }
 
-  @Resolve(message = "KEY_INFO")
-  public abstract static class InfoNode extends com.oracle.truffle.api.nodes.Node {
-
-    public int access(Sequence receiver, int index) {
-      if (index < receiver.length()) {
-        return KeyInfo.READABLE;
-      } else {
-        return KeyInfo.NONE;
-      }
-    }
+  @ExportMessage
+  public final boolean isArrayElementReadable(long index) {
+    return index < length();
   }
 
-  @Resolve(message = "READ")
-  abstract static class Read extends com.oracle.truffle.api.nodes.Node {
-    public Object access(Sequence receiver, int index) {
-      if (index < 0 || index >= receiver.length()) {
-        CompilerDirectives.transferToInterpreter();
-        throw UnknownIdentifierException.raise(String.valueOf(index));
-      } else {
-
-        Object key = receiver.lookup(index);
-        assert key instanceof Number;
-        return key;
-      }
-    }
+  @ExportMessage
+  public final boolean hasArrayElements() {
+    return true;
   }
 
   public static Sequence catenate(Sequence first, Sequence second) {
@@ -127,6 +103,25 @@ public abstract class Sequence implements TruffleObject {
     Sequence result = Shallow.EMPTY;
     for (Object value : values) result = result.inject(value);
     return result;
+  }
+
+  @Override
+  @CompilerDirectives.TruffleBoundary
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("[");
+
+    for (int i = 0; i < length(); i++) {
+      sb.append(lookup(i));
+
+      if (i != length() - 1) {
+        sb.append(", ");
+      }
+    }
+
+    sb.append("]");
+
+    return sb.toString();
   }
 
   private static Node[] makeNodes(Object[] m) {

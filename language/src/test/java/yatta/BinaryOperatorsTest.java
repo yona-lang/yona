@@ -1,17 +1,20 @@
 package yatta;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import yatta.runtime.Sequence;
 import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
 
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class BinaryOperatorsTest {
@@ -422,16 +425,86 @@ public class BinaryOperatorsTest {
     );
   }
 
+  @ParameterizedTest
+  @MethodSource("sequenceCatenateOps")
+  void testSequenceCatenateOps(BinaryArgsHolder args) {
+    Value ret = context.eval(YattaLanguage.ID, args.format("++"));
+    args.validator.apply(ret);
+  }
+
+  private static boolean sequenceCatenateOpsValidator(Value result) {
+    assertEquals(4, result.getArraySize());
+//    TODO enable once new Sequence is implemented
+//    Object[] array = result.as(Object[].class);
+//    assertEquals(1l, array[0]);
+//    assertEquals(2l, array[1]);
+//    assertEquals(3l, array[2]);
+//    assertEquals(4l, array[3]);
+    return true;
+  }
+
+  static Stream<BinaryArgsHolder> sequenceCatenateOps() {
+    return Stream.of(
+        new BinaryArgsHolder(Sequence.sequence(1l, 2l), Sequence.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
+        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), Sequence.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
+        new BinaryArgsHolder(Sequence.sequence(1l, 2l), new PromiseHolder(Sequence.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator),
+        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), new PromiseHolder(Sequence.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("sequenceJoinLeftOps")
+  void testSequenceJoinLeftOps(BinaryArgsHolder args) {
+    Object[] ret = context.eval(YattaLanguage.ID, args.format(":>")).as(Object[].class);
+    assertArrayEquals((Object[]) args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> sequenceJoinLeftOps() {
+    return Stream.of(
+        new BinaryArgsHolder(0l, Sequence.sequence(1l, 2l), new Object[] {0l, 1l, 2l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(0l), Sequence.sequence(1l, 2l), new Object[] {0l, 1l, 2l}, Object[].class),
+        new BinaryArgsHolder(0l, new PromiseHolder(Sequence.sequence(1l, 2l)), new Object[] {0l, 1l, 2l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(0l), new PromiseHolder(Sequence.sequence(1l, 2l)), new Object[] {0l, 1l, 2l}, Object[].class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("sequenceJoinRightOps")
+  void testSequenceJoinRightOps(BinaryArgsHolder args) {
+    Object[] ret = context.eval(YattaLanguage.ID, args.format("<:")).as(Object[].class);
+    assertArrayEquals((Object[]) args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> sequenceJoinRightOps() {
+    return Stream.of(
+        new BinaryArgsHolder(Sequence.sequence(1l, 2l), 3l, new Object[] {1l, 2l, 3l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), 3l, new Object[] {1l, 2l, 3l}, Object[].class),
+        new BinaryArgsHolder(Sequence.sequence(1l, 2l), new PromiseHolder(3l), new Object[] {1l, 2l, 3l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), new PromiseHolder(3l), new Object[] {1l, 2l, 3l}, Object[].class)
+    );
+  }
+
   private static final class BinaryArgsHolder {
     final Object left, right, expected;
+    final Function<Value, Boolean> validator;
     final Class expectedType;
 
     public BinaryArgsHolder(Object left, Object right, Object expected, Class expectedType) {
       this.left = left;
       this.right = right;
       this.expected = expected;
+      this.validator = null;
       this.expectedType = expectedType;
     }
+
+    public BinaryArgsHolder(Object left, Object right, Function<Value, Boolean> validator) {
+      this.left = left;
+      this.right = right;
+      this.expected = null;
+      this.validator = validator;
+      this.expectedType = null;
+    }
+
 
     private static String format(PromiseHolder obj) {
       return String.format("async \\->%s", obj);

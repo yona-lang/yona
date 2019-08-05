@@ -8,7 +8,7 @@ import yatta.runtime.async.Promise;
 @NodeInfo(shortName = "^")
 public abstract class BitwiseXorNode extends BinaryOpNode {
   @Specialization
-  public long booleans(long left, long right) {
+  public long longs(long left, long right) {
     return left ^ right;
   }
 

@@ -3,13 +3,14 @@ package yatta.ast.binary;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
+import yatta.runtime.Sequence;
 import yatta.runtime.async.Promise;
 
-@NodeInfo(shortName = "|")
-public abstract class BitwiseOrNode extends BinaryOpNode {
+@NodeInfo(shortName = "<:")
+public abstract class SequenceRightConsNode extends BinaryOpNode {
   @Specialization
-  public long longs(long left, long right) {
-    return left | right;
+  public Sequence sequences(Sequence left, Object right) {
+    return left.inject(right);
   }
 
   protected Promise promise(Object left, Object right) {
@@ -17,12 +18,8 @@ public abstract class BitwiseOrNode extends BinaryOpNode {
     return all.map(args -> {
       Object[] argValues = (Object[]) args;
 
-      if (!argValues[0].getClass().equals(argValues[1].getClass())) {
-        return YattaException.typeError(this, argValues);
-      }
-
-      if (argValues[0] instanceof Long) {
-        return (long) argValues[0] | (long) argValues[1];
+      if (argValues[0] instanceof Sequence) {
+        return ((Sequence) argValues[0]).inject(argValues[1]);
       } else {
         return YattaException.typeError(this, argValues);
       }
@@ -38,4 +35,5 @@ public abstract class BitwiseOrNode extends BinaryOpNode {
   public Promise rightPromise(Object left, Promise right) {
     return promise(left, right);
   }
+
 }

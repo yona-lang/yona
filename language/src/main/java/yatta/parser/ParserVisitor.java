@@ -199,6 +199,33 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
+  public ExpressionNode visitConsExpression(YattaParser.ConsExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    switch (ctx.op.getText()) {
+      case ":>": return SequenceLeftConsNodeGen.create(args);
+      case "<:": return SequenceRightConsNodeGen.create(args);
+      default:
+        throw new ParseError(source,
+            ctx.op.getLine(),
+            ctx.op.getCharPositionInLine(),
+            ctx.op.getText().length(),
+            "Binary operation '" + ctx.op.getText() + "' not supported");
+    }
+  }
+
+  @Override
+  public ExpressionNode visitJoinExpression(YattaParser.JoinExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    return SequenceJoinNodeGen.create(args);
+  }
+
+  @Override
   public PatternLetNode visitLetExpression(YattaParser.LetExpressionContext ctx) {
     ExpressionNode[] aliasNodes = new ExpressionNode[ctx.let().alias().size()];
 
