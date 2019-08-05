@@ -403,6 +403,12 @@ public class SimpleExpressionTest {
     assertEquals(-1l, ret);
   }
 
+  @Test
+  public void singleLetterNames() {
+    long ret = context.eval(YattaLanguage.ID, "\\a b -> a+b").execute(1l, 2l).as(long.class);
+    assertEquals(3l, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with

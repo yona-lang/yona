@@ -128,8 +128,8 @@ module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE function+ ;
 nonEmptyListOfNames : NEWLINE? name NEWLINE? (COMMA NEWLINE? name)* NEWLINE? ;
 
 unit : UNIT ;
-byteLiteral : INTEGER BYTE_SUFFIX;
-floatLiteral : FLOAT | (INTEGER FLOAT_SUFFIX);
+byteLiteral : BYTE;
+floatLiteral : FLOAT | FLOAT_INTEGER;
 integerLiteral : INTEGER ;
 
 stringLiteral: INTERPOLATED_REGULAR_STRING_START interpolatedStringPart* DOUBLE_QUOTE_INSIDE ;
@@ -204,12 +204,12 @@ innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
                      | tailsHead
                      | headTailsHead
                      ;
-headTails : (patternWithoutSequence CONS_L)+ tails ;
-tailsHead :  tails (CONS_R patternWithoutSequence)+ ;
+headTails : (patternWithoutSequence OP_CONS_L)+ tails ;
+tailsHead :  tails (OP_CONS_R patternWithoutSequence)+ ;
 
 headTailsHead : leftPattern+ tails rightPattern+ ;
-leftPattern : patternWithoutSequence CONS_L ;
-rightPattern : CONS_R patternWithoutSequence ;
+leftPattern : patternWithoutSequence OP_CONS_L ;
+rightPattern : OP_CONS_R patternWithoutSequence ;
 
 tails : identifier | emptySequence | underscore ;
 

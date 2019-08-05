@@ -266,13 +266,14 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public FloatNode visitFloatLiteral(YattaParser.FloatLiteralContext ctx) {
-    String text = ctx.FLOAT() != null ? ctx.FLOAT().getText() : ctx.INTEGER().getText();
+    String text = ctx.FLOAT() != null ? ctx.FLOAT().getText() : ctx.FLOAT_INTEGER().getText().substring(0, ctx.FLOAT_INTEGER().getText().length() - 1);
     return withSourceSection(ctx, new FloatNode(Double.parseDouble(text)));
   }
 
   @Override
   public ByteNode visitByteLiteral(YattaParser.ByteLiteralContext ctx) {
-    return withSourceSection(ctx, new ByteNode(Byte.parseByte(ctx.INTEGER().getText())));
+    String text = ctx.BYTE().getText();
+    return withSourceSection(ctx, new ByteNode(Byte.parseByte(text.substring(0, text.length() - 1))));
   }
 
   @Override

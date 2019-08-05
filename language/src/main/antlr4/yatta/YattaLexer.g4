@@ -69,11 +69,11 @@ DOT : '.' ;
 VLINE : '|';
 BACKSLASH : '\\' ;
 
-BYTE_SUFFIX : 'b' ;
-FLOAT_SUFFIX : 'f' ;
+LOWERCASE_NAME : 'a'..'z' [a-zA-Z0-9_]* ;
+UPPERCASE_NAME : 'A'..'Z' [a-zA-Z0-9_]* ;
 
-LOWERCASE_NAME : 'a'..'z' [a-zA-Z_]* ;
-UPPERCASE_NAME : 'A'..'Z' [a-zA-Z_]* ;
+BYTE : '-'?[0-9]+ 'b' ;
+FLOAT_INTEGER : '-'?[0-9]+ 'f' ;
 INTEGER : '-'?[0-9]+ ;
 FLOAT : ('0' .. '9') + ('.' ('0' .. '9') +)? ;
 
