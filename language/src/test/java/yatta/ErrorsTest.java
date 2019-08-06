@@ -29,7 +29,7 @@ public class ErrorsTest {
       try {
         context.eval(YattaLanguage.ID, "\\arg -> argx").execute(6);
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Identifier 'argx' not found in the current scope");
+        assertEquals("Identifier 'argx' not found in the current scope", ex.getMessage());
         throw ex;
       }
     });
@@ -39,13 +39,13 @@ public class ErrorsTest {
   public void invocationInLet1Test() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval(YattaLanguage.ID, "let " +
-            "funone = \\arg -> arg " +
-            "alias = 6" +
-            "funalias = \\arg -> funoneX alias " +
+        context.eval(YattaLanguage.ID, "let\n" +
+            "funone = \\arg -> arg\n" +
+            "alias = 6\n" +
+            "funalias = \\arg -> funoneX alias\n" +
             "in funalias").execute(5).asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Identifier 'funoneX' not found in the current scope");
+        assertEquals("Identifier 'funoneX' not found in the current scope", ex.getMessage());
         throw ex;
       }
     });
@@ -55,13 +55,13 @@ public class ErrorsTest {
   public void invocationInLet2Test() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval(YattaLanguage.ID, "let " +
-            "funone = \\arg -> arg " +
-            "alias = 6" +
-            "funalias = \\arg -> funoneX alias " +
+        context.eval(YattaLanguage.ID, "let\n" +
+            "funone = \\arg -> arg\n" +
+            "alias = 6\n" +
+            "funalias = \\arg -> funoneX alias\n" +
             "in whatever").execute(5).asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Identifier 'whatever' not found in the current scope");
+        assertEquals("Identifier 'whatever' not found in the current scope", ex.getMessage());
         throw ex;
       }
     });
@@ -71,13 +71,13 @@ public class ErrorsTest {
   public void invalidNumberOfArgsTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval(YattaLanguage.ID, "let " +
-            "funone = \\arg -> arg " +
-            "alias = 6" +
-            "funalias = \\arg -> funone alias 7 " +
+        context.eval(YattaLanguage.ID, "let \n" +
+            "funone = \\arg -> arg \n" +
+            "alias = 6\n" +
+            "funalias = \\arg -> funone alias 7\n" +
             "in funalias").execute(5).asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Unexpected number of arguments when calling '$lambda-0': 2 expected: 1");
+        assertEquals("Unexpected number of arguments when calling '$lambda-0': 2 expected: 1", ex.getMessage());
         throw ex;
       }
     });
@@ -87,13 +87,13 @@ public class ErrorsTest {
   public void callOfNonFunctionTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval(YattaLanguage.ID, "let " +
-            "funone = \\arg -> arg " +
-            "alias = 6" +
-            "funalias = \\arg -> alias 7 funone " +
+        context.eval(YattaLanguage.ID, "let\n" +
+            "funone = \\arg -> arg\n" +
+            "alias = 6\n" +
+            "funalias = \\arg -> alias 7 funone\n" +
             "in funalias").execute(5).asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Cannot invoke non-function node: SimpleIdentifierNode{name='alias'}");
+        assertEquals("Cannot invoke non-function node: SimpleIdentifierNode{name='alias'}", ex.getMessage());
         throw ex;
       }
     });
@@ -109,7 +109,7 @@ public class ErrorsTest {
             "funtwo argone = argone\n" +
             "in testMod.funtwo 6").asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Function funtwo is not present in Module{fqn=TestMod, exports=[funone], functions={funone=funone, funtwo=funtwo}}");
+        assertEquals("Function funtwo is not present in Module{fqn=TestMod, exports=[funone], functions={funone=funone, funtwo=funtwo}}", ex.getMessage());
         throw ex;
       }
     });
@@ -127,7 +127,7 @@ public class ErrorsTest {
             "_ -> 9\n" +
             "end\n").execute(new Tuple(1l, 5l, 6l)).asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Identifier 'secondArg' not found in the current scope");
+        assertEquals("Identifier 'secondArg' not found in the current scope", ex.getMessage());
         throw ex;
       }
     });
@@ -142,7 +142,7 @@ public class ErrorsTest {
             "2 -> 3\n" +
             "end\n").execute(3l).asLong();
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "NoMatchException");
+        assertEquals("NoMatchException", ex.getMessage());
         throw ex;
       }
     });
@@ -154,7 +154,7 @@ public class ErrorsTest {
       try {
         context.eval(YattaLanguage.ID, "async \\-> raise :something \"Error description\"\n");
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "YattaError <something>: Error description");
+        assertEquals("YattaError <something>: Error description", ex.getMessage());
         throw ex;
       }
     });
@@ -166,7 +166,7 @@ public class ErrorsTest {
       try {
         context.eval(YattaLanguage.ID, "!\"hello\"");
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"");
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"", ex.getMessage());
         throw ex;
       }
     });
@@ -178,7 +178,7 @@ public class ErrorsTest {
       try {
         context.eval(YattaLanguage.ID, "!(async \\->\"hello\")");
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"");
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"", ex.getMessage());
         throw ex;
       }
     });
@@ -190,7 +190,7 @@ public class ErrorsTest {
       try {
         context.eval(YattaLanguage.ID, "~\"hello\"");
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"");
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"", ex.getMessage());
         throw ex;
       }
     });
@@ -202,7 +202,7 @@ public class ErrorsTest {
       try {
         context.eval(YattaLanguage.ID, "~(async \\->\"hello\")");
       } catch (PolyglotException ex) {
-        assertEquals(ex.getMessage(), "Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"");
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"", ex.getMessage());
         throw ex;
       }
     });

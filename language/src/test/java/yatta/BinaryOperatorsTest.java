@@ -505,7 +505,6 @@ public class BinaryOperatorsTest {
       this.expectedType = null;
     }
 
-
     private static String format(PromiseHolder obj) {
       return String.format("async \\->%s", obj);
     }
