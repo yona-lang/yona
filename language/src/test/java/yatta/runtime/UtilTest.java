@@ -143,7 +143,13 @@ public class UtilTest {
     short bitmap;
     for (int i = 0; i < 15; i++) {
       bitmap = setBit((short) 0, i);
+      for (int j = 0; j < i; j++) {
+        assertFalse(testBit(bitmap, j));
+      }
       assertTrue(testBit(bitmap, i));
+      for (int j = i + 1; j < 15; j++) {
+        assertFalse(testBit(bitmap, j));
+      }
     }
   }
 
@@ -152,7 +158,13 @@ public class UtilTest {
     short bitmap;
     for (int i = 0; i < 15; i++) {
       bitmap = clearBit((short) 0xffff, i);
+      for (int j = 0; j < i; j++) {
+        assertTrue(testBit(bitmap, j));
+      }
       assertFalse(testBit(bitmap, i));
+      for (int j = i + 1; j < 15; j++) {
+        assertTrue(testBit(bitmap, j));
+      }
     }
   }
 }

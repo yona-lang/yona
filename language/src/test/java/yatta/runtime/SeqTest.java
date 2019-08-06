@@ -72,13 +72,49 @@ public class SeqTest {
   }
 
   @Test
+  public void testInsertFirst() {
+    Seq seq = Seq.EMPTY;
+    for (long i = 0; i < N; i++) {
+      Seq newSeq = seq.insertFirst(i);
+      for (long j = 0; j < i; j++) {
+        assertEquals(j, seq.lookup(seq.length() - j - 1, null));
+      }
+      for (long j = 0; j <= i; j++) {
+        assertEquals(j, newSeq.lookup(newSeq.length() - j - 1, null));
+      }
+      seq = newSeq;
+    }
+  }
+
+  @Test
   public void testInsertLast() {
     Seq seq = Seq.EMPTY;
     for (long i = 0; i < N; i++) {
-      seq = seq.insertLast(i);
+      Seq newSeq = seq.insertLast(i);
       for (long j = 0; j < i; j++) {
         assertEquals(j, seq.lookup(j, null));
       }
+      for (long j = 0; j <= i; j++) {
+        assertEquals(j, newSeq.lookup(j, null));
+      }
+      seq = newSeq;
+    }
+  }
+
+  @Test
+  public void testInsertFirstEncodedBytes() {
+    Seq seq = Seq.EMPTY;
+    for (int i = 0; i < N; i += 128) {
+      Seq newSeq = seq.insertFirstEncoded(bytes(), 128, Seq.EncodedType.BYTES);
+      for (int j = 0; j < i; j++) {
+        final byte expected = (byte) (j % 128);
+        assertEquals(expected, seq.lookup(j, null));
+      }
+      for (int j = 0; j <= i; j++) {
+        final byte expected = (byte) (j % 128);
+        assertEquals(expected, newSeq.lookup(j, null));
+      }
+      seq = newSeq;
     }
   }
 
@@ -86,11 +122,16 @@ public class SeqTest {
   public void testInsertLastEncodedBytes() {
     Seq seq = Seq.EMPTY;
     for (int i = 0; i < N; i += 128) {
-      seq = seq.insertLastEncoded(bytes(), 128, Seq.EncodedType.BYTES);
+      Seq newSeq = seq.insertLastEncoded(bytes(), 128, Seq.EncodedType.BYTES);
       for (int j = 0; j < i; j++) {
         final byte expected = (byte) (j % 128);
         assertEquals(expected, seq.lookup(j, null));
       }
+      for (int j = 0; j <= i; j++) {
+        final byte expected = (byte) (j % 128);
+        assertEquals(expected, newSeq.lookup(j, null));
+      }
+      seq = newSeq;
     }
   }
 
@@ -129,15 +170,27 @@ public class SeqTest {
   }
 
   @Test
-  public void testInsertLastMixed() {
-    final Object[] data = new Object[128];
-    for (int i = 0; i < data.length; i++) {
-      if (i % 2 == 0) data[i] = i;
-      else if (i % 3 == 0) data[i] = (byte) i;
-      else data[i] = (long) i;
-    }
+  public void testInsertFirstMixed() {
+    final Object[] data = data();
     Seq seq = Seq.EMPTY;
-    for (Object o : data) {
+    for (int i = data.length - 1; i >= 0; i--) {
+      final Object o = data[i];
+      if (o instanceof Integer) seq = seq.insertFirstEncoded(codePointToBytes((Integer) o), 1, Seq.EncodedType.UTF8);
+      else if (o instanceof Byte) seq = seq.insertFirstEncoded(new byte[]{ (byte) o }, 1, Seq.EncodedType.BYTES);
+      else seq = seq.insertFirst(o);
+    }
+    for (int i = 0; i < data.length; i++) {
+      Object expected = data[i];
+      assertEquals(expected, seq.lookup(i, null));
+    }
+  }
+
+  @Test
+  public void testInsertLastMixed() {
+    final Object[] data = data();
+    Seq seq = Seq.EMPTY;
+    for (int i = 0; i < data.length; i++) {
+      final Object o = data[i];
       if (o instanceof Integer) seq = seq.insertLastEncoded(codePointToBytes((Integer) o), 1, Seq.EncodedType.UTF8);
       else if (o instanceof Byte) seq = seq.insertLastEncoded(new byte[]{ (byte) o }, 1, Seq.EncodedType.BYTES);
       else seq = seq.insertLast(o);
@@ -146,5 +199,15 @@ public class SeqTest {
       Object expected = data[i];
       assertEquals(expected, seq.lookup(i, null));
     }
+  }
+
+  private static Object[] data() {
+    final Object[] result = new Object[128];
+    for (int i = 0; i < result.length; i++) {
+      if (i % 2 == 0) result[i] = i;
+      else if (i % 3 == 0) result[i] = (byte) i;
+      else result[i] = (long) i;
+    }
+    return result;
   }
 }

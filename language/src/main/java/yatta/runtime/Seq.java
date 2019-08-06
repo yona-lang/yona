@@ -47,6 +47,14 @@ public final class Seq {
     return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newSuffix, 1);
   }
 
+  public Seq insertFirst(final Object o) {
+    if (Node.readLength(prefix) != Node.MAX_LEN) return new Seq(nodePrepend(o, prefix), prefixSize + 1, root, rootSize, suffix, suffixSize);
+    final Object[] newPrefix = newNode(newMeta(0), o);
+    Object[] newRoot = treePrepend(prefix, root);
+    if (newRoot == null) newRoot = newLevelPrepend(prefix, root);
+    return new Seq(newPrefix, 1, newRoot, rootSize + prefixSize, suffix, suffixSize);
+  }
+
   private static Object[] treeAppend(final Object[] tree, final Object[] leaf) {
     final int depth = Meta.readDepth(Node.readMeta(tree));
     if (depth == 1) return Node.readLength(tree) == Node.MAX_LEN ? null : treeAppendTerminal(tree, leaf);
@@ -56,11 +64,30 @@ public final class Seq {
     return treeReplaceLast(tree, updatedChild);
   }
 
+  private static Object[] treePrepend(final Object[] leaf, final Object[] tree) {
+    final int depth = Meta.readDepth(Node.readMeta(tree));
+    if (depth == 1) return Node.readLength(tree) == Node.MAX_LEN ? null : treePrependTerminal(leaf, tree);
+    final Object[] leftmostChild = (Object[]) Node.readAt(tree, 0);
+    Object[] updatedChild = treePrepend(leaf, leftmostChild);
+    if (updatedChild == null) return Node.readLength(tree) == Node.MAX_LEN ? null : treePrependTerminal(createPath(leaf, depth - 1), tree);
+    return treeReplaceFirst(tree, updatedChild);
+  }
+
   private static Object[] treeAppendTerminal(final Object[] tree, final Object[] leaf) {
     final Object[] result = nodeAppend(tree, leaf);
     if (!Node.isNormal(leaf)) {
       final byte[] meta = metaAppend(Node.readMeta(tree), Node.calculateSize(leaf));
       Meta.writeBitmap(meta, Util.setBit(Meta.readBitmap(meta), Node.readLength(tree)));
+      Node.writeMeta(result, meta);
+    }
+    return result;
+  }
+
+  private static Object[] treePrependTerminal(final Object[] leaf, final Object[] tree) {
+    final Object[] result = nodePrepend(leaf, tree);
+    if (!Node.isNormal(leaf)) {
+      final byte[] meta = metaAppend(Node.readMeta(result), Node.calculateSize(leaf));
+      Meta.writeBitmap(meta, Util.setBit(Meta.readBitmap(meta), 0));
       Node.writeMeta(result, meta);
     }
     return result;
@@ -106,6 +133,30 @@ public final class Seq {
     return result;
   }
 
+  private static Object[] treeReplaceFirst(final Object[] tree, final Object[] replacement) {
+    final Object[] result = tree.clone();
+    final Object[] old = (Object[]) Node.readAt(tree, 0);
+    if (Node.isNormal(old)) {
+      if (!Node.isNormal(replacement)) {
+        final byte[] meta = metaAppend(Node.readMeta(tree), Node.calculateSize(replacement));
+        Meta.writeBitmap(meta, Util.setBit(Meta.readBitmap(meta), 0));
+        Node.writeMeta(result, meta);
+      }
+    } else {
+      if (Node.isNormal(replacement)) {
+        final byte[] meta = metaRemoveLast(Node.readMeta(tree));
+        Meta.writeBitmap(meta, Util.clearBit(Meta.readBitmap(meta), 0));
+        Node.writeMeta(result, meta);
+      } else {
+        final byte[] meta = Node.readMeta(tree).clone();
+        Meta.writeAt(meta, 0, Node.calculateSize(replacement));
+        Node.writeMeta(result, meta);
+      }
+    }
+    Node.writeAt(result, 0, replacement);
+    return result;
+  }
+
   private static Object[] newLevelAppend(final Object[] root, Object[] leaf) {
     final int rootDepth = Meta.readDepth(Node.readMeta(root));
     leaf = createPath(leaf, rootDepth);
@@ -138,11 +189,43 @@ public final class Seq {
     return newNode(meta, root, leaf);
   }
 
+  private static Object[] newLevelPrepend(Object[] leaf, final Object[] root) {
+    final int rootDepth = Meta.readDepth(Node.readMeta(root));
+    leaf = createPath(leaf, rootDepth);
+    final byte[] meta;
+    if (Node.isNormal(leaf)) {
+      if (Node.isNormal(root)) {
+        meta = newMeta(rootDepth + 1);
+      } else {
+        meta = newMeta(rootDepth + 1, 1);
+        final short bitmap = Util.setBit(Meta.EMPTY_BITMAP, 1);
+        Meta.writeBitmap(meta, bitmap);
+        Meta.writeAt(meta, 0, Node.calculateSize(root));
+      }
+    } else {
+      if (Node.isNormal(root)) {
+        meta = newMeta(rootDepth + 1, 1);
+        final short bitmap = Util.setBit(Meta.EMPTY_BITMAP, 0);
+        Meta.writeBitmap(meta, bitmap);
+        Meta.writeAt(meta, 0, Node.calculateSize(leaf));
+      } else {
+        meta = newMeta(rootDepth + 1, 2);
+        short bitmap = Meta.EMPTY_BITMAP;
+        bitmap = Util.setBit(bitmap, 0);
+        bitmap = Util.setBit(bitmap, 1);
+        Meta.writeBitmap(meta, bitmap);
+        Meta.writeAt(meta, 0, Node.calculateSize(leaf));
+        Meta.writeAt(meta, 1, Node.calculateSize(root));
+      }
+    }
+    return newNode(meta, leaf, root);
+  }
+
   public Seq insertLastEncoded(final byte[] b, final int size, final EncodedType type) {
     final long sizeAndType = encodeSizeAndType(size, type);
     if (Node.readLength(suffix) != Node.MAX_LEN) {
       final byte[] oldMeta = Node.readMeta(suffix);
-      final byte[] newMeta = metaAppend(Node.readMeta(suffix), sizeAndType);
+      final byte[] newMeta = metaAppend(oldMeta, sizeAndType);
       final short oldBitmap = Meta.readBitmap(oldMeta);
       final short newBitmap = Util.setBit(oldBitmap, Node.readLength(suffix));
       Meta.writeBitmap(newMeta, newBitmap);
@@ -157,6 +240,27 @@ public final class Seq {
     Object[] newRoot = treeAppend(root, suffix);
     if (newRoot == null) newRoot = newLevelAppend(root, suffix);
     return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newSuffix, size);
+  }
+
+  public Seq insertFirstEncoded(final byte[] b, final int size, final EncodedType type) {
+    final long sizeAndType = encodeSizeAndType(size, type);
+    if (Node.readLength(prefix) != Node.MAX_LEN) {
+      final Object[] newPrefix = nodePrepend(b, prefix);
+      final byte[] oldMeta = Node.readMeta(newPrefix);
+      final byte[] newMeta = metaPrepend(oldMeta, sizeAndType);
+      final short oldBitmap = Meta.readBitmap(oldMeta);
+      final short newBitmap = Util.setBit(oldBitmap, 0);
+      Meta.writeBitmap(newMeta, newBitmap);
+      Node.writeMeta(newPrefix, newMeta);
+      return new Seq(newPrefix, prefixSize + size, root, rootSize, suffix, suffixSize);
+    }
+    final byte[] newMeta = newMeta(0, 1);
+    Meta.writeBitmap(newMeta, Util.setBit(Meta.EMPTY_BITMAP, 0));
+    Meta.writeAt(newMeta, 0, sizeAndType);
+    final Object[] newPrefix = newNode(newMeta, b);
+    Object[] newRoot = treePrepend(prefix, root);
+    if (newRoot == null) newRoot = newLevelPrepend(prefix, root);
+    return new Seq(newPrefix, size, newRoot, rootSize + prefixSize, suffix, suffixSize);
   }
 
   public Object lookup(final long idx, final com.oracle.truffle.api.nodes.Node node) {
@@ -271,6 +375,10 @@ public final class Seq {
     return 1L << (depth << 2);
   }
 
+  public long length() {
+    return prefixSize + rootSize + suffixSize;
+  }
+
   private static Object[] newNode(final byte[] meta) {
     return new Object[]{ meta };
   }
@@ -287,6 +395,14 @@ public final class Seq {
     final Object[] result = new Object[node.length + 1];
     arraycopy(node, 0, result, 0, node.length);
     result[node.length] = o;
+    return result;
+  }
+
+  private static Object[] nodePrepend(final Object o, final Object[] node) {
+    final Object[] result = new Object[node.length + 1];
+    arraycopy(node, 1, result, 2, node.length - 1);
+    result[0] = metaShiftRight(Node.readMeta(node));
+    result[1] = o;
     return result;
   }
 
@@ -352,9 +468,29 @@ public final class Seq {
     return result;
   }
 
+  private static byte[] metaPrepend(final byte[] meta, final long value) {
+    final byte[] result = new byte[meta.length + 8];
+    arraycopy(meta, 0, result, 0, 3);
+    Util.int64Write(value, result, 3);
+    arraycopy(meta, 3, result, 11, meta.length - 3);
+    return result;
+  }
+
   private static byte[] metaRemoveLast(final byte[] meta) {
     final byte[] result = new byte[meta.length - 8];
     arraycopy(meta, 0, result, 0, result.length);
+    return result;
+  }
+
+  private static byte[] metaShiftRight(final byte[] meta) {
+    final short bitmap = Meta.readBitmap(meta);
+    final byte[] result;
+    if (bitmap == 0) {
+      result = meta;
+    } else {
+      result = meta.clone();
+      Meta.writeBitmap(result, (short) ((bitmap & 0xffff) >>> 1));
+    }
     return result;
   }
 
