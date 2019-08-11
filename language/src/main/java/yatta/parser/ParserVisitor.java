@@ -236,6 +236,8 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     return withSourceSection(ctx, new PatternLetNode(aliasNodes, ctx.let().expression().accept(this)));
   }
 
+
+
   @Override
   public ExpressionNode visitAlias(YattaParser.AliasContext ctx) {
     if (ctx.patternAlias() != null) {
@@ -793,20 +795,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public ExpressionNode visitBacktickExpression(YattaParser.BacktickExpressionContext ctx) {
     ExpressionNode[] argNodes = new ExpressionNode[2];
-    argNodes[0] = ctx.backtickExpr().leftSideOp().accept(this);
-    argNodes[1] = ctx.backtickExpr().right.accept(this);
+    argNodes[0] = ctx.left.accept(this);
+    argNodes[1] = ctx.right.accept(this);
 
-    YattaParser.CallContext callCtx = ctx.backtickExpr().call();
+    YattaParser.CallContext callCtx = ctx.call();
     return createCallNode(ctx, argNodes, callCtx);
-  }
-
-  @Override
-  public ExpressionNode visitLeftSideOp(YattaParser.LeftSideOpContext ctx) {
-    if (ctx.value() != null) {
-      return ctx.value().accept(this);
-    } else {
-      return ctx.expression().accept(this);
-    }
   }
 
   private ExpressionNode createCallNode(ParserRuleContext ctx, ExpressionNode[] argNodes, YattaParser.CallContext callCtx) {

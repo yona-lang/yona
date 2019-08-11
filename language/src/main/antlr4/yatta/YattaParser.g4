@@ -60,6 +60,7 @@ input : NEWLINE? expression NEWLINE? EOF ;
 
 expression : PARENS_L expression PARENS_R                                                                #expressionInParents
            | op=(OP_LOGIC_NOT | OP_BIN_NOT) expression                                                   #negation
+           | left=expression BACKTICK call BACKTICK right=expression                                     #backtickExpression
            | left=expression op=(OP_MULTIPLY | OP_DIVIDE | OP_MODULO) right=expression                   #multiplicativeExpression
            | left=expression op=(OP_PLUS | OP_MINUS) right=expression                                    #additiveExpression
            | left=expression op=(OP_LEFTSHIFT | OP_RIGHTSHIFT | OP_ZEROFILL_RIGHTSHIFT) right=expression #binaryShiftExpression
@@ -82,7 +83,6 @@ expression : PARENS_L expression PARENS_R                                       
            | importExpr                                                                                  #importExpression
            | tryCatchExpr                                                                                #tryCatchExpression
            | raiseExpr                                                                                   #raiseExpression
-           | backtickExpr                                                                                #backtickExpression
            ;
 
 
@@ -110,8 +110,6 @@ patternValue : unit
              ;
 
 name : LOWERCASE_NAME ;
-
-leftSideOp : value | PARENS_L expression PARENS_R ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
 alias : lambdaAlias | moduleAlias | patternAlias | fqnAlias ;
@@ -232,6 +230,3 @@ catchPatternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
 catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
 
 raiseExpr : KW_RAISE symbol stringLiteral NEWLINE ;
-
-
-backtickExpr : leftSideOp BACKTICK call BACKTICK right=expression ;
