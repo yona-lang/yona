@@ -17,10 +17,12 @@ import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.controlflow.BlockNode;
-import yatta.ast.expression.SimpleIdentifierNode;
+import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
+import yatta.ast.expression.value.FQNNode;
 import yatta.ast.expression.value.FunctionNode;
 import yatta.ast.local.ReadArgumentNode;
+import yatta.ast.local.WriteLocalVariableNode;
 import yatta.ast.local.WriteLocalVariableNodeGen;
 import yatta.runtime.Function;
 import yatta.runtime.UndefinedNameException;
@@ -37,30 +39,34 @@ import java.util.Arrays;
  */
 @NodeInfo(shortName = "invoke")
 public final class InvokeNode extends ExpressionNode {
-
   @Node.Child
   private ExpressionNode functionNode;
   private final Function function;
   @Node.Children
   private final ExpressionNode[] argumentNodes;
-  @Child private InteropLibrary library;
+  @Child
+  private InteropLibrary library;
+  @Children
+  private FQNNode[] moduleStack;  // Because this is created from Stack.toArray, the last pushed element is the last element of the array
 
   private YattaLanguage language;
 
-  public InvokeNode(YattaLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes) {
+  public InvokeNode(YattaLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
     this.functionNode = functionNode;
     this.function = null;
     this.argumentNodes = argumentNodes;
     this.library = InteropLibrary.getFactory().createDispatched(3);
     this.language = language;
+    this.moduleStack = moduleStack;
   }
 
-  public InvokeNode(YattaLanguage language, Function function, ExpressionNode[] argumentNodes) {
+  public InvokeNode(YattaLanguage language, Function function, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
     this.functionNode = null;
     this.function = function;
     this.argumentNodes = argumentNodes;
     this.library = InteropLibrary.getFactory().createDispatched(3);
     this.language = language;
+    this.moduleStack = moduleStack;
   }
 
   @Override
@@ -94,12 +100,15 @@ public final class InvokeNode extends ExpressionNode {
      * array length is really constant.
      */
     CompilerAsserts.compilationConstant(argumentNodes.length);
+    CompilerAsserts.compilationConstant(function.getCardinality());
     CompilerAsserts.compilationConstant(this.isTail());
 
     if (argumentNodes.length > function.getCardinality()) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new YattaException("Unexpected number of arguments when calling '" + function.getName() +
           "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
+    } else if (argumentNodes.length == 0 && function.getCardinality() > 0) {
+      return function;
     } else if (argumentNodes.length < function.getCardinality()) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       /*
@@ -126,18 +135,23 @@ public final class InvokeNode extends ExpressionNode {
        * Partially applied function will just invoke the original function with arguments constructed as a combination
        * of those which were provided when this closure was created and those to be read on the following application
        */
-      InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(function.getName()), allArgumentNodes);
-      BlockNode blockNode = new BlockNode(new ExpressionNode[]{
-          /*
-           * We need to make sure that the original function is still accessible within the closure, even if the partially
-           * applied function already leaves the scope with the original function
-          */
-          WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName())),
-          invokeNode
-      });
+      InvokeNode invokeNode = new InvokeNode(language, new IdentifierNode(language, function.getName(), moduleStack), allArgumentNodes, moduleStack);
 
+      /*
+       * We need to make sure that the original function is still accessible within the closure, even if the partially
+       * applied function already leaves the scope with the original function
+       */
+      WriteLocalVariableNode writeLocalVariableNode;
+      if (functionNode != null) {
+        writeLocalVariableNode = WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
+      } else {
+        writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
+      }
+
+      BlockNode blockNode = new BlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
       FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName,
           function.getCardinality() - argumentNodes.length, frame.getFrameDescriptor(), blockNode);
+
       return partiallyAppliedFunctionNode.executeGeneric(frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
@@ -145,7 +159,7 @@ public final class InvokeNode extends ExpressionNode {
       for (int i = 0; i < argumentNodes.length; i++) {
         Object argValue = argumentNodes[i].executeGeneric(frame);
         if (argValue instanceof Promise) {
-            argsArePromise = true;
+          argsArePromise = true;
         }
         argumentValues[i] = argValue;
       }

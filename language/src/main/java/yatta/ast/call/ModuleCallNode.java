@@ -1,13 +1,14 @@
 package yatta.ast.call;
 
-import yatta.YattaException;
-import yatta.YattaLanguage;
-import yatta.ast.ExpressionNode;
-import yatta.runtime.Function;
-import yatta.runtime.Module;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.YattaException;
+import yatta.YattaLanguage;
+import yatta.ast.ExpressionNode;
+import yatta.ast.expression.value.FQNNode;
+import yatta.runtime.Function;
+import yatta.runtime.Module;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -19,13 +20,15 @@ public final class ModuleCallNode extends ExpressionNode {
   @Children
   private ExpressionNode[] argumentNodes;
   private String functionName;
+  @Children private FQNNode[] moduleStack;
   private final YattaLanguage yattaLanguage;
 
-  public ModuleCallNode(YattaLanguage yattaLanguage, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes) {
+  public ModuleCallNode(YattaLanguage yattaLanguage, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
     this.yattaLanguage = yattaLanguage;
     this.nameNode = nameNode;
     this.functionName = functionName;
     this.argumentNodes = argumentNodes;
+    this.moduleStack = moduleStack;
   }
 
   @Override
@@ -66,7 +69,7 @@ public final class ModuleCallNode extends ExpressionNode {
       throw new YattaException("Function " + functionName + " is not present in " + module, this);
     } else {
       Function function = module.getFunctions().get(functionName);
-      InvokeNode invokeNode = new InvokeNode(yattaLanguage, function, argumentNodes);
+      InvokeNode invokeNode = new InvokeNode(yattaLanguage, function, argumentNodes, moduleStack);
       return invokeNode.executeGeneric(frame);
     }
   }

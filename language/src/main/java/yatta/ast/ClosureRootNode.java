@@ -13,7 +13,7 @@ import com.oracle.truffle.api.source.SourceSection;
  * builtin functions, the {@link #bodyNode} is a subclass of {@link yatta.ast.builtin.BuiltinNode}.
  */
 @NodeInfo(language = "yatta", description = "The root of all yatta execution trees")
-public class YattaRootNode extends RootNode {
+public class ClosureRootNode extends RootNode {
   /**
    * The function body that is executed, and specialized during execution.
    */
@@ -29,8 +29,8 @@ public class YattaRootNode extends RootNode {
 
   private final MaterializedFrame lexicalScope;
 
-  public YattaRootNode(YattaLanguage language, FrameDescriptor frameDescriptor, ExpressionNode bodyNode,
-                       SourceSection sourceSection, String name, MaterializedFrame lexicalScope) {
+  public ClosureRootNode(YattaLanguage language, FrameDescriptor frameDescriptor, ExpressionNode bodyNode,
+                         SourceSection sourceSection, String name, MaterializedFrame lexicalScope) {
     super(language, frameDescriptor);
     this.bodyNode = bodyNode;
     this.name = name;
@@ -45,14 +45,13 @@ public class YattaRootNode extends RootNode {
 
   @Override
   public Object execute(VirtualFrame frame) {
-    CompilerDirectives.transferToInterpreter();
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     for (Object identifier : lexicalScope.getFrameDescriptor().getIdentifiers()) {
       FrameSlot oldFrameSlot = lexicalScope.getFrameDescriptor().findFrameSlot(identifier);
       FrameSlot newFrameSlot = frame.getFrameDescriptor().findOrAddFrameSlot(identifier, FrameSlotKind.Illegal);
       frame.setObject(newFrameSlot, lexicalScope.getValue(oldFrameSlot));
     }
 
-    assert lookupContextReference(YattaLanguage.class).get() != null;
     return bodyNode.executeGeneric(frame);
   }
 
@@ -69,6 +68,6 @@ public class YattaRootNode extends RootNode {
 
   @Override
   public String toString() {
-    return "root " + name;
+    return "closure-root " + name;
   }
 }

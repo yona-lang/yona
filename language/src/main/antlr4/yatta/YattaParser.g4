@@ -14,7 +14,7 @@ options { tokenVocab=YattaLexer; }
     import com.oracle.truffle.api.RootCallTarget;
     import yatta.YattaLanguage;
     import yatta.ast.ExpressionNode;
-    import yatta.ast.YattaRootNode;
+    import yatta.ast.FunctionRootNode;
     import yatta.parser.ParseError;
     import yatta.parser.ParserVisitor;
 }
@@ -51,7 +51,7 @@ options { tokenVocab=YattaLexer; }
         parser.addErrorListener(listener);
         parser.source = source;
         ExpressionNode rootExpression = new ParserVisitor(language, source).visit(parser.input());
-        YattaRootNode rootNode = new YattaRootNode(language, new FrameDescriptor(), rootExpression, source.createSection(1), "root", Truffle.getRuntime().createMaterializedFrame(new Object[] {}));
+        FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(), rootExpression, source.createSection(1), "root");
         return Truffle.getRuntime().createCallTarget(rootNode);
     }
 }

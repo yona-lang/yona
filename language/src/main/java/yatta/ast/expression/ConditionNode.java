@@ -76,7 +76,7 @@ public final class ConditionNode extends ExpressionNode {
 
     if (condValue instanceof Promise) {
       Promise promise = (Promise) condValue;
-      CompilerDirectives.transferToInterpreter();
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       MaterializedFrame materializedFrame = frame.materialize();
 
       return promise.map(val -> {

@@ -1,45 +1,44 @@
 package yatta.runtime;
 
-import yatta.YattaLanguage;
-import yatta.ast.builtin.*;
-import yatta.ast.builtin.modules.BuiltinModuleInfo;
-import yatta.ast.builtin.modules.FileBuiltinModule;
-import yatta.ast.builtin.modules.SequenceBuiltinModule;
-import yatta.runtime.annotations.ExceptionSymbol;
-import yatta.runtime.async.AsyncSelectorThread;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.source.Source;
+import yatta.YattaException;
+import yatta.YattaLanguage;
+import yatta.ast.builtin.*;
+import yatta.ast.builtin.modules.BuiltinModuleInfo;
+import yatta.ast.builtin.modules.FileBuiltinModule;
+import yatta.ast.builtin.modules.SequenceBuiltinModule;
+import yatta.runtime.annotations.ExceptionSymbol;
+import yatta.runtime.threading.Threading;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class Context {
-  private static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "yatta builtin").build();
-  static final Layout LAYOUT = Layout.createLayout();
-
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
   private final PrintWriter output;
   private final YattaLanguage language;
-  private final AllocationReporter allocationReporter;
+  private final AllocationReporter allocationReporter;  // TODO use this
   private final Builtins builtins;
   private final BuiltinModules builtinModules;
-  private final ExecutorService executor = Executors.newFixedThreadPool(4);
-  private final AsyncSelectorThread asyncSelectorThread = new AsyncSelectorThread();
-  private final ConcurrentMap<String, Symbol> symbols = new ConcurrentHashMap<>();
+  private Dictionary symbols = Dictionary.dictionary();
+  private Dictionary moduleCache = Dictionary.dictionary();
+  private final Threading threading;
 
   public Context(YattaLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
     this.env = env;
@@ -49,7 +48,7 @@ public class Context {
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
     this.builtinModules = new BuiltinModules();
-    this.asyncSelectorThread.start();
+    this.threading = new Threading(env);
 
     installBuiltins(externalBuiltins);
     installBuiltinModules();
@@ -69,6 +68,14 @@ public class Context {
   private void installBuiltinModules() {
     this.builtinModules.register(new SequenceBuiltinModule());
     this.builtinModules.register(new FileBuiltinModule());
+  }
+
+  public TruffleLanguage.Env getEnv() {
+    return env;
+  }
+
+  public Threading getThreading() {
+    return threading;
   }
 
   /**
@@ -123,6 +130,67 @@ public class Context {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary
+  public void cacheModule(String FQN, Module module) {
+    moduleCache = moduleCache.insert(FQN, module);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Module lookupModule(String[] packageParts, String moduleName, Node node) {
+    String FQN = getFQN(packageParts, moduleName);
+    Object module = moduleCache.lookup(FQN);
+    if (module == Unit.INSTANCE) {
+      module = loadModule(packageParts, moduleName, FQN, node);
+      moduleCache = moduleCache.insert(FQN, module);
+    }
+
+    return (Module) module;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  private Module loadModule(String[] packageParts, String moduleName, String FQN, Node node) {
+    try {
+      Path path;
+      if (packageParts.length > 0) {
+        String[] pathParts = new String[packageParts.length];
+        System.arraycopy(packageParts, 1, pathParts, 0, packageParts.length - 1);
+        pathParts[pathParts.length - 1] = moduleName + "." + YattaLanguage.ID;
+        path = Paths.get(packageParts[0], pathParts);
+      } else {
+        path = Paths.get(moduleName);
+      }
+      URL url = path.toUri().toURL();
+
+      Source source = Source.newBuilder(YattaLanguage.ID, url).build();
+      CallTarget callTarget = parse(source);
+      Module module = (Module) callTarget.call();
+
+      if (!FQN.equals(module.getFqn())) {
+        throw new YattaException("Module file " + url.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
+      }
+      moduleCache = this.moduleCache.insert(FQN, module);
+
+      return module;
+    } catch (IOException e) {
+      throw new YattaException("Unable to load Module " + FQN + " due to: " + e.getMessage(), e, node);
+    }
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public static String getFQN(String[] packageParts, String moduleName) {
+    if (packageParts.length > 0) {
+      StringBuilder sb = new StringBuilder();
+      for (String packagePart : packageParts) {
+        sb.append(packagePart);
+        sb.append("\\");
+      }
+      sb.append(moduleName);
+      return sb.toString();
+    } else {
+      return moduleName;
+    }
+  }
+
   /*
    * Methods for language interoperability.
    */
@@ -138,7 +206,7 @@ public class Context {
     } else if (a instanceof Context) {
       return a;
     }
-    CompilerDirectives.transferToInterpreter();
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     throw new IllegalStateException(a + " is not a Truffle value");
   }
 
@@ -167,11 +235,13 @@ public class Context {
     return builtinModules;
   }
 
-  public ExecutorService getExecutor() {
-    return executor;
-  }
-
   public Symbol symbol(String name) {
-    return symbols.computeIfAbsent(name, Symbol::new);
+    Object symbol = symbols.lookup(name);
+    if (symbol == Unit.INSTANCE) {
+      symbol = new Symbol(name);
+      symbols = symbols.insert(name, symbol);
+    }
+
+    return (Symbol) symbol;
   }
 }

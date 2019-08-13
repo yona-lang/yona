@@ -1,5 +1,6 @@
 package yatta.ast.expression;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import yatta.ast.ExpressionNode;
 import yatta.ast.local.WriteLocalVariableNode;
 import yatta.ast.local.WriteLocalVariableNodeGen;
@@ -44,6 +45,7 @@ public final class AliasNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     FrameSlot frameSlot = frame.getFrameDescriptor().findOrAddFrameSlot(name, FrameSlotKind.Illegal);
     WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(expression, frameSlot);
     return writeLocalVariableNode.executeGeneric(frame);

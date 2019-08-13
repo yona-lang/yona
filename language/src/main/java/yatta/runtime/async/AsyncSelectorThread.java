@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 
-public final class AsyncSelectorThread extends Thread {
+public final class AsyncSelectorThread implements Runnable {
   public Selector selector;
 
   @Override

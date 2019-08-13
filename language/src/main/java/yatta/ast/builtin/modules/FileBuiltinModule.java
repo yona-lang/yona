@@ -1,6 +1,7 @@
 package yatta.ast.builtin.modules;
 
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
@@ -29,6 +30,7 @@ public final class FileBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "open")
   abstract static class FileOpenNode extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object open(String uri, String mode) {
       try {
         List<OpenOption> openOptions = new ArrayList<>();
@@ -48,9 +50,10 @@ public final class FileBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "readline")
   abstract static class FileReadLineNode extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Promise readline(Tuple fileTuple, @CachedContext(YattaLanguage.class) Context context) {
       AsynchronousFileChannel asynchronousFileChannel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
-      ByteBuffer buffer = ByteBuffer.allocate(1024 * 10);
+      ByteBuffer buffer = ByteBuffer.allocate(64);
       long position = (long) fileTuple.get(2);
       Node thisNode = this;
       Promise promise = new Promise();
@@ -66,18 +69,29 @@ public final class FileBuiltinModule implements BuiltinModule {
 
           attachment.flip();
           int length = attachment.limit();
-          StringBuffer output = (StringBuffer) fileTuple.get(1);
+          byte[] originalOutput = (byte[]) fileTuple.get(1);
 
-          if (output == null) output = new StringBuffer();
+          byte[] output;
+          int pos;
+
+          if (originalOutput == null) {
+            output = new byte[length];
+            pos = 0;
+          }
+          else {
+            output = new byte[originalOutput.length + length];
+            System.arraycopy(originalOutput, 0, output, 0, originalOutput.length);
+            pos = originalOutput.length;
+          }
 
           for (int i = 0; i < length; i++) {
-            char ch = ((char) attachment.get());
-            if (ch == '\n') {
-              promise.fulfil(new Tuple(context.symbol("ok"), output.toString(), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
+            byte b = attachment.get();
+            if (b == '\n') {
+              promise.fulfil(new Tuple(context.symbol("ok"), new String(output), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
               fulfilled = true;
               break;
             } else {
-              output.append(ch);
+              output[pos++] = b;
             }
           }
           attachment.clear();

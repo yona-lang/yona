@@ -17,7 +17,7 @@ public class PatternExpressionTest {
 
   @BeforeEach
   public void initEngine() {
-    context = Context.create();
+    context =     context = Context.newBuilder().allowAllAccess(true).build();
   }
 
   @AfterEach

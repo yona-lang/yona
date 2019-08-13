@@ -12,7 +12,7 @@ public class StdLibTest {
 
   @BeforeEach
   public void initEngine() {
-    context = Context.create();
+    context = Context.newBuilder().allowAllAccess(true).build();
   }
 
   @AfterEach

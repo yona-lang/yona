@@ -1,11 +1,12 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
-import yatta.runtime.Tuple;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.ast.ExpressionNode;
+import yatta.runtime.Tuple;
 
 import java.util.Arrays;
 
@@ -49,6 +50,13 @@ public final class TupleNode extends ExpressionNode {
   }
 
   private Tuple execute(VirtualFrame frame) {
-    return new Tuple(Arrays.stream(expressions).map((el) -> el.executeGeneric(frame)).toArray());
+    CompilerAsserts.compilationConstant(expressions.length);
+    Object[] results = new Object[expressions.length];
+
+    for (int i = 0; i < expressions.length; i++) {
+      results[i] = expressions[i].executeGeneric(frame);
+    }
+
+    return new Tuple(results);
   }
 }

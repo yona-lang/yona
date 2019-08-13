@@ -7,8 +7,8 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <m2e.apt.activation>jdt_apt</m2e.apt.activation>
-    <graalvm.version>19.0.0</graalvm.version>
-    <junit.version>5.4.2</junit.version>
+    <graalvm.version>19.1.1</graalvm.version>
+    <junit.version>5.5.1</junit.version>
     <antlr.version>4.7.2</antlr.version>
   </properties>
   <packaging>pom</packaging>

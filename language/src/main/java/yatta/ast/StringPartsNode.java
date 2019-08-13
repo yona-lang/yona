@@ -51,10 +51,9 @@ public final class StringPartsNode extends ExpressionNode {
       }
     }
 
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     if (!isPromise) {
       StringBuilder sb = new StringBuilder();
-
-      CompilerDirectives.transferToInterpreter();
 
       for (Object evaluatedExpression : evaluatedExpressions) {
         sb.append(evaluatedExpression);
@@ -62,8 +61,6 @@ public final class StringPartsNode extends ExpressionNode {
 
       return sb.toString();
     } else {
-      CompilerDirectives.transferToInterpreter();
-
       return Promise.all(evaluatedExpressions, this).map(vals -> {
         StringBuilder sb = new StringBuilder();
         for (Object val : (Object[]) vals) {

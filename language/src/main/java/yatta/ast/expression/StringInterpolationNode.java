@@ -50,7 +50,7 @@ public final class StringInterpolationNode extends ExpressionNode {
     Object alignmentValue = alignmentExpression != null ? alignmentExpression.executeGeneric(frame) : null;
 
     if (interpolationValue instanceof Promise || alignmentValue instanceof Promise) {
-      CompilerDirectives.transferToInterpreter();
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       return Promise.all(new Object[]{interpolationValue, alignmentValue}, this).map(fulfiled -> {
         try {
           Object[] fulfiledArgs = (Object[]) fulfiled;

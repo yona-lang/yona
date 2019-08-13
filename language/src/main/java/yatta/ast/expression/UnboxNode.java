@@ -47,7 +47,7 @@ public abstract class UnboxNode extends ExpressionNode {
         return value;
       }
     } catch (UnsupportedMessageException e) {
-      CompilerDirectives.transferToInterpreter();
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new AssertionError();
     }
   }

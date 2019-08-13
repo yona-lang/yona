@@ -27,6 +27,12 @@ public class YattaException extends RuntimeException implements TruffleException
   }
 
   @TruffleBoundary
+  public YattaException(String message, Throwable cause, Node location) {
+    super(message, cause);
+    this.location = location;
+  }
+
+  @TruffleBoundary
   public YattaException(Throwable cause, Node location) {
     super(cause);
     this.location = location;

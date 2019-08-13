@@ -3,6 +3,7 @@ package yatta.ast;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.YattaException;
+import yatta.runtime.Context;
 import yatta.runtime.Function;
 import yatta.runtime.async.Promise;
 
@@ -16,20 +17,24 @@ public final class MainExpressionNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    Object result = expressionNode.executeGeneric(frame);
-    if (result instanceof Promise) {
-      Promise promise = (Promise) result;
-      CompilerDirectives.transferToInterpreter();
-      try {
-        result = Promise.await(promise);
-      } catch (YattaException e) {
-        throw e;
-      } catch (Throwable e) {
-        throw new YattaException(e, this);
+    try {
+      Object result = expressionNode.executeGeneric(frame);
+      if (result instanceof Promise) {
+        Promise promise = (Promise) result;
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        try {
+          result = Promise.await(promise);
+        } catch (YattaException e) {
+          throw e;
+        } catch (Throwable e) {
+          throw new YattaException(e, this);
+        }
       }
-    }
 
-    return executeIfFunction(result, frame);
+      return executeIfFunction(result, frame);
+    } finally {
+      Context.getCurrent().getThreading().dispose();
+    }
   }
 
   private Object executeIfFunction(Object result, VirtualFrame frame) {

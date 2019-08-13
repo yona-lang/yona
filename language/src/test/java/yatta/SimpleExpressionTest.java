@@ -15,7 +15,7 @@ public class SimpleExpressionTest {
 
   @BeforeEach
   public void initEngine() {
-    context = Context.create();
+    context = Context.newBuilder().allowAllAccess(true).build();
   }
 
   @AfterEach

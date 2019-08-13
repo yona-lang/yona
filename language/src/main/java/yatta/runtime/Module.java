@@ -102,7 +102,7 @@ public final class Module implements TruffleObject {
     @ExportMessage
     Object readArrayElement(long index) throws InvalidArrayIndexException {
       if (!isArrayElementReadable(index)) {
-        CompilerDirectives.transferToInterpreter();
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw InvalidArrayIndexException.create(index);
       }
       return names[(int) index];

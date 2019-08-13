@@ -1,9 +1,9 @@
 package yatta.ast.pattern;
 
-import yatta.ast.ExpressionNode;
-import yatta.ast.expression.LetNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.ast.ExpressionNode;
+import yatta.ast.expression.AliasNode;
 
 import java.util.Objects;
 
@@ -51,8 +51,10 @@ public class PatternNode extends ExpressionNode implements PatternMatchable {
   public Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {
-      LetNode letNode = new LetNode(matchResult.getAliases(), valueExpression);
-      return letNode.executeGeneric(frame);
+      for (AliasNode aliasNode : matchResult.getAliases()) {
+        aliasNode.executeGeneric(frame);
+      }
+      return valueExpression.executeGeneric(frame);
     } else {
       throw MatchControlFlowException.INSTANCE;
     }

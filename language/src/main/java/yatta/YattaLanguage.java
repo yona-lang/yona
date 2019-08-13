@@ -1,11 +1,5 @@
 package yatta;
 
-import yatta.ast.builtin.BuiltinNode;
-import yatta.ast.local.LexicalScope;
-import yatta.runtime.Context;
-import yatta.runtime.Function;
-import yatta.runtime.Module;
-import yatta.runtime.Unit;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.debug.DebuggerTags;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -18,13 +12,18 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import yatta.ast.builtin.BuiltinNode;
+import yatta.ast.local.LexicalScope;
+import yatta.runtime.Context;
+import yatta.runtime.Function;
+import yatta.runtime.Module;
+import yatta.runtime.Unit;
 
 import java.util.*;
 
 @TruffleLanguage.Registration(id = YattaLanguage.ID, name = "yatta", defaultMimeType = YattaLanguage.MIME_TYPE, characterMimeTypes = YattaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, DebuggerTags.AlwaysHalt.class})
 public class YattaLanguage extends TruffleLanguage<Context> {
-
   public static final String ID = "yatta";
   public static final String MIME_TYPE = "application/x-yatta";
 
@@ -98,7 +97,7 @@ public class YattaLanguage extends TruffleLanguage<Context> {
         }
       }
     } catch (UnsupportedMessageException e) {
-      CompilerDirectives.transferToInterpreter();
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new AssertionError();
     }
   }
@@ -131,7 +130,6 @@ public class YattaLanguage extends TruffleLanguage<Context> {
       }
     }
   }
-
 
   @Override
   protected SourceSection findSourceLocation(Context context, Object value) {
@@ -178,5 +176,15 @@ public class YattaLanguage extends TruffleLanguage<Context> {
 
   public static void installBuiltin(NodeFactory<? extends BuiltinNode> builtin) {
     EXTERNAL_BUILTINS.add(builtin);
+  }
+
+  @Override
+  protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
+    return true;
+  }
+
+  @Override
+  protected void finalizeContext(Context context) {
+    context.getThreading().dispose();
   }
 }

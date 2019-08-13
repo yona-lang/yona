@@ -1,27 +1,25 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
-import yatta.ast.call.ModuleCacheNode;
-import yatta.ast.call.ModuleCacheNodeGen;
-import yatta.runtime.Module;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.ast.ExpressionNode;
+import yatta.runtime.Context;
+import yatta.runtime.Module;
 
 import java.util.Arrays;
 import java.util.Objects;
 
 @NodeInfo
 public final class FQNNode extends ExpressionNode {
-  @Child
-  private ModuleCacheNode moduleCacheNode;
   public final String[] packageParts;
   public final String moduleName;
+  private final Context context;
 
   public FQNNode(String[] packageParts, String moduleName) {
     this.packageParts = packageParts;
     this.moduleName = moduleName;
-    this.moduleCacheNode = ModuleCacheNodeGen.create();
+    this.context = Context.getCurrent();
   }
 
   @Override
@@ -50,16 +48,16 @@ public final class FQNNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return moduleCacheNode.executeLoad(packageParts, moduleName);
+    return context.lookupModule(packageParts, moduleName, this);
   }
 
   @Override
   public String executeString(VirtualFrame frame) throws UnexpectedResultException {
-    return ModuleCacheNode.getFQN(packageParts, moduleName);
+    return context.getFQN(packageParts, moduleName);
   }
 
   @Override
   public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
-    return moduleCacheNode.executeLoad(packageParts, moduleName);
+    return context.lookupModule(packageParts, moduleName, this);
   }
 }

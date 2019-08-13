@@ -1,13 +1,15 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
-import yatta.runtime.Function;
-import yatta.runtime.Module;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.YattaException;
+import yatta.ast.ExpressionNode;
+import yatta.ast.expression.AliasNode;
+import yatta.runtime.Context;
+import yatta.runtime.Function;
+import yatta.runtime.Module;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,19 +19,21 @@ import java.util.Objects;
 @NodeInfo
 public final class ModuleNode extends ExpressionNode {
   @Node.Child
-  public FQNNode moduleFQN;
+  private FQNNode moduleFQN;
   @Node.Child
-  public NonEmptyStringListNode exports;
+  private NonEmptyStringListNode exports;
   @Node.Children
-  public FunctionNode[] functions;
-
+  private FunctionLikeNode[] functions;
   @Child
-  public ExpressionNode expression;
+  private ExpressionNode expression;
 
-  public ModuleNode(FQNNode moduleFQN, NonEmptyStringListNode exports, FunctionNode[] functions) {
+  private final Context context;
+
+  public ModuleNode(FQNNode moduleFQN, NonEmptyStringListNode exports, FunctionLikeNode[] functions) {
     this.moduleFQN = moduleFQN;
     this.exports = exports;
     this.functions = functions;
+    this.context = Context.getCurrent();
   }
 
   @Override
@@ -61,8 +65,13 @@ public final class ModuleNode extends ExpressionNode {
     try {
       return executeModule(frame);
     } catch (UnexpectedResultException ex) {
-      return null;
+      throw new YattaException("Unable to load Module " + moduleFQN, ex, this);
     }
+  }
+
+  @Override
+  public String executeString(VirtualFrame frame) throws UnexpectedResultException {
+    return moduleFQN.executeString(frame);
   }
 
   @Override
@@ -74,15 +83,18 @@ public final class ModuleNode extends ExpressionNode {
     /*
      * Set up module-local scope by putting all local functions on the stack
      */
-    for (FunctionNode fun : functions) {
-      AliasNode aliasNode = new AliasNode(fun.name, fun);
+    for (FunctionLikeNode fun : functions) {
+      AliasNode aliasNode = new AliasNode(fun.name(), fun);
       aliasNode.executeGeneric(frame);
     }
 
-    for (FunctionNode fun : functions) {
+    for (FunctionLikeNode fun : functions) {
       executedFunctions.add(fun.executeFunction(frame));
     }
 
-    return new Module(executedModuleFQN, executedExports, executedFunctions);
+    Module module = new Module(executedModuleFQN, executedExports, executedFunctions);
+    context.cacheModule(executedModuleFQN, module);
+
+    return module;
   }
 }

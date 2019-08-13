@@ -1,5 +1,6 @@
 package yatta.ast.expression;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.local.ReadLocalVariableNode;
@@ -23,6 +24,7 @@ public final class SimpleIdentifierNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(name);
     if (frameSlot == null) {
       throw new YattaException("Identifier '" + name + "' not found in the current scope", this);
