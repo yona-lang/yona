@@ -14,6 +14,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.ast.local.LexicalScope;
+import yatta.parser.ParseError;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
 import yatta.runtime.Module;
@@ -40,7 +41,12 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   public CallTarget parse(ParsingRequest request) throws Exception {
     Source source = request.getSource();
     RootCallTarget rootCallTarget;
-    rootCallTarget = YattaParser.parseYatta(this, source);
+    try {
+      rootCallTarget = YattaParser.parseYatta(this, source);
+    } catch (ParseError e) {
+      getCurrentContext().getThreading().dispose();
+      throw e;
+    }
 
     return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
   }
@@ -181,10 +187,5 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   @Override
   protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
     return true;
-  }
-
-  @Override
-  protected void finalizeContext(Context context) {
-    context.getThreading().dispose();
   }
 }

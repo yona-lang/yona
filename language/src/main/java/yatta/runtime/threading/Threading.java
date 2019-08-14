@@ -6,7 +6,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 public final class Threading {
-  public static final int THREAD_COUNT = 4;
+  public static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors();
   public static final int QUEUE_SIZE = 1024;
 
   private Thread[] threads;

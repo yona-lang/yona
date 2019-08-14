@@ -1,8 +1,6 @@
 package yatta.runtime.threading;
 
 
-import yatta.runtime.Context;
-
 import java.util.concurrent.BlockingQueue;
 
 public class WorkerThread implements Runnable {
@@ -15,12 +13,12 @@ public class WorkerThread implements Runnable {
 
   @Override
   public void run() {
-    try {
-      while (true) {
-        if   (abort) break;
-        else queue.take().run();
+    while (true) {
+      try {
+        queue.take().run();
+      } catch (InterruptedException ex) {
+        if (abort) break;
       }
-    } catch (InterruptedException ex) {
     }
   }
 

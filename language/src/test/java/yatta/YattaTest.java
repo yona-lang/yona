@@ -19,7 +19,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class YattaTest {
-
   private static final String SOURCE_SUFFIX = ".yatta";
   private static final String INPUT_SUFFIX = ".input";
   private static final String OUTPUT_SUFFIX = ".output";
