@@ -14,7 +14,7 @@ module tests\CommonFunctions exports
     as
 
 #factorial 1 = 1
-#factorial n = n * (factorial n - 1)
+#factorial n = n * factorial (n - 1)
 
 # A tail recursive function to calculate factorial
 factTR n a
@@ -26,7 +26,7 @@ factorial n = factTR n 1
 
 fibonacci 0 = 0
 fibonacci 1 = 1
-fibonacci n = (fibonacci n - 1) + (fibonacci n - 2)
+fibonacci n = fibonacci (n - 1) + fibonacci (n - 2)
 
 bmiTell bmi
     | bmi <= 18.5 = "You're underweight, you emo, you!"

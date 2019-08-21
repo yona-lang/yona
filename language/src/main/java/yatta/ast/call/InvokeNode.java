@@ -12,7 +12,6 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
@@ -81,18 +80,33 @@ public final class InvokeNode extends ExpressionNode {
   @ExplodeLoop
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    final Function function;
     if (this.function != null) {
-      function = this.function;
+      return execute(this.function, frame);
     } else {
-      try {
-        function = functionNode.executeFunction(frame);
-      } catch (UnexpectedResultException e) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        throw new YattaException("Cannot invoke non-function node: " + functionNode, this);
+        Object maybeFunction = functionNode.executeGeneric(frame);
+        if (maybeFunction instanceof Function) {
+          return execute((Function) maybeFunction, frame);
+        } else if (maybeFunction instanceof Promise) {
+          Promise promise = (Promise) maybeFunction;
+          return promise.map(value -> {
+            if (value instanceof Function) {
+              return execute((Function) value, frame);
+            } else {
+              throw notAFucntion(functionNode);
+            }
+          }, this);
+        } else {
+          throw notAFucntion(functionNode);
       }
     }
+  }
 
+  private RuntimeException notAFucntion(ExpressionNode functionNode) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
+    return new YattaException("Cannot invoke non-function node: " + functionNode, this);
+  }
+
+  private Object execute(Function function, VirtualFrame frame) {
     /*
      * The number of arguments is constant for one invoke node. During compilation, the loop is
      * unrolled and the execute methods of all arguments are inlined. This is triggered by the

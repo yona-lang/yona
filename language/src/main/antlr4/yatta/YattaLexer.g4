@@ -109,6 +109,9 @@ OP_CONS_L : '<:' ;
 OP_CONS_R : ':>' ;
 OP_JOIN : '++';
 
+OP_PIPE_L : '<|' ;
+OP_PIPE_R : '|>' ;
+
 COMMENT: '#' InputCharacter* NEWLINE -> channel(COMMENTS_CHANNEL);
 
 NEWLINE : NewLinePart+;

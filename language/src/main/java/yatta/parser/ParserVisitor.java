@@ -15,6 +15,8 @@ import yatta.ast.binary.*;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.ast.call.InvokeNode;
 import yatta.ast.call.ModuleCallNode;
+import yatta.ast.controlflow.PipeLeftNode;
+import yatta.ast.controlflow.PipeRightNode;
 import yatta.ast.expression.*;
 import yatta.ast.expression.value.*;
 import yatta.ast.local.ReadArgumentNode;
@@ -52,21 +54,30 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public ExpressionNode visitNegation(YattaParser.NegationContext ctx) {
     if (ctx.OP_LOGIC_NOT() != null) {
-      return new NegationNode(ctx.expression().accept(this));
+      return withSourceSection(ctx, new NegationNode(ctx.expression().accept(this)));
     } else {
-      return new BinaryNegationNode(ctx.expression().accept(this));
+      return withSourceSection(ctx, new BinaryNegationNode(ctx.expression().accept(this)));
     }
   }
 
   @Override
   public ExpressionNode visitFunctionApplicationExpression(YattaParser.FunctionApplicationExpressionContext ctx) {
-    ExpressionNode[] argNodes = new ExpressionNode[ctx.apply().expression().size()];
-    for (int i = 0; i < ctx.apply().expression().size(); i++) {
-      argNodes[i] = ctx.apply().expression(i).accept(this);
+    ExpressionNode[] argNodes = new ExpressionNode[ctx.apply().funArg().size()];
+    for (int i = 0; i < ctx.apply().funArg().size(); i++) {
+      argNodes[i] = ctx.apply().funArg(i).accept(this);
     }
 
     YattaParser.CallContext callCtx = ctx.apply().call();
     return createCallNode(ctx, argNodes, callCtx);
+  }
+
+  @Override
+  public ExpressionNode visitFunArg(YattaParser.FunArgContext ctx) {
+    if (ctx.value() != null) {
+      return ctx.value().accept(this);
+    } else {
+      return ctx.expression().accept(this);
+    }
   }
 
   @Override
@@ -84,8 +95,8 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
     switch (ctx.op.getText()) {
-      case "+": return PlusNodeGen.create(args);
-      case "-": return MinusNodeGen.create(args);
+      case "+": return withSourceSection(ctx, PlusNodeGen.create(args));
+      case "-": return withSourceSection(ctx, MinusNodeGen.create(args));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -102,9 +113,9 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
     switch (ctx.op.getText()) {
-      case "<<": return LeftShiftNodeGen.create(args);
-      case ">>": return RightShiftNodeGen.create(args);
-      case ">>>": return ZerofillRightShiftNodeGen.create(args);
+      case "<<": return withSourceSection(ctx, LeftShiftNodeGen.create(args));
+      case ">>": return withSourceSection(ctx, RightShiftNodeGen.create(args));
+      case ">>>": return withSourceSection(ctx, ZerofillRightShiftNodeGen.create(args));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -121,9 +132,9 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
     switch (ctx.op.getText()) {
-      case "*": return MultiplyNodeGen.create(args);
-      case "/": return DivideNodeGen.create(args);
-      case "%": return ModuloNodeGen.create(args);
+      case "*": return withSourceSection(ctx, MultiplyNodeGen.create(args));
+      case "/": return withSourceSection(ctx, DivideNodeGen.create(args));
+      case "%": return withSourceSection(ctx, ModuloNodeGen.create(args));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -140,12 +151,12 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
     switch (ctx.op.getText()) {
-      case "==": return EqualsNodeGen.create(args);
-      case "!=": return NotEqualsNodeGen.create(args);
-      case "<=": return LowerThanOrEqualsNodeGen.create(args);
-      case "<": return LowerThanNodeGen.create(args);
-      case ">=": return GreaterThanOrEqualsNodeGen.create(args);
-      case ">": return GreaterThanNodeGen.create(args);
+      case "==": return withSourceSection(ctx, EqualsNodeGen.create(args));
+      case "!=": return withSourceSection(ctx, NotEqualsNodeGen.create(args));
+      case "<=": return withSourceSection(ctx, LowerThanOrEqualsNodeGen.create(args));
+      case "<": return withSourceSection(ctx, LowerThanNodeGen.create(args));
+      case ">=": return withSourceSection(ctx, GreaterThanOrEqualsNodeGen.create(args));
+      case ">": return withSourceSection(ctx, GreaterThanNodeGen.create(args));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -161,7 +172,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    return BitwiseXorNodeGen.create(args);
+    return withSourceSection(ctx, BitwiseXorNodeGen.create(args));
   }
 
   @Override
@@ -170,7 +181,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    return BitwiseOrNodeGen.create(args);
+    return withSourceSection(ctx, BitwiseOrNodeGen.create(args));
   }
 
   @Override
@@ -179,7 +190,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    return BitwiseAndNodeGen.create(args);
+    return withSourceSection(ctx, BitwiseAndNodeGen.create(args));
   }
 
   @Override
@@ -188,7 +199,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    return LogicalOrNodeGen.create(args);
+    return withSourceSection(ctx, LogicalOrNodeGen.create(args));
   }
 
   @Override
@@ -197,25 +208,25 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    return LogicalAndNodeGen.create(args);
+    return withSourceSection(ctx, LogicalAndNodeGen.create(args));
   }
 
   @Override
-  public ExpressionNode visitConsExpression(YattaParser.ConsExpressionContext ctx) {
+  public ExpressionNode visitConsLeftExpression(YattaParser.ConsLeftExpressionContext ctx) {
     ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    switch (ctx.op.getText()) {
-      case ":>": return SequenceLeftConsNodeGen.create(args);
-      case "<:": return SequenceRightConsNodeGen.create(args);
-      default:
-        throw new ParseError(source,
-            ctx.op.getLine(),
-            ctx.op.getCharPositionInLine(),
-            ctx.op.getText().length(),
-            "Binary operation '" + ctx.op.getText() + "' not supported");
-    }
+    return withSourceSection(ctx, SequenceLeftConsNodeGen.create(args));
+  }
+
+  @Override
+  public ExpressionNode visitConsRightExpression(YattaParser.ConsRightExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    return withSourceSection(ctx, SequenceRightConsNodeGen.create(args));
   }
 
   @Override
@@ -224,7 +235,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
-    return SequenceJoinNodeGen.create(args);
+    return withSourceSection(ctx, SequenceJoinNodeGen.create(args));
   }
 
   @Override
@@ -237,8 +248,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
     return withSourceSection(ctx, new PatternLetNode(aliasNodes, ctx.let().expression().accept(this)));
   }
-
-
 
   @Override
   public ExpressionNode visitAlias(YattaParser.AliasContext ctx) {
@@ -788,14 +797,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     return withSourceSection(ctx, new ThrowYattaExceptionNode(visitSymbol(ctx.symbol()), visitStringLiteral(ctx.stringLiteral())));
   }
 
-  private <T extends ExpressionNode> T withSourceSection(ParserRuleContext parserRuleContext, T expressionNode) {
-    expressionNode.setSourceSection(
-        parserRuleContext.start.getStartIndex(),
-        parserRuleContext.stop.getStopIndex() - parserRuleContext.start.getStartIndex()
-    );
-    return expressionNode;
-  }
-
   @Override
   public ExpressionNode visitBacktickExpression(YattaParser.BacktickExpressionContext ctx) {
     ExpressionNode[] argNodes = new ExpressionNode[2];
@@ -833,5 +834,23 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
         return withSourceSection(ctx, new InvokeNode(language, withSourceSection(callCtx.name(), new IdentifierNode(language, functionName, moduleStackArray)), argNodes, moduleStackArray));
       }
     }
+  }
+
+  @Override
+  public ExpressionNode visitPipeLeftExpression(YattaParser.PipeLeftExpressionContext ctx) {
+    return withSourceSection(ctx, new PipeLeftNode(language, ctx.left.accept(this), ctx.right.accept(this), moduleStack.toArray(new FQNNode[] {})));
+  }
+
+  @Override
+  public ExpressionNode visitPipeRightExpression(YattaParser.PipeRightExpressionContext ctx) {
+    return withSourceSection(ctx, new PipeRightNode(language, ctx.left.accept(this), ctx.right.accept(this), moduleStack.toArray(new FQNNode[] {})));
+  }
+
+  private <T extends ExpressionNode> T withSourceSection(ParserRuleContext parserRuleContext, T expressionNode) {
+    expressionNode.setSourceSection(
+        parserRuleContext.start.getStartIndex(),
+        parserRuleContext.stop.getStopIndex() - parserRuleContext.start.getStartIndex()
+    );
+    return expressionNode;
   }
 }

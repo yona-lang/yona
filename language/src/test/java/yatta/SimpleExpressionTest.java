@@ -5,6 +5,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -405,8 +406,77 @@ public class SimpleExpressionTest {
 
   @Test
   public void singleLetterNames() {
-    long ret = context.eval(YattaLanguage.ID, "\\a b -> a+b").execute(1l, 2l).as(long.class);
+    long ret = context.eval(YattaLanguage.ID, "\\a b -> a+b").execute(1l, 2l).asLong();
     assertEquals(3l, ret);
+  }
+
+  @Disabled("this seems to be broken because of existing Sequence bug")
+  @Test
+  public void joinAssociativity() {
+    Value ret = context.eval(YattaLanguage.ID, "[1, 2] ++ [3, 4] ++ [5, 6]");
+    assertEquals(6, ret.getArraySize());
+  }
+
+  @Test
+  public void consRightAssociativity() {
+    Value ret = context.eval(YattaLanguage.ID, "[1, 2] :> 3 :> 4");
+    assertEquals(4, ret.getArraySize());
+    Long[] array = ret.as(Long[].class);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+    assertEquals(3l, array[2]);
+    assertEquals(4l, array[3]);
+  }
+
+  @Test
+  public void consLeftAssociativity() {
+    Value ret = context.eval(YattaLanguage.ID, "1 <: 2 <: [3, 4]");
+    assertEquals(4, ret.getArraySize());
+    Long[] array = ret.as(Long[].class);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+    assertEquals(3l, array[2]);
+    assertEquals(4l, array[3]);
+  }
+
+  @Test
+  public void simplePipeRight() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    plus = \\a b -> a + b\n" +
+        "    multiply = \\a b -> a * b\n" +
+        "in 5 |> plus 3 |> multiply 10").asLong();
+    assertEquals(80l, ret);
+  }
+
+  @Test
+  public void newLinesPipeRight() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    plus = \\a b -> a + b\n" +
+        "    multiply = \\a b -> a * b\n" +
+        "in 5 \n" +
+        "|> plus 3\n" +
+        "|> multiply 10").asLong();
+    assertEquals(80l, ret);
+  }
+
+  @Test
+  public void simplePipeLeft() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    plus = \\a b -> a + b\n" +
+        "    multiply = \\a b -> a * b\n" +
+        "in plus 5 <| multiply 10 <| 3").asLong();
+    assertEquals(35l, ret);
+  }
+
+  @Test
+  public void newLinesPipeLeft() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    plus = \\a b -> a + b\n" +
+        "    multiply = \\a b -> a * b\n" +
+        "in plus 5" +
+        "<| multiply 10" +
+        "<| 3").asLong();
+    assertEquals(35l, ret);
   }
 
   //docs state:

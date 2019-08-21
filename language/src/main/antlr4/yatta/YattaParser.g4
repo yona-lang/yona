@@ -65,8 +65,9 @@ expression : PARENS_L expression PARENS_R                                       
            | left=expression op=(OP_PLUS | OP_MINUS) right=expression                                    #additiveExpression
            | left=expression op=(OP_LEFTSHIFT | OP_RIGHTSHIFT | OP_ZEROFILL_RIGHTSHIFT) right=expression #binaryShiftExpression
            | left=expression op=(OP_GTE | OP_LTE| OP_GT | OP_LT | OP_EQ | OP_NEQ) right=expression       #comparativeExpression
-           | left=expression op=(OP_CONS_L | OP_CONS_R) right=expression                                 #consExpression
-           | left=expression OP_JOIN right=expression                                                    #joinExpression
+           | <assoc=right> left=expression OP_CONS_L right=expression                                    #consLeftExpression
+           | left=expression OP_CONS_R right=expression                                                  #consRightExpression
+           | <assoc=right> left=expression OP_JOIN right=expression                                      #joinExpression
            | left=expression OP_BIN_AND right=expression                                                 #bitwiseAndExpression
            | left=expression OP_BIN_XOR right=expression                                                 #bitwiseXorExpression
            | left=expression VLINE right=expression                                                      #bitwiseOrExpression
@@ -79,10 +80,11 @@ expression : PARENS_L expression PARENS_R                                       
            | apply                                                                                       #functionApplicationExpression
            | caseExpr                                                                                    #caseExpression
            | doExpr                                                                                      #doExpression
-           | lambda                                                                                      #lambdaExpression
            | importExpr                                                                                  #importExpression
            | tryCatchExpr                                                                                #tryCatchExpression
            | raiseExpr                                                                                   #raiseExpression
+           | <assoc=right> left=expression NEWLINE? OP_PIPE_L right=expression                           #pipeLeftExpression
+           | left=expression NEWLINE? OP_PIPE_R right=expression                                         #pipeRightExpression
            ;
 
 
@@ -101,6 +103,7 @@ value : unit
       | sequence
       | symbol
       | identifier
+      | lambda
       ;
 
 patternValue : unit
@@ -118,7 +121,8 @@ moduleAlias : name OP_ASSIGN module NEWLINE? ;
 patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
 fqnAlias : name OP_ASSIGN fqn NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
-apply : call expression* ;
+apply : call funArg* ;
+funArg : value | PARENS_L expression PARENS_R ;
 call : name | moduleCall | nameCall ;
 moduleCall : fqn DOT name ;
 nameCall : var=name DOT fun=name;

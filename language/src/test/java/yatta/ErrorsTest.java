@@ -207,4 +207,16 @@ public class ErrorsTest {
       }
     });
   }
+
+  @Test
+  public void asyncWrongCallbackTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "async \\a b -> a + b");
+      } catch (PolyglotException ex) {
+        assertEquals("async function accepts only functions with zero arguments. Function $lambda-0 expects 2arguments", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
 }

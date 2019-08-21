@@ -138,4 +138,13 @@ public class AsyncTest {
 
     assertEquals("YattaError <random_error>: something happened", ret);
   }
+
+  @Test
+  public void functionAsAPromise() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "   fun = \\a b -> a + b\n" +
+        "   afun = async \\-> fun\n" +
+        "in afun 1 2").asLong();
+    assertEquals(3l, ret);
+  }
 }
