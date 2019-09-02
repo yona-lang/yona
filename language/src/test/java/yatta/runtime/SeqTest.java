@@ -189,10 +189,9 @@ public class SeqTest {
   public void testInsertLastMixed() {
     final Object[] data = data();
     Seq seq = Seq.EMPTY;
-    for (int i = 0; i < data.length; i++) {
-      final Object o = data[i];
+    for (final Object o : data) {
       if (o instanceof Integer) seq = seq.insertLastEncoded(codePointToBytes((Integer) o), 1, true);
-      else if (o instanceof Byte) seq = seq.insertLastEncoded(new byte[]{ (byte) o }, 1, false);
+      else if (o instanceof Byte) seq = seq.insertLastEncoded(new byte[]{(byte) o}, 1, false);
       else seq = seq.insertLast(o);
     }
     for (int i = 0; i < data.length; i++) {
@@ -209,5 +208,93 @@ public class SeqTest {
       else result[i] = (long) i;
     }
     return result;
+  }
+
+  @Test
+  public void testRemoveFirst() {
+    Seq seq = Seq.EMPTY;
+    for (long i = 0; i < N; i++) {
+      seq = seq.insertFirst(i);
+    }
+    while (seq.length() != 0) {
+      Seq newSeq = seq.removeFirst();
+      for (long j = 0; j < seq.length(); j++) {
+        assertEquals(j, seq.lookup(seq.length() - j - 1, null));
+      }
+      for (long j = 0; j < newSeq.length(); j++) {
+        assertEquals(j, newSeq.lookup(newSeq.length() - j - 1, null));
+      }
+      seq = newSeq;
+    }
+  }
+
+  @Test
+  public void testRemoveLast() {
+    Seq seq = Seq.EMPTY;
+    for (long i = 0; i < N; i++) {
+      seq = seq.insertLast(i);
+    }
+    while (seq.length() != 0) {
+      Seq newSeq = seq.removeLast();
+      for (long j = 0; j < seq.length(); j++) {
+        assertEquals(j, seq.lookup(j, null));
+      }
+      for (long j = 0; j < newSeq.length(); j++) {
+        assertEquals(j, newSeq.lookup(j, null));
+      }
+      seq = newSeq;
+    }
+  }
+
+  @Test
+  public void testRemoveFirstEncodedBytes() {
+    Seq seq = Seq.EMPTY;
+    for (int i = 0; i < N; i += 128) {
+      seq = seq.insertLastEncoded(bytes(), 128, false);
+    }
+    for (int j = 0; j < N; j++) {
+      final byte expected = (byte) (j % 128);
+      assertEquals(expected, seq.lookup(0, null));
+      seq = seq.removeFirst();
+    }
+  }
+
+  @Test
+  public void testRemoveLastEncodedBytes() {
+    Seq seq = Seq.EMPTY;
+    for (int i = 0; i < N; i += 128) {
+      seq = seq.insertFirstEncoded(bytes(), 128, false);
+    }
+    for (int j = 0; j < N; j++) {
+      final byte expected = (byte) (127 - (byte) (j % 128));
+      assertEquals(expected, seq.lookup(seq.length() - 1, null));
+      seq = seq.removeLast();
+    }
+  }
+
+  @Test
+  public void testRemoveFirstEncodedUtf8() {
+    Seq seq = Seq.EMPTY;
+    for (int codePoint : CODE_POINTS) {
+      seq = seq.insertLastEncoded(codePointToBytes(codePoint), 1, true);
+    }
+    for (int codePoint : CODE_POINTS) {
+      final byte[] expected = codePointToBytes(codePoint);
+      assertArrayEquals(expected, codePointToBytes((Integer) seq.lookup(0, null)));
+      seq = seq.removeFirst();
+    }
+  }
+
+  @Test
+  public void testRemoveLastEncodedUtf8() {
+    Seq seq = Seq.EMPTY;
+    for (int codePoint : CODE_POINTS) {
+      seq = seq.insertFirstEncoded(codePointToBytes(codePoint), 1, true);
+    }
+    for (int codePoint : CODE_POINTS) {
+      final byte[] expected = codePointToBytes(codePoint);
+      assertArrayEquals(expected, codePointToBytes((Integer) seq.lookup(seq.length() - 1, null)));
+      seq = seq.removeLast();
+    }
   }
 }
