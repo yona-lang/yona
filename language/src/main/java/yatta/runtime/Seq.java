@@ -60,18 +60,18 @@ public final class Seq {
     return treeReplaceFirst(tree, firstChild);
   }
 
-  private static Object[] wrap(Object[] leaf, int depth) {
-    while (depth != 0) {
-      final byte newMetaDepth = (byte) (metaDepth(nodeMeta(leaf)) + 1);
+  private static Object[] wrap(Object[] node, final int depth) {
+    byte nodeDepth = metaDepth(nodeMeta(node));
+    while (nodeDepth != depth) {
+      nodeDepth++;
       final byte[] newMeta;
-      if (nodeIsSpecial(leaf)) {
-        newMeta = metaNew(newMetaDepth, calculateTotalSize(leaf));
+      if (nodeIsSpecial(node)) {
+        newMeta = metaNew(nodeDepth, calculateTotalSize(node));
         metaSetBit(newMeta, 0);
-      } else newMeta = metaNew(newMetaDepth);
-      leaf = nodeNew(newMeta, leaf);
-      depth--;
+      } else newMeta = metaNew(nodeDepth);
+      node = nodeNew(newMeta, node);
     }
-    return leaf;
+    return node;
   }
 
   private static Object[] treeReplaceFirst(final Object[] tree, final Object[] leaf) {
@@ -429,6 +429,25 @@ public final class Seq {
     return prefixSize + rootSize + suffixSize;
   }
 
+  public static Seq catenate(final Seq left, final Seq right) {
+    final byte leftRootDepth = metaDepth(nodeMeta(left.root));
+    Object[] leftTree;
+    if (nodeLength(left.suffix) != 0) {
+      leftTree = tryTreeInsertLast(left.root, left.suffix);
+      if (leftTree == null) leftTree = newLevel(left.root, wrap(left.suffix, leftRootDepth));
+    } else leftTree = left.root;
+    final byte rightRootDepth = metaDepth(nodeMeta(right.root));
+    Object[] rightTree;
+    if (nodeLength(right.prefix) != 0) {
+      rightTree = tryTreeInsertFirst(right.root, right.prefix);
+      if (rightTree == null) rightTree = newLevel(wrap(right.prefix, rightRootDepth), right.root);
+    } else rightTree = right.root;
+    final byte newRootDepth = (byte) Math.max(leftRootDepth, rightRootDepth);
+    final Object[] newRoot = newLevel(wrap(leftTree, newRootDepth), wrap(rightTree, newRootDepth));
+    final long newRootSize = left.rootSize + left.suffixSize + right.prefixSize + right.rootSize;
+    return new Seq(left.prefix, left.prefixSize, newRoot, newRootSize, right.suffix, right.suffixSize);
+  }
+
   private static Object[] nodeNew(final byte[] meta) {
     return new Object[]{ meta };
   }
@@ -566,10 +585,6 @@ public final class Seq {
 
   private static byte metaDepth(final byte[] meta) {
     return meta[0];
-  }
-
-  private static int metaLength(final byte[] meta) {
-    return (meta.length - 3) / 8;
   }
 
   private static long metaDataAt(final byte[] meta, final int idx) {
