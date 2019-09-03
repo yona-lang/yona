@@ -35,8 +35,7 @@ public final class Seq {
   public Seq insertFirst(final Object o) {
     if (nodeLength(prefix) != 16) return new Seq(leafInsertFirst(prefix, o), prefixSize + 1, root, rootSize, suffix, suffixSize);
     final Object[] newPrefix = nodeNew(DEFAULT_LEAF_META, o);
-    Object[] newRoot = tryTreeInsertFirst(root, prefix);
-    if (newRoot == null) newRoot = newLevel(wrap(prefix, metaDepth(nodeMeta(root))), root);
+    final Object[] newRoot = treeInsertFirst(root, prefix);
     return new Seq(newPrefix, 1, newRoot, rootSize + prefixSize, suffix, suffixSize);
   }
 
@@ -48,6 +47,12 @@ public final class Seq {
       metaShiftRight(resultMeta);
     } else resultMeta = leafMeta;
     return nodeCopyInsertFirst(leaf, resultMeta, o);
+  }
+
+  private static Object[] treeInsertFirst(final Object[] tree, final Object[] leaf) {
+    Object[] result = tryTreeInsertFirst(tree, leaf);
+    if (result == null) result = newLevel(wrap(leaf, metaDepth(nodeMeta(tree))), tree);
+    return result;
   }
 
   private static Object[] tryTreeInsertFirst(final Object[] tree, final Object[] leaf) {
@@ -165,13 +170,18 @@ public final class Seq {
   public Seq insertLast(final Object o) {
     if (nodeLength(suffix) != 16) return new Seq(prefix, prefixSize, root, rootSize, leafInsertLast(suffix, o), suffixSize + 1);
     final Object[] newSuffix = nodeNew(DEFAULT_LEAF_META, o);
-    Object[] newRoot = tryTreeInsertLast(root, suffix);
-    if (newRoot == null) newRoot = newLevel(root, wrap(suffix, metaDepth(nodeMeta(root))));
+    final Object[] newRoot = treeInsertLast(root, suffix);
     return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newSuffix, 1);
   }
 
   private static Object[] leafInsertLast(final Object[] leaf, final Object o) {
     return nodeCopyInsertLast(leaf, nodeMeta(leaf), o);
+  }
+
+  private static Object[] treeInsertLast(final Object[] tree, final Object[] leaf) {
+    Object[] result = tryTreeInsertLast(tree, leaf);
+    if (result == null) result = newLevel(tree, wrap(leaf, metaDepth(nodeMeta(tree))));
+    return result;
   }
 
   private static Object[] tryTreeInsertLast(final Object[] tree, final Object[] leaf) {
@@ -430,22 +440,94 @@ public final class Seq {
   }
 
   public static Seq catenate(final Seq left, final Seq right) {
-    final byte leftRootDepth = metaDepth(nodeMeta(left.root));
-    Object[] leftTree;
-    if (nodeLength(left.suffix) != 0) {
-      leftTree = tryTreeInsertLast(left.root, left.suffix);
-      if (leftTree == null) leftTree = newLevel(left.root, wrap(left.suffix, leftRootDepth));
-    } else leftTree = left.root;
-    final byte rightRootDepth = metaDepth(nodeMeta(right.root));
-    Object[] rightTree;
-    if (nodeLength(right.prefix) != 0) {
-      rightTree = tryTreeInsertFirst(right.root, right.prefix);
-      if (rightTree == null) rightTree = newLevel(wrap(right.prefix, rightRootDepth), right.root);
-    } else rightTree = right.root;
-    final byte newRootDepth = (byte) Math.max(leftRootDepth, rightRootDepth);
-    final Object[] newRoot = newLevel(wrap(leftTree, newRootDepth), wrap(rightTree, newRootDepth));
+    final Object[] leftTree = nodeLength(left.suffix) != 0 ? treeInsertLast(left.root, left.suffix) : left.root;
+    final Object[] rightTree = nodeLength(right.prefix) != 0 ? treeInsertFirst(right.root, right.prefix) : right.root;
+    final byte leftDepth = metaDepth(nodeMeta(leftTree));
+    final byte rightDepth = metaDepth(nodeMeta(rightTree));
+    final int leftLength = nodeLength(leftTree);
+    final int rightLength = nodeLength(rightTree);
+    final Object[] newRoot;
+    if (leftLength == 0) {
+      newRoot = rightTree;
+    } else if (rightLength == 0) {
+      newRoot = leftTree;
+    } else if (leftDepth == 1 && rightDepth == 1 && leftLength + rightLength <= 16 ) {
+      newRoot = redistributeDepth1(leftTree, rightTree);
+    } else {
+      final int maxDepth = Math.max(leftDepth, rightDepth);
+      newRoot = newLevel(wrap(leftTree, maxDepth), wrap(rightTree, maxDepth));
+    }
     final long newRootSize = left.rootSize + left.suffixSize + right.prefixSize + right.rootSize;
     return new Seq(left.prefix, left.prefixSize, newRoot, newRootSize, right.suffix, right.suffixSize);
+  }
+
+  private static Object[] redistributeDepth1(final Object[] left, final Object[] right) {
+    final Object[][] buffer = new Object[16][];
+    int nodes = 0;
+    for (int i = 0; i < nodeLength(left); i++) {
+      final Object[] node = (Object[]) nodeDataAt(left, i);
+      buffer[nodes++] = node;
+    }
+    for (int i = 0; i < nodeLength(right); i++) {
+      final Object[] oldL = buffer[nodes - 1];
+      final Object[] oldR = (Object[]) nodeDataAt(right, i);
+      final Object[][] newLR = redistributeDepth0(oldL, oldR);
+      final Object[] newL = newLR[0];
+      final Object[] newR = newLR[1];
+      buffer[nodes - 1] = newL;
+      if (newR != null) buffer[nodes++] = newR;
+    }
+    byte[] resultMeta = DEFAULT_ROOT_META;
+    for (int i = 0; i < nodes; i++) {
+      final Object[] node = buffer[i];
+      if (nodeIsSpecial(node)) {
+        resultMeta = metaCopyInsertLast(resultMeta, calculateTotalSize(node));
+        metaSetBit(resultMeta, i);
+      }
+    }
+    return nodeNew(resultMeta, buffer, nodes);
+  }
+
+  private static Object[][] redistributeDepth0(final Object[] left, final Object[] right) {
+    if (nodeLength(left) == 16) return new Object[][]{ left, right };
+    final Object[] leftResultBuffer = new Object[16];
+    int leftNodes = 0;
+    byte[] leftResultMeta = DEFAULT_LEAF_META;
+    final byte[] leftMeta = nodeMeta(left);
+    int leftMetaDataOffset = 0;
+    for (int i = 0; i < nodeLength(left); i++) {
+      leftResultBuffer[leftNodes] = nodeDataAt(left, i);
+      if (metaTestBit(leftMeta, i)) {
+        leftResultMeta = metaCopyInsertLast(leftResultMeta, metaDataAt(leftMeta, leftMetaDataOffset++));
+        metaSetBit(leftResultMeta, leftNodes);
+      }
+      leftNodes++;
+    }
+    final Object[] rightResultBuffer = new Object[16];
+    int rightNodes = 0;
+    byte[] rightResultMeta = DEFAULT_LEAF_META;
+    final byte[] rightMeta = nodeMeta(right);
+    int rightMetaDataOffset = 0;
+    for (int i = 0; i < nodeLength(right); i++) {
+      if (leftNodes < 16) {
+        leftResultBuffer[leftNodes] = nodeDataAt(right, i);
+        if (metaTestBit(rightMeta, i)) {
+          leftResultMeta = metaCopyInsertLast(leftResultMeta, metaDataAt(rightMeta, rightMetaDataOffset++));
+          metaSetBit(leftResultMeta, leftNodes);
+        }
+        leftNodes++;
+      } else {
+        rightResultBuffer[rightNodes] = nodeDataAt(right, i);
+        if (metaTestBit(rightMeta, i)) {
+          rightResultMeta = metaCopyInsertLast(rightResultMeta, metaDataAt(rightMeta, rightMetaDataOffset++));
+          metaSetBit(rightResultMeta, rightNodes);
+        }
+        rightNodes++;
+      }
+    }
+    final Object[] leftResult = nodeNew(leftResultMeta, leftResultBuffer, leftNodes);
+    final Object[] rightResult = rightNodes == 0 ? null : nodeNew(rightResultMeta, rightResultBuffer, rightNodes);
+    return new Object[][]{ leftResult, rightResult };
   }
 
   private static Object[] nodeNew(final byte[] meta) {
@@ -458,6 +540,13 @@ public final class Seq {
 
   private static Object[] nodeNew(final byte[] meta, final Object first, final Object second) {
     return new Object[]{ meta, first, second };
+  }
+
+  private static Object[] nodeNew(final byte[] meta, final Object[] nodes, final int n) {
+    final Object[] result = new Object[n + 1];
+    result[0] = meta;
+    System.arraycopy(nodes, 0, result, 1, n);
+    return result;
   }
 
   private static Object[] nodeCopyInsertFirst(final Object[] node, final byte[] newMeta, final Object o) {

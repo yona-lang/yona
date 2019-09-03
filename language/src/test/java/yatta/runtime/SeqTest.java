@@ -297,4 +297,53 @@ public class SeqTest {
       seq = seq.removeLast();
     }
   }
+
+  @Test
+  public void testCatenate5() {
+    testCatenate(5);
+  }
+
+  @Test
+  public void testCatenate50() {
+    testCatenate(50);
+  }
+
+  @Test
+  public void testCatenate500() {
+    testCatenate(500);
+  }
+
+  private void testCatenate(final long n) {
+    Seq left = Seq.EMPTY;
+    Seq right = Seq.EMPTY;
+    for (long i = 0; i < n; i++) {
+      if (i < n/2) {
+        left = left.insertLast(i);
+      } else {
+        right = right.insertLast(i);
+      }
+    }
+    final Seq seq = Seq.catenate(left, right);
+    for (long i = 0; i < n; i++) {
+      assertEquals(i, seq.lookup(i, null));
+    }
+  }
+
+  @Test
+  public void testCatenateBytes() {
+    Seq left = Seq.EMPTY;
+    Seq right = Seq.EMPTY;
+    for (int i = 0; i < N; i += 128) {
+      if (i < N/2) {
+        left = left.insertLastEncoded(bytes(), 128, false);
+      } else {
+        right = right.insertLastEncoded(bytes(), 128, false);
+      }
+    }
+    final Seq seq = Seq.catenate(left, right);
+    for (int j = 0; j < N; j++) {
+      final byte expected = (byte) (j % 128);
+      assertEquals(expected, seq.lookup(j, null));
+    }
+  }
 }
