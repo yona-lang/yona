@@ -96,4 +96,10 @@ public class StringTest {
     String ret = context.eval(YattaLanguage.ID, "\"hello\nworld\"").asString();
     assertEquals("hello\nworld", ret);
   }
+
+  @Test
+  void testUnicodeCharacter() {
+    int ret = context.eval(YattaLanguage.ID, "'あ'").asInt();
+    assertEquals('あ', ret);
+  }
 }

@@ -81,6 +81,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
+  public ExpressionNode visitCharacterLiteral(YattaParser.CharacterLiteralContext ctx) {
+    return new CharacterNode(ctx.CHARACTER_LITERAL().getText().codePointAt(1));
+  }
+
+  @Override
   public ConditionNode visitConditionalExpression(YattaParser.ConditionalExpressionContext ctx) {
     ExpressionNode ifNode = ctx.conditional().ifX.accept(this);
     ExpressionNode thenNode = ctx.conditional().thenX.accept(this);

@@ -31,6 +31,12 @@ public class SimpleExpressionTest {
   }
 
   @Test
+  public void charValueTest() {
+    int ret = context.eval(YattaLanguage.ID, "'a'").asInt();
+    assertEquals('a', ret);
+  }
+
+  @Test
   public void byteValueTest() {
     byte ret = context.eval(YattaLanguage.ID, "5b").asByte();
     assertEquals(5, ret);
