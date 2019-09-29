@@ -17,7 +17,7 @@ import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 
 @NodeInfo(shortName = "async")
-public abstract class AsyncNode extends BuiltinNode {
+public abstract class AsyncBuiltin extends BuiltinNode {
   @Specialization
   public Promise async(Function function, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
     if (function.getCardinality() > 0) {
@@ -26,7 +26,7 @@ public abstract class AsyncNode extends BuiltinNode {
     }
 
     Promise promise = new Promise();
-    context.getThreading().submit(() -> {
+    context.threading.submit(() -> {
       try {
         promise.fulfil(dispatch.execute(function), this);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {

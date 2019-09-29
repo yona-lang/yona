@@ -26,6 +26,8 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Context {
   private final TruffleLanguage.Env env;
@@ -37,7 +39,8 @@ public class Context {
   private final BuiltinModules builtinModules;
   private Dictionary symbols = Dictionary.dictionary();
   private Dictionary moduleCache = Dictionary.dictionary();
-  private final Threading threading;
+  public final Threading threading;
+  public final ExecutorService ioExecutor;
 
   public Context(YattaLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
     this.env = env;
@@ -48,6 +51,7 @@ public class Context {
     this.builtins = new Builtins();
     this.builtinModules = new BuiltinModules();
     this.threading = new Threading(env);
+    this.ioExecutor = Executors.newCachedThreadPool();
 
     installBuiltins(externalBuiltins);
     installBuiltinModules();
@@ -59,9 +63,10 @@ public class Context {
     }
 
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
-    this.builtins.register(SleepNodeFactory.getInstance());
-    this.builtins.register(AsyncNodeFactory.getInstance());
+    this.builtins.register(SleepBuiltinFactory.getInstance());
+    this.builtins.register(AsyncBuiltinFactory.getInstance());
     this.builtins.register(ToStringBuiltinFactory.getInstance());
+    this.builtins.register(SystemBuiltinFactory.getInstance());
   }
 
   private void installBuiltinModules() {
@@ -71,10 +76,6 @@ public class Context {
 
   public TruffleLanguage.Env getEnv() {
     return env;
-  }
-
-  public Threading getThreading() {
-    return threading;
   }
 
   /**

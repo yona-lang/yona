@@ -42,7 +42,7 @@ public final class MainExpressionNode extends ExpressionNode {
 
       return executeIfFunction(result, frame);
     } finally {
-      Context.getCurrent().getThreading().dispose();
+      Context.getCurrent().threading.dispose();
     }
   }
 

@@ -44,7 +44,7 @@ public class YattaLanguage extends TruffleLanguage<Context> {
     try {
       rootCallTarget = YattaParser.parseYatta(this, source);
     } catch (ParseError e) {
-      getCurrentContext().getThreading().dispose();
+      getCurrentContext().threading.dispose();
       throw e;
     }
 

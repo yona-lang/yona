@@ -55,6 +55,7 @@ public final class TupleNode extends ExpressionNode {
 
     for (int i = 0; i < expressions.length; i++) {
       results[i] = expressions[i].executeGeneric(frame);
+      // TODO check if promise
     }
 
     return new Tuple(results);

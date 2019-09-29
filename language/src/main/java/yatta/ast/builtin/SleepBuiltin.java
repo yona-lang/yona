@@ -9,11 +9,11 @@ import yatta.runtime.Unit;
 import yatta.runtime.async.Promise;
 
 @NodeInfo(shortName = "sleep")
-public abstract class SleepNode extends BuiltinNode {
+public abstract class SleepBuiltin extends BuiltinNode {
   @Specialization
   public Promise sleep(long millis, @CachedContext(YattaLanguage.class) Context context) {
     Promise promise = new Promise();
-    context.getThreading().submit(() -> {
+    context.threading.submit(() -> {
       try {
         Thread.sleep(millis);
       } catch (InterruptedException ignored) { }
