@@ -1,6 +1,5 @@
 package yatta.parser;
 
-import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -12,7 +11,6 @@ import yatta.ast.ExpressionNode;
 import yatta.ast.MainExpressionNode;
 import yatta.ast.StringPartsNode;
 import yatta.ast.binary.*;
-import yatta.ast.builtin.BuiltinNode;
 import yatta.ast.call.InvokeNode;
 import yatta.ast.call.ModuleCallNode;
 import yatta.ast.controlflow.PipeLeftNode;
@@ -39,10 +37,10 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public ExpressionNode visitInput(YattaParser.InputContext ctx) {
-    ExpressionNode functionBodyNode = new MainExpressionNode(ctx.expression().accept(this));
+    ExpressionNode functionBodyNode = new MainExpressionNode(language, ctx.expression().accept(this), moduleStack.toArray(new FQNNode[]{}));
     functionBodyNode.addRootTag();
 
-    FunctionNode mainFunctionNode = withSourceSection(ctx, new FunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(), functionBodyNode));
+    ModuleFunctionNode mainFunctionNode = withSourceSection(ctx, new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), functionBodyNode));
     return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new FQNNode[] {}));
   }
 
@@ -405,6 +403,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public ModuleNode visitModule(YattaParser.ModuleContext ctx) {
+    FrameDescriptor frameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
     FQNNode moduleFQN = visitFqn(ctx.fqn());
     moduleStack.push(moduleFQN);
     NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());
@@ -499,7 +498,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       caseNode.addRootTag();
       caseNode.setIsTail(true);
 
-      ModuleFunctionNode functionNode = new ModuleFunctionNode(language, functionSourceSections.get(functionName), functionName, cardinality, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode);
+      FunctionNode functionNode = new FunctionNode(language, functionSourceSections.get(functionName), functionName, cardinality, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode);
       functions.add(functionNode);
     }
 
@@ -817,27 +816,14 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     if (callCtx.moduleCall() != null) {
       FQNNode fqnNode = visitFqn(callCtx.moduleCall().fqn());
       String functionName = callCtx.moduleCall().name().getText();
-
-      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltinModules().lookup(fqnNode, functionName);
-
-      if (builtinFunction != null) {
-        return builtinFunction.createNode((Object) argNodes);
-      } else {
-        return withSourceSection(ctx, new ModuleCallNode(language, fqnNode, functionName, argNodes, moduleStackArray));
-      }
+      return withSourceSection(ctx, new ModuleCallNode(language, fqnNode, functionName, argNodes, moduleStackArray));
     } else if (callCtx.nameCall() != null) {
       SimpleIdentifierNode nameNode = new SimpleIdentifierNode(callCtx.nameCall().var.getText());
       String functionName = callCtx.nameCall().fun.getText();
       return withSourceSection(ctx, new ModuleCallNode(language, nameNode, functionName, argNodes, moduleStackArray));
     } else {
       String functionName = callCtx.name().getText();
-      NodeFactory<? extends BuiltinNode> builtinFunction = language.getContextReference().get().getBuiltins().lookup(functionName);
-
-      if (builtinFunction != null) {
-        return builtinFunction.createNode((Object) argNodes);
-      } else {
-        return withSourceSection(ctx, new InvokeNode(language, withSourceSection(callCtx.name(), new IdentifierNode(language, functionName, moduleStackArray)), argNodes, moduleStackArray));
-      }
+      return withSourceSection(ctx, new InvokeNode(language, withSourceSection(callCtx.name(), new IdentifierNode(language, functionName, moduleStackArray)), argNodes, moduleStackArray));
     }
   }
 

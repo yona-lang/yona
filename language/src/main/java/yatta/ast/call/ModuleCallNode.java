@@ -21,10 +21,10 @@ public final class ModuleCallNode extends ExpressionNode {
   private ExpressionNode[] argumentNodes;
   private String functionName;
   @Children private FQNNode[] moduleStack;
-  private final YattaLanguage yattaLanguage;
+  private final YattaLanguage language;
 
-  public ModuleCallNode(YattaLanguage yattaLanguage, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
-    this.yattaLanguage = yattaLanguage;
+  public ModuleCallNode(YattaLanguage language, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
+    this.language = language;
     this.nameNode = nameNode;
     this.functionName = functionName;
     this.argumentNodes = argumentNodes;
@@ -62,14 +62,14 @@ public final class ModuleCallNode extends ExpressionNode {
     try {
       module = nameNode.executeModule(frame);
     } catch (UnexpectedResultException ex) {
-      throw new YattaException("Unexpected error while invoking a module function: " + ex.getMessage(), this);
+      throw new YattaException("Unexpected error while invoking a module function: " + ex.getMessage(), ex, this);
     }
 
     if (!module.getExports().contains(functionName)) {
       throw new YattaException("Function " + functionName + " is not present in " + module, this);
     } else {
       Function function = module.getFunctions().get(functionName);
-      InvokeNode invokeNode = new InvokeNode(yattaLanguage, function, argumentNodes, moduleStack);
+      InvokeNode invokeNode = new InvokeNode(language, function, argumentNodes, moduleStack);
       return invokeNode.executeGeneric(frame);
     }
   }

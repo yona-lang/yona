@@ -14,7 +14,7 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * Represents a yatta function. On the Truffle level, a callable element is represented by a
+ * Represents a Yatta function. On the Truffle level, a callable element is represented by a
  * {@link RootCallTarget call target}. This class encapsulates a call target, and adds version
  * support: functions in Yatta can be redefined, i.e. changed at run time. When a function is
  * redefined, the call target managed by this function object is changed (and {@link #callTarget} is

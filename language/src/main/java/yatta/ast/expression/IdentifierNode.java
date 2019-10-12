@@ -21,7 +21,8 @@ public final class IdentifierNode extends ExpressionNode {
   private final String name;
   private boolean functionInvoked;
   private final YattaLanguage language;
-  @Children private FQNNode[] moduleStack;
+  @Children
+  private FQNNode[] moduleStack;
 
   public IdentifierNode(YattaLanguage language, String name, FQNNode[] moduleStack) {
     this.name = name;

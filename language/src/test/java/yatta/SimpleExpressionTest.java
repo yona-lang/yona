@@ -485,6 +485,11 @@ public class SimpleExpressionTest {
     assertEquals(35l, ret);
   }
 
+  @Test
+  public void simplePrintlnTest() {
+    context.eval(YattaLanguage.ID, "println \"hello\"");
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with

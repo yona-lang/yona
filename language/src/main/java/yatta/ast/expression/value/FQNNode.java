@@ -1,11 +1,17 @@
 package yatta.ast.expression.value;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.YattaException;
 import yatta.ast.ExpressionNode;
+import yatta.ast.local.ReadLocalVariableNode;
+import yatta.ast.local.ReadLocalVariableNodeGen;
 import yatta.runtime.Context;
 import yatta.runtime.Module;
+import yatta.runtime.UninitializedFrameSlotException;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -48,7 +54,11 @@ public final class FQNNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return context.lookupModule(packageParts, moduleName, this);
+    try {
+      return executeModule(frame);
+    } catch (UnexpectedResultException e) {
+      return context.lookupModule(packageParts, moduleName, this);
+    }
   }
 
   @Override
@@ -58,6 +68,17 @@ public final class FQNNode extends ExpressionNode {
 
   @Override
   public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
+    try {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
+      FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(Context.getFQN(packageParts, moduleName));
+      if (frameSlot != null) {
+        ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+        return node.executeModule(frame);
+      }
+    } catch (UninitializedFrameSlotException | UnexpectedResultException e) {
+      throw new YattaException("Unexpected error while loading a module " + moduleName, e, this);
+    }
+
     return context.lookupModule(packageParts, moduleName, this);
   }
 }

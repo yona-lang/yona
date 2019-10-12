@@ -30,6 +30,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Context {
+  public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").build();
+
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
   private final PrintWriter output;
@@ -216,7 +218,7 @@ public class Context {
   }
 
   public CallTarget parse(Source source) {
-    return env.parse(source);
+    return env.parsePublic(source);
   }
 
   public TruffleObject getPolyglotBindings() {

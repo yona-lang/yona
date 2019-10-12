@@ -17,6 +17,7 @@ options { tokenVocab=YattaLexer; }
     import yatta.ast.FunctionRootNode;
     import yatta.parser.ParseError;
     import yatta.parser.ParserVisitor;
+    import yatta.runtime.UninitializedFrameSlot;
 }
 
 @parser::members
@@ -51,7 +52,7 @@ options { tokenVocab=YattaLexer; }
         parser.addErrorListener(listener);
         parser.source = source;
         ExpressionNode rootExpression = new ParserVisitor(language, source).visit(parser.input());
-        FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(), rootExpression, source.createSection(1), "root");
+        FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), rootExpression, source.createSection(1), "root");
         return Truffle.getRuntime().createCallTarget(rootNode);
     }
 }
@@ -76,7 +77,6 @@ expression : PARENS_L expression PARENS_R                                       
            | let                                                                                         #letExpression
            | conditional                                                                                 #conditionalExpression
            | value                                                                                       #valueExpression
-           | module                                                                                      #moduleExpression
            | apply                                                                                       #functionApplicationExpression
            | caseExpr                                                                                    #caseExpression
            | doExpr                                                                                      #doExpression
@@ -103,7 +103,9 @@ value : unit
       | sequence
       | symbol
       | identifier
+      | fqn
       | lambda
+      | module
       ;
 
 patternValue : unit
