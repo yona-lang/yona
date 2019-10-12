@@ -19,14 +19,12 @@ import yatta.runtime.*;
 @NodeInfo
 public final class IdentifierNode extends ExpressionNode {
   private final String name;
-  private boolean functionInvoked;
   private final YattaLanguage language;
   @Children
   private FQNNode[] moduleStack;
 
   public IdentifierNode(YattaLanguage language, String name, FQNNode[] moduleStack) {
     this.name = name;
-    this.functionInvoked = false;
     this.language = language;
     this.moduleStack = moduleStack;
   }
@@ -57,7 +55,6 @@ public final class IdentifierNode extends ExpressionNode {
             if (module.getFunctions().containsKey(name)) {
               InvokeNode invokeNode = new InvokeNode(language, module.getFunctions().get(name), new ExpressionNode[]{}, moduleStack);
               this.replace(invokeNode);
-              functionInvoked = true;
               return invokeNode.executeGeneric(frame);
             }
           } catch (UnexpectedResultException e) {
@@ -70,26 +67,23 @@ public final class IdentifierNode extends ExpressionNode {
 
       throw new YattaException("Identifier '" + name + "' not found in the current scope", this);
     }
+
     ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
 
-    if (functionInvoked) {
-      return node.executeGeneric(frame);
-    } else {
-      try {
-        Function function = node.executeFunction(frame);
+    try {
+      Function function = node.executeFunction(frame);
 
-        if (function.getCardinality() == 0) {
-          InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(name), new ExpressionNode[]{}, moduleStack);
-          this.replace(invokeNode);
-          functionInvoked = true;
-          return invokeNode.executeGeneric(frame);
-        }
-      } catch (UnexpectedResultException e) {
-        this.replace(new SimpleIdentifierNode(name));
+      if (function.getCardinality() == 0) {
+        InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(name), new ExpressionNode[]{}, moduleStack);
+        this.replace(invokeNode);
+        return invokeNode.executeGeneric(frame);
       }
-
-      return node.executeGeneric(frame);
+    } catch (UnexpectedResultException e) {
+      this.replace(new SimpleIdentifierNode(name));
     }
+
+    this.replace(node);
+    return node.executeGeneric(frame);
   }
 
   public boolean isBound(VirtualFrame frame) {

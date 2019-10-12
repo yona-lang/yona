@@ -84,6 +84,7 @@ public final class FQNNode extends ExpressionNode {
       FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(fqn);
       if (frameSlot != null) {
         ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+        this.replace(node);
         return node.executeModule(frame);
       }
     } catch (UninitializedFrameSlotException | UnexpectedResultException e) {
