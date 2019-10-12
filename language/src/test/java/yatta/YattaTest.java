@@ -77,7 +77,6 @@ public class YattaTest {
             context.close();
           });
 
-          if(baseName.equals("fread"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;
