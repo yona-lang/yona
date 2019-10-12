@@ -34,7 +34,7 @@ public class YattaLanguage extends TruffleLanguage<Context> {
 
   @Override
   protected Context createContext(Env env) {
-    return new Context(this, env, new ArrayList<>(EXTERNAL_BUILTINS));
+    return new Context(this, env);
   }
 
   @Override

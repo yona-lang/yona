@@ -1,0 +1,1 @@
+Module{fqn=File, exports=[open, readline], functions={open=open, readline=readline}}

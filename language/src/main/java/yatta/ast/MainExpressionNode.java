@@ -1,6 +1,6 @@
 package yatta.ast;
 
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -38,18 +38,17 @@ public final class MainExpressionNode extends ExpressionNode {
         '}';
   }
 
-  private void writeBuiltinsOnStack(VirtualFrame frame, Builtins builtins) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
+  private void writeBuiltinsOnStack(VirtualFrame frame, Builtins builtins, Context context) {
     builtins.builtins.forEach((name, nodeFactory) -> {
-      int argumentsCount = nodeFactory.getExecutionSignature().size();
-      ModuleFunctionNode functionNode = new ModuleFunctionNode(language, Context.BUILTIN_SOURCE.createUnavailableSection(), name, argumentsCount, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(nodeFactory));
+      int cardinality = nodeFactory.getExecutionSignature().size();
+      ModuleFunctionNode functionNode = new ModuleFunctionNode(language, Context.BUILTIN_SOURCE.createUnavailableSection(), name, cardinality, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(nodeFactory));
 
       InvokeNode invokeNode = new InvokeNode(language, functionNode, new ExpressionNode[]{}, moduleStack);
-      frame.setObject(frame.getFrameDescriptor().addFrameSlot(name), invokeNode.executeGeneric(frame));
+      context.insertGlobal(name, invokeNode.executeGeneric(frame));
     });
-  }
+}
 
-  public void writeModuleOnStack(VirtualFrame frame, String fqn, Builtins builtins) {
+  public void writeModuleOnStack(VirtualFrame frame, String fqn, Builtins builtins, Context context) {
     final List<String> exports = new ArrayList<>(builtins.builtins.size());
     final List<Function> functions = new ArrayList<>(builtins.builtins.size());
 
@@ -65,16 +64,18 @@ public final class MainExpressionNode extends ExpressionNode {
     });
 
     Module module = new Module(fqn, exports, functions);
-    frame.setObject(frame.getFrameDescriptor().addFrameSlot(fqn), module);
+    context.insertGlobal(fqn, module);
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     try {
-      Context context = Context.getCurrent();
-      writeBuiltinsOnStack(frame, context.getBuiltins());
-      context.getBuiltinModules().builtins.forEach((fqn, builtins) -> {
-        writeModuleOnStack(frame, fqn, builtins);
+      TruffleLanguage.ContextReference<Context> contextRef = lookupContextReference(YattaLanguage.class);
+      Context context = contextRef.get();
+
+      writeBuiltinsOnStack(frame, context.builtins, context);
+      context.builtinModules.builtins.forEach((fqn, builtins) -> {
+        writeModuleOnStack(frame, fqn, builtins, context);
       });
 
       Object result = expressionNode.executeGeneric(frame);

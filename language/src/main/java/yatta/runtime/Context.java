@@ -3,7 +3,6 @@ package yatta.runtime;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
@@ -25,7 +24,6 @@ import java.io.PrintWriter;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -37,14 +35,15 @@ public class Context {
   private final PrintWriter output;
   private final YattaLanguage language;
   private final AllocationReporter allocationReporter;  // TODO use this
-  private final Builtins builtins;
-  private final BuiltinModules builtinModules;
+  public final Builtins builtins;
+  public final BuiltinModules builtinModules;
   private Dictionary symbols = Dictionary.dictionary();
   private Dictionary moduleCache = Dictionary.dictionary();
   public final Threading threading;
   public final ExecutorService ioExecutor;
+  public Dictionary globals = Dictionary.dictionary();
 
-  public Context(YattaLanguage language, TruffleLanguage.Env env, List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
+  public Context(YattaLanguage language, TruffleLanguage.Env env) {
     this.env = env;
     this.input = new BufferedReader(new InputStreamReader(env.in()));
     this.output = new PrintWriter(env.out(), true);
@@ -55,15 +54,11 @@ public class Context {
     this.threading = new Threading(env);
     this.ioExecutor = Executors.newCachedThreadPool();
 
-    installBuiltins(externalBuiltins);
+    installBuiltins();
     installBuiltinModules();
   }
 
-  private void installBuiltins(List<NodeFactory<? extends BuiltinNode>> externalBuiltins) {
-    for (NodeFactory<? extends BuiltinNode> externalBuiltin : externalBuiltins) {
-      this.builtins.register(externalBuiltin);
-    }
-
+  private void installBuiltins() {
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
     this.builtins.register(SleepBuiltinFactory.getInstance());
     this.builtins.register(AsyncBuiltinFactory.getInstance());
@@ -229,14 +224,6 @@ public class Context {
     return YattaLanguage.getCurrentContext();
   }
 
-  public Builtins getBuiltins() {
-    return builtins;
-  }
-
-  public BuiltinModules getBuiltinModules() {
-    return builtinModules;
-  }
-
   public Symbol symbol(String name) {
     Object symbol = symbols.lookup(name);
     if (symbol == Unit.INSTANCE) {
@@ -245,5 +232,9 @@ public class Context {
     }
 
     return (Symbol) symbol;
+  }
+
+  public void insertGlobal(Object key, Object value) {
+    globals = globals.insert(key, value);
   }
 }

@@ -1,17 +1,20 @@
 package yatta.ast.expression.value;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
+import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
 import yatta.runtime.Context;
 import yatta.runtime.Module;
 import yatta.runtime.UninitializedFrameSlotException;
+import yatta.runtime.Unit;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -69,8 +72,16 @@ public final class FQNNode extends ExpressionNode {
   @Override
   public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
     try {
+      String fqn = Context.getFQN(packageParts, moduleName);
+      TruffleLanguage.ContextReference<Context> context = lookupContextReference(YattaLanguage.class);
+      Object globalValue = context.get().globals.lookup(fqn);
+      if (!Unit.INSTANCE.equals(globalValue)) {
+        this.replace(new AnyValueNode(globalValue));
+        return (Module) globalValue;
+      }
+
       CompilerDirectives.transferToInterpreterAndInvalidate();
-      FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(Context.getFQN(packageParts, moduleName));
+      FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(fqn);
       if (frameSlot != null) {
         ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
         return node.executeModule(frame);

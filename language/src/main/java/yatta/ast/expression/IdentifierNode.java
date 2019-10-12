@@ -1,6 +1,7 @@
 package yatta.ast.expression;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -9,12 +10,11 @@ import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.call.InvokeNode;
+import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.expression.value.FQNNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
-import yatta.runtime.Function;
-import yatta.runtime.Module;
-import yatta.runtime.UninitializedFrameSlotException;
+import yatta.runtime.*;
 
 @NodeInfo
 public final class IdentifierNode extends ExpressionNode {
@@ -40,6 +40,13 @@ public final class IdentifierNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
+    TruffleLanguage.ContextReference<Context> context = lookupContextReference(YattaLanguage.class);
+    Object globalValue = context.get().globals.lookup(name);
+    if (!Unit.INSTANCE.equals(globalValue)) {
+      this.replace(new AnyValueNode(globalValue));
+      return globalValue;
+    }
+
     CompilerDirectives.transferToInterpreterAndInvalidate();
     FrameSlot frameSlot = getFrameSlot(frame);
     if (frameSlot == null) {
