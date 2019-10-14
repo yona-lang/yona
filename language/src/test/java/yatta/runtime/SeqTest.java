@@ -3,6 +3,7 @@ package yatta.runtime;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.util.*;
 
@@ -476,13 +477,14 @@ public class SeqTest {
   @Test
   public void testAsChars() {
     Seq seq = EMPTY;
+    //noinspection MismatchedQueryAndUpdateOfStringBuilder
     StringBuilder sb = new StringBuilder();
     for (int codePoint : CODE_POINTS) {
       seq = seq.insertLast(codePoint);
       sb.appendCodePoint(codePoint);
     }
     CharBuffer buffer = CharBuffer.allocate(CODE_POINTS.length * 2);
-    seq.asChars(buffer);
+    assertTrue(seq.asChars(buffer));
     buffer.limit(buffer.position());
     buffer.position(0);
     assertOfIntEquals(sb.codePoints().iterator(), buffer.codePoints().iterator());
@@ -496,5 +498,17 @@ public class SeqTest {
     assertFalse(actual.hasNext());
   }
 
-
+  @Test
+  public void testAsBytes() {
+    Seq seq = EMPTY;
+    for (byte b : BYTES) {
+      seq = seq.insertLast(b);
+    }
+    ByteBuffer buffer = ByteBuffer.allocate(BYTES.length);
+    assertTrue(seq.asBytes(buffer));
+    buffer.position(0);
+    for (int i = 0; i < BYTES.length; i++) {
+      assertEquals(BYTES[i], buffer.get(i));
+    }
+  }
 }

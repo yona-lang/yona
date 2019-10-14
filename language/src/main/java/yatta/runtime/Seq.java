@@ -8,7 +8,9 @@ import com.oracle.truffle.api.nodes.Node;
 import yatta.runtime.exceptions.BadArgException;
 
 import java.lang.reflect.Array;
+import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.PrimitiveIterator;
 
 public final class Seq {
@@ -323,6 +325,48 @@ public final class Seq {
       buffer.put(Character.highSurrogate(codePoint));
       buffer.put(Character.lowSurrogate(codePoint));
     }
+  }
+
+  public boolean asBytes(final ByteBuffer buffer) {
+    if (!appendBytes(buffer, prefix, 0)) {
+      return false;
+    }
+    if (!appendBytes(buffer, root, shift)) {
+      return false;
+    }
+    //noinspection RedundantIfStatement
+    if (!appendBytes(buffer, suffix, 0)) {
+      return false;
+    }
+    return true;
+  }
+
+  static boolean appendBytes(final ByteBuffer buffer, final Object node, final int shift) {
+    final int len = nodeLength(node);
+    if (shift == 0) {
+      if (node instanceof byte[]) {
+        final byte[] bytes = (byte[]) node;
+        buffer.put(bytes, 1, bytes.length - 1);
+      } else {
+        for (int i = 0; i < len; i++) {
+          Object o = nodeLookup(node, i);
+          if (o instanceof Integer) {
+            buffer.put(new String(new int[]{ (Integer) o }, 0, 1).getBytes(StandardCharsets.UTF_8));
+          } else if (o instanceof Byte) {
+            buffer.put((Byte) o);
+          } else {
+            return false;
+          }
+        }
+      }
+    } else {
+      for (int i = 0; i < len; i++) {
+        if (!appendBytes(buffer, nodeLookup(node, i), shift - BITS)) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   @Override
