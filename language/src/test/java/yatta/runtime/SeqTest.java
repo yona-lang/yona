@@ -3,14 +3,15 @@ package yatta.runtime;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
+import java.nio.CharBuffer;
+import java.util.*;
 
 import static org.junit.Assert.*;
 import static yatta.runtime.Seq.*;
 
 public class SeqTest {
 
-  private static final int N = 262209;
+  private static final int N = 16777281;
 
   private static final byte[] BYTES = bytes();
   private static final int[] CODE_POINTS = codePoints();
@@ -25,13 +26,14 @@ public class SeqTest {
   }
 
   private static int[] codePoints() {
-    final ArrayList<Integer> list = new ArrayList<>();
-    for (int i = 0; i < 0x10ffff; i++) {
-      if (Character.isValidCodePoint(i)) list.add(i);
+    //noinspection MismatchedQueryAndUpdateOfStringBuilder
+    StringBuilder builder = new StringBuilder();
+    for (int i = 0; i < Integer.MAX_VALUE; i++) {
+      if (Character.isValidCodePoint(i)) {
+        builder.appendCodePoint(i);
+      }
     }
-    final int[] result = new int[list.size()];
-    for (int i = 0; i < result.length; i++) result[i] = list.get(i);
-    return result;
+    return builder.codePoints().toArray();
   }
 
   @Test
@@ -448,5 +450,51 @@ public class SeqTest {
       seq = seq.removeLast(null);
     }
   }
+
+  @Test
+  public void testFromCharSequence() {
+    StringBuilder sb = new StringBuilder();
+    for (int codePoint : CODE_POINTS) {
+      sb.appendCodePoint(codePoint);
+    }
+    Seq seq = Seq.fromCharSequence(sb);
+    assertOfIntEquals(sb.codePoints().iterator(), new PrimitiveIterator.OfInt() {
+      long offset = 0;
+
+      @Override
+      public int nextInt() {
+        return (int) seq.lookup(offset++, null);
+      }
+
+      @Override
+      public boolean hasNext() {
+        return offset < seq.length();
+      }
+    });
+  }
+
+  @Test
+  public void testAsChars() {
+    Seq seq = EMPTY;
+    StringBuilder sb = new StringBuilder();
+    for (int codePoint : CODE_POINTS) {
+      seq = seq.insertLast(codePoint);
+      sb.appendCodePoint(codePoint);
+    }
+    CharBuffer buffer = CharBuffer.allocate(CODE_POINTS.length * 2);
+    seq.asChars(buffer);
+    buffer.limit(buffer.position());
+    buffer.position(0);
+    assertOfIntEquals(sb.codePoints().iterator(), buffer.codePoints().iterator());
+  }
+
+  static void assertOfIntEquals(PrimitiveIterator.OfInt expected, PrimitiveIterator.OfInt actual) {
+    while (expected.hasNext() && actual.hasNext()) {
+      assertEquals(expected.nextInt(), actual.nextInt());
+    }
+    assertFalse(expected.hasNext());
+    assertFalse(actual.hasNext());
+  }
+
 
 }

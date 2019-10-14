@@ -8,6 +8,8 @@ import com.oracle.truffle.api.nodes.Node;
 import yatta.runtime.exceptions.BadArgException;
 
 import java.lang.reflect.Array;
+import java.nio.CharBuffer;
+import java.util.PrimitiveIterator;
 
 public final class Seq {
   static final String IOOB_MSG = "Index out of bounds: %d";
@@ -267,34 +269,33 @@ public final class Seq {
     return prefixSize + rootSize + suffixSize;
   }
 
-  /*public CharSequence asCharSequence(final Node caller) {
-    StringBuilder result = new StringBuilder((int) length());
-    if (!appendCodePoints(prefix, 0, result)) {
-      throw new NoMatchException(caller);
+  public boolean asChars(final CharBuffer buffer) {
+    if (!appendCodePoints(buffer, prefix, 0)) {
+      return false;
     }
-    if (!appendCodePoints(root, shift, result)) {
-      throw new NoMatchException(caller);
+    if (!appendCodePoints(buffer, root, shift)) {
+      return false;
     }
-    if (!appendCodePoints(suffix, 0, result)) {
-      throw new NoMatchException(caller);
+    //noinspection RedundantIfStatement
+    if (!appendCodePoints(buffer, suffix, 0)) {
+      return false;
     }
-    return result;
+    return true;
   }
 
-  private static boolean appendCodePoints(final Object node, final int shift, final StringBuilder result) {
+  static boolean appendCodePoints(final CharBuffer buffer, final Object node, final int shift) {
     final int len = nodeLength(node);
     if (shift == 0) {
       if (node instanceof byte[]) {
         final byte[] bytes = (byte[]) node;
-        if (decodeIsUtf8(bytes[0])) {
-          int offset = 1;
-          for (int i = 0; i < len; i++) {
-            final int codePoint = Util.codePointAt(bytes, offset);
-            result.appendCodePoint(codePoint);
-            offset += Util.codePointLen(codePoint);
-          }
-        } else {
+        if (!decodeIsUtf8(bytes[0])) {
           return false;
+        }
+        int offset = 1;
+        for (int i = 0; i < len; i++) {
+          final int codePoint = Util.codePointAt(bytes, offset);
+          appendCodePoint(buffer, codePoint);
+          offset += Util.codePointLen(codePoint);
         }
       } else {
         for (int i = 0; i < len; i++) {
@@ -302,18 +303,47 @@ public final class Seq {
           if (!(o instanceof Integer)) {
             return false;
           }
-          result.appendCodePoint((Integer) o);
+          appendCodePoint(buffer, (Integer) o);
         }
       }
     } else {
       for (int i = 0; i < len; i++) {
-        if (!appendCodePoints(nodeLookup(node, i), shift - BITS, result)) {
+        if (!appendCodePoints(buffer, nodeLookup(node, i), shift - BITS)) {
           return false;
         }
       }
     }
     return true;
-  }*/
+  }
+
+  static void appendCodePoint(final CharBuffer buffer, final int codePoint) {
+    if (Character.isBmpCodePoint(codePoint)) {
+      buffer.put((char) codePoint);
+    } else {
+      buffer.put(Character.highSurrogate(codePoint));
+      buffer.put(Character.lowSurrogate(codePoint));
+    }
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == this) {
+      return true;
+    }
+    if (!(o instanceof Seq)) {
+      return false;
+    }
+    Seq that = (Seq) o;
+    if (this.length() != that.length()) {
+      return false;
+    }
+    for (int i = 0; i < prefixSize + rootSize + suffixSize; i++) {
+      if (!this.lookup(i, null).equals(that.lookup(i, null))) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   static Object wrap(final Object leaf, final int shift) {
     return shift == 0 ? leaf : newNonLeaf(wrap(leaf, shift - BITS), shift - BITS);
@@ -411,9 +441,14 @@ public final class Seq {
   }
 
   static byte[] newLeaf(final ByteSource source, final int n) {
-    final byte[] result = new byte[n + 1];
+    final byte[] result = source.next(1, n);
     result[0] = encode(n, false);
-    source.next(result, 1, n);
+    return result;
+  }
+
+  static byte[] newLeaf(final Utf8Source source, final int n) {
+    final byte[] result = source.next(1, n);
+    result[0] = encode(n, true);
     return result;
   }
 
@@ -692,9 +727,39 @@ public final class Seq {
   }
 
   public static abstract class ByteSource {
-
     abstract int remaining();
 
-    abstract void next(final byte[] destination, final int offset, final int n);
+    abstract byte[] next(final int offset, final int n);
+  }
+
+  public static Seq fromUtf8(final Utf8Source source) {
+    int shift = BITS;
+    Object[] root = EMPTY_NODE;
+    for (int remaining = source.remaining(); remaining / MAX_NODE_LENGTH != 0; remaining -= MAX_NODE_LENGTH) {
+      byte[] leaf = newLeaf(source, MAX_NODE_LENGTH);
+      Object[] newRoot = treeTryInsertLast(root, leaf, shift);
+      if (newRoot == null) {
+        newRoot = newNonLeaf(root, wrap(leaf, shift), shift);
+        shift += BITS;
+      }
+      root = newRoot;
+    }
+    Object[] suffix = objectify(newLeaf(source, source.remaining() % MAX_NODE_LENGTH));
+    return new Seq(EMPTY_NODE, 0, root, nodeSize(root, shift), suffix, nodeLength(suffix), shift);
+  }
+
+  public static abstract class Utf8Source {
+    abstract int remaining();
+
+    abstract byte[] next(final int offset, final int n);
+  }
+
+  public static Seq fromCharSequence(final CharSequence source) {
+    Seq result = Seq.EMPTY;
+    final PrimitiveIterator.OfInt iterator = source.codePoints().iterator();
+    while (iterator.hasNext()) {
+      result = result.insertLast(iterator.next());
+    }
+    return result;
   }
 }
