@@ -99,6 +99,39 @@ public final class Util {
     throw new AssertionError();
   }
 
+  public static int offsetUtf8(final byte[] bytes, int offset, int idx) {
+    while (idx > 0) {
+      switch ((0xf0 & bytes[offset]) >>> 4) {
+        case 0b0000:
+        case 0b0001:
+        case 0b0010:
+        case 0b0011:
+        case 0b0100:
+        case 0b0101:
+        case 0b0110:
+        case 0b0111:
+          offset += 1;
+          break;
+        case 0b1000:
+        case 0b1001:
+        case 0b1010:
+        case 0b1011:
+          throw new AssertionError();
+        case 0b1100:
+        case 0b1101:
+          offset += 2;
+          break;
+        case 0b1110:
+          offset += 3;
+          break;
+        case 0b1111:
+          offset += 4;
+      }
+      idx--;
+    }
+    return offset;
+  }
+
   public static short setBit(final short bitmap, final int shift) {
     return (short) ((short) (0x8000 >>> shift) | (bitmap & 0xffff));
   }

@@ -8,6 +8,12 @@ import static yatta.runtime.Util.*;
 
 public class UtilTest {
 
+  private static final byte UTF8_1B = (byte) 0x05;
+  private static final byte UTF8_2B = (byte) 0xc5;
+  private static final byte UTF8_3B = (byte) 0xe5;
+  private static final byte UTF8_4B = (byte) 0xf5;
+  private static final byte UTF8_CC = (byte) 0x85;
+
   @Test
   public void testInt16ReadWrite() {
     final byte[] data = new byte[2];
@@ -166,5 +172,58 @@ public class UtilTest {
         assertTrue(testBit(bitmap, j));
       }
     }
+  }
+
+  @Test
+  public void testOffsetUtf8() {
+    byte[] bytes;
+    // leftmost, U+0000 - U+007F
+    bytes = new byte[] { UTF8_1B, 0 };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    // leftmost, U+0080 - U+07FF
+    bytes = new byte[] { UTF8_2B, UTF8_CC, 0 };
+    assertEquals(UTF8_2B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    // leftmost, U+0800 - U+FFFF
+    bytes = new byte[] { UTF8_3B, UTF8_CC, UTF8_CC, 0 };
+    assertEquals(UTF8_3B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    // leftmost, U+10000 - U+10FFFF
+    bytes = new byte[] { UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC, 0 };
+    assertEquals(UTF8_4B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    // rightmost, U+0000 - U+007F
+    bytes = new byte[] { 0, UTF8_1B };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // rightmost, U+0080 - U+07FF
+    bytes = new byte[] { 0, UTF8_2B, UTF8_CC };
+    assertEquals(UTF8_2B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // rightmost, U+0800 - U+FFFF
+    bytes = new byte[] { 0, UTF8_3B, UTF8_CC, UTF8_CC };
+    assertEquals(UTF8_3B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // rightmost, U+10000 - U+10FFFF
+    bytes = new byte[] { 0, UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC };
+    assertEquals(UTF8_4B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // mid-left, U+0000 - U+007F
+    bytes = new byte[] { 0, UTF8_1B, 0, 0 };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // mid-left, U+0080 - U+07FF
+    bytes = new byte[] { UTF8_2B, UTF8_CC, UTF8_1B, 0, 0 };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // mid-left, U+0800 - U+FFFF
+    bytes = new byte[] { UTF8_3B, UTF8_CC, UTF8_CC, UTF8_1B, 0, 0 };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // mid-left, U+10000 - U+10FFFF
+    bytes = new byte[] { UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC, UTF8_1B, 0, 0 };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    // mid-right, U+0000 - U+007F
+    bytes = new byte[] { 0, 0, UTF8_1B, 0 };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
+    // mid-right, U+0080 - U+07FF
+    bytes = new byte[] { 0, 0, UTF8_1B, UTF8_2B, UTF8_CC };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
+    // mid-right, U+0800 - U+FFFF
+    bytes = new byte[] { 0, 0, UTF8_1B, UTF8_3B, UTF8_CC, UTF8_CC };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
+    // mid-right, U+10000 - U+10FFFF
+    bytes = new byte[] { 0, 0, UTF8_1B, UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC };
+    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
   }
 }
