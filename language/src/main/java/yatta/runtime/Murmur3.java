@@ -25,7 +25,7 @@ public final class Murmur3 {
   }
 
   public static long hashBool(final long seed, final boolean value) {
-    return hashInt(seed, value ? 2118771933827131388L : 7104600103027644419L);
+    return seed ^ (value ? 1695892510400506682L : 214721695803549140L);
   }
 
   public static long hashByte(final long seed, final byte value) {
@@ -83,8 +83,10 @@ public final class Murmur3 {
   }
 
   public static void main(String[] args) {
-    final int seed = 34534;
-    System.out.println(hashBool(seed, true));
-    System.out.println(hashBool(seed, false));
+    for (int i = 0; i < Integer.MAX_VALUE; i++) {
+      long fst = hashBool(i, true);
+      long snd = hashBool(i, false);
+      System.out.println(Primes.hammingDistance(fst, snd));
+    }
   }
 }

@@ -31,7 +31,7 @@ public final class Seq {
   final Object[] suffix;
   final byte shift;
 
-  volatile long hash = -1;
+  volatile long hash = 0L;
 
   Seq(final Object[] prefix, final int prefixSize,
          final Object[] root, final long rootSize,
@@ -370,7 +370,7 @@ public final class Seq {
 
   public long murmur3Hash(final long seed) {
     if (seed == 0) {
-      if (hash == -1) {
+      if (hash == 0L) {
         hash = calculateMurmur3Hash(0);
       }
       return hash;
@@ -833,6 +833,15 @@ public final class Seq {
     final PrimitiveIterator.OfInt iterator = source.codePoints().iterator();
     while (iterator.hasNext()) {
       result = result.insertLast(iterator.next());
+    }
+    return result;
+  }
+
+  public static Seq catenate(final Seq left, final Seq right) {
+    // TODO
+    Seq result = left;
+    for (int i = 0; i < right.length(); i++) {
+      result = left.insertLast(right.lookup(i, null));
     }
     return result;
   }
