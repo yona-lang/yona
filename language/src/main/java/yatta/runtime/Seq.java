@@ -31,7 +31,7 @@ public final class Seq {
   final Object[] suffix;
   final byte shift;
 
-  long murmur3Hash = -1;
+  long hash = -1;
 
   Seq(final Object[] prefix, final int prefixSize,
          final Object[] root, final long rootSize,
@@ -369,21 +369,28 @@ public final class Seq {
   }
 
   public long murmur3Hash(final long seed) {
-    if (murmur3Hash == -1) {
-      long hash = seed;
-      final long length = length();
-      for (int i = 0; i < length; i++) {
-        long k = Murmur3.hash(seed, lookup(i, null));
-        k *= Murmur3.C1;
-        k = Long.rotateLeft(k, 31);
-        k *= Murmur3.C2;
-        hash ^= k;
-        hash = Long.rotateLeft(hash, 27) * 5 + 0x52dce729;
+    if (seed == 0) {
+      if (hash == -1) {
+        hash = calculateMurmur3Hash(0);
       }
-      hash = Murmur3.fMix64(hash ^ length);
-      murmur3Hash = hash;
+      return hash;
+    } else {
+      return calculateMurmur3Hash(seed);
     }
-    return murmur3Hash;
+  }
+
+  private long calculateMurmur3Hash(final long seed) {
+    long hash = seed;
+    final long length = length();
+    for (int i = 0; i < length; i++) {
+      long k = Murmur3.hash(seed, lookup(i, null));
+      k *= Murmur3.C1;
+      k = Long.rotateLeft(k, 31);
+      k *= Murmur3.C2;
+      hash ^= k;
+      hash = Long.rotateLeft(hash, 27) * 5 + 0x52dce729;
+    }
+    return Murmur3.fMix64(hash ^ length);
   }
 
   @Override

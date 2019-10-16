@@ -19,6 +19,8 @@ public final class Murmur3 {
       return hashFloat(seed, (Double) o);
     } else if (o instanceof Object[]) {
       return hashTuple(seed, (Object[]) o);
+    } else if (o instanceof Seq) {
+      return ((Seq) o).murmur3Hash(seed);
     } else throw new AssertionError();
   }
 
