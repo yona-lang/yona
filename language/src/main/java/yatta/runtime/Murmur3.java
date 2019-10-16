@@ -25,7 +25,7 @@ public final class Murmur3 {
   }
 
   public static long hashBool(final long seed, final boolean value) {
-    return value ? seed ^ 8463748566948153439L : seed ^ 1267067482056083053L;
+    return hashInt(seed, value ? 2118771933827131388L : 7104600103027644419L);
   }
 
   public static long hashByte(final long seed, final byte value) {

@@ -31,7 +31,7 @@ public final class Seq {
   final Object[] suffix;
   final byte shift;
 
-  long hash = -1;
+  volatile long hash = -1;
 
   Seq(final Object[] prefix, final int prefixSize,
          final Object[] root, final long rootSize,
