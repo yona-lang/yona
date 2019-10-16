@@ -2,9 +2,9 @@ package yatta.runtime;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.nio.ByteBuffer;
 
-import static yatta.runtime.Util.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class UtilTest {
 
@@ -148,13 +148,13 @@ public class UtilTest {
   public void testSetBit() {
     short bitmap;
     for (int i = 0; i < 15; i++) {
-      bitmap = setBit((short) 0, i);
+      bitmap = Util.setBit((short) 0, i);
       for (int j = 0; j < i; j++) {
-        assertFalse(testBit(bitmap, j));
+        assertFalse(Util.testBit(bitmap, j));
       }
-      assertTrue(testBit(bitmap, i));
+      assertTrue(Util.testBit(bitmap, i));
       for (int j = i + 1; j < 15; j++) {
-        assertFalse(testBit(bitmap, j));
+        assertFalse(Util.testBit(bitmap, j));
       }
     }
   }
@@ -163,67 +163,80 @@ public class UtilTest {
   public void testClearBit() {
     short bitmap;
     for (int i = 0; i < 15; i++) {
-      bitmap = clearBit((short) 0xffff, i);
+      bitmap = Util.clearBit((short) 0xffff, i);
       for (int j = 0; j < i; j++) {
-        assertTrue(testBit(bitmap, j));
+        assertTrue(Util.testBit(bitmap, j));
       }
-      assertFalse(testBit(bitmap, i));
+      assertFalse(Util.testBit(bitmap, i));
       for (int j = i + 1; j < 15; j++) {
-        assertTrue(testBit(bitmap, j));
+        assertTrue(Util.testBit(bitmap, j));
       }
     }
   }
 
   @Test
-  public void testOffsetUtf8() {
+  public void testUtf8Offset() {
     byte[] bytes;
     // leftmost, U+0000 - U+007F
     bytes = new byte[] { UTF8_1B, 0 };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 0)]);
     // leftmost, U+0080 - U+07FF
     bytes = new byte[] { UTF8_2B, UTF8_CC, 0 };
-    assertEquals(UTF8_2B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    assertEquals(UTF8_2B, bytes[Util.utf8Offset(bytes, 0, 0)]);
     // leftmost, U+0800 - U+FFFF
     bytes = new byte[] { UTF8_3B, UTF8_CC, UTF8_CC, 0 };
-    assertEquals(UTF8_3B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    assertEquals(UTF8_3B, bytes[Util.utf8Offset(bytes, 0, 0)]);
     // leftmost, U+10000 - U+10FFFF
     bytes = new byte[] { UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC, 0 };
-    assertEquals(UTF8_4B, bytes[Util.offsetUtf8(bytes, 0, 0)]);
+    assertEquals(UTF8_4B, bytes[Util.utf8Offset(bytes, 0, 0)]);
     // rightmost, U+0000 - U+007F
     bytes = new byte[] { 0, UTF8_1B };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // rightmost, U+0080 - U+07FF
     bytes = new byte[] { 0, UTF8_2B, UTF8_CC };
-    assertEquals(UTF8_2B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_2B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // rightmost, U+0800 - U+FFFF
     bytes = new byte[] { 0, UTF8_3B, UTF8_CC, UTF8_CC };
-    assertEquals(UTF8_3B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_3B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // rightmost, U+10000 - U+10FFFF
     bytes = new byte[] { 0, UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC };
-    assertEquals(UTF8_4B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_4B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // mid-left, U+0000 - U+007F
     bytes = new byte[] { 0, UTF8_1B, 0, 0 };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // mid-left, U+0080 - U+07FF
     bytes = new byte[] { UTF8_2B, UTF8_CC, UTF8_1B, 0, 0 };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // mid-left, U+0800 - U+FFFF
     bytes = new byte[] { UTF8_3B, UTF8_CC, UTF8_CC, UTF8_1B, 0, 0 };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // mid-left, U+10000 - U+10FFFF
     bytes = new byte[] { UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC, UTF8_1B, 0, 0 };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 1)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 1)]);
     // mid-right, U+0000 - U+007F
     bytes = new byte[] { 0, 0, UTF8_1B, 0 };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 2)]);
     // mid-right, U+0080 - U+07FF
     bytes = new byte[] { 0, 0, UTF8_1B, UTF8_2B, UTF8_CC };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 2)]);
     // mid-right, U+0800 - U+FFFF
     bytes = new byte[] { 0, 0, UTF8_1B, UTF8_3B, UTF8_CC, UTF8_CC };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 2)]);
     // mid-right, U+10000 - U+10FFFF
     bytes = new byte[] { 0, 0, UTF8_1B, UTF8_4B, UTF8_CC, UTF8_CC, UTF8_CC };
-    assertEquals(UTF8_1B, bytes[Util.offsetUtf8(bytes, 0, 2)]);
+    assertEquals(UTF8_1B, bytes[Util.utf8Offset(bytes, 0, 2)]);
+  }
+
+  @Test
+  public void testUtf8EncodeDecode() {
+    ByteBuffer buffer = ByteBuffer.allocate(4);
+    for (int i = 0; i < Integer.MAX_VALUE; i++) {
+      if (Util.utf8Length(i) != -1) {
+        Util.utf8Encode(buffer, i);
+        assertEquals(i, Util.utf8Decode(buffer.array(), 0));
+        buffer.position(0);
+        buffer.putInt(0, 0);
+      }
+    }
   }
 }

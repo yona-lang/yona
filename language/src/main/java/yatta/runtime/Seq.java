@@ -10,7 +10,6 @@ import yatta.runtime.exceptions.BadArgException;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.PrimitiveIterator;
 
 public final class Seq {
@@ -295,9 +294,9 @@ public final class Seq {
         }
         int offset = 1;
         for (int i = 0; i < len; i++) {
-          final int codePoint = Util.codePointAt(bytes, offset);
+          final int codePoint = Util.utf8Decode(bytes, offset);
           appendCodePoint(buffer, codePoint);
-          offset += Util.codePointLen(codePoint);
+          offset += Util.utf8Length(codePoint);
         }
       } else {
         for (int i = 0; i < len; i++) {
@@ -351,7 +350,7 @@ public final class Seq {
         for (int i = 0; i < len; i++) {
           Object o = nodeLookup(node, i);
           if (o instanceof Integer) {
-            buffer.put(new String(new int[]{ (Integer) o }, 0, 1).getBytes(StandardCharsets.UTF_8));
+            Util.utf8Encode(buffer, (Integer) o);
           } else if (o instanceof Byte) {
             buffer.put((Byte) o);
           } else {
@@ -399,7 +398,7 @@ public final class Seq {
       final Object[] result = new Object[nodeLength(leaf) + 1];
       if (decodeIsUtf8(bytes[0])) {
         for (int i = 1; i < bytes.length; i++) {
-          result[i] = Util.codePointAt(bytes, Util.offsetUtf8(bytes, 1, i - 1));
+          result[i] = Util.utf8Decode(bytes, Util.utf8Offset(bytes, 1, i - 1));
         }
       } else {
         for (int i = 1; i < bytes.length; i++) {
@@ -433,7 +432,7 @@ public final class Seq {
     if (node instanceof byte[]) {
       final byte[] bytes = (byte[]) node;
       if (decodeIsUtf8(bytes[0])) {
-        return Util.codePointAt(bytes, Util.offsetUtf8(bytes, 1, i));
+        return Util.utf8Decode(bytes, Util.utf8Offset(bytes, 1, i));
       } else {
         return bytes[i + 1];
       }

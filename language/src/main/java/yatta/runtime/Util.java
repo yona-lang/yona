@@ -1,5 +1,7 @@
 package yatta.runtime;
 
+import java.nio.ByteBuffer;
+
 public final class Util {
   private Util() {}
 
@@ -80,26 +82,28 @@ public final class Util {
     destination[offset] = (byte) value;
   }
 
-  public static int codePointAt(byte[] array, int offset) {
-    final byte b0 = array[offset++];
+  public static int utf8Decode(byte[] src, int offset) {
+    final byte b0 = src[offset++];
     if ((0x80 & b0) == 0) return b0;
-    final byte b1 = array[offset++];
+    final byte b1 = src[offset++];
     if ((0xe0 & b0) == 0xc0) return ((0x1f & b0) << 6) | (0x3f & b1);
-    final byte b2 = array[offset++];
+    final byte b2 = src[offset++];
     if ((0xf0 & b0) == 0xe0) return ((0x0f & b0) << 12) | ((0x3f & b1) << 6) | (0x3f & b2);
-    final byte b3 = array[offset];
+    final byte b3 = src[offset];
     return ((0x7 & b0) << 18) | ((0x3f & b1) << 12) | ((0x3f & b2) << 6) | (0x3f & b3);
   }
 
-  public static int codePointLen(int codePoint) {
+  public static int utf8Length(int codePoint) {
     if (codePoint < 0x80) return 1;
     if (codePoint < 0x800) return 2;
+    if (codePoint < 0xd800) return 3;
+    if (codePoint < 0xe000) return -1;
     if (codePoint < 0x10000) return 3;
     if (codePoint < 0x10ffff) return 4;
-    throw new AssertionError();
+    return -1;
   }
 
-  public static int offsetUtf8(final byte[] bytes, int offset, int idx) {
+  public static int utf8Offset(final byte[] bytes, int offset, int idx) {
     while (idx > 0) {
       switch ((0xf0 & bytes[offset]) >>> 4) {
         case 0b0000:
@@ -130,6 +134,34 @@ public final class Util {
       idx--;
     }
     return offset;
+  }
+
+  public static void utf8Encode(final ByteBuffer dst, int codePoint) {
+    switch (utf8Length(codePoint)) {
+      case 1: {
+        dst.put((byte) codePoint);
+        break;
+      }
+      case 2: {
+        dst.put((byte) (0xc0 | (codePoint >> 6)));
+        dst.put((byte) (0x80 | (codePoint & 0x3f)));
+        break;
+      }
+      case 3: {
+        dst.put((byte) (0xe0 | (codePoint >> 12)));
+        dst.put((byte) (0x80 | ((codePoint >> 6) & 0x3f)));
+        dst.put((byte) (0x80 | (codePoint & 0x3f)));
+        break;
+      }
+      case 4: {
+        dst.put((byte) (0xf0 | (codePoint >> 18)));
+        dst.put((byte) (0x80 | ((codePoint >> 12) & 0x3f)));
+        dst.put((byte) (0x80 | ((codePoint >>  6) & 0x3f)));
+        dst.put((byte) (0x80 | (codePoint & 0x3f)));
+        break;
+      }
+      default: throw new AssertionError();
+    }
   }
 
   public static short setBit(final short bitmap, final int shift) {

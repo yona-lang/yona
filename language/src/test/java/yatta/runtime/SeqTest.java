@@ -30,7 +30,7 @@ public class SeqTest {
     //noinspection MismatchedQueryAndUpdateOfStringBuilder
     StringBuilder builder = new StringBuilder();
     for (int i = 0; i < Integer.MAX_VALUE; i++) {
-      if (Character.isValidCodePoint(i)) {
+      if (Util.utf8Length(i) != -1) {
         builder.appendCodePoint(i);
       }
     }

@@ -103,7 +103,7 @@ public final class OuterSequence {
       final byte[] bytes = (byte[]) o;
       final int meta = readMeta(bytes);
       if (meta > 0) return bytes[4];
-      else return codePointAt(bytes, 4);
+      else return utf8Decode(bytes, 4);
     }
     return o;
   }
@@ -129,7 +129,7 @@ public final class OuterSequence {
       int offset = bytes.length - 1;
       if (meta > 0) return bytes[offset];
       while (((0x80 & bytes[offset]) >>> 6) == 0x2) offset--;
-      return codePointAt(bytes, offset);
+      return utf8Decode(bytes, offset);
     }
     return o;
   }
@@ -167,9 +167,9 @@ public final class OuterSequence {
         case 1: return null;
         case 2:
           if (meta > 0) return bytes[5];
-          else return codePointAt(bytes, 4 + codePointLen(codePointAt(bytes, 4)));
+          else return utf8Decode(bytes, 4 + utf8Length(utf8Decode(bytes, 4)));
         default:
-          final int offset = meta > 0 ? 1 : 4 + codePointLen(codePointAt(bytes, 4));
+          final int offset = meta > 0 ? 1 : 4 + utf8Length(utf8Decode(bytes, 4));
           final byte[] result = new byte[bytes.length - offset];
           writeMeta(result, meta - 1);
           arraycopy(bytes, 4 + offset, result, 4, result.length - 4);
@@ -211,7 +211,7 @@ public final class OuterSequence {
         case 1: return null;
         case 2:
           if (meta > 0) return bytes[4];
-          else return codePointAt(bytes, offsetUtf8(bytes, 0));
+          else return utf8Decode(bytes, offsetUtf8(bytes, 0));
         default:
           int offset = bytes.length - 1;
           if (meta < 0) while (((0x80 & bytes[offset]) >>> 6) == 0x2) offset--;
@@ -235,7 +235,7 @@ public final class OuterSequence {
         measure = 0x7fffffff & meta;
         if (i < measure) {
           if (meta > 0) return bytes[4 + i];
-          else return codePointAt(bytes, offsetUtf8(bytes, i));
+          else return utf8Decode(bytes, offsetUtf8(bytes, i));
         }
         i -= measure;
       } else {
@@ -250,7 +250,7 @@ public final class OuterSequence {
         measure = 0x7fffffff & meta;
         if (i < measure) {
           if (meta > 0) return bytes[4 + i];
-          else return codePointAt(bytes, offsetUtf8(bytes, i));
+          else return utf8Decode(bytes, offsetUtf8(bytes, i));
         }
         i -= measure;
       } else {
@@ -270,7 +270,7 @@ public final class OuterSequence {
           final int meta = readMeta(bytes);
           if (i < measure) {
             if (meta > 0) return bytes[4 + i];
-            else return codePointAt(bytes, offsetUtf8(bytes, i));
+            else return utf8Decode(bytes, offsetUtf8(bytes, i));
           }
           i -= measure;
         } else {
@@ -288,7 +288,7 @@ public final class OuterSequence {
         measure = 0x7fffffff & meta;
         if (i < measure) {
           if (meta > 0) return bytes[4 + i];
-          else return codePointAt(bytes, offsetUtf8(bytes, i));
+          else return utf8Decode(bytes, offsetUtf8(bytes, i));
         }
         i -= measure;
       } else {
@@ -303,7 +303,7 @@ public final class OuterSequence {
         measure = 0x7fffffff & meta;
         if (i < measure) {
           if (meta > 0) return bytes[4 + i];
-          else return codePointAt(bytes, offsetUtf8(bytes, i));
+          else return utf8Decode(bytes, offsetUtf8(bytes, i));
         }
         i -= measure;
       } else {
