@@ -81,12 +81,4 @@ public final class Murmur3 {
     hash ^= (hash >>> 33);
     return hash;
   }
-
-  public static void main(String[] args) {
-    for (int i = 0; i < Integer.MAX_VALUE; i++) {
-      long fst = hashBool(i, true);
-      long snd = hashBool(i, false);
-      System.out.println(Primes.hammingDistance(fst, snd));
-    }
-  }
 }
