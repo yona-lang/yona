@@ -31,7 +31,7 @@ public final class Seq {
   final Object[] suffix;
   final byte shift;
 
-  long hash = -1;
+  long murmur3Hash = -1;
 
   Seq(final Object[] prefix, final int prefixSize,
          final Object[] root, final long rootSize,
@@ -368,6 +368,29 @@ public final class Seq {
     return true;
   }
 
+  public long murmur3Hash(final long seed) {
+    if (murmur3Hash == -1) {
+      long hash = seed;
+      final long length = length();
+      for (int i = 0; i < length; i++) {
+        long k = Murmur3.hash(seed, lookup(i, null));
+        k *= Murmur3.C1;
+        k = Long.rotateLeft(k, 31);
+        k *= Murmur3.C2;
+        hash ^= k;
+        hash = Long.rotateLeft(hash, 27) * 5 + 0x52dce729;
+      }
+      hash = Murmur3.fMix64(hash ^ length);
+      murmur3Hash = hash;
+    }
+    return murmur3Hash;
+  }
+
+  @Override
+  public int hashCode() {
+    return (int) murmur3Hash(0);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (o == this) {
@@ -380,7 +403,8 @@ public final class Seq {
     if (this.length() != that.length()) {
       return false;
     }
-    for (int i = 0; i < prefixSize + rootSize + suffixSize; i++) {
+    final long length = length();
+    for (long i = 0; i < length; i++) {
       if (!this.lookup(i, null).equals(that.lookup(i, null))) {
         return false;
       }
