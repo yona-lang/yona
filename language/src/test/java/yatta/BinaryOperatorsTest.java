@@ -7,10 +7,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import yatta.runtime.Sequence;
+import yatta.runtime.Seq;
 import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
 
+import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -434,21 +435,20 @@ public class BinaryOperatorsTest {
 
   private static boolean sequenceCatenateOpsValidator(Value result) {
     assertEquals(4, result.getArraySize());
-//    TODO enable once new Sequence is implemented
-//    Object[] array = result.as(Object[].class);
-//    assertEquals(1l, array[0]);
-//    assertEquals(2l, array[1]);
-//    assertEquals(3l, array[2]);
-//    assertEquals(4l, array[3]);
+    Object[] array = result.as(Object[].class);
+    assertEquals(1l, array[0]);
+    assertEquals(2l, array[1]);
+    assertEquals(3l, array[2]);
+    assertEquals(4l, array[3]);
     return true;
   }
 
   static Stream<BinaryArgsHolder> sequenceCatenateOps() {
     return Stream.of(
-        new BinaryArgsHolder(Sequence.sequence(1l, 2l), Sequence.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
-        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), Sequence.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
-        new BinaryArgsHolder(Sequence.sequence(1l, 2l), new PromiseHolder(Sequence.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator),
-        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), new PromiseHolder(Sequence.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator)
+        new BinaryArgsHolder(Seq.sequence(1l, 2l), Seq.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
+        new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), Seq.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
+        new BinaryArgsHolder(Seq.sequence(1l, 2l), new PromiseHolder(Seq.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator),
+        new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), new PromiseHolder(Seq.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator)
     );
   }
 
@@ -461,10 +461,10 @@ public class BinaryOperatorsTest {
 
   static Stream<BinaryArgsHolder> sequenceJoinLeftOps() {
     return Stream.of(
-        new BinaryArgsHolder(0l, Sequence.sequence(1l, 2l), new Object[] {0l, 1l, 2l}, Object[].class),
-        new BinaryArgsHolder(new PromiseHolder(0l), Sequence.sequence(1l, 2l), new Object[] {0l, 1l, 2l}, Object[].class),
-        new BinaryArgsHolder(0l, new PromiseHolder(Sequence.sequence(1l, 2l)), new Object[] {0l, 1l, 2l}, Object[].class),
-        new BinaryArgsHolder(new PromiseHolder(0l), new PromiseHolder(Sequence.sequence(1l, 2l)), new Object[] {0l, 1l, 2l}, Object[].class)
+        new BinaryArgsHolder(0l, Seq.sequence(1l, 2l), new Object[] {0l, 1l, 2l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(0l), Seq.sequence(1l, 2l), new Object[] {0l, 1l, 2l}, Object[].class),
+        new BinaryArgsHolder(0l, new PromiseHolder(Seq.sequence(1l, 2l)), new Object[] {0l, 1l, 2l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(0l), new PromiseHolder(Seq.sequence(1l, 2l)), new Object[] {0l, 1l, 2l}, Object[].class)
     );
   }
 
@@ -477,10 +477,10 @@ public class BinaryOperatorsTest {
 
   static Stream<BinaryArgsHolder> sequenceJoinRightOps() {
     return Stream.of(
-        new BinaryArgsHolder(Sequence.sequence(1l, 2l), 3l, new Object[] {1l, 2l, 3l}, Object[].class),
-        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), 3l, new Object[] {1l, 2l, 3l}, Object[].class),
-        new BinaryArgsHolder(Sequence.sequence(1l, 2l), new PromiseHolder(3l), new Object[] {1l, 2l, 3l}, Object[].class),
-        new BinaryArgsHolder(new PromiseHolder(Sequence.sequence(1l, 2l)), new PromiseHolder(3l), new Object[] {1l, 2l, 3l}, Object[].class)
+        new BinaryArgsHolder(Seq.sequence(1l, 2l), 3l, new Object[] {1l, 2l, 3l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), 3l, new Object[] {1l, 2l, 3l}, Object[].class),
+        new BinaryArgsHolder(Seq.sequence(1l, 2l), new PromiseHolder(3l), new Object[] {1l, 2l, 3l}, Object[].class),
+        new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), new PromiseHolder(3l), new Object[] {1l, 2l, 3l}, Object[].class)
     );
   }
 

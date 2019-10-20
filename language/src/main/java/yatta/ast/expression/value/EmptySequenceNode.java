@@ -1,10 +1,10 @@
 package yatta.ast.expression.value;
 
 import yatta.ast.ExpressionNode;
-import yatta.runtime.Sequence;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.runtime.Seq;
 
 @NodeInfo
 public final class EmptySequenceNode extends ExpressionNode {
@@ -18,11 +18,11 @@ public final class EmptySequenceNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return Sequence.sequence();
+    return Seq.sequence();
   }
 
   @Override
-  public Sequence executeSequence(VirtualFrame frame) throws UnexpectedResultException {
-    return Sequence.sequence();
+  public Seq executeSequence(VirtualFrame frame) throws UnexpectedResultException {
+    return Seq.sequence();
   }
 }

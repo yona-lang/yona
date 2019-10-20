@@ -1,10 +1,10 @@
 package yatta.ast.binary;
 
-import yatta.runtime.*;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.runtime.*;
+import yatta.runtime.async.Promise;
 
 @NodeInfo(shortName = "==")
 public abstract class EqualsNode extends BinaryOpNode {
@@ -54,7 +54,7 @@ public abstract class EqualsNode extends BinaryOpNode {
   }
 
   @Specialization
-  public boolean sequences(Sequence left, Sequence right) {
+  public boolean sequences(Seq left, Seq right) {
     return left.equals(right);
   }
 

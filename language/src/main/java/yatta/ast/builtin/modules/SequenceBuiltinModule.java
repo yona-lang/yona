@@ -1,10 +1,5 @@
 package yatta.ast.builtin.modules;
 
-import yatta.ast.builtin.BuiltinNode;
-import yatta.runtime.Builtins;
-import yatta.runtime.Function;
-import yatta.runtime.Sequence;
-import yatta.runtime.UndefinedNameException;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -12,36 +7,37 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.builtin.BuiltinNode;
+import yatta.runtime.Builtins;
+import yatta.runtime.Function;
+import yatta.runtime.Seq;
+import yatta.runtime.UndefinedNameException;
 
 @BuiltinModuleInfo(moduleName = "Sequence")
 public final class SequenceBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "foldl")
   abstract static class FoldLeftBuiltin extends BuiltinNode {
     @Specialization
-    public Object foldLeft(Sequence sequence, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sequence.foldLeft((acc, val) -> {
-        try {
-          return dispatch.execute(function, new Object[] {acc, val});
-        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-          /* Execute was not successful. */
-          throw UndefinedNameException.undefinedFunction(this, function);
-        }
-      }, initialValue);
+    public Object foldLeft(Seq sequence, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      try {
+        return sequence.foldLeft(initialValue, function, dispatch);
+      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+        /* Execute was not successful. */
+        throw UndefinedNameException.undefinedFunction(this, function);
+      }
     }
   }
 
   @NodeInfo(shortName = "foldr")
   abstract static class FoldRightBuiltin extends BuiltinNode {
     @Specialization
-    public Object foldRight(Sequence sequence, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sequence.foldRight((acc, val) -> {
-        try {
-          return dispatch.execute(function, new Object[] {acc, val});
-        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-          /* Execute was not successful. */
-          throw UndefinedNameException.undefinedFunction(this, function);
-        }
-      }, initialValue);
+    public Object foldRight(Seq sequence, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      try {
+        return sequence.foldRight(initialValue, function, dispatch);
+      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+        /* Execute was not successful. */
+        throw UndefinedNameException.undefinedFunction(this, function);
+      }
     }
   }
 

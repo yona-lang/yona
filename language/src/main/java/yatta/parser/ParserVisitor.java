@@ -383,16 +383,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public OneSequenceNode visitOneSequence(YattaParser.OneSequenceContext ctx) {
-    return withSourceSection(ctx, new OneSequenceNode(ctx.expression().accept(this)));
-  }
-
-  @Override
-  public TwoSequenceNode visitTwoSequence(YattaParser.TwoSequenceContext ctx) {
-    return withSourceSection(ctx, new TwoSequenceNode(ctx.expression(0).accept(this), ctx.expression(1).accept(this)));
-  }
-
-  @Override
   public SequenceNode visitOtherSequence(YattaParser.OtherSequenceContext ctx) {
     ExpressionNode[] expressionNodes = new ExpressionNode[ctx.expression().size()];
     for (int i = 0; i < ctx.expression().size(); i++) {
@@ -403,7 +393,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public ModuleNode visitModule(YattaParser.ModuleContext ctx) {
-    FrameDescriptor frameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
     FQNNode moduleFQN = visitFqn(ctx.fqn());
     moduleStack.push(moduleFQN);
     NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());

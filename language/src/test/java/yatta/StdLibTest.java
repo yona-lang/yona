@@ -5,7 +5,6 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import yatta.runtime.Sequence;
 
 import java.util.AbstractList;
 

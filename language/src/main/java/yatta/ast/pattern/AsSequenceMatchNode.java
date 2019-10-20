@@ -3,9 +3,10 @@ package yatta.ast.pattern;
 import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
-import yatta.runtime.Sequence;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import yatta.runtime.Seq;
 
+import javax.sound.midi.Sequence;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -45,8 +46,8 @@ public final class AsSequenceMatchNode extends MatchNode {
 
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
-    if (value instanceof Sequence) {
-      Sequence sequence = (Sequence) value;
+    if (value instanceof Seq) {
+      Seq sequence = (Seq) value;
       List<AliasNode> aliases = new ArrayList<>();
 
       MatchResult matchResult = matchNode.match(sequence, frame);

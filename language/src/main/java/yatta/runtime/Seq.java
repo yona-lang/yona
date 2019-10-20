@@ -1,18 +1,19 @@
 package yatta.runtime;
 
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.Node;
-import yatta.runtime.exceptions.BadArgException;
+    import com.oracle.truffle.api.CompilerDirectives;
+    import com.oracle.truffle.api.interop.*;
+    import com.oracle.truffle.api.library.ExportLibrary;
+    import com.oracle.truffle.api.library.ExportMessage;
+    import com.oracle.truffle.api.nodes.Node;
+    import yatta.runtime.exceptions.BadArgException;
 
-import java.lang.reflect.Array;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.util.PrimitiveIterator;
+    import java.lang.reflect.Array;
+    import java.nio.ByteBuffer;
+    import java.nio.CharBuffer;
+    import java.util.PrimitiveIterator;
 
-public final class Seq {
+@ExportLibrary(InteropLibrary.class)
+public final class Seq implements TruffleObject {
   static final String IOOB_MSG = "Index out of bounds: %d";
   static final String EMPTY_MSG = "Empty seq";
   static final Object[] EMPTY_NODE = new Object[1];
@@ -34,9 +35,9 @@ public final class Seq {
   volatile long hash = 0L;
 
   Seq(final Object[] prefix, final int prefixSize,
-         final Object[] root, final long rootSize,
-         final Object[] suffix, final int suffixSize,
-         final int shift) {
+      final Object[] root, final long rootSize,
+      final Object[] suffix, final int suffixSize,
+      final int shift) {
     this.prefixSize = (byte) prefixSize;
     this.rootSize = rootSize;
     this.suffixSize = (byte) suffixSize;
@@ -44,6 +45,63 @@ public final class Seq {
     this.root = root;
     this.suffix = suffix;
     this.shift = (byte) shift;
+  }
+
+  @ExportMessage
+  public final long getArraySize() {
+    return length();
+  }
+
+  @ExportMessage
+  public final Object readArrayElement(long index) {
+    return lookup(index, null);
+  }
+
+  @ExportMessage
+  public final boolean isArrayElementReadable(long index) {
+    return index < length();
+  }
+
+  @ExportMessage
+  public final boolean hasArrayElements() {
+    return true;
+  }
+
+  static boolean isInstance(TruffleObject tuple) {
+    return tuple instanceof Seq;
+  }
+
+  public static Seq sequence(Object... values) {
+    Seq result = EMPTY;
+    for (Object value : values) result = result.insertLast(value);
+    return result;
+  }
+
+  public Object first(Node caller) {
+    return lookup(0, caller);
+  }
+
+  public Object last(Node caller) {
+    return lookup(length() - 1, caller);
+  }
+
+  @Override
+  @CompilerDirectives.TruffleBoundary
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("[");
+
+    for (int i = 0; i < length(); i++) {
+      sb.append(lookup(i, null));
+
+      if (i != length() - 1) {
+        sb.append(", ");
+      }
+    }
+
+    sb.append("]");
+
+    return sb.toString();
   }
 
   public Seq insertFirst(final Object o) {
@@ -841,7 +899,7 @@ public final class Seq {
     // TODO
     Seq result = left;
     for (int i = 0; i < right.length(); i++) {
-      result = left.insertLast(right.lookup(i, null));
+      result = result.insertLast(right.lookup(i, null));
     }
     return result;
   }

@@ -10,7 +10,7 @@ import yatta.TypesGen;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.runtime.Context;
-import yatta.runtime.Sequence;
+import yatta.runtime.Seq;
 import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
 
@@ -22,18 +22,17 @@ import java.io.InputStreamReader;
 public abstract class SystemBuiltin extends BuiltinNode {
   @Specialization
   @CompilerDirectives.TruffleBoundary
-  public Promise system(Sequence sequence, @CachedContext(YattaLanguage.class) Context context) {
+  public Promise system(Seq sequence, @CachedContext(YattaLanguage.class) Context context) {
     CompilerAsserts.compilationConstant(sequence.length());
-    String[] strings = new String[sequence.length()];
+    String[] strings = new String[(int) sequence.length()];
 
-    sequence.foldLeft((i, item) -> {
+    for(int i = 0; i < sequence.length(); i++) {
       try {
-        strings[i] = TypesGen.expectString(sequence.lookup(i));
-        return i + 1;
+        strings[i] = TypesGen.expectString(sequence.lookup(i, this));
       } catch (UnexpectedResultException e) {
         throw YattaException.typeError(this, sequence);
       }
-    }, 0);
+    }
 
     ProcessBuilder processBuilder = new ProcessBuilder().command(strings);
 
@@ -45,7 +44,7 @@ public abstract class SystemBuiltin extends BuiltinNode {
 
       context.ioExecutor.submit(() -> {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-          stdOutPromise.fulfil(Sequence.sequence(br.lines().toArray()), this);
+          stdOutPromise.fulfil(Seq.sequence(br.lines().toArray()), this);
         } catch (IOException ex) {
           stdOutPromise.fulfil(new yatta.runtime.exceptions.IOException(ex, this), this);
         }
@@ -53,7 +52,7 @@ public abstract class SystemBuiltin extends BuiltinNode {
 
       context.ioExecutor.submit(() -> {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-          stdErrPromise.fulfil(Sequence.sequence(br.lines().toArray()), this);
+          stdErrPromise.fulfil(Seq.sequence(br.lines().toArray()), this);
         } catch (IOException ex) {
           stdErrPromise.fulfil(new yatta.runtime.exceptions.IOException(ex, this), this);
         }
@@ -70,8 +69,8 @@ public abstract class SystemBuiltin extends BuiltinNode {
 
       return Promise.all(new Object[]{stdOutPromise, stdErrPromise, exitValuePromise}, this).map(results -> {
         Object[] resultsArray = (Object[]) results;
-        Sequence stdOut = (Sequence) resultsArray[0];
-        Sequence stdErr = (Sequence) resultsArray[1];
+        Seq stdOut = (Seq) resultsArray[0];
+        Seq stdErr = (Seq) resultsArray[1];
         long exitValue = (int) resultsArray[2];
 
         return new Tuple(exitValue, stdOut, stdErr);

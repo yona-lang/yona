@@ -1,10 +1,11 @@
 package yatta.ast.pattern;
 
 import yatta.ast.expression.AliasNode;
-import yatta.runtime.Sequence;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.Seq;
 
+import javax.sound.midi.Sequence;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -39,15 +40,15 @@ public final class SequenceMatchPatternNode extends MatchNode {
 
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
-    if (value instanceof Sequence) {
-      Sequence sequence = (Sequence) value;
+    if (value instanceof Seq) {
+      Seq sequence = (Seq) value;
 
       if (sequence.length() == matchNodes.length) {
         List<AliasNode> aliases = new ArrayList<>();
 
         for (int i = 0; i < matchNodes.length; i++) {
           MatchNode matchNode = matchNodes[i];
-          MatchResult matchResult = matchNode.match(sequence.lookup(i), frame);
+          MatchResult matchResult = matchNode.match(sequence.lookup(i, this), frame);
 
           if (!matchResult.isMatches()) {
             return MatchResult.FALSE;

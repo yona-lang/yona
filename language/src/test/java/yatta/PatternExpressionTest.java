@@ -1,15 +1,15 @@
 package yatta;
 
-import yatta.runtime.Dictionary;
-import yatta.runtime.Sequence;
-import yatta.runtime.Tuple;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import yatta.runtime.Dictionary;
+import yatta.runtime.Seq;
+import yatta.runtime.Tuple;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PatternExpressionTest {
 
@@ -128,7 +128,7 @@ public class PatternExpressionTest {
         "1 <: [] -> 2\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l)).asLong();
+        "end\n").execute(Seq.sequence(1l)).asLong();
     assertEquals(2l, ret);
   }
 
@@ -138,7 +138,7 @@ public class PatternExpressionTest {
         "[] :> 1 -> 2\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l)).asLong();
+        "end\n").execute(Seq.sequence(1l)).asLong();
     assertEquals(2l, ret);
   }
 
@@ -149,7 +149,7 @@ public class PatternExpressionTest {
         "_ <: _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l)).asLong();
+        "end\n").execute(Seq.sequence(1l)).asLong();
     assertEquals(2l, ret);
   }
 
@@ -160,7 +160,7 @@ public class PatternExpressionTest {
         "_ :> _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l)).asLong();
+        "end\n").execute(Seq.sequence(1l)).asLong();
     assertEquals(2l, ret);
   }
 
@@ -171,7 +171,7 @@ public class PatternExpressionTest {
         "_ <: _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(2l)).asLong();
+        "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(3l, ret);
   }
 
@@ -182,7 +182,7 @@ public class PatternExpressionTest {
         "_ :> _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(2l)).asLong();
+        "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(3l, ret);
   }
 
@@ -192,7 +192,7 @@ public class PatternExpressionTest {
         "1 <: _ -> 2\n" +
         "_ <: _ -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(2l)).asLong();
+        "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
 
@@ -202,7 +202,7 @@ public class PatternExpressionTest {
         "_ :> 1 -> 2\n" +
         "_ :> _ -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(2l)).asLong();
+        "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
   @Test
@@ -211,7 +211,7 @@ public class PatternExpressionTest {
         "1 <: _ -> 2\n" +
         "_ <: [] -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(2l)).asLong();
+        "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
 
@@ -221,7 +221,7 @@ public class PatternExpressionTest {
         "_ :> 1 -> 2\n" +
         "[] :> _ -> 4\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(2l)).asLong();
+        "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
   }
 
@@ -232,7 +232,7 @@ public class PatternExpressionTest {
         "1 <: tail -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l));
+        "end\n").execute(Seq.sequence(1l, 2l, 3l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -248,7 +248,7 @@ public class PatternExpressionTest {
         "tail :> 3 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l));
+        "end\n").execute(Seq.sequence(1l, 2l, 3l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -263,7 +263,7 @@ public class PatternExpressionTest {
         "1 <: tail -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l));
+        "end\n").execute(Seq.sequence(1l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -276,7 +276,7 @@ public class PatternExpressionTest {
         "tail :> 1 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l));
+        "end\n").execute(Seq.sequence(1l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -290,7 +290,7 @@ public class PatternExpressionTest {
         "1 <: bound -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l), Sequence.sequence(2l, 3l));
+        "end\n").execute(Seq.sequence(1l, 2l, 3l), Seq.sequence(2l, 3l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -306,7 +306,7 @@ public class PatternExpressionTest {
         "bound :> 3 -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l), Sequence.sequence(1l, 2l));
+        "end\n").execute(Seq.sequence(1l, 2l, 3l), Seq.sequence(1l, 2l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -321,7 +321,7 @@ public class PatternExpressionTest {
         "1 <: bound -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l), Sequence.sequence());
+        "end\n").execute(Seq.sequence(1l), Seq.sequence());
 
     Object[] array = sequence.as(Object[].class);
 
@@ -334,7 +334,7 @@ public class PatternExpressionTest {
         "bound :> 1 -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l), Sequence.sequence());
+        "end\n").execute(Seq.sequence(1l), Seq.sequence());
 
     Object[] array = sequence.as(Object[].class);
 
@@ -347,7 +347,7 @@ public class PatternExpressionTest {
         "[] -> 3\n"+
         "[1, _, 3] -> 1\n" +
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l)).asLong();
+        "end\n").execute(Seq.sequence(1l, 2l, 3l)).asLong();
 
     assertEquals(1l, ret);
   }
@@ -358,7 +358,7 @@ public class PatternExpressionTest {
         "[] -> 3\n"+
         "[1, second, 3] -> second\n" +
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l)).asLong();
+        "end\n").execute(Seq.sequence(1l, 2l, 3l)).asLong();
 
     assertEquals(2l, ret);
   }
@@ -369,7 +369,7 @@ public class PatternExpressionTest {
         "[] -> 3\n"+
         "[1, bound, 3] -> bound\n" +
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l), 2l).asLong();
+        "end\n").execute(Seq.sequence(1l, 2l, 3l), 2l).asLong();
 
     assertEquals(2l, ret);
   }
@@ -381,7 +381,7 @@ public class PatternExpressionTest {
         "[] -> 3\n"+
         "seq@([1, _, 3]) -> seq\n" +
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l));
+        "end\n").execute(Seq.sequence(1l, 2l, 3l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -397,7 +397,7 @@ public class PatternExpressionTest {
         "[] -> 3\n"+
         "seq@([1, second, 3]) -> second\n" +
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l)).asLong();
+        "end\n").execute(Seq.sequence(1l, 2l, 3l)).asLong();
 
     assertEquals(2l, ret);
   }
@@ -408,7 +408,7 @@ public class PatternExpressionTest {
         "[] -> 3\n"+
         "seq@([1, bound, 3]) -> bound\n" +
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l), 2l).asLong();
+        "end\n").execute(Seq.sequence(1l, 2l, 3l), 2l).asLong();
 
     assertEquals(2l, ret);
   }
@@ -465,7 +465,7 @@ public class PatternExpressionTest {
         "1 <: 2 <: tail -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l, 4l));
+        "end\n").execute(Seq.sequence(1l, 2l, 3l, 4l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -481,7 +481,7 @@ public class PatternExpressionTest {
         "tail :> 3 :> 4 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(1l, 2l, 3l, 4l));
+        "end\n").execute(Seq.sequence(1l, 2l, 3l, 4l));
 
     Object[] array = sequence.as(Object[].class);
 
@@ -536,7 +536,7 @@ public class PatternExpressionTest {
         "0 <: tail :> 3 :> 4 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Sequence.sequence(0l, 1l, 2l, 3l, 4l));
+        "end\n").execute(Seq.sequence(0l, 1l, 2l, 3l, 4l));
 
     Object[] array = sequence.as(Object[].class);
 

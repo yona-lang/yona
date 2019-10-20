@@ -161,7 +161,7 @@ tuple : PARENS_L expression (COMMA expression)+ PARENS_R ;
 dict : CURLY_L (dictKey OP_ASSIGN dictVal (COMMA dictKey OP_ASSIGN dictVal)*)? CURLY_R ;
 dictKey : expression ;
 dictVal : expression ;
-sequence : emptySequence | oneSequence | twoSequence | otherSequence ;
+sequence : emptySequence | otherSequence ;
 
 fqn : (packageName BACKSLASH)? moduleName ;
 packageName : LOWERCASE_NAME (BACKSLASH LOWERCASE_NAME)* ;
@@ -173,9 +173,7 @@ lambda : BACKSLASH pattern* OP_ARROW expression ;
 underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;
-oneSequence: BRACKET_L expression BRACKET_R ;
-twoSequence: BRACKET_L expression COMMA expression BRACKET_R ;
-otherSequence: BRACKET_L expression COMMA expression (COMMA expression)+ BRACKET_R ;
+otherSequence: BRACKET_L expression (COMMA expression)* BRACKET_R ;
 
 caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ NEWLINE? KW_END ;
 patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWithGuard+) NEWLINE ;

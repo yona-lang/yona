@@ -1,19 +1,17 @@
 package yatta;
 
-import com.oracle.truffle.api.TruffleStackTrace;
-import com.oracle.truffle.api.TruffleStackTraceElement;
-import yatta.runtime.Context;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.TruffleStackTrace;
+import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
-import yatta.runtime.Sequence;
+import yatta.runtime.Context;
+import yatta.runtime.Seq;
 import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
-
-import java.util.Arrays;
 
 public class YattaException extends RuntimeException implements TruffleException {
   private static final long serialVersionUID = -6799734410727348507L;
@@ -101,20 +99,20 @@ public class YattaException extends RuntimeException implements TruffleException
     return new YattaException(result.toString(), operation);
   }
 
-  public static Sequence stacktraceToSequence(Throwable throwable) {
-    Sequence stackTraceSequence = Sequence.sequence();
+  public static Seq stacktraceToSequence(Throwable throwable) {
+    Seq stackTraceSequence = Seq.sequence();
 
     for (TruffleStackTraceElement stackTraceElement : TruffleStackTrace.getStackTrace(throwable)) {
       Node location = stackTraceElement.getLocation();
       if (location != null && location.getSourceSection() != null) {
-        stackTraceSequence = stackTraceSequence.push(new Tuple(
+        stackTraceSequence = stackTraceSequence.insertFirst(new Tuple(
             stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName(),
             stackTraceElement.getTarget().getRootNode().getName(),
             location.getSourceSection().getStartLine(),
             location.getSourceSection().getStartColumn()
         ));
       } else {
-        stackTraceSequence = stackTraceSequence.push(new Tuple (
+        stackTraceSequence = stackTraceSequence.insertFirst(new Tuple (
             stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName(),
             stackTraceElement.getTarget().getRootNode().getName(),
             Unit.INSTANCE,

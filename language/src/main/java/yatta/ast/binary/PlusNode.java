@@ -2,7 +2,7 @@ package yatta.ast.binary;
 
 import yatta.YattaException;
 import yatta.runtime.Dictionary;
-import yatta.runtime.Sequence;
+import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -25,7 +25,7 @@ public abstract class PlusNode extends BinaryOpNode {
   }
 
   @Specialization
-  public Sequence sequences(Sequence left, Sequence right) {
+  public Seq sequences(Seq left, Seq right) {
     // TODO implement
     return null;
   }

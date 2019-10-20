@@ -1,8 +1,5 @@
 package yatta.ast;
 
-import yatta.TypesGen;
-import yatta.runtime.*;
-import yatta.runtime.Module;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
@@ -15,6 +12,8 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.Types;
+import yatta.TypesGen;
+import yatta.runtime.*;
 
 import java.io.File;
 
@@ -210,8 +209,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
     return TypesGen.expectStringList(executeGeneric(frame));
   }
 
-  public Sequence executeSequence(VirtualFrame frame) throws UnexpectedResultException {
-    return TypesGen.expectSequence(executeGeneric(frame));
+  public Seq executeSequence(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectSeq(executeGeneric(frame));
   }
 
   public Dictionary executeDictionary(VirtualFrame frame) throws UnexpectedResultException {

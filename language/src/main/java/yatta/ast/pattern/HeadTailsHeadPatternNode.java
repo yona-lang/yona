@@ -1,12 +1,12 @@
 package yatta.ast.pattern;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.expression.value.EmptySequenceNode;
-import yatta.runtime.Sequence;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import yatta.runtime.Seq;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,8 +56,8 @@ public class HeadTailsHeadPatternNode extends MatchNode {
 
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
-    if (value instanceof Sequence) {
-      Sequence sequence = (Sequence) value;
+    if (value instanceof Seq) {
+      Seq sequence = (Seq) value;
       List<AliasNode> aliases = new ArrayList<>();
 
       if (leftNodes.length + rightPatterns.length > sequence.length()) {
@@ -67,12 +67,12 @@ public class HeadTailsHeadPatternNode extends MatchNode {
       if (sequence.length() > 0) {
         for (int i = 0; i < leftNodes.length; i++) {
           MatchNode headNode = leftNodes[i];
-          MatchResult headMatches = headNode.match(sequence.first(), frame);
+          MatchResult headMatches = headNode.match(sequence.first(this), frame);
           if (headMatches.isMatches()) {
             for (AliasNode aliasNode : headMatches.getAliases()) {
               aliases.add(aliasNode);
             }
-            sequence = sequence.removeFirst();
+            sequence = sequence.removeFirst(this);
           } else {
             return MatchResult.FALSE;
           }
@@ -80,12 +80,12 @@ public class HeadTailsHeadPatternNode extends MatchNode {
 
         for (int i = rightPatterns.length - 1; i >= 0; i--) {
           MatchNode headNode = rightPatterns[i];
-          MatchResult headMatches = headNode.match(sequence.last(), frame);
+          MatchResult headMatches = headNode.match(sequence.last(this), frame);
           if (headMatches.isMatches()) {
             for (AliasNode aliasNode : headMatches.getAliases()) {
               aliases.add(aliasNode);
             }
-            sequence = sequence.removeLast();
+            sequence = sequence.removeLast(this);
           } else {
             return MatchResult.FALSE;
           }
@@ -96,7 +96,7 @@ public class HeadTailsHeadPatternNode extends MatchNode {
           IdentifierNode identifierNode = (IdentifierNode) tailsNode;
 
           if (identifierNode.isBound(frame)) {
-            Sequence identifierValue = (Sequence) identifierNode.executeGeneric(frame);
+            Seq identifierValue = (Seq) identifierNode.executeGeneric(frame);
 
             if (!Objects.equals(identifierValue, sequence)) {
               return MatchResult.FALSE;

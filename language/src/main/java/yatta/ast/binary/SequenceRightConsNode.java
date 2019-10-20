@@ -3,14 +3,14 @@ package yatta.ast.binary;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
-import yatta.runtime.Sequence;
+import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 
 @NodeInfo(shortName = ":>")
 public abstract class SequenceRightConsNode extends BinaryOpNode {
   @Specialization
-  public Sequence sequences(Sequence left, Object right) {
-    return left.inject(right);
+  public Seq sequences(Seq left, Object right) {
+    return left.insertLast(right);
   }
 
   protected Promise promise(Object left, Object right) {
@@ -18,8 +18,8 @@ public abstract class SequenceRightConsNode extends BinaryOpNode {
     return all.map(args -> {
       Object[] argValues = (Object[]) args;
 
-      if (argValues[0] instanceof Sequence) {
-        return ((Sequence) argValues[0]).inject(argValues[1]);
+      if (argValues[0] instanceof Seq) {
+        return ((Seq) argValues[0]).insertLast(argValues[1]);
       } else {
         return YattaException.typeError(this, argValues);
       }
