@@ -579,6 +579,7 @@ public final class Seq implements TruffleObject {
         result[i + 1] = dispatch.execute(function, nodeLookup(node, i));
       }
     } else {
+      result[0] = ((Object[]) node)[0];
       for (int i = 0; i < len; i++) {
         result[i + 1] = nodeMap(nodeLookup(node, i), shift - BITS, function, dispatch);
       }
