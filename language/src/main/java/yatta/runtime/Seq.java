@@ -10,7 +10,6 @@ package yatta.runtime;
     import java.lang.reflect.Array;
     import java.nio.ByteBuffer;
     import java.nio.CharBuffer;
-    import java.util.PrimitiveIterator;
 
 @ExportLibrary(InteropLibrary.class)
 public final class Seq implements TruffleObject {
@@ -486,11 +485,11 @@ public final class Seq implements TruffleObject {
       final byte[] bytes = (byte[]) leaf;
       final Object[] result = new Object[nodeLength(leaf) + 1];
       if (decodeIsUtf8(bytes[0])) {
-        for (int i = 1; i < bytes.length; i++) {
+        for (int i = 1; i < result.length; i++) {
           result[i] = Util.utf8Decode(bytes, Util.utf8Offset(bytes, 1, i - 1));
         }
       } else {
-        for (int i = 1; i < bytes.length; i++) {
+        for (int i = 1; i < result.length; i++) {
           result[i] = bytes[i];
         }
       }
@@ -887,12 +886,34 @@ public final class Seq implements TruffleObject {
   }
 
   public static Seq fromCharSequence(final CharSequence source) {
-    Seq result = Seq.EMPTY;
-    final PrimitiveIterator.OfInt iterator = source.codePoints().iterator();
-    while (iterator.hasNext()) {
-      result = result.insertLast(iterator.next());
-    }
-    return result;
+    final int[] codePoints = source.codePoints().toArray();
+    final ByteBuffer buffer = ByteBuffer.allocate(MAX_NODE_LENGTH * 4);
+    return fromUtf8(new Utf8Source() {
+      int cursor = 0;
+
+      @Override
+      int remaining() {
+        return codePoints.length - cursor;
+      }
+
+      @Override
+      byte[] next(final int offset, final int n) {
+        int bytes = 0;
+        for (int i = 0; i < n; i++) {
+          int codePoint = codePoints[cursor++];
+          int codePointLen = Util.utf8Length(codePoint);
+          if (codePointLen == -1) {
+            throw new AssertionError();
+          }
+          Util.utf8Encode(buffer, codePoint);
+          bytes += codePointLen;
+        }
+        final byte[] result = new byte[offset + bytes];
+        System.arraycopy(buffer.array(), 0, result, offset, bytes);
+        buffer.position(0);
+        return result;
+      }
+    });
   }
 
   public static Seq catenate(final Seq left, final Seq right) {

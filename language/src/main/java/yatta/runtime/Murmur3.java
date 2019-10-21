@@ -57,7 +57,7 @@ public final class Murmur3 {
   }
 
   public static long hashFloat(final long seed, final double value) {
-    return hash(seed, Double.doubleToLongBits(value));
+    return hashInt(seed, Double.doubleToLongBits(value));
   }
 
   public static long hashTuple(final long seed, final Object[] values) {
