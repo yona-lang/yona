@@ -18,11 +18,11 @@ public final class EmptySequenceNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return Seq.sequence();
+    return Seq.EMPTY;
   }
 
   @Override
   public Seq executeSequence(VirtualFrame frame) throws UnexpectedResultException {
-    return Seq.sequence();
+    return Seq.EMPTY;
   }
 }

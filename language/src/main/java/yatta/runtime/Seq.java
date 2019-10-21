@@ -323,6 +323,10 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
+  public Seq map(final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    return new Seq(nodeMap(prefix, 0, function, dispatch), prefixSize, nodeMap(root, shift, function, dispatch), rootSize, nodeMap(suffix, 0, function, dispatch), suffixSize, shift);
+  }
+
   public long length() {
     return prefixSize + rootSize + suffixSize;
   }
@@ -562,6 +566,21 @@ public final class Seq implements TruffleObject {
     } else {
       for (int i = len - 1; i >= 0; i--) {
         result = nodeFoldRight(nodeLookup(node, i), shift - BITS, result, function, dispatch);
+      }
+    }
+    return result;
+  }
+
+  static Object[] nodeMap(final Object node, final int shift, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    final int len = nodeLength(node);
+    Object[] result = new Object[len + 1];
+    if (shift == 0) {
+      for (int i = 0; i < len; i++) {
+        result[i + 1] = dispatch.execute(function, nodeLookup(node, i));
+      }
+    } else {
+      for (int i = 0; i < len; i++) {
+        result[i + 1] = nodeMap(nodeLookup(node, i), shift - BITS, function, dispatch);
       }
     }
     return result;

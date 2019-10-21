@@ -100,7 +100,7 @@ public class YattaException extends RuntimeException implements TruffleException
   }
 
   public static Seq stacktraceToSequence(Throwable throwable) {
-    Seq stackTraceSequence = Seq.sequence();
+    Seq stackTraceSequence = Seq.EMPTY;
 
     for (TruffleStackTraceElement stackTraceElement : TruffleStackTrace.getStackTrace(throwable)) {
       Node location = stackTraceElement.getLocation();

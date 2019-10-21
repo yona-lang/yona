@@ -321,7 +321,7 @@ public class PatternExpressionTest {
         "1 <: bound -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Seq.sequence(1l), Seq.sequence());
+        "end\n").execute(Seq.sequence(1l), Seq.EMPTY);
 
     Object[] array = sequence.as(Object[].class);
 
@@ -334,7 +334,7 @@ public class PatternExpressionTest {
         "bound :> 1 -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
-        "end\n").execute(Seq.sequence(1l), Seq.sequence());
+        "end\n").execute(Seq.sequence(1l), Seq.EMPTY);
 
     Object[] array = sequence.as(Object[].class);
 
