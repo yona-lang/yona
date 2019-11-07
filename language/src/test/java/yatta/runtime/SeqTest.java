@@ -511,4 +511,19 @@ public class SeqTest {
       assertEquals(BYTES[i], buffer.get(i));
     }
   }
+
+  @Test
+  public void testCatenate() {
+    Seq seq = EMPTY;
+    for (long i = 0; i < 8193; i++) {
+      seq = seq.insertLast(i);
+    }
+    for (long i = 0; i < 8193; i++) {
+      Seq left = seq.take(i, null);
+      Seq right = seq.drop(i, null);
+      Seq newSeq = Seq.catenate(left, right);
+      assertEquals(String.valueOf(i), seq, newSeq);
+      seq = newSeq;
+    }
+  }
 }

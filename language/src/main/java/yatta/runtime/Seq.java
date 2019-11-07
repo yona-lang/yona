@@ -1,15 +1,15 @@
 package yatta.runtime;
 
-    import com.oracle.truffle.api.CompilerDirectives;
-    import com.oracle.truffle.api.interop.*;
-    import com.oracle.truffle.api.library.ExportLibrary;
-    import com.oracle.truffle.api.library.ExportMessage;
-    import com.oracle.truffle.api.nodes.Node;
-    import yatta.runtime.exceptions.BadArgException;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.exceptions.BadArgException;
 
-    import java.lang.reflect.Array;
-    import java.nio.ByteBuffer;
-    import java.nio.CharBuffer;
+import java.lang.reflect.Array;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 
 @ExportLibrary(InteropLibrary.class)
 public final class Seq implements TruffleObject {
@@ -18,7 +18,7 @@ public final class Seq implements TruffleObject {
   static final Object[] EMPTY_NODE = new Object[1];
   static final int BITS = 6;
   static final int MAX_NODE_LENGTH = 64;
-  static final int MIN_NODE_LENGTH = 63;
+  static final int MIN_NODE_LENGTH = MAX_NODE_LENGTH - 1;
   static final int MASK = 0x3f;
 
   public static final Seq EMPTY = new Seq(EMPTY_NODE, 0, EMPTY_NODE, 0L, EMPTY_NODE, 0, BITS);
@@ -72,7 +72,9 @@ public final class Seq implements TruffleObject {
 
   public static Seq sequence(Object... values) {
     Seq result = EMPTY;
-    for (Object value : values) result = result.insertLast(value);
+    for (Object value : values) {
+      result = result.insertLast(value);
+    }
     return result;
   }
 
@@ -110,7 +112,7 @@ public final class Seq implements TruffleObject {
     Object[] newRoot = treeTryInsertFirst(root, prefix, shift);
     int newShift = shift;
     if (newRoot == null) {
-      newRoot = newNonLeaf(wrap(prefix, shift), root, shift);
+      newRoot = newNonLeaf(wrap(prefix, 0, shift), root, shift);
       newShift += BITS;
     }
     return new Seq(newLeaf(o), 1, newRoot, rootSize + prefixSize, suffix, suffixSize, newShift);
@@ -125,7 +127,7 @@ public final class Seq implements TruffleObject {
     if (child != null) {
       return nonLeafReplaceFirst(tree, child, shift - BITS);
     } else if (nodeLength(tree) != MAX_NODE_LENGTH) {
-      return tryNonLeafInsertFirst(tree, wrap(leaf, shift - BITS), shift - BITS);
+      return tryNonLeafInsertFirst(tree, wrap(leaf, 0, shift - BITS), shift - BITS);
     } else {
       return null;
     }
@@ -142,7 +144,7 @@ public final class Seq implements TruffleObject {
     Object[] newRoot = treeTryInsertLast(root, suffix, shift);
     int newShift = shift;
     if (newRoot == null) {
-      newRoot = newNonLeaf(root, wrap(suffix, shift), shift);
+      newRoot = newNonLeaf(root, wrap(suffix, 0, shift), shift);
       newShift += BITS;
     }
     return new Seq(prefix, prefixSize, newRoot, rootSize + suffixSize, newLeaf(o), 1, newShift);
@@ -157,7 +159,7 @@ public final class Seq implements TruffleObject {
     if (child != null) {
       return nonLeafReplaceLast(tree, child, shift - BITS);
     } else if (nodeLength(tree) != MAX_NODE_LENGTH) {
-      return tryNonLeafInsertLast(tree, wrap(leaf, shift - BITS), shift - BITS);
+      return tryNonLeafInsertLast(tree, wrap(leaf, 0, shift - BITS), shift - BITS);
     } else {
       return null;
     }
@@ -179,6 +181,8 @@ public final class Seq implements TruffleObject {
       final int newPrefixSize = firstLeafSize - 1;
       if (shift == BITS) {
         return new Seq(newPrefix, newPrefixSize, separated.rest, rootSize - firstLeafSize, suffix, suffixSize, BITS);
+      } else if (nodeLength(separated.rest) == 0) {
+        return new Seq(newPrefix, newPrefixSize, EMPTY_NODE, 0, suffix, suffixSize, BITS);
       } else if (nodeLength(separated.rest) == 1) {
         return new Seq(newPrefix, newPrefixSize, (Object[]) nodeFirst(separated.rest), rootSize - firstLeafSize, suffix, suffixSize, shift - BITS);
       } else {
@@ -224,6 +228,8 @@ public final class Seq implements TruffleObject {
       final int newSuffixSize = lastLeafSize - 1;
       if (shift == BITS) {
         return new Seq(prefix, prefixSize, separated.init, rootSize - lastLeafSize, newSuffix, newSuffixSize, BITS);
+      } else if (nodeLength(separated.init) == 0) {
+        return new Seq(prefix, prefixSize, EMPTY_NODE, 0, newSuffix, newSuffixSize, BITS);
       } else if (nodeLength(separated.init) == 1) {
         return new Seq(prefix, prefixSize, (Object[]) nodeLast(separated.init), rootSize - lastLeafSize, newSuffix, newSuffixSize, shift - BITS);
       } else {
@@ -297,6 +303,22 @@ public final class Seq implements TruffleObject {
       shift -= BITS;
     }
     return nodeLookup(node, (int) (index & MASK));
+  }
+
+  public Seq take(final long n, final Node caller) {
+    Seq result = Seq.EMPTY;
+    for (long i = 0; i < n; i++) {
+      result = result.insertLast(lookup(i, caller));
+    }
+    return result;
+  }
+
+  public Seq drop(final long n, final Node caller) {
+    Seq result = this;
+    for (long i = 0; i < n; i++) {
+      result = result.removeFirst(caller);
+    }
+    return result;
   }
 
   public Object foldLeft(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
@@ -480,8 +502,13 @@ public final class Seq implements TruffleObject {
     return true;
   }
 
-  static Object wrap(final Object leaf, final int shift) {
-    return shift == 0 ? leaf : newNonLeaf(wrap(leaf, shift - BITS), shift - BITS);
+  static Object wrap(final Object node, final int nodeShift, int desiredShift) {
+    if (nodeShift == desiredShift) {
+      return node;
+    } else {
+      desiredShift -= BITS;
+      return newNonLeaf(wrap(node, nodeShift, desiredShift), desiredShift);
+    }
   }
 
   static Object[] objectify(final Object leaf) {
@@ -868,7 +895,7 @@ public final class Seq implements TruffleObject {
       byte[] leaf = newLeaf(source, MAX_NODE_LENGTH);
       Object[] newRoot = treeTryInsertLast(root, leaf, shift);
       if (newRoot == null) {
-        newRoot = newNonLeaf(root, wrap(leaf, shift), shift);
+        newRoot = newNonLeaf(root, wrap(leaf, 0, shift), shift);
         shift += BITS;
       }
       root = newRoot;
@@ -890,7 +917,7 @@ public final class Seq implements TruffleObject {
       byte[] leaf = newLeaf(source, MAX_NODE_LENGTH);
       Object[] newRoot = treeTryInsertLast(root, leaf, shift);
       if (newRoot == null) {
-        newRoot = newNonLeaf(root, wrap(leaf, shift), shift);
+        newRoot = newNonLeaf(root, wrap(leaf, 0, shift), shift);
         shift += BITS;
       }
       root = newRoot;
@@ -937,11 +964,251 @@ public final class Seq implements TruffleObject {
   }
 
   public static Seq catenate(final Seq left, final Seq right) {
-    // TODO
-    Seq result = left;
-    for (int i = 0; i < right.length(); i++) {
-      result = result.insertLast(right.lookup(i, null));
+    int leftShift = left.shift;
+    Object[] leftRoot;
+    if (nodeLength(left.suffix) != 0) {
+      leftRoot = treeTryInsertLast(left.root, left.suffix, left.shift);
+      if (leftRoot == null) {
+        leftRoot = newNonLeaf(left.root, wrap(left.suffix, 0, left.shift), left.shift);
+        leftShift += BITS;
+      }
+    } else {
+      leftRoot = left.root;
     }
-    return result;
+    int rightShift = right.shift;
+    Object[] rightRoot;
+    if (nodeLength(right.prefix) != 0) {
+      rightRoot = treeTryInsertFirst(right.root, right.prefix, right.shift);
+      if (rightRoot == null) {
+        rightRoot = newNonLeaf(wrap(right.prefix, 0, right.shift), right.root, right.shift);
+        rightShift += BITS;
+      }
+    } else {
+      rightRoot = right.root;
+    }
+    if (nodeLength(leftRoot) == 0) {
+      return new Seq(left.prefix, left.prefixSize, rightRoot, left.suffixSize + right.prefixSize + right.rootSize, right.suffix, right.suffixSize, rightShift);
+    } else if (nodeLength(rightRoot) == 0) {
+      return new Seq(left.prefix, left.prefixSize, leftRoot, left.rootSize + left.suffixSize + right.prefixSize, right.suffix, right.suffixSize, leftShift);
+    } else {
+      leftRoot = tiltRight(leftRoot, leftShift);
+      rightRoot = tiltLeft(rightRoot, rightShift);
+      while (leftShift > BITS && nodeLength(leftRoot) == 1) {
+        leftRoot = (Object[]) nodeFirst(leftRoot);
+        leftShift -= BITS;
+      }
+      while (rightShift > BITS && nodeLength(rightRoot) == 1) {
+        rightRoot = (Object[]) nodeFirst(rightRoot);
+        rightShift -= BITS;
+      }
+      int shift = Math.max(leftShift, rightShift);
+      leftRoot = (Object[]) wrap(leftRoot, leftShift, shift);
+      rightRoot = (Object[]) wrap(rightRoot, rightShift, shift);
+      final Object[] root = newNonLeaf(leftRoot, rightRoot, shift);
+      shift += BITS;
+      final long rootSize = left.rootSize + left.suffixSize + right.prefixSize + right.rootSize;
+      return new Seq(left.prefix, left.prefixSize, root, rootSize, right.suffix, right.suffixSize, shift);
+    }
+  }
+
+  static Object[] tiltLeft(final Object[] node, int shift) {
+    if (shift == 6) {
+      if (nodeLength(node) <= 1) {
+        return node;
+      } else if (nodeLength(nodeFirst(node)) >= MIN_NODE_LENGTH) {
+        return node;
+      } else {
+        return redistributeLeft(node, 0);
+      }
+    } else {
+      Object[] result = node;
+      shift -= BITS;
+      if (nodeLength(nodeFirst(node)) < MIN_NODE_LENGTH) {
+        result = redistributeLeft(node, shift);
+      }
+      result = nonLeafReplaceFirst(result, tiltLeft((Object[]) nodeFirst(result), shift), shift);
+      if (nodeLength(nodeFirst(node)) < MIN_NODE_LENGTH) {
+        result = redistributeLeft(node, shift);
+      }
+      return result;
+    }
+  }
+
+  static Object[] redistributeLeft(final Object[] parent, final int childShift) {
+    final int parentLength = nodeLength(parent);
+    int total = 0;
+    Object[] result = null;
+    int nodesToFill = 0;
+    int nodesToCopy = 0;
+    for (int idx = 0; idx < parentLength; idx++) {
+      total += nodeLength(nodeLookup(parent, idx));
+      if (total % MAX_NODE_LENGTH == 0) {
+        nodesToFill = total / MAX_NODE_LENGTH;
+        nodesToCopy = parentLength - idx - 1;
+        result = new Object[nodesToFill + nodesToCopy + 1];
+        for (int i = 0; i < nodesToFill; i++) {
+          result[i + 1] = new Object[MAX_NODE_LENGTH + 1];
+        }
+        break;
+      } else if (total % MIN_NODE_LENGTH == 0) {
+        nodesToFill = total / MIN_NODE_LENGTH;
+        nodesToCopy = parentLength - idx - 1;
+        result = new Object[nodesToFill + nodesToCopy + 1];
+        for (int i = 0; i < nodesToFill; i++) {
+          result[i + 1] = new Object[MIN_NODE_LENGTH + 1];
+        }
+        break;
+      }
+    }
+    if (result == null) {
+      nodesToFill = (total / MAX_NODE_LENGTH) + 1;
+      result = new Object[nodesToFill + 1];
+      for (int i = 0; i < result.length - 1; i++) {
+        result[i + 1] = new Object[MAX_NODE_LENGTH + 1];
+      }
+      result[result.length - 1] = new Object[(total % MAX_NODE_LENGTH) + 1];
+    }
+    int srcIdx = 0;
+    int srcOffset = 0;
+    for (int i = 0; i < nodesToFill; i++) {
+      final Object[] dst = (Object[]) result[i + 1];
+      int dstOffset = 0;
+      while (srcIdx < parentLength) {
+        Object[] src = objectify(nodeLookup(parent, srcIdx));
+        final int srcRemaining = nodeLength(src) - srcOffset;
+        final int dstRemaining = nodeLength(dst) - dstOffset;
+        System.arraycopy(src, srcOffset + 1, dst, dstOffset + 1, Math.min(srcRemaining, dstRemaining));
+        if (srcRemaining > dstRemaining) {
+          srcOffset += dstRemaining;
+          if (childShift != 0) {
+            buildIndex(dst, childShift - BITS);
+          }
+          break;
+        } else if (srcRemaining < dstRemaining) {
+          dstOffset += srcRemaining;
+          srcOffset = 0;
+          srcIdx++;
+        } else {
+          srcOffset = 0;
+          srcIdx++;
+          if (childShift != 0) {
+            buildIndex(dst, childShift - BITS);
+          }
+          break;
+        }
+      }
+    }
+    System.arraycopy(parent, srcIdx + 1, result, nodesToFill + 1, nodesToCopy);
+    return buildIndex(result, childShift);
+  }
+
+  static Object[] tiltRight(final Object[] node, int shift) {
+    if (shift == 6) {
+      if (nodeLength(node) <= 1) {
+        return node;
+      } else if (nodeLength(nodeLast(node)) >= MIN_NODE_LENGTH) {
+        return node;
+      } else {
+        return redistributeRight(node, 0);
+      }
+    } else {
+      Object[] result = node;
+      shift -= BITS;
+      if (nodeLength(nodeLast(node)) < MIN_NODE_LENGTH) {
+        result = redistributeRight(node, shift);
+      }
+      result = nonLeafReplaceLast(result, tiltRight((Object[]) nodeLast(result), shift), shift);
+      if (nodeLength(nodeLast(node)) < MIN_NODE_LENGTH) {
+        result = redistributeRight(node, shift);
+      }
+      return result;
+    }
+  }
+
+  static Object[] redistributeRight(final Object[] parent, final int childShift) {
+    final int parentLength = nodeLength(parent);
+    int total = 0;
+    Object[] result = null;
+    int nodesToCopy = 0;
+    int nodesToFill = 0;
+    for (int idx = 0; idx < parentLength; idx++) {
+      total += nodeLength(nodeLookup(parent, parentLength - idx - 1));
+      if (total % MAX_NODE_LENGTH == 0) {
+        nodesToFill = total / MAX_NODE_LENGTH;
+        nodesToCopy = parentLength - idx - 1;
+        result = new Object[nodesToFill + nodesToCopy + 1];
+        for (int i = 0; i < nodesToFill; i++) {
+          result[nodesToCopy + i + 1] = new Object[MAX_NODE_LENGTH + 1];
+        }
+        break;
+      } else if (total % MIN_NODE_LENGTH == 0) {
+        nodesToFill = total / MIN_NODE_LENGTH;
+        nodesToCopy = parentLength - idx - 1;
+        result = new Object[nodesToFill + nodesToCopy + 1];
+        for (int i = 0; i < nodesToFill; i++) {
+          result[nodesToCopy + i + 1] = new Object[MIN_NODE_LENGTH + 1];
+        }
+        break;
+      }
+    }
+    if (result == null) {
+      nodesToFill = (total / MAX_NODE_LENGTH) + 1;
+      result = new Object[nodesToFill + 1];
+      result[1] = new Object[(total % MAX_NODE_LENGTH) + 1];
+      for (int i = 2; i < result.length; i++) {
+        result[i] = new Object[MAX_NODE_LENGTH + 1];
+      }
+    }
+    System.arraycopy(parent, 1, result, 1, nodesToCopy);
+    int srcIdx = nodesToCopy;
+    int srcOffset = 0;
+    for (int i = 0; i < nodesToFill; i++) {
+      final Object[] dst = (Object[]) result[nodesToCopy + i + 1];
+      int dstOffset = 0;
+      while (srcIdx < parentLength) {
+        Object[] src = objectify(nodeLookup(parent, srcIdx));
+        final int srcRemaining = nodeLength(src) - srcOffset;
+        final int dstRemaining = nodeLength(dst) - dstOffset;
+        System.arraycopy(src, srcOffset + 1, dst, dstOffset + 1, Math.min(srcRemaining, dstRemaining));
+        if (srcRemaining > dstRemaining) {
+          srcOffset += dstRemaining;
+          if (childShift != 0) {
+            buildIndex(dst, childShift - BITS);
+          }
+          break;
+        } else if (srcRemaining < dstRemaining) {
+          dstOffset += srcRemaining;
+          srcOffset = 0;
+          srcIdx++;
+        } else {
+          srcOffset = 0;
+          srcIdx++;
+          if (childShift != 0) {
+            buildIndex(dst, childShift - BITS);
+          }
+          break;
+        }
+      }
+    }
+    return buildIndex(result, childShift);
+  }
+
+  static Object[] buildIndex(final Object[] nonLeaf, final int childShift) {
+    final int len = nodeLength(nonLeaf);
+    final long[] meta = new long[len];
+    long base = 0;
+    boolean isSpecial = false;
+    for (int i = 0; i < len; i++) {
+      final Object node = nodeLookup(nonLeaf, i);
+      base += nodeSize(node, childShift);
+      meta[i] = base;
+      if (!isSpecial && nodeIsSpecial(node)) {
+        isSpecial = true;
+      }
+    }
+    if (isSpecial) {
+      nonLeaf[0] = meta;
+    }
+    return nonLeaf;
   }
 }
