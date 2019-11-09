@@ -1,5 +1,6 @@
 package yatta.runtime.threading;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 
 import java.util.concurrent.ArrayBlockingQueue;
@@ -28,6 +29,7 @@ public final class Threading {
     blockingQueue.add(runnable);
   }
 
+  @CompilerDirectives.TruffleBoundary
   public void dispose() {
     for (int i = 0; i < THREAD_COUNT; i++) {
       workers[i].abort();
