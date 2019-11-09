@@ -9,10 +9,7 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
-import yatta.runtime.Builtins;
-import yatta.runtime.Context;
-import yatta.runtime.NativeObject;
-import yatta.runtime.Tuple;
+import yatta.runtime.*;
 import yatta.runtime.async.Promise;
 
 import java.io.IOException;
@@ -31,8 +28,10 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileOpenNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object open(String uri, String mode) {
+    public Object open(Seq uriSeq, Seq modeSeq) {
       try {
+        String uri = uriSeq.asJavaString(this);
+        String mode = modeSeq.asJavaString(this);
         List<OpenOption> openOptions = new ArrayList<>();
         if (mode.equals("r")) {
           openOptions.add(StandardOpenOption.READ);
@@ -87,7 +86,7 @@ public final class FileBuiltinModule implements BuiltinModule {
           for (int i = 0; i < length; i++) {
             byte b = attachment.get();
             if (b == '\n') {
-              promise.fulfil(new Tuple(context.symbol("ok"), new String(output), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
+              promise.fulfil(new Tuple(context.symbol("ok"), Seq.fromCharSequence(new String(output)), new Tuple(new NativeObject(asynchronousFileChannel), null, position + i + 1)), thisNode);
               fulfilled = true;
               break;
             } else {

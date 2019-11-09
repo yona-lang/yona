@@ -31,6 +31,16 @@ public class YattaException extends RuntimeException implements TruffleException
   }
 
   @TruffleBoundary
+  public YattaException(Seq message, Node location) {
+    this(message.asJavaString(location), location);
+  }
+
+  @TruffleBoundary
+  public YattaException(Seq message, Throwable cause, Node location) {
+    this(message.asJavaString(location), cause, location);
+  }
+
+  @TruffleBoundary
   public YattaException(Throwable cause, Node location) {
     super(cause);
     this.location = location;
@@ -106,15 +116,15 @@ public class YattaException extends RuntimeException implements TruffleException
       Node location = stackTraceElement.getLocation();
       if (location != null && location.getSourceSection() != null) {
         stackTraceSequence = stackTraceSequence.insertFirst(new Tuple(
-            stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName(),
-            stackTraceElement.getTarget().getRootNode().getName(),
+            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
+            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getName()),
             location.getSourceSection().getStartLine(),
             location.getSourceSection().getStartColumn()
         ));
       } else {
         stackTraceSequence = stackTraceSequence.insertFirst(new Tuple (
-            stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName(),
-            stackTraceElement.getTarget().getRootNode().getName(),
+            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
+            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getName()),
             Unit.INSTANCE,
             Unit.INSTANCE
         ));

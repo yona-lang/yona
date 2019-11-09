@@ -11,7 +11,6 @@ import yatta.runtime.Seq;
 import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
 
-import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -95,8 +94,6 @@ public class BinaryOperatorsTest {
         new BinaryArgsHolder(2d, 1d, false, Boolean.class),
         new BinaryArgsHolder((byte) 1, (byte) 2, true, Boolean.class),
         new BinaryArgsHolder((byte) 2, (byte) 1, false, Boolean.class),
-        new BinaryArgsHolder("\"ad\"", "\"am\"", true, Boolean.class),
-        new BinaryArgsHolder("\"am\"", "\"ad\"", false, Boolean.class),
         new BinaryArgsHolder(Unit.INSTANCE, Unit.INSTANCE, false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(2l), 1l, false, Boolean.class),
@@ -115,8 +112,6 @@ public class BinaryOperatorsTest {
         new BinaryArgsHolder(2d, 1d, true, Boolean.class),
         new BinaryArgsHolder((byte) 1, (byte) 2, false, Boolean.class),
         new BinaryArgsHolder((byte) 2, (byte) 1, true, Boolean.class),
-        new BinaryArgsHolder("\"ad\"", "\"am\"", false, Boolean.class),
-        new BinaryArgsHolder("\"am\"", "\"ad\"", true, Boolean.class),
         new BinaryArgsHolder(Unit.INSTANCE, Unit.INSTANCE, false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(2l), 1l, true, Boolean.class),
@@ -152,9 +147,6 @@ public class BinaryOperatorsTest {
         new BinaryArgsHolder((byte) 1, (byte) 1, true, Boolean.class),
         new BinaryArgsHolder((byte) 1, (byte) 2, true, Boolean.class),
         new BinaryArgsHolder((byte) 2, (byte) 1, false, Boolean.class),
-        new BinaryArgsHolder("\"ad\"", "\"ad\"", true, Boolean.class),
-        new BinaryArgsHolder("\"ad\"", "\"am\"", true, Boolean.class),
-        new BinaryArgsHolder("\"am\"", "\"ad\"", false, Boolean.class),
         new BinaryArgsHolder(Unit.INSTANCE, Unit.INSTANCE, true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 1l, true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, true, Boolean.class),
@@ -179,9 +171,6 @@ public class BinaryOperatorsTest {
         new BinaryArgsHolder((byte) 1, (byte) 1, true, Boolean.class),
         new BinaryArgsHolder((byte) 1, (byte) 2, false, Boolean.class),
         new BinaryArgsHolder((byte) 2, (byte) 1, true, Boolean.class),
-        new BinaryArgsHolder("\"ad\"", "\"ad\"", true, Boolean.class),
-        new BinaryArgsHolder("\"ad\"", "\"am\"", false, Boolean.class),
-        new BinaryArgsHolder("\"am\"", "\"ad\"", true, Boolean.class),
         new BinaryArgsHolder(Unit.INSTANCE, Unit.INSTANCE, true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 1l, true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, false, Boolean.class),
@@ -206,8 +195,7 @@ public class BinaryOperatorsTest {
     return Stream.of(
         new BinaryArgsHolder(1l, 2l, 3l, Long.class),
         new BinaryArgsHolder(1d, 2d, 3d, Double.class),
-        new BinaryArgsHolder("\"ad\"", "\"am\"", "adam", String.class),
-        // TODO add sequence and dictionary
+        // TODO add dictionary
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, 3l, Long.class),
         new BinaryArgsHolder(1l, new PromiseHolder(2l), 3l, Long.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), 3l, Long.class)

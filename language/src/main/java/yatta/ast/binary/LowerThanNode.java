@@ -1,10 +1,11 @@
 package yatta.ast.binary;
 
-import yatta.YattaException;
-import yatta.runtime.*;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.YattaException;
+import yatta.runtime.Function;
+import yatta.runtime.Unit;
+import yatta.runtime.async.Promise;
 
 @NodeInfo(shortName = "<")
 public abstract class LowerThanNode extends BinaryOpNode {
@@ -21,11 +22,6 @@ public abstract class LowerThanNode extends BinaryOpNode {
   @Specialization
   public boolean bytes(byte left, byte right) {
     return left < right;
-  }
-
-  @Specialization
-  public boolean strings(String left, String right) {
-    return left.compareTo(right) < 0;
   }
 
   @Specialization
@@ -54,10 +50,6 @@ public abstract class LowerThanNode extends BinaryOpNode {
       } else if (argValues[0] instanceof Byte) {
         return (byte) argValues[0] < (byte) argValues[1];
         // TODO implement
-      } else if (argValues[0] instanceof String) {
-        return ((String) argValues[0]).compareTo((String) argValues[1]) < 0;
-//      } else if (argValues[0] instanceof Sequence) {
-//        return null;
 //      } else if (argValues[0] instanceof Dictionary) {
 //        return null;
       } else {

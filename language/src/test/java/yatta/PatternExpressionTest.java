@@ -118,7 +118,7 @@ public class PatternExpressionTest {
         "\"foo\" -> \"bar\"\n"+
         "\"hello\" -> \"world\"\n" +
         "_ -> \"unexpected\"\n" +
-        "end\n").execute("hello").asString();
+        "end\n").execute(Seq.fromCharSequence("hello")).asString();
     assertEquals("world", ret);
   }
 
@@ -496,7 +496,7 @@ public class PatternExpressionTest {
         "{\"b\" = 3} -> 3\n" +
         "{\"a\" = 1, \"b\" = bb} -> bb\n" +
         "_ -> 9\n" +
-        "end\n").execute(Dictionary.dictionary().insert("a", 1l).insert("b", 2l)).asLong();
+        "end\n").execute(Dictionary.dictionary().insert(Seq.fromCharSequence("a"), 1l).insert(Seq.fromCharSequence("b"), 2l)).asLong();
     assertEquals(2l, ret);
   }
 
@@ -524,7 +524,7 @@ public class PatternExpressionTest {
         "{\"b\" = 3} -> 3\n" +
         "{\"a\" = 1, \"b\" = bound} -> bound\n" +
         "_ -> 9\n" +
-        "end\n").execute(Dictionary.dictionary().insert("a", 1l).insert("b", 2l), 2l).asLong();
+        "end\n").execute(Dictionary.dictionary().insert(Seq.fromCharSequence("a"), 1l).insert(Seq.fromCharSequence("b"), 2l), 2l).asLong();
     assertEquals(2l, ret);
   }
 

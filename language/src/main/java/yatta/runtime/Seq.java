@@ -1,15 +1,16 @@
 package yatta.runtime;
 
-    import com.oracle.truffle.api.CompilerDirectives;
-    import com.oracle.truffle.api.interop.*;
-    import com.oracle.truffle.api.library.ExportLibrary;
-    import com.oracle.truffle.api.library.ExportMessage;
-    import com.oracle.truffle.api.nodes.Node;
-    import yatta.runtime.exceptions.BadArgException;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.exceptions.BadArgException;
 
-    import java.lang.reflect.Array;
-    import java.nio.ByteBuffer;
-    import java.nio.CharBuffer;
+import java.lang.reflect.Array;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 
 @ExportLibrary(InteropLibrary.class)
 public final class Seq implements TruffleObject {
@@ -66,6 +67,22 @@ public final class Seq implements TruffleObject {
     return true;
   }
 
+  @ExportMessage
+  public boolean isString() {
+    CompilerAsserts.compilationConstant(length());
+    for (long i = 0; i < length(); i++) {
+      if (!(lookup(i, null) instanceof Integer)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @ExportMessage
+  public String asString() throws UnsupportedMessageException {
+    return asJavaString(null);
+  }
+
   static boolean isInstance(TruffleObject tuple) {
     return tuple instanceof Seq;
   }
@@ -87,20 +104,24 @@ public final class Seq implements TruffleObject {
   @Override
   @CompilerDirectives.TruffleBoundary
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("[");
+    if (!isString()) {
+      StringBuilder sb = new StringBuilder();
+      sb.append("[");
 
-    for (int i = 0; i < length(); i++) {
-      sb.append(lookup(i, null));
+      for (int i = 0; i < length(); i++) {
+        sb.append(lookup(i, null));
 
-      if (i != length() - 1) {
-        sb.append(", ");
+        if (i != length() - 1) {
+          sb.append(", ");
+        }
       }
+
+      sb.append("]");
+
+      return sb.toString();
+    } else {
+      return asJavaString(null);
     }
-
-    sb.append("]");
-
-    return sb.toString();
   }
 
   public Seq insertFirst(final Object o) {
@@ -343,6 +364,21 @@ public final class Seq implements TruffleObject {
       return false;
     }
     return true;
+  }
+
+  public String asJavaString(Node caller) {
+    long len = length();
+    if (len > Integer.MAX_VALUE / 2) {
+      throw new BadArgException("Sequence too long to be converted to Java String", caller);
+    }
+    CharBuffer charBuffer = CharBuffer.allocate((int) len * 2);
+    if (asChars(charBuffer)) {
+      charBuffer.limit(charBuffer.position());
+      charBuffer.position(0);
+      return charBuffer.toString();
+    } else {
+      throw new BadArgException("Unable to convert sequence to Java String", caller);
+    }
   }
 
   static boolean appendCodePoints(final CharBuffer buffer, final Object node, final int shift) {

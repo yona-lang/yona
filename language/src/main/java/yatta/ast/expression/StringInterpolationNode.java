@@ -5,6 +5,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.TypesGen;
 import yatta.ast.ExpressionNode;
+import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.NoMatchException;
 import yatta.runtime.strings.StringUtil;
@@ -54,13 +55,13 @@ public final class StringInterpolationNode extends ExpressionNode {
       return Promise.all(new Object[]{interpolationValue, alignmentValue}, this).map(fulfiled -> {
         try {
           Object[] fulfiledArgs = (Object[]) fulfiled;
-          String fulfiledInterpolationValue = StringUtil.yattaValueAsYattaString(fulfiledArgs[0]);
+          Seq fulfiledInterpolationValue = StringUtil.yattaValueAsYattaString(fulfiledArgs[0]);
           Object fulfiledAlignmentValue = fulfiledArgs[1];
 
           if (fulfiledAlignmentValue == null) {
             return fulfiledInterpolationValue;
           } else {
-            return String.format("%" + TypesGen.expectLong(fulfiledAlignmentValue) + "s", fulfiledInterpolationValue);
+            return Seq.fromCharSequence(String.format("%" + TypesGen.expectLong(fulfiledAlignmentValue) + "s", fulfiledInterpolationValue.asJavaString(this)));
           }
         } catch (UnexpectedResultException e) {
           throw new NoMatchException(e, this);
@@ -68,11 +69,11 @@ public final class StringInterpolationNode extends ExpressionNode {
       }, this);
     } else {
       try {
-        String interpolationValueString = StringUtil.yattaValueAsYattaString(interpolationValue);
+        Seq interpolationValueString = StringUtil.yattaValueAsYattaString(interpolationValue);
         if (alignmentValue == null) {
           return interpolationValueString;
         } else {
-          return String.format("%" + TypesGen.expectLong(alignmentValue) + "s", interpolationValueString);
+          return Seq.fromCharSequence(String.format("%" + TypesGen.expectLong(alignmentValue) + "s", interpolationValueString.asJavaString(this)));
         }
       } catch (UnexpectedResultException e) {
         throw new NoMatchException(e, this);

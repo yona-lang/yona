@@ -9,6 +9,7 @@ import yatta.ast.ExpressionNode;
 import yatta.ast.expression.value.FQNNode;
 import yatta.runtime.Function;
 import yatta.runtime.Module;
+import yatta.runtime.Seq;
 
 import java.util.Arrays;
 import java.util.Objects;

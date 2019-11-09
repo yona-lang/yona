@@ -4,6 +4,7 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
@@ -47,27 +48,27 @@ public final class StringPartsNode extends ExpressionNode {
       if (evaluatedExpressions[i] instanceof Promise) {
         isPromise = true;
       } else {
-        assert evaluatedExpressions[i] instanceof String;
+        assert evaluatedExpressions[i] instanceof Seq;
       }
     }
 
     CompilerDirectives.transferToInterpreterAndInvalidate();
     if (!isPromise) {
-      StringBuilder sb = new StringBuilder();
+      Seq sb = Seq.EMPTY;
 
       for (Object evaluatedExpression : evaluatedExpressions) {
-        sb.append(evaluatedExpression);
+        sb = Seq.catenate(sb, (Seq) evaluatedExpression);
       }
 
-      return sb.toString();
+      return sb;
     } else {
       return Promise.all(evaluatedExpressions, this).map(vals -> {
-        StringBuilder sb = new StringBuilder();
+        Seq sb = Seq.EMPTY;
         for (Object val : (Object[]) vals) {
-          sb.append(val);
+          sb = Seq.catenate(sb, (Seq) val);
         }
 
-        return sb.toString();
+        return sb;
       }, this);
     }
   }

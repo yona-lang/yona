@@ -21,4 +21,8 @@ public final class UndefinedNameException extends YattaException {
   private UndefinedNameException(String message, Node node) {
     super(message, node);
   }
+
+  private UndefinedNameException(Seq message, Node node) {
+    super(message, node);
+  }
 }

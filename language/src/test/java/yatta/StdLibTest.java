@@ -2,13 +2,14 @@ package yatta;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.AbstractList;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StdLibTest {
   private Context context;
@@ -49,6 +50,6 @@ public class StdLibTest {
     Object[] array = tuple.as(Object[].class);
     assertEquals(0l, array[0]);
     assertEquals("ahoj", ((AbstractList) array[1]).get(0));
-    assertTrue(((AbstractList) array[2]).isEmpty());
+    assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
   }
 }

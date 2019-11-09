@@ -2,6 +2,7 @@ package yatta;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.Seq;
 import yatta.runtime.Symbol;
 import yatta.runtime.Tuple;
 
@@ -11,6 +12,10 @@ public class YattaSymbolException extends YattaException {
   public YattaSymbolException(String message, Node location, Symbol symbol) {
     super(message, location);
     this.symbol = symbol;
+  }
+
+  public YattaSymbolException(Seq message, Node location, Symbol symbol) {
+    this(message.asJavaString(location), location, symbol);
   }
 
   @Override

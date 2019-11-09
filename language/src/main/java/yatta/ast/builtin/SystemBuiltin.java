@@ -28,7 +28,7 @@ public abstract class SystemBuiltin extends BuiltinNode {
 
     for(int i = 0; i < sequence.length(); i++) {
       try {
-        strings[i] = TypesGen.expectString(sequence.lookup(i, this));
+        strings[i] = TypesGen.expectSeq(sequence.lookup(i, this)).asJavaString(this);
       } catch (UnexpectedResultException e) {
         throw YattaException.typeError(this, sequence);
       }
@@ -44,7 +44,7 @@ public abstract class SystemBuiltin extends BuiltinNode {
 
       context.ioExecutor.submit(() -> {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-          stdOutPromise.fulfil(Seq.sequence(br.lines().toArray()), this);
+          stdOutPromise.fulfil(Seq.sequence(br.lines().map(Seq::fromCharSequence).toArray()), this);
         } catch (IOException ex) {
           stdOutPromise.fulfil(new yatta.runtime.exceptions.IOException(ex, this), this);
         }
@@ -52,7 +52,7 @@ public abstract class SystemBuiltin extends BuiltinNode {
 
       context.ioExecutor.submit(() -> {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-          stdErrPromise.fulfil(Seq.sequence(br.lines().toArray()), this);
+          stdErrPromise.fulfil(Seq.sequence(br.lines().map(Seq::fromCharSequence).toArray()), this);
         } catch (IOException ex) {
           stdErrPromise.fulfil(new yatta.runtime.exceptions.IOException(ex, this), this);
         }

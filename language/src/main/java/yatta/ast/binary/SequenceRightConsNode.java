@@ -35,5 +35,4 @@ public abstract class SequenceRightConsNode extends BinaryOpNode {
   public Promise rightPromise(Object left, Promise right) {
     return promise(left, right);
   }
-
 }

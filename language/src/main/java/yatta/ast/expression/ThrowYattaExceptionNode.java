@@ -6,6 +6,7 @@ import yatta.YattaException;
 import yatta.YattaSymbolException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.value.SymbolNode;
+import yatta.runtime.Seq;
 import yatta.runtime.Symbol;
 import yatta.runtime.async.Promise;
 
@@ -47,12 +48,12 @@ public class ThrowYattaExceptionNode extends ExpressionNode {
     try {
       Symbol evaluatedSymbol = symbolNode.executeSymbol(frame);
       Object evaluatedString = stringNode.executeGeneric(frame);
-      if (evaluatedString instanceof String) {
-        throw new YattaSymbolException((String) evaluatedString, this, evaluatedSymbol);
+      if (evaluatedString instanceof Seq) {
+        throw new YattaSymbolException((Seq) evaluatedString, this, evaluatedSymbol);
       } else {
         assert evaluatedString instanceof Promise;
         Promise promise = (Promise) evaluatedString;
-        return promise.map(message -> new YattaSymbolException((String) message, this, evaluatedSymbol), this);
+        return promise.map(message -> new YattaSymbolException((Seq) message, this, evaluatedSymbol), this);
       }
     } catch (UnexpectedResultException ex) {
       throw new YattaException("Unexpected error while constructing an Exception: " + ex.getMessage(), this);

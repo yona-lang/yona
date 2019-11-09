@@ -40,7 +40,7 @@ public abstract class UnboxNode extends ExpressionNode {
       } else if (interop.fitsInDouble(value)) {
         return (long) interop.asDouble(value);
       } else if (interop.isString(value)) {
-        return interop.asString(value);
+        return Seq.fromCharSequence(interop.asString(value));
       } else if (interop.isBoolean(value)) {
         return interop.asBoolean(value);
       } else {
@@ -51,5 +51,4 @@ public abstract class UnboxNode extends ExpressionNode {
       throw new AssertionError();
     }
   }
-
 }

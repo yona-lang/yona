@@ -5,13 +5,11 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SimpleExpressionTest {
-
   private Context context;
 
   @BeforeEach
@@ -416,7 +414,6 @@ public class SimpleExpressionTest {
     assertEquals(3l, ret);
   }
 
-  @Disabled("this seems to be broken because of existing Sequence bug")
   @Test
   public void joinAssociativity() {
     Value ret = context.eval(YattaLanguage.ID, "[1, 2] ++ [3, 4] ++ [5, 6]");

@@ -1,11 +1,10 @@
 package yatta.ast.binary;
 
-import yatta.YattaException;
-import yatta.runtime.Dictionary;
-import yatta.runtime.Seq;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.YattaException;
+import yatta.runtime.Dictionary;
+import yatta.runtime.async.Promise;
 
 @NodeInfo(shortName = "+")
 public abstract class PlusNode extends BinaryOpNode {
@@ -17,17 +16,6 @@ public abstract class PlusNode extends BinaryOpNode {
   @Specialization
   public double doubles(double left, double right) {
     return left + right;
-  }
-
-  @Specialization
-  public String strings(String left, String right) {
-    return left + right;
-  }
-
-  @Specialization
-  public Seq sequences(Seq left, Seq right) {
-    // TODO implement
-    return null;
   }
 
   @Specialization
@@ -50,10 +38,6 @@ public abstract class PlusNode extends BinaryOpNode {
       } else if (argValues[0] instanceof Double) {
         return (double) argValues[0] + (double) argValues[1];
         // TODO implement
-      } else if (argValues[0] instanceof String) {
-        return (String) argValues[0] + (String) argValues[1];
-//      } else if (argValues[0] instanceof Sequence) {
-//        return null;
 //      } else if (argValues[0] instanceof Dictionary) {
 //        return null;
       } else {

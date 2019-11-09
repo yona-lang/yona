@@ -4,15 +4,20 @@ import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.runtime.Seq;
 
 import java.util.Objects;
 
-@NodeInfo
+@NodeInfo(shortName = "string")
 public final class StringNode extends ExpressionNode {
-  public final String value;
+  public final Seq value;
 
-  public StringNode(String value) {
+  public StringNode(Seq value) {
     this.value = value;
+  }
+
+  public StringNode(CharSequence value) {
+    this.value = Seq.fromCharSequence(value);
   }
 
   @Override
@@ -42,6 +47,6 @@ public final class StringNode extends ExpressionNode {
 
   @Override
   public String executeString(VirtualFrame frame) throws UnexpectedResultException {
-    return value;
+    return value.asJavaString(this);
   }
 }
