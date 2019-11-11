@@ -451,6 +451,11 @@ public final class Seq implements TruffleObject {
     return catenate(((Seq) pt[0]).insertLast(value), (Seq) pt[2]);
   }
 
+  public Seq remove(final long idx, final Node caller) {
+    final Object[] pt = splitAt(idx, caller);
+    return catenate((Seq) pt[0], (Seq) pt[2]);
+  }
+
   public Object foldLeft(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
     Object result = initial;
     for (int i = 0; i < prefixSize; i++) {
