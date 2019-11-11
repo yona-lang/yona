@@ -284,6 +284,111 @@ public final class Seq implements TruffleObject {
     }
   }
 
+  Object[] splitAt(final long index, final Node caller) {
+    if (index < 0) {
+      throw new BadArgException(String.format(IOOB_MSG, index), caller);
+    }
+    long i = index;
+    if (i < prefixSize) {
+      final Object[] pfxSplit = nodeSplitAt(prefix, (int) i, 0);
+      final Object[] pfxSplitLeft = (Object[]) pfxSplit[0];
+      final Object pfxSplitMedium = pfxSplit[1];
+      final Object[] pfxSplitRight = (Object[]) pfxSplit[2];
+      final Seq left = new Seq(EMPTY_NODE, 0, EMPTY_NODE, 0, pfxSplitLeft, nodeLength(pfxSplitLeft), BITS);
+      final Seq right = new Seq(pfxSplitRight, nodeLength(pfxSplitRight), root, rootSize, suffix, suffixSize, shift);
+      return new Object[]{ left, pfxSplitMedium, right };
+    }
+    i -= prefixSize;
+    if (i < rootSize) {
+      final Object[] treeSplit = treeSplitAt(root, i, shift);
+      Object[] leftRoot = (Object[]) treeSplit[0];
+      final Object medium = treeSplit[1];
+      Object[] rightRoot = (Object[]) treeSplit[2];
+      int leftShift = shift;
+      int rightShift = shift;
+      final Object[] leftSuffix;
+      if (nodeLength(leftRoot) == 0) {
+        leftShift = BITS;
+        leftSuffix = EMPTY_NODE;
+      } else {
+        final InitAndLast leftRootAndSuffix = treeSeparateLast(leftRoot, leftShift);
+        leftRoot = leftRootAndSuffix.init;
+        leftSuffix = objectify(leftRootAndSuffix.last);
+        if (nodeLength(leftRoot) == 0) {
+          leftShift = BITS;
+        }
+      }
+      final Object[] rightPrefix;
+      if (nodeLength(rightRoot) == 0) {
+        rightShift = BITS;
+        rightPrefix = EMPTY_NODE;
+      } else {
+        final FirstAndRest rightPrefixAndRoot = treeSeparateFirst(rightRoot, rightShift);
+        rightPrefix = objectify(rightPrefixAndRoot.first);
+        rightRoot = rightPrefixAndRoot.rest;
+        if (nodeLength(rightRoot) == 0) {
+          rightShift = BITS;
+        }
+      }
+      while (leftShift > BITS && nodeLength(leftRoot) == 1) {
+        leftRoot = (Object[]) nodeFirst(leftRoot);
+        leftShift -= BITS;
+      }
+      while (rightShift > BITS && nodeLength(rightRoot) == 1) {
+        rightRoot = (Object[]) nodeFirst(rightRoot);
+        rightShift -= BITS;
+      }
+      final Seq left = new Seq(prefix, prefixSize, leftRoot, nodeSize(leftRoot, leftShift), leftSuffix, nodeLength(leftSuffix), leftShift);
+      final Seq right = new Seq(rightPrefix, nodeLength(rightPrefix), rightRoot, nodeSize(rightRoot, rightShift), suffix, suffixSize, rightShift);
+      return new Object[]{ left, medium, right };
+    }
+    i -= rootSize;
+    if (i < suffixSize) {
+      final Object[] sfxSplit = nodeSplitAt(suffix, (int) i, 0);
+      final Object[] sfxSplitLeft = (Object[]) sfxSplit[0];
+      final Object sfxSplitMedium = sfxSplit[1];
+      final Object[] sfxSplitRight = (Object[]) sfxSplit[2];
+      final Seq left = new Seq(prefix, prefixSize, root, rootSize, sfxSplitLeft, nodeLength(sfxSplitLeft), shift);
+      final Seq right = new Seq(sfxSplitRight, nodeLength(sfxSplitRight), EMPTY_NODE, 0, EMPTY_NODE, 0, BITS);
+      return new Object[]{ left, sfxSplitMedium, right };
+    }
+    throw new BadArgException(String.format(IOOB_MSG, index), caller);
+  }
+
+  Object[] treeSplitAt(final Object tree, long idx, final int shift) {
+    final long[] meta = nodeMeta(tree);
+    final int i;
+    if (meta == null) {
+      i = (int) ((idx >>> shift) & MASK);
+    } else {
+      int guess = (int) (idx / elementSizeAt(shift));
+      while (meta[guess] <= idx) {
+        guess++;
+      }
+      if (guess != 0) {
+        idx -= meta[guess - 1];
+      }
+      i = guess;
+    }
+    final Object[] pt = nodeSplitAt(tree, i, shift);
+    if (shift == 0) {
+      return pt;
+    } else {
+      Object[] leftParent = (Object[]) pt[0];
+      Object[] rightParent = (Object[]) pt[2];
+      final Object[] subPt = treeSplitAt(pt[1], idx, shift - BITS);
+      final Object leftChild = subPt[0];
+      final Object rightChild = subPt[2];
+      if (nodeLength(leftChild) > 0) {
+        leftParent = nonLeafInsertLast(leftParent, leftChild, shift - BITS);
+      }
+      if (nodeLength(rightChild) > 0) {
+        rightParent = nonLeafInsertFirst(rightParent, rightChild, shift - BITS);
+      }
+      return new Object[]{ leftParent, subPt[1], rightParent };
+    }
+  }
+
   public Object lookup(final long index, final Node caller) {
     if (index < 0) {
       throw new BadArgException(String.format(IOOB_MSG, index), caller);
@@ -326,20 +431,24 @@ public final class Seq implements TruffleObject {
     return nodeLookup(node, (int) (index & MASK));
   }
 
+  public Seq[] split(final long idx, final Node caller) {
+    final Object[] pt = splitAt(idx, caller);
+    return new Seq[]{ (Seq) pt[0], ((Seq) pt[2]).insertFirst(pt[1]) };
+  }
+
   public Seq take(final long n, final Node caller) {
-    Seq result = Seq.EMPTY;
-    for (long i = 0; i < n; i++) {
-      result = result.insertLast(lookup(i, caller));
-    }
-    return result;
+    final Object[] pt = splitAt(n, caller);
+    return (Seq) pt[0];
   }
 
   public Seq drop(final long n, final Node caller) {
-    Seq result = this;
-    for (long i = 0; i < n; i++) {
-      result = result.removeFirst(caller);
-    }
-    return result;
+    final Object[] pt = splitAt(n, caller);
+    return ((Seq) pt[2]).insertFirst(pt[1]);
+  }
+
+  public Seq replace(final long idx, final Object value, final Node caller) {
+    final Object[] pt = splitAt(idx, caller);
+    return catenate(((Seq) pt[0]).insertLast(value), (Seq) pt[2]);
   }
 
   public Object foldLeft(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
@@ -547,10 +656,10 @@ public final class Seq implements TruffleObject {
     }
   }
 
-  static Object[] objectify(final Object leaf) {
-    if (leaf instanceof byte[]) {
-      final byte[] bytes = (byte[]) leaf;
-      final Object[] result = new Object[nodeLength(leaf) + 1];
+  static Object[] objectify(final Object node) {
+    if (node instanceof byte[]) {
+      final byte[] bytes = (byte[]) node;
+      final Object[] result = new Object[nodeLength(node) + 1];
       if (decodeIsUtf8(bytes[0])) {
         for (int i = 1; i < result.length; i++) {
           result[i] = Util.utf8Decode(bytes, Util.utf8Offset(bytes, 1, i - 1));
@@ -562,7 +671,7 @@ public final class Seq implements TruffleObject {
       }
       return result;
     } else {
-      return (Object[]) leaf;
+      return (Object[]) node;
     }
   }
 
@@ -581,6 +690,22 @@ public final class Seq implements TruffleObject {
   static long nodeSize(final Object node, final int shift) {
     final long[] meta = nodeMeta(node);
     return meta != null ? meta[meta.length - 1] : nodeLength(node) * elementSizeAt(shift);
+  }
+
+  static Object[] nodeSplitAt(final Object node, final int i, final int shift) {
+    final Object[] src = objectify(node);
+    Object[] left = new Object[i + 1];
+    System.arraycopy(src, 1, left, 1, i);
+    if (shift != 0) {
+      buildIndex(left, shift - BITS);
+    }
+    final int j = nodeLength(src) - i - 1;
+    Object[] right = new Object[j + 1];
+    System.arraycopy(src, i + 2, right, 1, j);
+    if (shift != 0) {
+      buildIndex(right, shift - BITS);
+    }
+    return new Object[]{ left, src[i + 1], right };
   }
 
   static Object nodeLookup(final Object node, final int i) {
@@ -1000,51 +1125,83 @@ public final class Seq implements TruffleObject {
   }
 
   public static Seq catenate(final Seq left, final Seq right) {
+    if (left.length() == 0) {
+      return right;
+    }
+    if (right.length() == 0) {
+      return left;
+    }
+    Object[] leftRoot = left.root;
     int leftShift = left.shift;
-    Object[] leftRoot;
-    if (nodeLength(left.suffix) != 0) {
-      leftRoot = treeTryInsertLast(left.root, left.suffix, left.shift);
-      if (leftRoot == null) {
-        leftRoot = newNonLeaf(left.root, wrap(left.suffix, 0, left.shift), left.shift);
+    if (nodeLength(left.prefix) != 0) {
+      Object[] l = treeTryInsertFirst(leftRoot, left.prefix, leftShift);
+      if (l != null) {
+        leftRoot = l;
+      } else {
+        leftRoot = newNonLeaf(wrap(left.prefix, 0, leftShift), leftRoot, leftShift);
         leftShift += BITS;
       }
-    } else {
-      leftRoot = left.root;
     }
+    if (nodeLength(left.suffix) != 0) {
+      Object[] l = treeTryInsertLast(leftRoot, left.suffix, leftShift);
+      if (l != null) {
+        leftRoot = l;
+      } else {
+        leftRoot = newNonLeaf(leftRoot, wrap(left.suffix, 0, leftShift), leftShift);
+        leftShift += BITS;
+      }
+    }
+    Object[] rightRoot = right.root;
     int rightShift = right.shift;
-    Object[] rightRoot;
     if (nodeLength(right.prefix) != 0) {
-      rightRoot = treeTryInsertFirst(right.root, right.prefix, right.shift);
-      if (rightRoot == null) {
-        rightRoot = newNonLeaf(wrap(right.prefix, 0, right.shift), right.root, right.shift);
+      Object[] r = treeTryInsertFirst(rightRoot, right.prefix, rightShift);
+      if (r != null) {
+        rightRoot = r;
+      } else {
+        rightRoot = newNonLeaf(wrap(right.prefix, 0, rightShift), rightRoot, rightShift);
         rightShift += BITS;
       }
-    } else {
-      rightRoot = right.root;
     }
+    if (nodeLength(right.suffix) != 0) {
+      Object[] r = treeTryInsertLast(rightRoot, right.suffix, rightShift);
+      if (r != null) {
+        rightRoot = r;
+      } else {
+        rightRoot = newNonLeaf(rightRoot, wrap(right.suffix, 0, rightShift), rightShift);
+        rightShift += BITS;
+      }
+    }
+    leftRoot = tiltRight(leftRoot, leftShift);
+    rightRoot = tiltLeft(rightRoot, rightShift);
+    final FirstAndRest prefixAndLeft = treeSeparateFirst(leftRoot, leftShift);
+    final Object[] newPrefix = objectify(prefixAndLeft.first);
+    leftRoot = prefixAndLeft.rest;
+    final InitAndLast rightAndSuffix = treeSeparateLast(rightRoot, rightShift);
+    rightRoot = rightAndSuffix.init;
+    final Object[] newSuffix = objectify(rightAndSuffix.last);
+    while (leftShift > BITS && nodeLength(leftRoot) == 1) {
+      leftRoot = (Object[]) nodeFirst(leftRoot);
+      leftShift -= BITS;
+    }
+    while (rightShift > BITS && nodeLength(rightRoot) == 1) {
+      rightRoot = (Object[]) nodeFirst(rightRoot);
+      rightShift -= BITS;
+    }
+    int shift = Math.max(leftShift, rightShift);
+    final Object[] root;
     if (nodeLength(leftRoot) == 0) {
-      return new Seq(left.prefix, left.prefixSize, rightRoot, left.suffixSize + right.prefixSize + right.rootSize, right.suffix, right.suffixSize, rightShift);
+      root = rightRoot;
+      shift = rightShift;
     } else if (nodeLength(rightRoot) == 0) {
-      return new Seq(left.prefix, left.prefixSize, leftRoot, left.rootSize + left.suffixSize + right.prefixSize, right.suffix, right.suffixSize, leftShift);
+      root = leftRoot;
+      shift = leftShift;
     } else {
-      leftRoot = tiltRight(leftRoot, leftShift);
-      rightRoot = tiltLeft(rightRoot, rightShift);
-      while (leftShift > BITS && nodeLength(leftRoot) == 1) {
-        leftRoot = (Object[]) nodeFirst(leftRoot);
-        leftShift -= BITS;
-      }
-      while (rightShift > BITS && nodeLength(rightRoot) == 1) {
-        rightRoot = (Object[]) nodeFirst(rightRoot);
-        rightShift -= BITS;
-      }
-      int shift = Math.max(leftShift, rightShift);
       leftRoot = (Object[]) wrap(leftRoot, leftShift, shift);
       rightRoot = (Object[]) wrap(rightRoot, rightShift, shift);
-      final Object[] root = newNonLeaf(leftRoot, rightRoot, shift);
+      root = newNonLeaf(leftRoot, rightRoot, shift);
       shift += BITS;
-      final long rootSize = left.rootSize + left.suffixSize + right.prefixSize + right.rootSize;
-      return new Seq(left.prefix, left.prefixSize, root, rootSize, right.suffix, right.suffixSize, shift);
     }
+    return new Seq(newPrefix, nodeLength(newPrefix), root, nodeSize(root, shift), newSuffix, nodeLength(newSuffix), shift);
   }
 
   static Object[] tiltLeft(final Object[] node, int shift) {
