@@ -12,8 +12,8 @@ import static yatta.runtime.Seq.*;
 
 public class SeqTest {
 
-  private static final int N = 262145;
-  private static final int M = 4097;
+  private static final int N = 262209;
+  private static final int M = 4161;
 
   private static final byte[] BYTES = bytes();
   private static final int[] CODE_POINTS = codePoints();
@@ -518,12 +518,12 @@ public class SeqTest {
     Seq seq = EMPTY;
     for (long i = 0; i < M; i++) {
       seq = seq.insertLast(i);
-      for (long j = 0; j < seq.length(); j++) {
-        Seq[] seqs = seq.split(j, null);
-        Seq newSeq = catenate(seqs[0], seqs[1]);
-        assertEquals(seq, newSeq);
-        seq = newSeq;
-      }
+    }
+    for (long j = 0; j < seq.length(); j++) {
+      Seq[] seqs = seq.split(j, null);
+      Seq newSeq = catenate(seqs[0], seqs[1]);
+      assertEquals(seq, newSeq);
+      seq = newSeq;
     }
   }
 }
