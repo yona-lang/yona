@@ -87,6 +87,7 @@ public final class Seq implements TruffleObject {
     return tuple instanceof Seq;
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Seq sequence(Object... values) {
     Seq result = EMPTY;
     for (Object value : values) {
@@ -95,10 +96,12 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Object first(Node caller) {
     return lookup(0, caller);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Object last(Node caller) {
     return lookup(length() - 1, caller);
   }
@@ -126,6 +129,7 @@ public final class Seq implements TruffleObject {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq insertFirst(final Object o) {
     if (prefixSize != MAX_NODE_LENGTH) {
       return new Seq(leafInsertFirst(prefix, o), prefixSize + 1, root, rootSize, suffix, suffixSize, shift);
@@ -158,6 +162,7 @@ public final class Seq implements TruffleObject {
     return nodeLength(parent) == MAX_NODE_LENGTH ? null : nonLeafInsertFirst(parent, child, childShift);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq insertLast(final Object o) {
     if (suffixSize != MAX_NODE_LENGTH) {
       return new Seq(prefix, prefixSize, root, rootSize, leafInsertLast(suffix, o), suffixSize + 1, shift);
@@ -190,6 +195,7 @@ public final class Seq implements TruffleObject {
     return nodeLength(parent) == MAX_NODE_LENGTH ? null : nonLeafInsertLast(parent, child, childShift);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq removeFirst(final Node caller) {
     if (prefixSize != 0) {
       return new Seq(leafRemoveFirst(prefix), prefixSize - 1, root, rootSize, suffix, suffixSize, shift);
@@ -237,6 +243,7 @@ public final class Seq implements TruffleObject {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq removeLast(final Node caller) {
     if (suffixSize != 0) {
       return new Seq(prefix, prefixSize, root, rootSize, leafRemoveLast(suffix), suffixSize - 1, shift);
@@ -389,6 +396,7 @@ public final class Seq implements TruffleObject {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Object lookup(final long index, final Node caller) {
     if (index < 0) {
       throw new BadArgException(String.format(IOOB_MSG, index), caller);
@@ -431,31 +439,37 @@ public final class Seq implements TruffleObject {
     return nodeLookup(node, (int) (index & MASK));
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq[] split(final long idx, final Node caller) {
     final Object[] pt = splitAt(idx, caller);
     return new Seq[]{ (Seq) pt[0], ((Seq) pt[2]).insertFirst(pt[1]) };
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq take(final long n, final Node caller) {
     final Object[] pt = splitAt(n, caller);
     return (Seq) pt[0];
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq drop(final long n, final Node caller) {
     final Object[] pt = splitAt(n, caller);
     return ((Seq) pt[2]).insertFirst(pt[1]);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq replace(final long idx, final Object value, final Node caller) {
     final Object[] pt = splitAt(idx, caller);
     return catenate(((Seq) pt[0]).insertLast(value), (Seq) pt[2]);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq remove(final long idx, final Node caller) {
     final Object[] pt = splitAt(idx, caller);
     return catenate((Seq) pt[0], (Seq) pt[2]);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Object foldLeft(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
     Object result = initial;
     for (int i = 0; i < prefixSize; i++) {
@@ -468,6 +482,7 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Object foldRight(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
     Object result = initial;
     for (int i = suffixSize - 1; i >= 0; i--) {
@@ -480,10 +495,12 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq map(final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
     return new Seq(nodeMap(prefix, 0, function, dispatch), prefixSize, nodeMap(root, shift, function, dispatch), rootSize, nodeMap(suffix, 0, function, dispatch), suffixSize, shift);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public long length() {
     return prefixSize + rootSize + suffixSize;
   }
@@ -601,7 +618,7 @@ public final class Seq implements TruffleObject {
     return true;
   }
 
-  public long murmur3Hash(final long seed) {
+  long murmur3Hash(final long seed) {
     if (seed == 0L) {
       if (hash == 0L) {
         hash = calculateMurmur3Hash(0L);
@@ -612,7 +629,7 @@ public final class Seq implements TruffleObject {
     }
   }
 
-  private long calculateMurmur3Hash(final long seed) {
+  long calculateMurmur3Hash(final long seed) {
     long hash = seed;
     final long length = length();
     for (int i = 0; i < length; i++) {
@@ -632,6 +649,7 @@ public final class Seq implements TruffleObject {
   }
 
   @Override
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public boolean equals(Object o) {
     if (o == this) {
       return true;
@@ -1129,6 +1147,7 @@ public final class Seq implements TruffleObject {
     });
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Seq catenate(final Seq left, final Seq right) {
     if (left.length() == 0) {
       return right;

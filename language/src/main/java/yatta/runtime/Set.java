@@ -1,5 +1,6 @@
 package yatta.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -21,29 +22,36 @@ public abstract class Set {
     this.seed = seed;
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public final Set add(final Object value) {
     return add(value, hasher.hash(seed, value), 0);
   }
 
   abstract Set add(Object value, long hash, int shift);
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public final boolean contains(final Object value) {
     return contains(value, hasher.hash(seed, value), 0);
   }
 
   abstract boolean contains(Object value, long hash, int shift);
 
+  abstract boolean subsetOf(Set set);
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public final Set remove(final Object value) {
     return remove(value, hasher.hash(seed, value), 0);
   }
 
   abstract Set remove(Object value, long hash, int shift);
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
 
   public abstract long size();
 
-  public final long murmur3Hash(long seed) {
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  final long murmur3Hash(long seed) {
     if (seed == 0L) {
       if (hash == 0L) {
         hash = calculateMurmur3Hash(0L);
@@ -61,8 +69,24 @@ public abstract class Set {
     return (int) murmur3Hash(0);
   }
 
+  @Override
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public boolean equals(Object o) {
+    if (o == this) {
+      return true;
+    }
+    if (!(o instanceof Set)) {
+      return false;
+    }
+    final Set that = (Set) o;
+    if (this.size() != that.size()) {
+      return false;
+    }
+    return subsetOf(that);
+  }
+
   final Set merge(final Object fst, final long fstHash, final Object snd, final long sndHash, final int shift) {
-    if (shift >= (1 << BITS)) {
+    if (shift > (1 << BITS)) {
       return new Collision(hasher, seed, fstHash, new Object[]{ fst, snd });
     }
     final long fstMask = mask(fstHash, shift);
@@ -169,6 +193,21 @@ public abstract class Set {
 
     static int index(final long pos, final long bitmap, final long mask) {
       return (bitmap == -1L) ? (int) mask : index(pos, bitmap);
+    }
+
+    @Override
+    boolean subsetOf(final Set set) {
+      for (int i = 0; i < arity(dataBmp); i++) {
+        if (!set.contains(dataAt(i))) {
+          return false;
+        }
+      }
+      for (int i = 0; i < arity(nodeBmp); i++) {
+        if (!nodeAt(i).subsetOf(set)) {
+          return false;
+        }
+      }
+      return true;
     }
 
     @Override
@@ -318,6 +357,16 @@ public abstract class Set {
         }
       }
       return false;
+    }
+
+    @Override
+    boolean subsetOf(final Set set) {
+      for (Object val : values) {
+        if (!set.contains(val)) {
+          return false;
+        }
+      }
+      return true;
     }
 
     @Override
