@@ -50,7 +50,6 @@ public abstract class Set {
 
   public abstract long size();
 
-  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   final long murmur3Hash(long seed) {
     if (seed == 0L) {
       if (hash == 0L) {
@@ -102,10 +101,12 @@ public abstract class Set {
 
   abstract Object dataAt(final int idx);
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Set empty(final Hasher hasher, final long seed) {
     return new Bitmap(hasher, seed, 0L, 0L, EMPTY_ARRAY);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Set singleton(final Hasher hasher, final long seed, final Object value) {
     return new Bitmap(hasher, seed, 0L, pos(mask(hasher.hash(seed, value), 0)), new Object[]{ value });
   }
