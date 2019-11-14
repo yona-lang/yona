@@ -18,9 +18,9 @@ public final class Seq implements TruffleObject {
   static final String EMPTY_MSG = "Empty seq";
   static final Object[] EMPTY_NODE = new Object[1];
   static final int BITS = 6;
-  static final int MAX_NODE_LENGTH = 64;
-  static final int MIN_NODE_LENGTH = MAX_NODE_LENGTH - 1;
   static final int MASK = 0x3f;
+  static final int MAX_NODE_LENGTH = 64;
+  static final int MIN_NODE_LENGTH = 63;
 
   public static final Seq EMPTY = new Seq(EMPTY_NODE, 0, EMPTY_NODE, 0L, EMPTY_NODE, 0, BITS);
 
@@ -602,9 +602,9 @@ public final class Seq implements TruffleObject {
   }
 
   public long murmur3Hash(final long seed) {
-    if (seed == 0) {
+    if (seed == 0L) {
       if (hash == 0L) {
-        hash = calculateMurmur3Hash(0);
+        hash = calculateMurmur3Hash(0L);
       }
       return hash;
     } else {
@@ -616,7 +616,7 @@ public final class Seq implements TruffleObject {
     long hash = seed;
     final long length = length();
     for (int i = 0; i < length; i++) {
-      long k = Murmur3.hash(seed, lookup(i, null));
+      long k = Murmur3.INSTANCE.hash(seed, lookup(i, null));
       k *= Murmur3.C1;
       k = Long.rotateLeft(k, 31);
       k *= Murmur3.C2;

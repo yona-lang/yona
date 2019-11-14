@@ -518,12 +518,12 @@ public class SeqTest {
     Seq seq = EMPTY;
     for (long i = 0; i < M; i++) {
       seq = seq.insertLast(i);
-    }
-    for (long j = 0; j < seq.length(); j++) {
-      Seq[] seqs = seq.split(j, null);
-      Seq newSeq = catenate(seqs[0], seqs[1]);
-      assertEquals(seq, newSeq);
-      seq = newSeq;
+      for (long j = 0; j < seq.length(); j++) {
+        Seq[] seqs = seq.split(j, null);
+        Seq newSeq = catenate(seqs[0], seqs[1]);
+        assertEquals(seq, newSeq);
+        seq = newSeq;
+      }
     }
   }
 }
