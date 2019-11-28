@@ -12,8 +12,8 @@ import static yatta.runtime.Seq.*;
 
 public class SeqTest {
 
-  private static final int N = 64 * 64 * 64 + 64 + 1;
-  private static final int M = 64 * 64 + 64 + 1;
+  private static final int N = (1 << 24) + 64 + 1;
+  private static final int M = (1 << 12) + 64 + 1;
 
   private static final byte[] BYTES = bytes();
   private static final int[] CODE_POINTS = codePoints();

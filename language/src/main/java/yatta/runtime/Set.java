@@ -219,7 +219,7 @@ public abstract class Set {
         final int dataIndex = index(pos, dataBmp);
         if (value.equals(dataAt(dataIndex))) {
           if (Long.bitCount(dataBmp) == 2 && Long.bitCount(nodeBmp) == 0) {
-            final long newDataBmp = (shift == 0) ? (int) (dataBmp ^ pos) : pos(mask(hash, 0));
+            final long newDataBmp = (shift == 0) ? dataBmp ^ pos : pos(mask(hash, 0));
             return dataIndex == 0 ? new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ dataAt(1) }) : new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ dataAt(0) });
           } else {
             return removeValue(pos);
@@ -279,10 +279,7 @@ public abstract class Set {
 
     @Override
     public long size() {
-      long result = 0;
-      for (int i = 0; i < arity(dataBmp); i++) {
-        result++;
-      }
+      long result = arity(dataBmp);
       for (int i = 0; i < arity(nodeBmp); i++) {
         result += nodeAt(i).size();
       }
@@ -301,7 +298,7 @@ public abstract class Set {
         hash = Long.rotateLeft(hash, 27) * 5 + 0x52dce729;
       }
       for (int i = 0; i < arity(nodeBmp); i++) {
-        long k = Murmur3.INSTANCE.hash(seed, nodeAt(i));
+        long k = nodeAt(i).murmur3Hash(seed);
         k *= Murmur3.C1;
         k = Long.rotateLeft(k, 31);
         k *= Murmur3.C2;
@@ -374,19 +371,13 @@ public abstract class Set {
     Set remove(final Object value, final long hash, final int shift) {
       for (int idx = 0; idx < values.length; idx++) {
         if (value.equals(values[idx])) {
-          switch (values.length) {
-            case 1: {
-              return empty(hasher, seed);
-            }
-            case 2: {
-              return singleton(hasher, seed, idx == 0 ? values[1] : values[0]);
-            }
-            default: {
-              final Object[] newValues = new Object[values.length - 1];
-              System.arraycopy(values, 0, newValues, 0, idx);
-              System.arraycopy(values, idx + 1, newValues, idx, values.length - idx - 1);
-              return new Collision(hasher, seed, hash, newValues);
-            }
+          if (values.length == 1) {
+            return empty(hasher, seed);
+          } else {
+            final Object[] newValues = new Object[values.length - 1];
+            System.arraycopy(values, 0, newValues, 0, idx);
+            System.arraycopy(values, idx + 1, newValues, idx, values.length - idx - 1);
+            return new Collision(hasher, seed, hash, newValues);
           }
         }
       }

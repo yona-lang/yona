@@ -17,7 +17,7 @@ public final class Murmur3 extends Hasher {
     } else if (o instanceof Integer) {
       return hashChar(seed, (Integer) o);
     } else if (o instanceof Long) {
-      return hashInt(seed, (Long) o);
+      return hashInteger(seed, (Long) o);
     } else if (o instanceof Double) {
       return hashFloat(seed, (Double) o);
     } else if (o instanceof Object[]) {
@@ -26,7 +26,7 @@ public final class Murmur3 extends Hasher {
       return ((Seq) o).murmur3Hash(seed);
     } else if (o instanceof Set) {
       return ((Set) o).murmur3Hash(seed);
-    } else return o.hashCode();
+    } else return seed ^ o.hashCode();
   }
 
   static long hashBool(final long seed, final boolean value) {
@@ -51,7 +51,7 @@ public final class Murmur3 extends Hasher {
     return fMix64(hash ^ 4);
   }
 
-  static long hashInt(final long seed, final long value) {
+  static long hashInteger(final long seed, final long value) {
     long hash = Long.reverseBytes(value);
     hash *= C1;
     hash = Long.rotateLeft(hash, 31);
@@ -62,7 +62,7 @@ public final class Murmur3 extends Hasher {
   }
 
   static long hashFloat(final long seed, final double value) {
-    return hashInt(seed, Double.doubleToLongBits(value));
+    return hashInteger(seed, Double.doubleToLongBits(value));
   }
 
   static long hashTuple(final long seed, final Object[] values) {

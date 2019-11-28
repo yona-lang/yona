@@ -145,36 +145,6 @@ public class UtilTest {
   }
 
   @Test
-  public void testSetBit() {
-    short bitmap;
-    for (int i = 0; i < 15; i++) {
-      bitmap = Util.setBit((short) 0, i);
-      for (int j = 0; j < i; j++) {
-        assertFalse(Util.testBit(bitmap, j));
-      }
-      assertTrue(Util.testBit(bitmap, i));
-      for (int j = i + 1; j < 15; j++) {
-        assertFalse(Util.testBit(bitmap, j));
-      }
-    }
-  }
-
-  @Test
-  public void testClearBit() {
-    short bitmap;
-    for (int i = 0; i < 15; i++) {
-      bitmap = Util.clearBit((short) 0xffff, i);
-      for (int j = 0; j < i; j++) {
-        assertTrue(Util.testBit(bitmap, j));
-      }
-      assertFalse(Util.testBit(bitmap, i));
-      for (int j = i + 1; j < 15; j++) {
-        assertTrue(Util.testBit(bitmap, j));
-      }
-    }
-  }
-
-  @Test
   public void testUtf8Offset() {
     byte[] bytes;
     // leftmost, U+0000 - U+007F
