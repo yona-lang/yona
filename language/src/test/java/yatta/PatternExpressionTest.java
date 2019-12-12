@@ -1,9 +1,6 @@
 package yatta;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import yatta.runtime.Dictionary;
 import yatta.runtime.Seq;
@@ -11,20 +8,7 @@ import yatta.runtime.Tuple;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class PatternExpressionTest {
-
-  private Context context;
-
-  @BeforeEach
-  public void initEngine() {
-    context =     context = Context.newBuilder().allowAllAccess(true).build();
-  }
-
-  @AfterEach
-  public void dispose() {
-    context.close();
-  }
-
+public class PatternExpressionTest extends CommonTest {
   @Test
   public void simpleTuplePatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +

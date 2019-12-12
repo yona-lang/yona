@@ -11,43 +11,21 @@ import java.util.Objects;
 
 @NodeInfo
 public final class PipeRightNode extends ExpressionNode {
-  @Child private ExpressionNode leftExpression;
-  @Child private ExpressionNode rightExpression;
-  @Children private final FQNNode[] moduleStack;
-  private final YattaLanguage language;
+  @Child private InvokeNode invokeNode;
 
   public PipeRightNode(YattaLanguage language, ExpressionNode leftExpression, ExpressionNode rightExpression, FQNNode[] moduleStack) {
-    this.language = language;
-    this.leftExpression = leftExpression;
-    this.rightExpression = rightExpression;
-    this.moduleStack = moduleStack;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    PipeRightNode that = (PipeRightNode) o;
-    return Objects.equals(leftExpression, that.leftExpression) &&
-        Objects.equals(rightExpression, that.rightExpression);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(leftExpression, rightExpression);
+    this.invokeNode = new InvokeNode(language, rightExpression, new ExpressionNode[]{leftExpression}, moduleStack);
   }
 
   @Override
   public String toString() {
     return "PipeRightNode{" +
-        "leftExpression=" + leftExpression +
-        ", rightExpression=" + rightExpression +
+        "invokeNode=" + invokeNode +
         '}';
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    InvokeNode invokeNode = new InvokeNode(language, rightExpression, new ExpressionNode[]{leftExpression}, moduleStack);
     return invokeNode.executeGeneric(frame);
   }
 }

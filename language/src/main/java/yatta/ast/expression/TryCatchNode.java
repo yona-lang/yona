@@ -6,6 +6,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import yatta.YattaException;
+import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.pattern.MatchControlFlowException;
 import yatta.ast.pattern.PatternMatchable;
@@ -20,12 +21,10 @@ import java.util.Objects;
 public final class TryCatchNode extends ExpressionNode {
   @Child private ExpressionNode tryExpression;
   @Children private final PatternMatchable[] catchPatterns;
-  private final Context context;
 
   public TryCatchNode(ExpressionNode tryExpression, PatternMatchable[] catchPatterns) {
     this.tryExpression = tryExpression;
     this.catchPatterns = catchPatterns;
-    this.context = Context.getCurrent();
   }
 
   @Override
@@ -122,7 +121,7 @@ public final class TryCatchNode extends ExpressionNode {
       return yattaException.asTuple();
     } else {
       // TODO deal with non Yatta exceptions ?
-      return new Tuple(context.symbol(throwable.getClass().getSimpleName()), throwable.getMessage(), YattaException.stacktraceToSequence(throwable));
+      return new Tuple(lookupContextReference(YattaLanguage.class).get().symbol(throwable.getClass().getSimpleName()), throwable.getMessage(), YattaException.stacktraceToSequence(throwable));
     }
   }
 }

@@ -8,8 +8,7 @@ import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.value.FQNNode;
 import yatta.runtime.Function;
-import yatta.runtime.Module;
-import yatta.runtime.Seq;
+import yatta.runtime.YattaModule;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -59,7 +58,7 @@ public final class ModuleCallNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    Module module;
+    YattaModule module;
     try {
       module = nameNode.executeModule(frame);
     } catch (UnexpectedResultException ex) {
@@ -71,6 +70,7 @@ public final class ModuleCallNode extends ExpressionNode {
     } else {
       Function function = module.getFunctions().get(functionName);
       InvokeNode invokeNode = new InvokeNode(language, function, argumentNodes, moduleStack);
+      this.replace(invokeNode);
       return invokeNode.executeGeneric(frame);
     }
   }

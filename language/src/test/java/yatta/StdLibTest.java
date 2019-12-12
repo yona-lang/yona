@@ -1,9 +1,6 @@
 package yatta;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractList;
@@ -11,19 +8,7 @@ import java.util.AbstractList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class StdLibTest {
-  private Context context;
-
-  @BeforeEach
-  public void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).build();
-  }
-
-  @AfterEach
-  public void dispose() {
-    context.close();
-  }
-
+public class StdLibTest extends CommonTest {
   @Test
   public void sequenceFoldLeftTest() {
     long ret = context.eval(YattaLanguage.ID, "Sequence.foldl [1, 2, 3] (\\acc val -> acc + val) 0").asLong();

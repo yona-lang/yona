@@ -68,6 +68,7 @@ public final class Seq implements TruffleObject {
   }
 
   @ExportMessage
+  @CompilerDirectives.TruffleBoundary
   public boolean isString() {
     CompilerAsserts.compilationConstant(length());
     for (long i = 0; i < length(); i++) {
@@ -79,7 +80,8 @@ public final class Seq implements TruffleObject {
   }
 
   @ExportMessage
-  public String asString() throws UnsupportedMessageException {
+  @CompilerDirectives.TruffleBoundary
+  public String asString() {
     return asJavaString(null);
   }
 

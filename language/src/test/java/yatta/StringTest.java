@@ -1,25 +1,10 @@
 package yatta;
 
-import org.graalvm.polyglot.Context;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class StringTest {
-  private Context context;
-
-  @BeforeEach
-  public void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).build();
-  }
-
-  @AfterEach
-  public void dispose() {
-    context.close();
-  }
-
+public class StringTest extends CommonTest {
   @Test
   void testSimpleInterpolation() {
     String ret = context.eval(YattaLanguage.ID, "let who = \"world\" in \"hello {who}\"").asString();

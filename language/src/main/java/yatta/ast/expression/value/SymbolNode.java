@@ -1,5 +1,6 @@
 package yatta.ast.expression.value;
 
+import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -9,12 +10,19 @@ import yatta.runtime.Symbol;
 
 import java.util.Objects;
 
-@NodeInfo
-public final class SymbolNode extends ExpressionNode {
-  public final Symbol value;
+@NodeInfo(shortName = "symbol")
+public class SymbolNode extends ExpressionNode {
+  public final String value;
+
+  /**
+   * Only to be used by CachedSymbolNode
+   */
+  SymbolNode() {
+    value = null;
+  }
 
   public SymbolNode(String value) {
-    this.value = Context.getCurrent().symbol(value);
+    this.value = value;
   }
 
   @Override
@@ -39,11 +47,17 @@ public final class SymbolNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return value;
+    return execute(frame);
   }
 
   @Override
   public Symbol executeSymbol(VirtualFrame frame) throws UnexpectedResultException {
-    return value;
+    return execute(frame);
+  }
+
+  private Symbol execute(VirtualFrame frame) {
+    Symbol symbol = lookupContextReference(YattaLanguage.class).get().symbol(value);
+    this.replace(new CachedSymbolNode(symbol));
+    return symbol;
   }
 }

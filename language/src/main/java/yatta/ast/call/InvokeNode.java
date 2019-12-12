@@ -15,7 +15,7 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
-import yatta.ast.controlflow.BlockNode;
+import yatta.ast.controlflow.YattaBlockNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.expression.value.FQNNode;
@@ -162,7 +162,7 @@ public final class InvokeNode extends ExpressionNode {
         writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
       }
 
-      BlockNode blockNode = new BlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
+      YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
       FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName,
           function.getCardinality() - argumentNodes.length, frame.getFrameDescriptor(), blockNode);
 

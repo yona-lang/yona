@@ -5,18 +5,19 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
+import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
-import yatta.runtime.Module;
+import yatta.runtime.YattaModule;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-@NodeInfo
+@NodeInfo(shortName = "module")
 public final class ModuleNode extends ExpressionNode {
   @Node.Child
   private FQNNode moduleFQN;
@@ -24,16 +25,11 @@ public final class ModuleNode extends ExpressionNode {
   private NonEmptyStringListNode exports;
   @Node.Children
   private FunctionLikeNode[] functions;
-  @Child
-  private ExpressionNode expression;
-
-  private final Context context;
 
   public ModuleNode(FQNNode moduleFQN, NonEmptyStringListNode exports, FunctionLikeNode[] functions) {
     this.moduleFQN = moduleFQN;
     this.exports = exports;
     this.functions = functions;
-    this.context = Context.getCurrent();
   }
 
   @Override
@@ -48,7 +44,7 @@ public final class ModuleNode extends ExpressionNode {
 
   @Override
   public int hashCode() {
-    return Objects.hash(moduleFQN, exports, expression);
+    return Objects.hash(moduleFQN, exports);
   }
 
   @Override
@@ -75,7 +71,7 @@ public final class ModuleNode extends ExpressionNode {
   }
 
   @Override
-  public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
+  public YattaModule executeModule(VirtualFrame frame) throws UnexpectedResultException {
     String executedModuleFQN = moduleFQN.executeString(frame);
     List<String> executedExports = exports.executeStringList(frame).asJavaList();
     List<Function> executedFunctions = new ArrayList<>(functions.length);
@@ -92,8 +88,8 @@ public final class ModuleNode extends ExpressionNode {
       executedFunctions.add(fun.executeFunction(frame));
     }
 
-    Module module = new Module(executedModuleFQN, executedExports, executedFunctions);
-    context.cacheModule(executedModuleFQN, module);
+    YattaModule module = new YattaModule(executedModuleFQN, executedExports, executedFunctions);
+    lookupContextReference(YattaLanguage.class).get().cacheModule(executedModuleFQN, module);
 
     return module;
   }

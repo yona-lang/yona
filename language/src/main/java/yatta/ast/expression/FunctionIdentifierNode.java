@@ -4,7 +4,7 @@ import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.value.FQNNode;
 import yatta.runtime.Function;
-import yatta.runtime.Module;
+import yatta.runtime.YattaModule;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
@@ -53,7 +53,7 @@ public class FunctionIdentifierNode extends ExpressionNode {
 
   @Override
   public Function executeFunction(VirtualFrame frame) throws UnexpectedResultException {
-    Module module = fqnNode.executeModule(frame);
+    YattaModule module = fqnNode.executeModule(frame);
 
     if (!module.getExports().contains(functionName)) {
       throw new YattaException("Function " + functionName + " is not exported from module " + module, this);

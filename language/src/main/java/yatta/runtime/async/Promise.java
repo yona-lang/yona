@@ -3,6 +3,8 @@ package yatta.runtime.async;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.YattaLanguage;
+import yatta.ast.call.InvokeNode;
 import yatta.ast.call.TailCallException;
 import yatta.runtime.UndefinedNameException;
 
@@ -21,19 +23,28 @@ public final class Promise implements TruffleObject {
 
   volatile Object value;
 
+  private final InteropLibrary library;
+
   public Promise() {
     value = Callback.Nil.INSTANCE;
+    library = InteropLibrary.getFactory().getUncached();
+  }
+
+  public Promise(InteropLibrary library) {
+    value = Callback.Nil.INSTANCE;
+    this.library = library;
   }
 
   public Promise(Object value) {
     this.value = value;
+    library = InteropLibrary.getFactory().getUncached();
   }
 
   public void fulfil(Object result, Node node) {
     fulfil(this, result, node).run();
   }
 
-  private static Trampoline fulfil(Promise promise, Object result, Node node) {
+  private Trampoline fulfil(Promise promise, Object result, Node node) {
     Object snapshot;
     do {
       snapshot = promise.value;
@@ -318,9 +329,7 @@ public final class Promise implements TruffleObject {
     }
   }
 
-  private static <T, R> Object applyTCOToFunction(Function<? super T, ? extends R> function, T argument, Node node) {
-    InteropLibrary library = InteropLibrary.getFactory().createDispatched(3);
-
+  private <T, R> Object applyTCOToFunction(Function<? super T, ? extends R> function, T argument, Node node) {
     try {
       return function.apply(argument);
     } catch (TailCallException e) {

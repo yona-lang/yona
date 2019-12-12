@@ -1,11 +1,13 @@
 package yatta.runtime;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Tag("slow")
 public class UtilTest {
 
   private static final byte UTF8_1B = (byte) 0x05;

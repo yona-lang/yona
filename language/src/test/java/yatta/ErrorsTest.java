@@ -1,28 +1,13 @@
 package yatta;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import yatta.runtime.Tuple;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class ErrorsTest {
-  private Context context;
-
-  @BeforeEach
-  public void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).build();
-  }
-
-  @AfterEach
-  public void dispose() {
-    context.close();
-  }
-
+public class ErrorsTest extends CommonTest {
   @Test
   public void oneArgFunctionTest() {
     assertThrows(PolyglotException.class, () -> {

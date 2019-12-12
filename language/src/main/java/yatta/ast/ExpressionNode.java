@@ -201,8 +201,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
     return TypesGen.expectTuple(executeGeneric(frame));
   }
 
-  public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
-    return TypesGen.expectModule(executeGeneric(frame));
+  public YattaModule executeModule(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectYattaModule(executeGeneric(frame));
   }
 
   public StringList executeStringList(VirtualFrame frame) throws UnexpectedResultException {

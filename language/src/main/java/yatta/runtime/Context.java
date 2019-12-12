@@ -51,8 +51,12 @@ public class Context {
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
     this.builtinModules = new BuiltinModules();
+    this.ioExecutor = Executors.newCachedThreadPool(env::createThread);
     this.threading = new Threading(env);
-    this.ioExecutor = Executors.newCachedThreadPool();
+  }
+
+  public void initialize() {
+    threading.initialize();
 
     installBuiltins();
     installBuiltinModules();
@@ -128,12 +132,12 @@ public class Context {
   }
 
   @CompilerDirectives.TruffleBoundary
-  public void cacheModule(String FQN, Module module) {
+  public void cacheModule(String FQN, YattaModule module) {
     moduleCache = moduleCache.insert(FQN, module);
   }
 
   @CompilerDirectives.TruffleBoundary
-  public Module lookupModule(String[] packageParts, String moduleName, Node node) {
+  public YattaModule lookupModule(String[] packageParts, String moduleName, Node node) {
     String FQN = getFQN(packageParts, moduleName);
     Object module = moduleCache.lookup(FQN);
     if (module == Unit.INSTANCE) {
@@ -141,11 +145,11 @@ public class Context {
       moduleCache = moduleCache.insert(FQN, module);
     }
 
-    return (Module) module;
+    return (YattaModule) module;
   }
 
   @CompilerDirectives.TruffleBoundary
-  private Module loadModule(String[] packageParts, String moduleName, String FQN, Node node) {
+  private YattaModule loadModule(String[] packageParts, String moduleName, String FQN, Node node) {
     try {
       Path path;
       if (packageParts.length > 0) {
@@ -159,8 +163,8 @@ public class Context {
       URL url = path.toUri().toURL();
 
       Source source = Source.newBuilder(YattaLanguage.ID, url).build();
-      CallTarget callTarget = parse(source);
-      Module module = (Module) callTarget.call();
+      CallTarget callTarget = env.parseInternal(source);
+      YattaModule module = (YattaModule) callTarget.call();
 
       if (!FQN.equals(module.getFqn())) {
         throw new YattaException("Module file " + url.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
@@ -212,10 +216,6 @@ public class Context {
     return ((Number) a).longValue();
   }
 
-  public CallTarget parse(Source source) {
-    return env.parsePublic(source);
-  }
-
   public TruffleObject getPolyglotBindings() {
     return (TruffleObject) env.getPolyglotBindings();
   }
@@ -236,5 +236,11 @@ public class Context {
 
   public void insertGlobal(Object key, Object value) {
     globals = globals.insert(key, value);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public void dispose() {
+    threading.dispose();
+    assert ioExecutor.shutdownNow().isEmpty();
   }
 }

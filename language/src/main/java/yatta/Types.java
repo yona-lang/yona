@@ -13,7 +13,7 @@ import com.oracle.truffle.api.dsl.TypeSystem;
  * generated ones would not be sufficient.
  */
 @TypeSystem({boolean.class, byte.class, long.class, double.class, int.class, String.class, Function.class, Unit.class,
-    Tuple.class, Module.class, StringList.class, Seq.class, Dictionary.class, Promise.class, NativeObject.class,
+    Tuple.class, YattaModule.class, StringList.class, Seq.class, Dictionary.class, Promise.class, NativeObject.class,
     Symbol.class})
 public abstract class Types {
 

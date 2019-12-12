@@ -64,6 +64,8 @@ public final class LexicalScope {
       block = findChildrenBlock(node);
       if (block == null) {
         // Corrupted Yatta AST, no block was found
+        RootNode root = node.getRootNode();
+        assert root instanceof  RootNode : "Corrupted Yatta AST under " + node;
         return new LexicalScope(null, null, (LexicalScopeNode) null);
       }
       node = null; // node is above the block

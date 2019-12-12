@@ -12,7 +12,7 @@ import yatta.ast.ExpressionNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
 import yatta.runtime.Context;
-import yatta.runtime.Module;
+import yatta.runtime.YattaModule;
 import yatta.runtime.UninitializedFrameSlotException;
 import yatta.runtime.Unit;
 
@@ -23,12 +23,10 @@ import java.util.Objects;
 public final class FQNNode extends ExpressionNode {
   public final String[] packageParts;
   public final String moduleName;
-  private final Context context;
 
   public FQNNode(String[] packageParts, String moduleName) {
     this.packageParts = packageParts;
     this.moduleName = moduleName;
-    this.context = Context.getCurrent();
   }
 
   @Override
@@ -60,24 +58,24 @@ public final class FQNNode extends ExpressionNode {
     try {
       return executeModule(frame);
     } catch (UnexpectedResultException e) {
-      return context.lookupModule(packageParts, moduleName, this);
+      return lookupContextReference(YattaLanguage.class).get().lookupModule(packageParts, moduleName, this);
     }
   }
 
   @Override
   public String executeString(VirtualFrame frame) throws UnexpectedResultException {
-    return context.getFQN(packageParts, moduleName);
+    return lookupContextReference(YattaLanguage.class).get().getFQN(packageParts, moduleName);
   }
 
   @Override
-  public Module executeModule(VirtualFrame frame) throws UnexpectedResultException {
+  public YattaModule executeModule(VirtualFrame frame) throws UnexpectedResultException {
+    Context context = lookupContextReference(YattaLanguage.class).get();
     try {
       String fqn = Context.getFQN(packageParts, moduleName);
-      TruffleLanguage.ContextReference<Context> context = lookupContextReference(YattaLanguage.class);
-      Object globalValue = context.get().globals.lookup(fqn);
+      Object globalValue = context.globals.lookup(fqn);
       if (!Unit.INSTANCE.equals(globalValue)) {
         this.replace(new AnyValueNode(globalValue));
-        return (Module) globalValue;
+        return (YattaModule) globalValue;
       }
 
       CompilerDirectives.transferToInterpreterAndInvalidate();

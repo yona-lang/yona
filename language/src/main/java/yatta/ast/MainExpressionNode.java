@@ -46,7 +46,7 @@ public final class MainExpressionNode extends ExpressionNode {
       InvokeNode invokeNode = new InvokeNode(language, functionNode, new ExpressionNode[]{}, moduleStack);
       context.insertGlobal(name, invokeNode.executeGeneric(frame));
     });
-}
+  }
 
   public void writeModuleOnStack(VirtualFrame frame, String fqn, Builtins builtins, Context context) {
     final List<String> exports = new ArrayList<>(builtins.builtins.size());
@@ -63,37 +63,32 @@ public final class MainExpressionNode extends ExpressionNode {
       }
     });
 
-    Module module = new Module(fqn, exports, functions);
+    YattaModule module = new YattaModule(fqn, exports, functions);
     context.insertGlobal(fqn, module);
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    try {
-      TruffleLanguage.ContextReference<Context> contextRef = lookupContextReference(YattaLanguage.class);
-      Context context = contextRef.get();
+    TruffleLanguage.ContextReference<Context> contextRef = lookupContextReference(YattaLanguage.class);
+    Context context = contextRef.get();
+    writeBuiltinsOnStack(frame, context.builtins, context);
+    context.builtinModules.builtins.forEach((fqn, builtins) -> {
+      writeModuleOnStack(frame, fqn, builtins, context);
+    });
 
-      writeBuiltinsOnStack(frame, context.builtins, context);
-      context.builtinModules.builtins.forEach((fqn, builtins) -> {
-        writeModuleOnStack(frame, fqn, builtins, context);
-      });
-
-      Object result = expressionNode.executeGeneric(frame);
-      if (result instanceof Promise) {
-        Promise promise = (Promise) result;
-        try {
-          result = Promise.await(promise);
-        } catch (YattaException e) {
-          throw e;
-        } catch (Throwable e) {
-          throw new YattaException(e, this);
-        }
+    Object result = expressionNode.executeGeneric(frame);
+    if (result instanceof Promise) {
+      Promise promise = (Promise) result;
+      try {
+        result = Promise.await(promise);
+      } catch (YattaException e) {
+        throw e;
+      } catch (Throwable e) {
+        throw new YattaException(e, this);
       }
-
-      return executeIfFunction(result, frame);
-    } finally {
-      Context.getCurrent().threading.dispose();
     }
+
+    return executeIfFunction(result, frame);
   }
 
   private Object executeIfFunction(Object result, VirtualFrame frame) {

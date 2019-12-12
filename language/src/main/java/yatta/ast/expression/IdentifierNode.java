@@ -51,7 +51,7 @@ public final class IdentifierNode extends ExpressionNode {
       if (moduleStack.length > 0) {
         for (int i = moduleStack.length - 1; i >= 0; i--) {
           try {
-            Module module = moduleStack[i].executeModule(frame);
+            YattaModule module = moduleStack[i].executeModule(frame);
             if (module.getFunctions().containsKey(name)) {
               InvokeNode invokeNode = new InvokeNode(language, module.getFunctions().get(name), new ExpressionNode[]{}, moduleStack);
               this.replace(invokeNode);

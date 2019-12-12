@@ -1,9 +1,6 @@
 package yatta;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -17,19 +14,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class BinaryOperatorsTest {
-  private Context context;
-
-  @BeforeEach
-  public void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).build();
-  }
-
-  @AfterEach
-  public void dispose() {
-    context.close();
-  }
-
+public class BinaryOperatorsTest extends CommonTest {
   @ParameterizedTest
   @MethodSource("equalsOps")
   void testEqualsOps(BinaryArgsHolder args) {

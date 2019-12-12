@@ -1,5 +1,6 @@
 package yatta.ast.expression;
 
+import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.Types;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.*;
@@ -13,6 +14,7 @@ import com.oracle.truffle.api.library.CachedLibrary;
 
 @TypeSystemReference(Types.class)
 @NodeChild
+@NodeInfo(shortName = "unbox")
 public abstract class UnboxNode extends ExpressionNode {
 
   static final int LIMIT = 5;

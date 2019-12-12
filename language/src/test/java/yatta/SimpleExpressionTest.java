@@ -1,27 +1,12 @@
 package yatta;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class SimpleExpressionTest {
-  private Context context;
-
-  @BeforeEach
-  public void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).build();
-  }
-
-  @AfterEach
-  public void dispose() {
-    context.close();
-  }
-
+public class SimpleExpressionTest extends CommonTest {
   @Test
   public void longValueTest() {
     long ret = context.eval(YattaLanguage.ID, "5").asLong();

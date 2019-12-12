@@ -2,7 +2,6 @@ package yatta;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.debug.DebuggerTags;
-import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
@@ -12,15 +11,14 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import yatta.ast.builtin.BuiltinNode;
 import yatta.ast.local.LexicalScope;
 import yatta.parser.ParseError;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
-import yatta.runtime.Module;
 import yatta.runtime.Unit;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 @TruffleLanguage.Registration(id = YattaLanguage.ID, name = "yatta", defaultMimeType = YattaLanguage.MIME_TYPE, characterMimeTypes = YattaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, DebuggerTags.AlwaysHalt.class})
@@ -38,16 +36,19 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   }
 
   @Override
+  protected void initializeContext(Context context) throws Exception {
+    context.initialize();
+  }
+
+  @Override
+  protected void finalizeContext(Context context) {
+    context.dispose();
+  }
+
+  @Override
   public CallTarget parse(ParsingRequest request) throws Exception {
     Source source = request.getSource();
-    RootCallTarget rootCallTarget;
-    try {
-      rootCallTarget = YattaParser.parseYatta(this, source);
-    } catch (ParseError e) {
-      getCurrentContext().threading.dispose();
-      throw e;
-    }
-
+    RootCallTarget rootCallTarget = YattaParser.parseYatta(this, source);
     return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
   }
 
@@ -176,12 +177,6 @@ public class YattaLanguage extends TruffleLanguage<Context> {
 
   public static Context getCurrentContext() {
     return getCurrentContext(YattaLanguage.class);
-  }
-
-  private static final List<NodeFactory<? extends BuiltinNode>> EXTERNAL_BUILTINS = Collections.synchronizedList(new ArrayList<>());
-
-  public static void installBuiltin(NodeFactory<? extends BuiltinNode> builtin) {
-    EXTERNAL_BUILTINS.add(builtin);
   }
 
   @Override

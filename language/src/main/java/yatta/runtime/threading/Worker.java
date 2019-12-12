@@ -3,11 +3,11 @@ package yatta.runtime.threading;
 
 import java.util.concurrent.BlockingQueue;
 
-public class WorkerThread implements Runnable {
+public class Worker implements Runnable {
   private final BlockingQueue<Runnable> queue;
   private volatile boolean abort = false;
 
-  public WorkerThread(BlockingQueue<Runnable> queue) {
+  public Worker(BlockingQueue<Runnable> queue) {
     this.queue = queue;
   }
 
