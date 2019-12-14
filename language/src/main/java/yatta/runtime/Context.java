@@ -51,7 +51,7 @@ public class Context {
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
     this.builtinModules = new BuiltinModules();
-    this.ioExecutor = Executors.newCachedThreadPool(env::createThread);
+    this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yatta-io")));
     this.threading = new Threading(env);
   }
 

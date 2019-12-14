@@ -54,6 +54,7 @@ public class YattaTest {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
             Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes("UTF-8"))).out(out).allowAllAccess(true).build();
+            context.enter();
 
             /* Parse the Yatta source file. */
             Source source = Source.newBuilder(YattaLanguage.ID, sourceFile.toFile()).interactive(true).build();
@@ -74,14 +75,7 @@ public class YattaTest {
 
             assertEquals(expectedOutput, actualOutput, sourceName);
 
-            try {
-              context.close();
-            } catch (PolyglotException e) {
-              // TODO: No idea why this is needed. It started happening as of 19.3.0, and random test cases fail due to:
-              // java.lang.IllegalStateException: The language did not complete all polyglot threads but should have:
-              // [Thread[Polyglot-yatta-2063,5,main], Thread[Polyglot-yatta-2061,5,main], Thread[Polyglot-yatta-2062,5,main]]
-              e.printStackTrace();
-            }
+            context.leave();
           });
 
           foundCases.add(dynamicTest);

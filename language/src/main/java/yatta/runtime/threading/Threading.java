@@ -19,7 +19,7 @@ public final class Threading {
     blockingQueue = new ArrayBlockingQueue<>(QUEUE_SIZE);
     for (int i = 0; i < THREAD_COUNT; i++) {
       workers[i] = new Worker(blockingQueue);
-      threads[i] = env.createThread(workers[i]);
+      threads[i] = env.createThread(workers[i], null, new ThreadGroup("yatta-worker"));
     }
   }
 
