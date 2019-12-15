@@ -10,20 +10,36 @@
   <artifactId>yatta</artifactId>
   <properties>
     <jar.dir>${project.build.directory}/jars</jar.dir>
-    <test.argLine>--upgrade-module-path=${jar.dir}/truffle-api.jar --add-opens org.graalvm.sdk/org.graalvm.polyglot=ALL-UNNAMED</test.argLine>
+    <test.argLine>--upgrade-module-path='${jar.dir}/truffle-api.jar' --add-opens org.graalvm.sdk/org.graalvm.polyglot=ALL-UNNAMED --add-exports java.base/jdk.internal.module=ALL-UNNAMED</test.argLine>
   </properties>
   <build>
     <plugins>
       <plugin>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.22.2</version>
-        <configuration>
-          <argLine>-Dgraalvm.locatorDisabled=true ${test.argLine}</argLine>
-          <includes>
-            <include>**/*TestSuite.java</include>
-            <include>**/*Test.java</include>
-          </includes>
-        </configuration>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>2.10</version>
+        <executions>
+          <execution>
+            <id>copy</id>
+            <phase>process-test-classes</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>org.graalvm.truffle</groupId>
+                  <artifactId>truffle-api</artifactId>
+                  <version>${graalvm.version}</version>
+                  <type>jar</type>
+                  <overWrite>true</overWrite>
+                  <destFileName>truffle-api.jar</destFileName>
+                </artifactItem>
+              </artifactItems>
+              <outputDirectory>${jar.dir}</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -31,6 +47,18 @@
         <configuration>
           <downloadSources>true</downloadSources>
           <downloadJavadocs>true</downloadJavadocs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.22.2</version>
+        <configuration>
+          <includes>
+            <include>**/*TestSuite.java</include>
+            <include>**/*Test.java</include>
+          </includes>
+          <argLine>-Dgraalvm.locatorDisabled=true ${test.argLine}</argLine>
         </configuration>
       </plugin>
       <plugin>
