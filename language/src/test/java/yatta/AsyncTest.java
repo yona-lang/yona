@@ -1,25 +1,10 @@
 package yatta;
 
-import org.graalvm.polyglot.Context;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class AsyncTest {
-  private Context context;
-
-  @BeforeEach
-  public void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).build();
-  }
-
-  @AfterEach
-  public void dispose() {
-    context.close();
-  }
-
+public class AsyncTest extends CommonTest {
   @Test
   public void simpleAsyncTest() {
     long ret = context.eval(YattaLanguage.ID, "async \\-> 5").asLong();
