@@ -213,7 +213,7 @@ headTailsHead : leftPattern+ tails rightPattern+ ;
 leftPattern : patternWithoutSequence OP_CONS_L ;
 rightPattern : OP_CONS_R patternWithoutSequence ;
 
-tails : identifier | emptySequence | underscore ;
+tails : identifier | sequence | underscore | stringLiteral ;
 
 dictPattern : CURLY_L (patternValue OP_ASSIGN pattern (COMMA patternValue OP_ASSIGN pattern)*)? CURLY_R ;
 

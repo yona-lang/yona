@@ -1,6 +1,7 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.IdentifierNode;
@@ -69,12 +70,17 @@ public final class TailsHeadMatchPatternNode extends MatchNode {
           }
         }
 
-        // YattaParser.g4: tails : identifier | emptySequence | underscore ;
+        // YattaParser.g4: tails : identifier | sequence | underscore | stringLiteral ;
         if (tailsNode instanceof IdentifierNode) {
           IdentifierNode identifierNode = (IdentifierNode) tailsNode;
 
           if (identifierNode.isBound(frame)) {
-            Seq identifierValue = (Seq) identifierNode.executeGeneric(frame);
+            Seq identifierValue;
+            try {
+              identifierValue = identifierNode.executeSequence(frame);
+            } catch (UnexpectedResultException e) {
+              return MatchResult.FALSE;
+            }
 
             if (!Objects.equals(identifierValue, sequence)) {
               return MatchResult.FALSE;
@@ -84,6 +90,19 @@ public final class TailsHeadMatchPatternNode extends MatchNode {
           }
         } else if (tailsNode instanceof EmptySequenceNode) {
           if (sequence.length() > 0) {
+            return MatchResult.FALSE;
+          }
+        } else if (tailsNode instanceof UnderscoreMatchNode) {
+          // nothing to match here
+        } else { // otherSequence | stringLiteral
+          Seq sequenceValue;
+          try {
+            sequenceValue = tailsNode.executeSequence(frame);
+          } catch (UnexpectedResultException e) {
+            return MatchResult.FALSE;
+          }
+
+          if (!Objects.equals(sequenceValue, sequence)) {
             return MatchResult.FALSE;
           }
         }

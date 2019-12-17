@@ -468,6 +468,14 @@ public class SimpleExpressionTest extends CommonTest {
   }
 
   @Test
+  public void simpleOperatorPrecedenceAndApplication() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    fun = \\a -> a\n" +
+        "in fun 5 + 3").asLong();
+    assertEquals(8l, ret);
+  }
+
+  @Test
   public void simplePrintlnTest() {
     context.eval(YattaLanguage.ID, "println \"hello\"");
   }

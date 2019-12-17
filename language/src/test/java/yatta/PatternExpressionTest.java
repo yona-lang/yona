@@ -542,4 +542,34 @@ public class PatternExpressionTest extends CommonTest {
 
     assertEquals(2l, ret);
   }
+
+  @Test
+  public void stringPrefixTest() {
+    long ret = context.eval(YattaLanguage.ID, "case ['a', 'b', 'c'] of\n" +
+        "\"ab\" :> _ -> 0\n" +
+        "_ -> 1\n" +
+        "end").asLong();
+
+    assertEquals(0l, ret);
+  }
+
+  @Test
+  public void stringPrefixAndSuffixTest() {
+    long ret = context.eval(YattaLanguage.ID, "case \"hello there\" of\n" +
+        "'h' <: 'e' <: _ :> 'r' :> 'e' -> 0\n" +
+        "_ -> 1\n" +
+        "end").asLong();
+
+    assertEquals(0l, ret);
+  }
+
+  @Test
+  public void stringSuffixTest() {
+    long ret = context.eval(YattaLanguage.ID, "case ['a', 'b', 'c'] of\n" +
+        "_ <: \"bc\" -> 0\n" +
+        "_ -> 1\n" +
+        "end").asLong();
+
+    assertEquals(0l, ret);
+  }
 }
