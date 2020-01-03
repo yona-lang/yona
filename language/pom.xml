@@ -75,6 +75,7 @@
               <finalName>yatta</finalName>
               <artifactSet>
                 <excludes>
+                  <exclude>junit:junit</exclude>
                   <exclude>org.junit.jupiter:junit-jupiter-api</exclude>
                   <exclude>org.junit.jupiter:junit-jupiter-engine</exclude>
                   <exclude>org.graalvm.truffle:truffle-api</exclude>
