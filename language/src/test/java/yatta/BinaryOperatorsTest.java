@@ -1,6 +1,7 @@
 package yatta;
 
 import org.graalvm.polyglot.Value;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -11,8 +12,7 @@ import yatta.runtime.Unit;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class BinaryOperatorsTest extends CommonTest {
   @ParameterizedTest
@@ -506,5 +506,41 @@ public class BinaryOperatorsTest extends CommonTest {
     public String toString() {
       return String.format("%s", val);
     }
+  }
+
+  @Test
+  public void functionsEqualityOne() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    fun1 = \\a b -> a+b\n" +
+        "    fun2 = \\a b -> a-b\n" +
+        "in fun1 == fun2").asBoolean();
+    assertFalse(ret);
+  }
+
+  @Test
+  public void functionsNotEqualityOne() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    fun1 = \\a b -> a+b\n" +
+        "    fun2 = \\a b -> a-b\n" +
+        "in fun1 != fun2").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void functionsEqualityTwo() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    fun1 = \\a b -> a+b\n" +
+        "    fun2 = \\a b -> a-b\n" +
+        "in fun1 == fun1").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void functionsNotEqualityTwo() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    fun1 = \\a b -> a+b\n" +
+        "    fun2 = \\a b -> a-b\n" +
+        "in fun1 != fun1").asBoolean();
+    assertFalse(ret);
   }
 }
