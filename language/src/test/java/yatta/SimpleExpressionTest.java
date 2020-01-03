@@ -478,6 +478,17 @@ public class SimpleExpressionTest extends CommonTest {
     context.eval(YattaLanguage.ID, "println \"hello\"");
   }
 
+  @Test
+  public void moduleCallTest() {
+    String src = "let testMod = module Test exports fun as\n" +
+        "fun = 6\n" +
+        "other_fun = 7\n" +
+        "in testMod.fun";
+    long ret = context.eval(YattaLanguage.ID, src).asLong();
+
+    assertEquals(6l, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with
