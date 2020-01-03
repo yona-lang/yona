@@ -479,8 +479,19 @@ public class SimpleExpressionTest extends CommonTest {
   }
 
   @Test
-  public void moduleCallTest() {
+  public void dynamicModuleCallTest() {
     String src = "let testMod = module Test exports fun as\n" +
+        "fun = 6\n" +
+        "other_fun = 7\n" +
+        "in testMod.fun";
+    long ret = context.eval(YattaLanguage.ID, src).asLong();
+
+    assertEquals(6l, ret);
+  }
+
+  @Test
+  public void dynamicAsyncModuleCallTest() {
+    String src = "let testMod = async \\-> module Test exports fun as\n" +
         "fun = 6\n" +
         "other_fun = 7\n" +
         "in testMod.fun";
