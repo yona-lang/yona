@@ -66,6 +66,7 @@ public class Context {
     this.builtins.register(PrintlnBuiltinFactory.getInstance());
     this.builtins.register(SleepBuiltinFactory.getInstance());
     this.builtins.register(AsyncBuiltinFactory.getInstance());
+    this.builtins.register(IdentityBuiltinFactory.getInstance());
     this.builtins.register(ToStringBuiltinFactory.getInstance());
     this.builtins.register(SystemBuiltinFactory.getInstance());
   }
