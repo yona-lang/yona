@@ -36,8 +36,6 @@ public abstract class Set {
 
   abstract boolean contains(Object value, long hash, int shift);
 
-  abstract boolean subsetOf(Set set);
-
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public final Set remove(final Object value) {
     return remove(value, hasher.hash(seed, value), 0);
@@ -66,22 +64,6 @@ public abstract class Set {
   @Override
   public final int hashCode() {
     return (int) murmur3Hash(0);
-  }
-
-  @Override
-  @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public boolean equals(Object o) {
-    if (o == this) {
-      return true;
-    }
-    if (!(o instanceof Set)) {
-      return false;
-    }
-    final Set that = (Set) o;
-    if (this.size() != that.size()) {
-      return false;
-    }
-    return subsetOf(that);
   }
 
   final Set merge(final Object fst, final long fstHash, final Object snd, final long sndHash, final int shift) {
@@ -197,21 +179,6 @@ public abstract class Set {
     }
 
     @Override
-    boolean subsetOf(final Set set) {
-      for (int i = 0; i < arity(dataBmp); i++) {
-        if (!set.contains(dataAt(i))) {
-          return false;
-        }
-      }
-      for (int i = 0; i < arity(nodeBmp); i++) {
-        if (!nodeAt(i).subsetOf(set)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    @Override
     Set remove(final Object value, final long hash, final int shift) {
       final long mask = mask(hash, shift);
       final long pos = pos(mask);
@@ -309,6 +276,39 @@ public abstract class Set {
     }
 
     @Override
+    @CompilerDirectives.TruffleBoundary(allowInlining = true)
+    public boolean equals(Object o) {
+      if (o == this) {
+        return true;
+      }
+      if (!(o instanceof Bitmap)) {
+        return false;
+      }
+      final Bitmap that = (Bitmap) o;
+      if (this.seed != that.seed) {
+        return false;
+      }
+      if (!this.hasher.equals(that.hasher)) {
+        return false;
+      }
+      if (this.nodeBmp != that.nodeBmp) {
+        return false;
+      }
+      if (this.dataBmp != that.dataBmp) {
+        return false;
+      }
+      if (this.elements.length != that.elements.length) {
+        return false;
+      }
+      for (int i = 0; i < elements.length; i++) {
+        if (!this.elements[i].equals(that.elements[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    @Override
     Object dataAt(final int idx) {
       return elements[idx];
     }
@@ -358,16 +358,6 @@ public abstract class Set {
     }
 
     @Override
-    boolean subsetOf(final Set set) {
-      for (Object val : values) {
-        if (!set.contains(val)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    @Override
     Set remove(final Object value, final long hash, final int shift) {
       for (int idx = 0; idx < values.length; idx++) {
         if (value.equals(values[idx])) {
@@ -405,6 +395,36 @@ public abstract class Set {
         hash ^= Murmur3.INSTANCE.hash(seed, value);
       }
       return Murmur3.fMix64(hash ^ values.length);
+    }
+
+    @Override
+    @CompilerDirectives.TruffleBoundary(allowInlining = true)
+    public boolean equals(Object o) {
+      if (o == this) {
+        return true;
+      }
+      if (!(o instanceof Collision)) {
+        return false;
+      }
+      final Collision that = (Collision) o;
+      if (this.seed != that.seed) {
+        return false;
+      }
+      if (!this.hasher.equals(that.hasher)) {
+        return false;
+      }
+      if (this.hash != that.hash) {
+        return false;
+      }
+      if (this.values.length != that.values.length) {
+        return false;
+      }
+      for (Object value : values) {
+        if (!that.contains(value, hash, 0)) {
+          return false;
+        }
+      }
+      return true;
     }
 
     @Override
