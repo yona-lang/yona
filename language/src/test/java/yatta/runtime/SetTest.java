@@ -71,6 +71,15 @@ public class SetTest {
     assertTrue(set.contains(1l));
   }
 
+  @Test
+  public void testCompareTo() {
+    Set fst = Set.set(1, 2);
+    Set snd = Set.set(1, 2, 3, 4);
+    assertTrue(fst.compareTo(fst) == 0);  // equal sets
+    assertTrue(fst.compareTo(snd) < 0);   // proper subset
+    assertTrue(snd.compareTo(fst) > 0);   // proper supserset
+  }
+
   private static final class O {
     final long value;
     final int hash;

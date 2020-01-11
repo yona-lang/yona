@@ -90,7 +90,13 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(1l, new PromiseHolder(2l), true, Boolean.class),
         new BinaryArgsHolder(2l, new PromiseHolder(1l), false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), false, Boolean.class)
+        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), false, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), Set.set(1l, 2l, 3l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), Set.set(1l, 2l), false, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l, 3l)), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l, 3l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class)
     );
   }
 
@@ -108,7 +114,13 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(1l, new PromiseHolder(2l), false, Boolean.class),
         new BinaryArgsHolder(2l, new PromiseHolder(1l), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), false, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), true, Boolean.class)
+        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l, 3l), Set.set(1l, 2l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), Set.set(1l, 2l), false, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l, 3l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l, 3l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class)
     );
   }
 
@@ -146,7 +158,13 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(2l, new PromiseHolder(1l), false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(1l), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), false, Boolean.class)
+        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), false, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), Set.set(1l, 2l, 3l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), Set.set(1l, 2l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l, 3l)), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l, 3l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class)
     );
   }
 
@@ -170,7 +188,13 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(2l, new PromiseHolder(1l), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(1l), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), false, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), true, Boolean.class)
+        new BinaryArgsHolder(new PromiseHolder(2l), new PromiseHolder(1l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l, 3l), Set.set(1l, 2l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), Set.set(1l, 2l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l, 3l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l, 3l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class)
     );
   }
 

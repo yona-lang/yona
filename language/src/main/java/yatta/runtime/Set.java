@@ -4,12 +4,11 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.nodes.Node;
 
 import java.util.function.BiFunction;
 
 @ExportLibrary(InteropLibrary.class)
-public abstract class Set implements TruffleObject {
+public abstract class Set implements TruffleObject, Comparable<Set> {
   static final int BITS = 6;
   static final int MASK = 0x3f;
 
@@ -65,6 +64,25 @@ public abstract class Set implements TruffleObject {
   @ExportMessage
   public boolean isString() {
     return true;
+  }
+
+  @Override
+  public int compareTo(Set o) {
+    int ret = fold(0, (acc, el) -> {
+      boolean containedInOther = o.contains(el);
+      if (containedInOther && acc == 0) {
+        return 0;
+      } else if (containedInOther && acc < 0) {
+        return -1;
+      } else {
+        return 1;
+      }
+    });
+    if (ret == 0 && size() != o.size()) {
+      return -1;
+    } else {
+      return ret;
+    }
   }
 
   @Override

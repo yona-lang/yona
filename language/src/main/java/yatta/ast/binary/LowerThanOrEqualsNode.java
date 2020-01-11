@@ -4,6 +4,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.runtime.Function;
+import yatta.runtime.Set;
 import yatta.runtime.Unit;
 import yatta.runtime.async.Promise;
 
@@ -34,6 +35,11 @@ public abstract class LowerThanOrEqualsNode extends BinaryOpNode {
     return true;
   }
 
+  @Specialization
+  public boolean sets(Set left, Set right) {
+    return left.compareTo(right) <= 0;
+  }
+
   protected Promise promise(Object left, Object right) {
     Promise all = Promise.all(new Object[]{left, right}, this);
     return all.map(args -> {
@@ -49,6 +55,8 @@ public abstract class LowerThanOrEqualsNode extends BinaryOpNode {
         return (double) argValues[0] <= (double) argValues[1];
       } else if (argValues[0] instanceof Byte) {
         return (byte) argValues[0] <= (byte) argValues[1];
+      } else if (argValues[0] instanceof Set) {
+        return sets((Set) argValues[0], (Set) argValues[1]);
         // TODO implement
 //      } else if (argValues[0] instanceof Dictionary) {
 //        return null;
