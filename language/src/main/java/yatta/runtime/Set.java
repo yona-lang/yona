@@ -72,8 +72,10 @@ public abstract class Set implements TruffleObject {
     StringBuilder sb = new StringBuilder();
     sb.append("{");
     fold(sb, (res, el) -> res.append(el + ", "));
-    sb.deleteCharAt(sb.length() - 1);
-    sb.deleteCharAt(sb.length() - 1);
+    if(size() > 0) {
+      sb.deleteCharAt(sb.length() - 1);
+      sb.deleteCharAt(sb.length() - 1);
+    }
     sb.append("}");
     return sb.toString();
   }

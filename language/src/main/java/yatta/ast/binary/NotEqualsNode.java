@@ -64,6 +64,11 @@ public abstract class NotEqualsNode extends BinaryOpNode {
   }
 
   @Specialization
+  public boolean set(Set left, Set right) {
+    return !left.equals(right);
+  }
+
+  @Specialization
   public boolean nativeObjects(NativeObject left, NativeObject right) {
     return !left.equals(right);
   }

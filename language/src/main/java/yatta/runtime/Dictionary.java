@@ -2,9 +2,11 @@ package yatta.runtime;
 
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.common.TriFunction;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.function.BiFunction;
 
 import static java.lang.Integer.bitCount;
 import static java.lang.System.arraycopy;
@@ -34,6 +36,8 @@ public abstract class Dictionary implements TruffleObject {
 
   public abstract Object fold(Function fn3, Object initial, InteropLibrary dispatch);
 
+  public abstract <T> T fold(TriFunction<T, Object, Object, T> function, T initial);
+
   public abstract Dictionary map(Function fn1, InteropLibrary dispatch);
 
   public abstract int size();
@@ -56,6 +60,28 @@ public abstract class Dictionary implements TruffleObject {
 
   public static Dictionary dictionary() {
     return Bitmap.EMPTY;
+  }
+
+  public static Dictionary singleton(Object key, Object value) {
+    return dictionary().insert(key, value);
+  }
+
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{");
+    fold((acc, key, val) -> {
+      acc.append(key);
+      acc.append(" = ");
+      acc.append(val);
+      acc.append(", ");
+      return acc;
+    }, sb);
+    if(size() > 0) {
+      sb.deleteCharAt(sb.length() - 1);
+      sb.deleteCharAt(sb.length() - 1);
+    }
+    sb.append("}");
+    return sb.toString();
   }
 
   private static final class Array extends Dictionary {
@@ -129,6 +155,15 @@ public abstract class Dictionary implements TruffleObject {
       Object result = initial;
       for (Dictionary dict : data) {
         if (dict != null) result = dict.fold(fn3, result, dispatch);
+      }
+      return result;
+    }
+
+    @Override
+    public <T> T fold(TriFunction<T, Object, Object, T> function, T initial) {
+      T result = initial;
+      for (Dictionary dict : data) {
+        if (dict != null) result = dict.fold(function, result);
       }
       return result;
     }
@@ -301,12 +336,26 @@ public abstract class Dictionary implements TruffleObject {
           assert o instanceof Entry;
           final Entry entry = (Entry) o;
           try {
-            result = dispatch.execute(fn3, new Object[] { result, entry.key, entry.value });
+            result = dispatch.execute(fn3, result, entry.key, entry.value);
           } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
             /* Execute was not successful. */
             // TODO node should not be null
             throw UndefinedNameException.undefinedFunction(null, fn3);
           }
+        }
+      }
+      return result;
+    }
+
+    public <T> T fold(TriFunction<T, Object, Object, T> function, T initial) {
+      T result = initial;
+      for (Object o : data) {
+        if (o instanceof Dictionary) {
+          result = ((Dictionary) o).fold(function, result);
+        } else {
+          assert o instanceof Entry;
+          final Entry entry = (Entry) o;
+          result = function.apply(result, entry.key, entry.value);
         }
       }
       return result;
@@ -325,7 +374,7 @@ public abstract class Dictionary implements TruffleObject {
           assert cursor instanceof Entry;
           final Entry entry = (Entry) cursor;
           try {
-            newData[i] = new Entry(entry.key, dispatch.execute(fn1, new Object[] { entry.value }));
+            newData[i] = new Entry(entry.key, dispatch.execute(fn1, entry.value));
           } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
             /* Execute was not successful. */
             // TODO node should not be null
@@ -362,13 +411,6 @@ public abstract class Dictionary implements TruffleObject {
       int result = Objects.hash(bitmap);
       result = 31 * result + Arrays.hashCode(data);
       return result;
-    }
-
-    @Override
-    public String toString() {
-      return "Bitmap{" +
-          "data=" + Arrays.toString(data) +
-          '}';
     }
   }
 
@@ -451,12 +493,27 @@ public abstract class Dictionary implements TruffleObject {
         if (o instanceof Entry) {
           final Entry entry = (Entry) o;
           try {
-            result = dispatch.execute(result, new Object[] { result, entry.key, entry.value });
+            result = dispatch.execute(result, result, entry.key, entry.value);
           } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
             /* Execute was not successful. */
             // TODO node should not be null
             throw UndefinedNameException.undefinedFunction(null, fn3);
           }
+        }
+      }
+      return result;
+    }
+
+    @Override
+    public <T> T fold(TriFunction<T, Object, Object, T> function, T initial) {
+      T result = initial;
+      for (Object o : data) {
+        if (o instanceof Dictionary) {
+          result = ((Dictionary) o).fold(function, result);
+        }
+        if (o instanceof Entry) {
+          final Entry entry = (Entry) o;
+          result = function.apply(result, entry.key, entry.value);
         }
       }
       return result;
@@ -470,7 +527,7 @@ public abstract class Dictionary implements TruffleObject {
       for (int i = 0; i < len; i++) {
         cursor = data[i];
         try {
-          newData[i] = new Entry(cursor.key, dispatch.execute(fn1, new Object[] { cursor.value }));
+          newData[i] = new Entry(cursor.key, dispatch.execute(fn1, cursor.value));
         } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
           /* Execute was not successful. */
           // TODO node should not be null

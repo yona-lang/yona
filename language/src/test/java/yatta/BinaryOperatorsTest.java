@@ -5,10 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import yatta.runtime.Seq;
-import yatta.runtime.Set;
-import yatta.runtime.Tuple;
-import yatta.runtime.Unit;
+import yatta.runtime.*;
 
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -48,13 +45,20 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder("[1, 2]", "[1, 2, 3]", false, Boolean.class),
         new BinaryArgsHolder(":yes", ":yes", true, Boolean.class),
         new BinaryArgsHolder(":yes", ":no", false, Boolean.class),
-        // TODO add dictionary
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), 1l, true, Boolean.class),
         new BinaryArgsHolder(1l, new PromiseHolder(2l), false, Boolean.class),
         new BinaryArgsHolder(1l, new PromiseHolder(1l), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), false, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(1l), true, Boolean.class)
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(1l), true, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l, 3l)), false, Boolean.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l, 3l)), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(Dictionary.singleton(1l, 2l), new PromiseHolder(Dictionary.dictionary()), false, Boolean.class),
+        new BinaryArgsHolder(Dictionary.singleton(1l, 2l), new PromiseHolder(Dictionary.singleton(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dictionary.singleton(1l, 2l)), new PromiseHolder(Dictionary.dictionary()), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dictionary.singleton(1l, 2l)), new PromiseHolder(Dictionary.singleton(1l, 2l)), true, Boolean.class)
     );
   }
 
@@ -458,7 +462,6 @@ public class BinaryOperatorsTest extends CommonTest {
     );
   }
 
-
   @ParameterizedTest
   @MethodSource("inOps")
   void testInOps(BinaryArgsHolder args) {
@@ -486,7 +489,17 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(1l, Set.set(1l, 2l), true, boolean.class),
         new BinaryArgsHolder(new PromiseHolder(1l), Set.set(1l, 2l), true, boolean.class),
         new BinaryArgsHolder(1l, new PromiseHolder(Set.set(1l, 2l)), true, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Set.set(1l, 2l)), true, boolean.class)
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Set.set(1l, 2l)), true, boolean.class),
+
+        // Set
+        new BinaryArgsHolder(3l, Dictionary.singleton(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), Dictionary.singleton(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(3l, new PromiseHolder(Dictionary.singleton(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(Dictionary.singleton(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(1l, Dictionary.singleton(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), Dictionary.singleton(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(1l, new PromiseHolder(Dictionary.singleton(1l, 2l)), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Dictionary.singleton(1l, 2l)), true, boolean.class)
     );
   }
 

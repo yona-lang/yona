@@ -17,10 +17,10 @@ public final class DictNode extends ExpressionNode {
   }
 
   public static final class Entry {
-    public final Object key;
+    public final ExpressionNode key;
     public final ExpressionNode value;
 
-    public Entry(Object key, ExpressionNode value) {
+    public Entry(ExpressionNode key, ExpressionNode value) {
       this.key = key;
       this.value = value;
     }
@@ -82,7 +82,7 @@ public final class DictNode extends ExpressionNode {
     Dictionary dictionary = Dictionary.dictionary();
 
     for (Entry entry : items) {
-      dictionary = dictionary.insert(entry.key, entry.value.executeGeneric(frame));
+      dictionary = dictionary.insert(entry.key.executeGeneric(frame), entry.value.executeGeneric(frame));
     }
 
     return dictionary;
