@@ -6,6 +6,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import yatta.runtime.Seq;
+import yatta.runtime.Set;
 import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
 
@@ -457,6 +458,38 @@ public class BinaryOperatorsTest extends CommonTest {
     );
   }
 
+
+  @ParameterizedTest
+  @MethodSource("inOps")
+  void testInOps(BinaryArgsHolder args) {
+    boolean ret = context.eval(YattaLanguage.ID, args.format("in")).asBoolean();
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> inOps() {
+    return Stream.of(
+        // Sequence
+        new BinaryArgsHolder(3l, Seq.sequence(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), Seq.sequence(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(3l, new PromiseHolder(Seq.sequence(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(Seq.sequence(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(1l, Seq.sequence(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), Seq.sequence(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(1l, new PromiseHolder(Seq.sequence(1l, 2l)), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Seq.sequence(1l, 2l)), true, boolean.class),
+
+        // Set
+        new BinaryArgsHolder(3l, Set.set(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), Set.set(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(3l, new PromiseHolder(Set.set(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(Set.set(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(1l, Set.set(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), Set.set(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(1l, new PromiseHolder(Set.set(1l, 2l)), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Set.set(1l, 2l)), true, boolean.class)
+    );
+  }
+
   private static final class BinaryArgsHolder {
     final Object left, right, expected;
     final Function<Value, Boolean> validator;
@@ -478,12 +511,12 @@ public class BinaryOperatorsTest extends CommonTest {
       this.expectedType = null;
     }
 
-    private static String format(PromiseHolder obj) {
-      return String.format("async \\->%s", obj);
-    }
-
     private static String format(Object obj) {
-      return String.format("%s", obj);
+      if (obj instanceof PromiseHolder) {
+        return String.format("async \\->%s", obj);
+      } else {
+        return String.format("%s", obj);
+      }
     }
 
     public String format(String op) {

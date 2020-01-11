@@ -16,8 +16,12 @@ import com.oracle.truffle.api.library.CachedLibrary;
 @NodeChild
 @NodeInfo(shortName = "unbox")
 public abstract class UnboxNode extends ExpressionNode {
-
   static final int LIMIT = 5;
+
+  @Override
+  public String toString() {
+    return "UnboxNode{}";
+  }
 
   @Specialization
   protected static long fromLong(long value) {
@@ -31,6 +35,21 @@ public abstract class UnboxNode extends ExpressionNode {
 
   @Specialization
   protected static Unit fromUnit(Unit value) {
+    return value;
+  }
+
+  @Specialization
+  protected static Set fromSet(Set value) {
+    return value;
+  }
+
+  @Specialization
+  protected static Seq fromSeq(Seq value) {
+    return value;
+  }
+
+  @Specialization
+  protected static Dictionary fromDictionary(Dictionary value) {
     return value;
   }
 

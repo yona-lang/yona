@@ -224,4 +224,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   public int executeInteger(VirtualFrame frame) throws UnexpectedResultException {
     return TypesGen.expectInteger(executeGeneric(frame));
   }
+
+  public Set executeSet(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectSet(executeGeneric(frame));
+  }
 }

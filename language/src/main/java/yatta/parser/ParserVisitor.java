@@ -242,6 +242,15 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
+  public ExpressionNode visitInExpression(YattaParser.InExpressionContext ctx) {
+    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
+    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode[] args = new ExpressionNode[]{left, right};
+
+    return withSourceSection(ctx, InNodeGen.create(args));
+  }
+
+  @Override
   public PatternLetNode visitLetExpression(YattaParser.LetExpressionContext ctx) {
     ExpressionNode[] aliasNodes = new ExpressionNode[ctx.let().alias().size()];
 
@@ -824,6 +833,15 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public ExpressionNode visitPipeRightExpression(YattaParser.PipeRightExpressionContext ctx) {
     return withSourceSection(ctx, new PipeRightNode(language, ctx.left.accept(this), ctx.right.accept(this), moduleStack.toArray(new FQNNode[] {})));
+  }
+
+  @Override
+  public SetNode visitSet(YattaParser.SetContext ctx) {
+    ExpressionNode[] expressionNodes = new ExpressionNode[ctx.expression().size()];
+    for (int i = 0; i < ctx.expression().size(); i++) {
+      expressionNodes[i] = ctx.expression(i).accept(this);
+    }
+    return withSourceSection(ctx, new SetNode(expressionNodes));
   }
 
   private <T extends ExpressionNode> T withSourceSection(ParserRuleContext parserRuleContext, T expressionNode) {

@@ -74,6 +74,7 @@ expression : PARENS_L expression PARENS_R                                       
            | left=expression VLINE right=expression                                                      #bitwiseOrExpression
            | left=expression OP_LOGIC_AND right=expression                                               #logicalAndExpression
            | left=expression OP_LOGIC_OR right=expression                                                #logicalOrExpression
+           | left=expression KW_IN right=expression                                                      #inExpression
            | let                                                                                         #letExpression
            | conditional                                                                                 #conditionalExpression
            | value                                                                                       #valueExpression
@@ -101,6 +102,7 @@ value : unit
       | tuple
       | dict
       | sequence
+      | set
       | symbol
       | identifier
       | fqn
@@ -162,6 +164,7 @@ dict : CURLY_L (dictKey OP_ASSIGN dictVal (COMMA dictKey OP_ASSIGN dictVal)*)? C
 dictKey : expression ;
 dictVal : expression ;
 sequence : emptySequence | otherSequence ;
+set : CURLY_L expression (COMMA expression)* CURLY_R ;
 
 fqn : (packageName BACKSLASH)? moduleName ;
 packageName : LOWERCASE_NAME (BACKSLASH LOWERCASE_NAME)* ;

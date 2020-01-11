@@ -9,6 +9,16 @@ import yatta.runtime.async.Promise;
 @NodeInfo(shortName = ":>")
 public abstract class SequenceRightConsNode extends BinaryOpNode {
   @Specialization
+  public Promise leftPromise(Promise left, Object right) {
+    return promise(left, right);
+  }
+
+  @Specialization
+  public Promise rightPromise(Object left, Promise right) {
+    return promise(left, right);
+  }
+
+  @Specialization
   public Seq sequences(Seq left, Object right) {
     return left.insertLast(right);
   }
@@ -24,15 +34,5 @@ public abstract class SequenceRightConsNode extends BinaryOpNode {
         return YattaException.typeError(this, argValues);
       }
     }, this);
-  }
-
-  @Specialization
-  public Promise leftPromise(Promise left, Object right) {
-    return promise(left, right);
-  }
-
-  @Specialization
-  public Promise rightPromise(Object left, Promise right) {
-    return promise(left, right);
   }
 }

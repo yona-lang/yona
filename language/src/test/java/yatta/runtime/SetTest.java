@@ -65,6 +65,12 @@ public class SetTest {
     }
   }
 
+  @Test
+  public void testContains() {
+    Set set = Set.set(1l, 2l);
+    assertTrue(set.contains(1l));
+  }
+
   private static final class O {
     final long value;
     final int hash;

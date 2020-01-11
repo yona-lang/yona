@@ -1,12 +1,15 @@
 package yatta.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
 
-public abstract class Set {
+import java.util.function.BiFunction;
+
+@ExportLibrary(InteropLibrary.class)
+public abstract class Set implements TruffleObject {
   static final int BITS = 6;
   static final int MASK = 0x3f;
 
@@ -20,6 +23,16 @@ public abstract class Set {
   Set(final Hasher hasher, final long seed) {
     this.hasher = hasher;
     this.seed = seed;
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public static Set set(Object... args) {
+    Set set = Set.empty(Murmur3.INSTANCE, 0l);
+    for (Object arg : args) {
+      set = set.add(arg);
+    }
+
+    return set;
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
@@ -45,6 +58,35 @@ public abstract class Set {
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public abstract <T> T fold(final T initial, final BiFunction<T, Object, T> function);
+
+  @ExportMessage
+  public boolean isString() {
+    return true;
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{");
+    fold(sb, (res, el) -> res.append(el + ", "));
+    sb.deleteCharAt(sb.length() - 1);
+    sb.deleteCharAt(sb.length() - 1);
+    sb.append("}");
+    return sb.toString();
+  }
+
+  @ExportMessage
+  @CompilerDirectives.TruffleBoundary
+  public String asString() {
+    return toString();
+  }
+
+  static boolean isInstance(TruffleObject set) {
+    return set instanceof Set;
+  }
 
   public abstract long size();
 
@@ -245,6 +287,18 @@ public abstract class Set {
     }
 
     @Override
+    public <T> T fold(final T initial, final BiFunction<T, Object, T> function) {
+      T result = initial;
+      for (int i = 0; i < arity(dataBmp); i++) {
+        result = function.apply(result, dataAt(i));
+      }
+      for (int i = 0; i < arity(nodeBmp); i++) {
+        result = nodeAt(i).fold(result, function);
+      }
+      return result;
+    }
+
+    @Override
     public long size() {
       long result = arity(dataBmp);
       for (int i = 0; i < arity(nodeBmp); i++) {
@@ -379,6 +433,15 @@ public abstract class Set {
       Object result = initial;
       for (Object val : values) {
         result = dispatch.execute(function, result, val);
+      }
+      return result;
+    }
+
+    @Override
+    public <T> T fold(final T initial, final BiFunction<T, Object, T> function) {
+      T result = initial;
+      for (Object val : values) {
+        result = function.apply(result, val);
       }
       return result;
     }

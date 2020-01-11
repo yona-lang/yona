@@ -11,6 +11,7 @@ import yatta.runtime.exceptions.BadArgException;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.util.function.BiFunction;
 
 @ExportLibrary(InteropLibrary.class)
 public final class Seq implements TruffleObject {
@@ -85,8 +86,8 @@ public final class Seq implements TruffleObject {
     return asJavaString(null);
   }
 
-  static boolean isInstance(TruffleObject tuple) {
-    return tuple instanceof Seq;
+  static boolean isInstance(TruffleObject seq) {
+    return seq instanceof Seq;
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
@@ -96,6 +97,17 @@ public final class Seq implements TruffleObject {
       result = result.insertLast(value);
     }
     return result;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public boolean contains(Object element, final Node caller) {
+    CompilerAsserts.compilationConstant(length());
+    for (long i = 0; i < length(); i++) {
+      if (element.equals(lookup(i, null))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
@@ -485,6 +497,19 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public <T> T foldLeft(final T initial, final BiFunction<T, Object, T> function) {
+    T result = initial;
+    for (int i = 0; i < prefixSize; i++) {
+      result = function.apply(result, nodeLookup(prefix, i));
+    }
+    result = nodeFoldLeft(root, shift, result, function);
+    for (int i = 0; i < suffixSize; i++) {
+      result = function.apply(result, nodeLookup(suffix, i));
+    }
+    return result;
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Object foldRight(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
     Object result = initial;
     for (int i = suffixSize - 1; i >= 0; i--) {
@@ -493,6 +518,19 @@ public final class Seq implements TruffleObject {
     result = nodeFoldRight(root, shift, result, function, dispatch);
     for (int i = prefixSize - 1; i >= 0; i--) {
       result = dispatch.execute(function, result, nodeLookup(prefix, i));
+    }
+    return result;
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public <T> T foldRight(final T initial, final BiFunction<T, Object, T> function) {
+    T result = initial;
+    for (int i = suffixSize - 1; i >= 0; i--) {
+      result = function.apply(result, nodeLookup(suffix, i));
+    }
+    result = nodeFoldRight(root, shift, result, function);
+    for (int i = prefixSize - 1; i >= 0; i--) {
+      result = function.apply(result, nodeLookup(prefix, i));
     }
     return result;
   }
@@ -769,6 +807,21 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
+  static <T> T nodeFoldLeft(final Object node, final int shift, final T initial, final BiFunction<T, Object, T> function) {
+    final int len = nodeLength(node);
+    T result = initial;
+    if (shift == 0) {
+      for (int i = 0; i < len; i++) {
+        result = function.apply(result, nodeLookup(node, i));
+      }
+    } else {
+      for (int i = 0; i < len; i++) {
+        result = nodeFoldLeft(nodeLookup(node, i), shift - BITS, result, function);
+      }
+    }
+    return result;
+  }
+
   static Object nodeFoldRight(final Object node, final int shift, final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
     final int len = nodeLength(node);
     Object result = initial;
@@ -779,6 +832,21 @@ public final class Seq implements TruffleObject {
     } else {
       for (int i = len - 1; i >= 0; i--) {
         result = nodeFoldRight(nodeLookup(node, i), shift - BITS, result, function, dispatch);
+      }
+    }
+    return result;
+  }
+
+  static <T> T nodeFoldRight(final Object node, final int shift, final T initial, final BiFunction<T, Object, T> function) {
+    final int len = nodeLength(node);
+    T result = initial;
+    if (shift == 0) {
+      for (int i = len - 1; i >= 0; i--) {
+        result = function.apply(result, nodeLookup(node, i));
+      }
+    } else {
+      for (int i = len - 1; i >= 0; i--) {
+        result = nodeFoldRight(nodeLookup(node, i), shift - BITS, result, function);
       }
     }
     return result;

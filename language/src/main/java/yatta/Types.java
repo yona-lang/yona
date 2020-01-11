@@ -14,7 +14,7 @@ import com.oracle.truffle.api.dsl.TypeSystem;
  */
 @TypeSystem({boolean.class, byte.class, long.class, double.class, int.class, String.class, Function.class, Unit.class,
     Tuple.class, YattaModule.class, StringList.class, Seq.class, Dictionary.class, Promise.class, NativeObject.class,
-    Symbol.class})
+    Symbol.class, Set.class})
 public abstract class Types {
 
   /**
