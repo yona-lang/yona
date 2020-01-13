@@ -208,8 +208,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     Set replaceNode(final long pos, final Set node) {
-      final Object[] newElements = new Object[elements.length];
-      System.arraycopy(elements, 0, newElements, 0, elements.length);
+      final Object[] newElements = elements.clone();
       newElements[elements.length - 1 - index(pos, nodeBmp)] = node;
       return new Bitmap(hasher, seed, nodeBmp, dataBmp, newElements);
     }

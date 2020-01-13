@@ -26,7 +26,10 @@ public final class Murmur3 extends Hasher {
       return ((Seq) o).murmur3Hash(seed);
     } else if (o instanceof Set) {
       return ((Set) o).murmur3Hash(seed);
-    } else return seed ^ o.hashCode();
+    } else {
+      final int hash = o.hashCode();
+      return seed ^ ((((long) hash) << 32) | (hash & 0xffffffffL));
+    }
   }
 
   static long hashBool(final long seed, final boolean value) {
