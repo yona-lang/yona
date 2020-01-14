@@ -396,12 +396,12 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   }
 
   static final class Collision extends Set {
-    final long hash;
+    final long commonHash;
     final Object[] values;
 
-    Collision(final Hasher hasher, final long seed, final long hash, final Object[] values) {
+    Collision(final Hasher hasher, final long seed, final long commonHash, final Object[] values) {
       super(hasher, seed);
-      this.hash = hash;
+      this.commonHash = commonHash;
       this.values = values;
     }
 
@@ -420,7 +420,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
 
     @Override
     boolean contains(final Object value, final long hash, final int shift) {
-      if (hash == this.hash) {
+      if (hash == this.commonHash) {
         for (Object val : values) {
           if (value.equals(val)) {
             return true;
@@ -495,14 +495,14 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
       if (!this.hasher.equals(that.hasher)) {
         return false;
       }
-      if (this.hash != that.hash) {
+      if (this.commonHash != that.commonHash) {
         return false;
       }
       if (this.values.length != that.values.length) {
         return false;
       }
       for (Object value : values) {
-        if (!that.contains(value, hash, 0)) {
+        if (!that.contains(value, commonHash, 0)) {
           return false;
         }
       }
