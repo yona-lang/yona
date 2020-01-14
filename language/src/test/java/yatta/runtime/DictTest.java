@@ -81,6 +81,17 @@ public class DictTest {
     }
   }
 
+  @Test
+  public void testKeySet() {
+    Dict dict = Dict.empty(Murmur3.INSTANCE, SEED);
+    Set set = Set.empty(Murmur3.INSTANCE, SEED);
+    for (int i = 0; i < M; i++) {
+      dict.add(new K(i), "");
+      set.add(new K(i));
+    }
+    assertEquals(set, dict.keys());
+  }
+
   private static final class K {
     final long value;
     final int hash;
