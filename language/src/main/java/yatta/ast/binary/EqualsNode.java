@@ -59,7 +59,7 @@ public abstract class EqualsNode extends BinaryOpNode {
   }
 
   @Specialization
-  public boolean dictionaries(Dictionary left, Dictionary right) {
+  public boolean dictionaries(Dict left, Dict right) {
     return left.equals(right);
   }
 

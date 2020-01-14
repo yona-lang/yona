@@ -2,7 +2,7 @@ package yatta.ast.pattern;
 
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
-import yatta.runtime.Dictionary;
+import yatta.runtime.Dict;
 import yatta.runtime.Unit;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
@@ -47,8 +47,8 @@ public final class DictMatchNode extends MatchNode {
 
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
-    if (value instanceof Dictionary) {
-      Dictionary dictionary = (Dictionary) value;
+    if (value instanceof Dict) {
+      Dict dictionary = (Dict) value;
 
       if (expressionNodes.length == 0) {
         if (dictionary.size() == 0) {

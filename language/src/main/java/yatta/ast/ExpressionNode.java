@@ -213,8 +213,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
     return TypesGen.expectSeq(executeGeneric(frame));
   }
 
-  public Dictionary executeDictionary(VirtualFrame frame) throws UnexpectedResultException {
-    return TypesGen.expectDictionary(executeGeneric(frame));
+  public Dict executeDictionary(VirtualFrame frame) throws UnexpectedResultException {
+    return TypesGen.expectDict(executeGeneric(frame));
   }
 
   public Symbol executeSymbol(VirtualFrame frame) throws UnexpectedResultException {

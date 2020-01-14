@@ -49,7 +49,7 @@ public abstract class UnboxNode extends ExpressionNode {
   }
 
   @Specialization
-  protected static Dictionary fromDictionary(Dictionary value) {
+  protected static Dict fromDictionary(Dict value) {
     return value;
   }
 

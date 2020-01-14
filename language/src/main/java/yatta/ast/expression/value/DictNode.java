@@ -1,10 +1,11 @@
 package yatta.ast.expression.value;
 
 import yatta.ast.ExpressionNode;
-import yatta.runtime.Dictionary;
+import yatta.runtime.Dict;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.runtime.Murmur3;
 
 import java.util.Objects;
 
@@ -74,15 +75,15 @@ public final class DictNode extends ExpressionNode {
   }
 
   @Override
-  public Dictionary executeDictionary(VirtualFrame frame) throws UnexpectedResultException {
+  public Dict executeDictionary(VirtualFrame frame) throws UnexpectedResultException {
     return execute(frame);
   }
 
-  private Dictionary execute(VirtualFrame frame) {
-    Dictionary dictionary = Dictionary.dictionary();
+  private Dict execute(VirtualFrame frame) {
+    Dict dictionary = Dict.empty(Murmur3.INSTANCE, 0L);
 
     for (Entry entry : items) {
-      dictionary = dictionary.insert(entry.key.executeGeneric(frame), entry.value.executeGeneric(frame));
+      dictionary = dictionary.add(entry.key.executeGeneric(frame), entry.value.executeGeneric(frame));
     }
 
     return dictionary;

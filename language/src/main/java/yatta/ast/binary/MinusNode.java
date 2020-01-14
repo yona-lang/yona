@@ -1,7 +1,7 @@
 package yatta.ast.binary;
 
 import yatta.YattaException;
-import yatta.runtime.Dictionary;
+import yatta.runtime.Dict;
 import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -19,7 +19,7 @@ public abstract class MinusNode extends BinaryOpNode {
   }
 
   @Specialization
-  public Dictionary dictionaries(Dictionary left, Dictionary right) {
+  public Dict dictionaries(Dict left, Dict right) {
     // TODO implement
     return null;
   }

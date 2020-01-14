@@ -55,10 +55,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l, 3l)), false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
-        new BinaryArgsHolder(Dictionary.singleton(1l, 2l), new PromiseHolder(Dictionary.dictionary()), false, Boolean.class),
-        new BinaryArgsHolder(Dictionary.singleton(1l, 2l), new PromiseHolder(Dictionary.singleton(1l, 2l)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dictionary.singleton(1l, 2l)), new PromiseHolder(Dictionary.dictionary()), false, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dictionary.singleton(1l, 2l)), new PromiseHolder(Dictionary.singleton(1l, 2l)), true, Boolean.class)
+        new BinaryArgsHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l), new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L)), false, Boolean.class),
+        new BinaryArgsHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l), new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L)), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), true, Boolean.class)
     );
   }
 
@@ -516,14 +516,14 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Set.set(1l, 2l)), true, boolean.class),
 
         // Set
-        new BinaryArgsHolder(3l, Dictionary.singleton(1l, 2l), false, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(3l), Dictionary.singleton(1l, 2l), false, boolean.class),
-        new BinaryArgsHolder(3l, new PromiseHolder(Dictionary.singleton(1l, 2l)), false, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(Dictionary.singleton(1l, 2l)), false, boolean.class),
-        new BinaryArgsHolder(1l, Dictionary.singleton(1l, 2l), true, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(1l), Dictionary.singleton(1l, 2l), true, boolean.class),
-        new BinaryArgsHolder(1l, new PromiseHolder(Dictionary.singleton(1l, 2l)), true, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Dictionary.singleton(1l, 2l)), true, boolean.class)
+        new BinaryArgsHolder(3l, Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(3l, new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(1l, Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(1l, new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Dict.empty(Murmur3.INSTANCE, 0L).add(1l, 2l)), true, boolean.class)
     );
   }
 

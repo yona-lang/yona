@@ -1,12 +1,12 @@
 package yatta.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-public abstract class Dict {
+@ExportLibrary(InteropLibrary.class)
+public abstract class Dict implements TruffleObject {
   static final int BITS = 6;
   static final int MASK = 0x3f;
 
@@ -85,6 +85,21 @@ public abstract class Dict {
     } else {
       return new Bitmap(hasher, seed, pos(fstMask), 0, new Object[]{ merge(fstKey, fstHash, fstValue, sndKey, sndHash, sndValue, shift + BITS) }, EMPTY_ARRAY);
     }
+  }
+
+  @ExportMessage
+  public boolean isString() {
+    return true;
+  }
+
+  @ExportMessage
+  @CompilerDirectives.TruffleBoundary
+  public String asString() {
+    return toString();
+  }
+
+  static boolean isInstance(TruffleObject dict) {
+    return dict instanceof Dict;
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)

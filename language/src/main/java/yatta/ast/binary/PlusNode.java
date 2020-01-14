@@ -3,7 +3,7 @@ package yatta.ast.binary;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
-import yatta.runtime.Dictionary;
+import yatta.runtime.Dict;
 import yatta.runtime.async.Promise;
 
 @NodeInfo(shortName = "+")
@@ -19,7 +19,7 @@ public abstract class PlusNode extends BinaryOpNode {
   }
 
   @Specialization
-  public Dictionary dictionaries(Dictionary left, Dictionary right) {
+  public Dict dictionaries(Dict left, Dict right) {
     // TODO implement
     return null;
   }

@@ -2,9 +2,7 @@ package yatta;
 
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
-import yatta.runtime.Dictionary;
-import yatta.runtime.Seq;
-import yatta.runtime.Tuple;
+import yatta.runtime.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -480,7 +478,7 @@ public class PatternExpressionTest extends CommonTest {
         "{\"b\" = 3} -> 3\n" +
         "{\"a\" = 1, \"b\" = bb} -> bb\n" +
         "_ -> 9\n" +
-        "end\n").execute(Dictionary.dictionary().insert(Seq.fromCharSequence("a"), 1l).insert(Seq.fromCharSequence("b"), 2l)).asLong();
+        "end\n").execute(Dict.empty(Murmur3.INSTANCE, 0L).add(Seq.fromCharSequence("a"), 1l).add(Seq.fromCharSequence("b"), 2l)).asLong();
     assertEquals(2l, ret);
   }
 
@@ -489,7 +487,7 @@ public class PatternExpressionTest extends CommonTest {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "{} -> 3\n" +
         "_ -> 9\n" +
-        "end\n").execute(Dictionary.dictionary()).asLong();
+        "end\n").execute(Dict.empty(Murmur3.INSTANCE, 0L)).asLong();
     assertEquals(3l, ret);
   }
 
@@ -498,7 +496,7 @@ public class PatternExpressionTest extends CommonTest {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "{} -> 3\n" +
         "_ -> 9\n" +
-        "end\n").execute(Dictionary.dictionary().insert("a", 1l)).asLong();
+        "end\n").execute(Dict.empty(Murmur3.INSTANCE, 0L).add("a", 1l)).asLong();
     assertEquals(9l, ret);
   }
 
@@ -508,7 +506,7 @@ public class PatternExpressionTest extends CommonTest {
         "{\"b\" = 3} -> 3\n" +
         "{\"a\" = 1, \"b\" = bound} -> bound\n" +
         "_ -> 9\n" +
-        "end\n").execute(Dictionary.dictionary().insert(Seq.fromCharSequence("a"), 1l).insert(Seq.fromCharSequence("b"), 2l), 2l).asLong();
+        "end\n").execute(Dict.empty(Murmur3.INSTANCE, 0L).add(Seq.fromCharSequence("a"), 1l).add(Seq.fromCharSequence("b"), 2l), 2l).asLong();
     assertEquals(2l, ret);
   }
 

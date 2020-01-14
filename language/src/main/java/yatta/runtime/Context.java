@@ -37,11 +37,11 @@ public class Context {
   private final AllocationReporter allocationReporter;  // TODO use this
   public final Builtins builtins;
   public final BuiltinModules builtinModules;
-  private Dictionary symbols = Dictionary.dictionary();
-  private Dictionary moduleCache = Dictionary.dictionary();
+  private Dict symbols = Dict.empty(Murmur3.INSTANCE, 0L);
+  private Dict moduleCache = Dict.empty(Murmur3.INSTANCE, 0L);
   public final Threading threading;
   public final ExecutorService ioExecutor;
-  public Dictionary globals = Dictionary.dictionary();
+  public Dict globals = Dict.empty(Murmur3.INSTANCE, 0L);
 
   public Context(YattaLanguage language, TruffleLanguage.Env env) {
     this.env = env;
@@ -134,7 +134,7 @@ public class Context {
 
   @CompilerDirectives.TruffleBoundary
   public void cacheModule(String FQN, YattaModule module) {
-    moduleCache = moduleCache.insert(FQN, module);
+    moduleCache = moduleCache.add(FQN, module);
   }
 
   @CompilerDirectives.TruffleBoundary
@@ -143,7 +143,7 @@ public class Context {
     Object module = moduleCache.lookup(FQN);
     if (module == Unit.INSTANCE) {
       module = loadModule(packageParts, moduleName, FQN, node);
-      moduleCache = moduleCache.insert(FQN, module);
+      moduleCache = moduleCache.add(FQN, module);
     }
 
     return (YattaModule) module;
@@ -170,7 +170,7 @@ public class Context {
       if (!FQN.equals(module.getFqn())) {
         throw new YattaException("Module file " + url.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
       }
-      moduleCache = this.moduleCache.insert(FQN, module);
+      moduleCache = this.moduleCache.add(FQN, module);
 
       return module;
     } catch (IOException e) {
@@ -229,14 +229,14 @@ public class Context {
     Object symbol = symbols.lookup(name);
     if (symbol == Unit.INSTANCE) {
       symbol = new Symbol(name);
-      symbols = symbols.insert(name, symbol);
+      symbols = symbols.add(name, symbol);
     }
 
     return (Symbol) symbol;
   }
 
   public void insertGlobal(Object key, Object value) {
-    globals = globals.insert(key, value);
+    globals = globals.add(key, value);
   }
 
   @CompilerDirectives.TruffleBoundary
