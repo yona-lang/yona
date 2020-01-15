@@ -111,6 +111,24 @@ public abstract class Dict implements TruffleObject {
     return new Bitmap(hasher, seed, 0L, 0L, EMPTY_ARRAY, EMPTY_ARRAY);
   }
 
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{");
+    fold(sb, (acc, key, val) -> {
+      acc.append(key);
+      acc.append(" = ");
+      acc.append(val);
+      acc.append(", ");
+      return acc;
+    });
+    if(size() > 0) {
+      sb.deleteCharAt(sb.length() - 1);
+      sb.deleteCharAt(sb.length() - 1);
+    }
+    sb.append("}");
+    return sb.toString();
+  }
+
   static long mask(final long hash, final int shift) {
     return (hash >>> shift) & MASK;
   }
