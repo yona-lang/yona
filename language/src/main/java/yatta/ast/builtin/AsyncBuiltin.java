@@ -12,7 +12,6 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaLanguage;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
-import yatta.runtime.UndefinedNameException;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 
@@ -24,19 +23,8 @@ public abstract class AsyncBuiltin extends BuiltinNode {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new BadArgException("async function accepts only functions with zero arguments. Function " + function + " expects " + function.getCardinality() + "arguments", this);
     }
-
     Promise promise = new Promise();
-    context.threading.submit(() -> {
-      try {
-        promise.fulfil(dispatch.execute(function), this);
-      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-        /* Execute was not successful. */
-        promise.fulfil(UndefinedNameException.undefinedFunction(this, function), this);
-      } catch (Throwable e) {
-        promise.fulfil(e, this);
-      }
-    });
-
+    context.threading.submit(promise, function, dispatch, this);
     return promise;
   }
 }

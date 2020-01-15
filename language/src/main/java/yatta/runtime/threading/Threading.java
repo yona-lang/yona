@@ -1,25 +1,88 @@
 package yatta.runtime.threading;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.Function;
+import yatta.runtime.UndefinedNameException;
+import yatta.runtime.async.Promise;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.locks.ReentrantLock;
 
 public final class Threading {
-  private static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors();
-  private static final int QUEUE_SIZE = 1024;
+  static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
 
-  private Thread[] threads;
-  private Worker[] workers;
-  private BlockingQueue<Runnable> blockingQueue;
+  static final int THREAD_COUNT = Math.min(64, Runtime.getRuntime().availableProcessors());
+  static final int BUFFER_SIZE = 1024;
+  static final int YIELD_MAX_ATTEMPTS = 1;
+  static final int PARK_MAX_ATTEMPTS = 10;
+
+  final Thread[] threads;
+  final ParallelConsumer[] consumers;
+  final RingBuffer ringBuffer;
+  final Lock lock = new ReentrantLock();
+  final Condition condition = lock.newCondition();
+
+  volatile int waiters = 0;
 
   public Threading(TruffleLanguage.Env env) {
+    ringBuffer = new RingBuffer(BUFFER_SIZE);
+    consumers = ringBuffer.subscribe(THREAD_COUNT);
     threads = new Thread[THREAD_COUNT];
-    workers = new Worker[THREAD_COUNT];
-    blockingQueue = new ArrayBlockingQueue<>(QUEUE_SIZE);
     for (int i = 0; i < THREAD_COUNT; i++) {
-      workers[i] = new Worker(blockingQueue);
-      threads[i] = env.createThread(workers[i], null, new ThreadGroup("yatta-worker"));
+      ParallelConsumer consumer = consumers[i];
+      threads[i] = env.createThread(() -> {
+        ParallelConsumer.Consume consume = new ParallelConsumer.Consume() {
+          @Override
+          boolean consume(final Task task, final boolean more) {
+            execute(task.promise, task.function, task.dispatch, task.node);
+            return true;
+          }
+        };
+        int yields = 0;
+        int parks = 0;
+        loop: while (true) {
+          ParallelConsumer.State state = consumer.consume(consume);
+          switch (state) {
+            case GATING: {
+              Thread.yield();
+              break;
+            }
+            case IDLE: {
+              if (yields != YIELD_MAX_ATTEMPTS) {
+                Thread.yield();
+                yields++;
+                break;
+              }
+              yields = 0;
+              if (parks != PARK_MAX_ATTEMPTS) {
+                LockSupport.parkNanos(1L);
+                parks++;
+                break;
+              }
+              parks = 0;
+              lock.lock();
+              WAITERS_UPDATER.incrementAndGet(this);
+              try {
+                condition.await();
+              } catch (InterruptedException e) {
+                break loop;
+              } finally {
+                WAITERS_UPDATER.decrementAndGet(this);
+                lock.unlock();
+              }
+              break;
+            }
+          }
+        }
+      }, null, new ThreadGroup("yatta-worker"));
     }
   }
 
@@ -29,14 +92,61 @@ public final class Threading {
     }
   }
 
-  public void submit(Runnable runnable) {
-    blockingQueue.add(runnable);
+  public void submit(Promise promise, Function function, InteropLibrary dispatch, Node node) {
+    int yields = 0;
+    int parks = 0;
+    long token;
+    while (true) {
+      token = ringBuffer.tryClaim(1);
+      if (token == -1) {
+        if (yields != YIELD_MAX_ATTEMPTS) {
+          Thread.yield();
+          yields++;
+          continue;
+        }
+        yields = 0;
+        if (parks != PARK_MAX_ATTEMPTS) {
+          LockSupport.parkNanos(1L);
+          parks++;
+          continue;
+        }
+        parks = 0;
+        execute(promise, function, dispatch, node);
+      } else {
+        break;
+      }
+    }
+    Task task = ringBuffer.slotFor(token);
+    task.promise = promise;
+    task.function = function;
+    task.dispatch = dispatch;
+    task.node = node;
+    ringBuffer.publish(token, token);
+    if (waiters != 0) {
+      lock.lock();
+      try {
+        condition.signal();
+      } finally {
+        lock.unlock();
+      }
+    }
+  }
+
+  static void execute(Promise promise, Function function, InteropLibrary dispatch, Node node) {
+    try {
+      promise.fulfil(dispatch.execute(function), node);
+    } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+      // Execute was not successful.
+      promise.fulfil(UndefinedNameException.undefinedFunction(node, function), node);
+    } catch (Throwable e) {
+      promise.fulfil(e, node);
+    }
   }
 
   public void dispose() {
     for (int i = 0; i < THREAD_COUNT; i++) {
-      workers[i].abort();
       try {
+        ringBuffer.unsubscribe(consumers[i]);
         threads[i].interrupt();
         threads[i].join();
       } catch (InterruptedException e) {

@@ -48,7 +48,7 @@ public final class Promise implements TruffleObject {
     Object snapshot;
     do {
       snapshot = promise.value;
-      if (!(snapshot instanceof Callback)) throw new AssertionError();
+      if (!(snapshot instanceof Callback)) throw new AssertionError("Promise is already fulfilled with " + snapshot);
     } while (!UPDATER.compareAndSet(promise, snapshot, result));
     Trampoline trampoline = Trampoline.Done.INSTANCE;
     Callback callback = (Callback) snapshot;

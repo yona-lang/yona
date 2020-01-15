@@ -13,12 +13,13 @@ public abstract class SleepBuiltin extends BuiltinNode {
   @Specialization
   public Promise sleep(long millis, @CachedContext(YattaLanguage.class) Context context) {
     Promise promise = new Promise();
-    context.threading.submit(() -> {
-      try {
-        Thread.sleep(millis);
-      } catch (InterruptedException ignored) { }
-      promise.fulfil(Unit.INSTANCE, this);
-    });
+    // TODO
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+    promise.fulfil(Unit.INSTANCE, null);
     return promise;
   }
 }
