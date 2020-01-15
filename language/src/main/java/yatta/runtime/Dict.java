@@ -4,6 +4,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import yatta.common.TriFunction;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class Dict implements TruffleObject {
@@ -45,6 +46,9 @@ public abstract class Dict implements TruffleObject {
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public abstract <T> T fold(final T initial, final TriFunction<T, Object, Object, T> function);
 
   public abstract long size();
 
@@ -264,10 +268,22 @@ public abstract class Dict implements TruffleObject {
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
       for (int i = 0; i < arity(dataBmp); i++) {
-        result = dispatch.execute(function, result, valueAt(i));
+        result = dispatch.execute(function, result, keyAt(i), valueAt(i));
       }
       for (int i = 0; i < arity(nodeBmp); i++) {
         result = nodeAt(i).fold(result, function, dispatch);
+      }
+      return result;
+    }
+
+    @Override
+    public <T> T fold(T initial, TriFunction<T, Object, Object, T> function) {
+      T result = initial;
+      for (int i = 0; i < arity(dataBmp); i++) {
+        result = function.apply(result, keyAt(i), valueAt(i));
+      }
+      for (int i = 0; i < arity(nodeBmp); i++) {
+        result = nodeAt(i).fold(result, function);
       }
       return result;
     }
@@ -446,8 +462,17 @@ public abstract class Dict implements TruffleObject {
     @Override
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
-      for (Object val : values) {
-        result = dispatch.execute(function, result, val);
+      for (int i = 0; i < keys.length; i++) {
+        result = dispatch.execute(function, result, keyAt(i), valueAt(i));
+      }
+      return result;
+    }
+
+    @Override
+    public <T> T fold(T initial, TriFunction<T, Object, Object, T> function) {
+      T result = initial;
+      for (int i = 0; i < keys.length; i++) {
+        result = function.apply(result, keyAt(i), valueAt(i));
       }
       return result;
     }
