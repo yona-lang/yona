@@ -56,9 +56,11 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   abstract Set remove(Object value, long hash, int shift);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+  public abstract Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+
   public abstract <T> T fold(final T initial, final BiFunction<T, Object, T> function);
 
   @ExportMessage
@@ -294,6 +296,23 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     @Override
+    public Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+      final Function init = reducer[0];
+      final Function step = reducer[1];
+      final Function complete = reducer[2];
+      Object state = dispatch.execute(init);
+      try {
+        for (int i = 0; i < arity(dataBmp); i++) {
+          state = dispatch.execute(step, state, dataAt(i));
+        }
+        for (int i = 0; i < arity(nodeBmp); i++) {
+          state = nodeAt(i).fold(state, step, dispatch);
+        }
+      } catch (Done ignored) {}
+      return dispatch.execute(complete, state);
+    }
+
+    @Override
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
       for (int i = 0; i < arity(dataBmp); i++) {
@@ -445,6 +464,20 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
         }
       }
       return this;
+    }
+
+    @Override
+    public Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+      final Function init = reducer[0];
+      final Function step = reducer[1];
+      final Function complete = reducer[2];
+      Object state = dispatch.execute(init);
+      try {
+        for (Object val : values) {
+          state = dispatch.execute(step, state, val);
+        }
+      } catch (Done ignored) {}
+      return dispatch.execute(complete, state);
     }
 
     @Override

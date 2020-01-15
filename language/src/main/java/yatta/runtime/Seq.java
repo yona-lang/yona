@@ -484,6 +484,24 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public Object reduceLeft(final Function[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    final Function init = reducer[0];
+    final Function step = reducer[1];
+    final Function complete = reducer[2];
+    Object state = dispatch.execute(init);
+    try {
+      for (int i = 0; i < prefixSize; i++) {
+        state = dispatch.execute(step, state, nodeLookup(prefix, i));
+      }
+      state = nodeFoldLeft(root, shift, state, step, dispatch);
+      for (int i = 0; i < suffixSize; i++) {
+        state = dispatch.execute(step, state, nodeLookup(suffix, i));
+      }
+    } catch (Done ignored) {}
+    return dispatch.execute(complete, state);
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Object foldLeft(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
     Object result = initial;
     for (int i = 0; i < prefixSize; i++) {
@@ -496,7 +514,6 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
-  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public <T> T foldLeft(final T initial, final BiFunction<T, Object, T> function) {
     T result = initial;
     for (int i = 0; i < prefixSize; i++) {
@@ -507,6 +524,24 @@ public final class Seq implements TruffleObject {
       result = function.apply(result, nodeLookup(suffix, i));
     }
     return result;
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public Object reduceRight(final Function[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    final Function init = reducer[0];
+    final Function step = reducer[1];
+    final Function complete = reducer[2];
+    Object state = dispatch.execute(init);
+    try {
+      for (int i = suffixSize - 1; i >= 0; i--) {
+        state = dispatch.execute(step, state, nodeLookup(suffix, i));
+      }
+      state = nodeFoldRight(root, shift, state, step, dispatch);
+      for (int i = prefixSize - 1; i >= 0; i--) {
+        state = dispatch.execute(step, state, nodeLookup(prefix, i));
+      }
+    } catch (Done ignored) {}
+    return dispatch.execute(complete, state);
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
@@ -522,7 +557,6 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
-  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public <T> T foldRight(final T initial, final BiFunction<T, Object, T> function) {
     T result = initial;
     for (int i = suffixSize - 1; i >= 0; i--) {
