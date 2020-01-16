@@ -1,79 +1,120 @@
 package yatta.runtime.threading;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Supplier;
 
-import static java.lang.Integer.numberOfLeadingZeros;
-import static java.lang.Math.min;
-
 final class RingBuffer<E> {
-  final E[] entries;
-  final int mask;
-  final AtomicCursor cursor = new AtomicCursor();
-  final DynamicMembershipCursors gate = new DynamicMembershipCursors();
-  final AtomicCursor cachedGating = new AtomicCursor();
-  final AtomicIntegerArray availability;
-  final int availabilityShift;
+  @SuppressWarnings("rawtypes")
+  private static final AtomicReferenceFieldUpdater<RingBuffer, AtomicCursor[]> GATING_UPDATER = AtomicReferenceFieldUpdater.newUpdater(RingBuffer.class, AtomicCursor[].class, "gating");
+
+  private final AtomicCursor cursor = new AtomicCursor();
+  private final AtomicCursor cachedGating = new AtomicCursor();
+  private final E[] elements;
+  private final int idxMask;
+  private final int idxShift;
+  private final AtomicIntegerArray availability;
+  private volatile AtomicCursor[] gating = new AtomicCursor[]{};
 
   @SuppressWarnings("unchecked")
-  RingBuffer(int size, Supplier<? extends E> ctor) {
+  RingBuffer(final int size, final Supplier<? extends E> constructor) {
     if (Integer.bitCount(size) != 1) {
-      throw new IllegalArgumentException("Size must be power of two.");
+      throw new AssertionError();
     }
-    entries = (E[]) new Object[size];
+    elements = (E[]) new Object[size];
     for (int i = 0; i < size; i++) {
-      entries[i] = ctor.get();
+      elements[i] = constructor.get();
     }
-    mask = size - 1;
+    idxMask = size - 1;
+    idxShift = 31 - Integer.numberOfLeadingZeros(size);
     availability = new AtomicIntegerArray(size);
-    for (int i = 0; i < size; i++) availability.lazySet(i, -1);
-    availabilityShift = 31 - numberOfLeadingZeros(size);
-  }
-
-  long tryClaim(int n) {
-    long cursorValue;
-    long result;
-    do {
-      cursorValue = cursor.readVolatile();
-      result = cursorValue + n;
-      final long wrapsAt = cursorValue + n - entries.length;
-      final long cachedGatingValue = cachedGating.readVolatile();
-      if (cursorValue < cachedGatingValue || cachedGatingValue < wrapsAt) {
-        final long min = min(cursorValue, gate.readVolatile());
-        cachedGating.writeOrdered(min);
-        if (min < wrapsAt) return -1L;
-      }
-    } while (!cursor.compareAndSwap(cursorValue, result));
-    return result;
-  }
-
-  E slotFor(final long token) {
-    return entries[(int)(token & mask)];
-  }
-
-  void publish(long from, long to) {
-    for (long i = from; i <= to; i++) {
-      availability.lazySet(((int) i) & mask, (int) (i >>> availabilityShift));
+    for (int i = 0; i < availability.length(); i++) {
+      availability.set(i, -1);
     }
   }
 
-  ParallelConsumer<E>[] subscribe(int n) {
-    ParallelConsumer<E>[] result = ParallelConsumer.create(this, n);
-    gate.invite(cursor, result[0].groupCursor);
+  long tryClaim(final int n) {
+    long current;
+    long next;
+    do {
+      current = cursor.readVolatile();
+      next = current + n;
+      if (!hasCapacity(n, current)) {
+        return -1L;
+      }
+    } while (!cursor.compareAndSwap(current, next));
+    return next;
+  }
+
+  private boolean hasCapacity(final int n, final long current) {
+    final long wrapsAt = (current + n) - elements.length;
+    final long cachedGatingValue = cachedGating.readVolatile();
+    if (current < cachedGatingValue || cachedGatingValue < wrapsAt) {
+      long min = current;
+      for (AtomicCursor cursor : gating) {
+        min = Math.min(min, cursor.readVolatile());
+      }
+      cachedGating.writeOrdered(min);
+      return wrapsAt <= min;
+    }
+    return true;
+  }
+
+  E read(final long token) {
+    return elements[(int)(token & idxMask)];
+  }
+
+  void release(final long from, final long to) {
+    for (long i = from; i <= to; i++) {
+      availability.lazySet(((int) i) & idxMask, (int) (i >>> idxShift));
+    }
+  }
+
+  Consumer[] subscribe(final int n) {
+    final AtomicCursor sharedCursor = new AtomicCursor();
+    final AtomicCursor[] consumerCursors = new AtomicCursor[n];
+    for (int i = 0; i < n; i++) {
+      consumerCursors[i] = new AtomicCursor();
+    }
+    final Consumer[] result = new Consumer[n];
+    for (int i = 0; i < n; i++) {
+      result[i] = new Consumer(sharedCursor, consumerCursors[i], this);
+    }
+    invite(consumerCursors);
     return result;
   }
 
-  void unsubscribe(ParallelConsumer<E> consumer) {
-    gate.expel(consumer.groupCursor);
+  private void invite(final AtomicCursor[] cursors) {
+    long cursorValue;
+    AtomicCursor[] updated;
+    AtomicCursor[] current;
+    do {
+      current = GATING_UPDATER.get(this);
+      updated = Arrays.copyOf(current, current.length + cursors.length);
+      cursorValue = cursor.readVolatile();
+      int index = current.length;
+      for (AtomicCursor c : cursors) {
+        c.writeOrdered(cursorValue);
+        updated[index++] = c;
+      }
+    } while (!GATING_UPDATER.compareAndSet(this, current, updated));
+    cursorValue = cursor.readVolatile();
+    for (AtomicCursor c : cursors) {
+      c.writeOrdered(cursorValue);
+    }
   }
 
-  long lastPublished(long from, long to) {
+  long lastPublished(final long from, final long to) {
     for (long i = from; i <= to; i++) {
-      if (availability.get(((int) i) & mask) != (int) (i >>> availabilityShift)) {
+      if (availability.get(((int) i) & idxMask) != (int) (i >>> idxShift)) {
         return i - 1;
       }
     }
     return to;
   }
 
+  long lastClaimed() {
+    return cursor.readVolatile();
+  }
 }

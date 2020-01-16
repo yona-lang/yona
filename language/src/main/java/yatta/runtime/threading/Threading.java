@@ -19,13 +19,13 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class Threading {
   static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
 
-  static final int THREAD_COUNT = Math.min(64, Runtime.getRuntime().availableProcessors());
+  static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors();
   static final int BUFFER_SIZE = 1024;
   static final int YIELD_MAX_ATTEMPTS = 1;
   static final int PARK_MAX_ATTEMPTS = 10;
 
   final Thread[] threads;
-  final ParallelConsumer<Task>[] consumers;
+  final Consumer[] consumers;
   final RingBuffer<Task> ringBuffer;
   final Lock lock = new ReentrantLock();
   final Condition condition = lock.newCondition();
@@ -37,16 +37,17 @@ public final class Threading {
     consumers = ringBuffer.subscribe(THREAD_COUNT);
     threads = new Thread[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
-      ParallelConsumer<Task> consumer = consumers[i];
+      Consumer consumer = consumers[i];
       threads[i] = env.createThread(() -> {
-        ParallelConsumer.Consume<Task> consume = new ParallelConsumer.Consume<>() {
+        final Consumer.Callback callback = new Consumer.Callback() {
           Promise promise;
           Function function;
           InteropLibrary dispatch;
           Node node;
 
           @Override
-          void consume(Task task, boolean more) {
+          void ready(final long token) {
+            final Task task = ringBuffer.read(token);
             promise = task.promise;
             function = task.function;
             dispatch = task.dispatch;
@@ -54,7 +55,7 @@ public final class Threading {
           }
 
           @Override
-          void done() {
+          void released() {
             execute(promise, function, dispatch, node);
             promise = null;
             function = null;
@@ -64,37 +65,29 @@ public final class Threading {
         };
         int yields = 0;
         int parks = 0;
-        loop: while (true) {
-          ParallelConsumer.State state = consumer.consume(consume);
-          switch (state) {
-            case GATING: {
+        while (true) {
+          if (!consumer.consume(callback)) {
+            if (yields != YIELD_MAX_ATTEMPTS) {
               Thread.yield();
-              break;
+              yields++;
+              continue ;
             }
-            case IDLE: {
-              if (yields != YIELD_MAX_ATTEMPTS) {
-                Thread.yield();
-                yields++;
-                break;
-              }
-              yields = 0;
-              if (parks != PARK_MAX_ATTEMPTS) {
-                LockSupport.parkNanos(1L);
-                parks++;
-                break;
-              }
-              parks = 0;
-              lock.lock();
-              WAITERS_UPDATER.incrementAndGet(this);
-              try {
-                condition.await();
-              } catch (InterruptedException e) {
-                break loop;
-              } finally {
-                WAITERS_UPDATER.decrementAndGet(this);
-                lock.unlock();
-              }
+            yields = 0;
+            if (parks != PARK_MAX_ATTEMPTS) {
+              LockSupport.parkNanos(1L);
+              parks++;
+              continue ;
+            }
+            parks = 0;
+            lock.lock();
+            WAITERS_UPDATER.incrementAndGet(this);
+            try {
+              condition.await();
+            } catch (InterruptedException e) {
               break;
+            } finally {
+              WAITERS_UPDATER.decrementAndGet(this);
+              lock.unlock();
             }
           }
         }
@@ -108,7 +101,7 @@ public final class Threading {
     }
   }
 
-  public void submit(Promise promise, Function function, InteropLibrary dispatch, Node node) {
+  public void submit(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
     int yields = 0;
     int parks = 0;
     long token;
@@ -132,12 +125,12 @@ public final class Threading {
         break;
       }
     }
-    Task task = ringBuffer.slotFor(token);
+    Task task = ringBuffer.read(token);
     task.promise = promise;
     task.function = function;
     task.dispatch = dispatch;
     task.node = node;
-    ringBuffer.publish(token, token);
+    ringBuffer.release(token, token);
     if (waiters != 0) {
       lock.lock();
       try {
@@ -148,7 +141,7 @@ public final class Threading {
     }
   }
 
-  static void execute(Promise promise, Function function, InteropLibrary dispatch, Node node) {
+  static void execute(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
     try {
       promise.fulfil(dispatch.execute(function), node);
     } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
@@ -162,7 +155,6 @@ public final class Threading {
   public void dispose() {
     for (int i = 0; i < THREAD_COUNT; i++) {
       try {
-        ringBuffer.unsubscribe(consumers[i]);
         threads[i].interrupt();
         threads[i].join();
       } catch (InterruptedException e) {
