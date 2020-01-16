@@ -1,12 +1,13 @@
 package yatta.runtime.threading;
 
 import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.function.Supplier;
 
 import static java.lang.Integer.numberOfLeadingZeros;
 import static java.lang.Math.min;
 
-final class RingBuffer {
-  final Task[] entries;
+final class RingBuffer<E> {
+  final E[] entries;
   final int mask;
   final AtomicCursor cursor = new AtomicCursor();
   final DynamicMembershipCursors gate = new DynamicMembershipCursors();
@@ -14,13 +15,14 @@ final class RingBuffer {
   final AtomicIntegerArray availability;
   final int availabilityShift;
 
-  RingBuffer(final int size) {
+  @SuppressWarnings("unchecked")
+  RingBuffer(int size, Supplier<? extends E> ctor) {
     if (Integer.bitCount(size) != 1) {
       throw new IllegalArgumentException("Size must be power of two.");
     }
-    entries = new Task[size];
+    entries = (E[]) new Object[size];
     for (int i = 0; i < size; i++) {
-      entries[i] = new Task();
+      entries[i] = ctor.get();
     }
     mask = size - 1;
     availability = new AtomicIntegerArray(size);
@@ -45,7 +47,7 @@ final class RingBuffer {
     return result;
   }
 
-  Task slotFor(final long token) {
+  E slotFor(final long token) {
     return entries[(int)(token & mask)];
   }
 
@@ -55,13 +57,13 @@ final class RingBuffer {
     }
   }
 
-  ParallelConsumer[] subscribe(int n) {
-    ParallelConsumer[] result = ParallelConsumer.create(this, n);
+  ParallelConsumer<E>[] subscribe(int n) {
+    ParallelConsumer<E>[] result = ParallelConsumer.create(this, n);
     gate.invite(cursor, result[0].groupCursor);
     return result;
   }
 
-  void unsubscribe(ParallelConsumer consumer) {
+  void unsubscribe(ParallelConsumer<E> consumer) {
     gate.expel(consumer.groupCursor);
   }
 

@@ -25,23 +25,23 @@ public final class Threading {
   static final int PARK_MAX_ATTEMPTS = 10;
 
   final Thread[] threads;
-  final ParallelConsumer[] consumers;
-  final RingBuffer ringBuffer;
+  final ParallelConsumer<Task>[] consumers;
+  final RingBuffer<Task> ringBuffer;
   final Lock lock = new ReentrantLock();
   final Condition condition = lock.newCondition();
 
   volatile int waiters = 0;
 
   public Threading(TruffleLanguage.Env env) {
-    ringBuffer = new RingBuffer(BUFFER_SIZE);
+    ringBuffer = new RingBuffer<>(BUFFER_SIZE, Task::new);
     consumers = ringBuffer.subscribe(THREAD_COUNT);
     threads = new Thread[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
-      ParallelConsumer consumer = consumers[i];
+      ParallelConsumer<Task> consumer = consumers[i];
       threads[i] = env.createThread(() -> {
-        ParallelConsumer.Consume consume = new ParallelConsumer.Consume() {
+        ParallelConsumer.Consume<Task> consume = new ParallelConsumer.Consume<>() {
           @Override
-          boolean consume(final Task task, final boolean more) {
+          boolean consume(Task task, boolean more) {
             execute(task.promise, task.function, task.dispatch, task.node);
             return true;
           }
