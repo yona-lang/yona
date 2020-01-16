@@ -18,23 +18,24 @@ final class ParallelConsumer<E> {
   }
 
   public State consume(Consume<E> with) {
-    boolean shouldContinue = true;
-    long current;
-    long next;
-    long lastPublished;
-    do {
-      do {
-        current = sharedCursor.readVolatile();
-        next = current + 1;
-        lastPublished = buffer.lastPublished(next, gate.readVolatile());
-        if (lastPublished < next) {
-          return next < buffer.cursor.readVolatile() ? State.GATING : State.IDLE;
-        }
-        ownCursor.writeOrdered(current);
-      } while (!sharedCursor.compareAndSwap(current, next));
-      shouldContinue = with.consume(buffer.slotFor(next), false);
-    } while (shouldContinue);
-    return State.WORKING;
+    final long current = sharedCursor.readVolatile();
+    final long next = current + 1;
+    final long available = buffer.lastPublished(next, gate.readVolatile());
+    if (next <= available) {
+      long consumed = current;
+      try {
+        with.consume(buffer.slotFor(next), next != available);
+        consumed = next;
+      } finally {
+        sharedCursor.writeOrdered(consumed);
+        with.done();
+      }
+      return State.WORKING;
+    } else if (buffer.cursor.readVolatile() >= next) {
+      return State.GATING;
+    } else {
+      return State.IDLE;
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -60,6 +61,8 @@ final class ParallelConsumer<E> {
   }
 
   static abstract class Consume<E> {
-    abstract boolean consume(E data, boolean more);
+    abstract void consume(E data, boolean more);
+
+    abstract void done();
   }
 }

@@ -40,10 +40,26 @@ public final class Threading {
       ParallelConsumer<Task> consumer = consumers[i];
       threads[i] = env.createThread(() -> {
         ParallelConsumer.Consume<Task> consume = new ParallelConsumer.Consume<>() {
+          Promise promise;
+          Function function;
+          InteropLibrary dispatch;
+          Node node;
+
           @Override
-          boolean consume(Task task, boolean more) {
-            execute(task.promise, task.function, task.dispatch, task.node);
-            return true;
+          void consume(Task task, boolean more) {
+            promise = task.promise;
+            function = task.function;
+            dispatch = task.dispatch;
+            node = task.node;
+          }
+
+          @Override
+          void done() {
+            execute(promise, function, dispatch, node);
+            promise = null;
+            function = null;
+            dispatch = null;
+            node = null;
           }
         };
         int yields = 0;
