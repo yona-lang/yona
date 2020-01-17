@@ -1,17 +1,22 @@
 package yatta.runtime;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SetTest {
   private static final int N = 1 << 24;
   private static final int M = 1 << 12;
-  private static final long SEED = 0L;
-  
-  @Test
-  public void testAddContains() {
-    Set set = Set.empty(Murmur3.INSTANCE, SEED);
+
+  @ParameterizedTest
+  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  public void testAddContains(final long seed) {
+    Set set = Set.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
       if (i % 2 == 0) {
         set = set.add(new O(i));
@@ -29,9 +34,10 @@ public class SetTest {
     }
   }
 
-  @Test
-  public void testRemoveContains() {
-    Set set = Set.empty(Murmur3.INSTANCE, SEED);
+  @ParameterizedTest
+  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  public void testRemoveContains(final long seed) {
+    Set set = Set.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
       set = set.add(new O(i));
     }
@@ -52,13 +58,14 @@ public class SetTest {
     }
   }
 
-  @Test
-  public void testEqualityAndHash() {
-    Set fst = Set.empty(Murmur3.INSTANCE, SEED);
-    Set snd = Set.empty(Murmur3.INSTANCE, SEED);
+  @ParameterizedTest
+  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  public void testEqualityAndHash(final long seed) {
+    Set fst = Set.empty(Murmur3.INSTANCE, seed);
+    Set snd = Set.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < M; i++) {
       assertEquals(fst, snd);
-      assertEquals(fst.murmur3Hash(SEED), snd.murmur3Hash(SEED));
+      assertEquals(fst.murmur3Hash(seed), snd.murmur3Hash(seed));
       fst = fst.add(new O(i));
       assertNotEquals(fst, snd);
       snd = snd.add(new O(i));
@@ -82,11 +89,9 @@ public class SetTest {
 
   private static final class O {
     final long value;
-    final int hash;
 
     O(final long value) {
       this.value = value;
-      this.hash = (int) value & 0xffff;
     }
 
     @Override
@@ -100,7 +105,7 @@ public class SetTest {
 
     @Override
     public int hashCode() {
-      return hash;
+      return (int) value;
     }
   }
 }

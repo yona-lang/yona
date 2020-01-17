@@ -10,7 +10,7 @@ import java.util.function.BiFunction;
 @ExportLibrary(InteropLibrary.class)
 public abstract class Set implements TruffleObject, Comparable<Set> {
   static final int BITS = 6;
-  static final int MASK = 0x3f;
+  static final int MASK = (1 << BITS) - 1;
 
   static final Object[] EMPTY_ARRAY = new Object[]{};
 
@@ -26,7 +26,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Set set(Object... args) {
-    Set set = Set.empty(Murmur3.INSTANCE, 0l);
+    Set set = Set.empty(Murmur3.INSTANCE, 0L);
     for (Object arg : args) {
       set = set.add(arg);
     }
@@ -91,7 +91,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("{");
-    fold(sb, (res, el) -> res.append(el + ", "));
+    fold(sb, (res, el) -> res.append(el).append(", "));
     if(size() > 0) {
       sb.deleteCharAt(sb.length() - 1);
       sb.deleteCharAt(sb.length() - 1);
@@ -197,7 +197,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     Set promote(final long pos, final Set node) {
       final int oldIdx = index(pos, dataBmp);
       final int newIdx = elements.length - 1 - index(pos, nodeBmp);
-      final Object[] newElements = new Object[elements.length - 1 + 1];
+      final Object[] newElements = new Object[elements.length];
       System.arraycopy(elements, 0, newElements, 0, oldIdx);
       System.arraycopy(elements, oldIdx + 1, newElements, oldIdx, newIdx - oldIdx);
       newElements[newIdx] = node;

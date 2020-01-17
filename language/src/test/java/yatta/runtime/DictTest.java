@@ -2,6 +2,8 @@ package yatta.runtime;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -9,11 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 public class DictTest {
   private static final int N = 1 << 24;
   private static final int M = 1 << 12;
-  private static final long SEED = 0L;
 
-  @Test
-  public void testAddLookup() {
-    Dict dict = Dict.empty(Murmur3.INSTANCE, SEED);
+  @ParameterizedTest
+  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  public void testAddLookup(final long seed) {
+    Dict dict = Dict.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
       if (i % 2 == 0) {
         dict = dict.add(new K(i), i);
@@ -31,9 +33,10 @@ public class DictTest {
     }
   }
 
-  @Test
-  public void testAddOverwrite() {
-    Dict dict = Dict.empty(Murmur3.INSTANCE, SEED);
+  @ParameterizedTest
+  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  public void testAddOverwrite(final long seed) {
+    Dict dict = Dict.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
       dict = dict.add(new K(i), "");
     }
@@ -45,9 +48,10 @@ public class DictTest {
     }
   }
 
-  @Test
-  public void testRemoveLookup() {
-    Dict dict = Dict.empty(Murmur3.INSTANCE, SEED);
+  @ParameterizedTest
+  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  public void testRemoveLookup(final long seed) {
+    Dict dict = Dict.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
       dict = dict.add(new K(i), i);
     }
@@ -68,13 +72,14 @@ public class DictTest {
     }
   }
 
-  @Test
-  public void testEqualityAndHash() {
-    Dict fst = Dict.empty(Murmur3.INSTANCE, SEED);
-    Dict snd = Dict.empty(Murmur3.INSTANCE, SEED);
+  @ParameterizedTest
+  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  public void testEqualityAndHash(final long seed) {
+    Dict fst = Dict.empty(Murmur3.INSTANCE, seed);
+    Dict snd = Dict.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < M; i++) {
       Assertions.assertEquals(fst, snd);
-      Assertions.assertEquals(fst.murmur3Hash(SEED), snd.murmur3Hash(SEED));
+      Assertions.assertEquals(fst.murmur3Hash(seed), snd.murmur3Hash(seed));
       fst = fst.add(new K(i), i);
       assertNotEquals(fst, snd);
       snd = snd.add(new K(i), i);
@@ -83,9 +88,9 @@ public class DictTest {
 
   @Test
   public void testKeySet() {
-    Dict dict = Dict.empty(Murmur3.INSTANCE, SEED);
-    Set set = Set.empty(Murmur3.INSTANCE, SEED);
-    for (int i = 0; i < M; i++) {
+    Dict dict = Dict.empty(Murmur3.INSTANCE, 0L);
+    Set set = Set.empty(Murmur3.INSTANCE, 0L);
+    for (int i = 0; i < N; i++) {
       dict.add(new K(i), "");
       set.add(new K(i));
     }
@@ -94,11 +99,9 @@ public class DictTest {
 
   private static final class K {
     final long value;
-    final int hash;
 
     K(final long value) {
       this.value = value;
-      this.hash = (int) value & 0xfffff;
     }
 
     @Override
@@ -112,7 +115,7 @@ public class DictTest {
 
     @Override
     public int hashCode() {
-      return hash;
+      return (int) value;
     }
   }
 }

@@ -9,7 +9,7 @@ import yatta.common.TriFunction;
 @ExportLibrary(InteropLibrary.class)
 public abstract class Dict implements TruffleObject {
   static final int BITS = 6;
-  static final int MASK = 0x3f;
+  static final int MASK = (1 << BITS) - 1;
 
   static final Object[] EMPTY_ARRAY = new Object[]{};
 
@@ -45,6 +45,9 @@ public abstract class Dict implements TruffleObject {
   abstract Dict remove(Object key, long hash, int shift);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public abstract Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
@@ -78,16 +81,16 @@ public abstract class Dict implements TruffleObject {
 
   final Dict merge(final Object fstKey, final long fstHash, final Object fstValue, final Object sndKey, final long sndHash, final Object sndValue, final int shift) {
     if (shift > (1 << BITS)) {
-      return new Collision(hasher, seed, fstHash, new Object[]{ fstKey, sndKey }, new Object[]{ fstValue, sndValue });
+      return new Collision(hasher, seed, fstHash, new Object[]{ fstKey, fstValue, sndKey, sndValue });
     }
     final long fstMask = mask(fstHash, shift);
     final long sndMask = mask(sndHash, shift);
     if (fstMask < sndMask) {
-      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ fstKey, sndKey }, new Object[]{ fstValue, sndValue });
+      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ fstKey, fstValue, sndKey, sndValue });
     } else if (fstMask > sndMask) {
-      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ sndKey, fstKey }, new Object[]{ sndValue, fstValue });
+      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ sndKey, sndValue, fstKey, fstValue });
     } else {
-      return new Bitmap(hasher, seed, pos(fstMask), 0, new Object[]{ merge(fstKey, fstHash, fstValue, sndKey, sndHash, sndValue, shift + BITS) }, EMPTY_ARRAY);
+      return new Bitmap(hasher, seed, pos(fstMask), 0, new Object[]{ merge(fstKey, fstHash, fstValue, sndKey, sndHash, sndValue, shift + BITS) });
     }
   }
 
@@ -108,9 +111,10 @@ public abstract class Dict implements TruffleObject {
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Dict empty(final Hasher hasher, final long seed) {
-    return new Bitmap(hasher, seed, 0L, 0L, EMPTY_ARRAY, EMPTY_ARRAY);
+    return new Bitmap(hasher, seed, 0L, 0L, EMPTY_ARRAY);
   }
 
+  @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("{");
@@ -140,15 +144,13 @@ public abstract class Dict implements TruffleObject {
   static final class Bitmap extends Dict {
     final long nodeBmp;
     final long dataBmp;
-    final Object[] keysAndNodes;
-    final Object[] values;
+    final Object[] entriesAndNodes;
 
-    Bitmap(final Hasher hasher, final long seed, final long nodeBmp, final long dataBmp, final Object[] keysAndNodes, final Object[] values) {
+    Bitmap(final Hasher hasher, final long seed, final long nodeBmp, final long dataBmp, final Object[] entriesAndNodes) {
       super(hasher, seed);
       this.nodeBmp = nodeBmp;
       this.dataBmp = dataBmp;
-      this.keysAndNodes = keysAndNodes;
-      this.values = values;
+      this.entriesAndNodes = entriesAndNodes;
     }
 
     @Override
@@ -169,42 +171,36 @@ public abstract class Dict implements TruffleObject {
     }
 
     Dict promote(final long pos, final Dict node) {
-      final int oldIdx = index(pos, dataBmp);
-      final int newIdx = keysAndNodes.length - 1 - index(pos, nodeBmp);
-      final Object[] newKeysAndNodes = new Object[keysAndNodes.length - 1 + 1];
-      System.arraycopy(keysAndNodes, 0, newKeysAndNodes, 0, oldIdx);
-      System.arraycopy(keysAndNodes, oldIdx + 1, newKeysAndNodes, oldIdx, newIdx - oldIdx);
-      newKeysAndNodes[newIdx] = node;
-      System.arraycopy(keysAndNodes, newIdx + 1, newKeysAndNodes, newIdx + 1, keysAndNodes.length - newIdx - 1);
-      final Object[] newValues = new Object[values.length - 1];
-      System.arraycopy(values, 0, newValues, 0, oldIdx);
-      System.arraycopy(values, oldIdx + 1, newValues, oldIdx, values.length - oldIdx - 1);
-      return new Bitmap(hasher, seed, nodeBmp | pos, dataBmp ^ pos, newKeysAndNodes, newValues);
+      final int oldIdx = index(pos, dataBmp) * 2;
+      final int newIdx = entriesAndNodes.length - 1 - index(pos, nodeBmp);
+      final Object[] newEntriesAndNodes = new Object[entriesAndNodes.length - 1];
+      System.arraycopy(entriesAndNodes, 0, newEntriesAndNodes, 0, oldIdx);
+      System.arraycopy(entriesAndNodes, oldIdx + 2, newEntriesAndNodes, oldIdx, newIdx - oldIdx - 1);
+      newEntriesAndNodes[newIdx - 1] = node;
+      System.arraycopy(entriesAndNodes, newIdx + 1, newEntriesAndNodes, newIdx, entriesAndNodes.length - newIdx - 1);
+      return new Bitmap(hasher, seed, nodeBmp | pos, dataBmp ^ pos, newEntriesAndNodes);
     }
 
     Dict replaceValue(final int idx, final Object value) {
-      final Object[] newValues = values.clone();
-      newValues[idx] = value;
-      return new Bitmap(hasher, seed, nodeBmp, dataBmp, keysAndNodes, newValues);
+      final Object[] newEntriesAndNodes = entriesAndNodes.clone();
+      newEntriesAndNodes[idx * 2 + 1] = value;
+      return new Bitmap(hasher, seed, nodeBmp, dataBmp, newEntriesAndNodes);
     }
 
     Dict replaceNode(final long pos, final Dict node) {
-      final Object[] newKeysAndNodes = keysAndNodes.clone();
-      newKeysAndNodes[keysAndNodes.length - 1 - index(pos, nodeBmp)] = node;
-      return new Bitmap(hasher, seed, nodeBmp, dataBmp, newKeysAndNodes, values);
+      final Object[] newEntriesAndNodes = entriesAndNodes.clone();
+      newEntriesAndNodes[entriesAndNodes.length - 1 - index(pos, nodeBmp)] = node;
+      return new Bitmap(hasher, seed, nodeBmp, dataBmp, newEntriesAndNodes);
     }
 
     Dict insertKeyAndValue(final long pos, final Object key, final Object value) {
-      final int idx = index(pos, dataBmp);
-      final Object[] newKeysAndNodes = new Object[keysAndNodes.length + 1];
-      System.arraycopy(keysAndNodes, 0, newKeysAndNodes, 0, idx);
-      newKeysAndNodes[idx] = key;
-      System.arraycopy(keysAndNodes, idx, newKeysAndNodes, idx + 1, keysAndNodes.length - idx);
-      final Object[] newValues = new Object[values.length + 1];
-      System.arraycopy(values, 0, newValues, 0, idx);
-      newValues[idx] = value;
-      System.arraycopy(values, idx, newValues, idx + 1, values.length - idx);
-      return new Bitmap(hasher, seed, nodeBmp, dataBmp | pos, newKeysAndNodes, newValues);
+      final int idx = index(pos, dataBmp) * 2;
+      final Object[] newEntriesAndNodes = new Object[entriesAndNodes.length + 2];
+      System.arraycopy(entriesAndNodes, 0, newEntriesAndNodes, 0, idx);
+      newEntriesAndNodes[idx] = key;
+      newEntriesAndNodes[idx + 1] = value;
+      System.arraycopy(entriesAndNodes, idx, newEntriesAndNodes, idx + 2, entriesAndNodes.length - idx);
+      return new Bitmap(hasher, seed, nodeBmp, dataBmp | pos, newEntriesAndNodes);
     }
 
     @Override
@@ -234,9 +230,9 @@ public abstract class Dict implements TruffleObject {
           if (Long.bitCount(dataBmp) == 2 && Long.bitCount(nodeBmp) == 0) {
             final long newDataBmp = (shift == 0) ? dataBmp ^ pos : pos(mask(hash, 0));
             if (idx == 0) {
-              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ keyAt(1) }, new Object[]{ valueAt(1) });
+              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ keyAt(1), valueAt(1) });
             } else {
-              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ keyAt(0) }, new Object[]{ valueAt(0) });
+              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ keyAt(0), valueAt(0) });
             }
           } else return removeKeyAndValue(pos);
         } else return this;
@@ -257,36 +253,47 @@ public abstract class Dict implements TruffleObject {
     }
 
     Dict removeKeyAndValue(final long pos) {
-      final int idx = index(pos, dataBmp);
-      final Object[] newKeysAndNodes = new Object[keysAndNodes.length - 1];
-      System.arraycopy(keysAndNodes, 0, newKeysAndNodes, 0, idx);
-      System.arraycopy(keysAndNodes, idx + 1, newKeysAndNodes, idx, keysAndNodes.length - idx - 1);
-      final Object[] newValues = new Object[values.length - 1];
-      System.arraycopy(values, 0, newValues, 0, idx);
-      System.arraycopy(values, idx + 1, newValues, idx, values.length - idx - 1);
-      return new Bitmap(hasher, seed, nodeBmp, dataBmp ^ pos, newKeysAndNodes, newValues);
+      final int idx = index(pos, dataBmp) * 2;
+      final Object[] newEntriesAndNodes = new Object[entriesAndNodes.length - 2];
+      System.arraycopy(entriesAndNodes, 0, newEntriesAndNodes, 0, idx);
+      System.arraycopy(entriesAndNodes, idx + 2, newEntriesAndNodes, idx, entriesAndNodes.length - idx - 2);
+      return new Bitmap(hasher, seed, nodeBmp, dataBmp ^ pos, newEntriesAndNodes);
     }
 
     Dict demote(final long pos, final Dict node) {
-      final int oldIdx = keysAndNodes.length - 1 - index(pos, nodeBmp);
-      final int newIdx = index(pos, dataBmp);
-      final Object[] newKeysAndNodes = new Object[keysAndNodes.length];
-      System.arraycopy(keysAndNodes, 0, newKeysAndNodes, 0, newIdx);
-      newKeysAndNodes[newIdx] = node.keyAt(0);
-      System.arraycopy(keysAndNodes, newIdx, newKeysAndNodes, newIdx + 1, oldIdx - newIdx);
-      System.arraycopy(keysAndNodes, oldIdx + 1, newKeysAndNodes, oldIdx + 1, keysAndNodes.length - oldIdx - 1);
-      final Object[] newValues = new Object[values.length - 1];
-      System.arraycopy(values, 0, newValues, 0, newIdx);
-      newValues[newIdx] = node.valueAt(0);
-      System.arraycopy(values, newIdx, newValues, newIdx + 1, values.length - newIdx - 1);
-      return new Bitmap(hasher, seed, nodeBmp ^ pos, dataBmp | pos, newKeysAndNodes, newValues);
+      final int oldIdx = entriesAndNodes.length - 1 - index(pos, nodeBmp);
+      final int newIdx = index(pos, dataBmp) * 2;
+      final Object[] newEntriesAndNodes = new Object[entriesAndNodes.length + 1];
+      System.arraycopy(entriesAndNodes, 0, newEntriesAndNodes, 0, newIdx);
+      newEntriesAndNodes[newIdx] = node.keyAt(0);
+      newEntriesAndNodes[newIdx + 1] = node.valueAt(0);
+      System.arraycopy(entriesAndNodes, newIdx, newEntriesAndNodes, newIdx + 2, oldIdx - newIdx);
+      System.arraycopy(entriesAndNodes, oldIdx + 1, newEntriesAndNodes, oldIdx + 2, entriesAndNodes.length - oldIdx - 1);
+      return new Bitmap(hasher, seed, nodeBmp ^ pos, dataBmp | pos, newEntriesAndNodes);
+    }
+
+    @Override
+    public Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+      final Function init = reducer[0];
+      final Function step = reducer[1];
+      final Function complete = reducer[2];
+      Object state = dispatch.execute(init);
+      try {
+        for (int i = 0; i < arity(dataBmp); i++) {
+          state = dispatch.execute(step, state, new Object[]{ keyAt(i), valueAt(i) });
+        }
+        for (int i = 0; i < arity(nodeBmp); i++) {
+          state = nodeAt(i).fold(state, step, dispatch);
+        }
+      } catch (Done ignored) {}
+      return dispatch.execute(complete, state);
     }
 
     @Override
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
       for (int i = 0; i < arity(dataBmp); i++) {
-        result = dispatch.execute(function, result, keyAt(i), valueAt(i));
+        result = dispatch.execute(function, result, new Object[]{ keyAt(i), valueAt(i) });
       }
       for (int i = 0; i < arity(nodeBmp); i++) {
         result = nodeAt(i).fold(result, function, dispatch);
@@ -317,9 +324,14 @@ public abstract class Dict implements TruffleObject {
 
     @Override
     public Set keys() {
-      final Object[] data = keysAndNodes.clone();
-      for (int i = 0; i < arity(nodeBmp); i++) {
-        data[data.length - 1 - i] = nodeAt(i).keys();
+      final int keys = arity(dataBmp);
+      final int nodes = arity(nodeBmp);
+      final Object[] data = new Object[keys + nodes];
+      for (int i = 0; i < keys; i++) {
+        data[i] = entriesAndNodes[i * 2];
+      }
+      for (int i = 0; i < nodes; i++) {
+        data[keys + i] = ((Dict) entriesAndNodes[keys * 2 + i]).keys();
       }
       return new Set.Bitmap(hasher, seed, nodeBmp, dataBmp, data);
     }
@@ -376,16 +388,11 @@ public abstract class Dict implements TruffleObject {
       if (this.dataBmp != that.dataBmp) {
         return false;
       }
-      if (this.keysAndNodes.length != that.keysAndNodes.length) {
+      if (this.entriesAndNodes.length != that.entriesAndNodes.length) {
         return false;
       }
-      for (int i = 0; i < keysAndNodes.length; i++) {
-        if (!this.keysAndNodes[i].equals(that.keysAndNodes[i])) {
-          return false;
-        }
-      }
-      for (int i = 0; i < values.length; i++) {
-        if (!this.values[i].equals(that.values[i])) {
+      for (int i = 0; i < entriesAndNodes.length; i++) {
+        if (!this.entriesAndNodes[i].equals(that.entriesAndNodes[i])) {
           return false;
         }
       }
@@ -394,16 +401,16 @@ public abstract class Dict implements TruffleObject {
 
     @Override
     Object keyAt(final int idx) {
-      return keysAndNodes[idx];
+      return entriesAndNodes[idx * 2];
     }
 
     @Override
     Object valueAt(final int idx) {
-      return values[idx];
+      return entriesAndNodes[idx * 2 + 1];
     }
 
     Dict nodeAt(final int idx) {
-      return (Dict) keysAndNodes[keysAndNodes.length - 1 - idx];
+      return (Dict) entriesAndNodes[entriesAndNodes.length - 1 - idx];
     }
 
     static int index(final long pos, final long bitmap) {
@@ -417,40 +424,36 @@ public abstract class Dict implements TruffleObject {
 
   static final class Collision extends Dict {
     final long commonHash;
-    final Object[] keys;
-    final Object[] values;
+    final Object[] entries;
 
-    Collision(final Hasher hasher, final long seed, final long commonHash, final Object[] keys, final Object[] values) {
+    Collision(final Hasher hasher, final long seed, final long commonHash, final Object[] entries) {
       super(hasher, seed);
       this.commonHash = commonHash;
-      this.keys = keys;
-      this.values = values;
+      this.entries = entries;
     }
 
     @Override
     Dict add(final Object key, final long hash, final Object value, final int shift) {
-      for (int i = 0; i < keys.length; i++) {
-        if (key.equals(keys[i])) {
-          final Object[] newValues = values.clone();
-          newValues[i] = value;
-          return new Collision(hasher, hash, commonHash, keys, newValues);
+      for (int i = 0; i < entries.length; i+=2) {
+        if (key.equals(entries[i])) {
+          final Object[] newEntries = entries.clone();
+          newEntries[i + 1] = value;
+          return new Collision(hasher, hash, commonHash, newEntries);
         }
       }
-      final Object[] newKeys = new Object[keys.length + 1];
-      System.arraycopy(keys, 0, newKeys, 0, keys.length);
-      newKeys[keys.length] = key;
-      final Object[] newValues = new Object[values.length + 1];
-      System.arraycopy(values, 0, newValues, 0, values.length);
-      newValues[values.length] = value;
-      return new Collision(hasher, hash, commonHash, newKeys, newValues);
+      final Object[] newEntries = new Object[entries.length + 2];
+      System.arraycopy(entries, 0, newEntries, 0, entries.length);
+      newEntries[entries.length] = key;
+      newEntries[entries.length + 1] = value;
+      return new Collision(hasher, hash, commonHash, newEntries);
     }
 
     @Override
     Object lookup(final Object key, final long hash, final int shift) {
       if (hash == this.commonHash) {
-        for (int i = 0; i < keys.length; i++) {
-          if (key.equals(keys[i])) {
-            return values[i];
+        for (int i = 0; i < entries.length; i+=2) {
+          if (key.equals(entries[i])) {
+            return entries[i + 1];
           }
         }
       }
@@ -459,18 +462,15 @@ public abstract class Dict implements TruffleObject {
 
     @Override
     Dict remove(final Object key, final long hash, final int shift) {
-      for (int i = 0; i < keys.length; i++) {
-        if (key.equals(keys[i])) {
-          if (keys.length == 1) {
+      for (int i = 0; i < entries.length; i+=2) {
+        if (key.equals(entries[i])) {
+          if (entries.length == 2) {
             return empty(hasher, seed);
           } else {
-            final Object[] newKeys = new Object[keys.length - 1];
-            System.arraycopy(keys, 0, newKeys, 0, i);
-            System.arraycopy(keys, i + 1, newKeys, i, keys.length - i - 1);
-            final Object[] newValues = new Object[values.length - 1];
-            System.arraycopy(values, 0, newValues, 0, i);
-            System.arraycopy(values, i + 1, newValues, i, values.length - i - 1);
-            return new Collision(hasher, seed, commonHash, newKeys, newValues);
+            final Object[] newEntries = new Object[entries.length - 2];
+            System.arraycopy(entries, 0, newEntries, 0, i);
+            System.arraycopy(entries, i + 2, newEntries, i, entries.length - i - 2);
+            return new Collision(hasher, seed, commonHash, newEntries);
           }
         }
       }
@@ -478,10 +478,24 @@ public abstract class Dict implements TruffleObject {
     }
 
     @Override
+    public Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+      final Function init = reducer[0];
+      final Function step = reducer[1];
+      final Function complete = reducer[2];
+      Object state = dispatch.execute(init);
+      try {
+        for (int i = 0; i < entries.length; i+=2) {
+          state = dispatch.execute(step, state, new Object[]{ entries[i], entries[i + 1] });
+        }
+      } catch (Done ignored) {}
+      return dispatch.execute(complete, state);
+    }
+
+    @Override
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
-      for (int i = 0; i < keys.length; i++) {
-        result = dispatch.execute(function, result, keyAt(i), valueAt(i));
+      for (int i = 0; i < entries.length; i+=2) {
+        result = dispatch.execute(function, result, entries[i], entries[2]);
       }
       return result;
     }
@@ -489,32 +503,33 @@ public abstract class Dict implements TruffleObject {
     @Override
     public <T> T fold(T initial, TriFunction<T, Object, Object, T> function) {
       T result = initial;
-      for (int i = 0; i < keys.length; i++) {
-        result = function.apply(result, keyAt(i), valueAt(i));
+      for (int i = 0; i < entries.length; i+=2) {
+        result = function.apply(result, entries[i], entries[2]);
       }
       return result;
     }
 
     @Override
     public long size() {
-      return keys.length;
+      return entries.length / 2;
     }
 
     @Override
     public Set keys() {
+      final Object[] keys = new Object[entries.length / 2];
+      for (int i = 0; i < keys.length; i++) {
+        keys[i] = entries[i * 2];
+      }
       return new Set.Collision(hasher, seed, commonHash, keys);
     }
 
     @Override
     long calculateMurmur3Hash(final long seed) {
       long hash = seed;
-      for (Object key : keys) {
-        hash ^= Murmur3.INSTANCE.hash(seed, key);
+      for (Object kv : entries) {
+        hash ^= Murmur3.INSTANCE.hash(seed, kv);
       }
-      for (Object value : values) {
-        hash ^= Murmur3.INSTANCE.hash(seed, value);
-      }
-      return Murmur3.fMix64(hash ^ values.length);
+      return Murmur3.fMix64(hash ^ entries.length);
     }
 
     @Override
@@ -536,11 +551,13 @@ public abstract class Dict implements TruffleObject {
       if (this.commonHash != that.commonHash) {
         return false;
       }
-      if (this.keys.length != that.keys.length) {
+      if (this.entries.length != that.entries.length) {
         return false;
       }
-      for (int i = 0; i < keys.length; i++) {
-        if (!this.values[i].equals(that.lookup(keys[i], commonHash, 0))) {
+      for (int i = 0; i < entries.length / 2; i+=2) {
+        final Object k = entries[i];
+        final Object v = entries[i + 1];
+        if (!v.equals(that.lookup(k, commonHash, 0))) {
           return false;
         }
       }
@@ -549,12 +566,12 @@ public abstract class Dict implements TruffleObject {
 
     @Override
     Object keyAt(final int idx) {
-      return keys[idx];
+      return entries[idx * 2];
     }
 
     @Override
     Object valueAt(final int idx) {
-      return values[idx];
+      return entries[idx * 2 + 1];
     }
   }
 }
