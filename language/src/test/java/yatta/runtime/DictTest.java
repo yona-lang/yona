@@ -7,9 +7,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class DictTest {
-  private static final int N = 1 << 20;
+  private static final int N = 1 << 24;
   private static final int M = 1 << 12;
-  private static final long SEED = 1234567890L;
+  private static final long SEED = 0L;
 
   @Test
   public void testAddLookup() {
@@ -98,7 +98,7 @@ public class DictTest {
 
     K(final long value) {
       this.value = value;
-      this.hash = (int) value & 0x3ff;
+      this.hash = (int) value & 0xfffff;
     }
 
     @Override

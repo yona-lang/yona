@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SetTest {
-  private static final int N = 1 << 20;
+  private static final int N = 1 << 24;
   private static final int M = 1 << 12;
-  private static final long SEED = 1234567890L;
+  private static final long SEED = 0L;
   
   @Test
   public void testAddContains() {
@@ -66,9 +66,9 @@ public class SetTest {
   }
 
   @Test
-  public void testContains() {
-    Set set = Set.set(1l, 2l);
-    assertTrue(set.contains(1l));
+  public void testCtor() {
+    Set set = Set.set(1L, 2L);
+    assertTrue(set.contains(1L));
   }
 
   @Test
@@ -86,7 +86,7 @@ public class SetTest {
 
     O(final long value) {
       this.value = value;
-      this.hash = (int) value & 0x3ff;
+      this.hash = (int) value & 0xffff;
     }
 
     @Override

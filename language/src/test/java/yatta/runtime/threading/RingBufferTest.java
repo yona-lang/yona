@@ -41,7 +41,7 @@ public class RingBufferTest {
             long token = buffer.tryClaim(1);
             if (token != -1) {
               int v = c.getAndIncrement();
-              if (v > N) {
+              if (v >= N) {
                 break;
               }
               buffer.read(token).value = v;
