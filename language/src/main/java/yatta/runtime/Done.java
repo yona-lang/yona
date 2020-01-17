@@ -1,11 +1,11 @@
 package yatta.runtime;
 
-import yatta.YattaException;
+import com.oracle.truffle.api.nodes.ControlFlowException;
 
-public final class Done extends YattaException  {
+public final class Done extends ControlFlowException {
   public static final Done INSTANCE = new Done();
 
   private Done() {
-    super("done", null);
+    super();
   }
 }
