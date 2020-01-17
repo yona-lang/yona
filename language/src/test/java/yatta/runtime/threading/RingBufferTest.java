@@ -4,14 +4,14 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class RingBufferTest {
   private static final int N = 1 << 24;
 
   @Test
   public void testLoad() throws InterruptedException {
-    final int[] values = new int[N];
+    final boolean[] values = new boolean[N];
     final AtomicInteger c = new AtomicInteger(0);
     RingBuffer<Int> buffer = new RingBuffer<>(1024, Int::new);
     final int m = Runtime.getRuntime().availableProcessors();
@@ -30,8 +30,11 @@ public class RingBufferTest {
 
           @Override
           void released() {
-            assertEquals(0, values[value]);
-            values[value] = value;
+            assertFalse(values[value]);
+            values[value] = true;
+            if (Integer.bitCount(value) == 1) {
+              System.out.println(value);
+            }
           }
         };
 
@@ -59,7 +62,7 @@ public class RingBufferTest {
       threads[i].join();
     }
     for (int i = 0; i < m; i++) {
-      assertEquals(i, values[i]);
+      assertTrue(values[i]);
     }
   }
 

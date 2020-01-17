@@ -21,8 +21,8 @@ public final class Threading {
 
   static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors();
   static final int BUFFER_SIZE = 1024;
-  static final int YIELD_MAX_ATTEMPTS = 1;
-  static final int PARK_MAX_ATTEMPTS = 10;
+  static final int YIELD_MAX_ATTEMPTS = 10;
+  static final int PARK_MAX_ATTEMPTS = 100;
 
   final Thread[] threads;
   final Consumer[] consumers;
