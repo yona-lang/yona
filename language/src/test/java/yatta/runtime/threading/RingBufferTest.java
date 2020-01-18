@@ -1,5 +1,6 @@
 package yatta.runtime.threading;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -10,6 +11,7 @@ public class RingBufferTest {
   private static final int N = 1 << 30;
 
   @Test
+  @Tag("slow")
   public void testLoad() throws InterruptedException {
     final boolean[] values = new boolean[N];
     final AtomicInteger c = new AtomicInteger(0);

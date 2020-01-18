@@ -391,11 +391,6 @@ public abstract class Dict implements TruffleObject {
       if (this.entriesAndNodes.length != that.entriesAndNodes.length) {
         return false;
       }
-      for (int i = 0; i < keysAndNodes.length; i++) {
-        if (!this.keysAndNodes[i].equals(that.keysAndNodes[i])) {
-          return false;
-        }
-      }
       for (int i = 0; i < entriesAndNodes.length; i++) {
         if (!this.entriesAndNodes[i].equals(that.entriesAndNodes[i])) {
           return false;
