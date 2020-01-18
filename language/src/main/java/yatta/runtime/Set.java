@@ -87,7 +87,28 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary
+  public Set union(Set other) {
+    final Set[] ret = {this};
+    return fold(other, (acc, el) -> {
+      ret[0] = acc.add(el);
+      return ret[0];
+    });
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Set intersection(Set other) {
+    return fold(Set.set(), (acc, el) -> {
+      if(contains(el) && other.contains(el)) {
+        return acc.add(el);
+      } else {
+        return acc;
+      }
+    });
+  }
+
   @Override
+  @CompilerDirectives.TruffleBoundary
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("{");

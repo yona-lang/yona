@@ -392,7 +392,11 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(4l, 2l, 4l & 2l, Long.class),
         new BinaryArgsHolder(new PromiseHolder(4l), 2l, 4l & 2l, Long.class),
         new BinaryArgsHolder(4l, new PromiseHolder(2l), 4l & 2l, Long.class),
-        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l & 2l, Long.class)
+        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l & 2l, Long.class),
+        new BinaryArgsHolder(Set.set(2l, 4l), Set.set(2l), "{2}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(2l, 4l)), Set.set(2l), "{2}", String.class),
+        new BinaryArgsHolder(Set.set(2l, 4l), new PromiseHolder(Set.set(2l)), "{2}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(2l, 4l)), new PromiseHolder(Set.set(2l)), "{2}", String.class)
     );
   }
 
@@ -408,7 +412,11 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(4l, 2l, 4l | 2l, Long.class),
         new BinaryArgsHolder(new PromiseHolder(4l), 2l, 4l | 2l, Long.class),
         new BinaryArgsHolder(4l, new PromiseHolder(2l), 4l | 2l, Long.class),
-        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l | 2l, Long.class)
+        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l | 2l, Long.class),
+        new BinaryArgsHolder(Set.set(4l), Set.set(2l), "{2, 4}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(4l)), Set.set(2l), "{2, 4}", String.class),
+        new BinaryArgsHolder(Set.set(4l), new PromiseHolder(Set.set(2l)), "{2, 4}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(4l)), new PromiseHolder(Set.set(2l)), "{2, 4}", String.class)
     );
   }
 

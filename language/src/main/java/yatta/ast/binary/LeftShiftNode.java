@@ -21,7 +21,7 @@ public abstract class LeftShiftNode extends BinaryOpNode {
         return YattaException.typeError(this, argValues);
       }
 
-      if (argValues[0] instanceof Long) {
+      if (argValues[0] instanceof Long && argValues[1] instanceof Long) {
         return (long) argValues[0] << (long) argValues[1];
       } else {
         return YattaException.typeError(this, argValues);

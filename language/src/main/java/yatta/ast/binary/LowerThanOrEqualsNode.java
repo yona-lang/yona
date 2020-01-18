@@ -49,7 +49,7 @@ public abstract class LowerThanOrEqualsNode extends BinaryOpNode {
         return YattaException.typeError(this, argValues);
       }
 
-      if (argValues[0] instanceof Long) {
+      if (argValues[0] instanceof Long && argValues[1] instanceof Long) {
         return (long) argValues[0] <= (long) argValues[1];
       } else if (argValues[0] instanceof Double) {
         return (double) argValues[0] <= (double) argValues[1];
