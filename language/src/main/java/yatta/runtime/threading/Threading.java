@@ -46,7 +46,7 @@ public final class Threading {
           Node node;
 
           @Override
-          void ready(final long token) {
+          void prepare(final long token) {
             final Task task = ringBuffer.read(token);
             promise = task.promise;
             function = task.function;
@@ -55,7 +55,7 @@ public final class Threading {
           }
 
           @Override
-          void released() {
+          void advance() {
             execute(promise, function, dispatch, node);
             promise = null;
             function = null;
@@ -145,7 +145,6 @@ public final class Threading {
     try {
       promise.fulfil(dispatch.execute(function), node);
     } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-      // Execute was not successful.
       promise.fulfil(UndefinedNameException.undefinedFunction(node, function), node);
     } catch (Throwable e) {
       promise.fulfil(e, node);

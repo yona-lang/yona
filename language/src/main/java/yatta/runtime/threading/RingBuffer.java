@@ -105,7 +105,7 @@ final class RingBuffer<E> {
     }
   }
 
-  long lastPublished(final long from, final long to) {
+  long lastReleased(final long from, final long to) {
     for (long i = from; i <= to; i++) {
       if (availability.get(((int) i) & idxMask) != (int) (i >>> idxShift)) {
         return i - 1;

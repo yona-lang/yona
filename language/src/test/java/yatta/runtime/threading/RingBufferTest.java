@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 public class RingBufferTest {
-  private static final int N = 1 << 24;
+  private static final int N = 1 << 30;
 
   @Test
   public void testLoad() throws InterruptedException {
@@ -24,34 +24,36 @@ public class RingBufferTest {
           int value = Integer.MIN_VALUE;
 
           @Override
-          void ready(final long token) {
+          void prepare(final long token) {
             value = buffer.read(token).value;
           }
 
           @Override
-          void released() {
+          void advance() {
             assertFalse(values[value]);
             values[value] = true;
-            if (Integer.bitCount(value) == 1) {
-              System.out.println(value);
-            }
           }
         };
 
         @Override
         public void run() {
-          while (true) {
+          boolean done = false;
+          do {
             long token = buffer.tryClaim(1);
             if (token != -1) {
               int v = c.getAndIncrement();
               if (v >= N) {
-                break;
+                done = true;
+              } else {
+                buffer.read(token).value = v;
+                buffer.release(token, token);
               }
-              buffer.read(token).value = v;
-              buffer.release(token, token);
             }
-            consumer.consume(callback);
-          }
+            boolean consume;
+            do {
+              consume = consumer.consume(callback);
+            } while (consume);
+          } while (!done);
         }
       });
     }
@@ -61,8 +63,8 @@ public class RingBufferTest {
     for (int i = 0; i < m; i++) {
       threads[i].join();
     }
-    for (int i = 0; i < m; i++) {
-      assertTrue(values[i]);
+    for (int i = 0; i < N; i++) {
+      assertTrue(String.valueOf(i), values[i]);
     }
   }
 

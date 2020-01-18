@@ -19,20 +19,20 @@ final class Consumer {
       current = sharedCursor.readVolatile();
       cursor.writeOrdered(current);
       next = current + 1;
-      available = buffer.lastPublished(next, buffer.lastClaimed());
+      available = buffer.lastReleased(next, buffer.lastClaimed());
       if (next > available) {
         return false;
       }
-      callback.ready(next);
+      callback.prepare(next);
     } while (!sharedCursor.compareAndSwap(current, next));
-    callback.released();
+    callback.advance();
     return true;
   }
 
 
   static abstract class Callback {
-    abstract void ready(long token);
+    abstract void prepare(long token);
 
-    abstract void released();
+    abstract void advance();
   }
 }
