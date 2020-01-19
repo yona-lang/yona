@@ -69,6 +69,7 @@ expression : PARENS_L expression PARENS_R                                       
            | <assoc=right> left=expression OP_CONS_L right=expression                                    #consLeftExpression
            | left=expression OP_CONS_R right=expression                                                  #consRightExpression
            | <assoc=right> left=expression OP_JOIN right=expression                                      #joinExpression
+           | <assoc=right> left=expression OP_DIFFERENCE right=expression                                #differenceExpression
            | left=expression OP_BIN_AND right=expression                                                 #bitwiseAndExpression
            | left=expression OP_BIN_XOR right=expression                                                 #bitwiseXorExpression
            | left=expression VLINE right=expression                                                      #bitwiseOrExpression

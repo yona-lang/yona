@@ -432,7 +432,11 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(4l, 2l, 4l ^ 2l, Long.class),
         new BinaryArgsHolder(new PromiseHolder(4l), 2l, 4l ^ 2l, Long.class),
         new BinaryArgsHolder(4l, new PromiseHolder(2l), 4l ^ 2l, Long.class),
-        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l ^ 2l, Long.class)
+        new BinaryArgsHolder(new PromiseHolder(4l), new PromiseHolder(2l), 4l ^ 2l, Long.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), Set.set(2l, 3l), "{1, 3}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), Set.set(2l, 3l), "{1, 3}", String.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(2l, 3l)), "{1, 3}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(2l, 3l)), "{1, 3}", String.class)
     );
   }
 
@@ -459,6 +463,38 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), Seq.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
         new BinaryArgsHolder(Seq.sequence(1l, 2l), new PromiseHolder(Seq.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator),
         new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), new PromiseHolder(Seq.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("setCatenateOps")
+  void testSetCatenateOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("++")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> setCatenateOps() {
+    return Stream.of(
+        new BinaryArgsHolder(Set.set(1l), 2l, "{1, 2}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), 2l, "{1, 2}", String.class),
+        new BinaryArgsHolder(Set.set(1l), new PromiseHolder(2l), "{1, 2}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), new PromiseHolder(2l), "{1, 2}", String.class)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("setDifferenceOps")
+  void testSetDifferenceOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("--")).as(args.expectedType);
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> setDifferenceOps() {
+    return Stream.of(
+        new BinaryArgsHolder(Set.set(1l, 2l), 2l, "{1}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), 2l, "{1}", String.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(2l), "{1}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(2l), "{1}", String.class)
     );
   }
 

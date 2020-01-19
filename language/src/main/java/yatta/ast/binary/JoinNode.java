@@ -4,30 +4,16 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.runtime.Seq;
+import yatta.runtime.Set;
 import yatta.runtime.async.Promise;
 
+import java.util.Arrays;
+
 @NodeInfo(shortName = "++")
-public abstract class SequenceJoinNode extends BinaryOpNode {
+public abstract class JoinNode extends BinaryOpNode {
   @Specialization
   public Seq sequences(Seq left, Seq right) {
     return Seq.catenate(left, right);
-  }
-
-  protected Promise promise(Object left, Object right) {
-    Promise all = Promise.all(new Object[]{left, right}, this);
-    return all.map(args -> {
-      Object[] argValues = (Object[]) args;
-
-      if (!argValues[0].getClass().equals(argValues[1].getClass())) {
-        return YattaException.typeError(this, argValues);
-      }
-
-      if (argValues[0] instanceof Seq) {
-        return Seq.catenate((Seq) argValues[0], (Seq) argValues[1]);
-      } else {
-        return YattaException.typeError(this, argValues);
-      }
-    }, this);
   }
 
   @Specialization
@@ -38,5 +24,25 @@ public abstract class SequenceJoinNode extends BinaryOpNode {
   @Specialization
   public Promise rightPromise(Object left, Promise right) {
     return promise(left, right);
+  }
+
+  protected Promise promise(Object left, Object right) {
+    Promise all = Promise.all(new Object[]{left, right}, this);
+    return all.map(args -> {
+      Object[] argValues = (Object[]) args;
+
+      if (argValues[0] instanceof Seq && argValues[1] instanceof Seq) {
+        return Seq.catenate((Seq) argValues[0], (Seq) argValues[1]);
+      } else if (argValues[0] instanceof Set) {
+          return set((Set) argValues[0], argValues[1]);
+      } else {
+        return YattaException.typeError(this, argValues);
+      }
+    }, this);
+  }
+
+  @Specialization
+  public Set set(Set left, Object right) {
+    return left.add(right);
   }
 }

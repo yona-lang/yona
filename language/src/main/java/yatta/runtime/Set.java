@@ -107,6 +107,17 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     });
   }
 
+  @CompilerDirectives.TruffleBoundary
+  public Set symetricDifference(Set other) {
+    return union(other).fold(Set.set(), (acc, el) -> {
+      if((contains(el) && !other.contains(el)) || (!contains(el) && other.contains(el))) {
+        return acc.add(el);
+      } else {
+        return acc;
+      }
+    });
+  }
+
   @Override
   @CompilerDirectives.TruffleBoundary
   public String toString() {
