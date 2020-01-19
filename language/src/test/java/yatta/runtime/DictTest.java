@@ -1,6 +1,7 @@
 package yatta.runtime;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -8,6 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.Assert.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+@Tag("slow")
 public class DictTest {
   private static final int N = 1 << 24;
   private static final int M = 1 << 12;

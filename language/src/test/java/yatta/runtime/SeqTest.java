@@ -1,6 +1,7 @@
 package yatta.runtime;
 
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -10,6 +11,7 @@ import java.util.*;
 import static org.junit.Assert.*;
 import static yatta.runtime.Seq.*;
 
+@Tag("slow")
 public class SeqTest {
 
   private static final int N = (1 << 24) + 64 + 1;

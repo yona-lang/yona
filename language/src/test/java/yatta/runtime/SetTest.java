@@ -1,5 +1,6 @@
 package yatta.runtime;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -9,6 +10,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Tag("slow")
 public class SetTest {
   private static final int N = 1 << 24;
   private static final int M = 1 << 12;
