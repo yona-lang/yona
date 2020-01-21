@@ -19,10 +19,11 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class Threading {
   static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
 
-  static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors();
+  static final int THREAD_COUNT = Math.max(2, Runtime.getRuntime().availableProcessors());
   static final int BUFFER_SIZE = 1024;
-  static final int YIELD_MAX_ATTEMPTS = 10;
-  static final int PARK_MAX_ATTEMPTS = 100;
+  static final int PRODUCE_YIELD_MAX_ATTEMPTS = 10;
+  static final int CONSUME_YIELD_MAX_ATTEMPTS = 10;
+  static final int CONSUME_PARK_MAX_ATTEMPTS = 100;
 
   final Thread[] threads;
   final Consumer[] consumers;
@@ -67,13 +68,13 @@ public final class Threading {
         int parks = 0;
         while (true) {
           if (!consumer.consume(callback)) {
-            if (yields != YIELD_MAX_ATTEMPTS) {
+            if (yields != CONSUME_YIELD_MAX_ATTEMPTS) {
               Thread.yield();
               yields++;
               continue ;
             }
             yields = 0;
-            if (parks != PARK_MAX_ATTEMPTS) {
+            if (parks != CONSUME_PARK_MAX_ATTEMPTS) {
               LockSupport.parkNanos(1L);
               parks++;
               continue ;
@@ -103,23 +104,16 @@ public final class Threading {
 
   public void submit(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
     int yields = 0;
-    int parks = 0;
     long token;
     while (true) {
       token = ringBuffer.tryClaim(1);
       if (token == -1) {
-        if (yields != YIELD_MAX_ATTEMPTS) {
+        if (yields != PRODUCE_YIELD_MAX_ATTEMPTS) {
           Thread.yield();
           yields++;
           continue;
         }
         yields = 0;
-        if (parks != PARK_MAX_ATTEMPTS) {
-          LockSupport.parkNanos(1L);
-          parks++;
-          continue;
-        }
-        parks = 0;
         execute(promise, function, dispatch, node);
       } else {
         break;
