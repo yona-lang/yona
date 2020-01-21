@@ -8,6 +8,7 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.TruffleFile;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.builtin.*;
@@ -21,9 +22,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.URL;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -60,6 +63,7 @@ public class Context {
 
     installBuiltins();
     installBuiltinModules();
+    installGlobals();
   }
 
   private void installBuiltins() {
@@ -74,6 +78,41 @@ public class Context {
   private void installBuiltinModules() {
     this.builtinModules.register(new SequenceBuiltinModule());
     this.builtinModules.register(new FileBuiltinModule());
+  }
+
+  private static final String STDLIB_FOLDER = "lib-yatta";
+  private static final int STDLIB_PREFIX_LENGTH = STDLIB_FOLDER.length() + 1;  // "lib-yatta".length() + 1
+  private static final int LANGUAGE_ID_SUFFIX_LENGTH = YattaLanguage.ID.length() + 1;  // ".yatta".length()
+
+  private void installGlobals() {
+    try {
+      env.getPublicTruffleFile(STDLIB_FOLDER).visit(new FileVisitor<TruffleFile>() {
+        @Override
+        public FileVisitResult preVisitDirectory(TruffleFile dir, BasicFileAttributes attrs) throws IOException {
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(TruffleFile file, BasicFileAttributes attrs) throws IOException {
+          String relativePath = file.toRelativeUri().toString();
+          String moduleFQN = relativePath.substring(STDLIB_PREFIX_LENGTH, relativePath.length() - LANGUAGE_ID_SUFFIX_LENGTH).replaceAll("/", "\\\\");
+          loadStdModule(file, moduleFQN, null);
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFileFailed(TruffleFile file, IOException exc) throws IOException {
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(TruffleFile dir, IOException exc) throws IOException {
+          return FileVisitResult.CONTINUE;
+        }
+      }, 10);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
   public TruffleLanguage.Env getEnv() {
@@ -151,24 +190,38 @@ public class Context {
 
   @CompilerDirectives.TruffleBoundary
   private YattaModule loadModule(String[] packageParts, String moduleName, String FQN, Node node) {
-    try {
-      Path path;
-      if (packageParts.length > 0) {
-        String[] pathParts = new String[packageParts.length];
-        System.arraycopy(packageParts, 1, pathParts, 0, packageParts.length - 1);
-        pathParts[pathParts.length - 1] = moduleName + "." + YattaLanguage.ID;
-        path = Paths.get(packageParts[0], pathParts);
-      } else {
-        path = Paths.get(moduleName);
-      }
-      URL url = path.toUri().toURL();
+    Path path = pathForModule(packageParts, moduleName);
+    return loadModule(env.getPublicTruffleFile(path.toUri()), FQN, node);
+  }
 
-      Source source = Source.newBuilder(YattaLanguage.ID, url).build();
+  @CompilerDirectives.TruffleBoundary
+  private YattaModule loadStdModule(TruffleFile file, String FQN, Node node) {
+    return loadModule(file, FQN, node);
+  }
+
+  private Path pathForModule(String[] packageParts, String moduleName) {
+    Path path;
+    if (packageParts.length > 0) {
+      String[] pathParts = new String[packageParts.length];
+      System.arraycopy(packageParts, 1, pathParts, 0, packageParts.length - 1);
+      pathParts[pathParts.length - 1] = moduleName + "." + YattaLanguage.ID;
+      path = Paths.get(packageParts[0], pathParts);
+    } else {
+      path = Paths.get(moduleName + "." + YattaLanguage.ID);
+    }
+
+    return path;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  private YattaModule loadModule(TruffleFile file, String FQN, Node node) {
+    try {
+      Source source = Source.newBuilder(YattaLanguage.ID, file).build();
       CallTarget callTarget = env.parseInternal(source);
       YattaModule module = (YattaModule) callTarget.call();
 
       if (!FQN.equals(module.getFqn())) {
-        throw new YattaException("Module file " + url.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
+        throw new YattaException("Module file " + file.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
       }
       moduleCache = this.moduleCache.add(FQN, module);
 
