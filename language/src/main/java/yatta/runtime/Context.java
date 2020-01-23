@@ -1,20 +1,35 @@
 package yatta.runtime;
 
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.TruffleFile;
+import com.oracle.truffle.api.source.SourceSection;
 import yatta.YattaException;
 import yatta.YattaLanguage;
+import yatta.ast.ClosureRootNode;
+import yatta.ast.ExpressionNode;
+import yatta.ast.FunctionRootNode;
 import yatta.ast.builtin.*;
 import yatta.ast.builtin.modules.BuiltinModuleInfo;
 import yatta.ast.builtin.modules.FileBuiltinModule;
 import yatta.ast.builtin.modules.SequenceBuiltinModule;
+import yatta.ast.call.BuiltinCallNode;
+import yatta.ast.call.InvokeNode;
+import yatta.ast.controlflow.YattaBlockNode;
+import yatta.ast.expression.IdentifierNode;
+import yatta.ast.expression.SimpleIdentifierNode;
+import yatta.ast.expression.value.AnyValueNode;
+import yatta.ast.local.ReadArgumentNode;
+import yatta.ast.local.WriteLocalVariableNode;
+import yatta.ast.local.WriteLocalVariableNodeGen;
 import yatta.runtime.annotations.ExceptionSymbol;
 import yatta.runtime.threading.Threading;
 
@@ -27,11 +42,17 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Context {
   public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").build();
+  private static final SourceSection BUILTIN_SOURCE_SECTION = BUILTIN_SOURCE.createUnavailableSection();
+  private static final String STDLIB_FOLDER = "lib-yatta";
+  private static final int STDLIB_PREFIX_LENGTH = STDLIB_FOLDER.length() + 1;  // "lib-yatta".length() + 1
+  private static final int LANGUAGE_ID_SUFFIX_LENGTH = YattaLanguage.ID.length() + 1;  // ".yatta".length()
 
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
@@ -63,28 +84,76 @@ public class Context {
 
     installBuiltins();
     installBuiltinModules();
+    registerBuiltins();
     installGlobals();
   }
 
   private void installBuiltins() {
-    this.builtins.register(PrintlnBuiltinFactory.getInstance());
-    this.builtins.register(SleepBuiltinFactory.getInstance());
-    this.builtins.register(AsyncBuiltinFactory.getInstance());
-    this.builtins.register(IdentityBuiltinFactory.getInstance());
-    this.builtins.register(ToStringBuiltinFactory.getInstance());
-    this.builtins.register(SystemBuiltinFactory.getInstance());
+    builtins.register(PrintlnBuiltinFactory.getInstance());
+    builtins.register(SleepBuiltinFactory.getInstance());
+    builtins.register(AsyncBuiltinFactory.getInstance());
+    builtins.register(IdentityBuiltinFactory.getInstance());
+    builtins.register(ToStringBuiltinFactory.getInstance());
+    builtins.register(SystemBuiltinFactory.getInstance());
   }
 
   private void installBuiltinModules() {
-    this.builtinModules.register(new SequenceBuiltinModule());
-    this.builtinModules.register(new FileBuiltinModule());
+    builtinModules.register(new SequenceBuiltinModule());
+    builtinModules.register(new FileBuiltinModule());
   }
 
-  private static final String STDLIB_FOLDER = "lib-yatta";
-  private static final int STDLIB_PREFIX_LENGTH = STDLIB_FOLDER.length() + 1;  // "lib-yatta".length() + 1
-  private static final int LANGUAGE_ID_SUFFIX_LENGTH = YattaLanguage.ID.length() + 1;  // ".yatta".length()
+  public void installBuiltinsGlobals(String fqn, Builtins builtins) {
+    final List<String> exports = new ArrayList<>(builtins.builtins.size());
+    final List<Function> functions = new ArrayList<>(builtins.builtins.size());
+
+    builtins.builtins.forEach((name, nodeFactory) -> {
+      int argumentsCount = nodeFactory.getExecutionSignature().size();
+      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(nodeFactory), BUILTIN_SOURCE_SECTION, name);
+      exports.add(name);
+      functions.add(new Function(name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount));
+    });
+
+    YattaModule module = new YattaModule(fqn, exports, functions);
+    insertGlobal(fqn, module);
+  }
+
+  private void registerBuiltins() {
+    builtins.builtins.forEach((name, nodeFactory) -> {
+      int cardinality = nodeFactory.getExecutionSignature().size();
+
+      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(nodeFactory), BUILTIN_SOURCE_SECTION, name);
+      Function function = new Function(name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
+
+      String partiallyAppliedFunctionName = "$partial-0/" + function.getCardinality() + "-" + function.getName();
+      ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
+
+      for (int i = 0; i < function.getCardinality(); i++) {
+        allArgumentNodes[i] = new ReadArgumentNode(i);
+      }
+
+      /*
+       * Partially applied function will just invoke the original function with arguments constructed as a combination
+       * of those which were provided when this closure was created and those to be read on the following application
+       */
+      InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(function.getName()), allArgumentNodes, null);
+
+      FrameDescriptor partialFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
+      /*
+       * We need to make sure that the original function is still accessible within the closure, even if the partially
+       * applied function already leaves the scope with the original function
+       */
+      WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), partialFrameDescriptor.addFrameSlot(function.getName()));
+
+      YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
+      FunctionRootNode partiallyAppliedFunctionRootNode = new FunctionRootNode(language, partialFrameDescriptor, blockNode, BUILTIN_SOURCE_SECTION, partiallyAppliedFunctionName);
+
+      insertGlobal(name, new Function(partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(partiallyAppliedFunctionRootNode), cardinality));
+    });
+  }
 
   private void installGlobals() {
+    builtinModules.builtins.forEach(this::installBuiltinsGlobals);
+
     try {
       env.getPublicTruffleFile(STDLIB_FOLDER).visit(new FileVisitor<TruffleFile>() {
         @Override
@@ -96,7 +165,8 @@ public class Context {
         public FileVisitResult visitFile(TruffleFile file, BasicFileAttributes attrs) throws IOException {
           String relativePath = file.toRelativeUri().toString();
           String moduleFQN = relativePath.substring(STDLIB_PREFIX_LENGTH, relativePath.length() - LANGUAGE_ID_SUFFIX_LENGTH).replaceAll("/", "\\\\");
-          loadStdModule(file, moduleFQN, null);
+          YattaModule module = loadStdModule(file, moduleFQN);
+          insertGlobal(moduleFQN, module);
           return FileVisitResult.CONTINUE;
         }
 
@@ -191,14 +261,15 @@ public class Context {
   @CompilerDirectives.TruffleBoundary
   private YattaModule loadModule(String[] packageParts, String moduleName, String FQN, Node node) {
     Path path = pathForModule(packageParts, moduleName);
-    return loadModule(env.getPublicTruffleFile(path.toUri()), FQN, node);
+    return loadModule(env.getPublicTruffleFile(path.toUri()), FQN, node, true);
   }
 
   @CompilerDirectives.TruffleBoundary
-  private YattaModule loadStdModule(TruffleFile file, String FQN, Node node) {
-    return loadModule(file, FQN, node);
+  private YattaModule loadStdModule(TruffleFile file, String FQN) {
+    return loadModule(file, FQN, null, false);
   }
 
+  @CompilerDirectives.TruffleBoundary
   private Path pathForModule(String[] packageParts, String moduleName) {
     Path path;
     if (packageParts.length > 0) {
@@ -214,7 +285,7 @@ public class Context {
   }
 
   @CompilerDirectives.TruffleBoundary
-  private YattaModule loadModule(TruffleFile file, String FQN, Node node) {
+  private YattaModule loadModule(TruffleFile file, String FQN, Node node, boolean cache) {
     try {
       Source source = Source.newBuilder(YattaLanguage.ID, file).build();
       CallTarget callTarget = env.parseInternal(source);
@@ -223,7 +294,9 @@ public class Context {
       if (!FQN.equals(module.getFqn())) {
         throw new YattaException("Module file " + file.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
       }
-      moduleCache = this.moduleCache.add(FQN, module);
+      if (cache) {
+        moduleCache = this.moduleCache.add(FQN, module);
+      }
 
       return module;
     } catch (IOException e) {

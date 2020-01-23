@@ -37,7 +37,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public ExpressionNode visitInput(YattaParser.InputContext ctx) {
-    ExpressionNode functionBodyNode = new MainExpressionNode(language, ctx.expression().accept(this), moduleStack.toArray(new FQNNode[]{}));
+    ExpressionNode functionBodyNode = new MainExpressionNode(ctx.expression().accept(this));
     functionBodyNode.addRootTag();
 
     ModuleFunctionNode mainFunctionNode = withSourceSection(ctx, new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), functionBodyNode));
