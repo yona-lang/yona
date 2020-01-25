@@ -361,8 +361,18 @@ public class Context {
     return (Symbol) symbol;
   }
 
-  public void insertGlobal(Object key, Object value) {
-    globals = globals.add(key, value);
+  public void insertGlobal(String functionName, Function function) {
+    globals = globals.add(functionName, function);
+  }
+
+  public void insertGlobal(String fqn, YattaModule module) {
+    Object existingObject = globals.lookup(fqn);
+    if (Unit.INSTANCE.equals(existingObject)) {
+      globals = globals.add(fqn, module);
+    } else {
+      YattaModule existingModule = (YattaModule) existingObject;
+      globals = globals.add(fqn, existingModule.merge(module));
+    }
   }
 
   @CompilerDirectives.TruffleBoundary
