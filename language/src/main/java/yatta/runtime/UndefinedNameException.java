@@ -9,7 +9,7 @@ public final class UndefinedNameException extends YattaException {
   private static final long serialVersionUID = 1L;
 
   @CompilerDirectives.TruffleBoundary
-  public static UndefinedNameException undefinedFunction(Node location, Object name) {
+  public static UndefinedNameException undefinedFunction(Node location, Function name) {
     throw new UndefinedNameException("Undefined function: " + name, location);
   }
 

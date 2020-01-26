@@ -72,7 +72,7 @@ public final class InvokeNode extends ExpressionNode {
   public String toString() {
     return "InvokeNode{" +
         "functionNode=" + functionNode +
-        ", function=" + function +
+        ", function=" + (function == null ? functionNode.toString() : function) +
         ", argumentNodes=" + Arrays.toString(argumentNodes) +
         '}';
   }

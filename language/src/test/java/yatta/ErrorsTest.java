@@ -62,7 +62,7 @@ public class ErrorsTest extends CommonTest {
             "funalias = \\arg -> funone alias 7\n" +
             "in funalias").execute(5).asLong();
       } catch (PolyglotException ex) {
-        assertEquals("Unexpected number of arguments when calling '$lambda-0': 2 expected: 1", ex.getMessage());
+        assertEquals("Unexpected number of arguments when calling '$lambda0-1': 2 expected: 1", ex.getMessage());
         throw ex;
       }
     });
@@ -199,7 +199,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YattaLanguage.ID, "async \\a b -> a + b");
       } catch (PolyglotException ex) {
-        assertEquals("async function accepts only functions with zero arguments. Function $lambda-0 expects 2arguments", ex.getMessage());
+        assertEquals("async function accepts only functions with zero arguments. Function $lambda0-2 expects 2arguments", ex.getMessage());
         throw ex;
       }
     });

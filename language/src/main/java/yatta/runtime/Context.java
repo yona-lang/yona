@@ -21,6 +21,7 @@ import yatta.ast.builtin.*;
 import yatta.ast.builtin.modules.BuiltinModuleInfo;
 import yatta.ast.builtin.modules.FileBuiltinModule;
 import yatta.ast.builtin.modules.SequenceBuiltinModule;
+import yatta.ast.builtin.modules.SetBuiltinModule;
 import yatta.ast.call.BuiltinCallNode;
 import yatta.ast.call.InvokeNode;
 import yatta.ast.controlflow.YattaBlockNode;
@@ -99,6 +100,7 @@ public class Context {
 
   private void installBuiltinModules() {
     builtinModules.register(new SequenceBuiltinModule());
+    builtinModules.register(new SetBuiltinModule());
     builtinModules.register(new FileBuiltinModule());
   }
 

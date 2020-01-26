@@ -1,5 +1,6 @@
 package yatta.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -16,6 +17,7 @@ public class Tuple implements TruffleObject {
   }
 
   @Override
+  @CompilerDirectives.TruffleBoundary
   public String toString() {
     String toStr = Arrays.toString(items);
     return "(" + toStr.substring(1, toStr.length() - 1) + ')';
@@ -39,6 +41,10 @@ public class Tuple implements TruffleObject {
     return items.length;
   }
 
+  public final int length() {
+    return items.length;
+  }
+
   @ExportMessage
   public final Object readArrayElement(long index) {
     return items[(int) index];
@@ -58,11 +64,26 @@ public class Tuple implements TruffleObject {
     return tuple instanceof Tuple;
   }
 
+  @ExportMessage
+  public boolean isString() {
+    return true;
+  }
+
+  @ExportMessage
+  @CompilerDirectives.TruffleBoundary
+  public String asString() {
+    return toString();
+  }
+
   public int size() {
     return items.length;
   }
 
   public Object get(int i) {
     return items[i];
+  }
+
+  public Object[] toArray() {
+    return items;
   }
 }
