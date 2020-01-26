@@ -349,29 +349,35 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public FunctionNode visitLambda(YattaParser.LambdaContext ctx) {
-    MatchNode[] patterns = new MatchNode[ctx.pattern().size()];
-    for (int i = 0; i < ctx.pattern().size(); i++) {
-      patterns[i] = visitPattern(ctx.pattern(i));
+    int argsCount = ctx.pattern().size();
+    ExpressionNode bodyNode;
+    if (ctx.pattern().size() > 0) {
+      MatchNode[] patterns = new MatchNode[argsCount];
+      for (int i = 0; i < argsCount; i++) {
+        patterns[i] = visitPattern(ctx.pattern(i));
+      }
+      TupleMatchNode argPatterns = new TupleMatchNode(patterns);
+
+      ExpressionNode[] argumentNodes = new ExpressionNode[argsCount];
+      for (int j = 0; j < argsCount; j++) {
+        argumentNodes[j] = new ReadArgumentNode(j);
+      }
+
+      TupleNode argsTuple = new TupleNode(argumentNodes);
+      bodyNode = new CaseNode(argsTuple, new PatternNode[]{new PatternNode(argPatterns, ctx.expression().accept(this))});
+
+    } else {
+      bodyNode = ctx.expression().accept(this);
     }
-    TupleMatchNode argPatterns = new TupleMatchNode(patterns);
 
-    ExpressionNode[] argumentNodes = new ExpressionNode[ctx.pattern().size()];
-    for (int j = 0; j < argumentNodes.length; j++) {
-      argumentNodes[j] = new ReadArgumentNode(j);
-    }
-
-    TupleNode argsTuple = new TupleNode(argumentNodes);
-    CaseNode caseNode = new CaseNode(argsTuple, new PatternNode[]{new PatternNode(argPatterns, ctx.expression().accept(this))});
-
-    caseNode.addRootTag();
-    caseNode.setIsTail(true);
+    bodyNode.addRootTag();
 
     return withSourceSection(ctx, new FunctionNode(language, source.createSection(
         ctx.BACKSLASH().getSymbol().getLine(),
         ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
         ctx.expression().stop.getLine(),
         ctx.expression().stop.getCharPositionInLine() + 1
-    ), "$lambda-" + lambdaCount++, ctx.pattern().size(), new FrameDescriptor(UninitializedFrameSlot.INSTANCE), caseNode));
+    ), "$lambda" + lambdaCount++ + "-" + argsCount, ctx.pattern().size(), new FrameDescriptor(UninitializedFrameSlot.INSTANCE), bodyNode));
   }
 
   @Override
