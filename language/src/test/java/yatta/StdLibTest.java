@@ -29,13 +29,13 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void sequenceReduceLeftFilterTest() {
-    long ret = context.eval(YattaLanguage.ID, "Sequence.reducel [-2,-1,0,1,2] <| Transducers.filter \\val -> val < 0 (\\-> 0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Sequence.reducel [-2,-1,0,1,2] <| Transducers.filter \\val -> val < 0 (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
     assertEquals(-6l, ret);
   }
 
   @Test
   public void sequenceReduceRightFilterTest() {
-    long ret = context.eval(YattaLanguage.ID, "Sequence.reducer [-2,-1,0,1,2] <| Transducers.filter \\val -> val < 0 (\\-> 0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Sequence.reducer [-2,-1,0,1,2] <| Transducers.filter \\val -> val < 0 (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
     assertEquals(-6l, ret);
   }
 
@@ -47,7 +47,7 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void setReduceFilterTest() {
-    long ret = context.eval(YattaLanguage.ID, "Set.reduce {-2,-1,0,1,2} <| Transducers.filter \\val -> val < 0 (\\-> 0, \\state val -> state + val, \\state -> state * 2)").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Set.reduce {-2,-1,0,1,2} <| Transducers.filter \\val -> val < 0 (0, \\state val -> state + val, \\state -> state * 2)").asLong();
     assertEquals(-6l, ret);
   }
 
