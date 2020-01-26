@@ -138,10 +138,14 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     return sb.toString();
   }
 
+  public boolean contains(Object key) {
+    return Unit.INSTANCE != lookup(key);
+  }
+
   @Override
   public int compareTo(Dict o) {
     int ret = fold(0, (acc, key, val) -> {
-      boolean containedInOther = !Unit.INSTANCE.equals(o.lookup(key));
+      boolean containedInOther = o.contains(key);
       if (containedInOther && acc == 0) {
         return 0;
       } else if (containedInOther && acc < 0) {
@@ -155,6 +159,33 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     } else {
       return ret;
     }
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Dict union(Dict other) {
+    return other.fold(this, Dict::add);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Dict intersection(Dict other) {
+    return other.fold(Dict.empty(), (acc, key, val) -> {
+      if(contains(key) && other.contains(key)) {
+        return acc.add(key, val);
+      } else {
+        return acc;
+      }
+    });
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Dict symmetricDifference(Dict other) {
+    return union(other).fold(Dict.empty(), (acc, key, val) -> {
+      if((contains(key) && !other.contains(key)) || (!contains(key) && other.contains(key))) {
+        return acc.add(key, val);
+      } else {
+        return acc;
+      }
+    });
   }
 
   static long mask(final long hash, final int shift) {

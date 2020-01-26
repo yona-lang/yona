@@ -99,6 +99,19 @@ public class DictTest {
     assertEquals(set, dict.keys());
   }
 
+  @Test
+  public void testInsertSameKey() {
+    Dict dict = Dict.empty().add(1, true).add(1, false);
+    assertEquals(dict.lookup(1), false);
+  }
+
+  @Test
+  public void testUnion() {
+    Dict dict1 = Dict.empty().add(1, 2);
+    Dict dict2 = Dict.empty().add(1, 3);
+    assertEquals(3, dict1.union(dict2).lookup(1));
+  }
+
   private static final class K {
     final long value;
 

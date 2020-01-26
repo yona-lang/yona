@@ -30,7 +30,7 @@ public abstract class InNode extends BinaryOpNode {
 
   @Specialization
   public boolean dict(Object el, Dict dict) {
-    return Unit.INSTANCE != dict.lookup(el);
+    return dict.contains(el);
   }
 
   protected Promise promise(Object left, Object right) {

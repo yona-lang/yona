@@ -53,6 +53,11 @@ public abstract class UnboxNode extends ExpressionNode {
     return value;
   }
 
+  @Specialization
+  protected static Tuple fromTuple(Tuple value) {
+    return value;
+  }
+
   @Specialization(limit = "LIMIT")
   public static Object fromForeign(Object value, @CachedLibrary("value") InteropLibrary interop) {
     try {

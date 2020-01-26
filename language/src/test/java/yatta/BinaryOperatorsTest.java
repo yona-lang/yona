@@ -420,7 +420,11 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(2l, 4l), Set.set(2l), "{2}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(2l, 4l)), Set.set(2l), "{2}", String.class),
         new BinaryArgsHolder(Set.set(2l, 4l), new PromiseHolder(Set.set(2l)), "{2}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(2l, 4l)), new PromiseHolder(Set.set(2l)), "{2}", String.class)
+        new BinaryArgsHolder(new PromiseHolder(Set.set(2l, 4l)), new PromiseHolder(Set.set(2l)), "{2}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), Dict.empty().add(2l, true).add(3l, false), "{3 = false}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), Dict.empty().add(2l, true).add(3l, false), "{3 = false}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{3 = false}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{3 = false}", String.class)
     );
   }
 
@@ -440,7 +444,12 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(4l), Set.set(2l), "{2, 4}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(4l)), Set.set(2l), "{2, 4}", String.class),
         new BinaryArgsHolder(Set.set(4l), new PromiseHolder(Set.set(2l)), "{2, 4}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(4l)), new PromiseHolder(Set.set(2l)), "{2, 4}", String.class)
+        new BinaryArgsHolder(new PromiseHolder(Set.set(4l)), new PromiseHolder(Set.set(2l)), "{2, 4}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 3 = false, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 3 = false, 4 = true}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 3 = false, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 3 = false, 4 = true}", String.class)
+
     );
   }
 
@@ -460,7 +469,11 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(1l, 2l), Set.set(2l, 3l), "{1, 3}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), Set.set(2l, 3l), "{1, 3}", String.class),
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(2l, 3l)), "{1, 3}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(2l, 3l)), "{1, 3}", String.class)
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(2l, 3l)), "{1, 3}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 4 = true}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 4 = true}", String.class)
     );
   }
 
@@ -491,34 +504,42 @@ public class BinaryOperatorsTest extends CommonTest {
   }
 
   @ParameterizedTest
-  @MethodSource("setCatenateOps")
-  void testSetCatenateOps(BinaryArgsHolder args) {
+  @MethodSource("otherCatenateOps")
+  void testOtherCatenateOps(BinaryArgsHolder args) {
     Object ret = context.eval(YattaLanguage.ID, args.format("++")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
-  static Stream<BinaryArgsHolder> setCatenateOps() {
+  static Stream<BinaryArgsHolder> otherCatenateOps() {
     return Stream.of(
         new BinaryArgsHolder(Set.set(1l), 2l, "{1, 2}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), 2l, "{1, 2}", String.class),
         new BinaryArgsHolder(Set.set(1l), new PromiseHolder(2l), "{1, 2}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), new PromiseHolder(2l), "{1, 2}", String.class)
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), new PromiseHolder(2l), "{1, 2}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class)
     );
   }
 
   @ParameterizedTest
-  @MethodSource("setDifferenceOps")
-  void testSetDifferenceOps(BinaryArgsHolder args) {
+  @MethodSource("differenceOps")
+  void testDifferenceOps(BinaryArgsHolder args) {
     Object ret = context.eval(YattaLanguage.ID, args.format("--")).as(args.expectedType);
     assertEquals(args.expected, ret);
   }
 
-  static Stream<BinaryArgsHolder> setDifferenceOps() {
+  static Stream<BinaryArgsHolder> differenceOps() {
     return Stream.of(
         new BinaryArgsHolder(Set.set(1l, 2l), 2l, "{1}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), 2l, "{1}", String.class),
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(2l), "{1}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(2l), "{1}", String.class)
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(2l), "{1}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), 2l, "{1 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), 2l, "{1 = true}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(2l), "{1 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(2l), "{1 = true}", String.class)
     );
   }
 

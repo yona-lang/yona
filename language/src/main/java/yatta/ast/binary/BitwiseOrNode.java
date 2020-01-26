@@ -3,6 +3,7 @@ package yatta.ast.binary;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
+import yatta.runtime.Dict;
 import yatta.runtime.Set;
 import yatta.runtime.async.Promise;
 
@@ -15,6 +16,11 @@ public abstract class BitwiseOrNode extends BinaryOpNode {
 
   @Specialization
   public Set sets(Set left, Set right) {
+    return left.union(right);
+  }
+
+  @Specialization
+  public Dict dicts(Dict left, Dict right) {
     return left.union(right);
   }
 
@@ -31,6 +37,8 @@ public abstract class BitwiseOrNode extends BinaryOpNode {
         return (long) argValues[0] | (long) argValues[1];
       } else if (argValues[0] instanceof Set && argValues[1] instanceof Set) {
           return sets((Set) argValues[0], (Set) argValues[1]);
+      } else if (argValues[0] instanceof Dict && argValues[1] instanceof Dict) {
+        return dicts((Dict) argValues[0], (Dict) argValues[1]);
       } else {
         return YattaException.typeError(this, argValues);
       }
