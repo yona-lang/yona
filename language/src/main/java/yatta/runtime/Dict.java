@@ -7,7 +7,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 import yatta.common.TriFunction;
 
 @ExportLibrary(InteropLibrary.class)
-public abstract class Dict implements TruffleObject {
+public abstract class Dict implements TruffleObject, Comparable<Dict> {
   static final int BITS = 6;
   static final int MASK = (1 << BITS) - 1;
 
@@ -114,6 +114,11 @@ public abstract class Dict implements TruffleObject {
     return new Bitmap(hasher, seed, 0L, 0L, EMPTY_ARRAY);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public static Dict empty() {
+    return new Bitmap(Murmur3.INSTANCE, 0L, 0L, 0L, EMPTY_ARRAY);
+  }
+
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
@@ -131,6 +136,25 @@ public abstract class Dict implements TruffleObject {
     }
     sb.append("}");
     return sb.toString();
+  }
+
+  @Override
+  public int compareTo(Dict o) {
+    int ret = fold(0, (acc, key, val) -> {
+      boolean containedInOther = !Unit.INSTANCE.equals(o.lookup(key));
+      if (containedInOther && acc == 0) {
+        return 0;
+      } else if (containedInOther && acc < 0) {
+        return -1;
+      } else {
+        return 1;
+      }
+    });
+    if (ret == 0 && size() != o.size()) {
+      return -1;
+    } else {
+      return ret;
+    }
   }
 
   static long mask(final long hash, final int shift) {
