@@ -40,6 +40,12 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  public void sequenceReduceLeftDropNTest() {
+    long ret = context.eval(YattaLanguage.ID, "Seq.reducel [-2,-1,0,1,2] <| Transducers.drop 2 (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    assertEquals(6L, ret);
+  }
+
+  @Test
   public void dictFoldTest() {
     long ret = context.eval(YattaLanguage.ID, "Dict.fold {'a' = 1, 'b' = 2, 'c' = 3} (\\acc _ -> acc + 1) 0").asLong();
     assertEquals(3L, ret);
