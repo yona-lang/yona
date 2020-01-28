@@ -3,10 +3,8 @@ package yatta.runtime.async;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.nodes.Node;
-import yatta.YattaLanguage;
-import yatta.ast.call.InvokeNode;
 import yatta.ast.call.TailCallException;
-import yatta.runtime.UndefinedNameException;
+import yatta.runtime.exceptions.UndefinedNameException;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;

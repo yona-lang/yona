@@ -10,6 +10,7 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
+import yatta.runtime.exceptions.UndefinedNameException;
 
 @BuiltinModuleInfo(moduleName = "Dict")
 public final class DictBuiltinModule implements BuiltinModule {

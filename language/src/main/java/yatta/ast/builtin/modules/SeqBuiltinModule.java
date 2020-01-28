@@ -8,8 +8,10 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
+import yatta.YattaSymbolException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
+import yatta.runtime.exceptions.UndefinedNameException;
 
 @BuiltinModuleInfo(moduleName = "Seq")
 public final class SeqBuiltinModule implements BuiltinModule {
@@ -47,7 +49,6 @@ public final class SeqBuiltinModule implements BuiltinModule {
         return sequence.reduceLeft(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
-        e.printStackTrace();
         throw new YattaException(e, this);
       }
     }

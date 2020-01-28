@@ -1,8 +1,10 @@
-package yatta.runtime;
+package yatta.runtime.exceptions;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.nodes.Node;
 import yatta.YattaException;
+import yatta.runtime.Function;
+import yatta.runtime.Seq;
 
 public final class UndefinedNameException extends YattaException {
 

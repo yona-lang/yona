@@ -1,7 +1,6 @@
 package yatta.ast.expression.value;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -13,7 +12,7 @@ import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
 import yatta.runtime.Context;
 import yatta.runtime.YattaModule;
-import yatta.runtime.UninitializedFrameSlotException;
+import yatta.runtime.exceptions.UninitializedFrameSlotException;
 import yatta.runtime.Unit;
 
 import java.util.Arrays;

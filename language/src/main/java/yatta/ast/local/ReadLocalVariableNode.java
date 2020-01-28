@@ -2,7 +2,7 @@ package yatta.ast.local;
 
 import yatta.ast.ExpressionNode;
 import yatta.runtime.UninitializedFrameSlot;
-import yatta.runtime.UninitializedFrameSlotException;
+import yatta.runtime.exceptions.UninitializedFrameSlotException;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;

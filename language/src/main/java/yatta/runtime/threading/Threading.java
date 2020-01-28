@@ -7,7 +7,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import yatta.runtime.Function;
-import yatta.runtime.UndefinedNameException;
+import yatta.runtime.exceptions.UndefinedNameException;
 import yatta.runtime.async.Promise;
 
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;

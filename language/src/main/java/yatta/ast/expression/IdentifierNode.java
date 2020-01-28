@@ -15,6 +15,7 @@ import yatta.ast.expression.value.FQNNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
 import yatta.runtime.*;
+import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
 @NodeInfo
 public final class IdentifierNode extends ExpressionNode {

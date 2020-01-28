@@ -7,7 +7,7 @@ import yatta.runtime.Symbol;
 import yatta.runtime.Tuple;
 
 public class YattaSymbolException extends YattaException {
-  private final Symbol symbol;
+  public final Symbol symbol;
 
   public YattaSymbolException(String message, Node location, Symbol symbol) {
     super(message, location);

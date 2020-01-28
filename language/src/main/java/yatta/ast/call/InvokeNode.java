@@ -24,7 +24,7 @@ import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.local.WriteLocalVariableNode;
 import yatta.ast.local.WriteLocalVariableNodeGen;
 import yatta.runtime.Function;
-import yatta.runtime.UndefinedNameException;
+import yatta.runtime.exceptions.UndefinedNameException;
 import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
