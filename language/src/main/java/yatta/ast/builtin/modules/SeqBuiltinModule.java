@@ -11,8 +11,8 @@ import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 
-@BuiltinModuleInfo(moduleName = "Sequence")
-public final class SequenceBuiltinModule implements BuiltinModule {
+@BuiltinModuleInfo(moduleName = "Seq")
+public final class SeqBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "foldl")
   abstract static class FoldLeftBuiltin extends BuiltinNode {
     @Specialization
@@ -42,9 +42,9 @@ public final class SequenceBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "reducel")
   abstract static class ReduceLeftBuiltin extends BuiltinNode {
     @Specialization
-    public Object reduceLeft(Seq sequence, Tuple transducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object reduceLeft(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return sequence.reduceLeft(new Function[] {(Function) transducer.get(0), (Function) transducer.get(1), (Function) transducer.get(2)}, dispatch);
+        return sequence.reduceLeft(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         e.printStackTrace();
@@ -56,9 +56,9 @@ public final class SequenceBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "reducer")
   abstract static class ReduceRightBuiltin extends BuiltinNode {
     @Specialization
-    public Object reduceRight(Seq sequence, Tuple transducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object reduceRight(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return sequence.reduceRight(new Function[] {(Function) transducer.get(0), (Function) transducer.get(1), (Function) transducer.get(2)}, dispatch);
+        return sequence.reduceRight(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YattaException(e, this);
@@ -68,10 +68,10 @@ public final class SequenceBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     Builtins builtins = new Builtins();
-    builtins.register(SequenceBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance());
-    builtins.register(SequenceBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance());
-    builtins.register(SequenceBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance());
-    builtins.register(SequenceBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance());
+    builtins.register(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance());
+    builtins.register(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance());
+    builtins.register(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance());
+    builtins.register(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance());
     return builtins;
   }
 }

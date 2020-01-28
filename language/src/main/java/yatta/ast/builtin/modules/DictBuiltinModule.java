@@ -11,14 +11,14 @@ import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 
-@BuiltinModuleInfo(moduleName = "Set")
-public final class SetBuiltinModule implements BuiltinModule {
+@BuiltinModuleInfo(moduleName = "Dict")
+public final class DictBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "fold")
   abstract static class FoldBuiltin extends BuiltinNode {
     @Specialization
-    public Object fold(Set set, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object fold(Dict dict, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return set.fold(initialValue, function, dispatch);
+        return dict.fold(initialValue, function, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw UndefinedNameException.undefinedFunction(this, function);
@@ -29,9 +29,9 @@ public final class SetBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "reduce")
   abstract static class ReduceBuiltin extends BuiltinNode {
     @Specialization
-    public Object reduce(Set set, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object reduce(Dict dict, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return set.reduce(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
+        return dict.reduce(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YattaException(e, this);
@@ -41,8 +41,8 @@ public final class SetBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     Builtins builtins = new Builtins();
-    builtins.register(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance());
-    builtins.register(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance());
+    builtins.register(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance());
+    builtins.register(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance());
     return builtins;
   }
 }

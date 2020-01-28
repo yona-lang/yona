@@ -14,18 +14,13 @@ import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.YattaException;
 import yatta.YattaLanguage;
-import yatta.ast.ClosureRootNode;
 import yatta.ast.ExpressionNode;
 import yatta.ast.FunctionRootNode;
 import yatta.ast.builtin.*;
-import yatta.ast.builtin.modules.BuiltinModuleInfo;
-import yatta.ast.builtin.modules.FileBuiltinModule;
-import yatta.ast.builtin.modules.SequenceBuiltinModule;
-import yatta.ast.builtin.modules.SetBuiltinModule;
+import yatta.ast.builtin.modules.*;
 import yatta.ast.call.BuiltinCallNode;
 import yatta.ast.call.InvokeNode;
 import yatta.ast.controlflow.YattaBlockNode;
-import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.SimpleIdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.local.ReadArgumentNode;
@@ -99,8 +94,9 @@ public class Context {
   }
 
   private void installBuiltinModules() {
-    builtinModules.register(new SequenceBuiltinModule());
+    builtinModules.register(new SeqBuiltinModule());
     builtinModules.register(new SetBuiltinModule());
+    builtinModules.register(new DictBuiltinModule());
     builtinModules.register(new FileBuiltinModule());
   }
 

@@ -1,4 +1,4 @@
-module Transducers exports filter as
+module Transducers exports filter, map as
 
 # pred: function of one argument (element) returning boolean value
 # init: initial state
@@ -8,3 +8,12 @@ filter pred (init, step, complete) = let
   new_step = \acc val -> if pred val then step acc val else acc
 in
   (\-> init, new_step, complete)
+
+# pred: function of one argument (element)
+# init: initial state
+# step: function of two arguments (accumulator, element) returning new value of the accumulator
+# complete: function of one argument (final state of accumulator) returning final return value
+map fun (init, step, complete) = let
+  new_step = \acc val -> step acc (fun val)
+in
+  (\ -> init, new_step, complete)

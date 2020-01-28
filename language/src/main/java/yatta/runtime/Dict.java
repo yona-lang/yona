@@ -335,7 +335,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       Object state = dispatch.execute(init);
       try {
         for (int i = 0; i < arity(dataBmp); i++) {
-          state = dispatch.execute(step, state, new Object[]{ keyAt(i), valueAt(i) });
+          state = dispatch.execute(step, state, new Tuple(keyAt(i), valueAt(i)));
         }
         for (int i = 0; i < arity(nodeBmp); i++) {
           state = nodeAt(i).fold(state, step, dispatch);
@@ -348,7 +348,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
       for (int i = 0; i < arity(dataBmp); i++) {
-        result = dispatch.execute(function, result, new Object[]{ keyAt(i), valueAt(i) });
+        result = dispatch.execute(function, result, new Tuple(keyAt(i), valueAt(i)));
       }
       for (int i = 0; i < arity(nodeBmp); i++) {
         result = nodeAt(i).fold(result, function, dispatch);
@@ -540,7 +540,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       Object state = dispatch.execute(init);
       try {
         for (int i = 0; i < entries.length; i+=2) {
-          state = dispatch.execute(step, state, new Object[]{ entries[i], entries[i + 1] });
+          state = dispatch.execute(step, state, new Tuple(entries[i], entries[i + 1]));
         }
       } catch (Done ignored) {}
       return dispatch.execute(complete, state);
@@ -550,7 +550,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
       for (int i = 0; i < entries.length; i+=2) {
-        result = dispatch.execute(function, result, entries[i], entries[2]);
+        result = dispatch.execute(function, result, new Tuple(entries[i], entries[2]));
       }
       return result;
     }
