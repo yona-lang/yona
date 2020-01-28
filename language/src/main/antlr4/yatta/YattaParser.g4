@@ -237,4 +237,4 @@ tripplePattern : PARENS_L pattern COMMA pattern COMMA pattern PARENS_R ;
 catchPatternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
 catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
 
-raiseExpr : KW_RAISE symbol stringLiteral NEWLINE ;
+raiseExpr : KW_RAISE symbol stringLiteral NEWLINE? ;
