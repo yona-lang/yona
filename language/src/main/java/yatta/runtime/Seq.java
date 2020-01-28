@@ -1176,6 +1176,7 @@ public final class Seq implements TruffleObject {
     return 1L << shift;
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Seq fromBytes(final ByteSource source) {
     int shift = BITS;
     Object[] root = EMPTY_NODE;
@@ -1220,6 +1221,7 @@ public final class Seq implements TruffleObject {
     abstract byte[] next(final int offset, final int n);
   }
 
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Seq fromCharSequence(final CharSequence source) {
     final int[] codePoints = source.codePoints().toArray();
     final ByteBuffer buffer = ByteBuffer.allocate(MAX_NODE_LENGTH * 4);
