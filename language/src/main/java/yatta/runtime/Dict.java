@@ -4,8 +4,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import yatta.YattaSymbolException;
 import yatta.common.TriFunction;
+import yatta.runtime.exceptions.TransducerDoneException;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class Dict implements TruffleObject, Comparable<Dict> {
@@ -341,11 +341,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
         for (int i = 0; i < arity(nodeBmp); i++) {
           state = nodeAt(i).fold(state, step, dispatch);
         }
-      } catch (YattaSymbolException ignored) {
-        if (!"done".equals(ignored.symbol.asString())) {
-          throw ignored;
-        }
-      }
+      } catch (TransducerDoneException ignored) {}
       return dispatch.execute(complete, state);
     }
 
@@ -547,11 +543,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
         for (int i = 0; i < entries.length; i+=2) {
           state = dispatch.execute(step, state, new Tuple(entries[i], entries[i + 1]));
         }
-      } catch (YattaSymbolException ignored) {
-        if (!"done".equals(ignored.symbol.asString())) {
-          throw ignored;
-        }
-      }
+      } catch (TransducerDoneException ignored) {}
       return dispatch.execute(complete, state);
     }
 

@@ -8,10 +8,11 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
-import yatta.YattaSymbolException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 import yatta.runtime.exceptions.UndefinedNameException;
+import yatta.runtime.stdlib.Builtins;
+import yatta.runtime.stdlib.ExportedFunction;
 
 @BuiltinModuleInfo(moduleName = "Seq")
 public final class SeqBuiltinModule implements BuiltinModule {
@@ -69,10 +70,10 @@ public final class SeqBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     Builtins builtins = new Builtins();
-    builtins.register(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance());
-    builtins.register(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance());
-    builtins.register(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance());
-    builtins.register(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance());
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()));
     return builtins;
   }
 }

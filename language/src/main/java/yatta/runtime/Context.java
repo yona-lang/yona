@@ -27,6 +27,9 @@ import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.local.WriteLocalVariableNode;
 import yatta.ast.local.WriteLocalVariableNodeGen;
 import yatta.runtime.annotations.ExceptionSymbol;
+import yatta.runtime.stdlib.BuiltinModules;
+import yatta.runtime.stdlib.Builtins;
+import yatta.runtime.stdlib.ExportedFunction;
 import yatta.runtime.threading.Threading;
 
 import java.io.BufferedReader;
@@ -85,12 +88,12 @@ public class Context {
   }
 
   private void installBuiltins() {
-    builtins.register(PrintlnBuiltinFactory.getInstance());
-    builtins.register(SleepBuiltinFactory.getInstance());
-    builtins.register(AsyncBuiltinFactory.getInstance());
-    builtins.register(IdentityBuiltinFactory.getInstance());
-    builtins.register(ToStringBuiltinFactory.getInstance());
-    builtins.register(SystemBuiltinFactory.getInstance());
+    builtins.register(new ExportedFunction(PrintlnBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SleepBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(AsyncBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(IdentityBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(ToStringBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SystemBuiltinFactory.getInstance()));
   }
 
   private void installBuiltinModules() {
@@ -98,16 +101,19 @@ public class Context {
     builtinModules.register(new SetBuiltinModule());
     builtinModules.register(new DictBuiltinModule());
     builtinModules.register(new FileBuiltinModule());
+    builtinModules.register(new TransducersBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {
     final List<String> exports = new ArrayList<>(builtins.builtins.size());
     final List<Function> functions = new ArrayList<>(builtins.builtins.size());
 
-    builtins.builtins.forEach((name, nodeFactory) -> {
-      int argumentsCount = nodeFactory.getExecutionSignature().size();
-      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(nodeFactory), BUILTIN_SOURCE_SECTION, name);
-      exports.add(name);
+    builtins.builtins.forEach((name, stdLibFunction) -> {
+      int argumentsCount = stdLibFunction.node.getExecutionSignature().size();
+      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, name);
+      if (stdLibFunction.isExported()) {
+        exports.add(name);
+      }
       functions.add(new Function(name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount));
     });
 
@@ -116,10 +122,10 @@ public class Context {
   }
 
   private void registerBuiltins() {
-    builtins.builtins.forEach((name, nodeFactory) -> {
-      int cardinality = nodeFactory.getExecutionSignature().size();
+    builtins.builtins.forEach((name, stdLibFunction) -> {
+      int cardinality = stdLibFunction.node.getExecutionSignature().size();
 
-      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(nodeFactory), BUILTIN_SOURCE_SECTION, name);
+      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, name);
       Function function = new Function(name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
 
       String partiallyAppliedFunctionName = "$partial-0/" + function.getCardinality() + "-" + function.getName();

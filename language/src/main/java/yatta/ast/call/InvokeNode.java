@@ -18,7 +18,6 @@ import yatta.ast.ExpressionNode;
 import yatta.ast.controlflow.YattaBlockNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
-import yatta.ast.expression.value.FQNNode;
 import yatta.ast.expression.value.FunctionNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.local.WriteLocalVariableNode;
@@ -46,11 +45,11 @@ public final class InvokeNode extends ExpressionNode {
   @Child
   private InteropLibrary library;
   @Children
-  private FQNNode[] moduleStack;  // Because this is created from Stack.toArray, the last pushed element is the last element of the array
+  private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode | Because this is created from Stack.toArray, the last pushed element is the last element of the array
 
   private YattaLanguage language;
 
-  public InvokeNode(YattaLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
+  public InvokeNode(YattaLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
     this.functionNode = functionNode;
     this.function = null;
     this.argumentNodes = argumentNodes;
@@ -59,7 +58,7 @@ public final class InvokeNode extends ExpressionNode {
     this.moduleStack = moduleStack;
   }
 
-  public InvokeNode(YattaLanguage language, Function function, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
+  public InvokeNode(YattaLanguage language, Function function, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
     this.functionNode = null;
     this.function = function;
     this.argumentNodes = argumentNodes;

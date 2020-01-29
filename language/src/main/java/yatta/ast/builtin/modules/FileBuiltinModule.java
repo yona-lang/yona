@@ -13,6 +13,8 @@ import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 import yatta.runtime.async.Promise;
+import yatta.runtime.stdlib.Builtins;
+import yatta.runtime.stdlib.ExportedFunction;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -120,8 +122,8 @@ public final class FileBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     Builtins builtins = new Builtins();
-    builtins.register(FileBuiltinModuleFactory.FileOpenNodeFactory.getInstance());
-    builtins.register(FileBuiltinModuleFactory.FileReadLineNodeFactory.getInstance());
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileOpenNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadLineNodeFactory.getInstance()));
     return builtins;
   }
 }

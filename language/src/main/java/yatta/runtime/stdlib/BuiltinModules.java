@@ -1,9 +1,8 @@
-package yatta.runtime;
+package yatta.runtime.stdlib;
 
-import com.oracle.truffle.api.dsl.NodeFactory;
-import yatta.ast.builtin.BuiltinNode;
 import yatta.ast.builtin.modules.BuiltinModule;
 import yatta.ast.builtin.modules.BuiltinModuleInfo;
+import yatta.runtime.Context;
 
 import java.util.HashMap;
 
@@ -16,7 +15,7 @@ public class BuiltinModules {
     this.builtins.put(Context.getFQN(info.packageParts(), info.moduleName()), builtinModule.builtins());
   }
 
-  public NodeFactory<? extends BuiltinNode> lookup(String fqn, String functionName) {
+  public StdLibFunction lookup(String fqn, String functionName) {
     return builtins.getOrDefault(fqn, EMPTY_BUILTINS).lookup(functionName);
   }
 }

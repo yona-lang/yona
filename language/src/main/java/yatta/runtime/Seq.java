@@ -6,8 +6,8 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
-import yatta.YattaSymbolException;
 import yatta.runtime.exceptions.BadArgException;
+import yatta.runtime.exceptions.TransducerDoneException;
 
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
@@ -498,11 +498,7 @@ public final class Seq implements TruffleObject {
       for (int i = 0; i < suffixSize; i++) {
         state = dispatch.execute(step, state, nodeLookup(suffix, i));
       }
-    } catch (YattaSymbolException ignored) {
-      if (!"done".equals(ignored.symbol.asString())) {
-        throw ignored;
-      }
-    }
+    } catch (TransducerDoneException ignored) {}
     return dispatch.execute(complete, state);
   }
 
@@ -545,11 +541,7 @@ public final class Seq implements TruffleObject {
       for (int i = prefixSize - 1; i >= 0; i--) {
         state = dispatch.execute(step, state, nodeLookup(prefix, i));
       }
-    } catch (YattaSymbolException ignored) {
-      if (!"done".equals(ignored.symbol.asString())) {
-        throw ignored;
-      }
-    }
+    } catch (TransducerDoneException ignored) {}
     return dispatch.execute(complete, state);
   }
 

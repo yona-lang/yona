@@ -11,6 +11,8 @@ import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 import yatta.runtime.exceptions.UndefinedNameException;
+import yatta.runtime.stdlib.Builtins;
+import yatta.runtime.stdlib.ExportedFunction;
 
 @BuiltinModuleInfo(moduleName = "Dict")
 public final class DictBuiltinModule implements BuiltinModule {
@@ -42,8 +44,8 @@ public final class DictBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     Builtins builtins = new Builtins();
-    builtins.register(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance());
-    builtins.register(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance());
+    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
     return builtins;
   }
 }

@@ -41,7 +41,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     functionBodyNode.addRootTag();
 
     ModuleFunctionNode mainFunctionNode = withSourceSection(ctx, new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), functionBodyNode));
-    return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new FQNNode[] {}));
+    return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new ExpressionNode[] {}));
   }
 
   @Override
@@ -555,7 +555,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public IdentifierNode visitIdentifier(YattaParser.IdentifierContext ctx) {
     String name = ctx.name().getText();
-    return withSourceSection(ctx, new IdentifierNode(language, name, moduleStack.toArray(new FQNNode[] {})));
+    return withSourceSection(ctx, new IdentifierNode(language, name, moduleStack.toArray(new ExpressionNode[] {})));
   }
 
   @Override
@@ -825,7 +825,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   private ExpressionNode createCallNode(ParserRuleContext ctx, ExpressionNode[] argNodes, YattaParser.CallContext callCtx) {
-    FQNNode[] moduleStackArray = moduleStack.toArray(new FQNNode[] {});
+    ExpressionNode[] moduleStackArray = moduleStack.toArray(new ExpressionNode[] {});
     if (callCtx.moduleCall() != null) {
       FQNNode fqnNode = visitFqn(callCtx.moduleCall().fqn());
       String functionName = callCtx.moduleCall().name().getText();
@@ -842,12 +842,12 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public ExpressionNode visitPipeLeftExpression(YattaParser.PipeLeftExpressionContext ctx) {
-    return withSourceSection(ctx, new PipeLeftNode(language, ctx.left.accept(this), ctx.right.accept(this), moduleStack.toArray(new FQNNode[] {})));
+    return withSourceSection(ctx, new PipeLeftNode(language, ctx.left.accept(this), ctx.right.accept(this), moduleStack.toArray(new ExpressionNode[] {})));
   }
 
   @Override
   public ExpressionNode visitPipeRightExpression(YattaParser.PipeRightExpressionContext ctx) {
-    return withSourceSection(ctx, new PipeRightNode(language, ctx.left.accept(this), ctx.right.accept(this), moduleStack.toArray(new FQNNode[] {})));
+    return withSourceSection(ctx, new PipeRightNode(language, ctx.left.accept(this), ctx.right.accept(this), moduleStack.toArray(new ExpressionNode[] {})));
   }
 
   @Override

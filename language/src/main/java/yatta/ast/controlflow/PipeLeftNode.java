@@ -13,7 +13,7 @@ import java.util.Objects;
 public final class PipeLeftNode extends ExpressionNode {
   @Child private InvokeNode invokeNode;
 
-  public PipeLeftNode(YattaLanguage language, ExpressionNode leftExpression, ExpressionNode rightExpression, FQNNode[] moduleStack) {
+  public PipeLeftNode(YattaLanguage language, ExpressionNode leftExpression, ExpressionNode rightExpression, ExpressionNode[] moduleStack) {
     this.invokeNode = new InvokeNode(language, leftExpression, new ExpressionNode[]{rightExpression}, moduleStack);
   }
 

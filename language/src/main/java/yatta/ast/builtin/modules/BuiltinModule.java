@@ -1,6 +1,6 @@
 package yatta.ast.builtin.modules;
 
-import yatta.runtime.Builtins;
+import yatta.runtime.stdlib.Builtins;
 
 public interface BuiltinModule {
   Builtins builtins();

@@ -20,10 +20,10 @@ public final class ModuleCallNode extends ExpressionNode {
   @Children
   private ExpressionNode[] argumentNodes;
   private String functionName;
-  @Children private FQNNode[] moduleStack;
+  @Children private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
   private final YattaLanguage language;
 
-  public ModuleCallNode(YattaLanguage language, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes, FQNNode[] moduleStack) {
+  public ModuleCallNode(YattaLanguage language, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
     this.language = language;
     this.nameNode = nameNode;
     this.functionName = functionName;

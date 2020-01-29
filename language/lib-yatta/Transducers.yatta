@@ -39,7 +39,7 @@ drop n (init, step, complete)
 # complete: function of one argument (final state of accumulator) returning final return value
 take n (init, step, complete)
   | n > 0 = let
-    new_step     = \(i, acc) val -> if i == 0 then raise :done "nothing" else (i - 1, step acc val)
+    new_step     = \(i, acc) val -> if i == 0 then raise_done else (i - 1, step acc val)
     new_complete = \(0, acc) -> complete acc
   in
     (\-> (n, init), new_step, new_complete)

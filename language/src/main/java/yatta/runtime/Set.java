@@ -4,7 +4,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import yatta.YattaSymbolException;
+import yatta.runtime.exceptions.TransducerDoneException;
 
 import java.util.function.BiFunction;
 
@@ -337,11 +337,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
         for (int i = 0; i < arity(nodeBmp); i++) {
           state = nodeAt(i).fold(state, step, dispatch);
         }
-      } catch (YattaSymbolException ignored) {
-        if (!"done".equals(ignored.symbol.asString())) {
-          throw ignored;
-        }
-      }
+      } catch (TransducerDoneException ignored) {}
       return dispatch.execute(complete, state);
     }
 
@@ -509,11 +505,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
         for (Object val : values) {
           state = dispatch.execute(step, state, val);
         }
-      } catch (YattaSymbolException ignored) {
-        if (!"done".equals(ignored.symbol.asString())) {
-          throw ignored;
-        }
-      }
+      } catch (TransducerDoneException ignored) {}
       return dispatch.execute(complete, state);
     }
 

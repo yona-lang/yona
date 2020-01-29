@@ -11,6 +11,8 @@ import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 import yatta.runtime.exceptions.UndefinedNameException;
+import yatta.runtime.stdlib.Builtins;
+import yatta.runtime.stdlib.ExportedFunction;
 
 @BuiltinModuleInfo(moduleName = "Set")
 public final class SetBuiltinModule implements BuiltinModule {
@@ -42,8 +44,8 @@ public final class SetBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     Builtins builtins = new Builtins();
-    builtins.register(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance());
-    builtins.register(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance());
+    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
     return builtins;
   }
 }
