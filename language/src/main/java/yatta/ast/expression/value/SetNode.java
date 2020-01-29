@@ -50,7 +50,7 @@ public class SetNode extends ExpressionNode {
   }
 
   private Set execute(VirtualFrame frame) {
-    Set set = Set.empty(Murmur3.INSTANCE, 0l);
+    Set set = Set.empty(Murmur3.INSTANCE, 0L);
     for (ExpressionNode expressionNode : expressions) {
       set = set.add(expressionNode.executeGeneric(frame));
     }

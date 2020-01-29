@@ -16,6 +16,8 @@ import yatta.runtime.stdlib.ExportedFunction;
 
 @BuiltinModuleInfo(moduleName = "Set")
 public final class SetBuiltinModule implements BuiltinModule {
+  private static final Set DEFAULT_EMPTY = Set.empty();
+
   @NodeInfo(shortName = "fold")
   abstract static class FoldBuiltin extends BuiltinNode {
     @Specialization
@@ -42,10 +44,19 @@ public final class SetBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "empty")
+  abstract static class EmptyBuiltin extends BuiltinNode {
+    @Specialization
+    public Object empty() {
+      return DEFAULT_EMPTY;
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()));
     return builtins;
   }
 }

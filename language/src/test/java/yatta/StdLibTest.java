@@ -52,6 +52,18 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  public void sequenceReduceLeftDedupeTest() {
+    long ret = context.eval(YattaLanguage.ID, "Seq.reducel [1, 1, 2, 3, 3, 4] <| Transducers.dedupe (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    assertEquals(20L, ret);
+  }
+
+  @Test
+  public void sequenceReduceLeftDistinctTest() {
+    long ret = context.eval(YattaLanguage.ID, "Seq.reducel [1, 2, 3, 4, 1, 2, 3, 4] <| Transducers.distinct (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    assertEquals(20L, ret);
+  }
+
+  @Test
   public void dictFoldTest() {
     long ret = context.eval(YattaLanguage.ID, "Dict.fold {'a' = 1, 'b' = 2, 'c' = 3} (\\acc _ -> acc + 1) 0").asLong();
     assertEquals(3L, ret);

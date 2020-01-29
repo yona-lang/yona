@@ -181,6 +181,10 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     return new Bitmap(hasher, seed, 0L, 0L, EMPTY_ARRAY);
   }
 
+  public static Set empty() {
+    return empty(Murmur3.INSTANCE, 0L);
+  }
+
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Set singleton(final Hasher hasher, final long seed, final Object value) {
     return new Bitmap(hasher, seed, 0L, pos(mask(hasher.hash(seed, value), 0)), new Object[]{ value });

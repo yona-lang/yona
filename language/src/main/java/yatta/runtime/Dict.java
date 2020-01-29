@@ -115,9 +115,8 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     return new Bitmap(hasher, seed, 0L, 0L, EMPTY_ARRAY);
   }
 
-  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Dict empty() {
-    return new Bitmap(Murmur3.INSTANCE, 0L, 0L, 0L, EMPTY_ARRAY);
+    return empty(Murmur3.INSTANCE, 0L);
   }
 
   @Override
