@@ -1,14 +1,15 @@
 package yatta.ast.call;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.value.FQNNode;
 import yatta.runtime.Function;
 import yatta.runtime.YattaModule;
+import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -58,13 +59,27 @@ public final class ModuleCallNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    YattaModule module;
-    try {
-      module = nameNode.executeModule(frame);
-    } catch (UnexpectedResultException ex) {
-      throw new YattaException("Unexpected error while invoking a module function: " + ex.getMessage(), ex, this);
-    }
+    Object executedName = nameNode.executeGeneric(frame);
 
+    if (executedName instanceof YattaModule) {
+      return invokeModuleFunction(frame, (YattaModule) executedName);
+    } else if (executedName instanceof Promise) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
+      MaterializedFrame materializedFrame = frame.materialize();
+
+      return ((Promise) executedName).map(maybeModule -> {
+        if (maybeModule instanceof YattaModule) {
+          return invokeModuleFunction(materializedFrame, (YattaModule) maybeModule);
+        } else {
+          return new YattaException("Unexpected error while invoking a module function: returned value is not a Yatta Module", this);
+        }
+      }, this);
+    } else {
+      throw new YattaException("Unexpected error while invoking a module function: : returned value is not a Yatta Module", this);
+    }
+  }
+
+  private Object invokeModuleFunction(VirtualFrame frame, YattaModule module) {
     if (!module.getExports().contains(functionName)) {
       throw new YattaException("Function " + functionName + " is not present in " + module, this);
     } else {
