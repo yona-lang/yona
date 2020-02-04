@@ -5,7 +5,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
-import yatta.ast.builtin.BuiltinNode;
 import yatta.ast.call.InvokeNode;
 import yatta.ast.expression.CaseNode;
 import yatta.ast.expression.IdentifierNode;
@@ -22,7 +21,7 @@ import yatta.runtime.UninitializedFrameSlot;
 
 @NodeInfo
 public final class SequenceGeneratorNode extends ExpressionNode {
-  private BuiltinNode callNode;
+  @Child private InvokeNode callNode;
 
   public SequenceGeneratorNode(YattaLanguage language, ExpressionNode reducer, ExpressionNode condition, String stepName, ExpressionNode stepExpression, ExpressionNode[] moduleStack) {
     Context context = Context.getCurrent();
@@ -39,6 +38,7 @@ public final class SequenceGeneratorNode extends ExpressionNode {
     TupleNode argsTuple = new TupleNode(argumentNodes);
     ExpressionNode reducerBodyNode = new CaseNode(argsTuple, new PatternNode[]{new PatternNode(argPatterns, reducer)});
     reducerBodyNode.addRootTag();
+
     FunctionNode reduceFunction = new FunctionNode(language, reducer.getSourceSection(), "$seq_reducer", 1, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), reducerBodyNode);
     InvokeNode mapInvoke = new InvokeNode(language, mapTransducer, new ExpressionNode[]{reduceFunction, toSeqInvoke}, moduleStack);
 
@@ -52,7 +52,7 @@ public final class SequenceGeneratorNode extends ExpressionNode {
     }
 
     ExpressionNode[] reduceArgs = new ExpressionNode[] {stepExpression, filterInvoke == null ? mapInvoke : filterInvoke};
-    this.callNode = context.builtinModules.lookup("Seq", "reducel").node.createNode((Object) reduceArgs);
+    this.callNode = new InvokeNode(language, context.lookupGlobalFunction("Seq", "reducel"), reduceArgs, moduleStack);
   }
 
   @Override

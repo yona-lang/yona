@@ -538,8 +538,40 @@ public class SimpleExpressionTest extends CommonTest {
   }
 
   @Test
+  public void seqGeneratorWithoutConditionAsyncCollectionTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "[x * 2 | x = async \\-> [1, 2, 3]]");
+    assertEquals(3, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(2l, array[0]);
+    assertEquals(4l, array[1]);
+    assertEquals(6l, array[2]);
+  }
+
+  @Test
+  public void seqGeneratorWithoutConditionAsyncReducerTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "[async \\-> x * 2 | x = [1, 2, 3]]");
+    assertEquals(3, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(2l, array[0]);
+    assertEquals(4l, array[1]);
+    assertEquals(6l, array[2]);
+  }
+
+  @Test
   public void seqGeneratorWithConditionTest() {
     Value tuple = context.eval(YattaLanguage.ID, "[x * 2 | x = [1, 2, 3] if x < 3]");
+    assertEquals(2, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(2l, array[0]);
+    assertEquals(4l, array[1]);
+  }
+
+  @Test
+  public void seqGeneratorWithAsyncConditionTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "[x * 2 | x = [1, 2, 3] if async \\-> x < 3]");
     assertEquals(2, tuple.getArraySize());
 
     Object[] array = tuple.as(Object[].class);
