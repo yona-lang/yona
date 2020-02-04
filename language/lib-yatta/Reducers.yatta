@@ -1,3 +1,9 @@
-module Reducers exports to_seq as
+module Reducers exports to_seq, reduce as
 
 to_seq = ([], \acc val-> acc :> val, \acc -> acc)
+
+# reduce dispatcher, based on collection type
+reduce val transducer
+  | Types.is_seq(val) = Seq.reduce val transducer
+  | Types.is_set(val) = Set.reduce val transducer
+  | Types.is_dict(val) = Dict.reduce val transducer

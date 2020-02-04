@@ -97,6 +97,7 @@ public class Context {
   }
 
   private void installBuiltinModules() {
+    builtinModules.register(new TypesBuiltinModule());
     builtinModules.register(new SeqBuiltinModule());
     builtinModules.register(new SetBuiltinModule());
     builtinModules.register(new DictBuiltinModule());
