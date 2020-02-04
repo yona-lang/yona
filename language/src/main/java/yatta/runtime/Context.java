@@ -379,6 +379,14 @@ public class Context {
     }
   }
 
+  public Function lookupGlobalFunction(String fqn, String function) {
+    if (globals.contains(fqn)) {
+      YattaModule yattaModule = (YattaModule) globals.lookup(fqn);
+      return yattaModule.getFunctions().get(function);
+    }
+    return null;
+  }
+
   @CompilerDirectives.TruffleBoundary
   public void dispose() {
     threading.dispose();

@@ -1,0 +1,3 @@
+module Reducers exports to_seq as
+
+to_seq = ([], \acc val-> acc :> val, \acc -> acc)

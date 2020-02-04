@@ -17,6 +17,7 @@ import yatta.ast.controlflow.PipeLeftNode;
 import yatta.ast.controlflow.PipeRightNode;
 import yatta.ast.expression.*;
 import yatta.ast.expression.value.*;
+import yatta.ast.generators.SequenceGeneratorNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.pattern.*;
 import yatta.runtime.UninitializedFrameSlot;
@@ -278,9 +279,16 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       return withSourceSection(ctx, new AliasNode(ctx.moduleAlias().name().getText(), visitModule(ctx.moduleAlias().module())));
     } else if (ctx.fqnAlias() != null) {
       return withSourceSection(ctx, new AliasNode(ctx.fqnAlias().name().getText(), visitFqn(ctx.fqnAlias().fqn())));
+    } else if (ctx.valueAlias() != null) {
+      return withSourceSection(ctx, new AliasNode(ctx.valueAlias().identifier().getText(), ctx.valueAlias().expression().accept(this)));
     } else {
       return withSourceSection(ctx, new AliasNode(ctx.lambdaAlias().name().getText(), visitLambda(ctx.lambdaAlias().lambda())));
     }
+  }
+
+  @Override
+  public ExpressionNode visitValueAlias(YattaParser.ValueAliasContext ctx) {
+    return withSourceSection(ctx, new AliasNode(ctx.identifier().getText(), ctx.expression().accept(this)));
   }
 
   @Override
@@ -365,7 +373,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
       TupleNode argsTuple = new TupleNode(argumentNodes);
       bodyNode = new CaseNode(argsTuple, new PatternNode[]{new PatternNode(argPatterns, ctx.expression().accept(this))});
-
     } else {
       bodyNode = ctx.expression().accept(this);
     }
@@ -857,6 +864,21 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       expressionNodes[i] = ctx.expression(i).accept(this);
     }
     return withSourceSection(ctx, new SetNode(expressionNodes));
+  }
+
+  @Override
+  public ExpressionNode visitSequenceGeneratorExpr(YattaParser.SequenceGeneratorExprContext ctx) {
+    ExpressionNode reducer = ctx.reducer.accept(this);
+    ExpressionNode condition = visitOptional(ctx.condition);
+    String stepName = ctx.valueAlias().identifier().getText();
+    ExpressionNode stepExpression = ctx.valueAlias().expression().accept(this);
+
+    return withSourceSection(ctx, new SequenceGeneratorNode(language, reducer, condition, stepName, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+  }
+
+  public ExpressionNode visitOptional(ParserRuleContext ctx) {
+    if (ctx == null) return null;
+    else return ctx.accept(this);
   }
 
   private <T extends ExpressionNode> T withSourceSection(ParserRuleContext parserRuleContext, T expressionNode) {

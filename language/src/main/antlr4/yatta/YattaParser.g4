@@ -85,6 +85,7 @@ expression : PARENS_L expression PARENS_R                                       
            | importExpr                                                                                  #importExpression
            | tryCatchExpr                                                                                #tryCatchExpression
            | raiseExpr                                                                                   #raiseExpression
+           | generatorExpr                                                                               #generatorExpression
            | <assoc=right> left=expression NEWLINE? OP_PIPE_L right=expression                           #pipeLeftExpression
            | left=expression NEWLINE? OP_PIPE_R right=expression                                         #pipeRightExpression
            ;
@@ -120,10 +121,11 @@ patternValue : unit
 name : LOWERCASE_NAME ;
 
 let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
-alias : lambdaAlias | moduleAlias | patternAlias | fqnAlias ;
+alias : lambdaAlias | moduleAlias | valueAlias | patternAlias | fqnAlias ;
 lambdaAlias : name OP_ASSIGN lambda NEWLINE? ;
 moduleAlias : name OP_ASSIGN module NEWLINE? ;
 patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
+valueAlias : identifier OP_ASSIGN expression NEWLINE? ;
 fqnAlias : name OP_ASSIGN fqn NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : call funArg* ;
@@ -238,3 +240,6 @@ catchPatternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
 catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
 
 raiseExpr : KW_RAISE symbol stringLiteral NEWLINE? ;
+
+generatorExpr : sequenceGeneratorExpr ;
+sequenceGeneratorExpr : BRACKET_L reducer=expression VLINE valueAlias (KW_IF condition=expression)? BRACKET_R ;

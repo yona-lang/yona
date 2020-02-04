@@ -4,6 +4,8 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SimpleExpressionTest extends CommonTest {
@@ -523,4 +525,25 @@ public class SimpleExpressionTest extends CommonTest {
     Value dict = context.eval(YattaLanguage.ID, "{:aa = 1, :bb = 2}");
     assertEquals(2, dict.getArraySize());
   }*/
+
+  @Test
+  public void seqGeneratorWithoutConditionTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "[x * 2 | x = [1, 2, 3]]");
+    assertEquals(3, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(2l, array[0]);
+    assertEquals(4l, array[1]);
+    assertEquals(6l, array[2]);
+  }
+
+  @Test
+  public void seqGeneratorWithConditionTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "[x * 2 | x = [1, 2, 3] if x < 3]");
+    assertEquals(2, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(2l, array[0]);
+    assertEquals(4l, array[1]);
+  }
 }
