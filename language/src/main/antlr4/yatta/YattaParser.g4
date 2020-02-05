@@ -124,8 +124,8 @@ let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
 alias : lambdaAlias | moduleAlias | valueAlias | patternAlias | fqnAlias ;
 lambdaAlias : name OP_ASSIGN lambda NEWLINE? ;
 moduleAlias : name OP_ASSIGN module NEWLINE? ;
-patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
 valueAlias : identifier OP_ASSIGN expression NEWLINE? ;
+patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
 fqnAlias : name OP_ASSIGN fqn NEWLINE? ;
 conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expression ;
 apply : call funArg* ;
@@ -175,7 +175,7 @@ moduleName : UPPERCASE_NAME ;
 
 symbol : COLON name;
 identifier : name ;
-lambda : BACKSLASH pattern* OP_ARROW expression ;
+lambda : BACKSLASH pattern* OP_RIGHT_ARROW expression ;
 underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;
@@ -187,8 +187,8 @@ patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWi
 doExpr : KW_DO NEWLINE? doOneStep+ NEWLINE? KW_END ;
 doOneStep : (alias | expression) NEWLINE ;
 
-patternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
-patternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
+patternExpressionWithoutGuard : NEWLINE? OP_RIGHT_ARROW NEWLINE? expression ;
+patternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_RIGHT_ARROW NEWLINE? expr=expression ;
 
 pattern : underscore
         | patternValue
@@ -236,10 +236,14 @@ catchExpr : KW_CATCH NEWLINE? catchPatternExpression+ ;
 
 catchPatternExpression : (tripplePattern | underscore) (catchPatternExpressionWithoutGuard | catchPatternExpressionWithGuard+) NEWLINE ;
 tripplePattern : PARENS_L pattern COMMA pattern COMMA pattern PARENS_R ;
-catchPatternExpressionWithoutGuard : NEWLINE? OP_ARROW NEWLINE? expression ;
-catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_ARROW NEWLINE? expr=expression ;
+catchPatternExpressionWithoutGuard : NEWLINE? OP_RIGHT_ARROW NEWLINE? expression ;
+catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_RIGHT_ARROW NEWLINE? expr=expression ;
 
 raiseExpr : KW_RAISE symbol stringLiteral NEWLINE? ;
 
 generatorExpr : sequenceGeneratorExpr ;
-sequenceGeneratorExpr : BRACKET_L reducer=expression VLINE valueAlias (KW_IF condition=expression)? BRACKET_R ;
+sequenceGeneratorExpr : BRACKET_L reducer=expression VLINE collectionExtractor OP_LEFT_ARROW stepExpression=expression NEWLINE? (KW_IF condition=expression)? BRACKET_R ;
+
+collectionExtractor : valueCollectionExtractor | keyValueCollectionExtractor ;
+valueCollectionExtractor : identifier ;
+keyValueCollectionExtractor : key=identifier OP_ASSIGN val=identifier ;

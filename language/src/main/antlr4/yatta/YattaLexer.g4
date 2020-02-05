@@ -85,7 +85,8 @@ OP_LT : '<' ;
 OP_LTE : '<=' ;
 OP_GT : '>' ;
 OP_GTE : '>=';
-OP_ARROW : '->' ;
+OP_RIGHT_ARROW : '->' ;
+OP_LEFT_ARROW : '<-' ;
 
 OP_MULTIPLY : '*';
 OP_DIVIDE : '/';

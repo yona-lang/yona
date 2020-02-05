@@ -870,10 +870,19 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   public ExpressionNode visitSequenceGeneratorExpr(YattaParser.SequenceGeneratorExprContext ctx) {
     ExpressionNode reducer = ctx.reducer.accept(this);
     ExpressionNode condition = visitOptional(ctx.condition);
-    String stepName = ctx.valueAlias().identifier().getText();
-    ExpressionNode stepExpression = ctx.valueAlias().expression().accept(this);
+    String[] stepNames;
+    ExpressionNode stepExpression = ctx.stepExpression.accept(this);
 
-    return withSourceSection(ctx, new SequenceGeneratorNode(language, reducer, condition, stepName, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+    if (ctx.collectionExtractor().valueCollectionExtractor() != null) {
+      stepNames = new String[] {ctx.collectionExtractor().valueCollectionExtractor().identifier().getText()};
+    } else {
+      stepNames = new String[] {
+          ctx.collectionExtractor().keyValueCollectionExtractor().key.getText(),
+          ctx.collectionExtractor().keyValueCollectionExtractor().val.getText()
+      };
+    }
+
+    return withSourceSection(ctx, new SequenceGeneratorNode(language, reducer, condition, stepNames, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {

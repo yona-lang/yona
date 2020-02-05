@@ -10,8 +10,8 @@ import yatta.ast.call.InvokeNode;
 public final class SequenceGeneratorNode extends BaseGeneratorNode {
   @Child private InvokeNode callNode;
 
-  public SequenceGeneratorNode(YattaLanguage language, ExpressionNode reducer, ExpressionNode condition, String stepName, ExpressionNode stepExpression, ExpressionNode[] moduleStack) {
-    this.callNode = getGeneratorNode(language, GeneratedCollection.SEQ, reducer, condition, stepName, stepExpression, moduleStack);
+  public SequenceGeneratorNode(YattaLanguage language, ExpressionNode reducer, ExpressionNode condition, String[] stepNames, ExpressionNode stepExpression, ExpressionNode[] moduleStack) {
+    this.callNode = getGeneratorNode(language, GeneratedCollection.SEQ, reducer, condition, stepNames, stepExpression, moduleStack);
   }
 
   @Override
