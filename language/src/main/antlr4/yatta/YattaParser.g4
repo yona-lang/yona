@@ -241,9 +241,14 @@ catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_RIGHT_ARROW
 
 raiseExpr : KW_RAISE symbol stringLiteral NEWLINE? ;
 
-generatorExpr : sequenceGeneratorExpr ;
+generatorExpr : sequenceGeneratorExpr | setGeneratorExpr | dictGeneratorExpr ;
 sequenceGeneratorExpr : BRACKET_L reducer=expression VLINE collectionExtractor OP_LEFT_ARROW stepExpression=expression NEWLINE? (KW_IF condition=expression)? BRACKET_R ;
+setGeneratorExpr : CURLY_L reducer=expression VLINE collectionExtractor OP_LEFT_ARROW stepExpression=expression NEWLINE? (KW_IF condition=expression)? CURLY_R ;
+dictGeneratorExpr : CURLY_L dictGeneratorReducer VLINE collectionExtractor OP_LEFT_ARROW stepExpression=expression NEWLINE? (KW_IF condition=expression)? CURLY_R ;
+
+dictGeneratorReducer : dictKey OP_ASSIGN dictVal ;
 
 collectionExtractor : valueCollectionExtractor | keyValueCollectionExtractor ;
-valueCollectionExtractor : identifier ;
-keyValueCollectionExtractor : key=identifier OP_ASSIGN val=identifier ;
+valueCollectionExtractor : identifierOrUnderscore ;
+keyValueCollectionExtractor : key=identifierOrUnderscore OP_ASSIGN val=identifierOrUnderscore ;
+identifierOrUnderscore : identifier | underscore ;

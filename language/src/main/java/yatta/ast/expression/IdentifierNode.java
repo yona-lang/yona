@@ -3,15 +3,16 @@ package yatta.ast.expression;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.TypesGen;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.call.InvokeNode;
 import yatta.ast.expression.value.AnyValueNode;
-import yatta.ast.expression.value.FQNNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
 import yatta.runtime.*;
@@ -70,35 +71,34 @@ public final class IdentifierNode extends ExpressionNode {
     }
 
     ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+    Object result = node.executeGeneric(frame);
 
-    try {
-      Function function = node.executeFunction(frame);
+    if (result instanceof Function) {
+      Function function = (Function) result;
 
       if (function.getCardinality() == 0) {
         InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(name), new ExpressionNode[]{}, moduleStack);
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
       }
-    } catch (UnexpectedResultException e) {
-      this.replace(new SimpleIdentifierNode(name));
     }
 
     this.replace(node);
-    return node.executeGeneric(frame);
+    return result;
   }
 
   public boolean isBound(VirtualFrame frame) {
-    try {
-      FrameSlot frameSlot = getFrameSlot(frame);
-      if (frameSlot == null) {
-        return false;
-      } else {
-        ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
-        node.executeGeneric(frame);
-        return true;
-      }
-    } catch (UninitializedFrameSlotException e) {
+    FrameSlot frameSlot = getFrameSlot(frame);
+    if (frameSlot == null) {
       return false;
+    } else {
+      ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+      try {
+        node.executeGeneric(frame);
+      } catch (UninitializedFrameSlotException e) {
+        return false;
+      }
+      return true;
     }
   }
 

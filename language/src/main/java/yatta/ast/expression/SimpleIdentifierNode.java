@@ -7,6 +7,7 @@ import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
 public final class SimpleIdentifierNode extends ExpressionNode {
   private final String name;
@@ -30,6 +31,10 @@ public final class SimpleIdentifierNode extends ExpressionNode {
       throw new YattaException("Identifier '" + name + "' not found in the current scope", this);
     }
     ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
-    return node.executeGeneric(frame);
+    try {
+      return node.executeGeneric(frame);
+    } catch (UninitializedFrameSlotException e) {
+      throw new YattaException("Identifier '" + name + "' not found in the current scope", this);
+    }
   }
 }

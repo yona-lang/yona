@@ -7,6 +7,7 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.Tuple;
+import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
 
@@ -15,7 +16,7 @@ public final class TupleNode extends ExpressionNode {
   @Node.Children
   public final ExpressionNode[] expressions;
 
-  public TupleNode(ExpressionNode[] expressions) {
+  public TupleNode(ExpressionNode... expressions) {
     this.expressions = expressions;
   }
 
@@ -41,23 +42,21 @@ public final class TupleNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return execute(frame);
-  }
-
-  @Override
-  public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
-    return execute(frame);
-  }
-
-  private Tuple execute(VirtualFrame frame) {
     CompilerAsserts.compilationConstant(expressions.length);
     Object[] results = new Object[expressions.length];
+    boolean containsPromise = false;
 
     for (int i = 0; i < expressions.length; i++) {
       results[i] = expressions[i].executeGeneric(frame);
-      // TODO check if promise
+      if (results[i] instanceof Promise) {
+        containsPromise = true;
+      }
     }
 
-    return new Tuple(results);
+    if (containsPromise) {
+      return Promise.all(results, this).map(res -> new Tuple((Object[]) res), this);
+    } else {
+      return new Tuple(results);
+    }
   }
 }

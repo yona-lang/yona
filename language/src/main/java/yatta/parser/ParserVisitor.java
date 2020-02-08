@@ -17,7 +17,8 @@ import yatta.ast.controlflow.PipeLeftNode;
 import yatta.ast.controlflow.PipeRightNode;
 import yatta.ast.expression.*;
 import yatta.ast.expression.value.*;
-import yatta.ast.generators.SequenceGeneratorNode;
+import yatta.ast.generators.GeneratedCollection;
+import yatta.ast.generators.GeneratorNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.pattern.*;
 import yatta.runtime.UninitializedFrameSlot;
@@ -870,19 +871,71 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   public ExpressionNode visitSequenceGeneratorExpr(YattaParser.SequenceGeneratorExprContext ctx) {
     ExpressionNode reducer = ctx.reducer.accept(this);
     ExpressionNode condition = visitOptional(ctx.condition);
-    String[] stepNames;
+    MatchNode[] stepMatchNodes;
     ExpressionNode stepExpression = ctx.stepExpression.accept(this);
 
     if (ctx.collectionExtractor().valueCollectionExtractor() != null) {
-      stepNames = new String[] {ctx.collectionExtractor().valueCollectionExtractor().identifier().getText()};
+      stepMatchNodes = new MatchNode[] {visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
     } else {
-      stepNames = new String[] {
-          ctx.collectionExtractor().keyValueCollectionExtractor().key.getText(),
-          ctx.collectionExtractor().keyValueCollectionExtractor().val.getText()
+      stepMatchNodes = new MatchNode[] {
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
       };
     }
 
-    return withSourceSection(ctx, new SequenceGeneratorNode(language, reducer, condition, stepNames, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SEQ, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+  }
+
+  @Override
+  public ExpressionNode visitSetGeneratorExpr(YattaParser.SetGeneratorExprContext ctx) {
+    ExpressionNode reducer = ctx.reducer.accept(this);
+    ExpressionNode condition = visitOptional(ctx.condition);
+    MatchNode[] stepMatchNodes;
+    ExpressionNode stepExpression = ctx.stepExpression.accept(this);
+
+    if (ctx.collectionExtractor().valueCollectionExtractor() != null) {
+      stepMatchNodes = new MatchNode[] {visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
+    } else {
+      stepMatchNodes = new MatchNode[] {
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+      };
+    }
+
+    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SET, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+  }
+
+  @Override
+  public ExpressionNode visitDictGeneratorExpr(YattaParser.DictGeneratorExprContext ctx) {
+    TupleNode reducer = visitDictGeneratorReducer(ctx.dictGeneratorReducer());
+    ExpressionNode condition = visitOptional(ctx.condition);
+    MatchNode[] stepMatchNodes;
+    ExpressionNode stepExpression = ctx.stepExpression.accept(this);
+
+    if (ctx.collectionExtractor().valueCollectionExtractor() != null) {
+      stepMatchNodes = new MatchNode[] {visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
+    } else {
+      stepMatchNodes = new MatchNode[] {
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+      };
+    }
+
+    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.DICT, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+  }
+
+  @Override
+  public MatchNode visitIdentifierOrUnderscore(YattaParser.IdentifierOrUnderscoreContext ctx) {
+    if (ctx.identifier() != null) {
+      return new ValueMatchNode(visitIdentifier(ctx.identifier()));
+    } else {
+      return visitUnderscore(ctx.underscore());
+    }
+  }
+
+  @Override
+  public TupleNode visitDictGeneratorReducer(YattaParser.DictGeneratorReducerContext ctx) {
+    return withSourceSection(ctx, new TupleNode(ctx.dictKey().accept(this), ctx.dictVal().accept(this)));
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {

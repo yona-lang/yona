@@ -1,6 +1,14 @@
-module Reducers exports to_seq, reduce as
+module Reducers exports to_seq, to_set, to_dict, reduce as
 
-to_seq = ([], \acc val-> acc :> val, \acc -> acc)
+
+to_seq = ([], \acc val-> acc :> val, identity)
+
+
+to_set = (Set.empty, \acc val-> acc ++ val, identity)
+
+
+to_dict = (Dict.empty, \acc val-> acc ++ val, identity)
+
 
 # reduce dispatcher, based on collection type
 reduce val transducer

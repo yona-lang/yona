@@ -15,7 +15,7 @@ public final class TypesBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "is_seq")
   abstract static class IsSeqBuiltin extends BuiltinNode {
     @Specialization
-    public Object match(Seq seq) {
+    public Object match(Seq val) {
       return true;
     }
 
@@ -28,7 +28,7 @@ public final class TypesBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "is_set")
   abstract static class IsSetBuiltin extends BuiltinNode {
     @Specialization
-    public Object match(Set seq) {
+    public Object match(Set val) {
       return true;
     }
 
@@ -41,7 +41,7 @@ public final class TypesBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "is_dict")
   abstract static class IsDictBuiltin extends BuiltinNode {
     @Specialization
-    public Object match(Dict seq) {
+    public Object match(Dict val) {
       return true;
     }
 

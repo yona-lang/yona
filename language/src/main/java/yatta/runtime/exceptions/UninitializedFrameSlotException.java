@@ -1,7 +1,9 @@
 package yatta.runtime.exceptions;
 
-public final class UninitializedFrameSlotException extends RuntimeException {
-  public static UninitializedFrameSlotException INSTANCE = new UninitializedFrameSlotException();
+import com.oracle.truffle.api.nodes.ControlFlowException;
+
+public final class UninitializedFrameSlotException extends ControlFlowException {
+  public static final UninitializedFrameSlotException INSTANCE = new UninitializedFrameSlotException();
 
   private UninitializedFrameSlotException() {
   }
