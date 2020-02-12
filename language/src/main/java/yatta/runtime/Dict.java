@@ -559,7 +559,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     public <T> T fold(T initial, TriFunction<T, Object, Object, T> function) {
       T result = initial;
       for (int i = 0; i < entries.length; i+=2) {
-        result = function.apply(result, entries[i], entries[2]);
+        result = function.apply(result, entries[i], entries[i + 1]);
       }
       return result;
     }

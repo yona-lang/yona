@@ -1,7 +1,5 @@
 package yatta.runtime.async;
 
-import java.lang.invoke.VarHandle;
-
 import static java.lang.Math.*;
 
 final class BloomFilter {
@@ -15,45 +13,51 @@ final class BloomFilter {
   }
 
   static int hashesFor(final int insertions, final int length) {
-    return (int) max(1, round((double) length * 64 / insertions * LOG2));
+    return (int) max(1, round((double) length * Long.SIZE / insertions * LOG2));
   }
 
-  static void add(final long[] data, final VarHandle handle, final int bitsPerHash, final long hash) {
+  static void add(final long[] data, final int hashes, final long value) {
     final long bits = data.length * Long.SIZE;
     int mix;
     long bit;
     long mask;
     int idx;
-    for (int i = 1; i <= bitsPerHash; i++) {
-      mix = mix(hash, i);
+    for (int i = 1; i <= hashes; i++) {
+      mix = mix(value, i);
       bit = mix % bits;
       mask = 1L << bit;
       idx = (int) (bit >>> 6);
-      long expected;
-      long updated;
-      do {
-        expected = (long) handle.getVolatile(data, idx);
-        updated = expected | mask;
-      } while (!handle.compareAndSet(data, idx, expected, updated));
+      data[idx] |= mask;
     }
   }
 
-  static boolean mightContain(final long[] data, final VarHandle handle, final int bitsPerHash, final long hash) {
+  static boolean mightContain(final long[] data, final int hashes, final long value) {
     final long bits = data.length * Long.SIZE;
     int mix;
     long bit;
     long mask;
     int idx;
-    for (int i = 1; i <= bitsPerHash; i++) {
-      mix = mix(hash, i);
+    for (int i = 1; i <= hashes; i++) {
+      mix = mix(value, i);
       bit = mix % bits;
       mask = 1L << bit;
       idx = (int) (bit >>> 6);
-      if (((long) handle.getVolatile(data, idx) & mask) == 0) {
+      if ((data[idx] & mask) == 0) {
         return false;
       }
     }
     return true;
+  }
+
+  static boolean mightIntersect(final long[] fst, final long[] snd, final int hashes) {
+    int intersections = 0;
+    for (int i = 0; i < fst.length; i++) {
+      intersections += Long.bitCount(fst[i] & snd[i]);
+      if (intersections >= hashes) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static int mix(final long hash, final int i) {
