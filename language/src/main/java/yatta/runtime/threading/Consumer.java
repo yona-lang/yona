@@ -1,11 +1,13 @@
 package yatta.runtime.threading;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 final class Consumer {
-  private final AtomicCursor cursor;
-  private final AtomicCursor sharedCursor;
+  private final AtomicLong cursor;
+  private final AtomicLong sharedCursor;
   private final RingBuffer<?> buffer;
 
-  Consumer(final AtomicCursor sharedCursor, final AtomicCursor cursor, final RingBuffer<?> buffer) {
+  Consumer(final AtomicLong sharedCursor, final AtomicLong cursor, final RingBuffer<?> buffer) {
     this.sharedCursor = sharedCursor;
     this.cursor = cursor;
     this.buffer = buffer;
@@ -16,15 +18,15 @@ final class Consumer {
     long next;
     long available;
     do {
-      current = sharedCursor.readVolatile();
-      cursor.writeOrdered(current);
+      current = sharedCursor.get();
+      cursor.lazySet(current);
       next = current + 1;
       available = buffer.lastReleased(next, buffer.lastClaimed());
       if (next > available) {
         return false;
       }
       callback.prepare(next);
-    } while (!sharedCursor.compareAndSwap(current, next));
+    } while (!sharedCursor.compareAndSet(current, next));
     callback.advance();
     return true;
   }

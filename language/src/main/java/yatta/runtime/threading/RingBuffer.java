@@ -2,20 +2,21 @@ package yatta.runtime.threading;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Supplier;
 
 final class RingBuffer<E> {
   @SuppressWarnings("rawtypes")
-  private static final AtomicReferenceFieldUpdater<RingBuffer, AtomicCursor[]> GATING_UPDATER = AtomicReferenceFieldUpdater.newUpdater(RingBuffer.class, AtomicCursor[].class, "gating");
+  private static final AtomicReferenceFieldUpdater<RingBuffer, AtomicLong[]> GATING_UPDATER = AtomicReferenceFieldUpdater.newUpdater(RingBuffer.class, AtomicLong[].class, "gating");
 
-  private final AtomicCursor cursor = new AtomicCursor();
-  private final AtomicCursor cachedGating = new AtomicCursor();
+  private final AtomicLong cursor = new AtomicLong(-1L);
+  private final AtomicLong cachedGating = new AtomicLong(-1L);
   private final E[] elements;
   private final int idxMask;
   private final int idxShift;
   private final AtomicIntegerArray availability;
-  private volatile AtomicCursor[] gating = new AtomicCursor[]{};
+  private volatile AtomicLong[] gating = new AtomicLong[]{};
 
   @SuppressWarnings("unchecked")
   RingBuffer(final int size, final Supplier<? extends E> constructor) {
@@ -38,24 +39,24 @@ final class RingBuffer<E> {
     long current;
     long next;
     do {
-      current = cursor.readVolatile();
+      current = cursor.get();
       next = current + n;
       if (!hasCapacity(n, current)) {
         return -1L;
       }
-    } while (!cursor.compareAndSwap(current, next));
+    } while (!cursor.compareAndSet(current, next));
     return next;
   }
 
   private boolean hasCapacity(final int n, final long current) {
     final long wrapsAt = (current + n) - elements.length;
-    final long cachedGatingValue = cachedGating.readVolatile();
+    final long cachedGatingValue = cachedGating.get();
     if (current < cachedGatingValue || cachedGatingValue < wrapsAt) {
       long min = current;
-      for (AtomicCursor cursor : gating) {
-        min = Math.min(min, cursor.readVolatile());
+      for (AtomicLong cursor : gating) {
+        min = Math.min(min, cursor.get());
       }
-      cachedGating.writeOrdered(min);
+      cachedGating.lazySet(min);
       return wrapsAt <= min;
     }
     return true;
@@ -72,10 +73,10 @@ final class RingBuffer<E> {
   }
 
   Consumer[] subscribe(final int n) {
-    final AtomicCursor sharedCursor = new AtomicCursor();
-    final AtomicCursor[] consumerCursors = new AtomicCursor[n];
+    final AtomicLong sharedCursor = new AtomicLong(-1L);
+    final AtomicLong[] consumerCursors = new AtomicLong[n];
     for (int i = 0; i < n; i++) {
-      consumerCursors[i] = new AtomicCursor();
+      consumerCursors[i] = new AtomicLong(-1L);
     }
     final Consumer[] result = new Consumer[n];
     for (int i = 0; i < n; i++) {
@@ -85,23 +86,23 @@ final class RingBuffer<E> {
     return result;
   }
 
-  private void invite(final AtomicCursor[] cursors) {
+  private void invite(final AtomicLong[] cursors) {
     long cursorValue;
-    AtomicCursor[] updated;
-    AtomicCursor[] current;
+    AtomicLong[] updated;
+    AtomicLong[] current;
     do {
       current = GATING_UPDATER.get(this);
       updated = Arrays.copyOf(current, current.length + cursors.length);
-      cursorValue = cursor.readVolatile();
+      cursorValue = cursor.get();
       int index = current.length;
-      for (AtomicCursor c : cursors) {
-        c.writeOrdered(cursorValue);
+      for (AtomicLong c : cursors) {
+        c.lazySet(cursorValue);
         updated[index++] = c;
       }
     } while (!GATING_UPDATER.compareAndSet(this, current, updated));
-    cursorValue = cursor.readVolatile();
-    for (AtomicCursor c : cursors) {
-      c.writeOrdered(cursorValue);
+    cursorValue = cursor.get();
+    for (AtomicLong c : cursors) {
+      c.lazySet(cursorValue);
     }
   }
 
@@ -115,6 +116,6 @@ final class RingBuffer<E> {
   }
 
   long lastClaimed() {
-    return cursor.readVolatile();
+    return cursor.get();
   }
 }
