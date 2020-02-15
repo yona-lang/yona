@@ -1,0 +1,5 @@
+module tests\ModuleWithRecords exports funone as
+
+record TestRecord = (argone, argtwo)
+
+funone argone = argone * 2

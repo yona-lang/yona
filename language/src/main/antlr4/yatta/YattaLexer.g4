@@ -36,6 +36,7 @@ KW_DO : 'do' ;
 KW_TRY : 'try' ;
 KW_CATCH : 'catch' ;
 KW_RAISE : 'raise' ;
+KW_RECORD : 'record' ;
 
 BRACKET_L : '[' ;
 BRACKET_R : ']' ;

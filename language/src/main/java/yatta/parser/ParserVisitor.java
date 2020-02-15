@@ -21,6 +21,7 @@ import yatta.ast.generators.GeneratedCollection;
 import yatta.ast.generators.GeneratorNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.pattern.*;
+import yatta.runtime.Dict;
 import yatta.runtime.UninitializedFrameSlot;
 
 import java.util.*;
@@ -433,8 +434,20 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     Map<String, List<PatternMatchable>> functionPatterns = new HashMap<>();
     Map<String, Integer> functionCardinality = new HashMap<>();
     Map<String, SourceSection> functionSourceSections = new HashMap<>();
+    Dict records = Dict.empty();
 
     String lastFunctionName = null;
+
+    for (int i = 0; i < ctx.record().size(); i++) {
+      YattaParser.RecordContext recordContext = ctx.record(i);
+      String[] fields = new String[recordContext.identifier().size()];
+
+      for (int j = 0; j < recordContext.identifier().size(); j++) {
+        fields[j] = recordContext.identifier(j).getText();
+      }
+
+      records = records.add(recordContext.UPPERCASE_NAME().getText(), fields);
+    }
 
     for (int i = 0; i < functionPatternsCount; i++) {
       YattaParser.FunctionContext functionContext = ctx.function(i);
@@ -533,7 +546,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     }
 
     moduleStack.pop();
-    return withSourceSection(ctx, new ModuleNode(moduleFQN, exports, functions.toArray(new FunctionLikeNode[]{})));
+    return withSourceSection(ctx, new ModuleNode(moduleFQN, exports, functions.toArray(new FunctionLikeNode[]{}), records));
   }
 
   @Override

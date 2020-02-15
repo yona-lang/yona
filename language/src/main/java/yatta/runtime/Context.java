@@ -1,16 +1,12 @@
 package yatta.runtime;
 
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.instrumentation.AllocationReporter;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.YattaException;
 import yatta.YattaLanguage;
@@ -118,7 +114,7 @@ public class Context {
       functions.add(new Function(name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount));
     });
 
-    YattaModule module = new YattaModule(fqn, exports, functions);
+    YattaModule module = new YattaModule(fqn, exports, functions, Dict.empty());
     insertGlobal(fqn, module);
   }
 

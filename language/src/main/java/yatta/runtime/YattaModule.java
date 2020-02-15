@@ -14,23 +14,42 @@ public final class YattaModule implements TruffleObject {
   final String fqn;
   final List<String> exports;
   final Map<String, Function> functions = new HashMap<>();
+  final Dict records; // <String, String[]>
 
-  public YattaModule(String fqn, List<String> exports, List<Function> functionsList) {
+  public YattaModule(String fqn, List<String> exports, List<Function> functionsList, Dict records) {
     this.fqn = fqn;
     this.exports = exports;
 
     for (Function fun : functionsList) {
       this.functions.put(fun.getName(), fun);
     }
+
+    this.records = records;
   }
 
   @Override
   public String toString() {
+    StringBuilder recordsSB = new StringBuilder();
+    recordsSB.append('{');
+    records.fold(recordsSB, (acc, key, val) -> {
+      acc.append(key);
+      acc.append('=');
+      acc.append(Arrays.toString((String[]) val));
+      acc.append(", ");
+      return acc;
+    });
+    if(records.size() > 0) {
+      recordsSB.deleteCharAt(recordsSB.length() - 1);
+      recordsSB.deleteCharAt(recordsSB.length() - 1);
+    }
+    recordsSB.append('}');
+
     return "Module{" +
         "fqn=" + fqn +
         ", exports=" + exports +
         ", functions=" + functions +
-        '}';
+        ", records=" + recordsSB.toString() +
+        "}";
   }
 
   public String getFqn() {
@@ -53,7 +72,10 @@ public final class YattaModule implements TruffleObject {
     List<Function> newFunctions = new ArrayList<>();
     newFunctions.addAll(functions.values());
     newFunctions.addAll(other.functions.values());
-    return new YattaModule(fqn, newExports, newFunctions);
+
+    Dict newRecords = records.union(other.records);
+
+    return new YattaModule(fqn, newExports, newFunctions, newRecords);
   }
 
   @ExportMessage

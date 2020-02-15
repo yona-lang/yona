@@ -8,7 +8,7 @@ import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
-import yatta.runtime.Context;
+import yatta.runtime.Dict;
 import yatta.runtime.Function;
 import yatta.runtime.YattaModule;
 
@@ -25,11 +25,13 @@ public final class ModuleNode extends ExpressionNode {
   private NonEmptyStringListNode exports;
   @Node.Children
   private FunctionLikeNode[] functions;
+  private final Dict records;  // <String, String[]>
 
-  public ModuleNode(FQNNode moduleFQN, NonEmptyStringListNode exports, FunctionLikeNode[] functions) {
+  public ModuleNode(FQNNode moduleFQN, NonEmptyStringListNode exports, FunctionLikeNode[] functions, Dict records) {
     this.moduleFQN = moduleFQN;
     this.exports = exports;
     this.functions = functions;
+    this.records = records;
   }
 
   @Override
@@ -38,22 +40,17 @@ public final class ModuleNode extends ExpressionNode {
     if (o == null || getClass() != o.getClass()) return false;
     ModuleNode that = (ModuleNode) o;
     return Objects.equals(moduleFQN, that.moduleFQN) &&
-           Objects.equals(exports, that.exports) &&
-           Objects.equals(functions, that.functions);
+        Objects.equals(exports, that.exports) &&
+        Arrays.equals(functions, that.functions) &&
+        Objects.equals(records, that.records);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(moduleFQN, exports);
-  }
-
-  @Override
-  public String toString() {
-    return "ModuleNode{" +
-           "moduleFQN='" + moduleFQN + '\'' +
-           ", exports=" + exports +
-           ", functions=" + Arrays.toString(functions) +
-           '}';
+    int result = Objects.hash(moduleFQN, exports);
+    result = 31 * result + Arrays.hashCode(functions);
+    result = 31 * result + Objects.hashCode(records);
+    return result;
   }
 
   @Override
@@ -88,7 +85,7 @@ public final class ModuleNode extends ExpressionNode {
       executedFunctions.add(fun.executeFunction(frame));
     }
 
-    YattaModule module = new YattaModule(executedModuleFQN, executedExports, executedFunctions);
+    YattaModule module = new YattaModule(executedModuleFQN, executedExports, executedFunctions, records);
     lookupContextReference(YattaLanguage.class).get().cacheModule(executedModuleFQN, module);
 
     return module;

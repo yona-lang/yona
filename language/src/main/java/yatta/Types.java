@@ -1,10 +1,10 @@
 package yatta;
 
-import yatta.runtime.*;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.dsl.TypeCast;
 import com.oracle.truffle.api.dsl.TypeCheck;
 import com.oracle.truffle.api.dsl.TypeSystem;
+import yatta.runtime.*;
+import yatta.runtime.async.Promise;
 
 /**
  * The type system of YattaLanguage, as explained in {@link YattaLanguage}. Based on the {@link TypeSystem}
