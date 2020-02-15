@@ -1,1 +1,1 @@
-Test.assert false
+Test::assert false

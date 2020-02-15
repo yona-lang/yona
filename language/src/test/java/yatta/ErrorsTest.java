@@ -92,7 +92,7 @@ public class ErrorsTest extends CommonTest {
             "testMod = module TestMod exports funone as\n" +
             "funone argone = funtwo argone\n" +
             "funtwo argone = argone\n" +
-            "in testMod.funtwo 6").asLong();
+            "in testMod::funtwo 6").asLong();
       } catch (PolyglotException ex) {
         assertEquals("Function funtwo is not present in Module{fqn=TestMod, exports=[funone], functions={funone=funone, funtwo=funtwo}, records={}}", ex.getMessage());
         throw ex;

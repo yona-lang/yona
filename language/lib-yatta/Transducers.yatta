@@ -61,4 +61,4 @@ distinct (init, step, complete) = let
   new_step = \(set, acc) val -> if val in set then (set, acc) else (set ++ val, step acc val)
   new_complete = \(_, acc) -> complete acc
 in
-  (\-> (Set.empty, init), new_step, new_complete)
+  (\-> (Set::empty, init), new_step, new_complete)

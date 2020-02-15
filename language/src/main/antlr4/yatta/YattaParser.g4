@@ -132,8 +132,8 @@ conditional : KW_IF ifX=expression KW_THEN thenX=expression KW_ELSE elseX=expres
 apply : call funArg* ;
 funArg : value | PARENS_L expression PARENS_R ;
 call : name | moduleCall | nameCall ;
-moduleCall : fqn DOT name ;
-nameCall : var=name DOT fun=name;
+moduleCall : fqn DCOLON name ;
+nameCall : var=name DCOLON fun=name;
 module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE record* function+ ;
 nonEmptyListOfNames : NEWLINE? name NEWLINE? (COMMA NEWLINE? name)* NEWLINE? ;
 

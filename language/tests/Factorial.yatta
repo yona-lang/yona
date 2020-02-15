@@ -1,1 +1,1 @@
-tests\CommonFunctions.factorial 20
+tests\CommonFunctions::factorial 20

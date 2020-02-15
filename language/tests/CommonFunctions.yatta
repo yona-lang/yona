@@ -57,7 +57,7 @@ countdown n = countdown (n - 1)
 read_file file = read_lines file 0
 
 read_lines file acc =
-    case File.readline file of
+    case File::readline file of
         (:ok, _, new_file)  -> read_lines new_file (acc + 1)
         :eof                -> acc
     end

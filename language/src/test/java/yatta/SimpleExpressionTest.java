@@ -247,7 +247,7 @@ public class SimpleExpressionTest extends CommonTest {
         "testMod = module TestMod exports funone as\n" +
         "funone argone = funtwo argone\n" +
         "funtwo argone = argone\n" +
-        "in testMod.funone 6").asLong();
+        "in testMod::funone 6").asLong();
     assertEquals(6l, ret);
   }
 
@@ -490,7 +490,7 @@ public class SimpleExpressionTest extends CommonTest {
     String src = "let testMod = module Test exports fun as\n" +
         "fun = 6\n" +
         "other_fun = 7\n" +
-        "in testMod.fun";
+        "in testMod::fun";
     long ret = context.eval(YattaLanguage.ID, src).asLong();
 
     assertEquals(6l, ret);
@@ -501,7 +501,7 @@ public class SimpleExpressionTest extends CommonTest {
     String src = "let testMod = async \\-> module Test exports fun as\n" +
         "fun = 6\n" +
         "other_fun = 7\n" +
-        "in testMod.fun";
+        "in testMod::fun";
     long ret = context.eval(YattaLanguage.ID, src).asLong();
 
     assertEquals(6l, ret);
@@ -527,7 +527,7 @@ public class SimpleExpressionTest extends CommonTest {
         "record TestRecord = (argone, argtwo)\n" +
         "funone = let nestedModule = module NestedModule exports funtwo as\n" +
         "funtwo = TestRecord(argtwo = 1)\n" +
-        "in nestedModule.funtwo").getMember("funone").execute();
+        "in nestedModule::funtwo").getMember("funone").execute();
 
     assertEquals(3, tuple.getArraySize());
 

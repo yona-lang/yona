@@ -1,1 +1,1 @@
-tests\CommonFunctions.fibonacci 10
+tests\CommonFunctions::fibonacci 10

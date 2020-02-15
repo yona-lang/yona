@@ -65,6 +65,7 @@ if (interpolatedStringLevel > 0)
 
 COMMA : ',' ;
 COLON : ':' ;
+DCOLON : '::' ;
 
 DOT : '.' ;
 VLINE : '|';
