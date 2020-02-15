@@ -2,4 +2,8 @@ module tests\ModuleWithRecords exports funone as
 
 record TestRecord = (argone, argtwo)
 
-funone argone = argone * 2
+funone argone =
+  let
+    recone = TestRecord(argone = "hello")
+    rectwo = TestRecord(argone = "hello", argtwo = "helloworld")
+  in rectwo

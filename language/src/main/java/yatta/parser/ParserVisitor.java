@@ -22,6 +22,7 @@ import yatta.ast.generators.GeneratorNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.pattern.*;
 import yatta.runtime.Dict;
+import yatta.runtime.Seq;
 import yatta.runtime.UninitializedFrameSlot;
 
 import java.util.*;
@@ -291,6 +292,17 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public ExpressionNode visitValueAlias(YattaParser.ValueAliasContext ctx) {
     return withSourceSection(ctx, new AliasNode(ctx.identifier().getText(), ctx.expression().accept(this)));
+  }
+
+  @Override
+  public ExpressionNode visitRecordInstance(YattaParser.RecordInstanceContext ctx) {
+    RecordInstanceNode.RecordInstanceFieldNode[] fields = new RecordInstanceNode.RecordInstanceFieldNode[ctx.name().size()];
+
+    for (int i = 0; i < ctx.name().size(); i++) {
+      fields[i] = new RecordInstanceNode.RecordInstanceFieldNode(ctx.name(i).LOWERCASE_NAME().getText(), ctx.expression(i).accept(this));
+    }
+
+    return new RecordInstanceNode(ctx.recordType().UPPERCASE_NAME().getText(), fields, moduleStack.toArray(new ExpressionNode[] {}));
   }
 
   @Override

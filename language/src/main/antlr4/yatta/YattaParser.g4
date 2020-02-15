@@ -110,6 +110,7 @@ value : unit
       | fqn
       | lambda
       | module
+      | recordInstance
       ;
 
 patternValue : unit
@@ -172,6 +173,9 @@ set : CURLY_L expression (COMMA expression)* CURLY_R ;
 fqn : (packageName BACKSLASH)? moduleName ;
 packageName : LOWERCASE_NAME (BACKSLASH LOWERCASE_NAME)* ;
 moduleName : UPPERCASE_NAME ;
+
+recordInstance : recordType PARENS_L (name OP_ASSIGN expression) (COMMA name OP_ASSIGN expression)* PARENS_R ;
+recordType : UPPERCASE_NAME ;
 
 symbol : COLON name;
 identifier : name ;

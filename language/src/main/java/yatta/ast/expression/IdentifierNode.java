@@ -22,8 +22,7 @@ import yatta.runtime.exceptions.UninitializedFrameSlotException;
 public final class IdentifierNode extends ExpressionNode {
   private final String name;
   private final YattaLanguage language;
-  @Children
-  private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
+  @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
   public IdentifierNode(YattaLanguage language, String name, ExpressionNode[] moduleStack) {
     this.name = name;

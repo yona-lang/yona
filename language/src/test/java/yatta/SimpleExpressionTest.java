@@ -3,6 +3,7 @@ package yatta;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
+import yatta.runtime.Unit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -504,6 +505,36 @@ public class SimpleExpressionTest extends CommonTest {
     long ret = context.eval(YattaLanguage.ID, src).asLong();
 
     assertEquals(6l, ret);
+  }
+
+  @Test
+  public void simplePartiallyInitializedRecordTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = TestRecord(argone = 1)").getMember("funone").execute();
+
+    assertEquals(3, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals("TestRecord", array[0]);
+    assertEquals(1l, array[1]);
+    assertNull(array[2]);
+  }
+
+  @Test
+  public void nestedModuleRecordTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let nestedModule = module NestedModule exports funtwo as\n" +
+        "funtwo = TestRecord(argtwo = 1)\n" +
+        "in nestedModule.funtwo").getMember("funone").execute();
+
+    assertEquals(3, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals("TestRecord", array[0]);
+    assertNull(array[1]);
+    assertEquals(1l, array[2]);
   }
 
   //docs state:

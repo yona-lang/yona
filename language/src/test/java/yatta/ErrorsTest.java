@@ -204,4 +204,32 @@ public class ErrorsTest extends CommonTest {
       }
     });
   }
+
+  @Test
+  public void wrongRecordTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "module WrongRecordModule exports funone as\n" +
+            "record TestRecord = (argone, argtwo)\n" +
+            "funone = WrongRecord(argone = \"hello\")").getMember("funone").execute();
+      } catch (PolyglotException ex) {
+        assertEquals("NoRecordException: WrongRecord", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void wrongRecordFieldTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "module WrongRecordModule exports funone as\n" +
+            "record TestRecord = (argone, argtwo)\n" +
+            "funone = TestRecord(argone = \"hello\", argthree = 3)").getMember("funone").execute();
+      } catch (PolyglotException ex) {
+        assertEquals("NoRecordFieldException: TestRecord(argthree)", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
 }

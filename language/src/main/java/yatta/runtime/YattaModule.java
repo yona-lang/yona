@@ -64,6 +64,10 @@ public final class YattaModule implements TruffleObject {
     return functions;
   }
 
+  public Dict getRecords() {
+    return records;
+  }
+
   public YattaModule merge(YattaModule other) {
     List<String> newExports = new ArrayList<>();
     newExports.addAll(exports);
