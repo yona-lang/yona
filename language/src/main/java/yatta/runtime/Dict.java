@@ -7,6 +7,9 @@ import com.oracle.truffle.api.library.ExportMessage;
 import yatta.common.TriFunction;
 import yatta.runtime.exceptions.TransducerDoneException;
 
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+
 @ExportLibrary(InteropLibrary.class)
 public abstract class Dict implements TruffleObject, Comparable<Dict> {
   static final int BITS = 6;
@@ -33,7 +36,8 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public final Object lookup(final Object key) {
-    return lookup(key, hasher.hash(seed, key), 0);
+    final Object result = lookup(key, hasher.hash(seed, key), 0);
+    return result == null ? Unit.INSTANCE : result;
   }
 
   abstract Object lookup(final Object key, final long hash, final int shift);
@@ -53,6 +57,8 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public abstract <T> T fold(final T initial, final TriFunction<T, Object, Object, T> function);
+
+  public abstract void forEach(final BiConsumer<? super Object, ? super Object> consumer);
 
   public abstract long size();
 
@@ -138,8 +144,8 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     return sb.toString();
   }
 
-  public boolean contains(Object key) {
-    return Unit.INSTANCE != lookup(key);
+  public final boolean contains(final Object key) {
+    return lookup(key, hasher.hash(seed, key), 0) != null;
   }
 
   @Override
@@ -264,11 +270,11 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       final long pos = pos(mask);
       if ((dataBmp & pos) != 0) {
         final int index = index(pos, dataBmp, mask);
-        return key.equals(keyAt(index)) ? valueAt(index) : Unit.INSTANCE;
+        return key.equals(keyAt(index)) ? valueAt(index) : null;
       } else if ((nodeBmp & pos) != 0) {
         final int index = index(pos, nodeBmp, mask);
         return nodeAt(index).lookup(key, hash, shift + BITS);
-      } else return Unit.INSTANCE;
+      } else return null;
     }
 
     static int index(final long pos, final long bitmap, final long mask) {
@@ -366,6 +372,16 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
         result = nodeAt(i).fold(result, function);
       }
       return result;
+    }
+
+    @Override
+    public void forEach(final BiConsumer<? super Object, ? super Object> consumer) {
+      for (int i = 0; i < arity(dataBmp); i++) {
+        consumer.accept(keyAt(i), valueAt(i));
+      }
+      for (int i = 0; i < arity(nodeBmp); i++) {
+        nodeAt(i).forEach(consumer);
+      }
     }
 
     @Override
@@ -512,7 +528,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
           }
         }
       }
-      return Unit.INSTANCE;
+      return null;
     }
 
     @Override
@@ -562,6 +578,13 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
         result = function.apply(result, entries[i], entries[i + 1]);
       }
       return result;
+    }
+
+    @Override
+    public void forEach(final BiConsumer<? super Object, ? super Object> consumer) {
+      for (int i = 0; i < entries.length; i+=2) {
+        consumer.accept(entries[i], entries[i + 1]);
+      }
     }
 
     @Override
