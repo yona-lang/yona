@@ -88,6 +88,7 @@ expression : PARENS_L expression PARENS_R                                       
            | generatorExpr                                                                               #generatorExpression
            | <assoc=right> left=expression NEWLINE? OP_PIPE_L right=expression                           #pipeLeftExpression
            | left=expression NEWLINE? OP_PIPE_R right=expression                                         #pipeRightExpression
+           | fieldAccessExpr                                                                             #fieldAccessExpression
            ;
 
 
@@ -258,3 +259,5 @@ keyValueCollectionExtractor : key=identifierOrUnderscore OP_ASSIGN val=identifie
 identifierOrUnderscore : identifier | underscore ;
 
 record : KW_RECORD UPPERCASE_NAME OP_ASSIGN PARENS_L identifier (NEWLINE? COMMA NEWLINE? identifier)* PARENS_R NEWLINE;
+
+fieldAccessExpr : identifier DOT name ;

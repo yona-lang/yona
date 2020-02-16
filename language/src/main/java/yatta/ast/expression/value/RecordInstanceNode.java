@@ -11,13 +11,14 @@ import yatta.runtime.Unit;
 import yatta.runtime.YattaModule;
 import yatta.runtime.exceptions.NoRecordException;
 import yatta.runtime.exceptions.NoRecordFieldException;
+import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 import java.util.Arrays;
 import java.util.Objects;
 
 @NodeInfo(shortName = "recordInstance")
 public final class RecordInstanceNode extends ExpressionNode {
-  private String recordType;
+  @CompilationFinal private String recordType;
   @Children private final RecordInstanceFieldNode[] fields;
   @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
@@ -110,7 +111,7 @@ public final class RecordInstanceNode extends ExpressionNode {
 
   @NodeInfo(shortName = "recordInstanceField")
   public static final class RecordInstanceFieldNode extends ExpressionNode {
-    String fieldName;
+    @CompilationFinal String fieldName;
     @Child ExpressionNode fieldValue;
 
     public RecordInstanceFieldNode(String fieldName, ExpressionNode fieldValue) {

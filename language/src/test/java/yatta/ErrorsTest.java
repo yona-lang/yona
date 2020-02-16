@@ -232,4 +232,66 @@ public class ErrorsTest extends CommonTest {
       }
     });
   }
+
+  @Test
+  public void invalidRecordFieldAccessTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
+            "record TestRecord = (argone, argtwo)\n" +
+            "funone = let rec = (:whatever) in\n" +
+            "rec.argone in mod::funone").asLong();
+      } catch (PolyglotException ex) {
+        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for String \"whatever\"", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void invalidRecordFieldAccessNoRecordTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
+            "record TestRecord = (argone, argtwo)\n" +
+            "funone = let rec = (:something, 0) in\n" +
+            "rec.argone in mod::funone").asLong();
+      } catch (PolyglotException ex) {
+        assertEquals("NoRecordException: something", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void invalidPromiseRecordFieldAccessTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
+            "record TestRecord = (argone, argtwo)\n" +
+            "funone = let rec = async \\-> (async \\-> :whatever, 0) in\n" +
+            "rec.argone in mod::funone").asLong();
+      } catch (PolyglotException ex) {
+        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for Unsupported Unsupported", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void wrongRecordFieldAccessTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
+            "record TestRecord = (argone, argtwo)\n" +
+            "record OtherRecord = (argthree, argfour)\n" +
+            "funone = let rec = TestRecord(argone = 1) in\n" +
+            "rec.argthree in mod::funone").asLong();
+      } catch (PolyglotException ex) {
+        assertEquals("NoRecordFieldException: Unnamed:5~(argthree)", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
 }

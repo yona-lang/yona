@@ -10,7 +10,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
 public final class SimpleIdentifierNode extends ExpressionNode {
-  private final String name;
+  public final String name;
 
   public SimpleIdentifierNode(String name) {
     this.name = name;

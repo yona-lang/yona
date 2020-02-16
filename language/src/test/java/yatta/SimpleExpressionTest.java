@@ -537,6 +537,46 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(1l, array[2]);
   }
 
+  @Test
+  public void simpleRecordFieldAccessTest() {
+    long ret = context.eval(YattaLanguage.ID, "module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let rec = TestRecord(argone = 1) in\n" +
+        "rec.argone").getMember("funone").execute().asLong();
+
+    assertEquals(1l, ret);
+  }
+
+  @Test
+  public void recordFromFunctionFieldAccessTest() {
+    long ret = context.eval(YattaLanguage.ID, "module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let rec = \\-> TestRecord(argone = 1) in\n" +
+        "rec.argone").getMember("funone").execute().asLong();
+
+    assertEquals(1l, ret);
+  }
+
+  @Test
+  public void emptyRecordFieldAccessTest() {
+    Value ret = context.eval(YattaLanguage.ID, "module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let rec = TestRecord(argone = 1) in\n" +
+        "rec.argtwo").getMember("funone").execute();
+
+    assertTrue(ret.isNull());
+  }
+
+  @Test
+  public void promiseRecordFieldAccessTest() {
+    long ret = context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let rec = async \\-> TestRecord(argone = async \\-> 1) in\n" +
+        "rec.argone in mod::funone").asLong();
+
+    assertEquals(1l, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with

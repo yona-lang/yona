@@ -963,6 +963,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     return withSourceSection(ctx, new TupleNode(ctx.dictKey().accept(this), ctx.dictVal().accept(this)));
   }
 
+  @Override
+  public FieldAccessNode visitFieldAccessExpr(YattaParser.FieldAccessExprContext ctx) {
+    return withSourceSection(ctx, new FieldAccessNode(visitIdentifier(ctx.identifier()), ctx.name().getText(), moduleStack.toArray(new ExpressionNode[] {})));
+  }
+
   public ExpressionNode visitOptional(ParserRuleContext ctx) {
     if (ctx == null) return null;
     else return ctx.accept(this);
