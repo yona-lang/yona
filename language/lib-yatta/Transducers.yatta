@@ -1,4 +1,4 @@
-module Transducers exports filter, map, drop, take, dedupe, distinct as
+module Transducers exports filter, map, drop, take, dedupe, distinct, chunk as
 
 # pred: function of one argument (element) returning boolean value
 # init: initial state
@@ -25,7 +25,7 @@ in
 # step: function of two arguments (accumulator, element) returning new value of the accumulator
 # complete: function of one argument (final state of accumulator) returning final return value
 drop n (init, step, complete)
-  | n > 0 = let
+  | n >= 0 = let
     new_step     = \(i, acc) val -> if i != 0 then (i - 1, acc) else (0, step acc val)
     new_complete = \(0, acc) -> complete acc
   in
@@ -37,7 +37,7 @@ drop n (init, step, complete)
 # step: function of two arguments (accumulator, element) returning new value of the accumulator
 # complete: function of one argument (final state of accumulator) returning final return value
 take n (init, step, complete)
-  | n > 0 = let
+  | n >= 0 = let
     new_step     = \(i, acc) val -> if i == 0 then done else (i - 1, step acc val)
     new_complete = \(0, acc) -> complete acc
   in
@@ -62,3 +62,14 @@ distinct (init, step, complete) = let
   new_complete = \(_, acc) -> complete acc
 in
   (\-> (Set::empty, init), new_step, new_complete)
+
+# n: max number of elements in chunk
+# init: initial state
+# step: function of two arguments (accumulator, element) returning new value of the accumulator
+# complete: function of one argument (final state of accumulator) returning final return value
+chunk n (init, step, complete)
+  | n > 0 = let
+    new_step = \(seq, acc) val -> if Seq::len seq == n then ([val], step acc seq) else (seq :> val, acc)
+    new_complete = \(seq, acc) -> if Seq::len seq == 0 then complete acc else complete <| step acc seq
+  in
+    (\-> ([], init), new_step, new_complete)

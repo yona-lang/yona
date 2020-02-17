@@ -81,8 +81,17 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "len")
+  abstract static class LengthBuiltin extends BuiltinNode {
+    @Specialization
+    public long length(Seq sequence) {
+      return sequence.length();
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceDefaultBuiltinFactory.getInstance()));

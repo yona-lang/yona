@@ -10,6 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StdLibTest extends CommonTest {
   @Test
+  public void sequenceLenTest() {
+    long ret = context.eval(YattaLanguage.ID, "Seq::len [1, 2, 3]").asLong();
+  }
+
+  @Test
   public void sequenceFoldLeftTest() {
     long ret = context.eval(YattaLanguage.ID, "Seq::foldl [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
     assertEquals(6L, ret);
@@ -61,6 +66,12 @@ public class StdLibTest extends CommonTest {
   public void sequenceReduceLeftDistinctTest() {
     long ret = context.eval(YattaLanguage.ID, "Seq::reducel [1, 2, 3, 4, 1, 2, 3, 4] <| Transducers::distinct (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
     assertEquals(20L, ret);
+  }
+
+  @Test
+  public void sequenceReduceLeftChunkTest() {
+    long ret = context.eval(YattaLanguage.ID, "Seq::reducel [6, 1, 5, 2, 4, 3] <| Transducers::chunk 2 (1, \\acc val -> acc * Seq::len val, \\acc -> acc)").asLong();
+    assertEquals(8L, ret);
   }
 
   @Test
