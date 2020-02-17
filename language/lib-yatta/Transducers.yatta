@@ -69,7 +69,7 @@ in
 # complete: function of one argument (final state of accumulator) returning final return value
 chunk n (init, step, complete)
   | n > 0 = let
-    new_step = \(seq, acc) val -> if Seq::len seq == n then ([val], step acc seq) else (seq :> val, acc)
+    new_step = \(seq, acc) val -> if Seq::len seq == n then ([val], step acc seq) else (seq |- val, acc)
     new_complete = \(seq, acc) -> if Seq::len seq == 0 then complete acc else complete <| step acc seq
   in
     (\-> ([], init), new_step, new_complete)
