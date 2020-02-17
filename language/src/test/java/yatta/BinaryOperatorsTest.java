@@ -546,7 +546,7 @@ public class BinaryOperatorsTest extends CommonTest {
   @ParameterizedTest
   @MethodSource("sequenceJoinLeftOps")
   void testSequenceJoinLeftOps(BinaryArgsHolder args) {
-    Object[] ret = context.eval(YattaLanguage.ID, args.format("<:")).as(Object[].class);
+    Object[] ret = context.eval(YattaLanguage.ID, args.format("-|")).as(Object[].class);
     assertArrayEquals((Object[]) args.expected, ret);
   }
 
@@ -562,7 +562,7 @@ public class BinaryOperatorsTest extends CommonTest {
   @ParameterizedTest
   @MethodSource("sequenceJoinRightOps")
   void testSequenceJoinRightOps(BinaryArgsHolder args) {
-    Object[] ret = context.eval(YattaLanguage.ID, args.format(":>")).as(Object[].class);
+    Object[] ret = context.eval(YattaLanguage.ID, args.format("|-")).as(Object[].class);
     assertArrayEquals((Object[]) args.expected, ret);
   }
 

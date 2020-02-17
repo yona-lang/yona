@@ -108,8 +108,8 @@ OP_LOGIC_AND : '&&';
 OP_LOGIC_OR : '||';
 OP_LOGIC_NOT : '!' ;
 
-OP_CONS_L : '<:' ;
-OP_CONS_R : ':>' ;
+OP_CONS_L : '-|' ;
+OP_CONS_R : '|-' ;
 OP_JOIN : '++';
 OP_DIFFERENCE : '--';
 

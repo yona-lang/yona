@@ -414,7 +414,7 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void consRightAssociativity() {
-    Value ret = context.eval(YattaLanguage.ID, "[1, 2] :> 3 :> 4");
+    Value ret = context.eval(YattaLanguage.ID, "[1, 2] |- 3 |- 4");
     assertEquals(4, ret.getArraySize());
     Long[] array = ret.as(Long[].class);
     assertEquals(1l, array[0]);
@@ -425,7 +425,7 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void consLeftAssociativity() {
-    Value ret = context.eval(YattaLanguage.ID, "1 <: 2 <: [3, 4]");
+    Value ret = context.eval(YattaLanguage.ID, "1 -| 2 -| [3, 4]");
     assertEquals(4, ret.getArraySize());
     Long[] array = ret.as(Long[].class);
     assertEquals(1l, array[0]);

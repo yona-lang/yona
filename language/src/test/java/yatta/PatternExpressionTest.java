@@ -107,7 +107,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: [] -> 2\n" +
+        "1 -| [] -> 2\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l)).asLong();
@@ -117,7 +117,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "[] :> 1 -> 2\n" +
+        "[] |- 1 -> 2\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l)).asLong();
@@ -127,8 +127,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsUnderscoreOnePatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: _ -> 2\n" +
-        "_ <: _ -> 3\n" +
+        "1 -| _ -> 2\n" +
+        "_ -| _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l)).asLong();
@@ -138,8 +138,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadUnderscoreOnePatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "_ :> 1 -> 2\n" +
-        "_ :> _ -> 3\n" +
+        "_ |- 1 -> 2\n" +
+        "_ |- _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l)).asLong();
@@ -149,8 +149,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsUnderscoreTwoPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: _ -> 2\n" +
-        "_ <: _ -> 3\n" +
+        "1 -| _ -> 2\n" +
+        "_ -| _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(2l)).asLong();
@@ -160,8 +160,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadUnderscoreTwoPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "_ :> 1 -> 2\n" +
-        "_ :> _ -> 3\n" +
+        "_ |- 1 -> 2\n" +
+        "_ |- _ -> 3\n" +
         "[] -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(2l)).asLong();
@@ -171,8 +171,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsUnderscoreThreePatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: _ -> 2\n" +
-        "_ <: _ -> 4\n"+
+        "1 -| _ -> 2\n" +
+        "_ -| _ -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
@@ -181,8 +181,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadUnderscoreThreePatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "_ :> 1 -> 2\n" +
-        "_ :> _ -> 4\n"+
+        "_ |- 1 -> 2\n" +
+        "_ |- _ -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
@@ -190,8 +190,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsUnderscoreFourPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: _ -> 2\n" +
-        "_ <: [] -> 4\n"+
+        "1 -| _ -> 2\n" +
+        "_ -| [] -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
@@ -200,8 +200,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadUnderscoreFourPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "_ :> 1 -> 2\n" +
-        "[] :> _ -> 4\n"+
+        "_ |- 1 -> 2\n" +
+        "[] |- _ -> 4\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(2l)).asLong();
     assertEquals(4l, ret);
@@ -210,8 +210,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsFreeVarPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: [] -> 2\n" +
-        "1 <: tail -> tail\n" +
+        "1 -| [] -> 2\n" +
+        "1 -| tail -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l));
@@ -226,8 +226,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadFreeVarPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "[] :> 3 -> 2\n" +
-        "tail :> 3 -> tail\n" +
+        "[] |- 3 -> 2\n" +
+        "tail |- 3 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l));
@@ -242,7 +242,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsFreeVarEmptyPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: tail -> tail\n" +
+        "1 -| tail -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l));
@@ -255,7 +255,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadFreeVarEmptyPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "tail :> 1 -> tail\n" +
+        "tail |- 1 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l));
@@ -268,8 +268,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsBoundVarPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
-        "1 <: [] -> 2\n" +
-        "1 <: bound -> bound\n" +
+        "1 -| [] -> 2\n" +
+        "1 -| bound -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l), Seq.sequence(2l, 3l));
@@ -284,8 +284,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadBoundVarPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
-        "[] :> 3 -> 2\n" +
-        "bound :> 3 -> bound\n" +
+        "[] |- 3 -> 2\n" +
+        "bound |- 3 -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l), Seq.sequence(1l, 2l));
@@ -300,7 +300,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsBoundVarEmptyPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
-        "1 <: bound -> bound\n" +
+        "1 -| bound -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l), Seq.EMPTY);
@@ -313,7 +313,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void tailsHeadBoundVarEmptyPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
-        "bound :> 1 -> bound\n" +
+        "bound |- 1 -> bound\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l), Seq.EMPTY);
@@ -443,8 +443,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void multipleHeadsOneTailPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: 2 <: [] -> 2\n" +
-        "1 <: 2 <: tail -> tail\n" +
+        "1 -| 2 -| [] -> 2\n" +
+        "1 -| 2 -| tail -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l, 4l));
@@ -459,8 +459,8 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void oneTailMultipleHeadsPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "[] :> 3 :> 4  -> 2\n" +
-        "tail :> 3 :> 4 -> tail\n" +
+        "[] |- 3 |- 4  -> 2\n" +
+        "tail |- 3 |- 4 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l, 4l));
@@ -513,9 +513,9 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void headTailsHeadPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
-        "1 <: 2 <: 3 <: tail :> 3 :> 4 -> 1 \n" +
-        "1 <: 2 <: [] :> 3 :> 4  -> 2\n" +
-        "0 <: tail :> 3 :> 4 -> tail\n" +
+        "1 -| 2 -| 3 -| tail |- 3 |- 4 -> 1 \n" +
+        "1 -| 2 -| [] |- 3 |- 4  -> 2\n" +
+        "0 -| tail |- 3 |- 4 -> tail\n" +
         "[] -> 3\n"+
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(0l, 1l, 2l, 3l, 4l));
@@ -544,7 +544,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void stringPrefixTest() {
     long ret = context.eval(YattaLanguage.ID, "case ['a', 'b', 'c'] of\n" +
-        "\"ab\" :> _ -> 0\n" +
+        "\"ab\" |- _ -> 0\n" +
         "_ -> 1\n" +
         "end").asLong();
 
@@ -554,7 +554,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void stringPrefixAndSuffixTest() {
     long ret = context.eval(YattaLanguage.ID, "case \"hello there\" of\n" +
-        "'h' <: 'e' <: _ :> 'r' :> 'e' -> 0\n" +
+        "'h' -| 'e' -| _ |- 'r' |- 'e' -> 0\n" +
         "_ -> 1\n" +
         "end").asLong();
 
@@ -564,7 +564,7 @@ public class PatternExpressionTest extends CommonTest {
   @Test
   public void stringSuffixTest() {
     long ret = context.eval(YattaLanguage.ID, "case ['a', 'b', 'c'] of\n" +
-        "_ <: \"bc\" -> 0\n" +
+        "_ -| \"bc\" -> 0\n" +
         "_ -> 1\n" +
         "end").asLong();
 

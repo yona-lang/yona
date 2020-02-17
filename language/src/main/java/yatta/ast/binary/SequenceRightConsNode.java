@@ -6,7 +6,7 @@ import yatta.YattaException;
 import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 
-@NodeInfo(shortName = ":>")
+@NodeInfo(shortName = "|-")
 public abstract class SequenceRightConsNode extends BinaryOpNode {
   @Specialization
   public Promise leftPromise(Promise left, Object right) {

@@ -5,7 +5,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
-public class ParseError extends RuntimeException implements TruffleException {
+public final class ParseError extends RuntimeException implements TruffleException {
 
   public static final long serialVersionUID = 1L;
   private final Source source;
