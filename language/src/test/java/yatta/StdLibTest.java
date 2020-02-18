@@ -75,6 +75,12 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  public void sequenceReduceLeftScanTest() {
+    long ret = context.eval(YattaLanguage.ID, "Seq::reducel [1, 2, 3] <| Transducers::scan (0, \\ acc val -> acc + Seq::len val, \\acc -> acc)").asLong();
+    assertEquals(6L, ret);
+  }
+
+  @Test
   public void dictFoldTest() {
     long ret = context.eval(YattaLanguage.ID, "Dict::fold {'a' = 1, 'b' = 2, 'c' = 3} (\\acc _ -> acc + 1) 0").asLong();
     assertEquals(3L, ret);

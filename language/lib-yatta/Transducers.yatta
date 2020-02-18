@@ -1,4 +1,4 @@
-module Transducers exports filter, map, drop, take, dedupe, distinct, chunk as
+module Transducers exports filter, map, drop, take, dedupe, distinct, chunk, scan as
 
 # pred: function of one argument (element) returning boolean value
 # init: initial state
@@ -73,3 +73,15 @@ chunk n (init, step, complete)
     new_complete = \(seq, acc) -> if Seq::len seq == 0 then complete acc else complete <| step acc seq
   in
     (\-> ([], init), new_step, new_complete)
+
+# init: initial state
+# step: function of two arguments (accumulator, element) returning new value of the accumulator
+# complete: function of one argument (final state of accumulator) returning final return value
+scan (init, step, complete) = let
+  new_step = \(seq, acc) val -> let
+    new_seq = seq |- val
+  in
+    (new_seq, step acc new_seq)
+  new_complete = \(_, acc) -> complete acc
+in
+  (\-> ([], init), new_step, new_complete)
