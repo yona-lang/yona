@@ -630,6 +630,8 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       return new ValueMatchNode(ctx.patternValue().accept(this));
     } else if (ctx.dictPattern() != null) {
       return visitDictPattern(ctx.dictPattern());
+    } else if (ctx.recordPattern() != null) {
+      return visitRecordPattern(ctx.recordPattern());
     } else {
       return visitSequencePattern(ctx.sequencePattern());
     }
@@ -741,6 +743,21 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     }
 
     return withSourceSection(ctx, new DictMatchNode(expressionNodes, matchNodes));
+  }
+
+  @Override
+  public MatchNode visitRecordPattern(YattaParser.RecordPatternContext ctx) {
+    if (ctx.identifier() != null) {
+      return withSourceSection(ctx, new AsRecordMatchNode(ctx.recordType().UPPERCASE_NAME().getText(), visitIdentifier(ctx.identifier()), moduleStack.toArray(new ExpressionNode[] {})));
+    } else {
+      RecordPatternNode.RecordPatternFieldNode[] fields = new RecordPatternNode.RecordPatternFieldNode[ctx.name().size()];
+
+      for (int i = 0; i < ctx.name().size(); i++) {
+        fields[i] = new RecordPatternNode.RecordPatternFieldNode(ctx.name(i).LOWERCASE_NAME().getText(), visitPattern(ctx.pattern(i)));
+      }
+
+      return new RecordPatternNode(ctx.recordType().UPPERCASE_NAME().getText(), fields, moduleStack.toArray(new ExpressionNode[] {}));
+    }
   }
 
   @Override

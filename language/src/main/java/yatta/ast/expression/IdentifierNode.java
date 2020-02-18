@@ -3,11 +3,9 @@ package yatta.ast.expression;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import yatta.TypesGen;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
@@ -15,7 +13,10 @@ import yatta.ast.call.InvokeNode;
 import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
-import yatta.runtime.*;
+import yatta.runtime.Context;
+import yatta.runtime.Function;
+import yatta.runtime.Unit;
+import yatta.runtime.YattaModule;
 import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
 @NodeInfo

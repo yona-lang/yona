@@ -570,4 +570,32 @@ public class PatternExpressionTest extends CommonTest {
 
     assertEquals(0l, ret);
   }
+
+  @Test
+  public void recordTest() {
+    long ret = context.eval(YattaLanguage.ID, "let mod = module TestMod exports testfun as\n" +
+        "record TestRecord=(argone, argtwo)\n" +
+        "testfun = case TestRecord(argone = 1, argtwo = 2) of\n" +
+        "    TestRecord(argone = 2) -> 0\n" +
+        "    TestRecord(argtwo = 2) -> 1\n" +
+        "    _ -> 2\n" +
+        "end\n" +
+        "in mod::testfun").asLong();
+
+    assertEquals(1l, ret);
+  }
+
+  @Test
+  public void recordAsTest() {
+    long ret = context.eval(YattaLanguage.ID, "let mod = module TestMod exports testfun as\n" +
+        "record TestRecord=(argone, argtwo)\n" +
+        "testfun = case TestRecord(argone = 1, argtwo = 2) of\n" +
+        "    2 -> 0\n" +
+        "    x@TestRecord -> x.argone\n" +
+        "    _ -> 2\n" +
+        "end\n" +
+        "in mod::testfun").asLong();
+
+    assertEquals(1l, ret);
+  }
 }

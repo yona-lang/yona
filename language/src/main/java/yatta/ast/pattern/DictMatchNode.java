@@ -70,9 +70,7 @@ public final class DictMatchNode extends MatchNode {
           if (!matchResult.isMatches()) {
             return MatchResult.FALSE;
           } else {
-            for (AliasNode aliasNode : matchResult.getAliases()) {
-              aliases.add(aliasNode);
-            }
+            aliases.addAll(Arrays.asList(matchResult.getAliases()));
           }
         }
       }

@@ -1,11 +1,10 @@
 package yatta.ast.pattern;
 
-import yatta.ast.expression.AliasNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.ast.expression.AliasNode;
 import yatta.runtime.Seq;
 
-import javax.sound.midi.Sequence;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -53,9 +52,7 @@ public final class SequenceMatchPatternNode extends MatchNode {
           if (!matchResult.isMatches()) {
             return MatchResult.FALSE;
           } else {
-            for (AliasNode aliasNode : matchResult.getAliases()) {
-              aliases.add(aliasNode);
-            }
+            aliases.addAll(Arrays.asList(matchResult.getAliases()));
           }
         }
 

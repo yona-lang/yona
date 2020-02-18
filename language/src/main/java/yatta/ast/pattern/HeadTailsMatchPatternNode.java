@@ -10,6 +10,7 @@ import yatta.ast.expression.value.EmptySequenceNode;
 import yatta.runtime.Seq;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -61,9 +62,7 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
           MatchNode headNode = headNodes[i];
           MatchResult headMatches = headNode.match(sequence.first(this), frame);
           if (headMatches.isMatches()) {
-            for (AliasNode aliasNode : headMatches.getAliases()) {
-              aliases.add(aliasNode);
-            }
+            aliases.addAll(Arrays.asList(headMatches.getAliases()));
             sequence = sequence.removeFirst(this);
           } else {
             return MatchResult.FALSE;

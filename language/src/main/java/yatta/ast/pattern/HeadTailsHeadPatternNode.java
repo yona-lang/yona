@@ -69,9 +69,7 @@ public class HeadTailsHeadPatternNode extends MatchNode {
           MatchNode headNode = leftNodes[i];
           MatchResult headMatches = headNode.match(sequence.first(this), frame);
           if (headMatches.isMatches()) {
-            for (AliasNode aliasNode : headMatches.getAliases()) {
-              aliases.add(aliasNode);
-            }
+            aliases.addAll(Arrays.asList(headMatches.getAliases()));
             sequence = sequence.removeFirst(this);
           } else {
             return MatchResult.FALSE;
@@ -82,9 +80,7 @@ public class HeadTailsHeadPatternNode extends MatchNode {
           MatchNode headNode = rightPatterns[i];
           MatchResult headMatches = headNode.match(sequence.last(this), frame);
           if (headMatches.isMatches()) {
-            for (AliasNode aliasNode : headMatches.getAliases()) {
-              aliases.add(aliasNode);
-            }
+            aliases.addAll(Arrays.asList(headMatches.getAliases()));
             sequence = sequence.removeLast(this);
           } else {
             return MatchResult.FALSE;

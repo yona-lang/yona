@@ -18,7 +18,7 @@ import java.util.Objects;
 
 @NodeInfo(shortName = "recordInstance")
 public final class RecordInstanceNode extends ExpressionNode {
-  @CompilationFinal private String recordType;
+  @CompilationFinal private final String recordType;
   @Children private final RecordInstanceFieldNode[] fields;
   @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 

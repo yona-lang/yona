@@ -8,6 +8,7 @@ import yatta.runtime.Seq;
 
 import javax.sound.midi.Sequence;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -54,10 +55,7 @@ public final class AsSequenceMatchNode extends MatchNode {
       if (!matchResult.isMatches()) {
         return MatchResult.FALSE;
       } else {
-        for (AliasNode aliasNode : matchResult.getAliases()) {
-          aliases.add(aliasNode);
-        }
-
+        aliases.addAll(Arrays.asList(matchResult.getAliases()));
         aliases.add(new AliasNode(identifierNode.name(), new AnyValueNode(sequence)));
         for (AliasNode aliasNode : aliases) {
           aliasNode.executeGeneric(frame);

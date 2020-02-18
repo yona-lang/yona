@@ -55,9 +55,7 @@ public final class TupleMatchNode extends MatchNode {
             if (!nestedMatchResult.isMatches()) {
               return MatchResult.FALSE;
             } else {
-              for (AliasNode aliasNode : nestedMatchResult.getAliases()) {
-                aliases.add(aliasNode);
-              }
+              aliases.addAll(Arrays.asList(nestedMatchResult.getAliases()));
             }
           } else {
             Object exprVal = expressions[i].executeGeneric(frame);
