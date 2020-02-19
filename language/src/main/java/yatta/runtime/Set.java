@@ -7,6 +7,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 import yatta.runtime.exceptions.TransducerDoneException;
 
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class Set implements TruffleObject, Comparable<Set> {
@@ -63,6 +64,8 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
 
   public abstract <T> T fold(final T initial, final BiFunction<T, Object, T> function);
+
+  public abstract void forEach(final Consumer<? super Object> consumer);
 
   @ExportMessage
   public boolean isString() {
@@ -370,6 +373,16 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     @Override
+    public void forEach(final Consumer<? super Object> consumer) {
+      for (int i = 0; i < arity(dataBmp); i++) {
+        consumer.accept(dataAt(i));
+      }
+      for (int i = 0; i < arity(nodeBmp); i++) {
+        nodeAt(i).forEach(consumer);
+      }
+    }
+
+    @Override
     public long size() {
       long result = arity(dataBmp);
       for (int i = 0; i < arity(nodeBmp); i++) {
@@ -529,6 +542,13 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
         result = function.apply(result, val);
       }
       return result;
+    }
+
+    @Override
+    public void forEach(final Consumer<? super Object> consumer) {
+      for (Object val : values) {
+        consumer.accept(val);
+      }
     }
 
     @Override

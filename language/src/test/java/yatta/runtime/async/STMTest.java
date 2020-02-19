@@ -1,5 +1,6 @@
 package yatta.runtime.async;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -14,12 +15,13 @@ public class STMTest {
   static final int N = 512;
 
   @Test
+  @Tag("slow")
   public void testSTM() throws InterruptedException {
-    ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+    ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     STM stm = new STM();
     List<STM.Var> vars = new ArrayList<>();
     for (int i = 0; i < N; i++) {
-      vars.add(new STM.Var(0L));
+      vars.add(stm.new Var(0L));
     }
     CountDownLatch cdl = new CountDownLatch(N * N);
     for (int i = 0; i < N * N; i++) {
@@ -32,7 +34,7 @@ public class STMTest {
           try {
             for (int j = 0; j <= v; j++) {
               if (j == v) {
-                vars.get(0).ensure(tx);
+                vars.get(v).ensure(tx);
               }
               final STM.Var var = vars.get(j);
               long value = (long) var.read(tx);

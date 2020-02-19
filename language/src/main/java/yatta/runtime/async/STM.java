@@ -2,11 +2,14 @@ package yatta.runtime.async;
 
 import yatta.runtime.Dict;
 import yatta.runtime.Hasher;
+import yatta.runtime.Set;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class STM {
@@ -14,30 +17,34 @@ public final class STM {
 
   volatile TransactionsRecord lastCommittedRecord = new TransactionsRecord();
   final ReferenceQueue<TransactionsRecord> gcQueue = new ReferenceQueue<>();
+  final AtomicReference<Set> vars = new AtomicReference<>(Set.empty());
 
   public Transaction newTransaction(boolean readOnly) {
     return readOnly ? new ReadOnlyTransaction(this) : new TopLevelReadWriteTransaction(this);
   }
 
+  @SuppressWarnings("unchecked")
   void gc() {
     TransactionsRecord record = (TransactionsRecord) gcQueue.poll();
-    while (record != null) {
+    if (record != null) {
       final long stamp = record.prevStamp;
-      record.prevWrites.forEach((k, v) -> {
-        StampedBox top = ((Var) k).box;
-        StampedBox bottom = top.prev;
-        while (bottom != null) {
-          if (bottom.stamp < stamp) {
-            top.prev = null;
-            break;
-          } else {
-            top = bottom;
-            bottom = top.prev;
+      vars.get().forEach(ref -> {
+        Var var = ((WeakReference<Var>) ref).get();
+        if (var != null) {
+          StampedBox top = var.box;
+          StampedBox bottom = top.prev;
+          while (bottom != null) {
+            if (bottom.stamp < stamp) {
+              top.prev = null;
+              break;
+            } else {
+              top = bottom;
+              bottom = top.prev;
+            }
           }
         }
       });
-      record.prevWrites = null;
-      record = (TransactionsRecord) gcQueue.poll();
+      record.clear();
     }
   }
 
@@ -55,13 +62,19 @@ public final class STM {
     return (fst & snd) != 0L;
   }
 
-  public static final class Var {
+  public final class Var {
     final long id;
     StampedBox box;
 
     public Var(final Object initial) {
       id = (((long) System.identityHashCode(this)) << 32) | (System.currentTimeMillis() & 0xffffffffL);
       box = new StampedBox(null, 0L, initial);
+      Set expectedVars;
+      Set updatedVars;
+      do {
+        expectedVars = STM.this.vars.get();
+        updatedVars = expectedVars.add(new WeakReference<>(this));
+      } while (!STM.this.vars.compareAndSet(expectedVars, updatedVars));
     }
 
     public Object read() {
@@ -103,7 +116,7 @@ public final class STM {
     }
   }
 
-  static final class TransactionsRecord extends WeakReference<TransactionsRecord> {
+  static final class TransactionsRecord extends PhantomReference<TransactionsRecord> {
     final AtomicReference<TransactionsRecord> next = new AtomicReference<>();
     final long stamp;
     final long writeFilterSummary;
@@ -111,7 +124,6 @@ public final class STM {
     final Dict writes;
     volatile Status status;
     long prevStamp;
-    Dict prevWrites;
 
     TransactionsRecord() {
       super(null, null);
@@ -130,7 +142,6 @@ public final class STM {
       this.writes = writes;
       this.status = Status.VALID;
       this.prevStamp = prev.stamp;
-      this.prevWrites = prev.writes;
     }
   }
 
@@ -311,6 +322,8 @@ public final class STM {
         } else {
           if (!summariesMightIntersect(writeFilterSummary, current.writeFilterSummary) || !BloomFilter.mightIntersect(writeFilter, current.writeFilter, 7)) {
             current = current.next.get();
+          } else {
+            Thread.yield();
           }
         }
       }
