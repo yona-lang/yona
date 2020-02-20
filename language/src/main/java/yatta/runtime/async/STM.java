@@ -1,37 +1,42 @@
 package yatta.runtime.async;
 
+import com.oracle.truffle.api.nodes.Node;
 import yatta.runtime.Dict;
 import yatta.runtime.Hasher;
 import yatta.runtime.Set;
+import yatta.runtime.exceptions.BadArgException;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
-import java.lang.ref.WeakReference;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class STM {
   static final Dict EMPTY_WRITES = Dict.empty(Id.INSTANCE, 0L);
+  static final Set EMPTY_VARS = Set.empty(Id.INSTANCE, 0L);
 
   volatile TransactionsRecord lastCommittedRecord = new TransactionsRecord();
-  final ReferenceQueue<TransactionsRecord> gcQueue = new ReferenceQueue<>();
-  final AtomicReference<Set> vars = new AtomicReference<>(Set.empty());
+  final ReferenceQueue<TransactionsRecord> gcStamps = new ReferenceQueue<>();
+  final AtomicReference<Set> gcVars = new AtomicReference<>(EMPTY_VARS);
 
   public Transaction newTransaction(boolean readOnly) {
-    return readOnly ? new ReadOnlyTransaction(this) : new TopLevelReadWriteTransaction(this);
+    return readOnly ? new ReadOnlyTransaction() : new TopLevelReadWriteTransaction();
   }
 
-  @SuppressWarnings("unchecked")
   void gc() {
-    TransactionsRecord record = (TransactionsRecord) gcQueue.poll();
+    TransactionsRecord record = (TransactionsRecord) gcStamps.poll();
     if (record != null) {
       final long stamp = record.prevStamp;
-      vars.get().forEach(ref -> {
-        Var var = ((WeakReference<Var>) ref).get();
+      Set expectedGcVars;
+      Set updatedGcVars;
+      do {
+        expectedGcVars = gcVars.get();
+        updatedGcVars = EMPTY_VARS;
+      } while (!gcVars.compareAndSet(expectedGcVars, updatedGcVars));
+      expectedGcVars.forEach(var -> {
         if (var != null) {
-          StampedBox top = var.box;
+          StampedBox top = ((Var) var).box;
           StampedBox bottom = top.prev;
           while (bottom != null) {
             if (bottom.stamp < stamp) {
@@ -69,19 +74,16 @@ public final class STM {
     public Var(final Object initial) {
       id = (((long) System.identityHashCode(this)) << 32) | (System.currentTimeMillis() & 0xffffffffL);
       box = new StampedBox(null, 0L, initial);
-      Set expectedVars;
-      Set updatedVars;
-      do {
-        expectedVars = STM.this.vars.get();
-        updatedVars = expectedVars.add(new WeakReference<>(this));
-      } while (!STM.this.vars.compareAndSet(expectedVars, updatedVars));
     }
 
     public Object read() {
       return box.value;
     }
 
-    public Object read(final Transaction transaction) {
+    public Object read(final Transaction transaction, final Node node) {
+      if (transaction.stm() != STM.this) {
+        throw new BadArgException("Var does not belong to this STM system.", node);
+      }
       transaction.read(this);
       if (transaction.writesContains(this)) {
         return transaction.writesLookup(this);
@@ -95,11 +97,17 @@ public final class STM {
       }
     }
 
-    public void ensure(final Transaction transaction) {
+    public void ensure(final Transaction transaction, final Node node) {
+      if (transaction.stm() != STM.this) {
+        throw new BadArgException("Var does not belong to this STM system.", node);
+      }
       transaction.ensure(this);
     }
 
-    public void write(final Object value, final Transaction transaction) {
+    public void write(final Object value, final Transaction transaction, final Node node) {
+      if (transaction.stm() != STM.this) {
+        throw new BadArgException("Var does not belong to this STM system.", node);
+      }
       transaction.write(this, value);
     }
   }
@@ -156,6 +164,8 @@ public final class STM {
       this.activeRecord = activeRecord;
     }
 
+    abstract STM stm();
+
     abstract void read(Var var);
 
     abstract void ensure(Var var);
@@ -173,9 +183,14 @@ public final class STM {
     public abstract void abort();
   }
 
-  static final class ReadOnlyTransaction extends Transaction {
-    ReadOnlyTransaction(final STM stm) {
-      super(stm.lastCommittedRecord);
+  final class ReadOnlyTransaction extends Transaction {
+    ReadOnlyTransaction() {
+      super(STM.this.lastCommittedRecord);
+    }
+
+    @Override
+    STM stm() {
+      return STM.this;
     }
 
     @Override
@@ -268,13 +283,16 @@ public final class STM {
     }
   }
 
-  static final class TopLevelReadWriteTransaction extends ReadWriteTransaction {
-    final STM stm;
+  final class TopLevelReadWriteTransaction extends ReadWriteTransaction {
     TransactionsRecord commitRecord;
 
-    TopLevelReadWriteTransaction(final STM stm) {
-      super(stm.lastCommittedRecord);
-      this.stm = stm;
+    TopLevelReadWriteTransaction() {
+      super(STM.this.lastCommittedRecord);
+    }
+
+    @Override
+    STM stm() {
+      return STM.this;
     }
 
     @Override
@@ -304,7 +322,7 @@ public final class STM {
           }
           next = lastValid.next.get();
         }
-        commitRecord = new TransactionsRecord(lastValid.stamp + 1, writeFilterSummary, writeFilter, writes, lastValid, stm.gcQueue);
+        commitRecord = new TransactionsRecord(lastValid.stamp + 1, writeFilterSummary, writeFilter, writes, lastValid, STM.this.gcStamps);
       } while (!lastValid.next.compareAndSet(null, commitRecord));
       return true;
     }
@@ -343,9 +361,20 @@ public final class STM {
         }
       }
       // finalize
-      stm.lastCommittedRecord = commitRecord;
+      STM.this.lastCommittedRecord = commitRecord;
       commitRecord.status = Status.COMMITTED;
-      stm.gc();
+      // collect the garbage if any
+      STM.this.gc();
+      // register its write set to be garbage collected later, avoiding unnecessary updates
+      Set gcVarsExpected;
+      Set gcVarsUpdated;
+      do {
+        gcVarsExpected = gcVars.get();
+        gcVarsUpdated = writes.fold(gcVarsExpected, (result, k, v) -> result.add(k));
+        if (gcVarsExpected == gcVarsUpdated) {
+          return;
+        }
+      } while (!gcVars.compareAndSet(gcVarsExpected, gcVarsUpdated));
     }
 
     @Override

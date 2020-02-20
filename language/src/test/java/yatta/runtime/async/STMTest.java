@@ -34,11 +34,11 @@ public class STMTest {
           try {
             for (int j = 0; j <= v; j++) {
               if (j == v) {
-                vars.get(v).ensure(tx);
+                vars.get(v).ensure(tx, null);
               }
               final STM.Var var = vars.get(j);
-              long value = (long) var.read(tx);
-              var.write(value + 1, tx);
+              long value = (long) var.read(tx, null);
+              var.write(value + 1, tx, null);
             }
             if (tx.validate()) {
               tx.commit();
