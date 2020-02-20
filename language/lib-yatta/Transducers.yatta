@@ -1,4 +1,4 @@
-module Transducers exports filter, map, drop, take, dedupe, distinct, chunk, scan as
+module Transducers exports filter, map, drop, take, dedupe, distinct, chunk, scan, cat as
 
 # pred: function of one argument (element) returning boolean value
 # init: initial state
@@ -17,7 +17,7 @@ in
 map fun (init, step, complete) = let
   new_step = \acc val -> step acc (fun val)
 in
-  (\ -> init, new_step, complete)
+  (\-> init, new_step, complete)
 
 
 # n: number of elements to drop
@@ -27,9 +27,8 @@ in
 drop n (init, step, complete)
   | n >= 0 = let
     new_step     = \(i, acc) val -> if i != 0 then (i - 1, acc) else (0, step acc val)
-    new_complete = \(0, acc) -> complete acc
   in
-    (\-> (n, init), new_step, new_complete)
+    (\-> (n, init), new_step, \(0, acc) -> complete acc)
 
 
 # n: number of elements to take
@@ -39,9 +38,8 @@ drop n (init, step, complete)
 take n (init, step, complete)
   | n >= 0 = let
     new_step     = \(i, acc) val -> if i == 0 then done else (i - 1, step acc val)
-    new_complete = \(0, acc) -> complete acc
   in
-    (\-> (n, init), new_step, new_complete)
+    (\-> (n, init), new_step, \(0, acc) -> complete acc)
 
 
 # init: initial state
@@ -49,9 +47,8 @@ take n (init, step, complete)
 # complete: function of one argument (final state of accumulator) returning final return value
 dedupe (init, step, complete) = let
   new_step = \(prev, acc) val -> if val != prev then (val, step acc val) else (prev, acc)
-  new_complete = \(_, acc) -> complete acc
 in
-  (\-> ((), init), new_step, new_complete)
+  (\-> ((), init), new_step, \(_, acc) -> complete acc)
 
 
 # init: initial state
@@ -59,9 +56,8 @@ in
 # complete: function of one argument (final state of accumulator) returning final return value
 distinct (init, step, complete) = let
   new_step = \(set, acc) val -> if val in set then (set, acc) else (set ++ val, step acc val)
-  new_complete = \(_, acc) -> complete acc
 in
-  (\-> (Set::empty, init), new_step, new_complete)
+  (\-> (Set::empty, init), new_step, \(_, acc) -> complete acc)
 
 # n: max number of elements in chunk
 # init: initial state
@@ -82,6 +78,14 @@ scan (init, step, complete) = let
     new_seq = seq |- val
   in
     (new_seq, step acc new_seq)
-  new_complete = \(_, acc) -> complete acc
 in
-  (\-> ([], init), new_step, new_complete)
+  (\-> ([], init), new_step, \(_, acc) -> complete acc)
+
+# reduce: function of two arguments (element, reducer) returning reduced value
+# init: initial state
+# step: function of two arguments (accumulator, element) returning new value of the accumulator
+# complete: function of one argument (final state of accumulator) returning final return value
+cat reduce (init, step, complete) = let
+  new_step = \acc val -> reduce val (\-> acc, \inner_acc inner_val -> step inner_acc inner_val, identity)
+in
+  (\-> init, new_step, complete)
