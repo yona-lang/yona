@@ -18,12 +18,12 @@ import java.util.Objects;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
-public final class RecordPatternNode extends MatchNode {
+public final class RecordFieldsPatternNode extends MatchNode {
   @CompilationFinal private final String recordType;
   @Children public RecordPatternFieldNode[] fieldMatchNodes;
   @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
-  public RecordPatternNode(String recordType, RecordPatternFieldNode[] fieldMatchNodes, ExpressionNode[] moduleStack) {
+  public RecordFieldsPatternNode(String recordType, RecordPatternFieldNode[] fieldMatchNodes, ExpressionNode[] moduleStack) {
     this.recordType = recordType;
     this.fieldMatchNodes = fieldMatchNodes;
     this.moduleStack = moduleStack;
@@ -33,7 +33,7 @@ public final class RecordPatternNode extends MatchNode {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    RecordPatternNode that = (RecordPatternNode) o;
+    RecordFieldsPatternNode that = (RecordFieldsPatternNode) o;
     return Objects.equals(recordType, that.recordType) &&
         Arrays.equals(fieldMatchNodes, that.fieldMatchNodes) &&
         Arrays.equals(moduleStack, that.moduleStack);

@@ -197,11 +197,17 @@ patternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_RIGHT_ARROW NEWL
 
 pattern : underscore
         | patternValue
-        | tuplePattern
-        | sequencePattern
-        | dictPattern
-        | recordPattern
+        | dataStructurePattern
+        | asDataStructurePattern
         ;
+
+dataStructurePattern : tuplePattern
+                     | sequencePattern
+                     | dictPattern
+                     | recordPattern
+                     ;
+
+asDataStructurePattern : identifier AT (PARENS_L dataStructurePattern PARENS_R | dataStructurePattern) ;
 
 patternWithoutSequence: underscore
                       | patternValue
@@ -210,14 +216,11 @@ patternWithoutSequence: underscore
                       ;
 
 tuplePattern : PARENS_L pattern (COMMA pattern)+ PARENS_R ;
-sequencePattern : identifier AT PARENS_L innerSequencePattern PARENS_R
-                | innerSequencePattern
+sequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
+                | headTails
+                | tailsHead
+                | headTailsHead
                 ;
-innerSequencePattern : BRACKET_L (pattern (COMMA pattern)*)? BRACKET_R
-                     | headTails
-                     | tailsHead
-                     | headTailsHead
-                     ;
 headTails : (patternWithoutSequence OP_CONS_L)+ tails ;
 tailsHead :  tails (OP_CONS_R patternWithoutSequence)+ ;
 
@@ -229,8 +232,7 @@ tails : identifier | sequence | underscore | stringLiteral ;
 
 dictPattern : CURLY_L (patternValue OP_ASSIGN pattern (COMMA patternValue OP_ASSIGN pattern)*)? CURLY_R ;
 
-recordPattern : identifier AT recordType
-              | recordType PARENS_L (name OP_ASSIGN pattern) (COMMA name OP_ASSIGN pattern)* PARENS_R ;
+recordPattern : recordType (PARENS_L (name OP_ASSIGN pattern) (COMMA name OP_ASSIGN pattern)* PARENS_R)? ;
 
 importExpr : KW_IMPORT NEWLINE? (importClause NEWLINE?)+ KW_IN NEWLINE? expression ;
 importClause : moduleImport | functionsImport ;

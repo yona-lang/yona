@@ -361,7 +361,7 @@ public class PatternExpressionTest extends CommonTest {
   public void namedSequenceMatchPatternTest() {
     Value sequence = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] -> 3\n"+
-        "seq@([1, _, 3]) -> seq\n" +
+        "seq@[1, _, 3] -> seq\n" +
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l));
 
@@ -377,7 +377,7 @@ public class PatternExpressionTest extends CommonTest {
   public void namedSequenceMatchFreeVarPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> case arg of\n" +
         "[] -> 3\n"+
-        "seq@([1, second, 3]) -> second\n" +
+        "seq@[1, second, 3] -> second\n" +
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l)).asLong();
 
@@ -388,7 +388,7 @@ public class PatternExpressionTest extends CommonTest {
   public void namedSequenceMatchBoundVarPatternTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg bound -> case arg of\n" +
         "[] -> 3\n"+
-        "seq@([1, bound, 3]) -> bound\n" +
+        "seq@[1, bound, 3] -> bound\n" +
         "_ -> 9\n" +
         "end\n").execute(Seq.sequence(1l, 2l, 3l), 2l).asLong();
 

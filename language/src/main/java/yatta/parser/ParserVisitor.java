@@ -22,7 +22,6 @@ import yatta.ast.generators.GeneratorNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.pattern.*;
 import yatta.runtime.Dict;
-import yatta.runtime.Seq;
 import yatta.runtime.UninitializedFrameSlot;
 
 import java.util.*;
@@ -624,10 +623,19 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   public MatchNode visitPattern(YattaParser.PatternContext ctx) {
     if (ctx.underscore() != null) {
       return withSourceSection(ctx.underscore(), new UnderscoreMatchNode());
-    } else if (ctx.tuplePattern() != null) {
-      return visitTuplePattern(ctx.tuplePattern());
     } else if (ctx.patternValue() != null) {
       return new ValueMatchNode(ctx.patternValue().accept(this));
+    } else if (ctx.dataStructurePattern() != null) {
+      return visitDataStructurePattern(ctx.dataStructurePattern());
+    } else {
+      return visitAsDataStructurePattern(ctx.asDataStructurePattern());
+    }
+  }
+
+  @Override
+  public MatchNode visitDataStructurePattern(YattaParser.DataStructurePatternContext ctx) {
+    if (ctx.tuplePattern() != null) {
+      return visitTuplePattern(ctx.tuplePattern());
     } else if (ctx.dictPattern() != null) {
       return visitDictPattern(ctx.dictPattern());
     } else if (ctx.recordPattern() != null) {
@@ -635,6 +643,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     } else {
       return visitSequencePattern(ctx.sequencePattern());
     }
+  }
+
+  @Override
+  public MatchNode visitAsDataStructurePattern(YattaParser.AsDataStructurePatternContext ctx) {
+    return withSourceSection(ctx, new AsDataStructureMatchNode(visitIdentifier(ctx.identifier()), visitDataStructurePattern(ctx.dataStructurePattern())));
   }
 
   @Override
@@ -663,15 +676,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public MatchNode visitSequencePattern(YattaParser.SequencePatternContext ctx) {
-    if (ctx.identifier() != null) {
-      return withSourceSection(ctx, new AsSequenceMatchNode(visitIdentifier(ctx.identifier()), visitInnerSequencePattern(ctx.innerSequencePattern())));
-    } else {
-      return visitInnerSequencePattern(ctx.innerSequencePattern());
-    }
-  }
-
-  @Override
-  public MatchNode visitInnerSequencePattern(YattaParser.InnerSequencePatternContext ctx) {
     if (ctx.headTails() != null) {
       return visitHeadTails(ctx.headTails());
     } else if (ctx.tailsHead() != null) {
@@ -747,16 +751,16 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public MatchNode visitRecordPattern(YattaParser.RecordPatternContext ctx) {
-    if (ctx.identifier() != null) {
-      return withSourceSection(ctx, new AsRecordMatchNode(ctx.recordType().UPPERCASE_NAME().getText(), visitIdentifier(ctx.identifier()), moduleStack.toArray(new ExpressionNode[] {})));
-    } else {
-      RecordPatternNode.RecordPatternFieldNode[] fields = new RecordPatternNode.RecordPatternFieldNode[ctx.name().size()];
+    if (ctx.pattern().size() > 0) {
+      RecordFieldsPatternNode.RecordPatternFieldNode[] fields = new RecordFieldsPatternNode.RecordPatternFieldNode[ctx.name().size()];
 
       for (int i = 0; i < ctx.name().size(); i++) {
-        fields[i] = new RecordPatternNode.RecordPatternFieldNode(ctx.name(i).LOWERCASE_NAME().getText(), visitPattern(ctx.pattern(i)));
+        fields[i] = new RecordFieldsPatternNode.RecordPatternFieldNode(ctx.name(i).LOWERCASE_NAME().getText(), visitPattern(ctx.pattern(i)));
       }
 
-      return new RecordPatternNode(ctx.recordType().UPPERCASE_NAME().getText(), fields, moduleStack.toArray(new ExpressionNode[] {}));
+      return withSourceSection(ctx, new RecordFieldsPatternNode(ctx.recordType().UPPERCASE_NAME().getText(), fields, moduleStack.toArray(new ExpressionNode[]{})));
+    } else {
+      return withSourceSection(ctx, new RecordTypePatternNode(ctx.recordType().UPPERCASE_NAME().getText(), moduleStack.toArray(new ExpressionNode[]{})));
     }
   }
 
