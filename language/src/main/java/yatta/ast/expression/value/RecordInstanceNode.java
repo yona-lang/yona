@@ -19,10 +19,10 @@ import java.util.Objects;
 @NodeInfo(shortName = "recordInstance")
 public final class RecordInstanceNode extends ExpressionNode {
   @CompilationFinal private final String recordType;
-  @Children private final RecordInstanceFieldNode[] fields;
+  @Children private final RecordFieldValueNode[] fields;
   @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
-  public RecordInstanceNode(String recordType, RecordInstanceFieldNode[] fields, ExpressionNode[] moduleStack) {
+  public RecordInstanceNode(String recordType, RecordFieldValueNode[] fields, ExpressionNode[] moduleStack) {
     this.recordType = recordType;
     this.fields = fields;
     this.moduleStack = moduleStack;
@@ -85,7 +85,7 @@ public final class RecordInstanceNode extends ExpressionNode {
       Object[] resultFields = new Object[recordFields.length + 1];
       Arrays.fill(resultFields, Unit.INSTANCE);
       resultFields[0] = lookupContextReference(YattaLanguage.class).get().symbol(recordType);
-      for (RecordInstanceFieldNode field : fields) {
+      for (RecordFieldValueNode field : fields) {
         Tuple fieldTuple = field.executeTuple(frame);
         setField((String) fieldTuple.get(0), fieldTuple.get(1), recordFields, resultFields);
       }
@@ -106,49 +106,6 @@ public final class RecordInstanceNode extends ExpressionNode {
       throw new NoRecordFieldException(recordType, fieldName, this);
     } else {
       resultFields[fieldPos + 1] = fieldValue;
-    }
-  }
-
-  @NodeInfo(shortName = "recordInstanceField")
-  public static final class RecordInstanceFieldNode extends ExpressionNode {
-    @CompilationFinal String fieldName;
-    @Child ExpressionNode fieldValue;
-
-    public RecordInstanceFieldNode(String fieldName, ExpressionNode fieldValue) {
-      this.fieldName = fieldName;
-      this.fieldValue = fieldValue;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-      RecordInstanceFieldNode that = (RecordInstanceFieldNode) o;
-      return Objects.equals(fieldName, that.fieldName) &&
-          Objects.equals(fieldValue, that.fieldValue);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(fieldName, fieldValue);
-    }
-
-    @Override
-    public String toString() {
-      return "RecordInstanceFieldNode{" +
-          "fieldName=" + fieldName +
-          ", fieldValue=" + fieldValue +
-          '}';
-    }
-
-    @Override
-    public Object executeGeneric(VirtualFrame frame) {
-      return new Tuple(fieldName, fieldValue.executeGeneric(frame));
-    }
-
-    @Override
-    public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
-      return new Tuple(fieldName, fieldValue.executeGeneric(frame));
     }
   }
 }

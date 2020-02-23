@@ -294,11 +294,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitRecordInstance(YattaParser.RecordInstanceContext ctx) {
-    RecordInstanceNode.RecordInstanceFieldNode[] fields = new RecordInstanceNode.RecordInstanceFieldNode[ctx.name().size()];
+  public RecordInstanceNode visitRecordInstance(YattaParser.RecordInstanceContext ctx) {
+    RecordFieldValueNode[] fields = new RecordFieldValueNode[ctx.name().size()];
 
     for (int i = 0; i < ctx.name().size(); i++) {
-      fields[i] = new RecordInstanceNode.RecordInstanceFieldNode(ctx.name(i).LOWERCASE_NAME().getText(), ctx.expression(i).accept(this));
+      fields[i] = new RecordFieldValueNode(ctx.name(i).LOWERCASE_NAME().getText(), ctx.expression(i).accept(this));
     }
 
     return new RecordInstanceNode(ctx.recordType().UPPERCASE_NAME().getText(), fields, moduleStack.toArray(new ExpressionNode[] {}));
@@ -987,6 +987,17 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public FieldAccessNode visitFieldAccessExpr(YattaParser.FieldAccessExprContext ctx) {
     return withSourceSection(ctx, new FieldAccessNode(visitIdentifier(ctx.identifier()), ctx.name().getText(), moduleStack.toArray(new ExpressionNode[] {})));
+  }
+
+  @Override
+  public RecordUpdateNode visitFieldUpdateExpr(YattaParser.FieldUpdateExprContext ctx) {
+    RecordFieldValueNode[] fields = new RecordFieldValueNode[ctx.name().size()];
+
+    for (int i = 0; i < ctx.name().size(); i++) {
+      fields[i] = new RecordFieldValueNode(ctx.name(i).LOWERCASE_NAME().getText(), ctx.expression(i).accept(this));
+    }
+
+    return new RecordUpdateNode(visitIdentifier(ctx.identifier()), fields, moduleStack.toArray(new ExpressionNode[] {}));
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {

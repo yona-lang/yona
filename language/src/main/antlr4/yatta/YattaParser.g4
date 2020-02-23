@@ -89,6 +89,7 @@ expression : PARENS_L expression PARENS_R                                       
            | <assoc=right> left=expression NEWLINE? OP_PIPE_L right=expression                           #pipeLeftExpression
            | left=expression NEWLINE? OP_PIPE_R right=expression                                         #pipeRightExpression
            | fieldAccessExpr                                                                             #fieldAccessExpression
+           | fieldUpdateExpr                                                                             #fieldUpdateExpression
            ;
 
 
@@ -174,9 +175,6 @@ set : CURLY_L expression (COMMA expression)* CURLY_R ;
 fqn : (packageName BACKSLASH)? moduleName ;
 packageName : LOWERCASE_NAME (BACKSLASH LOWERCASE_NAME)* ;
 moduleName : UPPERCASE_NAME ;
-
-recordInstance : recordType PARENS_L (name OP_ASSIGN expression) (COMMA name OP_ASSIGN expression)* PARENS_R ;
-recordType : UPPERCASE_NAME ;
 
 symbol : COLON name;
 identifier : name ;
@@ -265,4 +263,8 @@ identifierOrUnderscore : identifier | underscore ;
 
 record : KW_RECORD UPPERCASE_NAME OP_ASSIGN PARENS_L identifier (NEWLINE? COMMA NEWLINE? identifier)* PARENS_R NEWLINE;
 
+recordInstance : recordType PARENS_L (name OP_ASSIGN expression) (COMMA name OP_ASSIGN expression)* PARENS_R ;
+recordType : UPPERCASE_NAME ;
+
 fieldAccessExpr : identifier DOT name ;
+fieldUpdateExpr : identifier PARENS_L (name OP_ASSIGN expression) (COMMA name OP_ASSIGN expression)* PARENS_R ;

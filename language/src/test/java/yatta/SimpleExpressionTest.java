@@ -577,6 +577,37 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(1l, ret);
   }
 
+  @Test
+  public void simpleRecordUpdateOneTest() {
+    long ret = context.eval(YattaLanguage.ID, "module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let rec = TestRecord(argone = 1) in\n" +
+        "let rectwo = rec(argone = 2) in rectwo.argone").getMember("funone").execute().asLong();
+
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void simpleRecordUpdateTwoTest() {
+    long ret = context.eval(YattaLanguage.ID, "module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let rec = TestRecord(argone = 1) in\n" +
+        "let rectwo = rec(argtwo = 2) in rectwo.argtwo").getMember("funone").execute().asLong();
+
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void promiseRecordUpdateTest() {
+    long ret = context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
+        "record TestRecord = (argone, argtwo)\n" +
+        "funone = let rec = async \\-> TestRecord(argone = 1) in\n" +
+        "let rectwo = rec(argtwo = 2) in rectwo.argtwo in\n" +
+        "mod::funone").asLong();
+
+    assertEquals(2l, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with
