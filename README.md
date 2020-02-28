@@ -125,14 +125,14 @@ These are all the operations supposorted by Yatta's binary operators. Combinatio
 | `>` | integer | integer | greater than |
 | `>` | double | double | greater than |
 | `>` | byte | byte | greater than |
-| `>` | function | always `false` |
+| `>` | function | function | always `false` |
 | `>` | `()` | `()` | greater than - alwyays `false` |
 | `>` | dict | dict | left is a strict superset of the right |
 | `>` | set | set | left is a strict superset of the right |
 | `>=` | integer | integer | greater than or equals |
 | `>=` | double | double | greater than or equals |
 | `>=` | byte | byte | greater than or equals |
-| `>=` | function | referential equality |
+| `>=` | function | function | referential equality |
 | `>=` | `()` | `()` | always `true` |
 | `>=` | dict | dict | left is a superset of the right |
 | `>=` | set | set | left is a superset of the right |
@@ -150,14 +150,14 @@ These are all the operations supposorted by Yatta's binary operators. Combinatio
 | `<` | integer | integer | lower than |
 | `<` | double | double | lower than |
 | `<` | byte | byte | lower than |
-| `<` | function | always `false` |
+| `<` | function | function | always `false` |
 | `<` | `()` | `()` | lower than - alwyays `false` |
 | `<` | dict | dict | left is a strict subset of the right |
 | `<` | set | set | left is a strict subset of the right |
 | `<=` | integer | integer | lower than or equals |
 | `<=` | double | double | lower than or equals |
 | `<=` | byte | byte | lower than or equals |
-| `<=` | function | referential equality |
+| `<=` | function | function | referential equality |
 | `<=` | `()` | `()` | always `true` |
 | `<=` | dict | dict | left is a subset of the right |
 | `<=` | set | set | left is a subset of the right |
@@ -169,7 +169,7 @@ These are all the operations supposorted by Yatta's binary operators. Combinatio
 | `>>` | integer | integer | signed right shift |
 | `>>>` | integer | integer | zero fill right shift |
 | `&&` | boolean | boolean | logical and |
-| `||` | boolean | boolean | logical or |
+| `\|\|` | boolean | boolean | logical or |
 | `-` | integer | integer | arithmetic subtraction |
 | `-` | float | float | arithmetic subtraction |
 | `-` | dict | any | TBD: review |
@@ -185,8 +185,8 @@ These are all the operations supposorted by Yatta's binary operators. Combinatio
 | `+` | float | float | arithmetic addition |
 | `+` | set | any | add element to the left |
 | `+` | dict | tuple | add tuple `(key, value)` to the left |
-| `-|` | any | seq | add element to the beginning of a sequence |
-| `|-` | seq | any | add element to the end of a sequence |
+| `-\|` | any | seq | add element to the beginning of a sequence |
+| `\|-` | seq | any | add element to the end of a sequence |
 
 
 ## Syntax
