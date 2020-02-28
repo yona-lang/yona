@@ -101,9 +101,9 @@ These are all the operations supposorted by Yatta's binary operators. Combinatio
 | `&` | integer | integer | bitwise and |
 | `&` | set | set | set intersection |
 | `&` | dict | dict | dict intersection |
-| `|` | integer | integer | bitwise or |
-| `|` | set | set | set union |
-| `|` | dict | dict | dict union |
+| `\|` | integer | integer | bitwise or |
+| `\|` | set | set | set union |
+| `\|` | dict | dict | dict union |
 | `^` | integer | integer | bitwise xor |
 | `^` | set | set | set symetric difference |
 | `^` | dict | dict | dict symetric difference |
