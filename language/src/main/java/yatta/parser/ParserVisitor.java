@@ -245,15 +245,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitDifferenceExpression(YattaParser.DifferenceExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
-
-    return withSourceSection(ctx, DifferenceNodeGen.create(args));
-  }
-
-  @Override
   public ExpressionNode visitInExpression(YattaParser.InExpressionContext ctx) {
     ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
     ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));

@@ -233,11 +233,18 @@ public class BinaryOperatorsTest extends CommonTest {
     return Stream.of(
         new BinaryArgsHolder(1l, 2l, 3l, Long.class),
         new BinaryArgsHolder(1d, 2d, 3d, Double.class),
-        // TODO add dictionary
         new BinaryArgsHolder(new PromiseHolder(1l), 2l, 3l, Long.class),
         new BinaryArgsHolder(1l, new PromiseHolder(2l), 3l, Long.class),
-        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), 3l, Long.class)
-    );
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(2l), 3l, Long.class),
+        new BinaryArgsHolder(Set.set(1l), 2l, "{1, 2}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), 2l, "{1, 2}", String.class),
+        new BinaryArgsHolder(Set.set(1l), new PromiseHolder(2l), "{1, 2}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), new PromiseHolder(2l), "{1, 2}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class)
+        );
   }
 
   @ParameterizedTest
@@ -251,11 +258,18 @@ public class BinaryOperatorsTest extends CommonTest {
     return Stream.of(
         new BinaryArgsHolder(3l, 2l, 1l, Long.class),
         new BinaryArgsHolder(3d, 2d, 1d, Double.class),
-        // TODO add dictionary
         new BinaryArgsHolder(new PromiseHolder(3l), 2l, 1l, Long.class),
         new BinaryArgsHolder(3l, new PromiseHolder(2l), 1l, Long.class),
-        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(2l), 1l, Long.class)
-    );
+        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(2l), 1l, Long.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), 2l, "{1}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), 2l, "{1}", String.class),
+        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(2l), "{1}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(2l), "{1}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), 2l, "{1 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), 2l, "{1 = true}", String.class),
+        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(2l), "{1 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(2l), "{1 = true}", String.class)
+        );
   }
 
   @ParameterizedTest
@@ -500,46 +514,6 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), Seq.sequence(3l, 4l), BinaryOperatorsTest::sequenceCatenateOpsValidator),
         new BinaryArgsHolder(Seq.sequence(1l, 2l), new PromiseHolder(Seq.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator),
         new BinaryArgsHolder(new PromiseHolder(Seq.sequence(1l, 2l)), new PromiseHolder(Seq.sequence(3l, 4l)), BinaryOperatorsTest::sequenceCatenateOpsValidator)
-    );
-  }
-
-  @ParameterizedTest
-  @MethodSource("otherCatenateOps")
-  void testOtherCatenateOps(BinaryArgsHolder args) {
-    Object ret = context.eval(YattaLanguage.ID, args.format("++")).as(args.expectedType);
-    assertEquals(args.expected, ret);
-  }
-
-  static Stream<BinaryArgsHolder> otherCatenateOps() {
-    return Stream.of(
-        new BinaryArgsHolder(Set.set(1l), 2l, "{1, 2}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), 2l, "{1, 2}", String.class),
-        new BinaryArgsHolder(Set.set(1l), new PromiseHolder(2l), "{1, 2}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), new PromiseHolder(2l), "{1, 2}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class)
-    );
-  }
-
-  @ParameterizedTest
-  @MethodSource("differenceOps")
-  void testDifferenceOps(BinaryArgsHolder args) {
-    Object ret = context.eval(YattaLanguage.ID, args.format("--")).as(args.expectedType);
-    assertEquals(args.expected, ret);
-  }
-
-  static Stream<BinaryArgsHolder> differenceOps() {
-    return Stream.of(
-        new BinaryArgsHolder(Set.set(1l, 2l), 2l, "{1}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), 2l, "{1}", String.class),
-        new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(2l), "{1}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(2l), "{1}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), 2l, "{1 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), 2l, "{1 = true}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(2l), "{1 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(2l), "{1 = true}", String.class)
     );
   }
 

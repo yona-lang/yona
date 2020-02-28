@@ -55,7 +55,7 @@ in
 # step: function of two arguments (accumulator, element) returning new value of the accumulator
 # complete: function of one argument (final state of accumulator) returning final return value
 distinct (init, step, complete) = let
-  new_step = \(set, acc) val -> if val in set then (set, acc) else (set ++ val, step acc val)
+  new_step = \(set, acc) val -> if val in set then (set, acc) else (set + val, step acc val)
 in
   (\-> (Set::empty, init), new_step, \(_, acc) -> complete acc)
 

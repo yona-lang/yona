@@ -111,7 +111,6 @@ OP_LOGIC_NOT : '!' ;
 OP_CONS_L : '-|' ;
 OP_CONS_R : '|-' ;
 OP_JOIN : '++';
-OP_DIFFERENCE : '--';
 
 OP_PIPE_L : '<|' ;
 OP_PIPE_R : '|>' ;

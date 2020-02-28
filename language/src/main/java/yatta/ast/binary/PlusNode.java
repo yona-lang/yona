@@ -4,6 +4,8 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.runtime.Dict;
+import yatta.runtime.Set;
+import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
 
 @NodeInfo(shortName = "+")
@@ -19,9 +21,11 @@ public abstract class PlusNode extends BinaryOpNode {
   }
 
   @Specialization
-  public Dict dictionaries(Dict left, Dict right) {
-    // TODO implement
-    return null;
+  public Dict dict(Dict dict, Tuple tuple) {
+    if (2 != tuple.length()) {
+      throw YattaException.typeError(this, tuple.toArray());
+    }
+    return dict.add(tuple.get(0), tuple.get(1));
   }
 
   protected Promise promise(Object left, Object right) {
@@ -29,17 +33,14 @@ public abstract class PlusNode extends BinaryOpNode {
     return all.map(args -> {
       Object[] argValues = (Object[]) args;
 
-      if (!argValues[0].getClass().equals(argValues[1].getClass())) {
-        return YattaException.typeError(this, argValues);
-      }
-
       if (argValues[0] instanceof Long && argValues[1] instanceof Long) {
         return (long) argValues[0] + (long) argValues[1];
-      } else if (argValues[0] instanceof Double) {
+      } else if (argValues[0] instanceof Double && argValues[1] instanceof Double) {
         return (double) argValues[0] + (double) argValues[1];
-        // TODO implement
-//      } else if (argValues[0] instanceof Dictionary) {
-//        return null;
+      } else if (argValues[0] instanceof Dict && argValues[1] instanceof Tuple) {
+        return dict((Dict) argValues[0], (Tuple) argValues[1]);
+      } else if (argValues[0] instanceof Set) {
+        return set((Set) argValues[0], argValues[1]);
       } else {
         return YattaException.typeError(this, argValues);
       }
@@ -55,5 +56,10 @@ public abstract class PlusNode extends BinaryOpNode {
   @Specialization
   public Promise rightPromise(Object left, Promise right) {
     return promise(left, right);
+  }
+
+  @Specialization
+  public Set set(Set set, Object el) {
+    return set.add(el);
   }
 }

@@ -17,8 +17,7 @@ module tests\CommonFunctions exports
 #factorial n = n * factorial (n - 1)
 
 # A tail recursive function to calculate factorial
-factTR n a
-    | n == 0 = a
+factTR 0 a = a
 factTR n a = factTR (n - 1) (n * a)
 
 # A wrapper over factTR
