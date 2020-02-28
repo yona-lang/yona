@@ -47,7 +47,6 @@ public abstract class PlusNode extends BinaryOpNode {
     }, this);
   }
 
-
   @Specialization
   public Promise leftPromise(Promise left, Object right) {
     return promise(left, right);
