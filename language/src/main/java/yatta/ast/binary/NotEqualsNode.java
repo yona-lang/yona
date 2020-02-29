@@ -24,11 +24,6 @@ public abstract class NotEqualsNode extends BinaryOpNode {
   }
 
   @Specialization
-  public boolean strings(String left, String right) {
-    return !left.equals(right);
-  }
-
-  @Specialization
   public boolean functions(Function left, Function right) {
     return left != right;
   }
