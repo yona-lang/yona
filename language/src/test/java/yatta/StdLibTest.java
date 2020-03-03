@@ -82,7 +82,7 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void sequenceReduceLeftCatTest() {
-    long ret = context.eval(YattaLanguage.ID, "let reduce_set = Set::reduce in Seq::reducel [{1, 2}, {3, 4}] <| Transducers::cat reduce_set (\\-> 0, \\acc val -> acc + val, identity)").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Seq::reducel [{1, 2}, {3, 4}] <| Transducers::cat (Set::reduce) (\\-> 0, \\acc val -> acc + val, identity)").asLong();
     assertEquals(10L, ret);
   }
 

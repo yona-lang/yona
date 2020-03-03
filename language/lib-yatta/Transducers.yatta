@@ -59,6 +59,7 @@ distinct (init, step, complete) = let
 in
   (\-> (Set::empty, init), new_step, \(_, acc) -> complete acc)
 
+
 # n: max number of elements in chunk
 # init: initial state
 # step: function of two arguments (accumulator, element) returning new value of the accumulator
@@ -70,6 +71,7 @@ chunk n (init, step, complete)
   in
     (\-> ([], init), new_step, new_complete)
 
+
 # init: initial state
 # step: function of two arguments (accumulator, element) returning new value of the accumulator
 # complete: function of one argument (final state of accumulator) returning final return value
@@ -80,6 +82,7 @@ scan (init, step, complete) = let
     (new_seq, step acc new_seq)
 in
   (\-> ([], init), new_step, \(_, acc) -> complete acc)
+
 
 # reduce: function of two arguments (element, reducer) returning reduced value
 # init: initial state
