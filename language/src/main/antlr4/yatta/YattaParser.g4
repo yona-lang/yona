@@ -60,7 +60,7 @@ options { tokenVocab=YattaLexer; }
 input : NEWLINE? expression NEWLINE? EOF ;
 
 expression : PARENS_L expression PARENS_R                                                                #expressionInParents
-           | op=(OP_LOGIC_NOT | OP_BIN_NOT) expression                                                   #negation
+           | op=(OP_LOGIC_NOT | OP_BIN_NOT) expression                                                   #negationExpression
            | left=expression BACKTICK call BACKTICK right=expression                                     #backtickExpression
            | left=expression op=(OP_MULTIPLY | OP_DIVIDE | OP_MODULO) right=expression                   #multiplicativeExpression
            | left=expression op=(OP_PLUS | OP_MINUS) right=expression                                    #additiveExpression

@@ -53,7 +53,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitNegation(YattaParser.NegationContext ctx) {
+  public ExpressionNode visitNegationExpression(YattaParser.NegationExpressionContext ctx) {
     if (ctx.OP_LOGIC_NOT() != null) {
       return withSourceSection(ctx, new NegationNode(ctx.expression().accept(this)));
     } else {

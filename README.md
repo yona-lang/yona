@@ -191,6 +191,10 @@ These are all the operations supposorted by Yatta's binary operators. Combinatio
 | `\|-` | seq | any | add element to the end of a sequence |
 
 
+### Unary operators
+In addition to the binary operators in the table above, Yatta supports negation operator `~` which can be applied 
+either to integer or boolean values and will result in bitwise complement, or boolean negation respectively.
+
 ## Syntax
 Program in Yatta consists always of evaluation of a single expression. In fact, any Yatta program consist of exactly one expression.
 
