@@ -10,25 +10,27 @@ final class RingBuffer<E> {
   @SuppressWarnings("rawtypes")
   private static final AtomicReferenceFieldUpdater<RingBuffer, AtomicLong[]> GATING_UPDATER = AtomicReferenceFieldUpdater.newUpdater(RingBuffer.class, AtomicLong[].class, "gating");
 
-  private final AtomicLong cursor = new AtomicLong(-1L);
+  private final AtomicLong producerCursor = new AtomicLong(-1L);
   private final AtomicLong cachedGating = new AtomicLong(-1L);
   private final E[] elements;
-  private final int idxMask;
-  private final int idxShift;
+  private final int size;
+  private final int mask;
+  private final int shift;
   private final AtomicIntegerArray availability;
   private volatile AtomicLong[] gating = new AtomicLong[]{};
 
   @SuppressWarnings("unchecked")
-  RingBuffer(final int size, final Supplier<? extends E> constructor) {
-    if (Integer.bitCount(size) != 1) {
+  RingBuffer(final int capacity, final Supplier<? extends E> constructor) {
+    if (Integer.bitCount(capacity) != 1) {
       throw new AssertionError();
     }
-    elements = (E[]) new Object[size];
-    for (int i = 0; i < size; i++) {
+    elements = (E[]) new Object[capacity];
+    for (int i = 0; i < capacity; i++) {
       elements[i] = constructor.get();
     }
-    idxMask = size - 1;
-    idxShift = 31 - Integer.numberOfLeadingZeros(size);
+    size = capacity;
+    mask = size - 1;
+    shift = 31 - Integer.numberOfLeadingZeros(size);
     availability = new AtomicIntegerArray(size);
     for (int i = 0; i < availability.length(); i++) {
       availability.set(i, -1);
@@ -39,12 +41,12 @@ final class RingBuffer<E> {
     long current;
     long next;
     do {
-      current = cursor.get();
+      current = producerCursor.get();
       next = current + n;
       if (!hasCapacity(n, current)) {
         return -1L;
       }
-    } while (!cursor.compareAndSet(current, next));
+    } while (!producerCursor.compareAndSet(current, next));
     return next;
   }
 
@@ -63,12 +65,12 @@ final class RingBuffer<E> {
   }
 
   E read(final long token) {
-    return elements[(int)(token & idxMask)];
+    return elements[(int)(token & mask)];
   }
 
   void release(final long from, final long to) {
     for (long i = from; i <= to; i++) {
-      availability.lazySet(((int) i) & idxMask, (int) (i >>> idxShift));
+      availability.lazySet(((int) i) & mask, (int) (i >>> shift));
     }
   }
 
@@ -93,22 +95,23 @@ final class RingBuffer<E> {
     do {
       current = GATING_UPDATER.get(this);
       updated = Arrays.copyOf(current, current.length + cursors.length);
-      cursorValue = cursor.get();
+      cursorValue = producerCursor.get();
       int index = current.length;
       for (AtomicLong c : cursors) {
         c.lazySet(cursorValue);
         updated[index++] = c;
       }
     } while (!GATING_UPDATER.compareAndSet(this, current, updated));
-    cursorValue = cursor.get();
+    cursorValue = producerCursor.get();
     for (AtomicLong c : cursors) {
       c.lazySet(cursorValue);
     }
   }
 
-  long lastReleased(final long from, final long to) {
+  long lastReleased(final long from) {
+    final long to = lastClaimed();
     for (long i = from; i <= to; i++) {
-      if (availability.get(((int) i) & idxMask) != (int) (i >>> idxShift)) {
+      if (availability.get(((int) i) & mask) != (int) (i >>> shift)) {
         return i - 1;
       }
     }
@@ -116,6 +119,6 @@ final class RingBuffer<E> {
   }
 
   long lastClaimed() {
-    return cursor.get();
+    return producerCursor.get();
   }
 }

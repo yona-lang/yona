@@ -12,6 +12,6 @@ to_dict = (Dict::empty, \acc val-> acc + val, identity)
 
 # reduce dispatcher, based on collection type
 reduce val transducer
-  | Types::is_seq(val) = Seq::reduceLeft val transducer
+  | Types::is_seq(val) = Seq::reducel val transducer
   | Types::is_set(val) = Set::reduce val transducer
   | Types::is_dict(val) = Dict::reduce val transducer
