@@ -32,8 +32,7 @@ public class RingBufferTest {
 
           @Override
           void advance() {
-            assertFalse(values[value]);
-            values[value] = true;
+            values[value] = !values[value];
           }
         };
 

@@ -21,7 +21,7 @@ public final class Threading {
 
   static final int THREAD_COUNT = Math.max(2, Runtime.getRuntime().availableProcessors());
   static final int BUFFER_SIZE = 1024;
-  static final int PRODUCE_YIELD_MAX_ATTEMPTS = 10;
+  static final int PRODUCE_SPIN_MAX_ATTEMPTS = 1000;
   static final int CONSUME_YIELD_MAX_ATTEMPTS = 10;
   static final int CONSUME_PARK_MAX_ATTEMPTS = 100;
 
@@ -103,17 +103,17 @@ public final class Threading {
   }
 
   public void submit(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
-    int yields = 0;
+    int spins = 0;
     long token;
     while (true) {
       token = ringBuffer.tryClaim(1);
       if (token == -1) {
-        if (yields != PRODUCE_YIELD_MAX_ATTEMPTS) {
-          Thread.yield();
-          yields++;
+        if (spins != PRODUCE_SPIN_MAX_ATTEMPTS) {
+          Thread.onSpinWait();
+          spins++;
           continue;
         }
-        yields = 0;
+        spins = 0;
         execute(promise, function, dispatch, node);
       } else {
         break;
