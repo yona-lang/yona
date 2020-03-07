@@ -16,13 +16,13 @@ final class Consumer {
   boolean consume(final Callback callback) {
     long current;
     long next;
-    long available;
+    long limit;
     do {
       current = sharedCursor.get();
       cursor.lazySet(current);
       next = current + 1;
-      available = buffer.lastReleased(next, buffer.lastClaimed());
-      if (next > available) {
+      limit = buffer.lastReleased(next);
+      if (next > limit) {
         return false;
       }
       callback.prepare(next);

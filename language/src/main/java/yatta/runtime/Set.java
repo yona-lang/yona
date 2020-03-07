@@ -58,7 +58,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   abstract Set remove(Object value, long hash, int shift);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public abstract Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+  public abstract Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
@@ -332,11 +332,10 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     @Override
-    public Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
-      final Function init = reducer[0];
-      final Function step = reducer[1];
-      final Function complete = reducer[2];
-      Object state = dispatch.execute(init);
+    public Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+      final Function step = (Function) reducer[1];
+      final Function complete = (Function) reducer[2];
+      Object state = reducer[0];
       try {
         for (int i = 0; i < arity(dataBmp); i++) {
           state = dispatch.execute(step, state, dataAt(i));
@@ -513,11 +512,10 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     @Override
-    public Object reduce(Function[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
-      final Function init = reducer[0];
-      final Function step = reducer[1];
-      final Function complete = reducer[2];
-      Object state = dispatch.execute(init);
+    public Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+      final Function step = (Function) reducer[1];
+      final Function complete = (Function) reducer[2];
+      Object state = reducer[0];
       try {
         for (Object val : values) {
           state = dispatch.execute(step, state, val);

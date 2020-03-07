@@ -36,7 +36,7 @@ public final class DictBuiltinModule implements BuiltinModule {
     @Specialization
     public Object reduce(Dict dict, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return dict.reduce(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
+        return dict.reduce(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YattaException(e, this);

@@ -485,11 +485,10 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public Object reduceLeft(final Function[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
-    final Function init = reducer[0];
-    final Function step = reducer[1];
-    final Function complete = reducer[2];
-    Object state = dispatch.execute(init);
+  public Object reduceLeft(final Object[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    final Function step = (Function) reducer[1];
+    final Function complete = (Function) reducer[2];
+    Object state = reducer[0];
     try {
       for (int i = 0; i < prefixSize; i++) {
         state = dispatch.execute(step, state, nodeLookup(prefix, i));
@@ -528,11 +527,10 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public Object reduceRight(final Function[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
-    final Function init = reducer[0];
-    final Function step = reducer[1];
-    final Function complete = reducer[2];
-    Object state = dispatch.execute(init);
+  public Object reduceRight(final Object[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    final Function step = (Function) reducer[1];
+    final Function complete = (Function) reducer[2];
+    Object state = reducer[0];
     try {
       for (int i = suffixSize - 1; i >= 0; i--) {
         state = dispatch.execute(step, state, nodeLookup(suffix, i));

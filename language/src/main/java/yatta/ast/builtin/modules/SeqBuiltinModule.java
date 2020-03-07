@@ -42,25 +42,12 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
-  @NodeInfo(shortName = "reduce")
-  abstract static class ReduceDefaultBuiltin extends BuiltinNode {
-    @Specialization
-    public Object reduceLeft(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      try {
-        return sequence.reduceLeft(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
-      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-        /* Execute was not successful. */
-        throw new YattaException(e, this);
-      }
-    }
-  }
-
   @NodeInfo(shortName = "reducel")
   abstract static class ReduceLeftBuiltin extends BuiltinNode {
     @Specialization
     public Object reduceLeft(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return sequence.reduceLeft(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
+        return sequence.reduceLeft(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YattaException(e, this);
@@ -73,7 +60,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
     @Specialization
     public Object reduceRight(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return sequence.reduceRight(new Function[] {(Function) reducer.get(0), (Function) reducer.get(1), (Function) reducer.get(2)}, dispatch);
+        return sequence.reduceRight(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YattaException(e, this);
@@ -94,7 +81,6 @@ public final class SeqBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceDefaultBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()));
     return builtins;
