@@ -128,7 +128,7 @@ CHARACTER_LITERAL:                   '\'' (~['\\\r\n\u0085\u2028\u2029] | Common
 mode INTERPOLATION_STRING;
 DOUBLE_CURLY_INSIDE:           '{{';
 OPEN_BRACE_INSIDE:             '{' { curlyLevels.push(1); } -> skip, pushMode(DEFAULT_MODE);
-REGULAR_CHAR_INSIDE:           SimpleEscapeSequence;
+REGULAR_CHAR_INSIDE:           SimpleEscapeSequence { setText(getText().replace("\\\\", "\\").replace("\\\"", "\"")); };
 DOUBLE_QUOTE_INSIDE:           '"' { interpolatedStringLevel--; } -> popMode;
 REGULAR_STRING_INSIDE:         ~('{' | '\\' | '"')+;
 

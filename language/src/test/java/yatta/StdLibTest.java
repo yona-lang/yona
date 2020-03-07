@@ -1,12 +1,12 @@
 package yatta;
 
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class StdLibTest extends CommonTest {
   @Test
@@ -125,5 +125,29 @@ public class StdLibTest extends CommonTest {
     assertEquals(0L, array[0]);
     assertEquals("ahoj", ((List) array[1]).get(0));
     assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
+  }
+
+  @Test
+  public void simpleEvalTest() {
+    long ret = context.eval(YattaLanguage.ID, "eval \"1\"").asLong();
+    assertEquals(1L, ret);
+  }
+
+  @Test
+  public void asyncEvalTest() {
+    long ret = context.eval(YattaLanguage.ID, "eval \"async \\\\-> 1\"").asLong();
+    assertEquals(1L, ret);
+  }
+
+  @Test
+  public void raiseEvalTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "eval \"raise :test \\\"test msg\\\"\"");
+      } catch (PolyglotException ex) {
+        assertEquals("YattaError <test>: test msg", ex.getMessage());
+        throw ex;
+      }
+    });
   }
 }
