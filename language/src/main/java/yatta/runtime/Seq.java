@@ -617,9 +617,9 @@ public final class Seq implements TruffleObject {
         }
         int offset = 1;
         for (int i = 0; i < len; i++) {
-          final int codePoint = Util.utf8Decode(bytes, offset);
+          final int codePoint = UnicodeUtils.utf8Decode(bytes, offset);
           appendCodePoint(buffer, codePoint);
-          offset += Util.utf8Length(codePoint);
+          offset += UnicodeUtils.utf8Length(codePoint);
         }
       } else {
         for (int i = 0; i < len; i++) {
@@ -673,7 +673,7 @@ public final class Seq implements TruffleObject {
         for (int i = 0; i < len; i++) {
           Object o = nodeLookup(node, i);
           if (o instanceof Integer) {
-            Util.utf8Encode(buffer, (Integer) o);
+            UnicodeUtils.utf8Encode(buffer, (Integer) o);
           } else if (o instanceof Byte) {
             buffer.put((Byte) o);
           } else {
@@ -758,7 +758,7 @@ public final class Seq implements TruffleObject {
       final Object[] result = new Object[nodeLength(node) + 1];
       if (decodeIsUtf8(bytes[0])) {
         for (int i = 1; i < result.length; i++) {
-          result[i] = Util.utf8Decode(bytes, Util.utf8Offset(bytes, 1, i - 1));
+          result[i] = UnicodeUtils.utf8Decode(bytes, UnicodeUtils.utf8Offset(bytes, 1, i - 1));
         }
       } else {
         for (int i = 1; i < result.length; i++) {
@@ -808,7 +808,7 @@ public final class Seq implements TruffleObject {
     if (node instanceof byte[]) {
       final byte[] bytes = (byte[]) node;
       if (decodeIsUtf8(bytes[0])) {
-        return Util.utf8Decode(bytes, Util.utf8Offset(bytes, 1, i));
+        return UnicodeUtils.utf8Decode(bytes, UnicodeUtils.utf8Offset(bytes, 1, i));
       } else {
         return bytes[i + 1];
       }
@@ -1237,11 +1237,11 @@ public final class Seq implements TruffleObject {
         int bytes = 0;
         for (int i = 0; i < n; i++) {
           int codePoint = codePoints[cursor++];
-          int codePointLen = Util.utf8Length(codePoint);
+          int codePointLen = UnicodeUtils.utf8Length(codePoint);
           if (codePointLen == -1) {
             throw new AssertionError();
           }
-          Util.utf8Encode(buffer, codePoint);
+          UnicodeUtils.utf8Encode(buffer, codePoint);
           bytes += codePointLen;
         }
         final byte[] result = new byte[offset + bytes];

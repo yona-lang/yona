@@ -612,8 +612,10 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public MatchNode visitPattern(YattaParser.PatternContext ctx) {
-    if (ctx.underscore() != null) {
-      return withSourceSection(ctx.underscore(), new UnderscoreMatchNode());
+    if (ctx.pattern() != null) {
+      return visitPattern(ctx.pattern());
+    } else if (ctx.underscore() != null) {
+        return withSourceSection(ctx.underscore(), new UnderscoreMatchNode());
     } else if (ctx.patternValue() != null) {
       return new ValueMatchNode(ctx.patternValue().accept(this));
     } else if (ctx.dataStructurePattern() != null) {

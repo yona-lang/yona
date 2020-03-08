@@ -2,8 +2,8 @@ package yatta.runtime;
 
 import java.nio.ByteBuffer;
 
-public final class Util {
-  private Util() {}
+public final class UnicodeUtils {
+  private UnicodeUtils() {}
 
   public static short int16Read(final byte[] src, int offset) {
     return (short) ((src[offset] << 8) | (src[++offset] & 0xff));

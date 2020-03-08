@@ -48,11 +48,24 @@ public final class Launcher {
       context.eval(source);
       return 0;
     } catch (PolyglotException ex) {
+      if (!ex.isInternalError()) {
+        System.err.println(prettyPrintException(ex.getMessage(), ex.getSourceLocation()));
+      }
       ex.printStackTrace();
       return ex.getExitStatus();
     } finally {
       context.close();
     }
+  }
+
+  private static String prettyPrintException(String message, org.graalvm.polyglot.SourceSection sourceLocation) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(message);
+    sb.append(" at ");
+    sb.append(sourceLocation.getSource().getName());
+    sb.append(":\n");
+    sb.append(sourceLocation.getCharacters());
+    return sb.toString();
   }
 
   private static boolean parseOption(Map<String, String> options, String arg) {

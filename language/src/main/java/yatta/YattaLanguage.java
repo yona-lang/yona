@@ -12,7 +12,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.ast.local.LexicalScope;
-import yatta.parser.ParseError;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
 import yatta.runtime.Unit;

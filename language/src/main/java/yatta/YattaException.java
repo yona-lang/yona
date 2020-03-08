@@ -8,10 +8,7 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
-import yatta.runtime.Context;
-import yatta.runtime.Seq;
-import yatta.runtime.Tuple;
-import yatta.runtime.Unit;
+import yatta.runtime.*;
 
 public class YattaException extends RuntimeException implements TruffleException {
   private static final long serialVersionUID = -6799734410727348507L;
@@ -59,6 +56,17 @@ public class YattaException extends RuntimeException implements TruffleException
   @TruffleBoundary
   public Tuple asTuple() {
     return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), getMessage(), stacktraceToSequence(this));
+  }
+
+  @TruffleBoundary
+  public static String prettyPrint(String message, org.graalvm.polyglot.SourceSection sourceLocation) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(message);
+    sb.append(" at ");
+    sb.append(sourceLocation.getSource().getName());
+    sb.append(":\n");
+    sb.append(sourceLocation.getCharacters());
+    return sb.toString();
   }
 
   /**

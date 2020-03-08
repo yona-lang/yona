@@ -100,6 +100,7 @@ public class Context {
     builtinModules.register(new DictBuiltinModule());
     builtinModules.register(new FileBuiltinModule());
     builtinModules.register(new TransducersBuiltinModule());
+    builtinModules.register(new TimeBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

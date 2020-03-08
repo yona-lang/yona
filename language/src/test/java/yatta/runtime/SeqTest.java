@@ -33,7 +33,7 @@ public class SeqTest {
     //noinspection MismatchedQueryAndUpdateOfStringBuilder
     StringBuilder builder = new StringBuilder();
     for (int i = 0; i < Integer.MAX_VALUE; i++) {
-      if (Util.utf8Length(i) != -1) {
+      if (UnicodeUtils.utf8Length(i) != -1) {
         builder.appendCodePoint(i);
       }
     }

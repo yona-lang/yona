@@ -64,7 +64,7 @@ public class YattaTest {
               context.eval(source);
             } catch (PolyglotException ex) {
               if (!ex.isInternalError()) {
-                printer.println(ex.getMessage());
+                printer.println(YattaException.prettyPrint(ex.getMessage(), ex.getSourceLocation()));
               } else {
                 throw ex;
               }
@@ -78,6 +78,7 @@ public class YattaTest {
             context.leave();
           });
 
+          if(baseName.equals("Sieve"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;
