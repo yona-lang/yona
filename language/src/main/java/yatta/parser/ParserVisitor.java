@@ -403,11 +403,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public DictNode visitDict(YattaParser.DictContext ctx) {
-    DictNode.Entry[] entries = new DictNode.Entry[ctx.dictKey().size()];
+    DictNode.EntryNode[] entries = new DictNode.EntryNode[ctx.dictKey().size()];
     for (int i = 0; i < ctx.dictKey().size(); i++) {
       YattaParser.DictKeyContext keyCtx = ctx.dictKey(i);
       YattaParser.DictValContext expressionCtx = ctx.dictVal(i);
-      entries[i] = new DictNode.Entry(keyCtx.accept(this), expressionCtx.accept(this));
+      entries[i] = new DictNode.EntryNode(keyCtx.accept(this), expressionCtx.accept(this));
     }
     return withSourceSection(ctx, new DictNode(entries));
   }

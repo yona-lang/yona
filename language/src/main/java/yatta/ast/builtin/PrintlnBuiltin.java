@@ -8,6 +8,7 @@ import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.runtime.Context;
+import yatta.runtime.exceptions.BadArgException;
 
 import java.io.PrintWriter;
 
@@ -30,7 +31,7 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @TruffleBoundary
-    private static void doPrint(PrintWriter out, long value) {
+    private void doPrint(PrintWriter out, long value) {
         out.println(value);
     }
 
@@ -41,7 +42,7 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @TruffleBoundary
-    private static void doPrint(PrintWriter out, boolean value) {
+    private void doPrint(PrintWriter out, boolean value) {
         out.println(value);
     }
 
@@ -52,7 +53,7 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @TruffleBoundary
-    private static void doPrint(PrintWriter out, String value) {
+    private void doPrint(PrintWriter out, String value) {
         out.println(value);
     }
 
@@ -65,7 +66,7 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @TruffleBoundary
-    private static void doPrint(PrintWriter out, Promise value) {
+    private void doPrint(PrintWriter out, Promise value) {
         out.println(value);
     }
 
@@ -76,8 +77,12 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @TruffleBoundary
-    private static void doPrint(PrintWriter out, Seq value) {
-        out.println(value.asJavaString(null));
+    private void doPrint(PrintWriter out, Seq value) {
+        try {
+            out.println(value.asJavaString(this));
+        } catch (BadArgException e) {
+            out.println(value.toString());
+        }
     }
 
     @Specialization
@@ -87,7 +92,7 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     }
 
     @TruffleBoundary
-    private static void doPrint(PrintWriter out, Object value) {
+    private void doPrint(PrintWriter out, Object value) {
         out.println(value);
     }
 }

@@ -11,17 +11,17 @@ import java.util.Objects;
 
 @NodeInfo
 public final class DictNode extends ExpressionNode {
-  public final Entry[] items;
+  @Children public final EntryNode[] items;
 
-  public DictNode(Entry[] items) {
+  public DictNode(EntryNode[] items) {
     this.items = items;
   }
 
-  public static final class Entry {
-    public final ExpressionNode key;
-    public final ExpressionNode value;
+  public static final class EntryNode extends ExpressionNode {
+    @Child private ExpressionNode key;
+    @Child private ExpressionNode value;
 
-    public Entry(ExpressionNode key, ExpressionNode value) {
+    public EntryNode(ExpressionNode key, ExpressionNode value) {
       this.key = key;
       this.value = value;
     }
@@ -30,9 +30,9 @@ public final class DictNode extends ExpressionNode {
     public boolean equals(Object o) {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
-      Entry entry = (Entry) o;
-      return Objects.equals(key, entry.key) &&
-          Objects.equals(value, entry.value);
+      EntryNode entryNode = (EntryNode) o;
+      return Objects.equals(key, entryNode.key) &&
+          Objects.equals(value, entryNode.value);
     }
 
     @Override
@@ -42,10 +42,15 @@ public final class DictNode extends ExpressionNode {
 
     @Override
     public String toString() {
-      return "Entry{" +
+      return "EntryNode{" +
           "key=" + key +
           ", value=" + value +
           '}';
+    }
+
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
+      return new Object[] {key.executeGeneric(frame), value.executeGeneric(frame)};
     }
   }
 
@@ -82,8 +87,9 @@ public final class DictNode extends ExpressionNode {
   private Dict execute(VirtualFrame frame) {
     Dict dictionary = Dict.empty(Murmur3.INSTANCE, 0L);
 
-    for (Entry entry : items) {
-      dictionary = dictionary.add(entry.key.executeGeneric(frame), entry.value.executeGeneric(frame));
+    for (EntryNode entryNode : items) {
+      Object[] executedEntry = (Object[]) entryNode.executeGeneric(frame);
+      dictionary = dictionary.add(executedEntry[0], executedEntry[1]);
     }
 
     return dictionary;

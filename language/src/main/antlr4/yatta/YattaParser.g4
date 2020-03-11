@@ -180,7 +180,7 @@ funArg : value | PARENS_L expression PARENS_R ;
 call : name | moduleCall | nameCall ;
 moduleCall : fqn DCOLON name ;
 nameCall : var=name DCOLON fun=name;
-module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE record* function+ ;
+module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE record* function+ NEWLINE? KW_END ;
 nonEmptyListOfNames : NEWLINE? name NEWLINE? (COMMA NEWLINE? name)* NEWLINE? ;
 
 unit : UNIT ;

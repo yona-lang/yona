@@ -1,4 +1,4 @@
 module Test exports funone as
-
-funone argone 1 = argone
-funone 1 = argone
+    funone argone 1 = argone
+    funone 1 = argone
+end

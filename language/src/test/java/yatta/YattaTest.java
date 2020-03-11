@@ -13,8 +13,9 @@ import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -24,7 +25,7 @@ public class YattaTest {
   private static final String OUTPUT_SUFFIX = ".output";
   private static final String TESTS_DIRECTORY = "tests";
 
-  private static final String LF = System.getProperty("line.separator");
+  private static final boolean REPORT_STACKTRACE = false;
 
   @TestFactory
   protected List<DynamicTest> tests() throws IOException {
@@ -65,6 +66,17 @@ public class YattaTest {
             } catch (PolyglotException ex) {
               if (!ex.isInternalError()) {
                 printer.println(YattaException.prettyPrint(ex.getMessage(), ex.getSourceLocation()));
+
+                if (REPORT_STACKTRACE) {
+                  printer.println("Stack Trace:");
+                  List<PolyglotException.StackFrame> reversedStackFrame = StreamSupport.
+                      stream(ex.getPolyglotStackTrace().spliterator(), false).
+                      collect(Collectors.toList());
+                  Collections.reverse(reversedStackFrame);
+                  for (PolyglotException.StackFrame stackFrame : reversedStackFrame) {
+                    printer.println(stackFrame);
+                  }
+                }
               } else {
                 throw ex;
               }
@@ -73,12 +85,11 @@ public class YattaTest {
             printer.flush();
             String actualOutput = new String(out.toByteArray());
 
-            assertEquals(expectedOutput, actualOutput, sourceName);
+            assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
 
             context.leave();
           });
 
-          if(baseName.equals("Sieve"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;
@@ -88,11 +99,6 @@ public class YattaTest {
   }
 
   private static String readAllLines(Path file) throws IOException {
-    // fix line feeds for non unix os
-    StringBuilder outFile = new StringBuilder();
-    for (String line : Files.readAllLines(file, Charset.defaultCharset())) {
-      outFile.append(line).append(LF);
-    }
-    return outFile.toString();
+    return Files.readString(file, Charset.forName("UTF-8"));
   }
 }

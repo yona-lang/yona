@@ -1,5 +1,4 @@
 module File exports test as
-
-test = true
-
-private = false
+    test = true
+    private = false
+end

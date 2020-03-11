@@ -1,1 +1,2 @@
-YattaError <assert>: Assertion Error
+YattaError <assert>: Assertion Error at Test.yatta:
+raise :assert "Assertion Error"

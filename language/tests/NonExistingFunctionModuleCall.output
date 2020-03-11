@@ -1,1 +1,2 @@
-Function funtwo is not present in Module{fqn=tests\SimpleModule, exports=[funone, funthree], functions={funone=funone, funthree=funthree}, records={}}
+Function funtwo is not present in Module{fqn=tests\SimpleModule, exports=[funone, funthree], functions={funone=funone, funthree=funthree}, records={}} at NonExistingFunctionModuleCall.yatta:
+tests\SimpleModule::funtwo

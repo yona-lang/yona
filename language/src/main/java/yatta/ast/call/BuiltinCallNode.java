@@ -23,6 +23,12 @@ public final class BuiltinCallNode extends ExpressionNode {
   }
 
   @Override
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    builtinNode.setIsTail(isTail);
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     return builtinNode.executeGeneric(frame);
   }

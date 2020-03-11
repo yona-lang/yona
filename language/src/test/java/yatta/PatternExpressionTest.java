@@ -580,7 +580,7 @@ public class PatternExpressionTest extends CommonTest {
         "    TestRecord(argtwo = 2) -> 1\n" +
         "    _ -> 2\n" +
         "end\n" +
-        "in mod::testfun").asLong();
+        "end in mod::testfun").asLong();
 
     assertEquals(1l, ret);
   }
@@ -594,7 +594,7 @@ public class PatternExpressionTest extends CommonTest {
         "    x@TestRecord -> x.argone\n" +
         "    _ -> 2\n" +
         "end\n" +
-        "in mod::testfun").asLong();
+        "end in mod::testfun").asLong();
 
     assertEquals(1l, ret);
   }

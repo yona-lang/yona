@@ -6,6 +6,7 @@ import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.call.InvokeNode;
 import yatta.ast.expression.value.FQNNode;
+import yatta.ast.pattern.PatternMatchable;
 
 import java.util.Objects;
 
@@ -22,6 +23,12 @@ public final class PipeLeftNode extends ExpressionNode {
     return "PipeLeftNode{" +
         "invokeNode=" + invokeNode +
         '}';
+  }
+
+  @Override
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    invokeNode.setIsTail(isTail);
   }
 
   @Override

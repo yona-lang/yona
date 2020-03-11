@@ -92,7 +92,7 @@ public class ErrorsTest extends CommonTest {
             "testMod = module TestMod exports funone as\n" +
             "funone argone = funtwo argone\n" +
             "funtwo argone = argone\n" +
-            "in testMod::funtwo 6").asLong();
+            "end in testMod::funtwo 6").asLong();
       } catch (PolyglotException ex) {
         assertEquals("Function funtwo is not present in Module{fqn=TestMod, exports=[funone], functions={funone=funone, funtwo=funtwo}, records={}}", ex.getMessage());
         throw ex;
@@ -211,7 +211,8 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YattaLanguage.ID, "module WrongRecordModule exports funone as\n" +
             "record TestRecord = (argone, argtwo)\n" +
-            "funone = WrongRecord(argone = \"hello\")").getMember("funone").execute();
+            "funone = WrongRecord(argone = \"hello\")\n" +
+            "end").getMember("funone").execute();
       } catch (PolyglotException ex) {
         assertEquals("NoRecordException: WrongRecord", ex.getMessage());
         throw ex;
@@ -225,7 +226,8 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YattaLanguage.ID, "module WrongRecordModule exports funone as\n" +
             "record TestRecord = (argone, argtwo)\n" +
-            "funone = TestRecord(argone = \"hello\", argthree = 3)").getMember("funone").execute();
+            "funone = TestRecord(argone = \"hello\", argthree = 3)\n" +
+            "end").getMember("funone").execute();
       } catch (PolyglotException ex) {
         assertEquals("NoRecordFieldException: TestRecord(argthree)", ex.getMessage());
         throw ex;
@@ -240,7 +242,8 @@ public class ErrorsTest extends CommonTest {
         context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
             "record TestRecord = (argone, argtwo)\n" +
             "funone = let rec = (:whatever) in\n" +
-            "rec.argone in mod::funone").asLong();
+            "rec.argone\n" +
+            "end in mod::funone").asLong();
       } catch (PolyglotException ex) {
         assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for String \"whatever\"", ex.getMessage());
         throw ex;
@@ -255,7 +258,8 @@ public class ErrorsTest extends CommonTest {
         context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
             "record TestRecord = (argone, argtwo)\n" +
             "funone = let rec = (:something, 0) in\n" +
-            "rec.argone in mod::funone").asLong();
+            "rec.argone\n" +
+            "end in mod::funone").asLong();
       } catch (PolyglotException ex) {
         assertEquals("NoRecordException: something", ex.getMessage());
         throw ex;
@@ -270,7 +274,8 @@ public class ErrorsTest extends CommonTest {
         context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
             "record TestRecord = (argone, argtwo)\n" +
             "funone = let rec = async \\-> (async \\-> :whatever, 0) in\n" +
-            "rec.argone in mod::funone").asLong();
+            "rec.argone\n" +
+            "end in mod::funone").asLong();
       } catch (PolyglotException ex) {
         assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for Unsupported Unsupported", ex.getMessage());
         throw ex;
@@ -286,7 +291,8 @@ public class ErrorsTest extends CommonTest {
             "record TestRecord = (argone, argtwo)\n" +
             "record OtherRecord = (argthree, argfour)\n" +
             "funone = let rec = TestRecord(argone = 1) in\n" +
-            "rec.argthree in mod::funone").asLong();
+            "rec.argthree\n" +
+            "end in mod::funone").asLong();
       } catch (PolyglotException ex) {
         assertEquals("NoRecordFieldException: Unnamed:5~(argthree)", ex.getMessage());
         throw ex;

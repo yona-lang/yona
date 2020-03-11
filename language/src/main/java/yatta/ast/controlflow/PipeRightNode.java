@@ -25,6 +25,12 @@ public final class PipeRightNode extends ExpressionNode {
   }
 
   @Override
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    invokeNode.setIsTail(isTail);
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     return invokeNode.executeGeneric(frame);
   }

@@ -370,6 +370,7 @@ record DataStructure = (field_one, field_two)
 function1 = :something
 
 function2 = :something_else
+end
 ```
 
 Calling functions from a module is denoted by a double colon:
@@ -383,7 +384,8 @@ Module may also be defined dynamically, for example assigned to a name in a `let
 
 ```haskell
 let some_module = module TestModule exports test_function as
-    test_function = 5
+        test_function = 5
+    end
 in
     some_module::test_function
 ```
@@ -680,13 +682,13 @@ Sometimes it can be useful to name a collection (sequence, set or dictionary) or
 
 ```haskell
 let mod = module TestMod exports testfun as
-    
-    record TestRecord=(argone, argtwo)
-    
-    testfun = case TestRecord(argone = 1, argtwo = 2) of
-        2            -> 0
-        x@TestRecord -> x.argone
-        _            -> 2
+        record TestRecord=(argone, argtwo)
+        
+        testfun = case TestRecord(argone = 1, argtwo = 2) of
+            2            -> 0
+            x@TestRecord -> x.argone
+            _            -> 2
+        end
     end
 in mod::testfun
 ```

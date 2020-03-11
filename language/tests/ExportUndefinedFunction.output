@@ -1,1 +1,5 @@
-Module FQNNode{packageParts=[tests], moduleName='ExportUndefinedFunction'} is trying to export function fibonacci that is not defined.
+Module FQNNode{packageParts=[tests], moduleName='ExportUndefinedFunction'} is trying to export function fibonacci that is not defined. at ExportUndefinedFunction.yatta:
+module tests\ExportUndefinedFunction exports factorial, fibonacci as
+    factorial 1 =1
+    factorial n = n * (factorial n - 1)
+en

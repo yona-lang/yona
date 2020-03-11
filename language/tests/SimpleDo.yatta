@@ -1,6 +1,6 @@
 do
-one = 1
-println one
-two = 2
-one + two
+    one = 1
+    println one
+    two = 2
+    one + two
 end

@@ -4,5 +4,5 @@ import
 in
 
 module tests\ModuleWithImports exports funone as
-
-funone argone = simpleModuleOne::funone argone
+    funone argone = simpleModuleOne::funone argone
+end

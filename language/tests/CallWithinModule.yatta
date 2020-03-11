@@ -1,5 +1,4 @@
 module tests\CallWithinModule exports funtwo as
-
-funone argone = argone
-
-funtwo argone = funone argone
+    funone argone = argone
+    funtwo argone = funone argone
+end

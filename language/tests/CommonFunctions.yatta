@@ -13,61 +13,62 @@ module tests\CommonFunctions exports
     raise_error
     as
 
-#factorial 1 = 1
-#factorial n = n * factorial (n - 1)
+    #factorial 1 = 1
+    #factorial n = n * factorial (n - 1)
 
-# A tail recursive function to calculate factorial
-factTR 0 a = a
-factTR n a = factTR (n - 1) (n * a)
+    # A tail recursive function to calculate factorial
+    factTR 0 a = a
+    factTR n a = factTR (n - 1) (n * a)
 
-# A wrapper over factTR
-factorial n = factTR n 1
+    # A wrapper over factTR
+    factorial n = factTR n 1
 
-fibonacci 0 = 0
-fibonacci 1 = 1
-fibonacci n = fibonacci (n - 1) + fibonacci (n - 2)
+    fibonacci 0 = 0
+    fibonacci 1 = 1
+    fibonacci n = fibonacci (n - 1) + fibonacci (n - 2)
 
-bmiTell bmi
-    | bmi <= 18.5 = "You're underweight, you emo, you!"
-    | bmi <= 25.0 = "You're supposedly normal. Pffft, I bet you're ugly!"
-    | bmi <= 30.0 = "You're fat! Lose some weight, fatty!"
-    | true        = "You're a whale, congratulations!"
+    bmiTell bmi
+        | bmi <= 18.5 = "You're underweight, you emo, you!"
+        | bmi <= 25.0 = "You're supposedly normal. Pffft, I bet you're ugly!"
+        | bmi <= 30.0 = "You're fat! Lose some weight, fatty!"
+        | true        = "You're a whale, congratulations!"
 
-nonLinearTupleTest (arg, _) (_, arg)       = arg
-nonLinearTupleTest (argOne, _) (_, argTwo) = argOne + argTwo
+    nonLinearTupleTest (arg, _) (_, arg)       = arg
+    nonLinearTupleTest (argOne, _) (_, argTwo) = argOne + argTwo
 
-nonLinearListTest [arg, _] [_, arg]       = arg
-nonLinearListTest [argOne, _] [_, argTwo] = argOne + argTwo
+    nonLinearListTest [arg, _] [_, arg]       = arg
+    nonLinearListTest [argOne, _] [_, argTwo] = argOne + argTwo
 
-nonLinearHeadTailsTest head -| _ head -| _       = head
-nonLinearHeadTailsTest headOne -| _ headTwo -| _ = headOne + headTwo
+    nonLinearHeadTailsTest head -| _ head -| _       = head
+    nonLinearHeadTailsTest headOne -| _ headTwo -| _ = headOne + headTwo
 
-nonLinearAsSequenceOneTest seqOne@(head -| _) seqTwo@(head -| _)       = head
-nonLinearAsSequenceOneTest seqOne@(headOne -| _) seqTwo@(headTwo -| _) = headOne + headTwo
+    nonLinearAsSequenceOneTest seqOne@(head -| _) seqTwo@(head -| _)       = head
+    nonLinearAsSequenceOneTest seqOne@(headOne -| _) seqTwo@(headTwo -| _) = headOne + headTwo
 
-nonLinearAsSequenceTwoTest seq@(headOne -| _) seq@(headTwo -| _)       = headOne
-nonLinearAsSequenceTwoTest seqOne@(headOne -| _) seqTwo@(headTwo -| _) = headOne + headTwo
+    nonLinearAsSequenceTwoTest seq@(headOne -| _) seq@(headTwo -| _)       = headOne
+    nonLinearAsSequenceTwoTest seqOne@(headOne -| _) seqTwo@(headTwo -| _) = headOne + headTwo
 
-countdown n
-    | n < 1 = 0
-countdown n = countdown (n - 1)
-
-
-read_file file = read_lines file 0
-
-read_lines file acc =
-    case File::readline file of
-        (:ok, _, new_file)  -> read_lines new_file (acc + 1)
-        :eof                -> acc
-    end
+    countdown n
+        | n < 1 = 0
+    countdown n = countdown (n - 1)
 
 
-print_sequence []  = ()
-print_sequence h-|t =
-    do
-        println h
-        print_sequence t
-    end
+    read_file file = read_lines file 0
+
+    read_lines file acc =
+        case File::readline file of
+            (:ok, _, new_file)  -> read_lines new_file (acc + 1)
+            :eof                -> acc
+        end
 
 
-raise_error = raise :test_error "testing error"
+    print_sequence []  = ()
+    print_sequence h-|t =
+        do
+            println h
+            print_sequence t
+        end
+
+
+    raise_error = raise :test_error "testing error"
+end
