@@ -28,7 +28,7 @@ public abstract class ReadLocalVariableNode extends ExpressionNode {
    * Returns the descriptor of the accessed local variable. The implementation of this method is
    * created by the Truffle DSL based on the {@link NodeField} annotation on the class.
    */
-  protected abstract FrameSlot getSlot();
+  public abstract FrameSlot getSlot();
 
   @Specialization(guards = "frame.isLong(getSlot())")
   protected long readLong(VirtualFrame frame) {

@@ -95,8 +95,8 @@ public final class RecordFieldsPatternNode extends MatchNode {
           }
 
           if (matched) {
-            for (AliasNode aliasNode : aliases) {
-              aliasNode.executeGeneric(frame);
+            for (AliasNode nameAliasNode : aliases) {
+              nameAliasNode.executeGeneric(frame);
             }
 
             return MatchResult.TRUE;

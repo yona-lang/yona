@@ -94,7 +94,7 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void dictReduceMapTest() {
-    long ret = context.eval(YattaLanguage.ID, "Dict::reduce {'a' = 1, 'b' = 2, 'c' = 3} <| Transducers::map \\val -> val (0, \\ state val -> state + 1, \\state -> state * 2)").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Dict::reduce {'a' = 1, 'b' = 2, 'c' = 3} <| Transducers::map \\val -> val (0, \\state val -> state + 1, \\state -> state * 2)").asLong();
     assertEquals(6L, ret);
   }
 
@@ -112,7 +112,7 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void setReduceMapTest() {
-    long ret = context.eval(YattaLanguage.ID, "Set::reduce {1, 2, 3} <| Transducers::map \\val -> val + 1 (0, \\ state val -> state + val, \\state -> state * 2)").asLong();
+    long ret = context.eval(YattaLanguage.ID, "Set::reduce {1, 2, 3} <| Transducers::map \\val -> val + 1 (0, \\state val -> state + val, \\state -> state * 2)").asLong();
     assertEquals(18L, ret);
   }
 
@@ -149,5 +149,113 @@ public class StdLibTest extends CommonTest {
         throw ex;
       }
     });
+  }
+
+  @Test
+  public void simpleJsonParseEvalTest() {
+    long ret = context.eval(YattaLanguage.ID, "JSON::parse \"5\"").asLong();
+    assertEquals(5L, ret);
+  }
+
+  @Test
+  public void simpleAsyncJsonParseEvalTest() {
+    long ret = context.eval(YattaLanguage.ID, "JSON::parse <| async \\-> \"5\"").asLong();
+    assertEquals(5L, ret);
+  }
+
+  @Test
+  public void arrayJsonParseEvalTest() {
+    long ret = context.eval(YattaLanguage.ID, "JSON::parse \"[1, 2]\"").getArraySize();
+    assertEquals(2L, ret);
+  }
+
+  @Test
+  public void dictJsonParseEvalTest() {
+    long ret = context.eval(YattaLanguage.ID, "Dict::len <| JSON::parse \"{{\\\"1\\\": 2, \\\"3\\\": 4}}\"").asLong();
+    assertEquals(2L, ret);
+  }
+
+  @Test
+  public void stringJsonParseEvalTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::parse \"\\\"test\\\"\"").asString();
+    assertEquals("test", ret);
+  }
+
+  @Test
+  public void boolJsonFalseParseEvalTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "JSON::parse \"false\"").asBoolean();
+    assertFalse(ret);
+  }
+
+  @Test
+  public void boolJsonTrueParseEvalTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "JSON::parse \"true\"").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void unitJsonParseEvalTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "JSON::parse \"null\"").isNull();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void unitJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate ()").asString();
+    assertEquals("null", ret);
+  }
+
+  @Test
+  public void integerJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate 1").asString();
+    assertEquals("1", ret);
+  }
+
+  @Test
+  public void tupleBooleanJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate (true, false)").asString();
+    assertEquals("[true, false]", ret);
+  }
+
+  @Test
+  public void seqIntegerOneJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate [1]").asString();
+    assertEquals("[1]", ret);
+  }
+
+  @Test
+  public void seqIntegerTwoJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate [1, 2]").asString();
+    assertEquals("[1, 2]", ret);
+  }
+
+  @Test
+  public void seqIntegerThreeJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate [1, 2, 3]").asString();
+    assertEquals("[1, 2, 3]", ret);
+  }
+
+  @Test
+  public void dictTwoJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate {:one = 1, :two = 2}").asString();
+    assertEquals("{\"one\": 1, \"two\": 2}", ret);
+  }
+
+  @Test
+  public void setTwoJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate {:one, :two}").asString();
+    assertEquals("[\"one\", \"two\"]", ret);
+  }
+
+  @Test
+  public void charJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate 'x'").asString();
+    assertEquals("\"x\"", ret);
+  }
+
+  @Test
+  public void stringJsonGenerateTest() {
+    String ret = context.eval(YattaLanguage.ID, "JSON::generate \"x\"").asString();
+    assertEquals("\"x\"", ret);
   }
 }

@@ -1,10 +1,10 @@
 package yatta.ast.pattern;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
 import yatta.runtime.Dict;
 import yatta.runtime.Unit;
-import com.oracle.truffle.api.frame.VirtualFrame;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,8 +75,8 @@ public final class DictMatchNode extends MatchNode {
         }
       }
 
-      for (AliasNode aliasNode : aliases) {
-        aliasNode.executeGeneric(frame);
+      for (AliasNode nameAliasNode : aliases) {
+        nameAliasNode.executeGeneric(frame);
       }
 
       return MatchResult.TRUE;

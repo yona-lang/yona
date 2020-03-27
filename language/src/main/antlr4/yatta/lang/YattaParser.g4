@@ -15,7 +15,7 @@ options { tokenVocab=YattaLexer; }
     import yatta.ast.FunctionRootNode;
     import yatta.parser.ParseError;
     import yatta.parser.ParserVisitor;
-    import yatta.runtime.UninitializedFrameSlot;
+    import yatta.runtime.Context;
 }
 
 @parser::members
@@ -76,17 +76,23 @@ options { tokenVocab=YattaLexer; }
         for(int i = 0; i < charPositionInLine; i++) {
             msg.append(" ");
         }
-        int start = offendingToken.getStartIndex();
-        int stop = offendingToken.getStopIndex();
-        if(start >= 0 && stop >= 0) {
-            for(int i = start; i <= stop; i++) {
-                msg.append("^");
+        int length;
+        if(offendingToken != null) {
+            int start = offendingToken.getStartIndex();
+            int stop = offendingToken.getStopIndex();
+            if (start >= 0 && stop >= 0) {
+                for (int i = start; i <= stop; i++) {
+                    msg.append("^");
+                }
             }
+            length = Math.max(stop - start, 0);
+        } else {
+            length = 0;
         }
-        throw new ParseError(source, line, charPositionInLine + 1, Math.max(stop - start, 0), msg.toString());
+        throw new ParseError(source, line, charPositionInLine + 1, length, msg.toString());
     }
 
-    public static RootCallTarget parseYatta(YattaLanguage language, Source source) {
+    public static RootCallTarget parseYatta(YattaLanguage language, Context context, Source source) {
         YattaLexer lexer = new YattaLexer(CharStreams.fromString(source.getCharacters().toString()));
         YattaParser parser = new YattaParser(new CommonTokenStream(lexer));
         lexer.removeErrorListeners();
@@ -96,8 +102,8 @@ options { tokenVocab=YattaLexer; }
         parser.addErrorListener(listener);
         parser.setErrorHandler(new YattaErrorStrategy());
         parser.source = source;
-        ExpressionNode rootExpression = new ParserVisitor(language, source).visit(parser.input());
-        FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), rootExpression, source.createSection(1), "root");
+        ExpressionNode rootExpression = new ParserVisitor(language, context, source).visit(parser.input());
+        FunctionRootNode rootNode = new FunctionRootNode(language, context.globalFrameDescriptor, rootExpression, source.createSection(1), "root");
         return Truffle.getRuntime().createCallTarget(rootNode);
     }
 }
@@ -176,7 +182,7 @@ patternAlias : pattern OP_ASSIGN expression NEWLINE? ;
 fqnAlias : name OP_ASSIGN fqn NEWLINE? ;
 conditional : KW_IF ifX=expression NEWLINE? KW_THEN NEWLINE? thenX=expression NEWLINE? KW_ELSE NEWLINE? elseX=expression ;
 apply : call funArg* ;
-funArg : value | PARENS_L expression PARENS_R ;
+funArg : PARENS_L expression PARENS_R | value;
 call : name | moduleCall | nameCall ;
 moduleCall : fqn DCOLON name ;
 nameCall : var=name DCOLON fun=name;
@@ -192,6 +198,7 @@ stringLiteral: INTERPOLATED_REGULAR_STRING_START interpolatedStringPart* DOUBLE_
 interpolatedStringPart
 	: interpolatedStringExpression
 	| DOUBLE_CURLY_INSIDE
+	| DOUBLE_CURLY_CLOSE_INSIDE
 	| REGULAR_CHAR_INSIDE
 	| REGULAR_STRING_INSIDE
 	;
@@ -204,7 +211,7 @@ interpolatedStringExpression
 characterLiteral : CHARACTER_LITERAL ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
 function : name pattern* functionBody NEWLINE?;
-functionBody : bodyWithoutGuard | bodyWithGuards+ ;
+functionBody : bodyWithGuards+ | bodyWithoutGuard ;
 
 bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression ;
 bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression ;

@@ -1,10 +1,10 @@
 package yatta.ast.pattern;
 
-import yatta.ast.ExpressionNode;
-import yatta.ast.expression.ConditionNode;
-import yatta.ast.expression.LetNode;
-import yatta.ast.expression.ThrowNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import yatta.ast.ExpressionNode;
+import yatta.ast.expression.AliasNode;
+import yatta.ast.expression.ConditionNode;
+import yatta.ast.expression.ThrowNode;
 
 import java.util.Objects;
 
@@ -12,14 +12,11 @@ public class GuardedPattern extends ExpressionNode implements PatternMatchable {
   @Child
   public MatchNode matchExpression;
   @Child
-  public ExpressionNode valueExpression;
-  @Child
-  public ExpressionNode guardExpression;
+  public ConditionNode conditionNode;
 
   public GuardedPattern(MatchNode matchExpression, ExpressionNode guardExpression, ExpressionNode valueExpression) {
     this.matchExpression = matchExpression;
-    this.guardExpression = guardExpression;
-    this.valueExpression = valueExpression;
+    this.conditionNode = new ConditionNode(guardExpression, valueExpression, new ThrowNode(MatchControlFlowException.INSTANCE));
   }
 
   @Override
@@ -28,37 +25,36 @@ public class GuardedPattern extends ExpressionNode implements PatternMatchable {
     if (o == null || getClass() != o.getClass()) return false;
     GuardedPattern that = (GuardedPattern) o;
     return Objects.equals(matchExpression, that.matchExpression) &&
-        Objects.equals(valueExpression, that.valueExpression) &&
-        Objects.equals(guardExpression, that.guardExpression);
+        Objects.equals(conditionNode, that.conditionNode);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(matchExpression, valueExpression, guardExpression);
+    return Objects.hash(matchExpression, conditionNode);
   }
 
   @Override
   public String toString() {
     return "GuardedPattern{" +
         "matchExpression=" + matchExpression +
-        ", valueExpression=" + valueExpression +
-        ", guardExpression=" + guardExpression +
+        ", conditionNode=" + conditionNode +
         '}';
   }
 
   @Override
   public void setIsTail(boolean isTail) {
     super.setIsTail(isTail);
-    valueExpression.setIsTail(isTail);
+    conditionNode.setIsTail(isTail);
   }
 
   @Override
   public Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {
-      ConditionNode ifNode = new ConditionNode(guardExpression, valueExpression, new ThrowNode(MatchControlFlowException.INSTANCE));
-      LetNode letNode = new LetNode(matchResult.getAliases(), ifNode);
-      return letNode.executeGeneric(frame);
+      for (AliasNode nameAliasNode : matchResult.getAliases()) {
+        nameAliasNode.executeGeneric(frame);
+      }
+      return conditionNode.executeGeneric(frame);
     } else {
       throw MatchControlFlowException.INSTANCE;
     }

@@ -5,6 +5,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.IdentifierNode;
+import yatta.ast.expression.NameAliasNode;
 import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.expression.value.EmptySequenceNode;
 import yatta.runtime.Seq;
@@ -85,7 +86,7 @@ public final class TailsHeadMatchPatternNode extends MatchNode {
               return MatchResult.FALSE;
             }
           } else {
-            aliases.add(new AliasNode(identifierNode.name(), new AnyValueNode(sequence)));
+            aliases.add(new NameAliasNode(identifierNode.name(), new AnyValueNode(sequence)));
           }
         } else if (tailsNode instanceof EmptySequenceNode) {
           if (sequence.length() > 0) {
@@ -106,8 +107,8 @@ public final class TailsHeadMatchPatternNode extends MatchNode {
           }
         }
 
-        for (AliasNode aliasNode : aliases) {
-          aliasNode.executeGeneric(frame);
+        for (AliasNode nameAliasNode : aliases) {
+          nameAliasNode.executeGeneric(frame);
         }
 
         return MatchResult.TRUE;

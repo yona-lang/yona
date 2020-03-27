@@ -87,4 +87,16 @@ public class StringTest extends CommonTest {
     int ret = context.eval(YattaLanguage.ID, "'あ'").asInt();
     assertEquals('あ', ret);
   }
+
+  @Test
+  void testEscapeCurlyInterpolation() {
+    String ret = context.eval(YattaLanguage.ID, "\"{{hello}}\"").asString();
+    assertEquals("{hello}", ret);
+  }
+
+  @Test
+  void testInterpolationInCurly() {
+    String ret = context.eval(YattaLanguage.ID, "let who = \"world\" in \"hello {{{who}}}\"").asString();
+    assertEquals("hello {world}", ret);
+  }
 }

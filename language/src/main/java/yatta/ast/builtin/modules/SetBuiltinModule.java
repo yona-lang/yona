@@ -52,11 +52,20 @@ public final class SetBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "len")
+  abstract static class LengthBuiltin extends BuiltinNode {
+    @Specialization
+    public long length(Set set) {
+      return set.size();
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
     return builtins;
   }
 }

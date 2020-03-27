@@ -1,10 +1,10 @@
 package yatta.ast.pattern;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
 import yatta.runtime.Tuple;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,8 +66,8 @@ public final class TupleMatchNode extends MatchNode {
           }
         }
 
-        for (AliasNode aliasNode : aliases) {
-          aliasNode.executeGeneric(frame);
+        for (AliasNode nameAliasNode : aliases) {
+          nameAliasNode.executeGeneric(frame);
         }
 
         return MatchResult.TRUE;

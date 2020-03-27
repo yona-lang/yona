@@ -90,6 +90,7 @@ public class YattaTest {
             context.leave();
           });
 
+          if(baseName.equals("Sieve"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;

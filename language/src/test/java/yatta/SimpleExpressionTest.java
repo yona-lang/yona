@@ -621,6 +621,15 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(2l, ret);
   }
 
+  @Test
+  public void closureTest() {
+    long ret = context.eval(YattaLanguage.ID, "\\a b -> let\n" +
+        "x = \\-> a + b\n" +
+        "in x").execute(1l, 2l).asLong();
+
+    assertEquals(3l, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with

@@ -52,11 +52,20 @@ public final class DictBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "len")
+  abstract static class LengthBuiltin extends BuiltinNode {
+    @Specialization
+    public long length(Dict dict) {
+      return dict.size();
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
     return builtins;
   }
 }

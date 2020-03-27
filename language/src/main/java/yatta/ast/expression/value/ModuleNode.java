@@ -7,7 +7,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
+import yatta.ast.expression.NameAliasNode;
 import yatta.runtime.Dict;
 import yatta.runtime.Function;
 import yatta.runtime.YattaModule;
@@ -77,8 +77,8 @@ public final class ModuleNode extends ExpressionNode {
      * Set up module-local scope by putting all local functions on the stack
      */
     for (FunctionLikeNode fun : functions) {
-      AliasNode aliasNode = new AliasNode(fun.name(), fun);
-      aliasNode.executeGeneric(frame);
+      NameAliasNode nameAliasNode = new NameAliasNode(fun.name(), fun);
+      nameAliasNode.executeGeneric(frame);
     }
 
     for (FunctionLikeNode fun : functions) {

@@ -56,8 +56,8 @@ public final class SequenceMatchPatternNode extends MatchNode {
           }
         }
 
-        for (AliasNode aliasNode : aliases) {
-          aliasNode.executeGeneric(frame);
+        for (AliasNode nameAliasNode : aliases) {
+          nameAliasNode.executeGeneric(frame);
         }
 
         return MatchResult.TRUE;

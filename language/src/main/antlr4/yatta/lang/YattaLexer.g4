@@ -64,8 +64,8 @@ if (interpolatedStringLevel > 0)
 };
 
 COMMA : ',' ;
-COLON : ':' ;
 DCOLON : '::' ;
+COLON : ':' ;
 
 DOT : '.' ;
 VLINE : '|';
@@ -145,7 +145,6 @@ fragment NewLinePart
 	| '\u2028' //'<Line Separator CHARACTER (U+2028)>'
 	| '\u2029' //'<Paragraph Separator CHARACTER (U+2029)>'
 	;
-
 
 fragment WHITESPACE
     : [ \t]+

@@ -1,5 +1,6 @@
 package yatta.ast.builtin.modules;
 
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -7,6 +8,8 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.TypesGen;
 import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
@@ -76,6 +79,22 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "split")
+  abstract static class SplitBuiltin extends BuiltinNode {
+    @Specialization
+    public Tuple length(Seq sequence, long idx) {
+      return new Tuple((Object[]) sequence.split(idx, this));
+    }
+  }
+
+  @NodeInfo(shortName = "is_string")
+  abstract static class IsStringBuiltin extends BuiltinNode {
+    @Specialization
+    public boolean length(Seq sequence) {
+      return sequence.isString();
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
@@ -83,6 +102,8 @@ public final class SeqBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.SplitBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.IsStringBuiltinFactory.getInstance()));
     return builtins;
   }
 }

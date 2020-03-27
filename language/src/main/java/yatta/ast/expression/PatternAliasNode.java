@@ -1,6 +1,5 @@
 package yatta.ast.expression;
 
-import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.pattern.MatchNode;
 import yatta.ast.pattern.MatchResult;
@@ -75,8 +74,8 @@ public final class PatternAliasNode extends ExpressionNode {
   private Object execute(Object value, VirtualFrame frame) {
     MatchResult matchResult = matchNode.match(value, frame);
     if (matchResult.isMatches()) {
-      for (AliasNode aliasNode : matchResult.getAliases()) {
-        aliasNode.executeGeneric(frame);
+      for (AliasNode nameAliasNode : matchResult.getAliases()) {
+        nameAliasNode.executeGeneric(frame);
       }
 
       return Unit.INSTANCE;

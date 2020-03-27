@@ -12,6 +12,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.ast.local.LexicalScope;
+import yatta.lang.YattaParser;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
 import yatta.runtime.Unit;
@@ -47,7 +48,7 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   @Override
   public CallTarget parse(ParsingRequest request) throws Exception {
     Source source = request.getSource();
-    RootCallTarget rootCallTarget = YattaParser.parseYatta(this, source);
+    RootCallTarget rootCallTarget = YattaParser.parseYatta(this, getCurrentContext(), source);
     return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
   }
 

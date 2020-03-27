@@ -58,7 +58,7 @@ public final class Function implements TruffleObject {
    */
   @Override
   public String toString() {
-    return name;
+    return name + "/" + cardinality;
   }
 
   /**

@@ -10,11 +10,11 @@ import java.util.Objects;
 
 public final class LetNode extends LexicalScopeNode {
   @Node.Children
-  public AliasNode[] aliases;
+  public NameAliasNode[] aliases;
   @Node.Child
   public ExpressionNode expression;
 
-  public LetNode(AliasNode[] aliases, ExpressionNode expression) {
+  public LetNode(NameAliasNode[] aliases, ExpressionNode expression) {
     this.aliases = aliases;
     this.expression = expression;
   }
@@ -50,7 +50,7 @@ public final class LetNode extends LexicalScopeNode {
   @Override
   @ExplodeLoop
   public Object executeGeneric(VirtualFrame frame) {
-    for (AliasNode alias : aliases) {
+    for (NameAliasNode alias : aliases) {
       alias.executeGeneric(frame);
     }
     return expression.executeGeneric(frame);

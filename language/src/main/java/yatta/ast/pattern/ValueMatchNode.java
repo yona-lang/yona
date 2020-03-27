@@ -2,9 +2,13 @@ package yatta.ast.pattern;
 
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.AliasNode;
+import yatta.ast.expression.FrameSlotAliasNode;
+import yatta.ast.expression.NameAliasNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import yatta.ast.local.ReadLocalVariableNode;
+import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
 import java.util.Objects;
 
@@ -50,11 +54,30 @@ public final class ValueMatchNode extends MatchNode {
           return MatchResult.TRUE;
         }
       } else {
-        return new MatchResult(true, new AliasNode[]{new AliasNode(identifierNode.name(), new AnyValueNode(value))});
+        return new MatchResult(true, new AliasNode[]{new NameAliasNode(identifierNode.name(), new AnyValueNode(value))});
+      }
+    } else if (expression instanceof ReadLocalVariableNode) {
+      ReadLocalVariableNode readLocalVariableNode = (ReadLocalVariableNode) expression;
+      boolean isBound;
+      try {
+        readLocalVariableNode.executeGeneric(frame);
+        isBound = true;
+      } catch (UninitializedFrameSlotException e) {
+        isBound = false;
+      }
+      if (isBound) {
+        Object readValue = readLocalVariableNode.executeGeneric(frame);
+        if (!Objects.equals(readValue, value)) {
+          return MatchResult.FALSE;
+        } else {
+          return MatchResult.TRUE;
+        }
+      } else {
+        return new MatchResult(true, new AliasNode[]{new FrameSlotAliasNode(readLocalVariableNode.getSlot(), new AnyValueNode(value))});
       }
     } else {
       Object exprValue = expression.executeGeneric(frame);
-      return new MatchResult(Objects.equals(value, exprValue));
+      return Objects.equals(value, exprValue) ? MatchResult.TRUE : MatchResult.FALSE;
     }
   }
 

@@ -2,6 +2,8 @@ package yatta.runtime;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
@@ -61,6 +63,8 @@ public class Context {
   public final Threading threading;
   public final ExecutorService ioExecutor;
   public Dict globals = Dict.empty(Murmur3.INSTANCE, 0L);
+  public final FrameDescriptor globalFrameDescriptor;
+  public final MaterializedFrame globalFrame;
 
   public Context(YattaLanguage language, TruffleLanguage.Env env) {
     this.env = env;
@@ -72,6 +76,8 @@ public class Context {
     this.builtinModules = new BuiltinModules();
     this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yatta-io")));
     this.threading = new Threading(env);
+    this.globalFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
+    this.globalFrame = this.initGlobalFrame(language);
   }
 
   public void initialize() {
@@ -81,6 +87,11 @@ public class Context {
     installBuiltinModules();
     registerBuiltins();
     installGlobals();
+  }
+
+  private MaterializedFrame initGlobalFrame(YattaLanguage lang) {
+    VirtualFrame frame = Truffle.getRuntime().createVirtualFrame(null, this.globalFrameDescriptor);
+    return frame.materialize();
   }
 
   private void installBuiltins() {
@@ -101,6 +112,8 @@ public class Context {
     builtinModules.register(new FileBuiltinModule());
     builtinModules.register(new TransducersBuiltinModule());
     builtinModules.register(new TimeBuiltinModule());
+    builtinModules.register(new JSONBuiltinModule());
+    builtinModules.register(new TupleBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

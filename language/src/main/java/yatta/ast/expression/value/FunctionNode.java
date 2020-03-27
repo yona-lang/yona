@@ -1,8 +1,14 @@
 package yatta.ast.expression.value;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameSlot;
 import yatta.YattaLanguage;
 import yatta.ast.ClosureRootNode;
 import yatta.ast.ExpressionNode;
+import yatta.ast.FunctionRootNode;
+import yatta.ast.controlflow.YattaBlockNode;
+import yatta.ast.local.ReadLocalVariableNodeGen;
+import yatta.ast.local.WriteLocalVariableNodeGen;
 import yatta.runtime.Function;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -12,6 +18,9 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -72,6 +81,7 @@ public final class FunctionNode extends FunctionLikeNode {
   }
 
   private Function execute(VirtualFrame frame) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     ClosureRootNode rootNode = new ClosureRootNode(language, frameDescriptor, expression, sourceSection, name, frame.materialize());
     return new Function(name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
   }

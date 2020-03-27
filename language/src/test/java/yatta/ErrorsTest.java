@@ -94,7 +94,7 @@ public class ErrorsTest extends CommonTest {
             "funtwo argone = argone\n" +
             "end in testMod::funtwo 6").asLong();
       } catch (PolyglotException ex) {
-        assertEquals("Function funtwo is not present in Module{fqn=TestMod, exports=[funone], functions={funone=funone, funtwo=funtwo}, records={}}", ex.getMessage());
+        assertEquals("Function funtwo is not present in Module{fqn=TestMod, exports=[funone], functions={funone=funone/1, funtwo=funtwo/1}, records={}}", ex.getMessage());
         throw ex;
       }
     });
@@ -199,7 +199,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YattaLanguage.ID, "async \\a b -> a + b");
       } catch (PolyglotException ex) {
-        assertEquals("async function accepts only functions with zero arguments. Function $lambda0-2 expects 2arguments", ex.getMessage());
+        assertEquals("async function accepts only functions with zero arguments. Function $lambda0-2/2 expects 2arguments", ex.getMessage());
         throw ex;
       }
     });

@@ -51,8 +51,8 @@ public class PatternNode extends ExpressionNode implements PatternMatchable {
   public Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException {
     MatchResult matchResult = matchExpression.match(value, frame);
     if (matchResult.isMatches()) {
-      for (AliasNode aliasNode : matchResult.getAliases()) {
-        aliasNode.executeGeneric(frame);
+      for (AliasNode nameAliasNode : matchResult.getAliases()) {
+        nameAliasNode.executeGeneric(frame);
       }
       return valueExpression.executeGeneric(frame);
     } else {

@@ -1,11 +1,11 @@
 package yatta.ast;
 
-import yatta.YattaLanguage;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
+import yatta.YattaLanguage;
 
 /**
  * The root of all YattaLanguage execution trees. It is a Truffle requirement that the tree root extends the
@@ -68,6 +68,6 @@ public class ClosureRootNode extends RootNode {
 
   @Override
   public String toString() {
-    return "closure-root " + name;
+    return "closure:" + name;
   }
 }

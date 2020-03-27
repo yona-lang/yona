@@ -3,6 +3,7 @@ package yatta.ast.pattern;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.IdentifierNode;
+import yatta.ast.expression.NameAliasNode;
 import yatta.ast.expression.value.AnyValueNode;
 
 import java.util.Objects;
@@ -46,10 +47,10 @@ public final class AsDataStructureMatchNode extends MatchNode {
     if (!matchResult.isMatches()) {
       return MatchResult.FALSE;
     } else {
-      for (AliasNode aliasNode : matchResult.getAliases()) {
-        aliasNode.executeGeneric(frame);
+      for (AliasNode nameAliasNode : matchResult.getAliases()) {
+        nameAliasNode.executeGeneric(frame);
       }
-      AliasNode identifierAlias = new AliasNode(identifierNode.name(), new AnyValueNode(value));
+      AliasNode identifierAlias = new NameAliasNode(identifierNode.name(), new AnyValueNode(value));
       identifierAlias.executeGeneric(frame);
 
       return MatchResult.TRUE;

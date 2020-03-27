@@ -25,8 +25,7 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   private static final int NO_SOURCE = -1;
   private static final int UNAVAILABLE_SOURCE = -2;
 
-  private int sourceCharIndex = NO_SOURCE;
-  private int sourceLength;
+  private SourceSection sourceSection;
 
   private boolean hasRootTag;
 
@@ -54,29 +53,11 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   @Override
   @CompilerDirectives.TruffleBoundary
   public final SourceSection getSourceSection() {
-    if (sourceCharIndex == NO_SOURCE) {
-      // AST node without source
-      return null;
-    }
-    RootNode rootNode = getRootNode();
-    if (rootNode == null) {
-      // not yet adopted yet
-      return null;
-    }
-    SourceSection rootSourceSection = rootNode.getSourceSection();
-    if (rootSourceSection == null) {
-      return null;
-    }
-    Source source = rootSourceSection.getSource();
-    if (sourceCharIndex == UNAVAILABLE_SOURCE) {
-      return source.createUnavailableSection();
-    } else {
-      return source.createSection(sourceCharIndex, sourceLength);
-    }
+    return sourceSection;
   }
 
   public final boolean hasSource() {
-    return sourceCharIndex != NO_SOURCE;
+    return sourceSection.isAvailable();
   }
 
   public final boolean isInstrumentable() {
@@ -84,20 +65,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   }
 
   // invoked by the parser to set the source
-  public final void setSourceSection(int charIndex, int length) {
-    assert sourceCharIndex == NO_SOURCE : "source must only be set once";
-    if (charIndex < 0) {
-      throw new IllegalArgumentException("charIndex < 0");
-    } else if (length < 0) {
-      throw new IllegalArgumentException("length < 0");
-    }
-    this.sourceCharIndex = charIndex;
-    this.sourceLength = length;
-  }
-
-  public final void setUnavailableSourceSection() {
-    assert sourceCharIndex == NO_SOURCE : "source must only be set once";
-    this.sourceCharIndex = UNAVAILABLE_SOURCE;
+  public final void setSourceSection(SourceSection sourceSection) {
+    this.sourceSection = sourceSection;
   }
 
   /**

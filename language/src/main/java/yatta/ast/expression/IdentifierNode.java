@@ -95,10 +95,10 @@ public final class IdentifierNode extends ExpressionNode {
       ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
       try {
         node.executeGeneric(frame);
+        return true;
       } catch (UninitializedFrameSlotException e) {
         return false;
       }
-      return true;
     }
   }
 
