@@ -3,7 +3,7 @@ module JSON exports generate as
     generate val
         | Types::is_char val = "\"{val}\""
         | Types::is_function val = raise :nomatch "Functions cannot be serialized to JSON"
-        | Types::is_tuple val = generate <| (Tuple::to_seq val)
+        | Types::is_tuple val = generate <| Tuple::to_seq val
         | Types::is_module val = raise :nomatch "Modules cannot be serialized to JSON"
         | Types::is_seq val && Seq::is_string val = "\"{val}\""
         | Types::is_seq val = "[{let (res, _) = Seq::foldl val element_fold ("", Seq::len val) in res}]"

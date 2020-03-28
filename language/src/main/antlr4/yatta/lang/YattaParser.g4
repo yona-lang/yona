@@ -110,6 +110,12 @@ options { tokenVocab=YattaLexer; }
 
 input : NEWLINE? expression NEWLINE? EOF ;
 
+function : name pattern* functionBody NEWLINE?;
+functionBody : bodyWithGuards+ | bodyWithoutGuard ;
+
+bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression ;
+bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression ;
+
 expression : PARENS_L expression PARENS_R                                                                #expressionInParents
            | op=(OP_LOGIC_NOT | OP_BIN_NOT) expression                                                   #negationExpression
            | left=expression BACKTICK call BACKTICK right=expression                                     #backtickExpression
@@ -210,11 +216,6 @@ interpolatedStringExpression
 
 characterLiteral : CHARACTER_LITERAL ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
-function : name pattern* functionBody NEWLINE?;
-functionBody : bodyWithGuards+ | bodyWithoutGuard ;
-
-bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression ;
-bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression ;
 
 tuple : PARENS_L expression (COMMA expression)+ PARENS_R ;
 dict : CURLY_L (dictKey OP_ASSIGN dictVal (COMMA dictKey OP_ASSIGN dictVal)*)? CURLY_R ;
@@ -299,7 +300,7 @@ tripplePattern : PARENS_L pattern COMMA pattern COMMA pattern PARENS_R ;
 catchPatternExpressionWithoutGuard : NEWLINE? OP_RIGHT_ARROW NEWLINE? expression ;
 catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_RIGHT_ARROW NEWLINE? expr=expression ;
 
-raiseExpr : KW_RAISE symbol stringLiteral NEWLINE? ;
+raiseExpr : KW_RAISE symbol stringLiteral ;
 
 generatorExpr : sequenceGeneratorExpr | setGeneratorExpr | dictGeneratorExpr ;
 sequenceGeneratorExpr : BRACKET_L reducer=expression VLINE collectionExtractor OP_LEFT_ARROW stepExpression=expression NEWLINE? (KW_IF condition=expression)? BRACKET_R ;
