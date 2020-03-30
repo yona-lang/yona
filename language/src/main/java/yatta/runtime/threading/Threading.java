@@ -7,6 +7,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import yatta.runtime.Function;
+import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.exceptions.UndefinedNameException;
 import yatta.runtime.async.Promise;
 
@@ -18,6 +19,8 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public final class Threading {
   static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
+
+  public static final ThreadLocal<TransactionalMemory.Transaction> TX = new ThreadLocal<>();
 
   static final int THREAD_COUNT = Math.max(2, Runtime.getRuntime().availableProcessors());
   static final int BUFFER_SIZE = 1024;
@@ -45,6 +48,7 @@ public final class Threading {
           Function function;
           InteropLibrary dispatch;
           Node node;
+          TransactionalMemory.Transaction tx;
 
           @Override
           void prepare(final long token) {
@@ -53,15 +57,21 @@ public final class Threading {
             function = task.function;
             dispatch = task.dispatch;
             node = task.node;
+            tx = task.tx;
           }
 
           @Override
           void advance() {
-            execute(promise, function, dispatch, node);
-            promise = null;
-            function = null;
-            dispatch = null;
-            node = null;
+            TX.set(tx);
+            try {
+              execute(promise, function, dispatch, node);
+            } finally {
+              promise = null;
+              function = null;
+              dispatch = null;
+              node = null;
+              TX.remove();
+            }
           }
         };
         int yields = 0;
@@ -124,6 +134,7 @@ public final class Threading {
     task.function = function;
     task.dispatch = dispatch;
     task.node = node;
+    task.tx = TX.get();
     ringBuffer.release(token, token);
     if (waiters != 0) {
       lock.lock();
@@ -133,6 +144,7 @@ public final class Threading {
         lock.unlock();
       }
     }
+    TX.remove();
   }
 
   static void execute(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
