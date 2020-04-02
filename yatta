@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 VERSION="0.1"
-EXPECTED_GRAALVM_VERSION="19.3.1"
-TRUFFLE_VERSION="19.3.1"
+EXPECTED_GRAALVM_VERSION="20.0.0"
+TRUFFLE_VERSION="20.0.0"
 
 MAIN_CLASS="yatta.Launcher"
 SCRIPT_HOME="$(cd "$(dirname "$0")" && pwd -P)"

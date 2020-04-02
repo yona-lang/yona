@@ -30,7 +30,7 @@ It is possible to run Yatta locally, whether for play purposes or development of
 
 ### Getting GraalVM
     export JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$PATH
-    wget -O $HOME/jdk.tar.gz https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-19.3.1/graalvm-ce-java11-linux-amd64-19.3.1.tar.gz
+    wget -O $HOME/jdk.tar.gz https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-20.0.0/graalvm-ce-java11-linux-amd64-20.0.0.tar.gz
     mkdir $HOME/jdk && tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk --strip-components=1
     $HOME/jdk/bin/gu install native-image
     mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
