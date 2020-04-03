@@ -31,31 +31,20 @@ public final class TimeBuiltinModule implements BuiltinModule {
         return value;
       }
       final Promise promise = (Promise) value;
-      if (promise.isFulfilled()) {
-        final Object result = promise.unwrap();
-        if (result instanceof Error) {
-          throw (Error) result;
-        } else if (result instanceof RuntimeException) {
-          throw (RuntimeException) result;
-        } else if (result instanceof Exception) {
-          throw new YattaException((Exception) result, TimeoutBuiltin.this);
-        } else {
-          return result;
-        }
-      }
       final Promise result = new Promise();
-      new Thread(() -> {
+      Thread daemon = new Thread(() -> {
         try {
           if (Promise.timeout(promise, millis)) {
-            result.fulfil(promise.unwrap(), TimeoutBuiltin.this);
+            result.fulfil(promise.unwrapWithError(), TimeoutBuiltin.this);
           } else {
             result.fulfil(new TimeoutException(TimeoutBuiltin.this), TimeoutBuiltin.this);
           }
-
-        } catch (Throwable throwable) {
-          result.fulfil(throwable, TimeoutBuiltin.this);
+        } catch (InterruptedException interrupt) {
+          result.fulfil(interrupt, TimeoutBuiltin.this);
         }
-      }).start();
+      });
+      daemon.setDaemon(true);
+      daemon.start();
       return result;
     }
   }

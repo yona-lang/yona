@@ -5,7 +5,7 @@ import com.oracle.truffle.api.nodes.Node;
 import yatta.YattaException;
 import yatta.runtime.annotations.ExceptionSymbol;
 
-@ExceptionSymbol("badarg")
+@ExceptionSymbol("timeout")
 public class TimeoutException extends YattaException  {
   @CompilerDirectives.TruffleBoundary
   public TimeoutException(Node location) {

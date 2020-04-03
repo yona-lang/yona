@@ -240,7 +240,7 @@ public final class Promise implements TruffleObject {
     return throwIfThrowable(promise.value);
   }
 
-  public static boolean timeout(Promise promise, final long millis) throws Throwable {
+  public static boolean timeout(Promise promise, final long millis) throws InterruptedException {
     CountDownLatch latch = new CountDownLatch(1);
     Object snapshot;
     Object update;
