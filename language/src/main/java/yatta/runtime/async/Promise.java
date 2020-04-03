@@ -7,6 +7,7 @@ import yatta.ast.call.TailCallException;
 import yatta.runtime.exceptions.UndefinedNameException;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Consumer;
@@ -40,6 +41,10 @@ public final class Promise implements TruffleObject {
 
   public void fulfil(Object result, Node node) {
     fulfil(this, result, node).run();
+  }
+
+  public boolean isFulfilled() {
+    return !(value instanceof Callback);
   }
 
   private Trampoline fulfil(Promise promise, Object result, Node node) {
@@ -233,6 +238,19 @@ public final class Promise implements TruffleObject {
     } while (!UPDATER.compareAndSet(promise, snapshot, update));
     latch.await();
     return throwIfThrowable(promise.value);
+  }
+
+  public static boolean timeout(Promise promise, final long millis) throws Throwable {
+    CountDownLatch latch = new CountDownLatch(1);
+    Object snapshot;
+    Object update;
+    do {
+      snapshot = promise.value;
+      if (snapshot instanceof Callback) {
+        update = new Callback.Consume(o -> latch.countDown(), e -> latch.countDown(), (Callback) snapshot);
+      } else return true;
+    } while (!UPDATER.compareAndSet(promise, snapshot, update));
+    return latch.await(millis, TimeUnit.MILLISECONDS);
   }
 
   private static Object throwIfThrowable(Object value) throws Throwable {

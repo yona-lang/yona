@@ -258,4 +258,10 @@ public class StdLibTest extends CommonTest {
     String ret = context.eval(YattaLanguage.ID, "JSON::generate \"x\"").asString();
     assertEquals("\"x\"", ret);
   }
+
+  @Test
+  public void timeoutLiteralTest() {
+    long ret = context.eval(YattaLanguage.ID, "Time::timeout 1 0").asLong();
+    assertEquals(1L, ret);
+  }
 }
