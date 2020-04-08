@@ -9,6 +9,6 @@ import yatta.runtime.annotations.ExceptionSymbol;
 public class TimeoutException extends YattaException  {
   @CompilerDirectives.TruffleBoundary
   public TimeoutException(Node location) {
-    super("", location);
+    super("Async value timed out", location);
   }
 }

@@ -60,12 +60,21 @@ public final class DictBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "lookup")
+  abstract static class LookupBuiltin extends BuiltinNode {
+    @Specialization
+    public Object lookup(Dict dict, Object key) {
+      return dict.lookup(key);
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
     return builtins;
   }
 }

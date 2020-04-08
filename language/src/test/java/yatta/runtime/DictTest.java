@@ -5,8 +5,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import yatta.runtime.async.Promise;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Tag("slow")
@@ -110,6 +112,25 @@ public class DictTest {
     Dict dict1 = Dict.empty().add(1, 2);
     Dict dict2 = Dict.empty().add(1, 3);
     assertEquals(3, dict1.union(dict2).lookup(1));
+  }
+
+  @Test
+  public void testUnwrapPromises() {
+    Promise eight = new Promise();
+    Dict dict1 = Dict.empty().add(1, 2).add(3, new Promise(4)).add(new Promise(5), 6).add(new Promise(7), eight);
+    Object dict2 = dict1.unwrapPromises(null);
+    assertTrue(dict2 instanceof Promise);
+    eight.fulfil(8, null);
+    assertTrue(((Promise) dict2).isFulfilled());
+    assertEquals(Dict.empty().add(1, 2).add(3, 4).add(5, 6).add(7, 8), ((Promise) dict2).unwrap());
+  }
+
+  @Test
+  public void testUnwrapPromisesTwo() {
+    Dict dict1 = Dict.empty().add(1, 2).add(3, new Promise(4)).add(new Promise(5), 6).add(new Promise(7), new Promise(8));
+    Object dict2 = dict1.unwrapPromises(null);
+    assertTrue(dict2 instanceof Dict);
+    assertEquals(Dict.empty().add(1, 2).add(3, 4).add(5, 6).add(7, 8), dict2);
   }
 
   private static final class K {

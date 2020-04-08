@@ -114,6 +114,7 @@ public class Context {
     builtinModules.register(new TimeBuiltinModule());
     builtinModules.register(new JSONBuiltinModule());
     builtinModules.register(new TupleBuiltinModule());
+    builtinModules.register(new HttpClientBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

@@ -5,6 +5,8 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
 
@@ -85,5 +87,22 @@ public class Tuple implements TruffleObject {
 
   public Object[] toArray() {
     return items;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Object unwrapPromises(final Node node) {
+    boolean hasPromise = false;
+    for (Object item : items) {
+      if (item instanceof Promise) {
+        hasPromise = true;
+        break;
+      }
+    }
+
+    if (!hasPromise) {
+      return items;
+    } else {
+      return Promise.all(items, node);
+    }
   }
 }

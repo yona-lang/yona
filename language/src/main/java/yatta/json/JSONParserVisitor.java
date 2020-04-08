@@ -18,7 +18,7 @@ public class JSONParserVisitor extends JSONBaseVisitor<Object> {
 
   @Override
   public Object[] visitPair(JSONParser.PairContext ctx) {
-    Seq key = Seq.fromCharSequence(ctx.STRING().getText());
+    Seq key = normalizeString(ctx.STRING().getText());
     Object value = visitValue(ctx.value());
     return new Object[]{key, value};
   }
@@ -43,8 +43,7 @@ public class JSONParserVisitor extends JSONBaseVisitor<Object> {
         return Double.parseDouble(ctx.NUMBER().getText());
       }
     } else if (ctx.STRING() != null) {
-      String st = ctx.STRING().getText();
-      return Seq.fromCharSequence(st.substring(1, st.length() - 1));
+      return normalizeString(ctx.STRING().getText());
     } else if (ctx.obj() != null) {
       return visitObj(ctx.obj());
     } else if (ctx.bool() != null) {
@@ -61,5 +60,9 @@ public class JSONParserVisitor extends JSONBaseVisitor<Object> {
     } else {
       return Boolean.FALSE;
     }
+  }
+
+  private Seq normalizeString(String st) {
+    return Seq.fromCharSequence(st.substring(1, st.length() - 1));
   }
 }

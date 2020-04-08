@@ -19,7 +19,7 @@ public abstract class SleepBuiltin extends BuiltinNode {
     } catch (InterruptedException e) {
       e.printStackTrace();
     }
-    promise.fulfil(Unit.INSTANCE, null);
+    promise.fulfil(Unit.INSTANCE, this);
     return promise;
   }
 }

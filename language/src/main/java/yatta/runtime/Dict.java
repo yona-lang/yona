@@ -4,11 +4,14 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
 import yatta.common.TriFunction;
+import yatta.runtime.async.Promise;
+import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.exceptions.TransducerDoneException;
 
+import java.util.Arrays;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class Dict implements TruffleObject, Comparable<Dict> {
@@ -88,16 +91,16 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
   final Dict merge(final Object fstKey, final long fstHash, final Object fstValue, final Object sndKey, final long sndHash, final Object sndValue, final int shift) {
     if (shift > (1 << BITS)) {
-      return new Collision(hasher, seed, fstHash, new Object[]{ fstKey, fstValue, sndKey, sndValue });
+      return new Collision(hasher, seed, fstHash, new Object[]{fstKey, fstValue, sndKey, sndValue});
     }
     final long fstMask = mask(fstHash, shift);
     final long sndMask = mask(sndHash, shift);
     if (fstMask < sndMask) {
-      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ fstKey, fstValue, sndKey, sndValue });
+      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{fstKey, fstValue, sndKey, sndValue});
     } else if (fstMask > sndMask) {
-      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ sndKey, sndValue, fstKey, fstValue });
+      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{sndKey, sndValue, fstKey, fstValue});
     } else {
-      return new Bitmap(hasher, seed, pos(fstMask), 0, new Object[]{ merge(fstKey, fstHash, fstValue, sndKey, sndHash, sndValue, shift + BITS) });
+      return new Bitmap(hasher, seed, pos(fstMask), 0, new Object[]{merge(fstKey, fstHash, fstValue, sndKey, sndHash, sndValue, shift + BITS)});
     }
   }
 
@@ -136,7 +139,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       acc.append(", ");
       return acc;
     });
-    if(size() > 0) {
+    if (size() > 0) {
       sb.deleteCharAt(sb.length() - 1);
       sb.deleteCharAt(sb.length() - 1);
     }
@@ -175,7 +178,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
   @CompilerDirectives.TruffleBoundary
   public Dict intersection(Dict other) {
     return other.fold(Dict.empty(), (acc, key, val) -> {
-      if(contains(key) && other.contains(key)) {
+      if (contains(key) && other.contains(key)) {
         return acc.add(key, val);
       } else {
         return acc;
@@ -186,12 +189,72 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
   @CompilerDirectives.TruffleBoundary
   public Dict symmetricDifference(Dict other) {
     return union(other).fold(Dict.empty(), (acc, key, val) -> {
-      if((contains(key) && !other.contains(key)) || (!contains(key) && other.contains(key))) {
+      if ((contains(key) && !other.contains(key)) || (!contains(key) && other.contains(key))) {
         return acc.add(key, val);
       } else {
         return acc;
       }
     });
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Object unwrapPromises(final Node node) {
+    Object[] foldRes = fold(new Object[] {empty(hasher, seed), Seq.EMPTY}, (acc, k, v) -> {
+      Dict resultDict = (Dict) acc[0];
+      Seq promiseVals = (Seq) acc[1];
+      if (k instanceof Promise && v instanceof Promise) {
+        if (((Promise) k).isFulfilled() && ((Promise) v).isFulfilled()) {
+          resultDict = resultDict.add(((Promise) k).unwrap(), ((Promise) v).unwrap());
+        } else {
+          promiseVals = promiseVals.insertLast(k);
+          promiseVals = promiseVals.insertLast(v);
+        }
+      } else if (k instanceof Promise) {
+        if (((Promise) k).isFulfilled()) {
+          resultDict = resultDict.add(((Promise) k).unwrap(), v);
+        } else {
+          promiseVals = promiseVals.insertLast(k);
+          promiseVals = promiseVals.insertLast(v);
+        }
+      } else if (v instanceof Promise) {
+        if (((Promise) v).isFulfilled()) {
+          resultDict = resultDict.add(k, ((Promise) v).unwrap());
+        } else {
+          promiseVals = promiseVals.insertLast(k);
+          promiseVals = promiseVals.insertLast(v);
+        }
+      } else {
+        resultDict = resultDict.add(k, v);
+      }
+      return new Object[] {resultDict, promiseVals};
+    });
+
+    Dict resultDict = (Dict) foldRes[0];
+    Seq promiseVals = (Seq) foldRes[1];
+
+    if (resultDict.size() == size()) {
+      assert promiseVals == Seq.EMPTY;
+
+      return resultDict;
+    } else {
+      return Promise.all(promiseVals.toArray(), node).map(vals -> resultDict.union(fromArray((Object[]) vals, node, hasher, seed)), node);
+    }
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  private static Dict fromArray(final Object[] args, final Node node, final Hasher hasher, final long seed) {
+    if (args.length == 0) {
+      return Dict.empty(hasher, seed);
+    }
+    if (args.length % 2 != 0) {
+      throw new BadArgException("Unable to build a dict from array " + Arrays.toString(args), node);
+    }
+    Dict res = Dict.empty(hasher, seed);
+    for (int i = 0; i < args.length; i += 2) {
+      res = res.add(args[i], args[i + 1]);
+    }
+
+    return res;
   }
 
   static long mask(final long hash, final int shift) {
@@ -291,9 +354,9 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
           if (Long.bitCount(dataBmp) == 2 && Long.bitCount(nodeBmp) == 0) {
             final long newDataBmp = (shift == 0) ? dataBmp ^ pos : pos(mask(hash, 0));
             if (idx == 0) {
-              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ keyAt(1), valueAt(1) });
+              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{keyAt(1), valueAt(1)});
             } else {
-              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ keyAt(0), valueAt(0) });
+              return new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{keyAt(0), valueAt(0)});
             }
           } else return removeKeyAndValue(pos);
         } else return this;
@@ -345,7 +408,8 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
         for (int i = 0; i < arity(nodeBmp); i++) {
           state = nodeAt(i).fold(state, step, dispatch);
         }
-      } catch (TransducerDoneException ignored) {}
+      } catch (TransducerDoneException ignored) {
+      }
       return dispatch.execute(complete, state);
     }
 
@@ -504,7 +568,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
     @Override
     Dict add(final Object key, final long hash, final Object value, final int shift) {
-      for (int i = 0; i < entries.length; i+=2) {
+      for (int i = 0; i < entries.length; i += 2) {
         if (key.equals(entries[i])) {
           final Object[] newEntries = entries.clone();
           newEntries[i + 1] = value;
@@ -521,7 +585,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     @Override
     Object lookup(final Object key, final long hash, final int shift) {
       if (hash == this.commonHash) {
-        for (int i = 0; i < entries.length; i+=2) {
+        for (int i = 0; i < entries.length; i += 2) {
           if (key.equals(entries[i])) {
             return entries[i + 1];
           }
@@ -532,7 +596,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
     @Override
     Dict remove(final Object key, final long hash, final int shift) {
-      for (int i = 0; i < entries.length; i+=2) {
+      for (int i = 0; i < entries.length; i += 2) {
         if (key.equals(entries[i])) {
           if (entries.length == 2) {
             return empty(hasher, seed);
@@ -553,17 +617,18 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       final Function complete = (Function) reducer[2];
       Object state = reducer[0];
       try {
-        for (int i = 0; i < entries.length; i+=2) {
+        for (int i = 0; i < entries.length; i += 2) {
           state = dispatch.execute(step, state, new Tuple(entries[i], entries[i + 1]));
         }
-      } catch (TransducerDoneException ignored) {}
+      } catch (TransducerDoneException ignored) {
+      }
       return dispatch.execute(complete, state);
     }
 
     @Override
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
       Object result = initial;
-      for (int i = 0; i < entries.length; i+=2) {
+      for (int i = 0; i < entries.length; i += 2) {
         result = dispatch.execute(function, result, new Tuple(entries[i], entries[2]));
       }
       return result;
@@ -572,7 +637,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     @Override
     public <T> T fold(T initial, TriFunction<T, Object, Object, T> function) {
       T result = initial;
-      for (int i = 0; i < entries.length; i+=2) {
+      for (int i = 0; i < entries.length; i += 2) {
         result = function.apply(result, entries[i], entries[i + 1]);
       }
       return result;
@@ -580,7 +645,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
     @Override
     public void forEach(final BiConsumer<? super Object, ? super Object> consumer) {
-      for (int i = 0; i < entries.length; i+=2) {
+      for (int i = 0; i < entries.length; i += 2) {
         consumer.accept(entries[i], entries[i + 1]);
       }
     }
@@ -630,7 +695,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       if (this.entries.length != that.entries.length) {
         return false;
       }
-      for (int i = 0; i < entries.length / 2; i+=2) {
+      for (int i = 0; i < entries.length / 2; i += 2) {
         final Object k = entries[i];
         final Object v = entries[i + 1];
         if (!v.equals(that.lookup(k, commonHash, 0))) {

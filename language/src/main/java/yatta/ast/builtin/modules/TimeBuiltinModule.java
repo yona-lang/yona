@@ -2,7 +2,6 @@ package yatta.ast.builtin.modules;
 
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;

@@ -17,4 +17,9 @@ public final class BadArgException extends YattaException {
   public BadArgException(Seq message, Node location) {
     super(message, location);
   }
+
+  @CompilerDirectives.TruffleBoundary
+  public BadArgException(Throwable cause, Node location) {
+    super(cause, location);
+  }
 }

@@ -144,6 +144,17 @@ public final class Seq implements TruffleObject {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary
+  public Object[] toArray() {
+    assert length() < Integer.MAX_VALUE;
+    Object[] res = new Object[(int) length()];
+    foldLeft(0, (acc, el) -> {
+      res[acc] = el;
+      return acc + 1;
+    });
+    return res;
+  }
+
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq insertFirst(final Object o) {
     if (prefixSize != MAX_NODE_LENGTH) {
@@ -318,7 +329,7 @@ public final class Seq implements TruffleObject {
       final Object[] pfxSplitRight = (Object[]) pfxSplit[2];
       final Seq left = new Seq(EMPTY_NODE, 0, EMPTY_NODE, 0, pfxSplitLeft, nodeLength(pfxSplitLeft), BITS);
       final Seq right = new Seq(pfxSplitRight, nodeLength(pfxSplitRight), root, rootSize, suffix, suffixSize, shift);
-      return new Object[]{ left, pfxSplitMedium, right };
+      return new Object[]{left, pfxSplitMedium, right};
     }
     i -= prefixSize;
     if (i < rootSize) {
@@ -362,7 +373,7 @@ public final class Seq implements TruffleObject {
       }
       final Seq left = new Seq(prefix, prefixSize, leftRoot, nodeSize(leftRoot, leftShift), leftSuffix, nodeLength(leftSuffix), leftShift);
       final Seq right = new Seq(rightPrefix, nodeLength(rightPrefix), rightRoot, nodeSize(rightRoot, rightShift), suffix, suffixSize, rightShift);
-      return new Object[]{ left, medium, right };
+      return new Object[]{left, medium, right};
     }
     i -= rootSize;
     if (i < suffixSize) {
@@ -372,7 +383,7 @@ public final class Seq implements TruffleObject {
       final Object[] sfxSplitRight = (Object[]) sfxSplit[2];
       final Seq left = new Seq(prefix, prefixSize, root, rootSize, sfxSplitLeft, nodeLength(sfxSplitLeft), shift);
       final Seq right = new Seq(sfxSplitRight, nodeLength(sfxSplitRight), EMPTY_NODE, 0, EMPTY_NODE, 0, BITS);
-      return new Object[]{ left, sfxSplitMedium, right };
+      return new Object[]{left, sfxSplitMedium, right};
     }
     throw new BadArgException(String.format(IOOB_MSG, index), caller);
   }
@@ -407,7 +418,7 @@ public final class Seq implements TruffleObject {
       if (nodeLength(rightChild) > 0) {
         rightParent = nonLeafInsertFirst(rightParent, rightChild, shift - BITS);
       }
-      return new Object[]{ leftParent, subPt[1], rightParent };
+      return new Object[]{leftParent, subPt[1], rightParent};
     }
   }
 
@@ -457,7 +468,7 @@ public final class Seq implements TruffleObject {
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public Seq[] split(final long idx, final Node caller) {
     final Object[] pt = splitAt(idx, caller);
-    return new Seq[]{ (Seq) pt[0], ((Seq) pt[2]).insertFirst(pt[1]) };
+    return new Seq[]{(Seq) pt[0], ((Seq) pt[2]).insertFirst(pt[1])};
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
@@ -497,7 +508,8 @@ public final class Seq implements TruffleObject {
       for (int i = 0; i < suffixSize; i++) {
         state = dispatch.execute(step, state, nodeLookup(suffix, i));
       }
-    } catch (TransducerDoneException ignored) {}
+    } catch (TransducerDoneException ignored) {
+    }
     return dispatch.execute(complete, state);
   }
 
@@ -539,7 +551,8 @@ public final class Seq implements TruffleObject {
       for (int i = prefixSize - 1; i >= 0; i--) {
         state = dispatch.execute(step, state, nodeLookup(prefix, i));
       }
-    } catch (TransducerDoneException ignored) {}
+    } catch (TransducerDoneException ignored) {
+    }
     return dispatch.execute(complete, state);
   }
 
@@ -604,6 +617,21 @@ public final class Seq implements TruffleObject {
       return charBuffer.toString();
     } else {
       throw new BadArgException("Unable to convert sequence to Java String", caller);
+    }
+  }
+
+  public byte[] asByteArray(Node caller) {
+    long len = length();
+    if (len > Integer.MAX_VALUE) {
+      throw new BadArgException("Sequence too long to be converted to Java byte array", caller);
+    }
+    ByteBuffer byteBuffer = ByteBuffer.allocate((int) len);
+    if (asBytes(byteBuffer)) {
+      byteBuffer.limit(byteBuffer.position());
+      byteBuffer.position(0);
+      return byteBuffer.array();
+    } else {
+      throw new BadArgException("Unable to convert sequence to Java byte array", caller);
     }
   }
 
@@ -801,7 +829,7 @@ public final class Seq implements TruffleObject {
     if (shift != 0) {
       buildIndex(right, shift - BITS);
     }
-    return new Object[]{ left, src[i + 1], right };
+    return new Object[]{left, src[i + 1], right};
   }
 
   static Object nodeLookup(final Object node, final int i) {
@@ -902,7 +930,7 @@ public final class Seq implements TruffleObject {
   }
 
   static Object[] newLeaf(final Object value) {
-    return new Object[]{ null, value };
+    return new Object[]{null, value};
   }
 
   static byte[] newLeaf(final ByteSource source, final int n) {
@@ -954,7 +982,7 @@ public final class Seq implements TruffleObject {
     if (nodeIsSpecial(child)) {
       meta = newMeta(nodeSize(child, childShift));
     }
-    return new Object[]{ meta, child };
+    return new Object[]{meta, child};
   }
 
   static Object[] newNonLeaf(final Object firstChild, final Object secondChild, final int childShift) {
@@ -962,7 +990,7 @@ public final class Seq implements TruffleObject {
     if (nodeIsSpecial(firstChild) || nodeIsSpecial(secondChild)) {
       meta = newMeta(nodeSize(firstChild, childShift), nodeSize(secondChild, childShift));
     }
-    return new Object[]{ meta, firstChild, secondChild };
+    return new Object[]{meta, firstChild, secondChild};
   }
 
   static Object[] nonLeafInsertFirst(final Object[] parent, final Object child, final int childShift) {
@@ -1052,11 +1080,11 @@ public final class Seq implements TruffleObject {
   }
 
   static long[] newMeta(final long sole) {
-    return new long[]{ sole };
+    return new long[]{sole};
   }
 
   static long[] newMeta(final long first, final long second) {
-    return new long[]{ first, first + second };
+    return new long[]{first, first + second};
   }
 
   static long[] newMetaWithFirst(final long first, final long rest, final int n) {
@@ -1106,10 +1134,10 @@ public final class Seq implements TruffleObject {
 
   static long[] metaReplaceLast(final long[] meta, final long value) {
     if (meta.length == 1) {
-      return new long[]{ value };
+      return new long[]{value};
     }
     final long[] result = meta.clone();
-    result[result.length - 1] = result[result.length - 2] + value ;
+    result[result.length - 1] = result[result.length - 2] + value;
     return result;
   }
 
@@ -1176,7 +1204,7 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public static Seq fromBytes(final ByteSource source) {
+  public static Seq fromByteSource(final ByteSource source) {
     int shift = BITS;
     Object[] root = EMPTY_NODE;
     for (int remaining = source.remaining(); remaining / MAX_NODE_LENGTH != 0; remaining -= MAX_NODE_LENGTH) {
@@ -1190,6 +1218,26 @@ public final class Seq implements TruffleObject {
     }
     Object[] suffix = objectify(newLeaf(source, source.remaining() % MAX_NODE_LENGTH));
     return new Seq(EMPTY_NODE, 0, root, nodeSize(root, shift), suffix, nodeLength(suffix), shift);
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public static Seq fromBytes(final byte[] bytes) {
+    return fromByteSource(new ByteSource() {
+      int remaining = bytes.length;
+
+      @Override
+      int remaining() {
+        return remaining;
+      }
+
+      @Override
+      byte[] next(int offset, int n) {
+        byte[] ret = new byte[n + offset];
+        System.arraycopy(bytes, offset, ret, offset, n);
+        remaining -= n;
+        return ret;
+      }
+    });
   }
 
   public static abstract class ByteSource {

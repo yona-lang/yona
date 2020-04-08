@@ -264,4 +264,68 @@ public class StdLibTest extends CommonTest {
     long ret = context.eval(YattaLanguage.ID, "Time::timeout 1 0").asLong();
     assertEquals(1L, ret);
   }
+
+  @Test
+  public void httpClientTest() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    session = http\\Client::session {}\n" +
+        "    (status, headers, body) = http\\Client::get session \"https://httpbin.org/get\" {}\n" +
+        "in\n" +
+        "    status").asLong();
+    assertEquals(200L, ret);
+  }
+
+  @Test
+  public void httpClientAsyncTest() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    session = async \\-> http\\Client::session {}\n" +
+        "    (status, headers, body) = http\\Client::get session (async \\->\"https://httpbin.org/get\") (async \\->{})\n" +
+        "in\n" +
+        "    status").asLong();
+    assertEquals(200L, ret);
+  }
+
+  @Test
+  public void httpClientAuthTest() {
+    String ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    session = http\\Client::session {:authenticator = (:password, \"test\", \"test\")}\n" +
+        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/basic-auth/test/test\" {}\n" +
+        "    {\"user\" = user, \"authenticated\" = true} = JSON::parse body\n" +
+        "in\n" +
+        "    user").asString();
+    assertEquals("test", ret);
+  }
+
+  @Test
+  public void httpClientAuthAsyncTest() {
+    String ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    session = http\\Client::session <| async \\-> {async \\-> :authenticator = async \\-> (async \\-> :password, \"test\", \"test\")}\n" +
+        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/basic-auth/test/test\" {}\n" +
+        "    {\"user\" = user, \"authenticated\" = true} = JSON::parse body\n" +
+        "in\n" +
+        "    user").asString();
+    assertEquals("test", ret);
+  }
+
+  @Test
+  public void httpClientHeadersTest() {
+    String ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    session = http\\Client::session {}\n" +
+        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/headers\" {:accept = \"application/json\"}\n" +
+        "    {\"headers\" = response_headers} = JSON::parse body\n" +
+        "in\n" +
+        "    Dict::lookup response_headers \"Accept\"").asString();
+    assertEquals("application/json", ret);
+  }
+
+  @Test
+  public void httpClientHeadersAsyncTest() {
+    String ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    session = http\\Client::session {}\n" +
+        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/headers\" <| async \\-> {async \\-> :accept = async \\-> \"application/json\"}\n" +
+        "    {\"headers\" = response_headers} = JSON::parse body\n" +
+        "in\n" +
+        "    Dict::lookup response_headers \"Accept\"").asString();
+    assertEquals("application/json", ret);
+  }
 }
