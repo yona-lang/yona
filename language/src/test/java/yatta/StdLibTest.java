@@ -1,9 +1,11 @@
 package yatta;
 
+import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -327,5 +329,23 @@ public class StdLibTest extends CommonTest {
         "in\n" +
         "    Dict::lookup response_headers \"Accept\"").asString();
     assertEquals("application/json", ret);
+  }
+
+  @Test
+  public void readTest() {
+    Context customContext = Context.newBuilder().allowAllAccess(true).in(new ByteArrayInputStream("x".getBytes())).build();
+    customContext.enter();
+    int ret = customContext.eval(YattaLanguage.ID, "read").asInt();
+    assertEquals('x', ret);
+    customContext.leave();
+  }
+
+  @Test
+  public void readlnTest() {
+    Context customContext = Context.newBuilder().allowAllAccess(true).in(new ByteArrayInputStream("hello\n".getBytes())).build();
+    customContext.enter();
+    String ret = customContext.eval(YattaLanguage.ID, "readln").asString();
+    assertEquals("hello", ret);
+    customContext.leave();
   }
 }

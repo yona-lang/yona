@@ -101,7 +101,7 @@ public class Context {
     builtins.register(new ExportedFunction(IdentityBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(ToStringBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(ToFloatBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(ToLongBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(ToIntegerBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(EvalBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(ReadlnBuiltinFactory.getInstance()));

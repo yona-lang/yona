@@ -3,8 +3,8 @@ package yatta.ast.builtin;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 
-@NodeInfo(shortName = "long")
-public abstract class ToLongBuiltin extends BuiltinNode {
+@NodeInfo(shortName = "int")
+public abstract class ToIntegerBuiltin extends BuiltinNode {
     @Specialization
     public long byteVal(byte value) {
         return value;
