@@ -137,6 +137,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode[] args = new ExpressionNode[]{left, right};
 
     switch (ctx.op.getText()) {
+      case "**": return withSourceSection(ctx, PowerNodeGen.create(args));
       case "*": return withSourceSection(ctx, MultiplyNodeGen.create(args));
       case "/": return withSourceSection(ctx, DivideNodeGen.create(args));
       case "%": return withSourceSection(ctx, ModuloNodeGen.create(args));

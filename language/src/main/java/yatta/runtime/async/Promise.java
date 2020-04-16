@@ -19,6 +19,7 @@ import static java.util.function.Function.identity;
 @ExportLibrary(InteropLibrary.class)
 public final class Promise implements TruffleObject {
   private static final AtomicReferenceFieldUpdater<Promise, Object> UPDATER = AtomicReferenceFieldUpdater.newUpdater(Promise.class, Object.class, "value");
+  public static final Promise NEVER = new Promise();
 
   volatile Object value;
 

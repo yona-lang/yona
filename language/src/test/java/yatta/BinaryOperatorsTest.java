@@ -273,6 +273,22 @@ public class BinaryOperatorsTest extends CommonTest {
   }
 
   @ParameterizedTest
+  @MethodSource("powerOps")
+  void testPowerOps(BinaryArgsHolder args) {
+    Object ret = context.eval(YattaLanguage.ID, args.format("**")).asDouble();
+    assertEquals(args.expected, ret);
+  }
+
+  static Stream<BinaryArgsHolder> powerOps() {
+    return Stream.of(
+        new BinaryArgsHolder(3d, 2d, 9d, Double.class),
+        new BinaryArgsHolder(new PromiseHolder(3d), 2d, 9d, Double.class),
+        new BinaryArgsHolder(3d, new PromiseHolder(2d), 9d, Double.class),
+        new BinaryArgsHolder(new PromiseHolder(3d), new PromiseHolder(2d), 9d, Double.class)
+    );
+  }
+
+  @ParameterizedTest
   @MethodSource("multiplyOps")
   void testMultiplyOps(BinaryArgsHolder args) {
     Object ret = context.eval(YattaLanguage.ID, args.format("*")).as(args.expectedType);

@@ -24,75 +24,75 @@ import java.io.PrintWriter;
 @NodeInfo(shortName = "println")
 public abstract class PrintlnBuiltin extends BuiltinNode {
 
-    @Specialization
-    public long println(long value, @CachedContext(YattaLanguage.class) Context context) {
-        doPrint(context.getOutput(), value);
-        return value;
-    }
+  @Specialization
+  public long println(long value, @CachedContext(YattaLanguage.class) Context context) {
+    doPrint(context.getOutput(), value);
+    return value;
+  }
 
-    @TruffleBoundary
-    private void doPrint(PrintWriter out, long value) {
-        out.println(value);
-    }
+  @TruffleBoundary
+  private void doPrint(PrintWriter out, long value) {
+    out.println(value);
+  }
 
-    @Specialization
-    public boolean println(boolean value, @CachedContext(YattaLanguage.class) Context context) {
-        doPrint(context.getOutput(), value);
-        return value;
-    }
+  @Specialization
+  public boolean println(boolean value, @CachedContext(YattaLanguage.class) Context context) {
+    doPrint(context.getOutput(), value);
+    return value;
+  }
 
-    @TruffleBoundary
-    private void doPrint(PrintWriter out, boolean value) {
-        out.println(value);
-    }
+  @TruffleBoundary
+  private void doPrint(PrintWriter out, boolean value) {
+    out.println(value);
+  }
 
-    @Specialization
-    public String println(String value, @CachedContext(YattaLanguage.class) Context context) {
-        doPrint(context.getOutput(), value);
-        return value;
-    }
+  @Specialization
+  public String println(String value, @CachedContext(YattaLanguage.class) Context context) {
+    doPrint(context.getOutput(), value);
+    return value;
+  }
 
-    @TruffleBoundary
-    private void doPrint(PrintWriter out, String value) {
-        out.println(value);
-    }
+  @TruffleBoundary
+  private void doPrint(PrintWriter out, String value) {
+    out.println(value);
+  }
 
-    @Specialization
-    public Object println(Promise value, @CachedContext(YattaLanguage.class) Context context) {
-        return value.map(val -> {
-            doPrint(context.getOutput(), val);
-            return val;
-        }, this);
-    }
+  @Specialization
+  public Object println(Promise value, @CachedContext(YattaLanguage.class) Context context) {
+    return value.map(val -> {
+      doPrint(context.getOutput(), val);
+      return val;
+    }, this);
+  }
 
-    @TruffleBoundary
-    private void doPrint(PrintWriter out, Promise value) {
-        out.println(value);
-    }
+  @TruffleBoundary
+  private void doPrint(PrintWriter out, Promise value) {
+    out.println(value);
+  }
 
-    @Specialization
-    public Object println(Seq value, @CachedContext(YattaLanguage.class) Context context) {
-        doPrint(context.getOutput(), value);
-        return value;
-    }
+  @Specialization
+  public Object println(Seq value, @CachedContext(YattaLanguage.class) Context context) {
+    doPrint(context.getOutput(), value);
+    return value;
+  }
 
-    @TruffleBoundary
-    private void doPrint(PrintWriter out, Seq value) {
-        try {
-            out.println(value.asJavaString(this));
-        } catch (BadArgException e) {
-            out.println(value.toString());
-        }
+  @TruffleBoundary
+  private void doPrint(PrintWriter out, Seq value) {
+    try {
+      out.println(value.asJavaString(this));
+    } catch (BadArgException e) {
+      out.println(value.toString());
     }
+  }
 
-    @Specialization
-    public Object println(Object value, @CachedContext(YattaLanguage.class) Context context) {
-        doPrint(context.getOutput(), value);
-        return value;
-    }
+  @Specialization
+  public Object println(Object value, @CachedContext(YattaLanguage.class) Context context) {
+    doPrint(context.getOutput(), value);
+    return value;
+  }
 
-    @TruffleBoundary
-    private void doPrint(PrintWriter out, Object value) {
-        out.println(value);
-    }
+  @TruffleBoundary
+  private void doPrint(PrintWriter out, Object value) {
+    out.println(value);
+  }
 }

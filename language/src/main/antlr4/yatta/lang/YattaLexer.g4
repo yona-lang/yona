@@ -90,6 +90,7 @@ OP_GTE : '>=';
 OP_RIGHT_ARROW : '->' ;
 OP_LEFT_ARROW : '<-' ;
 
+OP_POWER : '**';
 OP_MULTIPLY : '*';
 OP_DIVIDE : '/';
 OP_MODULO : '%';
@@ -115,7 +116,7 @@ OP_JOIN : '++';
 OP_PIPE_L : '<|' ;
 OP_PIPE_R : '|>' ;
 
-COMMENT: '#' InputCharacter* NEWLINE -> channel(COMMENTS_CHANNEL);
+COMMENT: '#' InputCharacter* -> channel(COMMENTS_CHANNEL) ;
 
 NEWLINE : NewLinePart+;
 WS: WHITESPACE+ -> skip;

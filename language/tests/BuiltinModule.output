@@ -1,1 +1,1 @@
-Module{fqn=File, exports=[open, readline, test], functions={private=private, test=test, open=open, readline=readline}, records={}}
+Module{fqn=File, exports=[open, readline, test], functions={private=private/0, test=test/0, open=open/2, readline=readline/1}, records={}}

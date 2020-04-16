@@ -1,0 +1,12 @@
+do
+    multiplication_handler = \params headers raw_body -> let
+        body = JSON::parse raw_body
+    in (200, {"content-type" = "application/json"}, {"result" = (Dict::lookup body "a") * (Dict::lookup body "b")} |> JSON::generate)
+
+    server = http\Server::create "127.0.0.1" 3000 10
+          |> http\Server::handle "/multiply" {} multiplication_handler
+          |> http\Server::start
+    println "Server running on port 3000"
+
+    never
+end

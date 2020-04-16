@@ -54,7 +54,7 @@ public class YattaTest {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
-            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes("UTF-8"))).out(out).allowAllAccess(true).build();
+            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes("UTF-8"))).out(out).err(out).allowAllAccess(true).build();
             context.enter();
 
             /* Parse the Yatta source file. */
@@ -90,7 +90,6 @@ public class YattaTest {
             context.leave();
           });
 
-          if(baseName.equals("Sieve"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;

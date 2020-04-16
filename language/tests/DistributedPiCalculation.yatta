@@ -1,0 +1,30 @@
+# Distributed calculation of PI using builtin HTTP Server and Client
+do
+    port = 3000
+    server = do
+            iteration_handler = \params headers raw_body -> let
+                {"i" = i} = JSON::parse raw_body
+            in (200, {"content-type" = "application/json"}, JSON::generate {"result" = (-1f ** (i + 1f)) / ((2f * i) - 1f)})
+
+            max_connections = 100
+            server = http\Server::create "127.0.0.1" port max_connections
+                  |> http\Server::handle "/iteration" iteration_handler
+                  |> http\Server::start
+        end
+
+    client_session = http\Client::session {}
+    client_module = module Client exports run as
+        send_request i = do
+                (200, _, raw_body) = http\Client::post client_session "http://localhost:{port}/iteration" {} <| JSON::generate {"i" = i}
+                {"result" = result} = JSON::parse raw_body
+                result
+            end
+
+        max_iterations = 1000
+        run i acc
+          | i >= max_iterations = acc
+          | true = run (i + 1) (acc + (send_request <| float i))
+    end
+
+    4f * client_module::run 1 0f
+end

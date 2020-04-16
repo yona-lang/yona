@@ -14,6 +14,7 @@ import yatta.runtime.Context;
 import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.NoMatchException;
+import yatta.runtime.exceptions.util.ExceptionUtil;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -100,7 +101,7 @@ public final class TryCatchNode extends ExpressionNode {
     Object retValue = null;
     for (int i = 0; i < catchPatterns.length; i++) {
       try {
-        retValue = catchPatterns[i].patternMatch(throwableToTuple(throwable), frame);
+        retValue = catchPatterns[i].patternMatch(ExceptionUtil.throwableToTuple(throwable, lookupContextReference(YattaLanguage.class).get()), frame);
         break;
       } catch (MatchControlFlowException ex) {
         continue;
@@ -111,17 +112,6 @@ public final class TryCatchNode extends ExpressionNode {
       return retValue;
     } else {
       throw new NoMatchException(this);
-    }
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  private Tuple throwableToTuple(Throwable throwable) {
-    if (throwable instanceof YattaException) {
-      YattaException yattaException = (YattaException) throwable;
-      return yattaException.asTuple();
-    } else {
-      // TODO deal with non Yatta exceptions ?
-      return new Tuple(lookupContextReference(YattaLanguage.class).get().symbol(throwable.getClass().getSimpleName()), throwable.getMessage(), YattaException.stacktraceToSequence(throwable));
     }
   }
 }

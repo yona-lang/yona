@@ -43,8 +43,14 @@ public final class IdentifierNode extends ExpressionNode {
     TruffleLanguage.ContextReference<Context> context = lookupContextReference(YattaLanguage.class);
     Object globalValue = context.get().globals.lookup(name);
     if (!Unit.INSTANCE.equals(globalValue)) {
-      this.replace(new AnyValueNode(globalValue));
-      return globalValue;
+      if (globalValue instanceof Function && ((Function) globalValue).getCardinality() == 0) {
+        InvokeNode invokeNode = new InvokeNode(language, (Function) globalValue, new ExpressionNode[]{}, moduleStack);
+        this.replace(invokeNode);
+        return invokeNode.executeGeneric(frame);
+      } else {
+        this.replace(new AnyValueNode(globalValue));
+        return globalValue;
+      }
     }
 
     CompilerDirectives.transferToInterpreterAndInvalidate();

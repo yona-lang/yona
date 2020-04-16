@@ -37,7 +37,7 @@ public final class NameAliasNode extends ExpressionNode implements AliasNode {
 
   @Override
   public String toString() {
-    return "AliasNode{" +
+    return "NameAliasNode{" +
         "name='" + name + '\'' +
         ", expression=" + expression +
         '}';

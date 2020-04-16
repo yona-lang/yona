@@ -100,8 +100,13 @@ public class Context {
     builtins.register(new ExportedFunction(AsyncBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(IdentityBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(ToStringBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(ToFloatBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(ToLongBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(EvalBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(ReadlnBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(ReadBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(NeverBuiltinFactory.getInstance()));
   }
 
   private void installBuiltinModules() {
@@ -115,6 +120,7 @@ public class Context {
     builtinModules.register(new JSONBuiltinModule());
     builtinModules.register(new TupleBuiltinModule());
     builtinModules.register(new HttpClientBuiltinModule());
+    builtinModules.register(new HttpServerBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

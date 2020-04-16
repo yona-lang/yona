@@ -110,16 +110,16 @@ options { tokenVocab=YattaLexer; }
 
 input : NEWLINE? expression NEWLINE? EOF ;
 
-function : name pattern* functionBody NEWLINE?;
+function : NEWLINE* name pattern* NEWLINE? functionBody ;
 functionBody : bodyWithGuards+ | bodyWithoutGuard ;
 
-bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression ;
-bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression ;
+bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression NEWLINE ;
+bodyWithoutGuard : NEWLINE? OP_ASSIGN NEWLINE? expression NEWLINE ;
 
 expression : PARENS_L expression PARENS_R                                                                #expressionInParents
            | op=(OP_LOGIC_NOT | OP_BIN_NOT) expression                                                   #negationExpression
            | left=expression BACKTICK call BACKTICK right=expression                                     #backtickExpression
-           | left=expression op=(OP_MULTIPLY | OP_DIVIDE | OP_MODULO) right=expression                   #multiplicativeExpression
+           | left=expression op=(OP_POWER | OP_MULTIPLY | OP_DIVIDE | OP_MODULO) right=expression        #multiplicativeExpression
            | left=expression op=(OP_PLUS | OP_MINUS) right=expression                                    #additiveExpression
            | left=expression op=(OP_LEFTSHIFT | OP_RIGHTSHIFT | OP_ZEROFILL_RIGHTSHIFT) right=expression #binaryShiftExpression
            | left=expression op=(OP_GTE | OP_LTE| OP_GT | OP_LT | OP_EQ | OP_NEQ) right=expression       #comparativeExpression
@@ -192,7 +192,7 @@ funArg : PARENS_L expression PARENS_R | value;
 call : name | moduleCall | nameCall ;
 moduleCall : fqn DCOLON name ;
 nameCall : var=name DCOLON fun=name;
-module : KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE record* function+ NEWLINE? KW_END ;
+module : NEWLINE* KW_MODULE fqn KW_EXPORTS nonEmptyListOfNames KW_AS NEWLINE record* function+ NEWLINE? KW_END ;
 nonEmptyListOfNames : NEWLINE? name NEWLINE? (COMMA NEWLINE? name)* NEWLINE? ;
 
 unit : UNIT ;
@@ -217,7 +217,7 @@ interpolatedStringExpression
 characterLiteral : CHARACTER_LITERAL ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
 
-tuple : PARENS_L expression (COMMA expression)+ PARENS_R ;
+tuple : PARENS_L expression NEWLINE? (COMMA NEWLINE? expression)+ PARENS_R ;
 dict : CURLY_L (dictKey OP_ASSIGN dictVal (COMMA dictKey OP_ASSIGN dictVal)*)? CURLY_R ;
 dictKey : expression ;
 dictVal : expression ;
@@ -230,7 +230,7 @@ moduleName : UPPERCASE_NAME ;
 
 symbol : COLON name;
 identifier : name ;
-lambda : BACKSLASH pattern* OP_RIGHT_ARROW expression ;
+lambda : BACKSLASH pattern* OP_RIGHT_ARROW NEWLINE? expression ;
 underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;

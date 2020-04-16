@@ -630,6 +630,23 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(3l, ret);
   }
 
+  @Test
+  public void calculatePiTest() {
+    double ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    calculator = module PiCalculator exports run as\n" +
+        "        iteration i = (-1f ** (i + 1f)) / ((2f * i) - 1f)\n" +
+        "        max_iterations = 10000\n" +
+        "        run i acc\n" +
+        "          | i >= max_iterations = acc\n" +
+        "          | true = run (i + 1) (acc + (iteration <| float i))\n" +
+        "    end\n" +
+        "in\n" +
+        "    4f * calculator::run 1 0f").asDouble();
+
+    assertTrue(3d < ret);
+    assertTrue(4d > ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with

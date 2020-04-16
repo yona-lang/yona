@@ -30,9 +30,7 @@ public class Symbol implements TruffleObject {
 
   @Override
   public String toString() {
-    return "Symbol{" +
-        "name='" + name + '\'' +
-        '}';
+    return ":" + name;
   }
 
   @ExportMessage

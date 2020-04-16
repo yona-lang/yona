@@ -1,0 +1,58 @@
+do
+    sieveMod = module Sieve exports start as
+        natural {:n = n} = (n, {:n = n + 1})
+
+        filterAndAdd n [] = (true, [n])
+        filterAndAdd n h2 -| t2
+            | Types::is_seq h2 && Seq::len h2 > 1 =
+            let
+                _ = println h2
+                h -| t = h2
+                sortedPrimes = movePrimes h -| t1 [] t2
+            in filterAndAdd n sortedPrimes
+        filterAndAdd n h -| t
+            | n % h == 0 = (false, h -| t)
+        filterAndAdd n h -| t
+            | n < h * h = (true, h -| insertPrimes n t)
+        filterAndAdd n h -| t = let (r, l) = filterAndAdd n t in (r, h -| l)
+
+        insertPrimes n [] = [n]
+        insertPrimes n h2 -| t2 =
+            let
+                 h -| t = h2
+             in [n, h -| t1] -| T2
+        insertPrimes n h -| t2 = [n] -| (h -| t2)
+
+        movePrimes [] reversed [] = reversed
+        movePrimes primes reversed h -| t = h -| movePrimes primes reversed t
+        movePrimes h -| t reversed [] = movePrimes t h -| reversed []
+
+        sieve iterator primes = let
+            _ = println primes
+            (n, next) = natural iterator
+            (r, newPrimes) = filterAndAdd n primes
+            in
+                if r then (newPrimes, next)
+                else sieve next primes
+
+        start = last <| hundredThousand 100000 {:n = 2} []
+
+        last h = h
+        last h2 -| t2 =
+            let
+                h -| t = h2
+                sortedPrimes = movePrimes h -| t1 [] t2
+            in last sortedPrimes
+        last _ -| t = last t
+
+        hundredThousand 0 _ primes = primes
+        hundredThousand count iterator primes =
+            let (newPrimes, newIterator) = sieve iterator primes
+            in hundredThousand (count - 1) newIterator newPrimes
+    end
+
+    startTime = Time::now
+    result = sieveMod::start
+    endTime = Time::now
+    printf "Computed {result} in {endTime - startTime}ms"
+end

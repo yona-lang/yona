@@ -1,5 +1,6 @@
 package yatta.ast.builtin.modules;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import org.antlr.v4.runtime.CharStreams;
@@ -20,6 +21,7 @@ public final class JSONBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "parse")
   abstract static class ParseBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object parse(Seq str) {
       JSONLexer lexer = new JSONLexer(CharStreams.fromString(str.asJavaString(this)));
       TokenStream tokens = new CommonTokenStream(lexer);
@@ -30,6 +32,7 @@ public final class JSONBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object parse(Promise promise) {
       return promise.map(obj -> {
         if (obj instanceof Seq) {

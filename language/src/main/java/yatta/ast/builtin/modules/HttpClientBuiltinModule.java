@@ -1,7 +1,10 @@
 package yatta.ast.builtin.modules;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -30,6 +33,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "session")
   abstract static class SessionBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object session(Dict params, @CachedContext(YattaLanguage.class) Context context) {
       if (params.size() == 0L) {
         return new NativeObject(HttpClient.newHttpClient());
@@ -133,23 +137,24 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   }
 
   abstract static class SendBuiltin extends BuiltinNode {
-    protected Promise sendRequest(NativeObject session, RequestType requestType, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context) {
+    @CompilerDirectives.TruffleBoundary
+    protected Promise sendRequest(NativeObject session, RequestType requestType, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       if (session.getValue() instanceof HttpClient) {
         HttpClient httpClient = (HttpClient) session.getValue();
 
         Object requestObj = buildRequest(requestType, uri, headers, body);
         if (requestObj instanceof HttpRequest) {
-          return runRequest(httpClient, (HttpRequest) requestObj, context);
+          return runRequest(httpClient, (HttpRequest) requestObj, context, dispatch);
         } else {
-          return ((Promise) requestObj).map(request -> runRequest(httpClient, (HttpRequest) request, context), this);
+          return ((Promise) requestObj).map(request -> runRequest(httpClient, (HttpRequest) request, context, dispatch), this);
         }
       } else {
         throw YattaException.typeError(this, session);
       }
     }
 
-    private Promise runRequest(HttpClient httpClient, HttpRequest request, Context context) {
-      Promise promise = new Promise();
+    private Promise runRequest(HttpClient httpClient, HttpRequest request, Context context, InteropLibrary dispatch) {
+      Promise promise = new Promise(dispatch);
       context.ioExecutor.submit(() -> {
         try {
           HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -221,32 +226,32 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "get")
   abstract static class GetBuiltin extends SendBuiltin {
     @Specialization
-    public Promise get(NativeObject session, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context) {
-      return sendRequest(session, RequestType.GET, uri, headers, null, context);
+    public Promise get(NativeObject session, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(session, RequestType.GET, uri, headers, null, context, dispatch);
     }
   }
 
   @NodeInfo(shortName = "delete")
   abstract static class DeleteBuiltin extends SendBuiltin {
     @Specialization
-    public Promise delete(NativeObject session, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context) {
-      return sendRequest(session, RequestType.DELETE, uri, headers, null, context);
+    public Promise delete(NativeObject session, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(session, RequestType.DELETE, uri, headers, null, context, dispatch);
     }
   }
 
   @NodeInfo(shortName = "post")
   abstract static class PostBuiltin extends SendBuiltin {
     @Specialization
-    public Promise post(NativeObject session, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context) {
-      return sendRequest(session, RequestType.POST, uri, headers, body, context);
+    public Promise post(NativeObject session, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(session, RequestType.POST, uri, headers, body, context, dispatch);
     }
   }
 
   @NodeInfo(shortName = "put")
   abstract static class PutBuiltin extends SendBuiltin {
     @Specialization
-    public Promise put(NativeObject session, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context) {
-      return sendRequest(session, RequestType.PUT, uri, headers, body, context);
+    public Promise put(NativeObject session, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(session, RequestType.PUT, uri, headers, body, context, dispatch);
     }
   }
 

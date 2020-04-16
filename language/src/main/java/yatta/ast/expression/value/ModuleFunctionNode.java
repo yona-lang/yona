@@ -1,6 +1,5 @@
 package yatta.ast.expression.value;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -72,7 +71,6 @@ public final class ModuleFunctionNode extends FunctionLikeNode {
   }
 
   private Function execute(VirtualFrame frame) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     FunctionRootNode rootNode = new FunctionRootNode(language, frameDescriptor, expression, sourceSection, name);
     return new Function(name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
   }

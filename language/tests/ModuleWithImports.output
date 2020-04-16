@@ -1,1 +1,1 @@
-Module{fqn=tests\ModuleWithImports, exports=[funone], functions={funone=funone}, records={}}
+Module{fqn=tests\ModuleWithImports, exports=[funone], functions={funone=funone/1}, records={}}

@@ -71,7 +71,7 @@ public final class InvokeNode extends ExpressionNode {
   public String toString() {
     return "InvokeNode{" +
         "functionNode=" + functionNode +
-        ", function=" + (function == null ? functionNode.toString() : function) +
+        ", function=" + (functionNode == null ? function : functionNode) +
         ", argumentNodes=" + Arrays.toString(argumentNodes) +
         '}';
   }
@@ -125,7 +125,7 @@ public final class InvokeNode extends ExpressionNode {
     } else if (argumentNodes.length < function.getCardinality()) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       /*
-       * Create a closure for partially applied function
+       * Create a closure for `partial`ly applied function
        */
       String partiallyAppliedFunctionName = "$partial-" + argumentNodes.length + "/" + function.getCardinality() + "-" + function.getName();
       ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];

@@ -1,1 +1,1 @@
-Module{fqn=tests\CallWithinModule, exports=[funtwo], functions={funone=funone, funtwo=funtwo}, records={}}
+Module{fqn=tests\CallWithinModule, exports=[funtwo], functions={funone=funone/1, funtwo=funtwo/1}, records={}}

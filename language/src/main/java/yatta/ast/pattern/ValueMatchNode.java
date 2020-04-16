@@ -62,7 +62,7 @@ public final class ValueMatchNode extends MatchNode {
       try {
         readLocalVariableNode.executeGeneric(frame);
         isBound = true;
-      } catch (UninitializedFrameSlotException e) {
+      } catch (UninitializedFrameSlotException | IllegalStateException e) {
         isBound = false;
       }
       if (isBound) {
