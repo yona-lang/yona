@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 @NodeInfo
 public final class FunctionNode extends FunctionLikeNode {
-  private final String name;
+  private final String moduleFQN, name;
   private int cardinality;
   @Node.Child
   public ExpressionNode expression;
@@ -37,7 +37,8 @@ public final class FunctionNode extends FunctionLikeNode {
   private SourceSection sourceSection;
   private FrameDescriptor frameDescriptor;
 
-  public FunctionNode(YattaLanguage language, SourceSection sourceSection, String name, int cardinality, FrameDescriptor frameDescriptor, ExpressionNode expression) {
+  public FunctionNode(YattaLanguage language, SourceSection sourceSection, String moduleFQN, String name, int cardinality, FrameDescriptor frameDescriptor, ExpressionNode expression) {
+    this.moduleFQN = moduleFQN;
     this.name = name;
     this.cardinality = cardinality;
     this.expression = expression;
@@ -82,8 +83,8 @@ public final class FunctionNode extends FunctionLikeNode {
 
   private Function execute(VirtualFrame frame) {
     CompilerDirectives.transferToInterpreterAndInvalidate();
-    ClosureRootNode rootNode = new ClosureRootNode(language, frameDescriptor, expression, sourceSection, name, frame.materialize());
-    return new Function(name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
+    ClosureRootNode rootNode = new ClosureRootNode(language, frameDescriptor, expression, sourceSection, moduleFQN, name, frame.materialize());
+    return new Function(moduleFQN, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
   }
 
   @Override

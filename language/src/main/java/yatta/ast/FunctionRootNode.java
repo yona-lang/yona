@@ -25,12 +25,15 @@ public class FunctionRootNode extends RootNode {
    */
   private String name;
 
+  private String moduleFQN;
+
   private final SourceSection sourceSection;
 
   public FunctionRootNode(YattaLanguage language, FrameDescriptor frameDescriptor, ExpressionNode bodyNode,
-                          SourceSection sourceSection, String name) {
+                          SourceSection sourceSection, String moduleFQN, String name) {
     super(language, frameDescriptor);
     this.bodyNode = bodyNode;
+    this.moduleFQN = moduleFQN;
     this.name = name;
     this.sourceSection = sourceSection;
   }
@@ -48,6 +51,15 @@ public class FunctionRootNode extends RootNode {
   @Override
   public String getName() {
     return name;
+  }
+
+  @Override
+  public String getQualifiedName() {
+    if (moduleFQN != null) {
+      return moduleFQN + "::" + name;
+    } else {
+      return name;
+    }
   }
 
   public void setName(String name) {

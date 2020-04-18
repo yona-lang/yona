@@ -7,9 +7,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.*;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.Types;
 import yatta.TypesGen;
@@ -196,5 +194,9 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
 
   public Set executeSet(VirtualFrame frame) throws UnexpectedResultException {
     return TypesGen.expectSet(executeGeneric(frame));
+  }
+
+  protected boolean isForeignObject(Object obj) {
+    return TypesGen.isForeignObject(obj);
   }
 }

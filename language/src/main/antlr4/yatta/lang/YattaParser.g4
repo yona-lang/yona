@@ -103,7 +103,7 @@ options { tokenVocab=YattaLexer; }
         parser.setErrorHandler(new YattaErrorStrategy());
         parser.source = source;
         ExpressionNode rootExpression = new ParserVisitor(language, context, source).visit(parser.input());
-        FunctionRootNode rootNode = new FunctionRootNode(language, context.globalFrameDescriptor, rootExpression, source.createSection(1), "root");
+        FunctionRootNode rootNode = new FunctionRootNode(language, context.globalFrameDescriptor, rootExpression, source.createSection(1), null, "root");
         return Truffle.getRuntime().createCallTarget(rootNode);
     }
 }

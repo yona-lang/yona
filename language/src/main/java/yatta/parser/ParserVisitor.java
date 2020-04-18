@@ -42,7 +42,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode functionBodyNode = new MainExpressionNode(ctx.expression().accept(this));
     functionBodyNode.addRootTag();
 
-    ModuleFunctionNode mainFunctionNode = withSourceSection(ctx, new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), "$main", 0, context.globalFrameDescriptor, functionBodyNode));
+    ModuleFunctionNode mainFunctionNode = withSourceSection(ctx, new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), null, "$main", 0, context.globalFrameDescriptor, functionBodyNode));
     return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new ExpressionNode[] {}));
   }
 
@@ -386,7 +386,15 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
         ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
         ctx.expression().stop.getLine(),
         ctx.expression().stop.getCharPositionInLine() + 1
-    ), "$lambda" + lambdaCount++ + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor, bodyNode));
+    ), currentModuleName(), "$lambda" + lambdaCount++ + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor, bodyNode));
+  }
+
+  private String currentModuleName() {
+    try {
+      return moduleStack.peek().moduleName;
+    } catch (EmptyStackException e) {
+      return null;
+    }
   }
 
   @Override
@@ -427,6 +435,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public ModuleNode visitModule(YattaParser.ModuleContext ctx) {
     FQNNode moduleFQN = visitFqn(ctx.fqn());
+    String moduleFQNString = ctx.fqn().getText();
     moduleStack.push(moduleFQN);
     NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());
 
@@ -539,7 +548,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       caseNode.addRootTag();
       caseNode.setIsTail(true);
 
-      FunctionNode functionNode = new FunctionNode(language, functionSourceSections.get(functionName), functionName, cardinality, context.globalFrameDescriptor, caseNode);
+      FunctionNode functionNode = new FunctionNode(language, functionSourceSections.get(functionName), moduleFQNString, functionName, cardinality, context.globalFrameDescriptor, caseNode);
       functions.add(functionNode);
     }
 
@@ -927,7 +936,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       };
     }
 
-    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SEQ, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SEQ, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {}), currentModuleName()));
   }
 
   @Override
@@ -946,7 +955,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       };
     }
 
-    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SET, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SET, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {}), currentModuleName()));
   }
 
   @Override
@@ -965,7 +974,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       };
     }
 
-    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.DICT, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {})));
+    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.DICT, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[] {}), currentModuleName()));
   }
 
   @Override

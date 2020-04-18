@@ -162,7 +162,7 @@ public final class InvokeNode extends ExpressionNode {
       }
 
       YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
-      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), partiallyAppliedFunctionName,
+      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), function.getModuleFQN(), partiallyAppliedFunctionName,
           function.getCardinality() - argumentNodes.length, frame.getFrameDescriptor(), blockNode);
 
       return partiallyAppliedFunctionNode.executeGeneric(frame);

@@ -1,3 +1,3 @@
 (ExceptionStacktrace.yatta, root, (), ())
 (ExceptionStacktrace.yatta, $main, (), ())
-(CommonFunctions.yatta, raise_error, 73, 1)
+(CommonFunctions.yatta, tests\CommonFunctions::raise_error, 73, 1)

@@ -125,14 +125,14 @@ public class YattaException extends RuntimeException implements TruffleException
       if (location != null && location.getSourceSection() != null) {
         stackTraceSequence = stackTraceSequence.insertFirst(new Tuple(
             Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
-            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getName()),
+            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getQualifiedName()),
             location.getSourceSection().getStartLine(),
             location.getSourceSection().getStartColumn()
         ));
       } else {
         stackTraceSequence = stackTraceSequence.insertFirst(new Tuple (
             Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
-            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getName()),
+            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getQualifiedName()),
             Unit.INSTANCE,
             Unit.INSTANCE
         ));

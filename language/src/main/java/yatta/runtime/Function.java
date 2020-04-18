@@ -28,16 +28,22 @@ public final class Function implements TruffleObject {
 
   /** The name of the function. */
   private final String name;
+  private final String moduleFQN;
 
   private int cardinality;
 
   /** The current implementation of this function. */
   private RootCallTarget callTarget;
 
-  public Function(String name, RootCallTarget callTarget, int cardinality) {
+  public Function(String moduleFQN, String name, RootCallTarget callTarget, int cardinality) {
+    this.moduleFQN = moduleFQN;
     this.name = name;
     this.callTarget = callTarget;
     this.cardinality = cardinality;
+  }
+
+  public String getModuleFQN() {
+    return moduleFQN;
   }
 
   public String getName() {

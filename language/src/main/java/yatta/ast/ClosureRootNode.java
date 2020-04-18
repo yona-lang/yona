@@ -25,15 +25,18 @@ public class ClosureRootNode extends RootNode {
    */
   private String name;
 
+  private String moduleFQN;
+
   private final SourceSection sourceSection;
 
   private final MaterializedFrame lexicalScope;
 
   public ClosureRootNode(YattaLanguage language, FrameDescriptor frameDescriptor, ExpressionNode bodyNode,
-                         SourceSection sourceSection, String name, MaterializedFrame lexicalScope) {
+                         SourceSection sourceSection, String moduleFQN, String name, MaterializedFrame lexicalScope) {
     super(language, frameDescriptor);
     this.bodyNode = bodyNode;
     this.name = name;
+    this.moduleFQN = moduleFQN;
     this.sourceSection = sourceSection;
     this.lexicalScope = lexicalScope;
   }
@@ -58,6 +61,15 @@ public class ClosureRootNode extends RootNode {
   @Override
   public String getName() {
     return name;
+  }
+
+  @Override
+  public String getQualifiedName() {
+    if (moduleFQN != null) {
+      return moduleFQN + "::" + name;
+    } else {
+      return name;
+    }
   }
 
   public void setName(String name) {

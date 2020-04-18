@@ -129,11 +129,11 @@ public class Context {
 
     builtins.builtins.forEach((name, stdLibFunction) -> {
       int argumentsCount = stdLibFunction.node.getExecutionSignature().size();
-      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, name);
+      FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, fqn, name);
       if (stdLibFunction.isExported()) {
         exports.add(name);
       }
-      functions.add(new Function(name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount));
+      functions.add(new Function(fqn, name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount));
     });
 
     YattaModule module = new YattaModule(fqn, exports, functions, Dict.empty());
@@ -144,8 +144,8 @@ public class Context {
     builtins.builtins.forEach((name, stdLibFunction) -> {
       int cardinality = stdLibFunction.node.getExecutionSignature().size();
 
-      FunctionRootNode rootNode = new FunctionRootNode(language, new FrameDescriptor(UninitializedFrameSlot.INSTANCE), new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, name);
-      Function function = new Function(name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
+      FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, null, name);
+      Function function = new Function(null, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
 
       String partiallyAppliedFunctionName = "$partial-0/" + function.getCardinality() + "-" + function.getName();
       ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
@@ -168,9 +168,9 @@ public class Context {
       WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), partialFrameDescriptor.addFrameSlot(function.getName()));
 
       YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
-      FunctionRootNode partiallyAppliedFunctionRootNode = new FunctionRootNode(language, partialFrameDescriptor, blockNode, BUILTIN_SOURCE_SECTION, partiallyAppliedFunctionName);
+      FunctionRootNode partiallyAppliedFunctionRootNode = new FunctionRootNode(language, partialFrameDescriptor, blockNode, BUILTIN_SOURCE_SECTION, null, partiallyAppliedFunctionName);
 
-      insertGlobal(name, new Function(partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(partiallyAppliedFunctionRootNode), cardinality));
+      insertGlobal(name, new Function(null, partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(partiallyAppliedFunctionRootNode), cardinality));
     });
   }
 
