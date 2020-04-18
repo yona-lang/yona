@@ -22,6 +22,9 @@ Yatta abstract users from dealing with non-blocking asynchronous computations an
 * advanced concurrency provided by built-in Software Transactional Memory (STM) module
 * polyglot language - interoperability with other languages via GraalVM
 
+## Documentation
+Yatta Documentation is available in the [wiki](https://github.com/yatta-lang/yatta/wiki/Yatta-Documentation) section.
+
 ## Installation Instructions
 It is possible to run Yatta locally, whether for play purposes or development of new features.
 
@@ -179,6 +182,7 @@ These are all the operations supposorted by Yatta's binary operators. Combinatio
 | `%` | float | float | arithmetic modulo |
 | `*` | integer | integer | arithmetic multiplication |
 | `*` | float | float | arithmetic multiplication |
+| `**` | float | float | first argument raised to the power of the second argument |
 | `-` | integer | integer | arithmetic subtraction |
 | `-` | float | float | arithmetic subtraction |
 | `-` | set | any | remove element from the left |
