@@ -64,9 +64,9 @@ public abstract class UnboxNode extends ExpressionNode {
       if (interop.fitsInLong(value)) {
         return interop.asLong(value);
       } else if (interop.fitsInDouble(value)) {
-        return (long) interop.asDouble(value);
+        return interop.asDouble(value);
       } else if (interop.isString(value)) {
-        return Seq.fromCharSequence(interop.asString(value));
+        return interop.asString(value);
       } else if (interop.isBoolean(value)) {
         return interop.asBoolean(value);
       } else {

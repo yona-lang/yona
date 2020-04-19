@@ -121,6 +121,7 @@ public class Context {
     builtinModules.register(new TupleBuiltinModule());
     builtinModules.register(new HttpClientBuiltinModule());
     builtinModules.register(new HttpServerBuiltinModule());
+    builtinModules.register(new JavaBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

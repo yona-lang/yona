@@ -300,4 +300,18 @@ public class ErrorsTest extends CommonTest {
     });
   }
 
+  @Test
+  public void javaRaiseTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "let\n" +
+            "    type = Java::type \"java.lang.ArithmeticException\"\n" +
+            "    error = Java::new type [\"testing error\"]\n" +
+            "in Java::throw error");
+      } catch (PolyglotException ex) {
+        assertEquals("java.lang.ArithmeticException: testing error", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
 }

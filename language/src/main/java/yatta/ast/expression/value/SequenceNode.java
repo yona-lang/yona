@@ -28,7 +28,7 @@ public final class SequenceNode extends ExpressionNode {
 
   @Override
   public int hashCode() {
-    return Objects.hash(expressions);
+    return Objects.hash((Object[]) expressions);
   }
 
   @Override

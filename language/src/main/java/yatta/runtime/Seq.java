@@ -6,6 +6,7 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.exceptions.TransducerDoneException;
 
@@ -153,6 +154,23 @@ public final class Seq implements TruffleObject {
       return acc + 1;
     });
     return res;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Object unwrapPromises(final Node node) {
+    boolean hasPromise = foldLeft(false, (acc, el) -> {
+      if (el instanceof Promise) {
+        return true;
+      } else {
+        return acc;
+      }
+    });
+
+    if (!hasPromise) {
+      return this;
+    } else {
+      return Promise.all(toArray(), node);
+    }
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)

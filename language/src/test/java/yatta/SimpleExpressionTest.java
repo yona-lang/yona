@@ -143,6 +143,9 @@ public class SimpleExpressionTest extends CommonTest {
     assertTrue(modVal.hasMember("fun"));
     assertTrue(modVal.hasMember("other_fun"));
     assertFalse(modVal.hasMember("whatever"));
+
+    assertEquals(6l, modVal.getMember("fun").execute().asLong());
+    assertEquals(7l, modVal.getMember("other_fun").execute().asLong());
   }
 
   @Test

@@ -46,4 +46,12 @@ public abstract class Types {
       return value;
     }
   }
+
+  public static boolean isForeignObject(Object obj) {
+    return !(obj instanceof Boolean || obj instanceof Byte || obj instanceof Long ||
+        obj instanceof Double || obj instanceof Integer || obj instanceof String || obj instanceof Function ||
+        obj instanceof Unit || obj instanceof Tuple || obj instanceof YattaModule || obj instanceof StringList ||
+        obj instanceof Seq || obj instanceof Dict || obj instanceof Set || obj instanceof NativeObject ||
+        obj instanceof Symbol || obj instanceof Promise);
+  }
 }

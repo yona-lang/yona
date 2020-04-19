@@ -1,6 +1,7 @@
 package yatta.ast.builtin;
 
 import yatta.YattaLanguage;
+import yatta.runtime.NativeObject;
 import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -83,6 +84,17 @@ public abstract class PrintlnBuiltin extends BuiltinNode {
     } catch (BadArgException e) {
       out.println(value.toString());
     }
+  }
+
+  @Specialization
+  public Object println(NativeObject value, @CachedContext(YattaLanguage.class) Context context) {
+    doPrint(context.getOutput(), value);
+    return value;
+  }
+
+  @TruffleBoundary
+  private void doPrint(PrintWriter out, NativeObject value) {
+    out.println(value.getValue());
   }
 
   @Specialization

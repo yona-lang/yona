@@ -131,13 +131,13 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void simpleEvalTest() {
-    long ret = context.eval(YattaLanguage.ID, "eval \"1\"").asLong();
+    long ret = context.eval(YattaLanguage.ID, "eval :yatta \"1\"").asLong();
     assertEquals(1L, ret);
   }
 
   @Test
   public void asyncEvalTest() {
-    long ret = context.eval(YattaLanguage.ID, "eval \"async \\\\-> 1\"").asLong();
+    long ret = context.eval(YattaLanguage.ID, "eval :yatta \"async \\\\-> 1\"").asLong();
     assertEquals(1L, ret);
   }
 
@@ -145,12 +145,43 @@ public class StdLibTest extends CommonTest {
   public void raiseEvalTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        context.eval(YattaLanguage.ID, "eval \"raise :test \\\"test msg\\\"\"");
+        context.eval(YattaLanguage.ID, "eval :yatta \"raise :test \\\"test msg\\\"\"");
       } catch (PolyglotException ex) {
         assertEquals("YattaError <test>: test msg", ex.getMessage());
         throw ex;
       }
     });
+  }
+
+  @Test
+  public void javaTypeEvalTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    type = Java::type \"java.math.BigInteger\"\n" +
+        "    instance = Java::new type [\"50\"]\n" +
+        "in Java::instanceof instance type").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void javaAsyncTypeEvalTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    type = Java::type \"java.math.BigInteger\"\n" +
+        "    instance = Java::new type [async \\-> \"50\"]\n" +
+        "in Java::instanceof instance type").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void javaCatchTest() {
+    String ret = context.eval(YattaLanguage.ID, "try\n" +
+        "let\n" +
+        "    type = Java::type \"java.lang.ArithmeticException\"\n" +
+        "    error = Java::new type [\"testing error\"]\n" +
+        "in Java::throw error\n" +
+        "catch\n" +
+        "    (:java, error_msg, _) -> error_msg\n" +
+        "end").asString();
+    assertEquals("java.lang.ArithmeticException: testing error", ret);
   }
 
   @Test

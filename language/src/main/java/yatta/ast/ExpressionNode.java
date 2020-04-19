@@ -199,4 +199,8 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
   protected boolean isForeignObject(Object obj) {
     return TypesGen.isForeignObject(obj);
   }
+
+  protected boolean isThrowable(Object obj) {
+    return obj instanceof Throwable;
+  }
 }
