@@ -6,6 +6,8 @@ import com.oracle.truffle.api.dsl.TypeSystem;
 import yatta.runtime.*;
 import yatta.runtime.async.Promise;
 
+import java.lang.reflect.Array;
+
 /**
  * The type system of YattaLanguage, as explained in {@link YattaLanguage}. Based on the {@link TypeSystem}
  * annotation, the Truffle DSL generates the subclass {@link TypesGen} with type test and type
@@ -53,5 +55,27 @@ public abstract class Types {
         obj instanceof Unit || obj instanceof Tuple || obj instanceof YattaModule || obj instanceof StringList ||
         obj instanceof Seq || obj instanceof Dict || obj instanceof Set || obj instanceof NativeObject ||
         obj instanceof Symbol || obj instanceof Promise);
+  }
+
+  public static Object foreignResultToYattaType(Object result) {
+    if (result == null) {
+      return Unit.INSTANCE;
+    } else if (result.getClass().isArray()) {
+      Seq res = Seq.EMPTY;
+      for (int i = 0; i < Array.getLength(result); i++) {
+        res = res.insertLast(foreignResultToYattaType(Array.get(result, i)));
+      }
+      return res;
+    } else if (result instanceof Integer) {
+      return (long) (int) result;
+    } else if (result instanceof Float) {
+      return (double) (float) result;
+    } else if (isForeignObject(result)) {
+      return new NativeObject(result);
+    } else if (result instanceof Character) {
+      return Character.codePointAt(new char[]{((char) result)}, 0);
+    } else {
+      return result;
+    }
   }
 }

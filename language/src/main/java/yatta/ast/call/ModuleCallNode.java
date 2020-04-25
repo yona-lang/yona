@@ -7,10 +7,13 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
+import yatta.ast.JavaMethodRootNode;
 import yatta.runtime.Function;
+import yatta.runtime.NativeObject;
 import yatta.runtime.YattaModule;
 import yatta.runtime.async.Promise;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -21,7 +24,8 @@ public final class ModuleCallNode extends ExpressionNode {
   @Children
   private ExpressionNode[] argumentNodes;
   private String functionName;
-  @Children private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
+  @Children
+  private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
   private final YattaLanguage language;
 
   public ModuleCallNode(YattaLanguage language, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
@@ -38,7 +42,7 @@ public final class ModuleCallNode extends ExpressionNode {
     if (o == null || getClass() != o.getClass()) return false;
     ModuleCallNode that = (ModuleCallNode) o;
     return Objects.equals(nameNode, that.nameNode) &&
-           Arrays.equals(argumentNodes, that.argumentNodes);
+        Arrays.equals(argumentNodes, that.argumentNodes);
   }
 
   @Override
@@ -51,42 +55,57 @@ public final class ModuleCallNode extends ExpressionNode {
   @Override
   public String toString() {
     return "ModuleCallNode{" +
-           "nameNode=" + nameNode +
-           ", functionName=" + functionName +
-           ", argumentNodes=" + Arrays.toString(argumentNodes) +
-           '}';
+        "nameNode=" + nameNode +
+        ", functionName=" + functionName +
+        ", argumentNodes=" + Arrays.toString(argumentNodes) +
+        '}';
   }
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object executedName = nameNode.executeGeneric(frame);
 
-    if (executedName instanceof YattaModule) {
-      return invokeModuleFunction(frame, (YattaModule) executedName);
-    } else if (executedName instanceof Promise) {
+    if (executedName instanceof Promise) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       MaterializedFrame materializedFrame = frame.materialize();
 
-      return ((Promise) executedName).map(maybeModule -> {
-        if (maybeModule instanceof YattaModule) {
-          return invokeModuleFunction(materializedFrame, (YattaModule) maybeModule);
-        } else {
-          return new YattaException("Unexpected error while invoking a module function: returned value is not a Yatta Module", this);
-        }
-      }, this);
+      return ((Promise) executedName).map(maybeModule -> invokeModuleFunction(materializedFrame, maybeModule), this);
+    } else if (executedName instanceof YattaModule || executedName instanceof NativeObject) {
+      return invokeModuleFunction(frame, executedName);
     } else {
-      throw new YattaException("Unexpected error while invoking a module function: : returned value is not a Yatta Module", this);
+      throw new YattaException("Unexpected error while invoking a module function: : returned value is not a Yatta Module, nor a Native Object", this);
     }
   }
 
-  private Object invokeModuleFunction(VirtualFrame frame, YattaModule module) {
-    if (!module.getExports().contains(functionName)) {
-      throw new YattaException("Function " + functionName + " is not present in " + module, this);
+  private Object invokeModuleFunction(VirtualFrame frame, Object maybeModule) {
+    if (maybeModule instanceof YattaModule) {
+      YattaModule module = (YattaModule) maybeModule;
+      if (!module.getExports().contains(functionName)) {
+        throw new YattaException("Function " + functionName + " is not present in " + module, this);
+      } else {
+        Function function = module.getFunctions().get(functionName);
+        InvokeNode invokeNode = new InvokeNode(language, function, argumentNodes, moduleStack);
+        this.replace(invokeNode);
+        return invokeNode.executeGeneric(frame);
+      }
+    } else if (maybeModule instanceof NativeObject) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
+
+      NativeObject nativeObject = (NativeObject) maybeModule;
+      Method[] methods = nativeObject.getValue().getClass().getMethods();
+
+      for (int i = 0; i < methods.length; i++) {
+        Method method = methods[i];
+        if (method.getName().equals(functionName)) {
+          Function javaFunction = JavaMethodRootNode.buildFunction(language, method, frame.getFrameDescriptor(), nativeObject.getValue());
+          InvokeNode invokeNode = new InvokeNode(language, javaFunction, argumentNodes, moduleStack);
+          this.replace(invokeNode);
+          return invokeNode.executeGeneric(frame);
+        }
+      }
+      return null;
     } else {
-      Function function = module.getFunctions().get(functionName);
-      InvokeNode invokeNode = new InvokeNode(language, function, argumentNodes, moduleStack);
-      this.replace(invokeNode);
-      return invokeNode.executeGeneric(frame);
+      throw new YattaException("Unexpected error while invoking a module function: : returned value is not a Yatta Module", this);
     }
   }
 }

@@ -50,11 +50,6 @@ public class FunctionRootNode extends RootNode {
 
   @Override
   public String getName() {
-    return name;
-  }
-
-  @Override
-  public String getQualifiedName() {
     if (moduleFQN != null) {
       return moduleFQN + "::" + name;
     } else {

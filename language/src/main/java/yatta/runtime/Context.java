@@ -14,6 +14,7 @@ import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.FunctionRootNode;
+import yatta.ast.JavaMethodRootNode;
 import yatta.ast.builtin.*;
 import yatta.ast.builtin.modules.*;
 import yatta.ast.call.BuiltinCallNode;
@@ -34,6 +35,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.lang.reflect.Method;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Path;
@@ -47,6 +49,8 @@ import java.util.concurrent.Executors;
 public class Context {
   public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").build();
   private static final SourceSection BUILTIN_SOURCE_SECTION = BUILTIN_SOURCE.createUnavailableSection();
+  public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").build();
+  public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
   private static final String STDLIB_FOLDER = "lib-yatta";
   private static final int STDLIB_PREFIX_LENGTH = STDLIB_FOLDER.length() + 1;  // "lib-yatta".length() + 1
   private static final int LANGUAGE_ID_SUFFIX_LENGTH = YattaLanguage.ID.length() + 1;  // ".yatta".length()
@@ -122,6 +126,7 @@ public class Context {
     builtinModules.register(new HttpClientBuiltinModule());
     builtinModules.register(new HttpServerBuiltinModule());
     builtinModules.register(new JavaBuiltinModule());
+    builtinModules.register(new JavaTypesBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {
@@ -324,7 +329,33 @@ public class Context {
 
       return module;
     } catch (IOException e) {
-      throw new YattaException("Unable to load Module " + FQN + " due to: " + e.getMessage(), e, node);
+      YattaModule module = loadJavaModule(FQN);
+      if (module != null) {
+        return module;
+      } else {
+        throw new YattaException("Unable to load Module " + FQN + " due to: " + e.getMessage(), e, node);
+      }
+    }
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  private YattaModule loadJavaModule(String FQN) {
+    try {
+      Class cls = Class.forName(FQN.replace("\\", "."));
+      Method[] methods = cls.getMethods();
+      List<Function> functions = new ArrayList<>(methods.length);
+      List<String> exports = new ArrayList<>(methods.length);
+
+      for (Method method : methods) {
+        exports.add(method.getName());
+        Function javaFunction = JavaMethodRootNode.buildFunction(language, method, globalFrameDescriptor, null);
+        functions.add(javaFunction);
+      }
+      YattaModule module = new YattaModule(FQN, exports, functions, Dict.empty());
+      moduleCache = this.moduleCache.add(FQN, module);
+      return module;
+    } catch (ClassNotFoundException classNotFoundException) {
+      return null;
     }
   }
 

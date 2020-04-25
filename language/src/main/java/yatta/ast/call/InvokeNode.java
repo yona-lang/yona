@@ -2,6 +2,7 @@ package yatta.ast.call;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
@@ -14,17 +15,17 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.YattaLanguage;
+import yatta.ast.ClosureRootNode;
 import yatta.ast.ExpressionNode;
 import yatta.ast.controlflow.YattaBlockNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.value.AnyValueNode;
-import yatta.ast.expression.value.FunctionNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.local.WriteLocalVariableNode;
 import yatta.ast.local.WriteLocalVariableNodeGen;
 import yatta.runtime.Function;
-import yatta.runtime.exceptions.UndefinedNameException;
 import yatta.runtime.async.Promise;
+import yatta.runtime.exceptions.UndefinedNameException;
 
 import java.util.Arrays;
 
@@ -71,7 +72,7 @@ public final class InvokeNode extends ExpressionNode {
   public String toString() {
     return "InvokeNode{" +
         "functionNode=" + functionNode +
-        ", function=" + (functionNode == null ? function : functionNode) +
+        ", function=" + function +
         ", argumentNodes=" + Arrays.toString(argumentNodes) +
         '}';
   }
@@ -82,20 +83,20 @@ public final class InvokeNode extends ExpressionNode {
     if (this.function != null) {
       return execute(this.function, frame);
     } else {
-        Object maybeFunction = functionNode.executeGeneric(frame);
-        if (maybeFunction instanceof Function) {
-          return execute((Function) maybeFunction, frame);
-        } else if (maybeFunction instanceof Promise) {
-          Promise promise = (Promise) maybeFunction;
-          return promise.map(value -> {
-            if (value instanceof Function) {
-              return execute((Function) value, frame);
-            } else {
-              throw notAFucntion(functionNode);
-            }
-          }, this);
-        } else {
-          throw notAFucntion(functionNode);
+      Object maybeFunction = functionNode.executeGeneric(frame);
+      if (maybeFunction instanceof Function) {
+        return execute((Function) maybeFunction, frame);
+      } else if (maybeFunction instanceof Promise) {
+        Promise promise = (Promise) maybeFunction;
+        return promise.map(value -> {
+          if (value instanceof Function) {
+            return execute((Function) value, frame);
+          } else {
+            throw notAFucntion(functionNode);
+          }
+        }, this);
+      } else {
+        throw notAFucntion(functionNode);
       }
     }
   }
@@ -123,88 +124,108 @@ public final class InvokeNode extends ExpressionNode {
     } else if (argumentNodes.length == 0 && function.getCardinality() > 0) {
       return function;
     } else if (argumentNodes.length < function.getCardinality()) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-      /*
-       * Create a closure for `partial`ly applied function
-       */
-      String partiallyAppliedFunctionName = "$partial-" + argumentNodes.length + "/" + function.getCardinality() + "-" + function.getName();
-      ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
-
-      for (int i = 0; i < argumentNodes.length; i++) {
-        /*
-         * These arguments are already on the stack, so they are evaluated and stored for later
-         */
-        allArgumentNodes[i] = new AnyValueNode(argumentNodes[i].executeGeneric(frame));
-      }
-
-      for (int i = argumentNodes.length, j = 0; i < function.getCardinality(); i++, j++) {
-        /*
-         * These are the new arguments, to be read on the actual application of this new closure
-         */
-        allArgumentNodes[i] = new ReadArgumentNode(j);
-      }
-
-      /*
-       * Partially applied function will just invoke the original function with arguments constructed as a combination
-       * of those which were provided when this closure was created and those to be read on the following application
-       */
-      InvokeNode invokeNode = new InvokeNode(language, new IdentifierNode(language, function.getName(), moduleStack), allArgumentNodes, moduleStack);
-
-      /*
-       * We need to make sure that the original function is still accessible within the closure, even if the partially
-       * applied function already leaves the scope with the original function
-       */
-      WriteLocalVariableNode writeLocalVariableNode;
-      if (functionNode != null) {
-        writeLocalVariableNode = WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
-      } else {
-        writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
-      }
-
-      YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
-      FunctionNode partiallyAppliedFunctionNode = new FunctionNode(language, getSourceSection(), function.getModuleFQN(), partiallyAppliedFunctionName,
-          function.getCardinality() - argumentNodes.length, frame.getFrameDescriptor(), blockNode);
-
-      return partiallyAppliedFunctionNode.executeGeneric(frame);
+      return createPartiallyAppliedClosure(function, frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
-      boolean argsArePromise = false;
-      for (int i = 0; i < argumentNodes.length; i++) {
-        Object argValue = argumentNodes[i].executeGeneric(frame);
-        if (argValue instanceof Promise) {
-          argsArePromise = true;
-        }
-        argumentValues[i] = argValue;
-      }
+      boolean argsArePromise = checkArgsForPromises(frame, argumentValues);
+      return dispatchFunction(function, argumentValues, argsArePromise);
+    }
+  }
 
-      if (argsArePromise) {
-        Promise argsPromise = Promise.all(argumentValues, this);
-        return argsPromise.map(argValues -> {
-          try {
-            return library.execute(function, (Object[]) argValues);
-          } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-            /* Execute was not successful. */
-            return UndefinedNameException.undefinedFunction(this, function);
-          }
-        }, this);
+  @ExplodeLoop
+  private boolean checkArgsForPromises(VirtualFrame frame, Object[] argumentValues) {
+    boolean argsArePromise = false;
+    for (int i = 0; i < argumentNodes.length; i++) {
+      Object argValue = argumentNodes[i].executeGeneric(frame);
+      if (argValue instanceof Promise) {
+        argsArePromise = true;
       }
+      argumentValues[i] = argValue;
+    }
+    return argsArePromise;
+  }
 
-      if (this.isTail()) {
-        throw new TailCallException(function, argumentValues);
-      }
-
-      Function dispatchFunction = function;
-      while (true) {
+  private Object dispatchFunction(Function function, Object[] argumentValues, boolean argsArePromise) {
+    if (argsArePromise) {
+      Promise argsPromise = Promise.all(argumentValues, this);
+      return argsPromise.map(argValues -> {
         try {
-          return library.execute(dispatchFunction, argumentValues);
-        } catch (TailCallException e) {
-          dispatchFunction = e.function;
-          argumentValues = e.arguments;
+          return library.execute(function, (Object[]) argValues);
         } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
           /* Execute was not successful. */
-          throw UndefinedNameException.undefinedFunction(this, dispatchFunction);
+          return UndefinedNameException.undefinedFunction(this, function);
         }
+      }, this);
+    }
+
+    if (this.isTail()) {
+      throw new TailCallException(function, argumentValues);
+    }
+
+    Function dispatchFunction = function;
+    while (true) {
+      try {
+        return library.execute(dispatchFunction, argumentValues);
+      } catch (TailCallException e) {
+        dispatchFunction = e.function;
+        argumentValues = e.arguments;
+      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+        /* Execute was not successful. */
+        throw UndefinedNameException.undefinedFunction(this, dispatchFunction);
       }
+    }
+  }
+
+  private Object createPartiallyAppliedClosure(Function function, VirtualFrame frame) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
+    /*
+     * Create a closure for `partial`ly applied function
+     */
+    String partiallyAppliedFunctionName = "$partial-" + argumentNodes.length + "/" + function.getCardinality() + "-" + function.getName();
+    ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
+
+    setEvaluatedArgs(frame, allArgumentNodes);
+    setNotEvaluatedArgs(function, allArgumentNodes);
+
+    /*
+     * Partially applied function will just invoke the original function with arguments constructed as a combination
+     * of those which were provided when this closure was created and those to be read on the following application
+     */
+    InvokeNode invokeNode = new InvokeNode(language, new IdentifierNode(language, function.getName(), moduleStack), allArgumentNodes, moduleStack);
+
+    /*
+     * We need to make sure that the original function is still accessible within the closure, even if the partially
+     * applied function already leaves the scope with the original function
+     */
+    WriteLocalVariableNode writeLocalVariableNode;
+    if (functionNode != null) {
+      writeLocalVariableNode = WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
+    } else {
+      writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
+    }
+
+    YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
+    ClosureRootNode rootNode = new ClosureRootNode(language, frame.getFrameDescriptor(), blockNode, getSourceSection(), function.getModuleFQN(), partiallyAppliedFunctionName, frame.materialize());
+    return new Function(function.getModuleFQN(), partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(rootNode), function.getCardinality() - argumentNodes.length);
+  }
+
+  /*
+   * These are the new arguments, to be read on the actual application of this new closure
+   */
+  @ExplodeLoop
+  private void setNotEvaluatedArgs(Function function, ExpressionNode[] allArgumentNodes) {
+    for (int i = argumentNodes.length, j = 0; i < function.getCardinality(); i++, j++) {
+      allArgumentNodes[i] = new ReadArgumentNode(j);
+    }
+  }
+
+  /*
+   * These arguments are already on the stack, so they are evaluated and stored for later
+   */
+  @ExplodeLoop
+  private void setEvaluatedArgs(VirtualFrame frame, ExpressionNode[] allArgumentNodes) {
+    for (int i = 0; i < argumentNodes.length; i++) {
+      allArgumentNodes[i] = new AnyValueNode(argumentNodes[i].executeGeneric(frame));
     }
   }
 

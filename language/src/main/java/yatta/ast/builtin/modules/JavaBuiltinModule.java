@@ -8,7 +8,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import org.antlr.v4.runtime.tree.xpath.XPathRuleAnywhereElement;
 import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.Context;
@@ -133,7 +132,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "instanceof")
   abstract static class InstanceOfBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(object.getValue())", "isForeignObject(klass)"})
-    boolean check(NativeObject object, TruffleObject klass, @CachedContext(YattaLanguage.class) Context context) {
+    public boolean check(NativeObject object, TruffleObject klass, @CachedContext(YattaLanguage.class) Context context) {
       TruffleLanguage.Env env = context.getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
@@ -148,7 +147,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
     }
 
     @Specialization(guards = {"!isForeignObject(object)", "isForeignObject(klass)"})
-    boolean check(Object object, TruffleObject klass, @CachedContext(YattaLanguage.class) Context context) {
+    public boolean check(Object object, TruffleObject klass, @CachedContext(YattaLanguage.class) Context context) {
       TruffleLanguage.Env env = context.getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
@@ -179,6 +178,55 @@ public final class JavaBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "cast")
+  abstract static class CastBuiltin extends BuiltinNode {
+    @Specialization(guards = {"isForeignObject(object.getValue())", "isForeignObject(klass)"})
+    public Object cast(NativeObject object, TruffleObject klass, @CachedContext(YattaLanguage.class) Context context) {
+      TruffleLanguage.Env env = context.getEnv();
+      try {
+        Object hostKlass = env.asHostObject(klass);
+        if (hostKlass instanceof Class<?>) {
+          return new NativeObject(((Class<?>) hostKlass).cast(object.getValue()));
+        } else {
+          throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
+        }
+      } catch (ClassCastException cce) {
+        throw new PolyglotException(String.format("klass argument '%s' is not a host object", klass), cce, this);
+      }
+    }
+
+    @Specialization(guards = {"!isForeignObject(object)", "isForeignObject(klass)"})
+    public Object cast(Object object, TruffleObject klass, @CachedContext(YattaLanguage.class) Context context) {
+      TruffleLanguage.Env env = context.getEnv();
+      try {
+        Object hostKlass = env.asHostObject(klass);
+        if (hostKlass instanceof Class<?>) {
+          return new NativeObject(((Class<?>) hostKlass).cast(object));
+        } else {
+          throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
+        }
+      } catch (ClassCastException cce) {
+        throw new PolyglotException(String.format("klass argument '%s' is not a host object", klass), cce, this);
+      }
+    }
+
+    @Specialization(guards = {"isForeignObject(object)", "isForeignObject(klass)"})
+    public Object castForeign(Object object, TruffleObject klass, @CachedContext(YattaLanguage.class) Context context) {
+      TruffleLanguage.Env env = context.getEnv();
+      try {
+        Object hostObject = env.asHostObject(object);
+        Object hostKlass = env.asHostObject(klass);
+        if (hostKlass instanceof Class<?>) {
+          return new NativeObject(((Class<?>) hostKlass).cast(hostObject));
+        } else {
+          throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
+        }
+      } catch (ClassCastException cce) {
+        throw new PolyglotException(String.format("The object klass '%s' arguments is not a host object", klass), cce, this);
+      }
+    }
+  }
+
   @Override
   public Builtins builtins() {
     Builtins builtins = new Builtins();
@@ -186,6 +234,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.InstanceOfBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.NewBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.RaiseBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.CastBuiltinFactory.getInstance()));
     return builtins;
   }
 }

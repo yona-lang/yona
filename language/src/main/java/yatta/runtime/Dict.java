@@ -11,6 +11,8 @@ import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.exceptions.TransducerDoneException;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 @ExportLibrary(InteropLibrary.class)
@@ -145,6 +147,14 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     }
     sb.append("}");
     return sb.toString();
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Map toMap() {
+    return fold(new HashMap<>(), (acc, key, val) -> {
+      acc.put(key, val);
+      return acc;
+    });
   }
 
   public final boolean contains(final Object key) {

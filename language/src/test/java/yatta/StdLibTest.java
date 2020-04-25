@@ -185,6 +185,58 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  public void javaCallNoArgMethodTest() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    type = Java::type \"java.math.BigInteger\"\n" +
+        "    instance = Java::new type [\"-2\"]\n" +
+        "in instance::longValue").asLong();
+    assertEquals(-2l, ret);
+  }
+
+  @Test
+  public void javaCallArgMethodTest() {
+    long ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    type = Java::type \"java.math.BigInteger\"\n" +
+        "    big_two = Java::new type [\"2\"]\n" +
+        "    big_three = Java::new type [\"3\"]\n" +
+        "    result = big_two::multiply big_three\n" +
+        "in  result::longValue").asLong();
+    assertEquals(6l, ret);
+  }
+
+  @Test
+  public void javaCallStaticMethodTest() {
+    long ret = context.eval(YattaLanguage.ID, "do\n" +
+        "    list = Java::new (Java::type \"java.util.ArrayList\") []\n" +
+        "    list::add 5\n" +
+        "    list::size\n" +
+        "end").asLong();
+    assertEquals(1l, ret);
+  }
+
+  @Test
+  public void javaCallCurriedMethodTest() {
+    long ret = context.eval(YattaLanguage.ID, "do\n" +
+        "    list = Java::new (Java::type \"java.util.ArrayList\") []\n" +
+        "    list::add 5\n" +
+        "    set_second = list::set <| java\\Types::to_int 0\n" +
+        "    set_second 6\n" +
+        "    list::get <| java\\Types::to_int 0\n" +
+        "end").asLong();
+    assertEquals(6l, ret);
+  }
+
+  @Test
+  public void javaCallStaticWithAsyncMethodTest() {
+    long ret = context.eval(YattaLanguage.ID, "do\n" +
+        "    list = Java::new (Java::type \"java.util.ArrayList\") []\n" +
+        "    list::add (async \\ -> 5)\n" +
+        "    list::size\n" +
+        "end").asLong();
+    assertEquals(1l, ret);
+  }
+
+  @Test
   public void simpleJsonParseEvalTest() {
     long ret = context.eval(YattaLanguage.ID, "JSON::parse \"5\"").asLong();
     assertEquals(5L, ret);
