@@ -1,5 +1,6 @@
 package yatta.ast.expression.value;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -57,6 +58,7 @@ public class SymbolNode extends ExpressionNode {
 
   private Symbol execute(VirtualFrame frame) {
     Symbol symbol = lookupContextReference(YattaLanguage.class).get().symbol(value);
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     this.replace(new CachedSymbolNode(symbol));
     return symbol;
   }

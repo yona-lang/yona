@@ -1,5 +1,6 @@
 package yatta.ast.local;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
@@ -28,6 +29,7 @@ public class ReadArgumentNode extends ExpressionNode {
     Object[] args = frame.getArguments();
     if (index >= args.length) {
       // This should be ultimately an assert check only: https://github.com/yatta-lang/yatta/issues/37
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new YattaException("Unable to read argument number " + index + "(zero-indexed) from args: " + Arrays.toString(args) + ". This is most likely because the function is being called with fewer arguments than how many are defined.", this);
     }
     return args[index];

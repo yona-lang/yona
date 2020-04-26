@@ -44,13 +44,16 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         if (unwrappedParams instanceof Dict) {
           return buildSession((Dict) unwrappedParams, context, builder);
         } else { // Promise
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           Promise paramsPromise = (Promise) unwrappedParams;
           return paramsPromise.map((paramsDict) -> buildSession((Dict) paramsDict, context, builder), this);
         }
       }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Object buildSession(Dict params, Context context, HttpClient.Builder builder) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       Symbol followRedirectsSymbol = context.symbol("follow_redirects");
       if (params.contains(followRedirectsSymbol)) {
         builder.followRedirects(extractRedirectPolicy(params.lookup(followRedirectsSymbol)));
@@ -62,17 +65,25 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         if (authenticatorObj instanceof Authenticator) {
           builder.authenticator((Authenticator) authenticatorObj);
         } else { // Promise
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           Promise authenticatorPromise = (Promise) authenticatorObj;
           return authenticatorPromise.map(authenticator -> {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             builder.authenticator((Authenticator) authenticator);
-            return new NativeObject(builder.build());
+            return buildHttpClient(builder);
           }, this);
         }
       }
 
+      return buildHttpClient(builder);
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private NativeObject buildHttpClient(HttpClient.Builder builder) {
       return new NativeObject(builder.build());
     }
 
+    @CompilerDirectives.TruffleBoundary
     private HttpClient.Redirect extractRedirectPolicy(Object redirectPolicy) {
       if (redirectPolicy instanceof Symbol) {
         String redirectPolicyString = ((Symbol) redirectPolicy).asString();
@@ -91,6 +102,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Object extractAuthenticator(Object authenticatorObj) {
       if (authenticatorObj instanceof Tuple) {
         Object authenticatorTupleObj = ((Tuple) authenticatorObj).unwrapPromises(this);
@@ -124,10 +136,12 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
             }
           }
         } else { // Promise
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           Promise authenticatorTuplePromise = (Promise) authenticatorTupleObj;
           return authenticatorTuplePromise.map(this::extractAuthenticator, this);
         }
       } else if (authenticatorObj instanceof Promise) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         Promise authenticatorObjPromise = (Promise) authenticatorObj;
         return authenticatorObjPromise.map(this::extractAuthenticator, this);
       } else {
@@ -146,6 +160,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         if (requestObj instanceof HttpRequest) {
           return runRequest(httpClient, (HttpRequest) requestObj, context, dispatch);
         } else {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           return ((Promise) requestObj).map(request -> runRequest(httpClient, (HttpRequest) request, context, dispatch), this);
         }
       } else {
@@ -153,6 +168,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Promise runRequest(HttpClient httpClient, HttpRequest request, Context context, InteropLibrary dispatch) {
       Promise promise = new Promise(dispatch);
       context.ioExecutor.submit(() -> {
@@ -167,6 +183,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       return promise;
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Tuple responseToTuple(HttpResponse<String> response) {
       Dict headers = Dict.empty();
       for (Map.Entry<String, List<String>> entry : response.headers().map().entrySet()) {
@@ -179,17 +196,20 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       return new Tuple((long) response.statusCode(), headers, Seq.fromCharSequence(response.body()));
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Object buildRequest(RequestType requestType, Seq uri, Dict headers, Seq body) {
       HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri.asJavaString(this)));
 
       Object unwrappedHeadersObj = headers.unwrapPromises(this);
       if (unwrappedHeadersObj instanceof Promise) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         return ((Promise) unwrappedHeadersObj).map(unwrappedHeaders -> applyHeadersToRequest(requestType, body, builder, (Dict) unwrappedHeaders), this);
       } else {
         return applyHeadersToRequest(requestType, body, builder, (Dict) unwrappedHeadersObj);
       }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private HttpRequest applyHeadersToRequest(RequestType requestType, Seq body, HttpRequest.Builder builder, Dict headers) {
       headers.forEach((k, v) -> builder.setHeader(
           StringUtil.yattaValueAsYattaString(k).asJavaString(this),
@@ -217,6 +237,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         }
       }
 
+      @CompilerDirectives.TruffleBoundary
       private HttpRequest.BodyPublisher bodyPublisher(Seq body, Node node) {
         return HttpRequest.BodyPublishers.ofByteArray(body.asByteArray(node));
       }

@@ -1,21 +1,26 @@
 package yatta.runtime.strings;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import yatta.runtime.Seq;
 import yatta.runtime.Symbol;
 
 public final class StringUtil {
+  @CompilerDirectives.TruffleBoundary
   public static Seq yattaValueAsYattaString(boolean val) {
     return Seq.fromCharSequence(String.valueOf(val));
   }
 
+  @CompilerDirectives.TruffleBoundary
   public static Seq yattaValueAsYattaString(byte val) {
     return Seq.fromCharSequence(String.valueOf(val));
   }
 
+  @CompilerDirectives.TruffleBoundary
   public static Seq yattaValueAsYattaString(long val) {
     return Seq.fromCharSequence(String.valueOf(val));
   }
 
+  @CompilerDirectives.TruffleBoundary
   public static Seq yattaValueAsYattaString(double val) {
     return Seq.fromCharSequence(String.valueOf(val));
   }

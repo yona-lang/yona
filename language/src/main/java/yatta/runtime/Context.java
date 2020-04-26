@@ -321,6 +321,7 @@ public class Context {
       YattaModule module = (YattaModule) callTarget.call();
 
       if (!FQN.equals(module.getFqn())) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new YattaException("Module file " + file.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
       }
       if (cache) {
@@ -333,6 +334,7 @@ public class Context {
       if (module != null) {
         return module;
       } else {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new YattaException("Unable to load Module " + FQN + " due to: " + e.getMessage(), e, node);
       }
     }

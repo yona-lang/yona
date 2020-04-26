@@ -16,6 +16,7 @@ public final class NameAliasNode extends ExpressionNode implements AliasNode {
   @Node.Child
   public ExpressionNode expression;
 
+  @CompilerDirectives.TruffleBoundary
   public NameAliasNode(String name, ExpressionNode expression) {
     this.name = name;
     this.expression = expression;

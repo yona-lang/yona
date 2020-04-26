@@ -16,6 +16,7 @@ public final class FrameSlotAliasNode extends ExpressionNode implements AliasNod
   @Node.Child
   public ExpressionNode expression;
 
+  @CompilerDirectives.TruffleBoundary
   public FrameSlotAliasNode(FrameSlot frameSlot, ExpressionNode expression) {
     this.frameSlot = frameSlot;
     this.expression = expression;

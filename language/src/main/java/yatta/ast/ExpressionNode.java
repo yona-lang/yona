@@ -16,7 +16,7 @@ import yatta.runtime.*;
 import java.io.File;
 
 @TypeSystemReference(Types.class)
-@NodeInfo(language = "yatta", description = "The abstract base node for all strings")
+@NodeInfo(language = "yatta", description = "The abstract base node for all yatta nodes")
 @GenerateWrapper
 @ReportPolymorphism
 public abstract class ExpressionNode extends Node implements InstrumentableNode {

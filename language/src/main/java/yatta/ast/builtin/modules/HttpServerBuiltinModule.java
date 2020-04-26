@@ -88,6 +88,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
       }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Object stopServer(NativeObject server, Object delayObj) {
       try {
         long delay = TypesGen.expectLong(delayObj);
@@ -143,6 +144,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
       }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private void appendExceptionStackTrace(Tuple tuple, StringBuilder errorMsg) {
       errorMsg.append("(");
       errorMsg.append(tuple.get(0).toString());
@@ -157,6 +159,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
       });
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Object sendResponse(Object result, HttpExchange httpExchange) {
       if (result instanceof Tuple) {
         Tuple resultTuple = (Tuple) result;
@@ -181,12 +184,14 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
               }
             }
           } else { // Promise
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             Promise unwrappedResultTuplePromise = (Promise) unwrappedResultTuple;
             return unwrappedResultTuplePromise.map(res -> sendResponse(new Tuple(res), httpExchange), this);
           }
           return Unit.INSTANCE;
         }
       } else if (result instanceof Promise) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         Promise resultPromise = (Promise) result;
         return resultPromise.map(res -> sendResponse(res, httpExchange), this);
       }
@@ -194,6 +199,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
       throw new BadArgException("Invalid return value of an HTTP handler. It must return a triple (status_code, headers, body).", this);
     }
 
+    @CompilerDirectives.TruffleBoundary
     private void writeResponseHeaders(Dict headersDict, Headers headers) {
       headersDict.forEach((k, v) -> {
         headers.add(
@@ -203,6 +209,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
       });
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Dict headersToDict(Headers headers) {
       Dict headersDict = Dict.empty();
       for (Map.Entry<String, List<String>> entry : headers.entrySet()) {

@@ -61,6 +61,7 @@ public final class StringInterpolationNode extends ExpressionNode {
           if (fulfiledAlignmentValue == null) {
             return fulfiledInterpolationValue;
           } else {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             return Seq.fromCharSequence(String.format("%" + TypesGen.expectLong(fulfiledAlignmentValue) + "s", fulfiledInterpolationValue.asJavaString(this)));
           }
         } catch (UnexpectedResultException e) {
@@ -73,6 +74,7 @@ public final class StringInterpolationNode extends ExpressionNode {
         if (alignmentValue == null) {
           return interpolationValueString;
         } else {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           return Seq.fromCharSequence(String.format("%" + TypesGen.expectLong(alignmentValue) + "s", interpolationValueString.asJavaString(this)));
         }
       } catch (UnexpectedResultException e) {

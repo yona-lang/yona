@@ -1,9 +1,10 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.ExpressionNode;
 
 import java.util.Objects;
 
@@ -14,6 +15,7 @@ public class AnyValueNode extends ExpressionNode {
   @CompilationFinal
   public final Object value;
 
+  @CompilerDirectives.TruffleBoundary
   public AnyValueNode(Object value) {
     this.value = value;
   }

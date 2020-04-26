@@ -1,5 +1,6 @@
 package yatta.ast.builtin;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -14,6 +15,7 @@ import yatta.runtime.exceptions.PolyglotException;
 @NodeInfo(shortName = "eval")
 public abstract class EvalBuiltin extends BuiltinNode {
   @Specialization
+  @CompilerDirectives.TruffleBoundary
   public Object eval(Symbol language, Seq source, @CachedContext(YattaLanguage.class) Context context) {
     TruffleLanguage.Env env = context.getEnv();
     if (env.isPolyglotEvalAllowed()) {

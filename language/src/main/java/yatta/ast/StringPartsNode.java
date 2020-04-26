@@ -62,6 +62,7 @@ public final class StringPartsNode extends ExpressionNode {
 
       return sb;
     } else {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       return Promise.all(evaluatedExpressions, this).map(vals -> {
         Seq sb = Seq.EMPTY;
         for (Object val : (Object[]) vals) {

@@ -73,6 +73,7 @@ public final class FQNNode extends ExpressionNode {
       String fqn = Context.getFQN(packageParts, moduleName);
       Object globalValue = context.globals.lookup(fqn);
       if (!Unit.INSTANCE.equals(globalValue)) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         this.replace(new AnyValueNode(globalValue));
         return (YattaModule) globalValue;
       }
@@ -81,6 +82,7 @@ public final class FQNNode extends ExpressionNode {
       FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(fqn);
       if (frameSlot != null) {
         ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         this.replace(node);
         return node.executeModule(frame);
       }

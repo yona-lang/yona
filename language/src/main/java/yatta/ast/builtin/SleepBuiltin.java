@@ -1,5 +1,6 @@
 package yatta.ast.builtin;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -13,6 +14,7 @@ import yatta.runtime.async.Promise;
 @NodeInfo(shortName = "sleep")
 public abstract class SleepBuiltin extends BuiltinNode {
   @Specialization
+  @CompilerDirectives.TruffleBoundary
   public Promise sleep(long millis, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
     Promise promise = new Promise(dispatch);
     // TODO

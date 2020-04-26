@@ -50,22 +50,20 @@ public class JavaMethodRootNode extends RootNode {
 
   @Override
   public Object execute(VirtualFrame frame) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     Object[] args = readArgs(frame);
     try {
       Object result = method.invoke(object, args);
       return TypesGen.foreignResultToYattaType(result);
     } catch (IllegalAccessException e) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new YattaException(e, this);
     } catch (InvocationTargetException e) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new YattaException(e.getCause(), this);
     }
   }
 
   @ExplodeLoop
   private Object[] readArgs(VirtualFrame frame) {
-    CompilerAsserts.compilationConstant(method.getParameterCount());
     Object[] args = new Object[method.getParameterCount()];
     for (int i = 0; i < method.getParameterCount(); i++) {
       Object arg = new ReadArgumentNode(i).executeGeneric(frame);

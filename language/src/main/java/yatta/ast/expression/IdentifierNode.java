@@ -44,10 +44,12 @@ public final class IdentifierNode extends ExpressionNode {
     Object globalValue = context.get().globals.lookup(name);
     if (!Unit.INSTANCE.equals(globalValue)) {
       if (globalValue instanceof Function && ((Function) globalValue).getCardinality() == 0) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         InvokeNode invokeNode = new InvokeNode(language, (Function) globalValue, new ExpressionNode[]{}, moduleStack);
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
       } else {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         this.replace(new AnyValueNode(globalValue));
         return globalValue;
       }
@@ -61,6 +63,7 @@ public final class IdentifierNode extends ExpressionNode {
           try {
             YattaModule module = moduleStack[i].executeModule(frame);
             if (module.getFunctions().containsKey(name)) {
+              CompilerDirectives.transferToInterpreterAndInvalidate();
               InvokeNode invokeNode = new InvokeNode(language, module.getFunctions().get(name), new ExpressionNode[]{}, moduleStack);
               this.replace(invokeNode);
               return invokeNode.executeGeneric(frame);
@@ -89,6 +92,7 @@ public final class IdentifierNode extends ExpressionNode {
       }
     }
 
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     this.replace(node);
     return result;
   }
@@ -98,6 +102,7 @@ public final class IdentifierNode extends ExpressionNode {
     if (frameSlot == null) {
       return false;
     } else {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
       try {
         node.executeGeneric(frame);
@@ -109,6 +114,7 @@ public final class IdentifierNode extends ExpressionNode {
   }
 
   private FrameSlot getFrameSlot(VirtualFrame frame) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     return frame.getFrameDescriptor().findFrameSlot(name);
   }
 

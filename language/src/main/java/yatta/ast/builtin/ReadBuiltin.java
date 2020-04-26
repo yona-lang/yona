@@ -1,5 +1,6 @@
 package yatta.ast.builtin;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -14,6 +15,7 @@ import java.io.IOException;
 @NodeInfo(shortName = "read")
 public abstract class ReadBuiltin extends BuiltinNode {
   @Specialization
+  @CompilerDirectives.TruffleBoundary
   public Promise read(@CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
     Promise promise = new Promise(dispatch);
     context.ioExecutor.submit(() -> {

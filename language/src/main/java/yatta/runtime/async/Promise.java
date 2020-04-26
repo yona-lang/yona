@@ -1,5 +1,6 @@
 package yatta.runtime.async;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.nodes.Node;
@@ -106,6 +107,7 @@ public final class Promise implements TruffleObject {
     return Trampoline.Done.INSTANCE;
   }
 
+  @CompilerDirectives.TruffleBoundary
   public Promise map(Function<? super Object, ?> function, Node node) {
     Promise result = null;
     Object snapshot;
@@ -139,6 +141,7 @@ public final class Promise implements TruffleObject {
     return result;
   }
 
+  @CompilerDirectives.TruffleBoundary
   public Promise map(Function<? super Object, ?> onSuccess, Function<? super Throwable, ?> onFailure, Node node) {
     Promise result = null;
     Object snapshot;
@@ -193,6 +196,7 @@ public final class Promise implements TruffleObject {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary
   public static Promise all(Object[] args, Node node) {
     Promise result = new Promise();
     Object[] data = args.clone();
@@ -227,6 +231,7 @@ public final class Promise implements TruffleObject {
     return result;
   }
 
+  @CompilerDirectives.TruffleBoundary
   public static Object await(Promise promise) throws Throwable {
     CountDownLatch latch = new CountDownLatch(1);
     Object snapshot;
@@ -241,6 +246,7 @@ public final class Promise implements TruffleObject {
     return throwIfThrowable(promise.value);
   }
 
+  @CompilerDirectives.TruffleBoundary
   public static boolean timeout(Promise promise, final long millis) throws InterruptedException {
     CountDownLatch latch = new CountDownLatch(1);
     Object snapshot;

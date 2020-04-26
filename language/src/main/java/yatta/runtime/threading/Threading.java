@@ -1,5 +1,6 @@
 package yatta.runtime.threading;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -112,6 +113,7 @@ public final class Threading {
     }
   }
 
+  @CompilerDirectives.TruffleBoundary
   public void submit(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
     int spins = 0;
     long token;

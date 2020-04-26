@@ -38,6 +38,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
       try {
         return env.lookupHostSymbol(name.asJavaString(this));
       } catch (RuntimeException e) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("Host symbol %s is not defined or access has been denied", name.asJavaString(this)), e, this);
       }
     }
@@ -56,6 +57,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "new")
   abstract static class NewBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(klass)"})
+    @CompilerDirectives.TruffleBoundary
     public Object newObject(TruffleObject klass, Seq args, @CachedContext(YattaLanguage.class) Context context) {
       TruffleLanguage.Env env = context.getEnv();
       try {
@@ -78,6 +80,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
       }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Object instantiate(Seq args, Constructor<?>[] constructors) throws InstantiationException, IllegalAccessException, InvocationTargetException {
       InteropLibrary interop = InteropLibrary.getFactory().getUncached();
       Object[] javaObjects = new Object[(int) args.length()];
@@ -102,9 +105,11 @@ public final class JavaBuiltinModule implements BuiltinModule {
         if (constructor != null) {
           return new NativeObject(constructor.newInstance(javaObjects));
         } else {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("No constructor found for arguments: %s", args), this);
         }
       } catch (IllegalArgumentException e) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("Unable to call constructor '%s' using arguments: %s", constructor, Arrays.toString(javaObjects)), this);
       }
     }
@@ -142,6 +147,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
           return false;
         }
       } catch (ClassCastException cce) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("klass argument '%s' is not a host object", klass), cce, this);
       }
     }
@@ -157,6 +163,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
           return false;
         }
       } catch (ClassCastException cce) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("klass argument '%s' is not a host object", klass), cce, this);
       }
     }
@@ -173,6 +180,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
           return false;
         }
       } catch (ClassCastException cce) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("The object klass '%s' arguments is not a host object", klass), cce, this);
       }
     }
@@ -188,9 +196,11 @@ public final class JavaBuiltinModule implements BuiltinModule {
         if (hostKlass instanceof Class<?>) {
           return new NativeObject(((Class<?>) hostKlass).cast(object.getValue()));
         } else {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
         }
       } catch (ClassCastException cce) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("klass argument '%s' is not a host object", klass), cce, this);
       }
     }
@@ -203,9 +213,11 @@ public final class JavaBuiltinModule implements BuiltinModule {
         if (hostKlass instanceof Class<?>) {
           return new NativeObject(((Class<?>) hostKlass).cast(object));
         } else {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
         }
       } catch (ClassCastException cce) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("klass argument '%s' is not a host object", klass), cce, this);
       }
     }
@@ -219,9 +231,11 @@ public final class JavaBuiltinModule implements BuiltinModule {
         if (hostKlass instanceof Class<?>) {
           return new NativeObject(((Class<?>) hostKlass).cast(hostObject));
         } else {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
         }
       } catch (ClassCastException cce) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new PolyglotException(String.format("The object klass '%s' arguments is not a host object", klass), cce, this);
       }
     }

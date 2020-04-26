@@ -1,5 +1,6 @@
 package yatta.ast.expression.value;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -71,6 +72,7 @@ public final class ModuleNode extends ExpressionNode {
   public YattaModule executeModule(VirtualFrame frame) throws UnexpectedResultException {
     String executedModuleFQN = moduleFQN.executeString(frame);
     List<String> executedExports = exports.executeStringList(frame).asJavaList();
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     List<Function> executedFunctions = new ArrayList<>(functions.length);
 
     /*

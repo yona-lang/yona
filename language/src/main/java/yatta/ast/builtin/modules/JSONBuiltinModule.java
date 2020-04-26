@@ -23,6 +23,7 @@ public final class JSONBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Object parse(Seq str) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       JSONLexer lexer = new JSONLexer(CharStreams.fromString(str.asJavaString(this)));
       TokenStream tokens = new CommonTokenStream(lexer);
       JSONParser parser = new JSONParser(tokens);
@@ -34,8 +35,10 @@ public final class JSONBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Object parse(Promise promise) {
+      CompilerDirectives.transferToInterpreterAndInvalidate();
       return promise.map(obj -> {
         if (obj instanceof Seq) {
+          CompilerDirectives.transferToInterpreterAndInvalidate();
           Seq str = (Seq) obj;
           JSONLexer lexer = new JSONLexer(CharStreams.fromString(str.asJavaString(this)));
           TokenStream tokens = new CommonTokenStream(lexer);

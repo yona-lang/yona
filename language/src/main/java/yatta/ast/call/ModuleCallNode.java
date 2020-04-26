@@ -81,6 +81,7 @@ public final class ModuleCallNode extends ExpressionNode {
   }
 
   private Object invokeModuleFunction(VirtualFrame frame, Object maybeModule) {
+    CompilerDirectives.transferToInterpreterAndInvalidate();
     if (maybeModule instanceof YattaModule) {
       YattaModule module = (YattaModule) maybeModule;
       if (!module.getExports().contains(functionName)) {
@@ -92,8 +93,6 @@ public final class ModuleCallNode extends ExpressionNode {
         return invokeNode.executeGeneric(frame);
       }
     } else if (maybeModule instanceof NativeObject) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-
       NativeObject nativeObject = (NativeObject) maybeModule;
       Object obj = nativeObject.getValue();
       Method method = lookupAccessibleMethod(obj, obj.getClass());
