@@ -394,7 +394,7 @@ public final class TransactionalMemory {
                 return false;
               }
             }
-            next = lastValid.next.get();
+            next = next.get();
           }
           commitRecord = new TransactionsRecord(lastValid, parent().recordsQueue, lastValid.stamp + 1, writeFilter, writeFilterSummary);
         } while (!TransactionsRecord.NEXT_HANDLE.compareAndSet(lastValid, null, commitRecord));

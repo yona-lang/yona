@@ -14,7 +14,8 @@ import java.util.concurrent.Executors;
 import static org.junit.Assert.assertEquals;
 
 public class TransactionalMemoryTest {
-  static final int N = 1 << 12;
+  static final int M = 12;
+  static final int N = 1 << M;
 
   ExecutorService executorService;
 
@@ -26,7 +27,7 @@ public class TransactionalMemoryTest {
   @Test
   @Tag("slow")
   public void testSTM() throws InterruptedException {
-    ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    ExecutorService executorService = Executors.newWorkStealingPool(M);
     TransactionalMemory stm = new TransactionalMemory();
     List<TransactionalMemory.Var> vars = new ArrayList<>();
     for (int i = 0; i < N; i++) {
