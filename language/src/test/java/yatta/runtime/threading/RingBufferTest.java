@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 public class RingBufferTest {
-  private static final int N = 1 << 30;
+  private static final int N = 1 << 24;
 
   @Test
   @Tag("slow")
