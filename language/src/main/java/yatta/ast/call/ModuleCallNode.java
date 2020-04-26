@@ -1,8 +1,10 @@
 package yatta.ast.call;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.YattaLanguage;
@@ -12,6 +14,7 @@ import yatta.runtime.Function;
 import yatta.runtime.NativeObject;
 import yatta.runtime.YattaModule;
 import yatta.runtime.async.Promise;
+import yatta.runtime.exceptions.PolyglotException;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -92,20 +95,48 @@ public final class ModuleCallNode extends ExpressionNode {
       CompilerDirectives.transferToInterpreterAndInvalidate();
 
       NativeObject nativeObject = (NativeObject) maybeModule;
-      Method[] methods = nativeObject.getValue().getClass().getMethods();
+      Object obj = nativeObject.getValue();
+      Method method = lookupAccessibleMethod(obj, obj.getClass());
 
-      for (int i = 0; i < methods.length; i++) {
-        Method method = methods[i];
-        if (method.getName().equals(functionName)) {
-          Function javaFunction = JavaMethodRootNode.buildFunction(language, method, frame.getFrameDescriptor(), nativeObject.getValue());
-          InvokeNode invokeNode = new InvokeNode(language, javaFunction, argumentNodes, moduleStack);
-          this.replace(invokeNode);
-          return invokeNode.executeGeneric(frame);
-        }
+      if (method != null) {
+        Function javaFunction = JavaMethodRootNode.buildFunction(language, method, frame.getFrameDescriptor(), nativeObject.getValue());
+        InvokeNode invokeNode = new InvokeNode(language, javaFunction, argumentNodes, moduleStack);
+        this.replace(invokeNode);
+        return invokeNode.executeGeneric(frame);
+      } else {
+        throw new PolyglotException(String.format("Unable to find an accessible method '%s' in object '%s'.", functionName, obj), this);
       }
-      return null;
     } else {
       throw new YattaException("Unexpected error while invoking a module function: : returned value is not a Yatta Module", this);
     }
+  }
+
+  @ExplodeLoop
+  private Method lookupAccessibleMethod(Object obj, Class<?> cls) {
+    Method[] methods = cls.getMethods();
+    CompilerAsserts.compilationConstant(methods.length);
+    for (int i = 0; i < methods.length; i++) {
+      Method method = methods[i];
+      if (method.getName().equals(functionName)) {
+        if (method.canAccess(obj)) {
+          return method;
+        } else {
+          Class<?> supercls = cls.getSuperclass();
+          if (supercls != null) {
+            Method possibleMethod = lookupAccessibleMethod(obj, supercls);
+            if (possibleMethod != null) {
+              return possibleMethod;
+            }
+          }
+          for (Class<?> intf : cls.getInterfaces()) {
+            Method possibleMethod = lookupAccessibleMethod(obj, intf);
+            if (possibleMethod != null) {
+              return possibleMethod;
+            }
+          }
+        }
+      }
+    }
+    return null;
   }
 }

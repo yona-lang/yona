@@ -6,6 +6,7 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -200,18 +201,14 @@ public class StdLibTest extends CommonTest {
         "    big_two = Java::new type [\"2\"]\n" +
         "    big_three = Java::new type [\"3\"]\n" +
         "    result = big_two::multiply big_three\n" +
-        "in  result::longValue").asLong();
+        "in result::longValue").asLong();
     assertEquals(6l, ret);
   }
 
   @Test
   public void javaCallStaticMethodTest() {
-    long ret = context.eval(YattaLanguage.ID, "do\n" +
-        "    list = Java::new (Java::type \"java.util.ArrayList\") []\n" +
-        "    list::add 5\n" +
-        "    list::size\n" +
-        "end").asLong();
-    assertEquals(1l, ret);
+    long ret = context.eval(YattaLanguage.ID, "(java\\util\\Collections::singletonList 5)::get (java\\Types::to_int 0)").asLong();
+    assertEquals(5l, ret);
   }
 
   @Test

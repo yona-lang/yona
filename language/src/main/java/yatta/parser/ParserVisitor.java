@@ -888,9 +888,14 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   private ExpressionNode createCallNode(ParserRuleContext ctx, ExpressionNode[] argNodes, YattaParser.CallContext callCtx) {
     ExpressionNode[] moduleStackArray = moduleStack.toArray(new ExpressionNode[] {});
     if (callCtx.moduleCall() != null) {
-      FQNNode fqnNode = visitFqn(callCtx.moduleCall().fqn());
+      ExpressionNode nameNode;
+      if (callCtx.moduleCall().fqn() != null) {
+        nameNode = visitFqn(callCtx.moduleCall().fqn());
+      } else {
+        nameNode = withSourceSection(callCtx.moduleCall().expression(), callCtx.moduleCall().expression().accept(this));
+      }
       String functionName = callCtx.moduleCall().name().getText();
-      return withSourceSection(ctx, new ModuleCallNode(language, fqnNode, functionName, argNodes, moduleStackArray));
+      return withSourceSection(ctx, new ModuleCallNode(language, nameNode, functionName, argNodes, moduleStackArray));
     } else if (callCtx.nameCall() != null) {
       SimpleIdentifierNode nameNode = new SimpleIdentifierNode(callCtx.nameCall().var.getText());
       String functionName = callCtx.nameCall().fun.getText();
