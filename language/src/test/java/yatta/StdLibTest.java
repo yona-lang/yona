@@ -342,8 +342,20 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
-  public void timeoutLiteralTest() {
-    long ret = context.eval(YattaLanguage.ID, "Time::timeout 1 0").asLong();
+  public void timeoutPromiseTest() {
+    long ret = context.eval(YattaLanguage.ID, "timeout (:millis, 500) (let _ = sleep (:millis, 100) in 1)").asLong();
+    assertEquals(1L, ret);
+  }
+
+  @Test
+  public void timeoutValueTest() {
+    long ret = context.eval(YattaLanguage.ID, "timeout (:millis, 500) 1").asLong();
+    assertEquals(1L, ret);
+  }
+
+  @Test
+  public void timeoutAsyncTimeoutTest() {
+    long ret = context.eval(YattaLanguage.ID, "timeout (let _ = sleep (:millis, 1000) in (:millis, 500)) 1").asLong();
     assertEquals(1L, ret);
   }
 

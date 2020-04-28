@@ -84,7 +84,7 @@ public final class FunctionNode extends FunctionLikeNode {
   private Function execute(VirtualFrame frame) {
     CompilerDirectives.transferToInterpreterAndInvalidate();
     ClosureRootNode rootNode = new ClosureRootNode(language, frameDescriptor, expression, sourceSection, moduleFQN, name, frame.materialize());
-    return new Function(moduleFQN, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
+    return new Function(moduleFQN, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality, true);
   }
 
   @Override

@@ -35,11 +35,14 @@ public final class Function implements TruffleObject {
   /** The current implementation of this function. */
   private RootCallTarget callTarget;
 
-  public Function(String moduleFQN, String name, RootCallTarget callTarget, int cardinality) {
+  private boolean unwrapArgumentPromises;
+
+  public Function(String moduleFQN, String name, RootCallTarget callTarget, int cardinality, boolean unwrapArgumentPromises) {
     this.moduleFQN = moduleFQN;
     this.name = name;
     this.callTarget = callTarget;
     this.cardinality = cardinality;
+    this.unwrapArgumentPromises = unwrapArgumentPromises;
   }
 
   public String getModuleFQN() {
@@ -73,6 +76,10 @@ public final class Function implements TruffleObject {
   @SuppressWarnings("static-method")
   public SourceSection getDeclaredLocation() {
     return getCallTarget().getRootNode().getSourceSection();
+  }
+
+  public boolean isUnwrapArgumentPromises() {
+    return unwrapArgumentPromises;
   }
 
   /**

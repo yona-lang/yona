@@ -314,4 +314,28 @@ public class ErrorsTest extends CommonTest {
       }
     });
   }
+
+  @Test
+  public void timeoutAsyncTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "timeout (:millis, 500) (sleep (:seconds, 2))");
+      } catch (PolyglotException ex) {
+        assertEquals("Async value timed out", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void timeoutAsyncTimeoutTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "timeout (let _ = sleep (:millis, 1000) in (:millis, 500)) (sleep (:seconds, 2))");
+      } catch (PolyglotException ex) {
+        assertEquals("Async value timed out", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
 }

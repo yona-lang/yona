@@ -31,7 +31,8 @@ public class JavaMethodRootNode extends RootNode {
         fqn,
         method.getName(),
         Truffle.getRuntime().createCallTarget(new JavaMethodRootNode(language, frameDescriptor, method, object, Context.JAVA_SOURCE_SECTION, fqn)),
-        method.getParameterCount());
+        method.getParameterCount(),
+        true);
   }
 
   public JavaMethodRootNode(YattaLanguage language, FrameDescriptor frameDescriptor, Method method,

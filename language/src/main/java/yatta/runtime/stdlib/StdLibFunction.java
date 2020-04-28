@@ -11,4 +11,8 @@ public abstract class StdLibFunction {
   }
 
   public abstract boolean isExported();
+
+  public boolean unwrapArgumentPromises() {
+    return true;
+  }
 }

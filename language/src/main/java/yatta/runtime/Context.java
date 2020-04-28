@@ -29,6 +29,7 @@ import yatta.runtime.annotations.ExceptionSymbol;
 import yatta.runtime.stdlib.BuiltinModules;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
+import yatta.runtime.stdlib.StdLibFunction;
 import yatta.runtime.threading.Threading;
 
 import java.io.BufferedReader;
@@ -111,6 +112,12 @@ public class Context {
     builtins.register(new ExportedFunction(ReadlnBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(ReadBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(NeverBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(TimeoutBuiltinFactory.getInstance()) {
+      @Override
+      public boolean unwrapArgumentPromises() {
+        return false;
+      }
+    });
   }
 
   private void installBuiltinModules() {
@@ -139,7 +146,7 @@ public class Context {
       if (stdLibFunction.isExported()) {
         exports.add(name);
       }
-      functions.add(new Function(fqn, name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount));
+      functions.add(new Function(fqn, name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount, stdLibFunction.unwrapArgumentPromises()));
     });
 
     YattaModule module = new YattaModule(fqn, exports, functions, Dict.empty());
@@ -151,7 +158,7 @@ public class Context {
       int cardinality = stdLibFunction.node.getExecutionSignature().size();
 
       FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, null, name);
-      Function function = new Function(null, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality);
+      Function function = new Function(null, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality, stdLibFunction.unwrapArgumentPromises());
 
       String partiallyAppliedFunctionName = "$partial-0/" + function.getCardinality() + "-" + function.getName();
       ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
@@ -176,7 +183,7 @@ public class Context {
       YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
       FunctionRootNode partiallyAppliedFunctionRootNode = new FunctionRootNode(language, partialFrameDescriptor, blockNode, BUILTIN_SOURCE_SECTION, null, partiallyAppliedFunctionName);
 
-      insertGlobal(name, new Function(null, partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(partiallyAppliedFunctionRootNode), cardinality));
+      insertGlobal(name, new Function(null, partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(partiallyAppliedFunctionRootNode), cardinality, stdLibFunction.unwrapArgumentPromises()));
     });
   }
 

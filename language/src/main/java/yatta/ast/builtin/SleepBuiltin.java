@@ -8,22 +8,39 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaLanguage;
 import yatta.runtime.Context;
+import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
 import yatta.runtime.async.Promise;
+import yatta.runtime.stdlib.util.TimeUnitUtil;
 
 @NodeInfo(shortName = "sleep")
 public abstract class SleepBuiltin extends BuiltinNode {
   @Specialization
   @CompilerDirectives.TruffleBoundary
-  public Promise sleep(long millis, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+  public Promise sleep(Tuple timeUnit, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
     Promise promise = new Promise(dispatch);
-    // TODO
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      e.printStackTrace();
+    Object millisObj = TimeUnitUtil.getMilliseconds(timeUnit, this);
+
+    if (millisObj instanceof Long) {
+      sleep(context, promise, (long) millisObj);
+    } else { // Promise
+      ((Promise) millisObj).map((millis) -> {
+        sleep(context, promise, (long) millisObj);
+        return Unit.INSTANCE;
+      }, this);
     }
-    promise.fulfil(Unit.INSTANCE, this);
+
     return promise;
+  }
+
+  private void sleep(@CachedContext(YattaLanguage.class) Context context, Promise promise, long millisObj) {
+    context.ioExecutor.submit(() -> {
+      try {
+        Thread.sleep(millisObj);
+      } catch (InterruptedException interrupt) {
+        promise.fulfil(interrupt, this);
+      }
+      promise.fulfil(Unit.INSTANCE, this);
+    });
   }
 }

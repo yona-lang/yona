@@ -3,7 +3,7 @@ package yatta.runtime.stdlib;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import yatta.ast.builtin.BuiltinNode;
 
-public final class ExportedFunction extends StdLibFunction {
+public class ExportedFunction extends StdLibFunction {
   public ExportedFunction(NodeFactory<? extends BuiltinNode> node) {
     super(node);
   }

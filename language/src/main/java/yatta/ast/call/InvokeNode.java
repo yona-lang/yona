@@ -127,8 +127,8 @@ public final class InvokeNode extends ExpressionNode {
       return createPartiallyAppliedClosure(function, frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
-      boolean argsArePromise = checkArgsForPromises(frame, argumentValues);
-      return dispatchFunction(function, argumentValues, argsArePromise);
+      boolean unwrapPromises = checkArgsForPromises(frame, argumentValues);
+      return dispatchFunction(function, argumentValues, function.isUnwrapArgumentPromises() && unwrapPromises);
     }
   }
 
@@ -145,8 +145,8 @@ public final class InvokeNode extends ExpressionNode {
     return argsArePromise;
   }
 
-  private Object dispatchFunction(Function function, Object[] argumentValues, boolean argsArePromise) {
-    if (argsArePromise) {
+  private Object dispatchFunction(Function function, Object[] argumentValues, boolean unwrapPromises) {
+    if (unwrapPromises) {
       Promise argsPromise = Promise.all(argumentValues, this);
       return argsPromise.map(argValues -> {
         try {
@@ -156,22 +156,22 @@ public final class InvokeNode extends ExpressionNode {
           return UndefinedNameException.undefinedFunction(this, function);
         }
       }, this);
-    }
+    } else {
+      if (this.isTail()) {
+        throw new TailCallException(function, argumentValues);
+      }
 
-    if (this.isTail()) {
-      throw new TailCallException(function, argumentValues);
-    }
-
-    Function dispatchFunction = function;
-    while (true) {
-      try {
-        return library.execute(dispatchFunction, argumentValues);
-      } catch (TailCallException e) {
-        dispatchFunction = e.function;
-        argumentValues = e.arguments;
-      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-        /* Execute was not successful. */
-        throw UndefinedNameException.undefinedFunction(this, dispatchFunction);
+      Function dispatchFunction = function;
+      while (true) {
+        try {
+          return library.execute(dispatchFunction, argumentValues);
+        } catch (TailCallException e) {
+          dispatchFunction = e.function;
+          argumentValues = e.arguments;
+        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+          /* Execute was not successful. */
+          throw UndefinedNameException.undefinedFunction(this, dispatchFunction);
+        }
       }
     }
   }
@@ -206,7 +206,7 @@ public final class InvokeNode extends ExpressionNode {
 
     YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
     ClosureRootNode rootNode = new ClosureRootNode(language, frame.getFrameDescriptor(), blockNode, getSourceSection(), function.getModuleFQN(), partiallyAppliedFunctionName, frame.materialize());
-    return new Function(function.getModuleFQN(), partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(rootNode), function.getCardinality() - argumentNodes.length);
+    return new Function(function.getModuleFQN(), partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(rootNode), function.getCardinality() - argumentNodes.length, function.isUnwrapArgumentPromises());
   }
 
   /*
