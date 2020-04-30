@@ -33,7 +33,7 @@ public abstract class SleepBuiltin extends BuiltinNode {
     return promise;
   }
 
-  private void sleep(@CachedContext(YattaLanguage.class) Context context, Promise promise, long millisObj) {
+  private void sleep(Context context, Promise promise, long millisObj) {
     context.ioExecutor.submit(() -> {
       try {
         Thread.sleep(millisObj);

@@ -6,6 +6,7 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -121,12 +122,51 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void systemCommandTest() {
-    Value tuple = context.eval(YattaLanguage.ID, "system [\"echo\", \"ahoj\"]");
+    Value tuple = context.eval(YattaLanguage.ID, "System::run [\"echo\", \"ahoj\"]");
     assertTrue(tuple.hasArrayElements());
 
     Object[] array = tuple.as(Object[].class);
     assertEquals(0L, array[0]);
     assertEquals("ahoj", ((List) array[1]).get(0));
+    assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
+  }
+
+  @Test
+  public void systemAsyncCommandTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "System::run [async \\->\"echo\", \"ahoj\"]");
+    assertTrue(tuple.hasArrayElements());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(0L, array[0]);
+    assertEquals("ahoj", ((List) array[1]).get(0));
+    assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
+  }
+
+  @Test
+  public void systemPipelineCommandTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "System::pipeline [\n" +
+        "[\"echo\", \"hello\"],\n" +
+        "[\"rev\"]" +
+        "]");
+    assertTrue(tuple.hasArrayElements());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(0L, array[0]);
+    assertEquals("olleh", ((List) array[1]).get(0));
+    assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
+  }
+
+  @Test
+  public void systemPipelineAsyncCommandTest() {
+    Value tuple = context.eval(YattaLanguage.ID, "System::pipeline [\n" +
+        "[\"echo\", \"hello\"],\n" +
+        "[async \\->\"rev\"]" +
+        "]");
+    assertTrue(tuple.hasArrayElements());
+
+    Object[] array = tuple.as(Object[].class);
+    assertEquals(0L, array[0]);
+    assertEquals("olleh", ((List) array[1]).get(0));
     assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
   }
 

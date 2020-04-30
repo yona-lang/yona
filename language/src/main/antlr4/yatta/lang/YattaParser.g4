@@ -67,8 +67,14 @@ options { tokenVocab=YattaLexer; }
         msg.append(" ");
         msg.append(syntaxErrMsg);
         msg.append("\n");
-        CommonTokenStream tokens = (CommonTokenStream) recognizer.getInputStream();
-        String input = tokens.getTokenSource().getInputStream().toString();
+        String input;
+        if (recognizer.getInputStream() instanceof TokenStream) {
+            TokenStream tokens = (TokenStream) recognizer.getInputStream();
+            input = tokens.getTokenSource().getInputStream().toString();
+        } else {
+            CharStream tokens = (CharStream) recognizer.getInputStream();
+            input = tokens.getText(Interval.of(0, tokens.size())).toString();
+        }
         String[] lines = input.split("\n");
         String errorLine = lines[line - 1];
         msg.append(errorLine);
@@ -218,11 +224,11 @@ characterLiteral : CHARACTER_LITERAL ;
 booleanLiteral : KW_TRUE | KW_FALSE ;
 
 tuple : PARENS_L expression NEWLINE? (COMMA NEWLINE? expression)+ PARENS_R ;
-dict : CURLY_L (dictKey OP_ASSIGN dictVal (COMMA dictKey OP_ASSIGN dictVal)*)? CURLY_R ;
+dict : CURLY_L NEWLINE? (dictKey OP_ASSIGN dictVal (COMMA NEWLINE? dictKey OP_ASSIGN dictVal)*)? NEWLINE? CURLY_R ;
 dictKey : expression ;
 dictVal : expression ;
 sequence : emptySequence | otherSequence ;
-set : CURLY_L expression (COMMA expression)* CURLY_R ;
+set : CURLY_L NEWLINE? expression (COMMA NEWLINE? expression)* NEWLINE? CURLY_R ;
 
 fqn : (packageName BACKSLASH)? moduleName ;
 packageName : LOWERCASE_NAME (BACKSLASH LOWERCASE_NAME)* ;
@@ -234,7 +240,7 @@ lambda : BACKSLASH pattern* OP_RIGHT_ARROW NEWLINE? expression ;
 underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;
-otherSequence: BRACKET_L expression (COMMA expression)* BRACKET_R ;
+otherSequence: BRACKET_L NEWLINE? expression (COMMA NEWLINE? expression)* NEWLINE? BRACKET_R ;
 
 caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ NEWLINE? KW_END ;
 patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWithGuard+) NEWLINE ;

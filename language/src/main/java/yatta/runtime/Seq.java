@@ -147,10 +147,15 @@ public final class Seq implements TruffleObject {
 
   @CompilerDirectives.TruffleBoundary
   public Object[] toArray() {
+    return toArray(Object.class);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public <T> T[] toArray(Class<T> cls) {
     assert length() < Integer.MAX_VALUE;
-    Object[] res = new Object[(int) length()];
+    T[] res = (T[]) Array.newInstance(cls, (int) length());
     foldLeft(0, (acc, el) -> {
-      res[acc] = el;
+      res[acc] = (T) el;
       return acc + 1;
     });
     return res;
@@ -605,6 +610,11 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  public Seq map(final java.util.function.Function function) {
+    return new Seq(nodeMap(prefix, 0, function), prefixSize, nodeMap(root, shift, function), rootSize, nodeMap(suffix, 0, function), suffixSize, shift);
+  }
+
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public long length() {
     return prefixSize + rootSize + suffixSize;
   }
@@ -942,6 +952,22 @@ public final class Seq implements TruffleObject {
       result[0] = ((Object[]) node)[0];
       for (int i = 0; i < len; i++) {
         result[i + 1] = nodeMap(nodeLookup(node, i), shift - BITS, function, dispatch);
+      }
+    }
+    return result;
+  }
+
+  static Object[] nodeMap(final Object node, final int shift, final java.util.function.Function function) {
+    final int len = nodeLength(node);
+    Object[] result = new Object[len + 1];
+    if (shift == 0) {
+      for (int i = 0; i < len; i++) {
+        result[i + 1] = function.apply(nodeLookup(node, i));
+      }
+    } else {
+      result[0] = ((Object[]) node)[0];
+      for (int i = 0; i < len; i++) {
+        result[i + 1] = nodeMap(nodeLookup(node, i), shift - BITS, function);
       }
     }
     return result;
