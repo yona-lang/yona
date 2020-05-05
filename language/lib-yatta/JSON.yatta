@@ -13,14 +13,6 @@ module JSON exports generate as
         | Types::is_symbol val = "\"{val}\""
         | true = "{val}"
 
-    element_fold (acc, remains) el = let
-        g = generate el
-      in
-        ("{acc}{g}" ++ if remains > 1 then ", " else "", remains - 1)
-
-    key_val_fold (acc, remains) (key, val) = let
-        gkey = generate key
-        gval = generate val
-      in
-        ("{acc}{gkey}: {gval}" ++ if remains > 1 then ", " else "", remains - 1)
+    element_fold (acc, remains) el = ("{acc}{(generate el)}" ++ if remains > 1 then ", " else "", remains - 1)
+    key_val_fold (acc, remains) (key, val) = ("{acc}{(generate key)}: {(generate val)}" ++ if remains > 1 then ", " else "", remains - 1)
 end

@@ -1,6 +1,12 @@
 package yatta;
 
+import org.apache.commons.lang3.StringEscapeUtils;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
+
+import java.util.Arrays;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -98,5 +104,30 @@ public class StringTest extends CommonTest {
   void testInterpolationInCurly() {
     String ret = context.eval(YattaLanguage.ID, "let who = \"world\" in \"hello {{{who}}}\"").asString();
     assertEquals("hello {world}", ret);
+  }
+
+  @TestFactory
+  Stream<DynamicTest> escapeSequencesCurly() {
+    String[] escapeSequences = {
+        "\\'",
+        "\\a",
+        "\\b",
+        "\\f",
+        "\\n",
+        "\\r",
+        "\\t",
+        "\\v"
+    };
+
+    return Arrays.stream(escapeSequences).map(sequence -> DynamicTest.dynamicTest(sequence, () -> {
+      String ret = context.eval(YattaLanguage.ID, '"' + sequence + '"').asString();
+      assertEquals(sequence, ret);
+    }));
+  }
+
+  @Test
+  void testUnicodeLiterals() {
+    String ret = context.eval(YattaLanguage.ID, "\"\\u0070\\u0075\\u0062\\u006c\\u0069\\u0063 \\u0063\\u006c\\u0061\\u0073\\u0073\\u0020\\u0054\\u0065\\u0073\\u0074\"").asString();
+    assertEquals("public class Test", StringEscapeUtils.unescapeJava(ret));
   }
 }

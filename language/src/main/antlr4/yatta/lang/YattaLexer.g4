@@ -3,7 +3,7 @@ lexer grammar YattaLexer;
 @lexer::header
 {import java.util.Stack;}
 
-channels { COMMENTS_CHANNEL, DIRECTIVE }
+channels { COMMENTS_CHANNEL }
 
 @lexer::members
 {
@@ -129,7 +129,7 @@ CHARACTER_LITERAL:                   '\'' (~['\\\r\n\u0085\u2028\u2029] | Common
 mode INTERPOLATION_STRING;
 DOUBLE_CURLY_INSIDE:           '{{';
 OPEN_BRACE_INSIDE:             '{' { curlyLevels.push(1); } -> skip, pushMode(DEFAULT_MODE);
-REGULAR_CHAR_INSIDE:           SimpleEscapeSequence { setText(getText().replace("\\\\", "\\").replace("\\\"", "\"")); };
+REGULAR_CHAR_INSIDE:           SimpleEscapeSequence { setText(getText().replace("\\\\", "\\").replace("\\\"", "\"")); } | CommonCharacter;
 DOUBLE_QUOTE_INSIDE:           '"' { interpolatedStringLevel--; } -> popMode;
 REGULAR_STRING_INSIDE:         ~('{' | '\\' | '"')+;
 
@@ -181,17 +181,17 @@ fragment CommonCharacter
 	| UnicodeEscapeSequence
 	;
 fragment SimpleEscapeSequence
-	: '\\\''
-	| '\\"'
-	| '\\\\'
+	: '\\\'' // Single quotation mark
+	| '\\"'  // Double quotation mark
+	| '\\\\' // Backslash
 	| '\\0'
-	| '\\a'
-	| '\\b'
-	| '\\f'
-	| '\\n'
-	| '\\r'
-	| '\\t'
-	| '\\v'
+	| '\\a'  // Bell (alert)
+	| '\\b'  // Backspace
+	| '\\f'  // Form feed
+	| '\\n'  // New line
+	| '\\r'  // Carriage return
+	| '\\t'  // Horizontal tab
+	| '\\v'  // Vertical tab
 	;
 fragment HexEscapeSequence
 	: '\\x' HexDigit

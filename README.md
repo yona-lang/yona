@@ -556,7 +556,8 @@ Yatta supports string interpolation for convenience of formatting strings. The s
 "this string contains an interpolated {variable}"
 ```
 
-In this string the `{variable}` part is replaced with whatever contents of the `variable`.
+In this string the `{variable}` part is replaced with whatever contents of the `variable`. Technically,
+`variable` is a name of a bound variable, or an expression in parentheses.
 
 It is also possible to use string interpolation with alignment option, which can be used for formatting tabular outputs:
 

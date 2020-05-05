@@ -10,6 +10,7 @@
     <graalvm.version>20.0.0</graalvm.version>
     <junit.version>5.5.2</junit.version>
     <antlr.version>4.8-1</antlr.version>
+    <commons.lang.version>3.10</commons.lang.version>
   </properties>
   <packaging>pom</packaging>
   <modules>
