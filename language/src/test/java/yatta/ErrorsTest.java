@@ -273,11 +273,11 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YattaLanguage.ID, "let mod = module RecordModule exports funone as\n" +
             "record TestRecord = (argone, argtwo)\n" +
-            "funone = let rec = async \\-> (async \\-> :whatever, 0) in\n" +
+            "funone = let rec = async \\-> (async \\-> :whatever) in\n" +
             "rec.argone\n" +
             "end in mod::funone").asLong();
       } catch (PolyglotException ex) {
-        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for Unsupported Unsupported", ex.getMessage());
+        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for String \"whatever\"", ex.getMessage());
         throw ex;
       }
     });

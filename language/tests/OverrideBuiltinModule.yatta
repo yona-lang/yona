@@ -1,0 +1,6 @@
+let
+    JSON = module JSON exports generate as
+        generate = "wrong"
+    end
+in
+    JSON::generate [1, 2]

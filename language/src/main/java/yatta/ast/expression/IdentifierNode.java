@@ -98,6 +98,10 @@ public final class IdentifierNode extends ExpressionNode {
   }
 
   public boolean isBound(VirtualFrame frame) {
+    TruffleLanguage.ContextReference<Context> context = lookupContextReference(YattaLanguage.class);
+    if (context.get().globals.lookup(name) != Unit.INSTANCE) {
+      return true;
+    }
     FrameSlot frameSlot = getFrameSlot(frame);
     if (frameSlot == null) {
       return false;

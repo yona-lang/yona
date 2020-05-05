@@ -7,9 +7,9 @@ do
             in (200, {"content-type" = "application/json"}, JSON::generate {"result" = (-1f ** (i + 1f)) / ((2f * i) - 1f)})
 
             max_connections = 100
-            server = http\Server::create "127.0.0.1" port max_connections
-                  |> http\Server::handle "/iteration" iteration_handler
-                  |> http\Server::start
+            http\Server::create "127.0.0.1" port max_connections
+            |> http\Server::handle "/iteration" iteration_handler
+            |> http\Server::start
         end
 
     client_session = http\Client::session {}
