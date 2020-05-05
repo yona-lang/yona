@@ -1,0 +1,4 @@
+let
+    curried = tests\CommonFunctions::nonLinearListTest [2, 0]
+in
+    curried [0, 3]
