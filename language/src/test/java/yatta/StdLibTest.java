@@ -6,8 +6,6 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -271,6 +269,24 @@ public class StdLibTest extends CommonTest {
         "    list::size\n" +
         "end").asLong();
     assertEquals(1l, ret);
+  }
+
+  @Test
+  public void javaCallDictArgTest() {
+    long ret = context.eval(YattaLanguage.ID, "yatta\\TestUtil::mapSize {:one = 1, :two = 2}").asLong();
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void javaCallSeqArgTest() {
+    long ret = context.eval(YattaLanguage.ID, "yatta\\TestUtil::arraySize [:one, :two]").asLong();
+    assertEquals(2l, ret);
+  }
+
+  @Test
+  public void javaCallTupleArgTest() {
+    long ret = context.eval(YattaLanguage.ID, "yatta\\TestUtil::arraySize (:one, :two)").asLong();
+    assertEquals(2l, ret);
   }
 
   @Test

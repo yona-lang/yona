@@ -7,6 +7,8 @@ import yatta.runtime.*;
 import yatta.runtime.async.Promise;
 
 import java.lang.reflect.Array;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The type system of YattaLanguage, as explained in {@link YattaLanguage}. Based on the {@link TypeSystem}
@@ -70,6 +72,8 @@ public abstract class Types {
       return (long) (int) result;
     } else if (result instanceof Float) {
       return (double) (float) result;
+    } else if (result instanceof CharSequence) {
+      return Seq.fromCharSequence((CharSequence) result);
     } else if (isForeignObject(result)) {
       return new NativeObject(result);
     } else if (result instanceof Character) {
