@@ -4,8 +4,11 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.TransducerDoneException;
 
+import java.lang.reflect.Array;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -34,6 +37,39 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     return set;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Object[] toArray() {
+    return toArray(Object.class);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public <T> T[] toArray(Class<T> cls) {
+    assert size() < Integer.MAX_VALUE;
+    T[] res = (T[]) Array.newInstance(cls, (int) size());
+    fold(0, (acc, el) -> {
+      res[acc] = (T) el;
+      return acc + 1;
+    });
+    return res;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Object unwrapPromises(final Node node) {
+    boolean hasPromise = fold(false, (acc, el) -> {
+      if (el instanceof Promise) {
+        return true;
+      } else {
+        return acc;
+      }
+    });
+
+    if (!hasPromise) {
+      return this;
+    } else {
+      return Promise.all(toArray(), node);
+    }
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)

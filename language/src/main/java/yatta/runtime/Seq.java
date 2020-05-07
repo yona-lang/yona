@@ -1277,7 +1277,7 @@ public final class Seq implements TruffleObject {
       @Override
       byte[] next(int offset, int n) {
         byte[] ret = new byte[n + offset];
-        System.arraycopy(bytes, offset, ret, offset, n);
+        System.arraycopy(bytes, offset, ret, 0, n);
         remaining -= n;
         return ret;
       }
