@@ -1,5 +1,5 @@
 do
-	file = File::open "tests/big.txt" {:read}
+    file = File::open "tests/big.txt" {:read}
     result = tests\CommonFunctions::read_all_lines file
     File::close file
     result

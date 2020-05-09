@@ -35,7 +35,7 @@ public final class FileBuiltinModule implements BuiltinModule {
 
   public static final int FILE_READ_BUFFER_SIZE = 4096;
 
-  private static Tuple fileTuple(AsynchronousFileChannel fileHandle, byte[] readBuffer, long position) {
+  private static Tuple fileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position) {
     return new Tuple(new NativeObject(fileHandle), readBuffer, position);
   }
 
@@ -59,7 +59,7 @@ public final class FileBuiltinModule implements BuiltinModule {
       try {
         AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, openOptions, context.ioExecutor);
 
-        return fileTuple(asynchronousFileChannel, null, 0L);
+        return fileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L);
       } catch (IOException e) {
         throw new YattaException(e.getMessage(), this);
       }
@@ -154,40 +154,26 @@ public final class FileBuiltinModule implements BuiltinModule {
 
             attachment.flip();
             int length = attachment.limit();
-            byte[] originalOutput = (byte[]) fileTuple.get(1);
 
             byte[] output;
             int pos;
 
-            if (originalOutput == null) {
-              output = new byte[length];
-              pos = 0;
-            } else {
+            Object originalOutputObj = fileTuple.get(1);
+            if (originalOutputObj instanceof byte[]) {
+              byte[] originalOutput = (byte[]) originalOutputObj;
+
               output = new byte[originalOutput.length + length];
               System.arraycopy(originalOutput, 0, output, 0, originalOutput.length);
               pos = originalOutput.length;
+            } else {
+              output = new byte[length];
+              pos = 0;
             }
 
             for (int i = 0; i < length; i++) {
               byte b = attachment.get();
               if (b == '\n') {
-                Seq bytes = Seq.fromByteSource(new Seq.ByteSource() {
-                  int remaining = output.length;
-
-                  @Override
-                  protected int remaining() {
-                    return remaining;
-                  }
-
-                  @Override
-                  protected byte[] next(int offset, int n) {
-                    byte[] result = new byte[n + offset];
-                    System.arraycopy(output, output.length - remaining, result, offset, n);
-                    remaining -= n;
-                    return result;
-                  }
-                });
-                promise.fulfil(new Tuple(context.symbol("ok"), bytes, fileTuple(asynchronousFileChannel, null, position + i + 1)), thisNode);
+                promise.fulfil(new Tuple(context.symbol("ok"), Seq.fromBytes(output), fileTuple(asynchronousFileChannel, null, position + i + 1)), thisNode);
                 fulfilled = true;
                 break;
               } else {
@@ -240,6 +226,7 @@ public final class FileBuiltinModule implements BuiltinModule {
             promise.fulfil(new Tuple(context.symbol("ok"), seq), FileReadFileNode.this);
           } else {
             attachment.flip();
+
             seq = Seq.catenate(seq, Seq.fromByteSource(new Seq.ByteSource() {
               int remaining = attachment.limit();
 
@@ -256,7 +243,9 @@ public final class FileBuiltinModule implements BuiltinModule {
                 return result;
               }
             }));
+
             attachment.clear();
+
             position += result;
             channel.read(attachment, position, attachment, this);
           }
@@ -267,15 +256,18 @@ public final class FileBuiltinModule implements BuiltinModule {
           promise.fulfil(new YattaException(exc.getMessage(), FileReadFileNode.this), FileReadFileNode.this);
         }
       }
+
       final AsynchronousFileChannel channel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
       final ByteBuffer buffer = ByteBuffer.allocate(FILE_READ_BUFFER_SIZE);
       final long position = (long) fileTuple.get(2);
       final Promise promise = new Promise(interopLibrary);
+
       try {
         channel.read(buffer, position, buffer, new CatenateCompletionHandler(channel, promise, position));
       } catch (Exception ex) {
         promise.fulfil(new YattaException(ex.getMessage(), this), this);
       }
+
       return promise;
     }
   }

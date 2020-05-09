@@ -25,7 +25,7 @@ Yatta abstract users from dealing with non-blocking asynchronous computations an
 * polyglot language - interoperability with other languages via GraalVM
 
 ## Documentation
-Yatta Documentation is available in the [wiki](https://github.com/yatta-lang/yatta/wiki/Yatta-Documentation) section.
+Yatta Documentation is available in the [language homepage](https://yatta-lang.org/docs/) section.
 
 ## Installation Instructions
 It is possible to run Yatta locally, whether for play purposes or development of new features.

@@ -1276,6 +1276,25 @@ public final class Seq implements TruffleObject {
     protected abstract byte[] next(final int offset, final int n);
   }
 
+  public static Seq fromBytes(final byte[] bytes) {
+    return fromByteSource(new ByteSource() {
+      int remaining = bytes.length;
+
+      @Override
+      protected int remaining() {
+        return remaining;
+      }
+
+      @Override
+      protected byte[] next(int offset, int n) {
+        byte[] result = new byte[n + offset];
+        System.arraycopy(bytes, bytes.length - remaining, result, offset, n);
+        remaining -= n;
+        return result;
+      }
+    });
+  }
+
   public static Seq fromUtf8(final Utf8Source source) {
     int shift = BITS;
     Object[] root = EMPTY_NODE;

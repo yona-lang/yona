@@ -1,5 +1,5 @@
 do
-	file = File::open "tests/big.txt" {:read}
+    file = File::open "tests/big.txt" {:read}
     (:ok, file_contents) = File::readfile file
     File::close file
     Seq::len file_contents
