@@ -33,23 +33,6 @@ public final class JSONBuiltinModule implements BuiltinModule {
       return visitor.visit(parser.json());
     }
 
-    private CharStream seqToCharStream(Seq str) {
-      CharStream charStream;
-      if (str.isString()) {
-        charStream = CharStreams.fromString(str.asJavaString(this));
-      } else {
-        ByteBuffer byteBuffer = ByteBuffer.allocate((int) str.length());
-        if (str.asBytes(byteBuffer)) {
-          byteBuffer.limit(byteBuffer.position());
-          byteBuffer.position(0);
-          charStream = CodePointCharStream.fromBuffer(CodePointBuffer.withBytes(byteBuffer));
-        } else {
-          throw new BadArgException("Provided string is not a valid byte sequence or Yatta string: " + str, this);
-        }
-      }
-      return charStream;
-    }
-
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Object parse(Promise promise) {
@@ -68,6 +51,29 @@ public final class JSONBuiltinModule implements BuiltinModule {
           return YattaException.typeError(this, obj);
         }
       }, this);
+    }
+
+    private CharStream seqToCharStream(Seq str) {
+      CharStream charStream;
+      if (str.isString()) {
+        charStream = CharStreams.fromString(str.asJavaString(this));
+      } else {
+        long len = str.length();
+
+        if (len > Integer.MAX_VALUE) {
+          throw new BadArgException("Sequence too long to be converted to Java byte array", this);
+        }
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate((int) len);
+        if (str.asBytes(byteBuffer)) {
+          byteBuffer.limit(byteBuffer.position());
+          byteBuffer.position(0);
+          charStream = CodePointCharStream.fromBuffer(CodePointBuffer.withBytes(byteBuffer));
+        } else {
+          throw new BadArgException("Provided string is not a valid byte sequence or Yatta string: " + str, this);
+        }
+      }
+      return charStream;
     }
   }
 
