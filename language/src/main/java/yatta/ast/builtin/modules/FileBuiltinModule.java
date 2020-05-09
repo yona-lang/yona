@@ -33,7 +33,7 @@ import java.util.Set;
 @BuiltinModuleInfo(moduleName = "File")
 public final class FileBuiltinModule implements BuiltinModule {
 
-  public static final int FILE_READ_BUFFER_SIZE = 64;
+  public static final int FILE_READ_BUFFER_SIZE = 4096;
 
   private static Tuple fileTuple(AsynchronousFileChannel fileHandle, byte[] readBuffer, long position) {
     return new Tuple(new NativeObject(fileHandle), readBuffer, position);
@@ -59,7 +59,7 @@ public final class FileBuiltinModule implements BuiltinModule {
       try {
         AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, openOptions, context.ioExecutor);
 
-        return fileTuple(asynchronousFileChannel, null, 0l);
+        return fileTuple(asynchronousFileChannel, null, 0L);
       } catch (IOException e) {
         throw new YattaException(e.getMessage(), this);
       }
@@ -171,7 +171,23 @@ public final class FileBuiltinModule implements BuiltinModule {
             for (int i = 0; i < length; i++) {
               byte b = attachment.get();
               if (b == '\n') {
-                promise.fulfil(new Tuple(context.symbol("ok"), Seq.fromCharSequence(new String(output)), fileTuple(asynchronousFileChannel, null, position + i + 1)), thisNode);
+                Seq bytes = Seq.fromByteSource(new Seq.ByteSource() {
+                  int remaining = output.length;
+
+                  @Override
+                  protected int remaining() {
+                    return remaining;
+                  }
+
+                  @Override
+                  protected byte[] next(int offset, int n) {
+                    byte[] result = new byte[n + offset];
+                    System.arraycopy(output, output.length - remaining, result, offset, n);
+                    remaining -= n;
+                    return result;
+                  }
+                });
+                promise.fulfil(new Tuple(context.symbol("ok"), bytes, fileTuple(asynchronousFileChannel, null, position + i + 1)), thisNode);
                 fulfilled = true;
                 break;
               } else {
@@ -203,55 +219,63 @@ public final class FileBuiltinModule implements BuiltinModule {
 
   @NodeInfo(shortName = "readfile")
   abstract static class FileReadFileNode extends BuiltinNode {
-    private static final class FileReader implements CompletionHandler<Integer, AsynchronousFileChannel> {
-      private final Promise promise;
-      private final ByteBuffer buffer;
-      private final Node node;
-      private final Context context;
-      private Seq read = Seq.EMPTY;
-
-      public FileReader(final Promise promise, final ByteBuffer buffer, final Node node, final Context context) {
-        this.promise = promise;
-        this.buffer = buffer;
-        this.node = node;
-        this.context = context;
-      }
-
-      private int pos = 0;
-
-      @Override
-      public void completed(Integer result, AsynchronousFileChannel attachment) {
-        if (result <= 0) {
-          promise.fulfil(new Tuple(context.symbol("ok"), read), node);
-          return;
-        } else {
-          pos += result;
-          read = Seq.catenate(read, Seq.fromCharSequence(new String(buffer.array(), 0, result)));
-          buffer.clear();
-        }
-        attachment.read(buffer, pos, attachment, this);
-      }
-
-      @Override
-      public void failed(Throwable exc, AsynchronousFileChannel attachment) {
-        promise.fulfil(new YattaException(exc.getMessage(), node), node);
-      }
-    }
-
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Promise readfile(Tuple fileTuple, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
-      AsynchronousFileChannel asynchronousFileChannel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
-      ByteBuffer buffer = ByteBuffer.allocate(FILE_READ_BUFFER_SIZE);
-      long position = (long) fileTuple.get(2);
-      Promise promise = new Promise(interopLibrary);
+      final class CatenateCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
+        final AsynchronousFileChannel channel;
+        final Promise promise;
+        long position;
+        Seq seq = Seq.EMPTY;
 
+        CatenateCompletionHandler(AsynchronousFileChannel channel, Promise promise, long position) {
+          this.channel = channel;
+          this.promise = promise;
+          this.position = position;
+        }
+
+        @Override
+        public void completed(Integer result, ByteBuffer attachment) {
+          if (result <= 0) {
+            promise.fulfil(new Tuple(context.symbol("ok"), seq), FileReadFileNode.this);
+          } else {
+            attachment.flip();
+            seq = Seq.catenate(seq, Seq.fromByteSource(new Seq.ByteSource() {
+              int remaining = attachment.limit();
+
+              @Override
+              protected int remaining() {
+                return remaining;
+              }
+
+              @Override
+              protected byte[] next(int offset, int n) {
+                byte[] result = new byte[offset + n];
+                attachment.get(result, offset, n);
+                remaining -= n;
+                return result;
+              }
+            }));
+            attachment.clear();
+            position += result;
+            channel.read(attachment, position, attachment, this);
+          }
+        }
+
+        @Override
+        public void failed(Throwable exc, ByteBuffer attachment) {
+          promise.fulfil(new YattaException(exc.getMessage(), FileReadFileNode.this), FileReadFileNode.this);
+        }
+      }
+      final AsynchronousFileChannel channel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
+      final ByteBuffer buffer = ByteBuffer.allocate(FILE_READ_BUFFER_SIZE);
+      final long position = (long) fileTuple.get(2);
+      final Promise promise = new Promise(interopLibrary);
       try {
-        asynchronousFileChannel.read(buffer, position, asynchronousFileChannel, new FileReader(promise, buffer, this, context));
+        channel.read(buffer, position, buffer, new CatenateCompletionHandler(channel, promise, position));
       } catch (Exception ex) {
         promise.fulfil(new YattaException(ex.getMessage(), this), this);
       }
-
       return promise;
     }
   }

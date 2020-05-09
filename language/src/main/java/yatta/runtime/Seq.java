@@ -150,6 +150,7 @@ public final class Seq implements TruffleObject {
     return toArray(Object.class);
   }
 
+  @SuppressWarnings("unchecked")
   @CompilerDirectives.TruffleBoundary
   public <T> T[] toArray(Class<T> cls) {
     assert length() < Integer.MAX_VALUE;
@@ -610,7 +611,7 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public Seq map(final java.util.function.Function function) {
+  public Seq map(final java.util.function.Function<Object, ?> function) {
     return new Seq(nodeMap(prefix, 0, function), prefixSize, nodeMap(root, shift, function), rootSize, nodeMap(suffix, 0, function), suffixSize, shift);
   }
 
@@ -957,7 +958,7 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
-  static Object[] nodeMap(final Object node, final int shift, final java.util.function.Function function) {
+  static Object[] nodeMap(final Object node, final int shift, final java.util.function.Function<Object, ?> function) {
     final int len = nodeLength(node);
     Object[] result = new Object[len + 1];
     if (shift == 0) {
@@ -1260,34 +1261,19 @@ public final class Seq implements TruffleObject {
       }
       root = newRoot;
     }
-    Object[] suffix = objectify(newLeaf(source, source.remaining() % MAX_NODE_LENGTH));
+    final Object[] suffix;
+    if (source.remaining() != 0) {
+      suffix = objectify(newLeaf(source, source.remaining() % MAX_NODE_LENGTH));
+    } else {
+      suffix = EMPTY_NODE;
+    }
     return new Seq(EMPTY_NODE, 0, root, nodeSize(root, shift), suffix, nodeLength(suffix), shift);
   }
 
-  @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public static Seq fromBytes(final byte[] bytes) {
-    return fromByteSource(new ByteSource() {
-      int remaining = bytes.length;
-
-      @Override
-      int remaining() {
-        return remaining;
-      }
-
-      @Override
-      byte[] next(int offset, int n) {
-        byte[] ret = new byte[n + offset];
-        System.arraycopy(bytes, offset, ret, 0, n);
-        remaining -= n;
-        return ret;
-      }
-    });
-  }
-
   public static abstract class ByteSource {
-    abstract int remaining();
+    protected abstract int remaining();
 
-    abstract byte[] next(final int offset, final int n);
+    protected abstract byte[] next(final int offset, final int n);
   }
 
   public static Seq fromUtf8(final Utf8Source source) {
@@ -1302,7 +1288,12 @@ public final class Seq implements TruffleObject {
       }
       root = newRoot;
     }
-    Object[] suffix = objectify(newLeaf(source, source.remaining() % MAX_NODE_LENGTH));
+    final Object[] suffix;
+    if (source.remaining() != 0) {
+      suffix = objectify(newLeaf(source, source.remaining() % MAX_NODE_LENGTH));
+    } else {
+      suffix = EMPTY_NODE;
+    }
     return new Seq(EMPTY_NODE, 0, root, nodeSize(root, shift), suffix, nodeLength(suffix), shift);
   }
 
@@ -1395,11 +1386,21 @@ public final class Seq implements TruffleObject {
     leftRoot = tiltRight(leftRoot, leftShift);
     rightRoot = tiltLeft(rightRoot, rightShift);
     final FirstAndRest prefixAndLeft = treeSeparateFirst(leftRoot, leftShift);
-    final Object[] newPrefix = objectify(prefixAndLeft.first);
-    leftRoot = prefixAndLeft.rest;
+    final Object[] newPrefix;
+    if (nodeLength(prefixAndLeft.first) != MAX_NODE_LENGTH) {
+      newPrefix = objectify(prefixAndLeft.first);
+      leftRoot = prefixAndLeft.rest;
+    } else {
+      newPrefix = EMPTY_NODE;
+    }
     final InitAndLast rightAndSuffix = treeSeparateLast(rightRoot, rightShift);
-    rightRoot = rightAndSuffix.init;
-    final Object[] newSuffix = objectify(rightAndSuffix.last);
+    final Object[] newSuffix;
+    if (nodeLength(rightAndSuffix.last) != MAX_NODE_LENGTH) {
+      rightRoot = rightAndSuffix.init;
+      newSuffix = objectify(rightAndSuffix.last);
+    } else {
+      newSuffix = EMPTY_NODE;
+    }
     while (leftShift > BITS && nodeLength(leftRoot) == 1) {
       leftRoot = (Object[]) nodeFirst(leftRoot);
       leftShift -= BITS;
@@ -1437,12 +1438,12 @@ public final class Seq implements TruffleObject {
     } else {
       Object[] result = node;
       shift -= BITS;
-      if (nodeLength(nodeFirst(node)) < MIN_NODE_LENGTH) {
-        result = redistributeLeft(node, shift);
+      if (nodeLength(nodeFirst(result)) < MIN_NODE_LENGTH) {
+        result = redistributeLeft(result, shift);
       }
       result = nonLeafReplaceFirst(result, tiltLeft((Object[]) nodeFirst(result), shift), shift);
-      if (nodeLength(nodeFirst(node)) < MIN_NODE_LENGTH) {
-        result = redistributeLeft(node, shift);
+      if (nodeLength(nodeFirst(result)) < MIN_NODE_LENGTH) {
+        result = redistributeLeft(result, shift);
       }
       return result;
     }
@@ -1528,12 +1529,12 @@ public final class Seq implements TruffleObject {
     } else {
       Object[] result = node;
       shift -= BITS;
-      if (nodeLength(nodeLast(node)) < MIN_NODE_LENGTH) {
-        result = redistributeRight(node, shift);
+      if (nodeLength(nodeLast(result)) < MIN_NODE_LENGTH) {
+        result = redistributeRight(result, shift);
       }
       result = nonLeafReplaceLast(result, tiltRight((Object[]) nodeLast(result), shift), shift);
-      if (nodeLength(nodeLast(node)) < MIN_NODE_LENGTH) {
-        result = redistributeRight(node, shift);
+      if (nodeLength(nodeLast(result)) < MIN_NODE_LENGTH) {
+        result = redistributeRight(result, shift);
       }
       return result;
     }

@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
@@ -32,7 +33,7 @@ public class YattaTest {
     List<DynamicTest> foundCases = new ArrayList<>();
     final Path rootPath = Paths.get(TESTS_DIRECTORY);
 
-    Files.walkFileTree(rootPath, new SimpleFileVisitor<Path>() {
+    Files.walkFileTree(rootPath, new SimpleFileVisitor<>() {
       @Override
       public FileVisitResult visitFile(Path sourceFile, BasicFileAttributes attrs) {
         String sourceName = sourceFile.getFileName().toString();
@@ -54,7 +55,7 @@ public class YattaTest {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
-            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes("UTF-8"))).out(out).err(out).allowAllAccess(true).build();
+            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8))).out(out).err(out).allowAllAccess(true).build();
             context.enter();
 
             /* Parse the Yatta source file. */
@@ -99,6 +100,6 @@ public class YattaTest {
   }
 
   private static String readAllLines(Path file) throws IOException {
-    return Files.readString(file, Charset.forName("UTF-8"));
+    return Files.readString(file, StandardCharsets.UTF_8);
   }
 }
