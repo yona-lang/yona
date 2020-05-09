@@ -125,7 +125,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
               .add("uri", Seq.fromCharSequence(httpExchange.getRequestURI().toString()));
           Dict headers = headersToDict(httpExchange.getRequestHeaders());
           byte[] bodyBytes = httpExchange.getRequestBody().readAllBytes();
-          Seq body = Seq.fromCharSequence(new String(bodyBytes));
+          Seq body = Seq.fromBytes(bodyBytes);
           try {
             Object handlerResult = dispatch.execute(handler, exchangeParams, headers, body);
             sendResponse(handlerResult, httpExchange);

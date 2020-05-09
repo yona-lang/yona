@@ -173,7 +173,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       Promise promise = new Promise(dispatch);
       context.ioExecutor.submit(() -> {
         try {
-          HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+          HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
           promise.fulfil(responseToTuple(response), this);
         } catch (Exception e) {
           promise.fulfil(e, this);
@@ -184,7 +184,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
     }
 
     @CompilerDirectives.TruffleBoundary
-    private Tuple responseToTuple(HttpResponse<String> response) {
+    private Tuple responseToTuple(HttpResponse<byte[]> response) {
       Dict headers = Dict.empty();
       for (Map.Entry<String, List<String>> entry : response.headers().map().entrySet()) {
         Seq value = Seq.EMPTY;
@@ -193,7 +193,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         }
         headers = headers.add(Seq.fromCharSequence(entry.getKey()), value);
       }
-      return new Tuple((long) response.statusCode(), headers, Seq.fromCharSequence(response.body()));
+      return new Tuple((long) response.statusCode(), headers, Seq.fromBytes(response.body()));
     }
 
     @CompilerDirectives.TruffleBoundary
