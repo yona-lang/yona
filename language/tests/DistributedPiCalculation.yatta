@@ -13,7 +13,7 @@ do
         end
 
     client_session = http\Client::session {}
-    client_module = module Client exports run as
+    client = module Client exports run as
         send_request i = do
                 (200, _, raw_body) = http\Client::post client_session "http://localhost:{port}/iteration" {} <| JSON::generate {"i" = i}
                 {"result" = result} = JSON::parse raw_body
@@ -26,5 +26,5 @@ do
           | true = run (i + 1) (acc + (send_request <| float i))
     end
 
-    4f * client_module::run 1 0f
+    4f * client::run 1 0f
 end
