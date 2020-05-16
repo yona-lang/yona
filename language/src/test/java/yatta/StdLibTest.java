@@ -511,4 +511,13 @@ public class StdLibTest extends CommonTest {
     assertEquals("TEST", ret);
     customContext.leave();
   }
+
+  @Test
+  public void getArgsTest() {
+    Context customContext = Context.newBuilder().allowAllAccess(true).arguments("yatta", new String[] {"-h", "-test"}).build();
+    customContext.enter();
+    boolean ret = customContext.eval(YattaLanguage.ID, "let [\"-h\", \"-test\"] = System::args in true").asBoolean();
+    assertTrue(ret);
+    customContext.leave();
+  }
 }

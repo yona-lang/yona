@@ -176,12 +176,25 @@ public final class SystemBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "args")
+  abstract static class GetArgsBuiltin extends BuiltinNode {
+    @Specialization
+    public Seq args(@CachedContext(YattaLanguage.class) Context context) {
+      Seq ret = Seq.EMPTY;
+      for (String arg : context.getEnv().getApplicationArguments()) {
+        ret = ret.insertLast(Seq.fromCharSequence(arg));
+      }
+      return ret;
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PipelineBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetEnvBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PidBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetArgsBuiltinFactory.getInstance()));
     return builtins;
   }
 }
