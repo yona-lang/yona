@@ -1,0 +1,7 @@
+do
+    file = File::open "tests/JsonSample.json" {:read, :binary}
+    file_contents = File::readfile file
+    File::close file
+    {"glossary" = {"title" = title}} = JSON::parse file_contents
+    title
+end

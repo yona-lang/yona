@@ -12,7 +12,7 @@ import java.util.Arrays;
 
 @ExportLibrary(InteropLibrary.class)
 public class Tuple implements TruffleObject {
-  private final Object[] items;
+  protected Object[] items;
 
   public Tuple(Object... items) {
     this.items = items;

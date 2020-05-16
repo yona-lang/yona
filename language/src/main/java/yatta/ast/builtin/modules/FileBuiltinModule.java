@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,10 +34,48 @@ import java.util.Set;
 @BuiltinModuleInfo(moduleName = "File")
 public final class FileBuiltinModule implements BuiltinModule {
 
-  public static final int FILE_READ_BUFFER_SIZE = 4096;
+  protected static final int FILE_READ_BUFFER_SIZE = 4096;
 
-  private static Tuple fileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position) {
-    return new Tuple(new NativeObject(fileHandle), readBuffer, position);
+  protected static final class FileTuple extends Tuple {
+    public FileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position, Seq additionalOptions) {
+      this.items = new Object[] {
+          new NativeObject(fileHandle), readBuffer, position, additionalOptions
+      };
+    }
+
+    public FileTuple copy(Object readBuffer, long position) {
+      return new FileTuple(fileHandle(), readBuffer, position, additionalOptions());
+    }
+
+    public AsynchronousFileChannel fileHandle() {
+      return (AsynchronousFileChannel) ((NativeObject) items[0]).getValue();
+    }
+
+    public Object readBuffer() {
+      return items[1];
+    }
+
+    public long position() {
+      return (long) items[2];
+    }
+
+    public Seq additionalOptions() {
+      return (Seq) items[3];
+    }
+  }
+
+
+  protected static final class FileOptions {
+    final Set<OpenOption> openOptions = new HashSet<>();
+    private Seq additionalOptions = Seq.EMPTY;
+
+    public Seq getAdditionalOptions() {
+      return additionalOptions;
+    }
+
+    public void addAdditionalOption(Object option) {
+      this.additionalOptions = this.additionalOptions.insertFirst(option);
+    }
   }
 
   @NodeInfo(shortName = "open")
@@ -47,19 +86,19 @@ public final class FileBuiltinModule implements BuiltinModule {
     public Object open(Seq uri, yatta.runtime.Set modes, @CachedContext(YattaLanguage.class) Context context) {
       Path path = Paths.get(uri.asJavaString(this));
 
-      Object openOptions = openOptions(modes.unwrapPromises(this));
-      if (openOptions instanceof Set) {
-        return openFile(path, (Set<OpenOption>) openOptions, context);
+      Object fileOptionsObj = openOptions(modes.unwrapPromises(this));
+      if (fileOptionsObj instanceof FileOptions) {
+        return openFile(path, (FileOptions) fileOptionsObj, context);
       } else { // Promise
-        return ((Promise) openOptions).map(modesSet -> openFile(path, (Set<OpenOption>) modesSet, context), this);
+        return ((Promise) fileOptionsObj).map(fileOptions -> openFile(path, (FileOptions) fileOptions, context), this);
       }
     }
 
-    private Object openFile(Path path, Set<OpenOption> openOptions, Context context) {
+    private Object openFile(Path path, FileOptions fileOptions, Context context) {
       try {
-        AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, openOptions, context.ioExecutor);
+        AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, fileOptions.openOptions, context.ioExecutor);
 
-        return fileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L);
+        return new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions);
       } catch (IOException e) {
         throw new YattaException(e.getMessage(), this);
       }
@@ -75,16 +114,31 @@ public final class FileBuiltinModule implements BuiltinModule {
       }
     }
 
-    private Object openOptionsFromArray(Object[] modes) {
-      Set<OpenOption> openOptions = new HashSet<>();
+    private FileOptions openOptionsFromArray(Object[] modes) {
+      FileOptions fileOptions = new FileOptions();
       for (Object el : modes) {
         try {
-          openOptions.add(modeSymbolToOpenOption(TypesGen.expectSymbol(el)));
+          Symbol symbol = TypesGen.expectSymbol(el);
+          if (isModeAdditionalOption(symbol)) {
+            fileOptions.addAdditionalOption(symbol);
+          } else {
+            fileOptions.openOptions.add(modeSymbolToOpenOption(symbol));
+          }
         } catch (UnexpectedResultException e) {
           throw new BadArgException(e, this);
         }
       }
-      return openOptions;
+      return fileOptions;
+    }
+
+    private boolean isModeAdditionalOption(Symbol symbol) {
+      String symbolName = symbol.asString();
+      switch (symbolName) {
+        case "binary":
+          return true;
+        default:
+          return false;
+      }
     }
 
     private OpenOption modeSymbolToOpenOption(Symbol symbol) {
@@ -120,10 +174,9 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileCloseNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Unit close(Tuple fileTuple) {
-      AsynchronousFileChannel asynchronousFileChannel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
+    public Unit close(FileTuple fileTuple) {
       try {
-        asynchronousFileChannel.close();
+        fileTuple.fileHandle().close();
       } catch (IOException e) {
         throw new yatta.runtime.exceptions.IOException(e, this);
       }
@@ -135,15 +188,14 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileReadLineNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise readline(Tuple fileTuple, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+    public Promise readline(FileTuple fileTuple, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
       AsynchronousFileChannel asynchronousFileChannel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
       ByteBuffer buffer = ByteBuffer.allocate(FILE_READ_BUFFER_SIZE);
-      long position = (long) fileTuple.get(2);
       Node thisNode = this;
       Promise promise = new Promise(interopLibrary);
 
       try {
-        asynchronousFileChannel.read(buffer, position, buffer, new CompletionHandler<>() {
+        asynchronousFileChannel.read(buffer, fileTuple.position(), buffer, new CompletionHandler<>() {
           @Override
           public void completed(Integer result, ByteBuffer attachment) {
             boolean fulfilled = false;
@@ -155,35 +207,29 @@ public final class FileBuiltinModule implements BuiltinModule {
             attachment.flip();
             int length = attachment.limit();
 
-            byte[] output;
-            int pos;
+            ByteBuffer output;
 
-            Object originalOutputObj = fileTuple.get(1);
-            if (originalOutputObj instanceof byte[]) {
-              byte[] originalOutput = (byte[]) originalOutputObj;
-
-              output = new byte[originalOutput.length + length];
-              System.arraycopy(originalOutput, 0, output, 0, originalOutput.length);
-              pos = originalOutput.length;
+            if (fileTuple.readBuffer() instanceof ByteBuffer) {
+              output = (ByteBuffer) fileTuple.readBuffer();
+              output.flip();
             } else {
-              output = new byte[length];
-              pos = 0;
+              output = ByteBuffer.allocate(length);
             }
 
             for (int i = 0; i < length; i++) {
               byte b = attachment.get();
               if (b == '\n') {
-                promise.fulfil(new Tuple(context.symbol("ok"), Seq.fromBytes(output), fileTuple(asynchronousFileChannel, null, position + i + 1)), thisNode);
+                promise.fulfil(new Tuple(context.symbol("ok"), bytesToSeq(output, fileTuple.additionalOptions(), context, thisNode), fileTuple.copy(null, fileTuple.position() + i + 1)), thisNode);
                 fulfilled = true;
                 break;
               } else {
-                output[pos++] = b;
+                output.put(b);
               }
             }
             attachment.clear();
 
             if (!fulfilled) {
-              readline(fileTuple(asynchronousFileChannel, output, position + length), context, interopLibrary).map(res -> {
+              readline(fileTuple.copy(output, fileTuple.position() + length), context, interopLibrary).map(res -> {
                 promise.fulfil(res, thisNode);
                 return res;
               }, thisNode);
@@ -201,13 +247,22 @@ public final class FileBuiltinModule implements BuiltinModule {
 
       return promise;
     }
+
+    private static Seq bytesToSeq(ByteBuffer byteBuffer, Seq additionalFileOptions, Context context, Node caller) {
+      byteBuffer.flip();
+      if (additionalFileOptions.contains(context.symbol("binary"), caller)) {
+        return Seq.fromByteBuffer(byteBuffer);
+      } else {
+        return Seq.fromCharSequence(StandardCharsets.UTF_8.decode(byteBuffer));
+      }
+    }
   }
 
   @NodeInfo(shortName = "readfile")
   abstract static class FileReadFileNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise readfile(Tuple fileTuple, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+    public Promise readfile(FileTuple fileTuple, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
       final class CatenateCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         final AsynchronousFileChannel channel;
         final Promise promise;
@@ -223,27 +278,15 @@ public final class FileBuiltinModule implements BuiltinModule {
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
           if (result <= 0) {
-            promise.fulfil(new Tuple(context.symbol("ok"), seq), FileReadFileNode.this);
+            promise.fulfil(seq, FileReadFileNode.this);
           } else {
             attachment.flip();
 
-            seq = Seq.catenate(seq, Seq.fromByteSource(new Seq.ByteSource() {
-              int remaining = attachment.limit();
-
-              @Override
-              protected int remaining() {
-                return remaining;
-              }
-
-              @Override
-              protected byte[] next(int offset, int n) {
-                byte[] result = new byte[offset + n];
-                attachment.get(result, offset, n);
-                remaining -= n;
-                return result;
-              }
-            }));
-
+            if (fileTuple.additionalOptions().contains(context.symbol("binary"), FileReadFileNode.this)) {
+              seq = Seq.catenate(seq, Seq.fromByteBuffer(attachment));
+            } else {
+              seq = Seq.catenate(seq, Seq.fromCharSequence(StandardCharsets.UTF_8.decode(attachment)));
+            }
             attachment.clear();
 
             position += result;
@@ -257,13 +300,11 @@ public final class FileBuiltinModule implements BuiltinModule {
         }
       }
 
-      final AsynchronousFileChannel channel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
       final ByteBuffer buffer = ByteBuffer.allocate(FILE_READ_BUFFER_SIZE);
-      final long position = (long) fileTuple.get(2);
       final Promise promise = new Promise(interopLibrary);
 
       try {
-        channel.read(buffer, position, buffer, new CatenateCompletionHandler(channel, promise, position));
+        fileTuple.fileHandle().read(buffer, fileTuple.position(), buffer, new CatenateCompletionHandler(fileTuple.fileHandle(), promise, fileTuple.position()));
       } catch (Exception ex) {
         promise.fulfil(new YattaException(ex.getMessage(), this), this);
       }
