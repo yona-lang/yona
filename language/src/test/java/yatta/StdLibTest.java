@@ -496,4 +496,19 @@ public class StdLibTest extends CommonTest {
     assertEquals("hello", ret);
     customContext.leave();
   }
+
+  @Test
+  public void pidTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "System::pid > 0").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void getEnvTest() {
+    Context customContext = Context.newBuilder().allowAllAccess(true).environment("TEST_ENV", "TEST").build();
+    customContext.enter();
+    String ret = customContext.eval(YattaLanguage.ID, "System::get_env \"TEST_ENV\"").asString();
+    assertEquals("TEST", ret);
+    customContext.leave();
+  }
 }

@@ -18,12 +18,10 @@ import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
-import yatta.runtime.stdlib.util.YattaAssert;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;

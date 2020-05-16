@@ -14,6 +14,7 @@ import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.Context;
 import yatta.runtime.Seq;
 import yatta.runtime.Tuple;
+import yatta.runtime.Unit;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.stdlib.Builtins;
@@ -24,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @BuiltinModuleInfo(moduleName = "System")
 public final class SystemBuiltinModule implements BuiltinModule {
@@ -151,10 +153,35 @@ public final class SystemBuiltinModule implements BuiltinModule {
     }, node);
   }
 
+  @NodeInfo(shortName = "get_env")
+  abstract static class GetEnvBuiltin extends BuiltinNode {
+    @Specialization
+    public Object getEnv(Seq key, @CachedContext(YattaLanguage.class) Context context) {
+      Map<String, String> env = context.getEnv().getEnvironment();
+      String keyString = key.asJavaString(this);
+      if (env.containsKey(keyString)) {
+        return Seq.fromCharSequence(env.get(keyString));
+      } else {
+        return Unit.INSTANCE;
+      }
+    }
+  }
+
+  @NodeInfo(shortName = "pid")
+  abstract static class PidBuiltin extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public long pid() {
+      return ProcessHandle.current().pid();
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PipelineBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetEnvBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PidBuiltinFactory.getInstance()));
     return builtins;
   }
 }
