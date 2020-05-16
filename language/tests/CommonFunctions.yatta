@@ -56,7 +56,7 @@ module tests\CommonFunctions exports
     read_all_lines file = read_lines file 0
 
     read_lines file acc =
-        case File::readline file of
+        case File::read_line file of
             (:ok, _, new_file)  -> read_lines new_file (acc + 1)
             :eof                -> acc
         end

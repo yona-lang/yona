@@ -18,16 +18,16 @@ import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
+import yatta.runtime.stdlib.util.YattaAssert;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.OpenOption;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -37,14 +37,18 @@ public final class FileBuiltinModule implements BuiltinModule {
   protected static final int FILE_READ_BUFFER_SIZE = 4096;
 
   protected static final class FileTuple extends Tuple {
-    public FileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position, Seq additionalOptions) {
-      this.items = new Object[] {
-          new NativeObject(fileHandle), readBuffer, position, additionalOptions
+    public FileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position, Seq additionalOptions, Seq path) {
+      this.items = new Object[]{
+          new NativeObject(fileHandle), readBuffer, position, additionalOptions, path
       };
     }
 
     public FileTuple copy(Object readBuffer, long position) {
-      return new FileTuple(fileHandle(), readBuffer, position, additionalOptions());
+      return new FileTuple(fileHandle(), readBuffer, position, additionalOptions(), path());
+    }
+
+    public FileTuple seek(long position) {
+      return new FileTuple(fileHandle(), readBuffer(), position, additionalOptions(), path());
     }
 
     public AsynchronousFileChannel fileHandle() {
@@ -62,49 +66,34 @@ public final class FileBuiltinModule implements BuiltinModule {
     public Seq additionalOptions() {
       return (Seq) items[3];
     }
+
+    public Seq path() {
+      return (Seq) items[4];
+    }
   }
 
 
   protected static final class FileOptions {
     final Set<OpenOption> openOptions = new HashSet<>();
-    private Seq additionalOptions = Seq.EMPTY;
-
-    public Seq getAdditionalOptions() {
-      return additionalOptions;
-    }
+    Seq additionalOptions = Seq.EMPTY;
 
     public void addAdditionalOption(Object option) {
       this.additionalOptions = this.additionalOptions.insertFirst(option);
     }
   }
 
-  @NodeInfo(shortName = "open")
-  abstract static class FileOpenNode extends BuiltinNode {
-    @Specialization
-    @CompilerDirectives.TruffleBoundary
-    @SuppressWarnings("unchecked")
-    public Object open(Seq uri, yatta.runtime.Set modes, @CachedContext(YattaLanguage.class) Context context) {
-      Path path = Paths.get(uri.asJavaString(this));
-
-      Object fileOptionsObj = openOptions(modes.unwrapPromises(this));
-      if (fileOptionsObj instanceof FileOptions) {
-        return openFile(path, (FileOptions) fileOptionsObj, context);
-      } else { // Promise
-        return ((Promise) fileOptionsObj).map(fileOptions -> openFile(path, (FileOptions) fileOptions, context), this);
-      }
-    }
-
-    private Object openFile(Path path, FileOptions fileOptions, Context context) {
+  private abstract static class NewFileNode extends BuiltinNode {
+    protected Object openFile(Path path, FileOptions fileOptions, Context context) {
       try {
         AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, fileOptions.openOptions, context.ioExecutor);
 
-        return new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions);
+        return new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions, Seq.fromCharSequence(path.toString()));
       } catch (IOException e) {
         throw new YattaException(e.getMessage(), this);
       }
     }
 
-    private Object openOptions(Object modes) {
+    protected Object openOptions(Object modes) {
       if (modes instanceof Object[]) {
         return openOptionsFromArray((Object[]) modes);
       } else if (modes instanceof yatta.runtime.Set) {
@@ -168,6 +157,26 @@ public final class FileBuiltinModule implements BuiltinModule {
           throw new BadArgException("Unknown file mode: " + symbol, this);
       }
     }
+
+    protected Object openPath(Path path, yatta.runtime.Set modes, Context context) {
+      Object fileOptionsObj = openOptions(modes.unwrapPromises(this));
+      if (fileOptionsObj instanceof FileOptions) {
+        return openFile(path, (FileOptions) fileOptionsObj, context);
+      } else { // Promise
+        return ((Promise) fileOptionsObj).map(fileOptions -> openFile(path, (FileOptions) fileOptions, context), this);
+      }
+    }
+  }
+
+  @NodeInfo(shortName = "open")
+  abstract static class FileOpenNode extends NewFileNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    @SuppressWarnings("unchecked")
+    public Object open(Seq uri, yatta.runtime.Set modes, @CachedContext(YattaLanguage.class) Context context) {
+      Path path = Paths.get(uri.asJavaString(this));
+      return openPath(path, modes, context);
+    }
   }
 
   @NodeInfo(shortName = "close")
@@ -177,14 +186,62 @@ public final class FileBuiltinModule implements BuiltinModule {
     public Unit close(FileTuple fileTuple) {
       try {
         fileTuple.fileHandle().close();
+        return Unit.INSTANCE;
       } catch (IOException e) {
         throw new yatta.runtime.exceptions.IOException(e, this);
       }
-      return Unit.INSTANCE;
     }
   }
 
-  @NodeInfo(shortName = "readline")
+  @NodeInfo(shortName = "path")
+  abstract static class FilePathNode extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Seq path(FileTuple fileTuple) {
+      return fileTuple.path();
+    }
+  }
+
+  @NodeInfo(shortName = "delete")
+  abstract static class FileDeleteNode extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Unit path(FileTuple fileTuple) {
+      try {
+        Files.deleteIfExists(Paths.get(fileTuple.path().asJavaString(this)));
+        return Unit.INSTANCE;
+      } catch (IOException e) {
+        throw new yatta.runtime.exceptions.IOException(e, this);
+      }
+    }
+  }
+
+  @NodeInfo(shortName = "seek")
+  abstract static class FileSeekNode extends NewFileNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    @SuppressWarnings("unchecked")
+    public FileTuple open(FileTuple fileTuple, long position) {
+      return fileTuple.seek(position);
+    }
+  }
+
+  @NodeInfo(shortName = "make_temp")
+  abstract static class CreateTempFileNode extends NewFileNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    @SuppressWarnings("unchecked")
+    public Object open(Seq prefix, Seq suffix, yatta.runtime.Set modes, @CachedContext(YattaLanguage.class) Context context) {
+      try {
+        File tempFile = File.createTempFile(prefix.asJavaString(this), suffix.asJavaString(this));
+        return openPath(tempFile.toPath(), modes, context);
+      } catch (IOException e) {
+        throw new yatta.runtime.exceptions.IOException(e, this);
+      }
+    }
+  }
+
+  @NodeInfo(shortName = "read_line")
   abstract static class FileReadLineNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
@@ -242,7 +299,7 @@ public final class FileBuiltinModule implements BuiltinModule {
           }
         });
       } catch (Exception ex) {
-        promise.fulfil(new YattaException(ex.getMessage(), thisNode), thisNode);
+        promise.fulfil(new yatta.runtime.exceptions.IOException(ex.getMessage(), thisNode), thisNode);
       }
 
       return promise;
@@ -258,7 +315,7 @@ public final class FileBuiltinModule implements BuiltinModule {
     }
   }
 
-  @NodeInfo(shortName = "readfile")
+  @NodeInfo(shortName = "read")
   abstract static class FileReadFileNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
@@ -296,7 +353,7 @@ public final class FileBuiltinModule implements BuiltinModule {
 
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
-          promise.fulfil(new YattaException(exc.getMessage(), FileReadFileNode.this), FileReadFileNode.this);
+          promise.fulfil(new yatta.runtime.exceptions.IOException(exc.getMessage(), FileReadFileNode.this), FileReadFileNode.this);
         }
       }
 
@@ -313,12 +370,48 @@ public final class FileBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "write")
+  abstract static class FileWriteFileNode extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Promise writefile(FileTuple fileTuple, Seq data, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+      final class WriteCompletionHandler implements CompletionHandler<Integer, Promise> {
+
+        @Override
+        public void completed(Integer result, Promise attachment) {
+          attachment.fulfil(fileTuple.copy(Unit.INSTANCE, fileTuple.position() + result), FileWriteFileNode.this);
+        }
+
+        @Override
+        public void failed(Throwable exc, Promise attachment) {
+          attachment.fulfil(new yatta.runtime.exceptions.IOException(exc.getMessage(), FileWriteFileNode.this), FileWriteFileNode.this);
+        }
+      }
+
+      final Promise promise = new Promise(interopLibrary);
+
+      ByteBuffer byteBuffer = data.asByteBuffer(this);
+      try {
+        fileTuple.fileHandle().write(byteBuffer, fileTuple.position(), promise, new WriteCompletionHandler());
+      } catch (Exception ex) {
+        promise.fulfil(new YattaException(ex.getMessage(), this), this);
+      }
+
+      return promise;
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileOpenNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileCloseNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.CreateTempFileNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileDeleteNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FilePathNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileSeekNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadLineNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadFileNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileWriteFileNodeFactory.getInstance()));
     return builtins;
   }
 }

@@ -635,15 +635,20 @@ public final class Seq implements TruffleObject {
   }
 
   public String asJavaString(Node caller) {
+    CharBuffer charBuffer = asCharBuffer(caller);
+    return charBuffer.toString();
+  }
+
+  public CharBuffer asCharBuffer(Node caller) {
     long len = length();
-    if (len > Integer.MAX_VALUE / 2) {
+    if (len > Integer.MAX_VALUE / Character.BYTES) {
       throw new BadArgException("Sequence too long to be converted to Java String", caller);
     }
-    CharBuffer charBuffer = CharBuffer.allocate((int) len * 2);
+    CharBuffer charBuffer = CharBuffer.allocate((int) len * Character.BYTES);
     if (asChars(charBuffer)) {
       charBuffer.limit(charBuffer.position());
       charBuffer.position(0);
-      return charBuffer.toString();
+      return charBuffer;
     } else {
       throw new BadArgException("Unable to convert sequence to Java String", caller);
     }
@@ -661,6 +666,21 @@ public final class Seq implements TruffleObject {
       return byteBuffer.array();
     } else {
       throw new BadArgException("Unable to convert sequence to Java byte array", caller);
+    }
+  }
+
+  public ByteBuffer asByteBuffer(Node caller) {
+    long len = length();
+    if (len > Integer.MAX_VALUE) {
+      throw new BadArgException("Sequence too long to be converted to Java ByteBuffer", caller);
+    }
+    ByteBuffer byteBuffer = ByteBuffer.allocate((int) len);
+    if (asBytes(byteBuffer)) {
+      byteBuffer.limit(byteBuffer.position());
+      byteBuffer.position(0);
+      return byteBuffer;
+    } else {
+      throw new BadArgException("Unable to convert sequence to Java ByteBuffer", caller);
     }
   }
 

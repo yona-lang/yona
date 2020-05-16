@@ -1,0 +1,12 @@
+do
+    http_session = http\Client::session {}
+    (200, headers, body) = http\Client::get http_session "https://httpbin.org/get" {}
+    temp_file = File::make_temp "test_" ".yatta" {:write, :binary}
+    File::write temp_file body
+    File::close temp_file
+
+    source_file = File::open (File::path temp_file) {:read}  # can be read as :binary, but also as a text
+    {"url" = url} = File::read source_file |> JSON::parse
+    File::delete temp_file
+    url
+end

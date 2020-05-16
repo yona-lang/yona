@@ -1,6 +1,6 @@
 do
     file = File::open "tests/big.txt" {:read, :binary}
-    file_contents = File::readfile file
+    file_contents = File::read file
     File::close file
     Seq::len file_contents
 end
