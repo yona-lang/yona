@@ -14,7 +14,7 @@ SCRIPT_HOME="$(cd "$(dirname "$0")" && pwd -P)"
 GRAALVM_VERSION=$(grep "GRAALVM_VERSION" "$SCRIPT_HOME/../release" 2> /dev/null)
 if [[ "$GRAALVM_VERSION" != "" ]]; then
     LANGUAGE_PATH=""
-    LAUNCHER_PATH="$SCRIPT_HOME/../jre/languages/yatta/launcher/yatta-launcher.jar"
+    LAUNCHER_PATH="$SCRIPT_HOME/../languages/yatta/launcher/yatta-launcher.jar"
     JAVACMD="$SCRIPT_HOME/java"
     GRAALVM_VERSION=$(echo "$GRAALVM_VERSION" | awk 'BEGIN {FS="="} {print $2}')
     if [[ "$GRAALVM_VERSION" != "$EXPECTED_GRAALVM_VERSION" ]]; then

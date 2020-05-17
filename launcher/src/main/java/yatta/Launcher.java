@@ -11,7 +11,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class Launcher {
-  private Launcher() {}
+  private final static String LANGUAGE_ID = "yatta";
+
+  private Launcher() {
+  }
 
   public static void main(String[] args) throws IOException {
     Source source;
@@ -25,10 +28,10 @@ public final class Launcher {
 
     if (file == null) {
       // @formatter:off
-      source = Source.newBuilder("yatta", new InputStreamReader(System.in), "<stdin>").build();
+      source = Source.newBuilder(LANGUAGE_ID, new InputStreamReader(System.in), "<stdin>").interactive(true).build();
       // @formatter:on
     } else {
-      source = Source.newBuilder("yatta", new File(file)).build();
+      source = Source.newBuilder(LANGUAGE_ID, new File(file)).interactive(true).build();
     }
 
     System.exit(executeSource(source, options));
@@ -37,14 +40,14 @@ public final class Launcher {
   private static int executeSource(Source source, Map<String, String> options) {
     Context context;
     try {
-      context = Context.newBuilder("yatta").in(System.in).out(System.out).options(options).allowAllAccess(true).build();
+      context = Context.newBuilder(LANGUAGE_ID).in(System.in).out(System.out).options(options).allowAllAccess(true).build();
     } catch (IllegalArgumentException e) {
       System.err.println(e.getMessage());
       return 1;
     }
-    System.out.println("== running on " + context.getEngine());
 
     try {
+      context.enter();
       context.eval(source);
       return 0;
     } catch (PolyglotException ex) {
@@ -54,7 +57,7 @@ public final class Launcher {
       ex.printStackTrace();
       return ex.getExitStatus();
     } finally {
-      context.close();
+      context.leave();
     }
   }
 
