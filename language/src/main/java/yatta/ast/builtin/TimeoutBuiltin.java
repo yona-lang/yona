@@ -65,7 +65,7 @@ public abstract class TimeoutBuiltin extends BuiltinNode {
   }
 
   @Specialization
-  public Object timeout(Promise timeUnit, Object value, @CachedContext(YattaLanguage.class) Context context) {
+  public Object timeout(Promise timeUnit, Object value) {
     return timeUnit.map((maybeTimeUnit) -> {
       if (maybeTimeUnit instanceof Tuple) {
         Object millisObj = TimeUnitUtil.getMilliseconds((Tuple) maybeTimeUnit, this);

@@ -27,3 +27,4 @@ deploy:
   on:
     repo: yatta-lang/yatta
   skip_cleanup: 'true'
+  overwrite: true
