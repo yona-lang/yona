@@ -3,6 +3,7 @@ package yatta.runtime.strings;
 import com.oracle.truffle.api.CompilerDirectives;
 import yatta.runtime.Seq;
 import yatta.runtime.Symbol;
+import yatta.runtime.Unit;
 
 public final class StringUtil {
   @CompilerDirectives.TruffleBoundary

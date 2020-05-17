@@ -31,7 +31,7 @@ public abstract class ToStringBuiltin extends BuiltinNode {
 
     @Specialization
     public Promise promiseStr(Promise value) {
-        return value.map(val -> StringUtil.yattaValueAsYattaString(val), this);
+        return value.map(StringUtil::yattaValueAsYattaString, this);
     }
 
     @Fallback

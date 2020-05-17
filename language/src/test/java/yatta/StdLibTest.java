@@ -526,4 +526,52 @@ public class StdLibTest extends CommonTest {
     long ret = context.eval(YattaLanguage.ID, "File::list_dir \".\" |> Seq::len").asLong();
     assertTrue(ret > 0);
   }
+
+  @Test
+  public void byteToIntTest() {
+    long ret = context.eval(YattaLanguage.ID, "5b |> int").asLong();
+    assertEquals(5L, ret);
+  }
+
+  @Test
+  public void intToIntTest() {
+    long ret = context.eval(YattaLanguage.ID, "5 |> int").asLong();
+    assertEquals(5L, ret);
+  }
+
+  @Test
+  public void floatToIntTest() {
+    long ret = context.eval(YattaLanguage.ID, "5.0 |> int").asLong();
+    assertEquals(5L, ret);
+  }
+
+  @Test
+  public void stringToIntTest() {
+    long ret = context.eval(YattaLanguage.ID, "\"5\" |> int").asLong();
+    assertEquals(5L, ret);
+  }
+
+  @Test
+  public void byteToFloatTest() {
+    double ret = context.eval(YattaLanguage.ID, "5b |> float").asDouble();
+    assertEquals(5d, ret);
+  }
+
+  @Test
+  public void intToFloatTest() {
+    double ret = context.eval(YattaLanguage.ID, "5 |> float").asDouble();
+    assertEquals(5d, ret);
+  }
+
+  @Test
+  public void floatToFloatTest() {
+    double ret = context.eval(YattaLanguage.ID, "5.0 |> float").asDouble();
+    assertEquals(5d, ret);
+  }
+
+  @Test
+  public void stringToFloatTest() {
+    double ret = context.eval(YattaLanguage.ID, "\"5\" |> float").asDouble();
+    assertEquals(5d, ret);
+  }
 }
