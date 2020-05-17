@@ -2,6 +2,7 @@ package yatta.ast.builtin.modules;
 
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -26,6 +27,7 @@ import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -239,6 +241,24 @@ public final class FileBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "list_dir")
+  abstract static class FileListNode extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Seq path(Seq path, @CachedContext(YattaLanguage.class) Context context) {
+      try {
+        Collection<TruffleFile> files = context.getEnv().getPublicTruffleFile(path.asJavaString(this)).list();
+        Seq ret = Seq.EMPTY;
+        for (TruffleFile file : files) {
+          ret = ret.insertLast(Seq.fromCharSequence(file.getPath()));
+        }
+        return ret;
+      } catch (IOException e) {
+        throw new yatta.runtime.exceptions.IOException(e, this);
+      }
+    }
+  }
+
   @NodeInfo(shortName = "read_line")
   abstract static class FileReadLineNode extends BuiltinNode {
     @Specialization
@@ -407,6 +427,7 @@ public final class FileBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileDeleteNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FilePathNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileSeekNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileListNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadLineNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadFileNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileWriteFileNodeFactory.getInstance()));

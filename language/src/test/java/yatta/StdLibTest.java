@@ -520,4 +520,10 @@ public class StdLibTest extends CommonTest {
     assertTrue(ret);
     customContext.leave();
   }
+
+  @Test
+  public void fileListTest() {
+    long ret = context.eval(YattaLanguage.ID, "File::list_dir \".\" |> Seq::len").asLong();
+    assertTrue(ret > 0);
+  }
 }
