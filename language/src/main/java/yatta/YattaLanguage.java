@@ -17,6 +17,9 @@ import yatta.runtime.Context;
 import yatta.runtime.Function;
 import yatta.runtime.Unit;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -32,7 +35,17 @@ public class YattaLanguage extends TruffleLanguage<Context> {
 
   @Override
   protected Context createContext(Env env) {
-    return new Context(this, env);
+    String languageHome = getLanguageHome();
+    Path languageHomePath = null;
+    if (languageHome == null) {
+      if (System.getenv().containsKey("JAVA_HOME")) {
+        languageHomePath = Paths.get(System.getenv().get("JAVA_HOME"), "languages", ID, "lib-yatta");
+      }
+    } else {
+      languageHomePath = Paths.get(languageHome, "lib-yatta");
+    }
+
+    return new Context(this, env, languageHomePath);
   }
 
   @Override
@@ -46,7 +59,7 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   }
 
   @Override
-  public CallTarget parse(ParsingRequest request) throws Exception {
+  public CallTarget parse(ParsingRequest request) {
     Source source = request.getSource();
     RootCallTarget rootCallTarget = YattaParser.parseYatta(this, getCurrentContext(), source);
     return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
@@ -95,7 +108,7 @@ public class YattaLanguage extends TruffleLanguage<Context> {
           return "Function";
         }
       } else {
-        if(value == Unit.INSTANCE) {
+        if (value == Unit.INSTANCE) {
           return "()";
         } else if (value instanceof Module) {
           return ((Module) value).toString();
@@ -182,5 +195,10 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   @Override
   protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
     return true;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public static TruffleLogger getLogger(Class<?> clazz) {
+    return TruffleLogger.getLogger(ID, clazz);
   }
 }

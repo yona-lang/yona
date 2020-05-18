@@ -17,4 +17,12 @@ public abstract class CommonTest {
   public void dispose() {
     context.leave();
   }
+
+  /**
+   * This can be used in Context Builder using .option(, "<log level>")
+   */
+  @SuppressWarnings("unused")
+  private String logLevelOption(Class<?> cls) {
+    return "log." + YattaLanguage.ID + "." + cls.getName() + ".level";
+  }
 }

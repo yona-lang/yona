@@ -185,7 +185,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
 
     @CompilerDirectives.TruffleBoundary
     private Tuple responseToTuple(HttpResponse<byte[]> response) {
-      Dict headers = Dict.empty();
+      Dict headers = Dict.EMPTY;
       for (Map.Entry<String, List<String>> entry : response.headers().map().entrySet()) {
         Seq value = Seq.EMPTY;
         for (String val : entry.getValue()) {

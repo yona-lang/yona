@@ -130,6 +130,8 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     return empty(Murmur3.INSTANCE, 0L);
   }
 
+  public static Dict EMPTY = empty();
+
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
@@ -187,7 +189,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
   @CompilerDirectives.TruffleBoundary
   public Dict intersection(Dict other) {
-    return other.fold(Dict.empty(), (acc, key, val) -> {
+    return other.fold(EMPTY, (acc, key, val) -> {
       if (contains(key) && other.contains(key)) {
         return acc.add(key, val);
       } else {
@@ -198,7 +200,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
   @CompilerDirectives.TruffleBoundary
   public Dict symmetricDifference(Dict other) {
-    return union(other).fold(Dict.empty(), (acc, key, val) -> {
+    return union(other).fold(EMPTY, (acc, key, val) -> {
       if ((contains(key) && !other.contains(key)) || (!contains(key) && other.contains(key))) {
         return acc.add(key, val);
       } else {

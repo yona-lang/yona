@@ -117,7 +117,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
       if (hopefullyHttpServer instanceof HttpServer) {
         HttpServer httpServer = (HttpServer) server.getValue();
         HttpContext httpContext = httpServer.createContext(path.asJavaString(this), (httpExchange) -> {
-          Dict exchangeParams = Dict.empty()
+          Dict exchangeParams = Dict.EMPTY
               .add("local_address", Seq.fromCharSequence(httpExchange.getLocalAddress().toString()))
               .add("protocol", Seq.fromCharSequence(httpExchange.getProtocol()))
               .add("remote_address", Seq.fromCharSequence(httpExchange.getRemoteAddress().toString()))
@@ -211,7 +211,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
 
     @CompilerDirectives.TruffleBoundary
     private Dict headersToDict(Headers headers) {
-      Dict headersDict = Dict.empty();
+      Dict headersDict = Dict.EMPTY;
       for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
         Seq value = Seq.EMPTY;
         for (String val : entry.getValue()) {

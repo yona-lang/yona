@@ -55,10 +55,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l, 3l)), false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, 2l), new PromiseHolder(Dict.empty()), false, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, 2l), new PromiseHolder(Dict.empty().add(1l, 2l)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, 2l)), new PromiseHolder(Dict.empty()), false, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, 2l)), new PromiseHolder(Dict.empty().add(1l, 2l)), true, Boolean.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, 2l), new PromiseHolder(Dict.EMPTY), false, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, 2l), new PromiseHolder(Dict.EMPTY.add(1l, 2l)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, 2l)), new PromiseHolder(Dict.EMPTY), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, 2l)), new PromiseHolder(Dict.EMPTY.add(1l, 2l)), true, Boolean.class)
     );
   }
 
@@ -97,12 +97,12 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l, 3l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), Dict.empty().add(1l, true).add(2l, true).add(3l, true), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), Dict.empty().add(1l, true).add(2l, true), false, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), false, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), false, Boolean.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), Dict.EMPTY.add(1l, true).add(2l, true), false, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), false, Boolean.class)
     );
   }
 
@@ -127,12 +127,12 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l, 3l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), false, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true), Dict.empty().add(1l, true).add(2l, true), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), Dict.empty().add(1l, true).add(2l, true), false, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), false, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), false, Boolean.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true), Dict.EMPTY.add(1l, true).add(2l, true), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), Dict.EMPTY.add(1l, true).add(2l, true), false, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), false, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), false, Boolean.class)
     );
   }
 
@@ -177,12 +177,12 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l, 3l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), Dict.empty().add(1l, true).add(2l, true).add(3l, true), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), Dict.empty().add(1l, true).add(2l, true), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), Dict.EMPTY.add(1l, true).add(2l, true), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class)
     );
   }
 
@@ -213,12 +213,12 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l, 3l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(1l, 2l)), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true), Dict.empty().add(1l, true).add(2l, true), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), Dict.empty().add(1l, true).add(2l, true), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), true, Boolean.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true), Dict.EMPTY.add(1l, true).add(2l, true), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), Dict.EMPTY.add(1l, true).add(2l, true), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true).add(3l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), true, Boolean.class)
     );
   }
 
@@ -240,10 +240,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), 2l, "{1, 2}", String.class),
         new BinaryArgsHolder(Set.set(1l), new PromiseHolder(2l), "{1, 2}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), new PromiseHolder(2l), "{1, 2}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true)), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true)), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true)), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class)
         );
   }
 
@@ -265,10 +265,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), 2l, "{1}", String.class),
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(2l), "{1}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(2l), "{1}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), 2l, "{1 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), 2l, "{1 = true}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(1l, true).add(2l, true), new PromiseHolder(2l), "{1 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(1l, true).add(2l, true)), new PromiseHolder(2l), "{1 = true}", String.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), 2l, "{1 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), 2l, "{1 = true}", String.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true).add(2l, true), new PromiseHolder(2l), "{1 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true).add(2l, true)), new PromiseHolder(2l), "{1 = true}", String.class)
         );
   }
 
@@ -451,10 +451,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Set.set(2l, 4l)), Set.set(2l), "{2}", String.class),
         new BinaryArgsHolder(Set.set(2l, 4l), new PromiseHolder(Set.set(2l)), "{2}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(2l, 4l)), new PromiseHolder(Set.set(2l)), "{2}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), Dict.empty().add(2l, true).add(3l, false), "{3 = false}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), Dict.empty().add(2l, true).add(3l, false), "{3 = false}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{3 = false}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{3 = false}", String.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(4l, true).add(3l, true), Dict.EMPTY.add(2l, true).add(3l, false), "{3 = false}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(4l, true).add(3l, true)), Dict.EMPTY.add(2l, true).add(3l, false), "{3 = false}", String.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(4l, true).add(3l, true), new PromiseHolder(Dict.EMPTY.add(2l, true).add(3l, false)), "{3 = false}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(4l, true).add(3l, true)), new PromiseHolder(Dict.EMPTY.add(2l, true).add(3l, false)), "{3 = false}", String.class)
     );
   }
 
@@ -475,10 +475,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Set.set(4l)), Set.set(2l), "{2, 4}", String.class),
         new BinaryArgsHolder(Set.set(4l), new PromiseHolder(Set.set(2l)), "{2, 4}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(4l)), new PromiseHolder(Set.set(2l)), "{2, 4}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 3 = false, 4 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 3 = false, 4 = true}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 3 = false, 4 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 3 = false, 4 = true}", String.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(4l, true).add(3l, true), Dict.EMPTY.add(2l, true).add(3l, false), "{2 = true, 3 = false, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(4l, true).add(3l, true)), Dict.EMPTY.add(2l, true).add(3l, false), "{2 = true, 3 = false, 4 = true}", String.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(4l, true).add(3l, true), new PromiseHolder(Dict.EMPTY.add(2l, true).add(3l, false)), "{2 = true, 3 = false, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(4l, true).add(3l, true)), new PromiseHolder(Dict.EMPTY.add(2l, true).add(3l, false)), "{2 = true, 3 = false, 4 = true}", String.class)
 
     );
   }
@@ -500,10 +500,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), Set.set(2l, 3l), "{1, 3}", String.class),
         new BinaryArgsHolder(Set.set(1l, 2l), new PromiseHolder(Set.set(2l, 3l)), "{1, 3}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l, 2l)), new PromiseHolder(Set.set(2l, 3l)), "{1, 3}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 4 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), Dict.empty().add(2l, true).add(3l, false), "{2 = true, 4 = true}", String.class),
-        new BinaryArgsHolder(Dict.empty().add(4l, true).add(3l, true), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 4 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.empty().add(4l, true).add(3l, true)), new PromiseHolder(Dict.empty().add(2l, true).add(3l, false)), "{2 = true, 4 = true}", String.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(4l, true).add(3l, true), Dict.EMPTY.add(2l, true).add(3l, false), "{2 = true, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(4l, true).add(3l, true)), Dict.EMPTY.add(2l, true).add(3l, false), "{2 = true, 4 = true}", String.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(4l, true).add(3l, true), new PromiseHolder(Dict.EMPTY.add(2l, true).add(3l, false)), "{2 = true, 4 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(4l, true).add(3l, true)), new PromiseHolder(Dict.EMPTY.add(2l, true).add(3l, false)), "{2 = true, 4 = true}", String.class)
     );
   }
 
@@ -595,14 +595,14 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Set.set(1l, 2l)), true, boolean.class),
 
         // Set
-        new BinaryArgsHolder(3l, Dict.empty().add(1l, 2l), false, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(3l), Dict.empty().add(1l, 2l), false, boolean.class),
-        new BinaryArgsHolder(3l, new PromiseHolder(Dict.empty().add(1l, 2l)), false, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(Dict.empty().add(1l, 2l)), false, boolean.class),
-        new BinaryArgsHolder(1l, Dict.empty().add(1l, 2l), true, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(1l), Dict.empty().add(1l, 2l), true, boolean.class),
-        new BinaryArgsHolder(1l, new PromiseHolder(Dict.empty().add(1l, 2l)), true, boolean.class),
-        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Dict.empty().add(1l, 2l)), true, boolean.class)
+        new BinaryArgsHolder(3l, Dict.EMPTY.add(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), Dict.EMPTY.add(1l, 2l), false, boolean.class),
+        new BinaryArgsHolder(3l, new PromiseHolder(Dict.EMPTY.add(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(3l), new PromiseHolder(Dict.EMPTY.add(1l, 2l)), false, boolean.class),
+        new BinaryArgsHolder(1l, Dict.EMPTY.add(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), Dict.EMPTY.add(1l, 2l), true, boolean.class),
+        new BinaryArgsHolder(1l, new PromiseHolder(Dict.EMPTY.add(1l, 2l)), true, boolean.class),
+        new BinaryArgsHolder(new PromiseHolder(1l), new PromiseHolder(Dict.EMPTY.add(1l, 2l)), true, boolean.class)
     );
   }
 

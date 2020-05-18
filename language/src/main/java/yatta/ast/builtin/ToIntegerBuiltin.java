@@ -1,5 +1,6 @@
 package yatta.ast.builtin;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.runtime.Seq;
@@ -23,6 +24,7 @@ public abstract class ToIntegerBuiltin extends BuiltinNode {
   }
 
   @Specialization
+  @CompilerDirectives.TruffleBoundary
   public long stringVal(Seq value) {
     try {
       return Long.parseLong(value.asJavaString(this));

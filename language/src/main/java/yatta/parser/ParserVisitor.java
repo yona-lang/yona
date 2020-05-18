@@ -477,7 +477,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     Map<String, List<PatternMatchable>> functionPatterns = new HashMap<>();
     Map<String, Integer> functionCardinality = new HashMap<>();
     Map<String, SourceSection> functionSourceSections = new HashMap<>();
-    Dict records = Dict.empty();
+    Dict records = Dict.EMPTY;
 
     String lastFunctionName = null;
 

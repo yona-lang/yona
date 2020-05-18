@@ -16,8 +16,6 @@ import yatta.runtime.stdlib.ExportedFunction;
 
 @BuiltinModuleInfo(moduleName = "Dict")
 public final class DictBuiltinModule implements BuiltinModule {
-  private static final Dict DEFAULT_EMPTY = Dict.empty();
-
   @NodeInfo(shortName = "fold")
   abstract static class FoldBuiltin extends BuiltinNode {
     @Specialization
@@ -44,14 +42,6 @@ public final class DictBuiltinModule implements BuiltinModule {
     }
   }
 
-  @NodeInfo(shortName = "empty")
-  abstract static class EmptyBuiltin extends BuiltinNode {
-    @Specialization
-    public Object empty() {
-      return DEFAULT_EMPTY;
-    }
-  }
-
   @NodeInfo(shortName = "len")
   abstract static class LengthBuiltin extends BuiltinNode {
     @Specialization
@@ -72,7 +62,6 @@ public final class DictBuiltinModule implements BuiltinModule {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
     return builtins;

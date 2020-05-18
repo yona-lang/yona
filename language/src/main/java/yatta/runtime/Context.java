@@ -29,7 +29,6 @@ import yatta.runtime.annotations.ExceptionSymbol;
 import yatta.runtime.stdlib.BuiltinModules;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
-import yatta.runtime.stdlib.StdLibFunction;
 import yatta.runtime.threading.Threading;
 
 import java.io.BufferedReader;
@@ -52,9 +51,8 @@ public class Context {
   private static final SourceSection BUILTIN_SOURCE_SECTION = BUILTIN_SOURCE.createUnavailableSection();
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").build();
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
-  private static final String STDLIB_FOLDER = "lib-yatta";
-  private static final int STDLIB_PREFIX_LENGTH = STDLIB_FOLDER.length() + 1;  // "lib-yatta".length() + 1
-  private static final int LANGUAGE_ID_SUFFIX_LENGTH = YattaLanguage.ID.length() + 1;  // ".yatta".length()
+  private static final TruffleLogger LOGGER = YattaLanguage.getLogger(Context.class);
+  public static final String YATTA_PATH = "YATTA_PATH";
 
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
@@ -70,8 +68,9 @@ public class Context {
   public Dict globals = Dict.empty(Murmur3.INSTANCE, 0L);
   public final FrameDescriptor globalFrameDescriptor;
   public final MaterializedFrame globalFrame;
+  private final Path languageHome;
 
-  public Context(YattaLanguage language, TruffleLanguage.Env env) {
+  public Context(final YattaLanguage language, final TruffleLanguage.Env env, final Path languageHome) {
     this.env = env;
     this.input = new BufferedReader(new InputStreamReader(env.in()));
     this.output = new PrintWriter(env.out(), true);
@@ -82,19 +81,29 @@ public class Context {
     this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yatta-io")));
     this.threading = new Threading(env);
     this.globalFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
-    this.globalFrame = this.initGlobalFrame(language);
+    this.globalFrame = this.initGlobalFrame();
+    this.languageHome = languageHome;
+    LOGGER.config("Yatta language home: " + languageHome);
   }
 
-  public void initialize() {
+  public void initialize() throws Exception {
+    LOGGER.config("Yatta Context initializing");
+
+    if (languageHome == null) {
+      throw new IOException("Unable to locate language home. Please set up JAVA_HOME environment variable to point to the GraalVM root folder.");
+    }
+
+    LOGGER.fine("Initializing threading");
     threading.initialize();
 
     installBuiltins();
     installBuiltinModules();
     registerBuiltins();
     installGlobals();
+    LOGGER.config("Yatta Context initialized");
   }
 
-  private MaterializedFrame initGlobalFrame(YattaLanguage lang) {
+  private MaterializedFrame initGlobalFrame() {
     VirtualFrame frame = Truffle.getRuntime().createVirtualFrame(null, this.globalFrameDescriptor);
     return frame.materialize();
   }
@@ -149,7 +158,7 @@ public class Context {
       functions.add(new Function(fqn, name, Truffle.getRuntime().createCallTarget(rootNode), argumentsCount, stdLibFunction.unwrapArgumentPromises()));
     });
 
-    YattaModule module = new YattaModule(fqn, exports, functions, Dict.empty());
+    YattaModule module = new YattaModule(fqn, exports, functions, Dict.EMPTY);
     insertGlobal(fqn, module);
   }
 
@@ -187,32 +196,44 @@ public class Context {
     });
   }
 
+  private String[] getYattaPath() {
+    if (env.getEnvironment().containsKey(YATTA_PATH)) {
+      return env.getEnvironment().get(YATTA_PATH).split(env.getPathSeparator());
+    } else {
+      return new String[]{};
+    }
+  }
+
   private void installGlobals() {
     builtinModules.builtins.forEach(this::installBuiltinsGlobals);
 
+    LOGGER.config("Installing globals from: " + languageHome);
     try {
-      env.getPublicTruffleFile(STDLIB_FOLDER).visit(new FileVisitor<TruffleFile>() {
+      env.getInternalTruffleFile(languageHome.toUri()).visit(new FileVisitor<>() {
         @Override
-        public FileVisitResult preVisitDirectory(TruffleFile dir, BasicFileAttributes attrs) throws IOException {
+        public FileVisitResult preVisitDirectory(TruffleFile dir, BasicFileAttributes attrs) {
           return FileVisitResult.CONTINUE;
         }
 
         @Override
-        public FileVisitResult visitFile(TruffleFile file, BasicFileAttributes attrs) throws IOException {
-          String relativePath = file.toRelativeUri().toString();
-          String moduleFQN = relativePath.substring(STDLIB_PREFIX_LENGTH, relativePath.length() - LANGUAGE_ID_SUFFIX_LENGTH).replaceAll("/", "\\\\");
-          YattaModule module = loadStdModule(file, moduleFQN);
-          insertGlobal(moduleFQN, module);
+        public FileVisitResult visitFile(TruffleFile file, BasicFileAttributes attrs) {
+          String relativizedPath = languageHome.toUri().relativize(file.toUri()).getPath();
+          if (relativizedPath.endsWith("." + YattaLanguage.ID)) {
+            String moduleFQN = relativizedPath.substring(0, relativizedPath.lastIndexOf(".")).replaceAll("/", "\\\\");
+            LOGGER.config("Loading stdlib module: " + moduleFQN);
+            YattaModule module = loadStdModule(file, moduleFQN);
+            insertGlobal(moduleFQN, module);
+          }
           return FileVisitResult.CONTINUE;
         }
 
         @Override
-        public FileVisitResult visitFileFailed(TruffleFile file, IOException exc) throws IOException {
+        public FileVisitResult visitFileFailed(TruffleFile file, IOException exc) {
           return FileVisitResult.CONTINUE;
         }
 
         @Override
-        public FileVisitResult postVisitDirectory(TruffleFile dir, IOException exc) throws IOException {
+        public FileVisitResult postVisitDirectory(TruffleFile dir, IOException exc) {
           return FileVisitResult.CONTINUE;
         }
       }, 10);
@@ -360,7 +381,8 @@ public class Context {
         Function javaFunction = JavaMethodRootNode.buildFunction(language, method, globalFrameDescriptor, null);
         functions.add(javaFunction);
       }
-      YattaModule module = new YattaModule(FQN, exports, functions, Dict.empty());
+
+      YattaModule module = new YattaModule(FQN, exports, functions, Dict.EMPTY);
       moduleCache = this.moduleCache.add(FQN, module);
       return module;
     } catch (ClassNotFoundException classNotFoundException) {
@@ -381,30 +403,6 @@ public class Context {
     } else {
       return moduleName;
     }
-  }
-
-  /*
-   * Methods for language interoperability.
-   */
-  public static Object fromForeignValue(Object a) {
-    if (a instanceof Long || a instanceof String || a instanceof Boolean) {
-      return a;
-    } else if (a instanceof Character) {
-      return String.valueOf(a);
-    } else if (a instanceof Number) {
-      return fromForeignNumber(a);
-    } else if (a instanceof TruffleObject) {
-      return a;
-    } else if (a instanceof Context) {
-      return a;
-    }
-    CompilerDirectives.transferToInterpreterAndInvalidate();
-    throw new IllegalStateException(a + " is not a Truffle value");
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  private static long fromForeignNumber(Object a) {
-    return ((Number) a).longValue();
   }
 
   public TruffleObject getPolyglotBindings() {
@@ -449,7 +447,9 @@ public class Context {
 
   @CompilerDirectives.TruffleBoundary
   public void dispose() {
+    LOGGER.fine("Threading shutting down");
     threading.dispose();
     assert ioExecutor.shutdownNow().isEmpty();
+    LOGGER.fine("Threading shut down");
   }
 }

@@ -103,34 +103,34 @@ public class DictTest {
 
   @Test
   public void testInsertSameKey() {
-    Dict dict = Dict.empty().add(1, true).add(1, false);
+    Dict dict = Dict.EMPTY.add(1, true).add(1, false);
     assertEquals(dict.lookup(1), false);
   }
 
   @Test
   public void testUnion() {
-    Dict dict1 = Dict.empty().add(1, 2);
-    Dict dict2 = Dict.empty().add(1, 3);
+    Dict dict1 = Dict.EMPTY.add(1, 2);
+    Dict dict2 = Dict.EMPTY.add(1, 3);
     assertEquals(3, dict1.union(dict2).lookup(1));
   }
 
   @Test
   public void testUnwrapPromises() {
     Promise eight = new Promise();
-    Dict dict1 = Dict.empty().add(1, 2).add(3, new Promise(4)).add(new Promise(5), 6).add(new Promise(7), eight);
+    Dict dict1 = Dict.EMPTY.add(1, 2).add(3, new Promise(4)).add(new Promise(5), 6).add(new Promise(7), eight);
     Object dict2 = dict1.unwrapPromises(null);
     assertTrue(dict2 instanceof Promise);
     eight.fulfil(8, null);
     assertTrue(((Promise) dict2).isFulfilled());
-    assertEquals(Dict.empty().add(1, 2).add(3, 4).add(5, 6).add(7, 8), ((Promise) dict2).unwrap());
+    assertEquals(Dict.EMPTY.add(1, 2).add(3, 4).add(5, 6).add(7, 8), ((Promise) dict2).unwrap());
   }
 
   @Test
   public void testUnwrapPromisesTwo() {
-    Dict dict1 = Dict.empty().add(1, 2).add(3, new Promise(4)).add(new Promise(5), 6).add(new Promise(7), new Promise(8));
+    Dict dict1 = Dict.EMPTY.add(1, 2).add(3, new Promise(4)).add(new Promise(5), 6).add(new Promise(7), new Promise(8));
     Object dict2 = dict1.unwrapPromises(null);
     assertTrue(dict2 instanceof Dict);
-    assertEquals(Dict.empty().add(1, 2).add(3, 4).add(5, 6).add(7, 8), dict2);
+    assertEquals(Dict.EMPTY.add(1, 2).add(3, 4).add(5, 6).add(7, 8), dict2);
   }
 
   private static final class K {

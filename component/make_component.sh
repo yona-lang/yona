@@ -17,9 +17,11 @@ cp ../launcher/target/yatta-launcher.jar "$LANGUAGE_PATH/launcher/"
 
 mkdir -p "$LANGUAGE_PATH/bin"
 cp ../yatta $LANGUAGE_PATH/bin/
-if [[ $INCLUDE_YATTANATIVE = "TRUE" ]]; then
+if [[ $INCLUDE_YATTANATIVE -eq "TRUE" ]]; then
     cp ../native/yattanative $LANGUAGE_PATH/bin/
 fi
+
+cp -R ../language/lib-yatta "$LANGUAGE_PATH"
 
 touch "$LANGUAGE_PATH/native-image.properties"
 
@@ -37,7 +39,7 @@ cd $COMPONENT_DIR || exit 1
 jar cfm ../yatta-component.jar META-INF/MANIFEST.MF .
 
 echo "bin/yatta = ../languages/yatta/bin/yatta" > META-INF/symlinks
-if [[ $INCLUDE_YATTANATIVE = "TRUE" ]]; then
+if [[ $INCLUDE_YATTANATIVE -eq "TRUE" ]]; then
     echo "bin/yattanative = ../languages/yatta/bin/yattanative" >> META-INF/symlinks
 fi
 jar uf ../yatta-component.jar META-INF/symlinks

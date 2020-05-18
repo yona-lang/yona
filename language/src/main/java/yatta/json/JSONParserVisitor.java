@@ -8,7 +8,7 @@ import yatta.runtime.Unit;
 public class JSONParserVisitor extends JSONBaseVisitor<Object> {
   @Override
   public Dict visitObj(JSONParser.ObjContext ctx) {
-    Dict dict = Dict.empty();
+    Dict dict = Dict.EMPTY;
     for (JSONParser.PairContext pairContext : ctx.pair()) {
       Object[] pair = visitPair(pairContext);
       dict = dict.add(pair[0], pair[1]);

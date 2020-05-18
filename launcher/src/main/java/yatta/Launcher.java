@@ -64,10 +64,15 @@ public final class Launcher {
   private static String prettyPrintException(String message, org.graalvm.polyglot.SourceSection sourceLocation) {
     StringBuilder sb = new StringBuilder();
     sb.append(message);
-    sb.append(" at ");
-    sb.append(sourceLocation.getSource().getName());
-    sb.append(":\n");
-    sb.append(sourceLocation.getCharacters());
+    if (sourceLocation != null) {
+      if (sourceLocation.getSource() != null) {
+        sb.append(" at ");
+        sb.append(sourceLocation.getSource().getName());
+        sb.append(":");
+      }
+      sb.append("\n");
+      sb.append(sourceLocation.getCharacters());
+    }
     return sb.toString();
   }
 

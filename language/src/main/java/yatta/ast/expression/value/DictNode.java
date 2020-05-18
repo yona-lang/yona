@@ -85,7 +85,7 @@ public final class DictNode extends ExpressionNode {
   }
 
   private Dict execute(VirtualFrame frame) {
-    Dict dictionary = Dict.empty(Murmur3.INSTANCE, 0L);
+    Dict dictionary = Dict.EMPTY;
 
     for (EntryNode entryNode : items) {
       Object[] executedEntry = (Object[]) entryNode.executeGeneric(frame);
