@@ -36,12 +36,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
-import java.nio.file.FileVisitResult;
-import java.nio.file.FileVisitor;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -196,14 +194,6 @@ public class Context {
     });
   }
 
-  private String[] getYattaPath() {
-    if (env.getEnvironment().containsKey(YATTA_PATH)) {
-      return env.getEnvironment().get(YATTA_PATH).split(env.getPathSeparator());
-    } else {
-      return new String[]{};
-    }
-  }
-
   private void installGlobals() {
     builtinModules.builtins.forEach(this::installBuiltinsGlobals);
 
@@ -221,8 +211,12 @@ public class Context {
           if (relativizedPath.endsWith("." + YattaLanguage.ID)) {
             String moduleFQN = relativizedPath.substring(0, relativizedPath.lastIndexOf(".")).replaceAll("/", "\\\\");
             LOGGER.config("Loading stdlib module: " + moduleFQN);
-            YattaModule module = loadStdModule(file, moduleFQN);
-            insertGlobal(moduleFQN, module);
+            try {
+              YattaModule module = loadStdModule(file, moduleFQN);
+              insertGlobal(moduleFQN, module);
+            } catch (IOException e) {
+              LOGGER.config(e.getMessage());
+            }
           }
           return FileVisitResult.CONTINUE;
         }
@@ -316,14 +310,44 @@ public class Context {
   }
 
   @CompilerDirectives.TruffleBoundary
-  private YattaModule loadModule(String[] packageParts, String moduleName, String FQN, Node node) {
-    Path path = pathForModule(packageParts, moduleName);
-    return loadModule(env.getPublicTruffleFile(path.toUri()), FQN, node, true);
+  private String[] getYattaPath() {
+    if (env.getEnvironment().containsKey(YATTA_PATH)) {
+      return env.getEnvironment().get(YATTA_PATH).split(env.getPathSeparator());
+    } else {
+      return new String[]{env.getCurrentWorkingDirectory().toString()};
+    }
   }
 
   @CompilerDirectives.TruffleBoundary
-  private YattaModule loadStdModule(TruffleFile file, String FQN) {
-    return loadModule(file, FQN, null, false);
+  private YattaModule loadModule(String[] packageParts, String moduleName, String FQN, Node node) {
+    YattaModule javaModule = loadJavaModule(FQN);
+    if (javaModule != null) {
+      return javaModule;
+    } else {
+      Path path = pathForModule(packageParts, moduleName);
+      String[] yattaPaths = getYattaPath();
+      for (String yattaPath : yattaPaths) {
+        Path fullPath = Paths.get(yattaPath, path.toString());
+        if (Files.exists(fullPath)) {
+          YattaModule module = loadModule(env.getPublicTruffleFile(fullPath.toUri()), FQN, node, true);
+          if (module != null) {
+            return module;
+          }
+        }
+      }
+      CompilerDirectives.transferToInterpreterAndInvalidate();
+      throw new YattaException("Module " + FQN + " not found in YATTA_PATH: " + Arrays.toString(yattaPaths), node);
+    }
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  private YattaModule loadStdModule(TruffleFile file, String FQN) throws IOException {
+    YattaModule module = loadModule(file, FQN, null, false);
+    if (module != null) {
+      return module;
+    } else {
+      throw new IOException("StdLib Module " + FQN + " not found: ");
+    }
   }
 
   @CompilerDirectives.TruffleBoundary
@@ -358,13 +382,7 @@ public class Context {
 
       return module;
     } catch (IOException e) {
-      YattaModule module = loadJavaModule(FQN);
-      if (module != null) {
-        return module;
-      } else {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        throw new YattaException("Unable to load Module " + FQN + " due to: " + e.getMessage(), e, node);
-      }
+      return null;
     }
   }
 
@@ -429,7 +447,7 @@ public class Context {
 
   public void insertGlobal(String fqn, YattaModule module) {
     Object existingObject = globals.lookup(fqn);
-    if (Unit.INSTANCE.equals(existingObject)) {
+    if (Unit.INSTANCE == existingObject) {
       globals = globals.add(fqn, module);
     } else {
       YattaModule existingModule = (YattaModule) existingObject;
