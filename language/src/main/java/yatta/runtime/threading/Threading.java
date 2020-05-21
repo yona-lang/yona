@@ -8,9 +8,9 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import yatta.runtime.Function;
+import yatta.runtime.async.Promise;
 import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.exceptions.UndefinedNameException;
-import yatta.runtime.async.Promise;
 
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.locks.Condition;
@@ -82,13 +82,13 @@ public final class Threading {
             if (yields != CONSUME_YIELD_MAX_ATTEMPTS) {
               Thread.yield();
               yields++;
-              continue ;
+              continue;
             }
             yields = 0;
             if (parks != CONSUME_PARK_MAX_ATTEMPTS) {
               LockSupport.parkNanos(1L);
               parks++;
-              continue ;
+              continue;
             }
             parks = 0;
             lock.lock();

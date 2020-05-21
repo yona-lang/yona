@@ -57,7 +57,11 @@ public final class Launcher {
       ex.printStackTrace();
       return ex.getExitStatus();
     } finally {
-      context.leave();
+      try {
+        context.eval(Source.newBuilder("yatta", "shutdown", "shutdown").internal(true).build());
+      } catch (IOException e) {
+      }
+      context.close();
     }
   }
 

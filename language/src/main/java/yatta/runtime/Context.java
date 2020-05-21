@@ -38,17 +38,21 @@ import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 public class Context {
-  public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").build();
+  public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").internal(true).build();
   private static final SourceSection BUILTIN_SOURCE_SECTION = BUILTIN_SOURCE.createUnavailableSection();
-  public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").build();
+  public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
+  public static final Source SHUTDOWN_SOURCE = Source.newBuilder(YattaLanguage.ID, "shutdown", "shutdown").internal(true).build();
   private static final TruffleLogger LOGGER = YattaLanguage.getLogger(Context.class);
   public static final String YATTA_PATH = "YATTA_PATH";
 
@@ -466,7 +470,16 @@ public class Context {
   public void dispose() {
     LOGGER.fine("Threading shutting down");
     threading.dispose();
+    ioExecutor.shutdown();
     assert ioExecutor.shutdownNow().isEmpty();
+    assert ioExecutor.isShutdown();
+    while (!ioExecutor.isTerminated()) {
+      try {
+        Thread.sleep(1);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
     LOGGER.fine("Threading shut down");
   }
 }

@@ -6,6 +6,6 @@ fi
 "$JAVA_HOME"/bin/native-image \
     --enable-http --enable-https --enable-all-security-services \
     --macro:truffle --no-fallback --initialize-at-build-time \
-    -cp ../language/target/yatta.jar:../launcher/target/launcher-0.1-SNAPSHOT.jar \
+    -cp ../language/target/yatta.jar:../launcher/target/launcher-0.1-SNAPSHOT.jar:$JAVA_HOME/lib/src.zip \
     yatta.Launcher \
     yattanative

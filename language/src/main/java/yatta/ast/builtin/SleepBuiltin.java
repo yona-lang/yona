@@ -37,10 +37,10 @@ public abstract class SleepBuiltin extends BuiltinNode {
     context.ioExecutor.submit(() -> {
       try {
         Thread.sleep(millisObj);
+        promise.fulfil(Unit.INSTANCE, this);
       } catch (InterruptedException interrupt) {
-        promise.fulfil(interrupt, this);
+        promise.fulfil(new yatta.runtime.exceptions.InterruptedException(interrupt, this), this);
       }
-      promise.fulfil(Unit.INSTANCE, this);
     });
   }
 }

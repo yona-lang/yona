@@ -22,13 +22,7 @@ public abstract class TimeoutBuiltin extends BuiltinNode {
     if (millisObj instanceof Long) {
       return timeoutForMillis((long) millisObj, promise, context);
     } else { // Promise
-      return ((Promise) millisObj).map((millis) -> {
-        try {
-          return timeoutForMillis((long) millis, promise, context);
-        } catch (BadArgException e) {
-          return e;
-        }
-      }, this);
+      return ((Promise) millisObj).map((millis) -> timeoutForMillis((long) millis, promise, context), this);
     }
   }
 
@@ -44,22 +38,12 @@ public abstract class TimeoutBuiltin extends BuiltinNode {
       if (maybeTimeUnit instanceof Tuple) {
         Object millisObj = TimeUnitUtil.getMilliseconds((Tuple) maybeTimeUnit, this);
         if (millisObj instanceof Long) {
-          try {
-            return timeoutForMillis((long) millisObj, value, context);
-          } catch (BadArgException e) {
-            return e;
-          }
+          return timeoutForMillis((long) millisObj, value, context);
         } else { // Promise
-          return ((Promise) millisObj).map((millis) -> {
-            try {
-              return timeoutForMillis((long) millis, value, context);
-            } catch (BadArgException e) {
-              return e;
-            }
-          }, this);
+          return ((Promise) millisObj).map((millis) -> timeoutForMillis((long) millis, value, context), this);
         }
       } else {
-        return new BadArgException("first argument of timeout must of a type tuple, for example (:seconds, 10)", this);
+        throw new BadArgException("first argument of timeout must of a type tuple, for example (:seconds, 10)", this);
       }
     }, this);
   }
@@ -70,16 +54,12 @@ public abstract class TimeoutBuiltin extends BuiltinNode {
       if (maybeTimeUnit instanceof Tuple) {
         Object millisObj = TimeUnitUtil.getMilliseconds((Tuple) maybeTimeUnit, this);
         if (millisObj instanceof Long) {
-          try {
-            return value;
-          } catch (BadArgException e) {
-            return e;
-          }
+          return value;
         } else { // Promise
           return ((Promise) millisObj).map((millis) -> value, this);
         }
       } else {
-        return new BadArgException("first argument of timeout must of a type tuple, for example (:seconds, 10)", this);
+        throw new BadArgException("first argument of timeout must of a type tuple, for example (:seconds, 10)", this);
       }
     }, this);
   }
@@ -90,7 +70,8 @@ public abstract class TimeoutBuiltin extends BuiltinNode {
     }
 
     final Promise result = new Promise();
-    Thread daemon = new Thread(() -> {
+
+    context.ioExecutor.submit(() -> {
       try {
         if (Promise.timeout(promise, millis)) {
           result.fulfil(promise.unwrapWithError(), this);
@@ -98,12 +79,9 @@ public abstract class TimeoutBuiltin extends BuiltinNode {
           result.fulfil(new TimeoutException(this), this);
         }
       } catch (InterruptedException interrupt) {
-        result.fulfil(interrupt, this);
+        result.fulfil(new yatta.runtime.exceptions.InterruptedException(interrupt, this), this);
       }
     });
-
-    daemon.setDaemon(true);
-    context.ioExecutor.submit(daemon);
 
     return result;
   }
