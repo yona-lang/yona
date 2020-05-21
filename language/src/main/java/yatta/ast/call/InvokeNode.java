@@ -51,6 +51,7 @@ public final class InvokeNode extends ExpressionNode {
   private YattaLanguage language;
 
   public InvokeNode(YattaLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
+    assert functionNode != null;
     this.functionNode = functionNode;
     this.function = null;
     this.argumentNodes = argumentNodes;
@@ -60,6 +61,7 @@ public final class InvokeNode extends ExpressionNode {
   }
 
   public InvokeNode(YattaLanguage language, Function function, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
+    assert function != null;
     this.functionNode = null;
     this.function = function;
     this.argumentNodes = argumentNodes;

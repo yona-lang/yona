@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 VERSION="0.1"
-EXPECTED_GRAALVM_VERSION='"20.0.0"'
-TRUFFLE_VERSION="20.0.0"
+EXPECTED_GRAALVM_VERSION='"20.1.0"'
+TRUFFLE_VERSION="20.1.0"
 
 MAIN_CLASS="yatta.Launcher"
 SCRIPT_HOME="$(cd "$(dirname "$0")" && pwd -P)"
@@ -101,6 +101,6 @@ else
     fi
     GRAAL_SDK_PATH="$HOME/.m2/repository/org/graalvm/graal-sdk/sdk/$TRUFFLE_VERSION/graal-sdk-$TRUFFLE_VERSION.jar"
     TRUFFLE_API_PATH="$HOME/.m2/repository/org/graalvm/truffle/truffle-api/$TRUFFLE_VERSION/truffle-api-$TRUFFLE_VERSION.jar"
-    ANTLR_PATH="$HOME/.m2/repository/org/antlr/antlr4-runtime/4.8-1/antlr4-runtime-4.8-1.jar"
+    ANTLR_PATH="$HOME/.m2/repository/org/antlr/antlr4-runtime/4.7.2/antlr4-runtime-4.7.2.jar"
     "$JAVACMD" -cp "$GRAAL_SDK_PATH":"$LAUNCHER_PATH":"$LANGUAGE_PATH":"$TRUFFLE_API_PATH":"$ANTLR_PATH" "$MAIN_CLASS" $PROGRAM_ARGS
 fi

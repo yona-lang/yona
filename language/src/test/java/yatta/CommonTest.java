@@ -9,7 +9,7 @@ public abstract class CommonTest {
 
   @BeforeEach
   public void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).build();
+    context = Context.newBuilder().allowAllAccess(true).environment("YATTA_STDLIB_HOME", "lib-yatta").build();
     context.enter();
   }
 

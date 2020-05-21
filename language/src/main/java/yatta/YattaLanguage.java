@@ -38,8 +38,11 @@ public class YattaLanguage extends TruffleLanguage<Context> {
     String languageHome = getLanguageHome();
     Path languageHomePath = null;
     if (languageHome == null) {
-      if (System.getenv().containsKey("JAVA_HOME")) {
-        languageHomePath = Paths.get(System.getenv().get("JAVA_HOME"), "languages", ID, "lib-yatta");
+      if (env.getEnvironment().containsKey("YATTA_STDLIB_HOME")) {
+        languageHomePath = Paths.get(env.getEnvironment().get("YATTA_STDLIB_HOME"));
+      }
+      else if (env.getEnvironment().containsKey("JAVA_HOME")) {
+        languageHomePath = Paths.get(env.getEnvironment().get("JAVA_HOME"), "languages", ID, "lib-yatta");
       }
     } else {
       languageHomePath = Paths.get(languageHome, "lib-yatta");

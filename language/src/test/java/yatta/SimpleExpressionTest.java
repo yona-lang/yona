@@ -40,7 +40,7 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void unitValueTest() {
-    assertEquals("NONE", context.eval(YattaLanguage.ID, "()").toString());
+    assertTrue(context.eval(YattaLanguage.ID, "()").isNull());
   }
 
   @Test
