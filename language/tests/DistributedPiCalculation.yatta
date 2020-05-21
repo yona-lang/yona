@@ -8,7 +8,7 @@ do
 
             max_connections = 100
             http\Server::create "127.0.0.1" port max_connections
-            |> http\Server::handle "/iteration" iteration_handler
+            |> http\Server::handle "/iteration" :text iteration_handler
             |> http\Server::start
         end
 

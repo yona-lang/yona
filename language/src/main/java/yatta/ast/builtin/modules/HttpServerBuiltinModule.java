@@ -25,6 +25,7 @@ import yatta.runtime.stdlib.util.TimeUnitUtil;
 import yatta.runtime.strings.StringUtil;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
@@ -112,35 +113,56 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
   abstract static class HandleBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object handle(Seq path, Function handler, NativeObject server, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      Object hopefullyHttpServer = (server).getValue();
+    public Object handle(Seq path, Symbol bodyEncoding, Function handler, NativeObject server, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      final Object hopefullyHttpServer = (server).getValue();
       if (hopefullyHttpServer instanceof HttpServer) {
-        HttpServer httpServer = (HttpServer) server.getValue();
-        HttpContext httpContext = httpServer.createContext(path.asJavaString(this), (httpExchange) -> {
+        final HttpServer httpServer = (HttpServer) server.getValue();
+        final String bodyEncodingStr = validateBodyEncoding(bodyEncoding);
+        httpServer.createContext(path.asJavaString(this), (httpExchange) -> {
           Dict exchangeParams = Dict.EMPTY
               .add("local_address", Seq.fromCharSequence(httpExchange.getLocalAddress().toString()))
               .add("protocol", Seq.fromCharSequence(httpExchange.getProtocol()))
               .add("remote_address", Seq.fromCharSequence(httpExchange.getRemoteAddress().toString()))
               .add("method", context.symbol(httpExchange.getRequestMethod()))
               .add("uri", Seq.fromCharSequence(httpExchange.getRequestURI().toString()));
-          Dict headers = headersToDict(httpExchange.getRequestHeaders());
-          byte[] bodyBytes = httpExchange.getRequestBody().readAllBytes();
-          Seq body = Seq.fromBytes(bodyBytes);
+          final Dict headers = headersToDict(httpExchange.getRequestHeaders());
+          final Seq body = bodyToSeq(httpExchange.getRequestBody(), bodyEncodingStr);
           try {
-            Object handlerResult = dispatch.execute(handler, exchangeParams, headers, body);
+            final Object handlerResult = dispatch.execute(handler, exchangeParams, headers, body);
             sendResponse(handlerResult, httpExchange);
           } catch (Throwable e) {
-            StringBuilder errorMsg = new StringBuilder();
-            errorMsg.append("Internal Server Error: ");
-            appendExceptionStackTrace(ExceptionUtil.throwableToTuple(e, context), errorMsg);
-            String errorMsgStr = errorMsg.toString();
-            httpExchange.sendResponseHeaders(500, errorMsgStr.length());
-            httpExchange.getResponseBody().write(errorMsgStr.getBytes());
+            returnErrorResponse(httpExchange, e, context);
           }
         });
         return server;
       } else {
         throw YattaException.typeError(this, hopefullyHttpServer);
+      }
+    }
+
+    private void returnErrorResponse(HttpExchange httpExchange, Throwable e, Context context) throws IOException {
+      final StringBuilder errorMsg = new StringBuilder();
+      errorMsg.append("Internal Server Error: ");
+      appendExceptionStackTrace(ExceptionUtil.throwableToTuple(e, context), errorMsg);
+      final String errorMsgStr = errorMsg.toString();
+      httpExchange.sendResponseHeaders(500, errorMsgStr.length());
+      httpExchange.getResponseBody().write(errorMsgStr.getBytes());
+    }
+
+    private String validateBodyEncoding(Symbol bodyEncoding) {
+      final String bodyEncodingStr = bodyEncoding.asString();
+      if (bodyEncodingStr.equals("binary") || bodyEncodingStr.equals("text")) {
+        return bodyEncodingStr;
+      } else {
+        throw new BadArgException("Allowed body encodings are :binary or :text (default), UTF-8 encoded", this);
+      }
+    }
+
+    private Seq bodyToSeq(InputStream body, String bodyEncoding) throws IOException {
+      if (bodyEncoding.equals("binary")) {
+        return Seq.fromBytes(body.readAllBytes());
+      } else {
+        return Seq.fromCharSequence(new String(body.readAllBytes()));
       }
     }
 
