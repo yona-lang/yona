@@ -1,5 +1,6 @@
 package yatta.runtime.async;
 
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import yatta.YattaException;
 
@@ -14,7 +15,7 @@ import static java.lang.System.identityHashCode;
 import static java.util.Arrays.copyOf;
 import static java.util.Arrays.fill;
 
-public final class TransactionalMemory {
+public final class TransactionalMemory implements TruffleObject {
   static final int WRITE_SET_INITIAL_CAPACITY = 2;
   static final int WRITE_SET_PROBES = 4;
   static final int BLOOM_FILTER_HASHES = 7;
@@ -147,7 +148,7 @@ public final class TransactionalMemory {
     }
   }
 
-  public static final class Var {
+  public static final class Var implements TruffleObject {
     final TransactionalMemory parent;
     final long id;
     Box current;

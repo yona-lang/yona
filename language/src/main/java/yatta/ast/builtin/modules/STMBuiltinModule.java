@@ -18,11 +18,10 @@ import yatta.runtime.threading.Threading;
 
 @BuiltinModuleInfo(moduleName = "STM")
 public class STMBuiltinModule implements BuiltinModule {
-
-  @NodeInfo(shortName = "stm")
+  @NodeInfo(shortName = "new")
   abstract static class STMBuiltin extends BuiltinNode {
     @Specialization
-    public TransactionalMemory stm(@CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public TransactionalMemory stm() {
       return new TransactionalMemory();
     }
   }
@@ -30,7 +29,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "var")
   abstract static class VarBuiltin extends BuiltinNode {
     @Specialization
-    public TransactionalMemory.Var var(TransactionalMemory memory, Object initial, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public TransactionalMemory.Var var(TransactionalMemory memory, Object initial) {
       return new TransactionalMemory.Var(memory, initial);
     }
   }
@@ -38,7 +37,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "transaction")
   abstract static class TransactionBuiltin extends BuiltinNode {
     @Specialization
-    public Object transaction(TransactionalMemory stm, Function function, boolean readOnly, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object transaction(TransactionalMemory stm, boolean readOnly, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       if (Threading.TX.get() != null) {
         throw new YattaException("STM transaction is already running", this);
       }
@@ -62,7 +61,7 @@ public class STMBuiltinModule implements BuiltinModule {
               tx.abort();
               tx.reset();
             }
-          } catch (UnsupportedTypeException  | ArityException | UnsupportedMessageException e) {
+          } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             tx.abort();
             throw new YattaException(e, this);
           } catch (Exception e) {
@@ -80,7 +79,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read")
   abstract static class ReadBuiltin extends BuiltinNode {
     @Specialization
-    public Object read(TransactionalMemory.Var var, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object read(TransactionalMemory.Var var) {
       TransactionalMemory.Transaction tx = Threading.TX.get();
       if (tx == null) {
         return var.read();
@@ -93,7 +92,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "write")
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
-    public Unit write(TransactionalMemory.Var var, Object value, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Unit write(TransactionalMemory.Var var, Object value) {
       TransactionalMemory.Transaction tx = Threading.TX.get();
       if (tx == null) {
         throw new YattaException("There is no running STM transaction", this);
@@ -106,7 +105,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "protect")
   abstract static class ProtectBuiltin extends BuiltinNode {
     @Specialization
-    public Unit protect(TransactionalMemory.Var var, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Unit protect(TransactionalMemory.Var var) {
       TransactionalMemory.Transaction tx = Threading.TX.get();
       if (tx == null) {
         throw new YattaException("There is no running STM transaction", this);
