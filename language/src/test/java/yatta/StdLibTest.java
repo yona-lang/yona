@@ -469,6 +469,16 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  public void httpClientHeadersBinaryBodyTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "    session = http\\Client::session {:body_encoding = :binary}\n" +
+        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/image\" {:accept = \"image/jpeg\"}\n" +
+        "in\n" +
+        "    Seq::is_string body").asBoolean();
+    assertFalse(ret);
+  }
+
+  @Test
   public void httpClientHeadersAsyncTest() {
     String ret = context.eval(YattaLanguage.ID, "let\n" +
         "    session = http\\Client::session {}\n" +

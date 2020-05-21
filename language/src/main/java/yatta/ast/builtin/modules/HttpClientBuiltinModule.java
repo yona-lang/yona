@@ -25,18 +25,36 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 @BuiltinModuleInfo(packageParts = {"http"}, moduleName = "Client")
 public final class HttpClientBuiltinModule implements BuiltinModule {
+  protected static final class HttpSessionTuple extends Tuple {
+    public HttpSessionTuple(HttpClient client, Set additionalOptions) {
+      this.items = new Object[]{
+          new NativeObject(client), additionalOptions
+      };
+    }
+
+    public HttpClient httpClient() {
+      return (HttpClient) ((NativeObject) items[0]).getValue();
+    }
+
+    public Set additionalOptions() {
+      return (Set) items[1];
+    }
+  }
+
   @NodeInfo(shortName = "session")
   abstract static class SessionBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Object session(Dict params, @CachedContext(YattaLanguage.class) Context context) {
       if (params.size() == 0L) {
-        return new NativeObject(HttpClient.newHttpClient());
+        return new HttpSessionTuple(HttpClient.newHttpClient(), Set.empty());
       } else {
         HttpClient.Builder builder = HttpClient.newBuilder().executor(context.ioExecutor);
 
@@ -54,9 +72,23 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
     @CompilerDirectives.TruffleBoundary
     private Object buildSession(Dict params, Context context, HttpClient.Builder builder) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
+      Set additionalOptions = Set.empty();
       Symbol followRedirectsSymbol = context.symbol("follow_redirects");
       if (params.contains(followRedirectsSymbol)) {
         builder.followRedirects(extractRedirectPolicy(params.lookup(followRedirectsSymbol)));
+      }
+
+      Symbol bodyEncodingSymbol = context.symbol("body_encoding");
+      if (params.contains(bodyEncodingSymbol)) {
+        Object bodyEncoding = params.lookup(bodyEncodingSymbol);
+        if (bodyEncoding instanceof Symbol) {
+          String bodyEncodingString = ((Symbol) bodyEncoding).asString();
+          if ("binary".equals(bodyEncodingString) || "text".equals(bodyEncodingString)) {
+            additionalOptions = additionalOptions.add(bodyEncoding);
+          } else {
+            throw new BadArgException("Accepted values for body_encoding are :binary or :text. Text is always UTF-8. Text is the default choice.", this);
+          }
+        }
       }
 
       Symbol authenticatorSymbol = context.symbol("authenticator");
@@ -67,20 +99,16 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         } else { // Promise
           CompilerDirectives.transferToInterpreterAndInvalidate();
           Promise authenticatorPromise = (Promise) authenticatorObj;
+          Set finalAdditionalOptions = additionalOptions;
           return authenticatorPromise.map(authenticator -> {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             builder.authenticator((Authenticator) authenticator);
-            return buildHttpClient(builder);
+            return new HttpSessionTuple(builder.build(), finalAdditionalOptions);
           }, this);
         }
       }
 
-      return buildHttpClient(builder);
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private NativeObject buildHttpClient(HttpClient.Builder builder) {
-      return new NativeObject(builder.build());
+      return new HttpSessionTuple(builder.build(), additionalOptions);
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -109,7 +137,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         if (authenticatorTupleObj instanceof Object[]) {
           Object[] authenticatorItems = (Object[]) authenticatorTupleObj;
           if (authenticatorItems.length != 3) {
-            throw new BadArgException("Authenticator tuple must have 3 elements: " + authenticatorItems, this);
+            throw new BadArgException("Authenticator tuple must have 3 elements: " + Arrays.toString(authenticatorItems), this);
           } else {
             if (authenticatorItems[0] instanceof Symbol) {
               Symbol authenticationTypeSymbol = (Symbol) authenticatorItems[0];
@@ -152,29 +180,23 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
 
   abstract static class SendBuiltin extends BuiltinNode {
     @CompilerDirectives.TruffleBoundary
-    protected Promise sendRequest(NativeObject session, RequestType requestType, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      if (session.getValue() instanceof HttpClient) {
-        HttpClient httpClient = (HttpClient) session.getValue();
-
-        Object requestObj = buildRequest(requestType, uri, headers, body);
-        if (requestObj instanceof HttpRequest) {
-          return runRequest(httpClient, (HttpRequest) requestObj, context, dispatch);
-        } else {
-          CompilerDirectives.transferToInterpreterAndInvalidate();
-          return ((Promise) requestObj).map(request -> runRequest(httpClient, (HttpRequest) request, context, dispatch), this);
-        }
+    protected Promise sendRequest(HttpSessionTuple sessionTuple, RequestType requestType, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Object requestObj = buildRequest(requestType, uri, headers, body);
+      if (requestObj instanceof HttpRequest) {
+        return runRequest(sessionTuple, (HttpRequest) requestObj, context, dispatch);
       } else {
-        throw YattaException.typeError(this, session);
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        return ((Promise) requestObj).map(request -> runRequest(sessionTuple, (HttpRequest) request, context, dispatch), this);
       }
     }
 
     @CompilerDirectives.TruffleBoundary
-    private Promise runRequest(HttpClient httpClient, HttpRequest request, Context context, InteropLibrary dispatch) {
+    private Promise runRequest(HttpSessionTuple sessionTuple, HttpRequest request, Context context, InteropLibrary dispatch) {
       Promise promise = new Promise(dispatch);
       context.ioExecutor.submit(() -> {
         try {
-          HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-          promise.fulfil(responseToTuple(response), this);
+          HttpResponse<?> response = sessionTuple.httpClient().send(request, bodyHandlerForHttpSession(sessionTuple, context));
+          promise.fulfil(responseToTuple(sessionTuple, response, context), this);
         } catch (Exception e) {
           promise.fulfil(e, this);
         }
@@ -184,7 +206,16 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
     }
 
     @CompilerDirectives.TruffleBoundary
-    private Tuple responseToTuple(HttpResponse<byte[]> response) {
+    private HttpResponse.BodyHandler<?> bodyHandlerForHttpSession(HttpSessionTuple sessionTuple, Context context) {
+      if (sessionTuple.additionalOptions().contains(context.symbol("binary"))) {
+        return HttpResponse.BodyHandlers.ofByteArray();
+      } else {
+        return HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8);
+      }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private Tuple responseToTuple(HttpSessionTuple sessionTuple, HttpResponse<?> response, Context context) {
       Dict headers = Dict.EMPTY;
       for (Map.Entry<String, List<String>> entry : response.headers().map().entrySet()) {
         Seq value = Seq.EMPTY;
@@ -193,7 +224,15 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         }
         headers = headers.add(Seq.fromCharSequence(entry.getKey()), value);
       }
-      return new Tuple((long) response.statusCode(), headers, Seq.fromBytes(response.body()));
+      return new Tuple((long) response.statusCode(), headers, bodyForHttpSession(sessionTuple, response, context));
+    }
+
+    private Seq bodyForHttpSession(HttpSessionTuple sessionTuple, HttpResponse<?> response, Context context) {
+      if (sessionTuple.additionalOptions().contains(context.symbol("binary"))) {
+        return Seq.fromBytes((byte[]) response.body());
+      } else {
+        return Seq.fromCharSequence((String) response.body());
+      }
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -247,32 +286,32 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "get")
   abstract static class GetBuiltin extends SendBuiltin {
     @Specialization
-    public Promise get(NativeObject session, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(session, RequestType.GET, uri, headers, null, context, dispatch);
+    public Promise get(HttpSessionTuple sessionTuple, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(sessionTuple, RequestType.GET, uri, headers, null, context, dispatch);
     }
   }
 
   @NodeInfo(shortName = "delete")
   abstract static class DeleteBuiltin extends SendBuiltin {
     @Specialization
-    public Promise delete(NativeObject session, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(session, RequestType.DELETE, uri, headers, null, context, dispatch);
+    public Promise delete(HttpSessionTuple sessionTuple, Seq uri, Dict headers, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(sessionTuple, RequestType.DELETE, uri, headers, null, context, dispatch);
     }
   }
 
   @NodeInfo(shortName = "post")
   abstract static class PostBuiltin extends SendBuiltin {
     @Specialization
-    public Promise post(NativeObject session, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(session, RequestType.POST, uri, headers, body, context, dispatch);
+    public Promise post(HttpSessionTuple sessionTuple, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(sessionTuple, RequestType.POST, uri, headers, body, context, dispatch);
     }
   }
 
   @NodeInfo(shortName = "put")
   abstract static class PutBuiltin extends SendBuiltin {
     @Specialization
-    public Promise put(NativeObject session, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(session, RequestType.PUT, uri, headers, body, context, dispatch);
+    public Promise put(HttpSessionTuple sessionTuple, Seq uri, Dict headers, Seq body, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(sessionTuple, RequestType.PUT, uri, headers, body, context, dispatch);
     }
   }
 
