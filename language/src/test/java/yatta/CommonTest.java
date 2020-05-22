@@ -28,7 +28,7 @@ public abstract class CommonTest {
    * This can be used in Context Builder using .option(, "<log level>")
    */
   @SuppressWarnings("unused")
-  private String logLevelOption(Class<?> cls) {
+  static String logLevelOption(Class<?> cls) {
     return "log." + YattaLanguage.ID + "." + cls.getName() + ".level";
   }
 }

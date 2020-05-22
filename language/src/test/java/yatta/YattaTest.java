@@ -5,6 +5,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
+import yatta.ast.builtin.modules.STMBuiltinModule;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,7 +27,7 @@ public class YattaTest {
   private static final String OUTPUT_SUFFIX = ".output";
   private static final String TESTS_DIRECTORY = "tests";
 
-  private static final boolean REPORT_STACKTRACE = false;
+  private static final boolean REPORT_STACKTRACE = true;
 
   @TestFactory
   protected List<DynamicTest> tests() throws IOException {
@@ -55,7 +56,7 @@ public class YattaTest {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
-            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8))).out(out).err(out).allowAllAccess(true).build();
+            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8))).out(out).err(out).allowAllAccess(true).option(CommonTest.logLevelOption(STMBuiltinModule.class), "FINEST").build();
             context.enter();
 
             /* Parse the Yatta source file. */
@@ -91,6 +92,7 @@ public class YattaTest {
             context.leave();
           });
 
+          if(baseName.equals("STM"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;
