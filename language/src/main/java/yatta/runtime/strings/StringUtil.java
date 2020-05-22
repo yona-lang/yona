@@ -31,7 +31,7 @@ public final class StringUtil {
   }
 
   public static Seq yattaValueAsYattaString(Object val) {
-    if (val instanceof Seq) return (Seq) val;
+    if (val instanceof Seq && ((Seq) val).isString()) return (Seq) val;
     else if (val instanceof Boolean) return yattaValueAsYattaString((boolean) val);
     else if (val instanceof Byte) return yattaValueAsYattaString((byte) val);
     else if (val instanceof Long) return yattaValueAsYattaString((long) val);

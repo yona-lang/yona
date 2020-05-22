@@ -116,7 +116,7 @@ OP_JOIN : '++';
 OP_PIPE_L : '<|' ;
 OP_PIPE_R : '|>' ;
 
-COMMENT: '#' InputCharacter* -> channel(COMMENTS_CHANNEL) ;
+COMMENT: NEWLINE? WS? '#' InputCharacter* -> channel(COMMENTS_CHANNEL) ;
 
 NEWLINE : NewLinePart+;
 WS: WHITESPACE+ -> skip;

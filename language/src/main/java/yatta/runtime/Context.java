@@ -144,7 +144,7 @@ public class Context {
     builtinModules.register(new JavaBuiltinModule());
     builtinModules.register(new JavaTypesBuiltinModule());
     builtinModules.register(new SystemBuiltinModule());
-    builtinModules.register(new STMBuiltinModule());
+    //builtinModules.register(new STMBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

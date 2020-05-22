@@ -98,6 +98,12 @@ public class SimpleExpressionTest extends CommonTest {
   }
 
   @Test
+  public void sequenceToStrValueTest() {
+    String ret = context.eval(YattaLanguage.ID, "[1, 2] |> str").asString();
+    assertEquals("[1, 2]", ret);
+  }
+
+  @Test
   public void threeSequenceValueTest() {
     Value sequence = context.eval(YattaLanguage.ID, "[1, 2, 3]");
     assertEquals(3, sequence.getArraySize());

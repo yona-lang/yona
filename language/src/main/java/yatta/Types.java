@@ -7,8 +7,6 @@ import yatta.runtime.*;
 import yatta.runtime.async.Promise;
 
 import java.lang.reflect.Array;
-import java.util.List;
-import java.util.Map;
 
 /**
  * The type system of YattaLanguage, as explained in {@link YattaLanguage}. Based on the {@link TypeSystem}

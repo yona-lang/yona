@@ -105,7 +105,7 @@ public final class Seq implements TruffleObject {
   public boolean contains(Object element, final Node caller) {
     CompilerAsserts.compilationConstant(length());
     for (long i = 0; i < length(); i++) {
-      if (element.equals(lookup(i, null))) {
+      if (element.equals(lookup(i, caller))) {
         return true;
       }
     }
