@@ -464,7 +464,7 @@ public class StdLibTest extends CommonTest {
         "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/headers\" {:accept = \"application/json\"}\n" +
         "    {\"headers\" = response_headers} = JSON::parse body\n" +
         "in\n" +
-        "    Dict::lookup response_headers \"Accept\"").asString();
+        "    Dict::lookup \"Accept\" response_headers").asString();
     assertEquals("application/json", ret);
   }
 
@@ -485,7 +485,7 @@ public class StdLibTest extends CommonTest {
         "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/headers\" <| async \\-> {async \\-> :accept = async \\-> \"application/json\"}\n" +
         "    {\"headers\" = response_headers} = JSON::parse body\n" +
         "in\n" +
-        "    Dict::lookup response_headers \"Accept\"").asString();
+        "    Dict::lookup \"Accept\" response_headers").asString();
     assertEquals("application/json", ret);
   }
 
@@ -583,5 +583,29 @@ public class StdLibTest extends CommonTest {
   public void stringToFloatTest() {
     double ret = context.eval(YattaLanguage.ID, "\"5\" |> float").asDouble();
     assertEquals(5d, ret);
+  }
+
+  @Test
+  public void seqLookupTest() {
+    long ret = context.eval(YattaLanguage.ID, "Seq::lookup 1 [5, 6, 7] ").asLong();
+    assertEquals(6L, ret);
+  }
+
+  @Test
+  public void seqZipTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "[(1, 4), (2, 5), (3, 6)] == Seq::zip [1, 2, 3] [4, 5, 6]").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void dictFromSeqTest() {
+    long ret = context.eval(YattaLanguage.ID, "Dict::from_seq [(1, 4), (2, 5), (3, 6)] |> Dict::lookup 1").asLong();
+    assertEquals(4, ret);
+  }
+
+  @Test
+  public void seqToStrTest() {
+    String ret = context.eval(YattaLanguage.ID, "[\"adam\", \"fedor\"] |> str").asString();
+    assertEquals("[adam, fedor]", ret);
   }
 }

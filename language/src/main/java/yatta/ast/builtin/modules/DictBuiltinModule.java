@@ -53,7 +53,7 @@ public final class DictBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "lookup")
   abstract static class LookupBuiltin extends BuiltinNode {
     @Specialization
-    public Object lookup(Dict dict, Object key) {
+    public Object lookup(Object key, Dict dict) {
       return dict.lookup(key);
     }
   }

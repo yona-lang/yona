@@ -1,6 +1,5 @@
 package yatta.ast.builtin.modules;
 
-import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -8,11 +7,11 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import yatta.TypesGen;
 import yatta.YattaException;
 import yatta.ast.builtin.BuiltinNode;
-import yatta.runtime.*;
+import yatta.runtime.Function;
+import yatta.runtime.Seq;
+import yatta.runtime.Tuple;
 import yatta.runtime.exceptions.UndefinedNameException;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
@@ -50,7 +49,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
     @Specialization
     public Object reduceLeft(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return sequence.reduceLeft(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
+        return sequence.reduceLeft(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YattaException(e, this);
@@ -63,7 +62,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
     @Specialization
     public Object reduceRight(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return sequence.reduceRight(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
+        return sequence.reduceRight(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YattaException(e, this);
@@ -95,6 +94,14 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "lookup")
+  abstract static class LookupBuiltin extends BuiltinNode {
+    @Specialization
+    public Object length(long idx, Seq sequence) {
+      return sequence.lookup(idx, this);
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
@@ -104,6 +111,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.SplitBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.IsStringBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
     return builtins;
   }
 }

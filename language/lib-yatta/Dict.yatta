@@ -1,0 +1,4 @@
+module Dict exports from_seq as
+    from_seq [] = {}
+    from_seq (k ,v) -| tail = {k = v} | from_seq tail
+end

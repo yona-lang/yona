@@ -23,7 +23,7 @@ public abstract class PlusNode extends BinaryOpNode {
   @Specialization
   public Dict dict(Dict dict, Tuple tuple) {
     if (2 != tuple.length()) {
-      throw YattaException.typeError(this, tuple.toArray());
+      throw YattaException.typeError(this, tuple);
     }
     return dict.add(tuple.get(0), tuple.get(1));
   }

@@ -89,7 +89,7 @@ public final class FileBuiltinModule implements BuiltinModule {
 
         return new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions, Seq.fromCharSequence(path.toString()));
       } catch (IOException e) {
-        throw new YattaException(e.getMessage(), this);
+        throw new yatta.runtime.exceptions.IOException(e, this);
       }
     }
 
@@ -293,6 +293,9 @@ public final class FileBuiltinModule implements BuiltinModule {
 
             for (int i = 0; i < length; i++) {
               byte b = attachment.get();
+              if (b == '\r') {
+                continue;
+              }
               if (b == '\n') {
                 promise.fulfil(new Tuple(context.symbol("ok"), bytesToSeq(output, fileTuple.additionalOptions(), context, thisNode), fileTuple.copy(null, fileTuple.position() + i + 1)), thisNode);
                 fulfilled = true;
