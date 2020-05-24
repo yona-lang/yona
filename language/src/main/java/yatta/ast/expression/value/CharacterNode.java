@@ -3,12 +3,11 @@ package yatta.ast.expression.value;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import yatta.ast.ExpressionNode;
 
 import java.util.Objects;
 
 @NodeInfo
-public final class CharacterNode extends ExpressionNode {
+public final class CharacterNode extends LiteralValueNode {
   public final int value;
 
   public CharacterNode(int value) {

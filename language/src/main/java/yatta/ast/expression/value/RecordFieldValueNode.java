@@ -48,6 +48,11 @@ public final class RecordFieldValueNode extends ExpressionNode {
   }
 
   @Override
+  protected String[] requiredIdentifiers() {
+    return fieldValue.getRequiredIdentifiers();
+  }
+
+  @Override
   public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
     return new Tuple(fieldName, fieldValue.executeGeneric(frame));
   }

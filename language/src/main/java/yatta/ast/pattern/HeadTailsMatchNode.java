@@ -1,12 +1,15 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.NameAliasNode;
 import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.expression.value.EmptySequenceNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 
 import java.util.ArrayList;
@@ -14,45 +17,43 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-public class HeadTailsHeadPatternNode extends MatchNode {
+@NodeInfo(shortName = "headTailsMatch")
+public final class HeadTailsMatchNode extends MatchNode {
   @Children
-  public final MatchNode[] leftNodes;
+  public MatchNode headNodes[];
   @Child
   public ExpressionNode tailsNode;
-  @Children
-  public final MatchNode[] rightPatterns;
 
-  public HeadTailsHeadPatternNode(MatchNode[] leftNodes, ExpressionNode tailsNode, MatchNode[] rightPatterns) {
-    this.leftNodes = leftNodes;
+  public HeadTailsMatchNode(MatchNode headNodes[], ExpressionNode tailsNode) {
+    this.headNodes = headNodes;
     this.tailsNode = tailsNode;
-    this.rightPatterns = rightPatterns;
   }
 
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    HeadTailsHeadPatternNode that = (HeadTailsHeadPatternNode) o;
-    return Arrays.equals(leftNodes, that.leftNodes) &&
-        Objects.equals(tailsNode, that.tailsNode) &&
-        Arrays.equals(rightPatterns, that.rightPatterns);
+    HeadTailsMatchNode that = (HeadTailsMatchNode) o;
+    return Objects.equals(headNodes, that.headNodes) &&
+        Objects.equals(tailsNode, that.tailsNode);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(tailsNode);
-    result = 31 * result + Arrays.hashCode(leftNodes);
-    result = 31 * result + Arrays.hashCode(rightPatterns);
-    return result;
+    return Objects.hash(headNodes, tailsNode);
   }
 
   @Override
   public String toString() {
-    return "HeadTailsHeadPatternNode{" +
-        "leftNodes=" + Arrays.toString(leftNodes) +
+    return "HeadTailsMatchPatternNode{" +
+        "headNodes=" + headNodes +
         ", tailsNode=" + tailsNode +
-        ", rightPatterns=" + Arrays.toString(rightPatterns) +
         '}';
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return tailsNode.getRequiredIdentifiers();
   }
 
   @Override
@@ -61,13 +62,13 @@ public class HeadTailsHeadPatternNode extends MatchNode {
       Seq sequence = (Seq) value;
       List<AliasNode> aliases = new ArrayList<>();
 
-      if (leftNodes.length + rightPatterns.length > sequence.length()) {
+      if (headNodes.length > sequence.length()) {
         return MatchResult.FALSE;
       }
 
       if (sequence.length() > 0) {
-        for (int i = 0; i < leftNodes.length; i++) {
-          MatchNode headNode = leftNodes[i];
+        for (int i = 0; i < headNodes.length; i++) {
+          MatchNode headNode = headNodes[i];
           MatchResult headMatches = headNode.match(sequence.first(this), frame);
           if (headMatches.isMatches()) {
             aliases.addAll(Arrays.asList(headMatches.getAliases()));
@@ -77,23 +78,17 @@ public class HeadTailsHeadPatternNode extends MatchNode {
           }
         }
 
-        for (int i = rightPatterns.length - 1; i >= 0; i--) {
-          MatchNode headNode = rightPatterns[i];
-          MatchResult headMatches = headNode.match(sequence.last(this), frame);
-          if (headMatches.isMatches()) {
-            aliases.addAll(Arrays.asList(headMatches.getAliases()));
-            sequence = sequence.removeLast(this);
-          } else {
-            return MatchResult.FALSE;
-          }
-        }
-
-        // YattaParser.g4: tails : identifier | emptySequence | underscore ;
+        // YattaParser.g4: tails : identifier | sequence | underscore | stringLiteral ;
         if (tailsNode instanceof IdentifierNode) {
           IdentifierNode identifierNode = (IdentifierNode) tailsNode;
 
           if (identifierNode.isBound(frame)) {
-            Seq identifierValue = (Seq) identifierNode.executeGeneric(frame);
+            Seq identifierValue = null;
+            try {
+              identifierValue = identifierNode.executeSequence(frame);
+            } catch (UnexpectedResultException e) {
+              return MatchResult.FALSE;
+            }
 
             if (!Objects.equals(identifierValue, sequence)) {
               return MatchResult.FALSE;
@@ -103,6 +98,19 @@ public class HeadTailsHeadPatternNode extends MatchNode {
           }
         } else if (tailsNode instanceof EmptySequenceNode) {
           if (sequence.length() > 0) {
+            return MatchResult.FALSE;
+          }
+        } else if (tailsNode instanceof UnderscoreMatchNode) {
+          // nothing to match here
+        } else { // otherSequence | stringLiteral
+          Seq sequenceValue;
+          try {
+            sequenceValue = tailsNode.executeSequence(frame);
+          } catch (UnexpectedResultException e) {
+            return MatchResult.FALSE;
+          }
+
+          if (!Objects.equals(sequenceValue, sequence)) {
             return MatchResult.FALSE;
           }
         }
@@ -116,5 +124,10 @@ public class HeadTailsHeadPatternNode extends MatchNode {
     }
 
     return MatchResult.FALSE;
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return DependencyUtils.catenateProvidedIdentifiers(tailsNode.getRequiredIdentifiers(), headNodes);
   }
 }

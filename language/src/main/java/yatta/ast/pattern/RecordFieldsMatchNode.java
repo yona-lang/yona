@@ -1,15 +1,13 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.YattaLanguage;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
-import yatta.runtime.Context;
-import yatta.runtime.Symbol;
-import yatta.runtime.Tuple;
-import yatta.runtime.YattaModule;
+import yatta.runtime.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,12 +16,16 @@ import java.util.Objects;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
-public final class RecordFieldsPatternNode extends MatchNode {
-  @CompilationFinal private final String recordType;
-  @Children public RecordPatternFieldNode[] fieldMatchNodes;
-  @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
+@NodeInfo(shortName = "recordFieldsMatch")
+public final class RecordFieldsMatchNode extends MatchNode {
+  @CompilationFinal
+  private final String recordType;
+  @Children
+  public RecordPatternFieldNode[] fieldMatchNodes;
+  @Children
+  private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
-  public RecordFieldsPatternNode(String recordType, RecordPatternFieldNode[] fieldMatchNodes, ExpressionNode[] moduleStack) {
+  public RecordFieldsMatchNode(String recordType, RecordPatternFieldNode[] fieldMatchNodes, ExpressionNode[] moduleStack) {
     this.recordType = recordType;
     this.fieldMatchNodes = fieldMatchNodes;
     this.moduleStack = moduleStack;
@@ -33,7 +35,7 @@ public final class RecordFieldsPatternNode extends MatchNode {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    RecordFieldsPatternNode that = (RecordFieldsPatternNode) o;
+    RecordFieldsMatchNode that = (RecordFieldsMatchNode) o;
     return Objects.equals(recordType, that.recordType) &&
         Arrays.equals(fieldMatchNodes, that.fieldMatchNodes) &&
         Arrays.equals(moduleStack, that.moduleStack);
@@ -53,6 +55,11 @@ public final class RecordFieldsPatternNode extends MatchNode {
         "recordType='" + recordType + '\'' +
         ", fieldMatchNodes=" + Arrays.toString(fieldMatchNodes) +
         '}';
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(fieldMatchNodes);
   }
 
   @Override
@@ -108,9 +115,16 @@ public final class RecordFieldsPatternNode extends MatchNode {
     return MatchResult.FALSE;
   }
 
+  @Override
+  protected String[] providedIdentifiers() {
+    return DependencyUtils.catenateProvidedIdentifiers(fieldMatchNodes);
+  }
+
   public static final class RecordPatternFieldNode extends MatchNode {
-    @CompilationFinal String fieldName;
-    @Child MatchNode fieldValue;
+    @CompilationFinal
+    String fieldName;
+    @Child
+    MatchNode fieldValue;
 
     public RecordPatternFieldNode(String fieldName, MatchNode fieldValue) {
       this.fieldName = fieldName;
@@ -140,6 +154,11 @@ public final class RecordFieldsPatternNode extends MatchNode {
     }
 
     @Override
+    protected String[] requiredIdentifiers() {
+      return fieldValue.getRequiredIdentifiers();
+    }
+
+    @Override
     public MatchResult match(Object value, VirtualFrame frame) {
       Object[] inputValues = (Object[]) value;
       Tuple tuple = (Tuple) inputValues[0];
@@ -158,6 +177,11 @@ public final class RecordFieldsPatternNode extends MatchNode {
       }
 
       return MatchResult.FALSE;
+    }
+
+    @Override
+    protected String[] providedIdentifiers() {
+      return fieldValue.getProvidedIdentifiers();
     }
   }
 }

@@ -1,13 +1,15 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import yatta.ast.expression.AliasNode;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.AliasNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.NameAliasNode;
 import yatta.ast.expression.value.AnyValueNode;
 
 import java.util.Objects;
 
+@NodeInfo(shortName = "asDataStructureMatch")
 public final class AsDataStructureMatchNode extends MatchNode {
   @Child
   public IdentifierNode identifierNode;
@@ -55,5 +57,15 @@ public final class AsDataStructureMatchNode extends MatchNode {
 
       return MatchResult.TRUE;
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return matchNode.getRequiredIdentifiers();
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return matchNode.getProvidedIdentifiers();
   }
 }

@@ -1,8 +1,10 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
+import yatta.runtime.ArrayUtils;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Dict;
 import yatta.runtime.Unit;
 
@@ -83,5 +85,18 @@ public final class DictMatchNode extends MatchNode {
     }
 
     return MatchResult.FALSE;
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(expressionNodes);
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return ArrayUtils.catenate(
+        DependencyUtils.catenateRequiredIdentifiers(expressionNodes),
+        DependencyUtils.catenateProvidedIdentifiers(patternNodes)
+    );
   }
 }

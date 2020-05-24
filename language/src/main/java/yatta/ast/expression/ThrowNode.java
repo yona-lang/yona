@@ -1,11 +1,13 @@
 package yatta.ast.expression;
 
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.ExpressionNode;
 
 import java.util.Objects;
 
-public class ThrowNode extends ExpressionNode {
+@NodeInfo(shortName = "throw")
+public final class ThrowNode extends ExpressionNode {
   private final RuntimeException exception;
 
   public ThrowNode(RuntimeException exception) {
@@ -35,5 +37,10 @@ public class ThrowNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     throw exception;
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return new String[0];
   }
 }

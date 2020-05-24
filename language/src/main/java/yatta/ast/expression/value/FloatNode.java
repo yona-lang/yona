@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import java.util.Objects;
 
 @NodeInfo
-public final class FloatNode extends ExpressionNode {
+public final class FloatNode extends LiteralValueNode {
   public final double value;
 
   public FloatNode(double value) {

@@ -8,6 +8,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.Context;
+import yatta.runtime.DependencyUtils;
 
 /**
  * Base class for all builtin functions. It contains the Truffle DSL annotation {@link NodeChild}
@@ -29,4 +30,9 @@ public abstract class BuiltinNode extends ExpressionNode {
   }
 
   protected abstract Object execute(VirtualFrame frame);
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers((ExpressionNode) super.getChildren());
+  }
 }

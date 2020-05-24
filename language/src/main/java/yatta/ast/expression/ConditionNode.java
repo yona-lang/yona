@@ -1,16 +1,19 @@
 package yatta.ast.expression;
 
-import yatta.ast.ExpressionNode;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import yatta.YattaException;
+import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
+import yatta.runtime.async.Promise;
 
 import java.util.Objects;
 
+@NodeInfo(shortName = "if")
 public final class ConditionNode extends ExpressionNode {
   @Node.Child
   public ExpressionNode ifExpression;
@@ -95,5 +98,10 @@ public final class ConditionNode extends ExpressionNode {
     } else {
       throw YattaException.typeError(this, condValue);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(ifExpression, thenExpression, elseExpression);
   }
 }

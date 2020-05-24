@@ -4,8 +4,8 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
 
@@ -58,5 +58,10 @@ public final class TupleNode extends ExpressionNode {
     } else {
       return new Tuple(results);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(expressions);
   }
 }

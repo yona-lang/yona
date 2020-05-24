@@ -1,14 +1,17 @@
 package yatta.ast.expression;
 
-import yatta.ast.ExpressionNode;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
+import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
 
+@NodeInfo(shortName = "do")
 public final class DoNode extends ExpressionNode {
   @Children
   public ExpressionNode[] steps;  // PatternAliasNode | AliasNode | ExpressionNode
@@ -75,5 +78,10 @@ public final class DoNode extends ExpressionNode {
     } else {
       return result;
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(steps);
   }
 }

@@ -5,6 +5,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Murmur3;
 import yatta.runtime.Set;
 
@@ -42,6 +43,11 @@ public class SetNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     return execute(frame);
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(expressions);
   }
 
   @Override

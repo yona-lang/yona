@@ -1,6 +1,6 @@
 package yatta.ast.pattern;
 
-import yatta.ast.expression.AliasNode;
+import yatta.ast.AliasNode;
 
 import java.util.Arrays;
 import java.util.Objects;

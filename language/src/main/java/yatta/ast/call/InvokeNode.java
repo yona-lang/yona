@@ -23,6 +23,7 @@ import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.local.WriteLocalVariableNode;
 import yatta.ast.local.WriteLocalVariableNodeGen;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Function;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.UndefinedNameException;
@@ -237,5 +238,14 @@ public final class InvokeNode extends ExpressionNode {
       return true;
     }
     return super.hasTag(tag);
+  }
+
+  @Override
+  public String[] requiredIdentifiers() {
+    if (function != null) {
+      return DependencyUtils.catenateRequiredIdentifiers(argumentNodes);
+    } else {
+      return DependencyUtils.catenateRequiredIdentifiersWith(functionNode, argumentNodes);
+    }
   }
 }

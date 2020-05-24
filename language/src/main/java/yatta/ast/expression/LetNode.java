@@ -1,13 +1,16 @@
 package yatta.ast.expression;
 
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 
 import java.util.Arrays;
 import java.util.Objects;
 
+@NodeInfo(shortName = "let")
 public final class LetNode extends LexicalScopeNode {
   @Node.Children
   public NameAliasNode[] aliases;
@@ -54,5 +57,10 @@ public final class LetNode extends LexicalScopeNode {
       alias.executeGeneric(frame);
     }
     return expression.executeGeneric(frame);
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiersWith(expression, aliases);
   }
 }

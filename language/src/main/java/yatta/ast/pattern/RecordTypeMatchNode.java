@@ -1,6 +1,7 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
@@ -12,11 +13,12 @@ import java.util.Objects;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
-public final class RecordTypePatternNode extends MatchNode {
+@NodeInfo(shortName = "recordTypeMatch")
+public final class RecordTypeMatchNode extends MatchNode {
   @CompilationFinal private final String recordType;
   @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
-  public RecordTypePatternNode(String recordType, ExpressionNode[] moduleStack) {
+  public RecordTypeMatchNode(String recordType, ExpressionNode[] moduleStack) {
     this.recordType = recordType;
     this.moduleStack = moduleStack;
   }
@@ -25,7 +27,7 @@ public final class RecordTypePatternNode extends MatchNode {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    RecordTypePatternNode that = (RecordTypePatternNode) o;
+    RecordTypeMatchNode that = (RecordTypeMatchNode) o;
     return Objects.equals(recordType, that.recordType) &&
         Arrays.equals(moduleStack, that.moduleStack);
   }
@@ -42,6 +44,11 @@ public final class RecordTypePatternNode extends MatchNode {
     return "RecordTypeNode{" +
         "recordType='" + recordType + '\'' +
         '}';
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return new String[0];
   }
 
   @Override
@@ -64,5 +71,10 @@ public final class RecordTypePatternNode extends MatchNode {
     }
 
     return MatchResult.FALSE;
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return new String[0];
   }
 }

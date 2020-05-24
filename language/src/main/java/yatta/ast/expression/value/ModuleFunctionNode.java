@@ -69,6 +69,11 @@ public final class ModuleFunctionNode extends FunctionLikeNode {
   }
 
   @Override
+  protected String[] requiredIdentifiers() {
+    return expression.getRequiredIdentifiers();
+  }
+
+  @Override
   public Function executeFunction(VirtualFrame frame) throws UnexpectedResultException {
     return execute(frame);
   }

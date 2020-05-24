@@ -36,6 +36,11 @@ public class ReadArgumentNode extends ExpressionNode {
   }
 
   @Override
+  protected String[] requiredIdentifiers() {
+    return new String[0];
+  }
+
+  @Override
   public String toString() {
     return "ReadArgumentNode{" +
         "index=" + index +

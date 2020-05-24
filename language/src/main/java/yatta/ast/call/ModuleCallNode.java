@@ -10,6 +10,7 @@ import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.JavaMethodRootNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Function;
 import yatta.runtime.NativeObject;
 import yatta.runtime.YattaModule;
@@ -78,6 +79,11 @@ public final class ModuleCallNode extends ExpressionNode {
     } else {
       throw new YattaException("Unexpected error while invoking a module function: : returned value is not a Yatta Module, nor a Native Object", this);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiersWith(nameNode, argumentNodes);
   }
 
   private Object invokeModuleFunction(VirtualFrame frame, Object maybeModule) {

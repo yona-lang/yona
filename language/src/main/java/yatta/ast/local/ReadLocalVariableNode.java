@@ -55,4 +55,9 @@ public abstract class ReadLocalVariableNode extends ExpressionNode {
 
     return value;
   }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return new String[0];
+  }
 }

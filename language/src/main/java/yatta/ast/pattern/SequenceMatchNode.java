@@ -2,18 +2,21 @@ package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import yatta.ast.expression.AliasNode;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.AliasNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public final class SequenceMatchPatternNode extends MatchNode {
+@NodeInfo(shortName = "sequenceMatch")
+public final class SequenceMatchNode extends MatchNode {
   @Node.Children
   public MatchNode[] matchNodes;
 
-  public SequenceMatchPatternNode(MatchNode[] matchNodes) {
+  public SequenceMatchNode(MatchNode[] matchNodes) {
     this.matchNodes = matchNodes;
   }
 
@@ -21,7 +24,7 @@ public final class SequenceMatchPatternNode extends MatchNode {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    SequenceMatchPatternNode that = (SequenceMatchPatternNode) o;
+    SequenceMatchNode that = (SequenceMatchNode) o;
     return Arrays.equals(matchNodes, that.matchNodes);
   }
 
@@ -35,6 +38,11 @@ public final class SequenceMatchPatternNode extends MatchNode {
     return "SequenceMatchPatternNode{" +
         "matchNodes=" + Arrays.toString(matchNodes) +
         '}';
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(matchNodes);
   }
 
   @Override
@@ -65,5 +73,10 @@ public final class SequenceMatchPatternNode extends MatchNode {
     }
 
     return MatchResult.FALSE;
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return DependencyUtils.catenateProvidedIdentifiers(matchNodes);
   }
 }

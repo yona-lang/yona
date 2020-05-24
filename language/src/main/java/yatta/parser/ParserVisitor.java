@@ -4,6 +4,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import org.antlr.v4.runtime.ParserRuleContext;
 import yatta.YattaLanguage;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
 import yatta.ast.MainExpressionNode;
 import yatta.ast.StringPartsNode;
@@ -21,7 +22,10 @@ import yatta.lang.YattaParserBaseVisitor;
 import yatta.runtime.Context;
 import yatta.runtime.Dict;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.*;
+import java.util.function.BiFunction;
 
 public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> {
   private YattaLanguage language;
@@ -94,16 +98,15 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitAdditiveExpression(YattaParser.AdditiveExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitAdditiveExpression(YattaParser.AdditiveExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
     switch (ctx.op.getText()) {
       case "+":
-        return withSourceSection(ctx, PlusNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(PlusNodeGen::create, left, right));
       case "-":
-        return withSourceSection(ctx, MinusNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(MinusNodeGen::create, left, right));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -114,18 +117,17 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitBinaryShiftExpression(YattaParser.BinaryShiftExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitBinaryShiftExpression(YattaParser.BinaryShiftExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
     switch (ctx.op.getText()) {
       case "<<":
-        return withSourceSection(ctx, LeftShiftNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(LeftShiftNodeGen::create, left, right));
       case ">>":
-        return withSourceSection(ctx, RightShiftNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(RightShiftNodeGen::create, left, right));
       case ">>>":
-        return withSourceSection(ctx, ZerofillRightShiftNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(ZerofillRightShiftNodeGen::create, left, right));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -136,20 +138,19 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitMultiplicativeExpression(YattaParser.MultiplicativeExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitMultiplicativeExpression(YattaParser.MultiplicativeExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
     switch (ctx.op.getText()) {
       case "**":
-        return withSourceSection(ctx, PowerNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(PowerNodeGen::create, left, right));
       case "*":
-        return withSourceSection(ctx, MultiplyNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(MultiplyNodeGen::create, left, right));
       case "/":
-        return withSourceSection(ctx, DivideNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(DivideNodeGen::create, left, right));
       case "%":
-        return withSourceSection(ctx, ModuloNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(ModuloNodeGen::create, left, right));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -160,24 +161,23 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitComparativeExpression(YattaParser.ComparativeExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitComparativeExpression(YattaParser.ComparativeExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
     switch (ctx.op.getText()) {
       case "==":
-        return withSourceSection(ctx, EqualsNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(EqualsNodeGen::create, left, right));
       case "!=":
-        return withSourceSection(ctx, NotEqualsNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(NotEqualsNodeGen::create, left, right));
       case "<=":
-        return withSourceSection(ctx, LowerThanOrEqualsNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(LowerThanOrEqualsNodeGen::create, left, right));
       case "<":
-        return withSourceSection(ctx, LowerThanNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(LowerThanNodeGen::create, left, right));
       case ">=":
-        return withSourceSection(ctx, GreaterThanOrEqualsNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(GreaterThanOrEqualsNodeGen::create, left, right));
       case ">":
-        return withSourceSection(ctx, GreaterThanNodeGen.create(args));
+        return withSourceSection(ctx, newBinaryOpNode(GreaterThanNodeGen::create, left, right));
       default:
         throw new ParseError(source,
             ctx.op.getLine(),
@@ -188,87 +188,89 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitBitwiseXorExpression(YattaParser.BitwiseXorExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitBitwiseXorExpression(YattaParser.BitwiseXorExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
-    return withSourceSection(ctx, BitwiseXorNodeGen.create(args));
+    return withSourceSection(ctx, newBinaryOpNode(BitwiseXorNodeGen::create, left, right));
   }
 
   @Override
-  public ExpressionNode visitBitwiseOrExpression(YattaParser.BitwiseOrExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitBitwiseOrExpression(YattaParser.BitwiseOrExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
-    return withSourceSection(ctx, BitwiseOrNodeGen.create(args));
+    return withSourceSection(ctx, newBinaryOpNode(BitwiseOrNodeGen::create, left, right));
   }
 
   @Override
-  public ExpressionNode visitBitwiseAndExpression(YattaParser.BitwiseAndExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitBitwiseAndExpression(YattaParser.BitwiseAndExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
-    return withSourceSection(ctx, BitwiseAndNodeGen.create(args));
+    return withSourceSection(ctx, newBinaryOpNode(BitwiseAndNodeGen::create, left, right));
   }
 
   @Override
   public ExpressionNode visitLogicalOrExpression(YattaParser.LogicalOrExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
     return withSourceSection(ctx, new LogicalOrNode(left, right));
   }
 
   @Override
   public ExpressionNode visitLogicalAndExpression(YattaParser.LogicalAndExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
     return withSourceSection(ctx, new LogicalAndNode(left, right));
   }
 
   @Override
-  public ExpressionNode visitConsLeftExpression(YattaParser.ConsLeftExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitConsLeftExpression(YattaParser.ConsLeftExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
-    return withSourceSection(ctx, SequenceLeftConsNodeGen.create(args));
+    return withSourceSection(ctx, newBinaryOpNode(SequenceLeftConsNodeGen::create, left, right));
   }
 
   @Override
-  public ExpressionNode visitConsRightExpression(YattaParser.ConsRightExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitConsRightExpression(YattaParser.ConsRightExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
-    return withSourceSection(ctx, SequenceRightConsNodeGen.create(args));
+    return withSourceSection(ctx, newBinaryOpNode(SequenceRightConsNodeGen::create, left, right));
   }
 
   @Override
-  public ExpressionNode visitJoinExpression(YattaParser.JoinExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitJoinExpression(YattaParser.JoinExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
-    return withSourceSection(ctx, JoinNodeGen.create(args));
+    return withSourceSection(ctx, newBinaryOpNode(JoinNodeGen::create, left, right));
   }
 
   @Override
-  public ExpressionNode visitInExpression(YattaParser.InExpressionContext ctx) {
-    ExpressionNode left = UnboxNodeGen.create(ctx.left.accept(this));
-    ExpressionNode right = UnboxNodeGen.create(ctx.right.accept(this));
-    ExpressionNode[] args = new ExpressionNode[]{left, right};
+  public BinaryOpNode visitInExpression(YattaParser.InExpressionContext ctx) {
+    ExpressionNode left = newUnboxNode(ctx.left);
+    ExpressionNode right = newUnboxNode(ctx.right);
 
-    return withSourceSection(ctx, InNodeGen.create(args));
+    return withSourceSection(ctx, newBinaryOpNode(InNodeGen::create, left, right));
+  }
+
+  private UnboxNode newUnboxNode(YattaParser.ExpressionContext ctx) {
+    ExpressionNode expressionNode = ctx.accept(this);
+    return withSourceSection(ctx, UnboxNodeGen.create(expressionNode).setValue(expressionNode));
+  }
+
+  private <T extends BinaryOpNode> BinaryOpNode newBinaryOpNode(BiFunction<ExpressionNode, ExpressionNode, T> ctor, ExpressionNode left, ExpressionNode right) {
+    return ctor.apply(left, right).setLeft(left).setRight(right);
   }
 
   @Override
   public PatternLetNode visitLetExpression(YattaParser.LetExpressionContext ctx) {
-    ExpressionNode[] aliasNodes = new ExpressionNode[ctx.let().alias().size()];
+    AliasNode[] aliasNodes = new AliasNode[ctx.let().alias().size()];
 
     for (int i = 0; i < ctx.let().alias().size(); i++) {
       aliasNodes[i] = visitAlias(ctx.let().alias(i));
@@ -278,7 +280,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   @Override
-  public ExpressionNode visitAlias(YattaParser.AliasContext ctx) {
+  public AliasNode visitAlias(YattaParser.AliasContext ctx) {
     if (ctx.patternAlias() != null) {
       return withSourceSection(ctx, new PatternAliasNode(visitPattern(ctx.patternAlias().pattern()), ctx.patternAlias().expression().accept(this)));
     } else if (ctx.moduleAlias() != null) {
@@ -734,12 +736,12 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       for (int i = 0; i < ctx.pattern().size(); i++) {
         matchNodes[i] = visitPattern(ctx.pattern(i));
       }
-      return withSourceSection(ctx, new SequenceMatchPatternNode(matchNodes));
+      return withSourceSection(ctx, new SequenceMatchNode(matchNodes));
     }
   }
 
   @Override
-  public HeadTailsMatchPatternNode visitHeadTails(YattaParser.HeadTailsContext ctx) {
+  public HeadTailsMatchNode visitHeadTails(YattaParser.HeadTailsContext ctx) {
     MatchNode[] headPatterns = new MatchNode[ctx.patternWithoutSequence().size()];
 
     for (int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
@@ -748,11 +750,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
     ExpressionNode tails = ctx.tails().accept(this);
 
-    return withSourceSection(ctx, new HeadTailsMatchPatternNode(headPatterns, tails));
+    return withSourceSection(ctx, new HeadTailsMatchNode(headPatterns, tails));
   }
 
   @Override
-  public TailsHeadMatchPatternNode visitTailsHead(YattaParser.TailsHeadContext ctx) {
+  public TailsHeadMatchNode visitTailsHead(YattaParser.TailsHeadContext ctx) {
     MatchNode[] headPatterns = new MatchNode[ctx.patternWithoutSequence().size()];
 
     for (int i = 0; i < ctx.patternWithoutSequence().size(); i++) {
@@ -761,11 +763,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
     ExpressionNode tails = ctx.tails().accept(this);
 
-    return withSourceSection(ctx, new TailsHeadMatchPatternNode(tails, headPatterns));
+    return withSourceSection(ctx, new TailsHeadMatchNode(tails, headPatterns));
   }
 
   @Override
-  public HeadTailsHeadPatternNode visitHeadTailsHead(YattaParser.HeadTailsHeadContext ctx) {
+  public HeadTailsHeadMatchNode visitHeadTailsHead(YattaParser.HeadTailsHeadContext ctx) {
     MatchNode[] leftPatterns = new MatchNode[ctx.leftPattern().size()];
     MatchNode[] rightPatterns = new MatchNode[ctx.rightPattern().size()];
 
@@ -779,7 +781,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
       rightPatterns[i] = visitPatternWithoutSequence(ctx.rightPattern(i).patternWithoutSequence());
     }
 
-    return withSourceSection(ctx, new HeadTailsHeadPatternNode(leftPatterns, tails, rightPatterns));
+    return withSourceSection(ctx, new HeadTailsHeadMatchNode(leftPatterns, tails, rightPatterns));
   }
 
   @Override
@@ -799,15 +801,15 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   @Override
   public MatchNode visitRecordPattern(YattaParser.RecordPatternContext ctx) {
     if (ctx.pattern().size() > 0) {
-      RecordFieldsPatternNode.RecordPatternFieldNode[] fields = new RecordFieldsPatternNode.RecordPatternFieldNode[ctx.name().size()];
+      RecordFieldsMatchNode.RecordPatternFieldNode[] fields = new RecordFieldsMatchNode.RecordPatternFieldNode[ctx.name().size()];
 
       for (int i = 0; i < ctx.name().size(); i++) {
-        fields[i] = new RecordFieldsPatternNode.RecordPatternFieldNode(ctx.name(i).LOWERCASE_NAME().getText(), visitPattern(ctx.pattern(i)));
+        fields[i] = new RecordFieldsMatchNode.RecordPatternFieldNode(ctx.name(i).LOWERCASE_NAME().getText(), visitPattern(ctx.pattern(i)));
       }
 
-      return withSourceSection(ctx, new RecordFieldsPatternNode(ctx.recordType().UPPERCASE_NAME().getText(), fields, moduleStack.toArray(new ExpressionNode[]{})));
+      return withSourceSection(ctx, new RecordFieldsMatchNode(ctx.recordType().UPPERCASE_NAME().getText(), fields, moduleStack.toArray(new ExpressionNode[]{})));
     } else {
-      return withSourceSection(ctx, new RecordTypePatternNode(ctx.recordType().UPPERCASE_NAME().getText(), moduleStack.toArray(new ExpressionNode[]{})));
+      return withSourceSection(ctx, new RecordTypeMatchNode(ctx.recordType().UPPERCASE_NAME().getText(), moduleStack.toArray(new ExpressionNode[]{})));
     }
   }
 

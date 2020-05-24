@@ -2,8 +2,8 @@ package yatta.ast.expression;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
@@ -22,9 +22,12 @@ import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 @NodeInfo(shortName = "fieldAccess")
 public class FieldAccessNode extends ExpressionNode {
-  @Child private ExpressionNode recordName;
-  @CompilationFinal private final String fieldName;
-  @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
+  @Child
+  private ExpressionNode recordName;
+  @CompilationFinal
+  private final String fieldName;
+  @Children
+  private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
   public FieldAccessNode(IdentifierNode recordName, String fieldName, ExpressionNode[] moduleStack) {
     this.recordName = recordName;
@@ -73,7 +76,7 @@ public class FieldAccessNode extends ExpressionNode {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       MaterializedFrame materializedFrame = frame.materialize();
 
-      return  ((Promise) recordValue).map(recordTupleObj -> {
+      return ((Promise) recordValue).map(recordTupleObj -> {
         if (recordTupleObj instanceof Tuple) {
           Tuple recordTuple = (Tuple) recordTupleObj;
           return getFieldElementFromTuple(recordTuple, materializedFrame);
@@ -84,6 +87,11 @@ public class FieldAccessNode extends ExpressionNode {
     } else {
       throw YattaException.typeError(this, recordValue);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return recordName.getRequiredIdentifiers();
   }
 
   private Object getFieldElementFromTuple(Tuple recordTuple, MaterializedFrame frame) {

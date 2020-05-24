@@ -1,7 +1,9 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
 
+@NodeInfo(shortName = "underscoreMatch")
 public final class UnderscoreMatchNode extends MatchNode {
   public UnderscoreMatchNode() {
   }
@@ -12,7 +14,17 @@ public final class UnderscoreMatchNode extends MatchNode {
   }
 
   @Override
+  protected String[] requiredIdentifiers() {
+    return new String[0];
+  }
+
+  @Override
   public MatchResult match(Object value, VirtualFrame frame) {
     return MatchResult.TRUE;
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return new String[0];
   }
 }

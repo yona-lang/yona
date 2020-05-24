@@ -5,13 +5,12 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import yatta.YattaException;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.pattern.MatchControlFlowException;
 import yatta.ast.pattern.PatternMatchable;
-import yatta.runtime.Context;
-import yatta.runtime.Tuple;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.NoMatchException;
 import yatta.runtime.exceptions.util.ExceptionUtil;
@@ -19,9 +18,12 @@ import yatta.runtime.exceptions.util.ExceptionUtil;
 import java.util.Arrays;
 import java.util.Objects;
 
+@NodeInfo(shortName = "try")
 public final class TryCatchNode extends ExpressionNode {
-  @Child private ExpressionNode tryExpression;
-  @Children private final PatternMatchable[] catchPatterns;
+  @Child
+  private ExpressionNode tryExpression;
+  @Children
+  private final PatternMatchable[] catchPatterns;
 
   public TryCatchNode(ExpressionNode tryExpression, PatternMatchable[] catchPatterns) {
     this.tryExpression = tryExpression;
@@ -57,7 +59,7 @@ public final class TryCatchNode extends ExpressionNode {
     super.setIsTail(isTail);
     tryExpression.setIsTail(true);
     for (PatternMatchable patternMatchable : catchPatterns) {
-      ((ExpressionNode) patternMatchable).setIsTail(isTail);
+      patternMatchable.setIsTail(isTail);
     }
   }
 
@@ -86,6 +88,11 @@ public final class TryCatchNode extends ExpressionNode {
     } catch (Throwable t) {
       return execute(t, frame);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiersWith(tryExpression, catchPatterns);
   }
 
   @ExplodeLoop

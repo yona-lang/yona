@@ -19,11 +19,12 @@ import yatta.runtime.Unit;
 import yatta.runtime.YattaModule;
 import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
-@NodeInfo
+@NodeInfo(shortName = "identifier")
 public final class IdentifierNode extends ExpressionNode {
   private final String name;
   private final YattaLanguage language;
-  @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
+  @Children
+  private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
   public IdentifierNode(YattaLanguage language, String name, ExpressionNode[] moduleStack) {
     this.name = name;
@@ -95,6 +96,11 @@ public final class IdentifierNode extends ExpressionNode {
     CompilerDirectives.transferToInterpreterAndInvalidate();
     this.replace(node);
     return result;
+  }
+
+  @Override
+  public String[] requiredIdentifiers() {
+    return new String[]{name};
   }
 
   public boolean isBound(VirtualFrame frame) {

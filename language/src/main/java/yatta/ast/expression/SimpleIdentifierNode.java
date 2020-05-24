@@ -1,14 +1,16 @@
 package yatta.ast.expression;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.ast.local.ReadLocalVariableNodeGen;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
+@NodeInfo(shortName = "simpleIdentifier")
 public final class SimpleIdentifierNode extends ExpressionNode {
   public final String name;
 
@@ -36,5 +38,10 @@ public final class SimpleIdentifierNode extends ExpressionNode {
     } catch (UninitializedFrameSlotException e) {
       throw new YattaException("Identifier '" + name + "' not found in the current scope", this);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return new String[]{name};
   }
 }

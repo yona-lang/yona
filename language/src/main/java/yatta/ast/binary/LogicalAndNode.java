@@ -4,6 +4,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.async.Promise;
 
 /**
@@ -43,6 +44,11 @@ public final class LogicalAndNode extends ExpressionNode {
     } else {
       throw YattaException.typeError(this, leftValue);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(leftNode, rightNode);
   }
 
   private Object evaluateRight(VirtualFrame frame, Boolean leftValue) {

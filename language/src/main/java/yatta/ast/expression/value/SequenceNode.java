@@ -5,6 +5,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 
 import java.util.Objects;
@@ -41,6 +42,11 @@ public final class SequenceNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     return execute(frame);
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(expressions);
   }
 
   @Override

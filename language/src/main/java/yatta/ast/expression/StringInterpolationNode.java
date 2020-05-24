@@ -2,9 +2,11 @@ package yatta.ast.expression;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.TypesGen;
 import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.NoMatchException;
@@ -12,11 +14,12 @@ import yatta.runtime.strings.StringUtil;
 
 import java.util.Objects;
 
+@NodeInfo(shortName = "stringInterpolation")
 public final class StringInterpolationNode extends ExpressionNode {
   @Child
-  ExpressionNode interpolationExpression;
+  public ExpressionNode interpolationExpression;
   @Child
-  ExpressionNode alignmentExpression;
+  public ExpressionNode alignmentExpression;
 
   public StringInterpolationNode(ExpressionNode interpolationExpression, ExpressionNode alignmentExpression) {
     this.interpolationExpression = interpolationExpression;
@@ -81,5 +84,10 @@ public final class StringInterpolationNode extends ExpressionNode {
         throw new NoMatchException(e, this);
       }
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(interpolationExpression, alignmentExpression);
   }
 }

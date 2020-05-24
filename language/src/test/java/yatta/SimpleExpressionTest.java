@@ -3,7 +3,6 @@ package yatta;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
-import yatta.runtime.Unit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -162,7 +161,7 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void letTwoAliasesTest() {
-    Value ret = context.eval(YattaLanguage.ID, "\\test -> let \n" +
+    Value ret = context.eval(YattaLanguage.ID, "\\test -> let\n" +
         "    alias = test\n" +
         "    aliastwo = 6\n" +
         "in\n" +

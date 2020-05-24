@@ -6,21 +6,26 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Tuple;
 import yatta.runtime.Unit;
 import yatta.runtime.YattaModule;
 import yatta.runtime.exceptions.NoRecordException;
 import yatta.runtime.exceptions.NoRecordFieldException;
-import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 import java.util.Arrays;
 import java.util.Objects;
 
+import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+
 @NodeInfo(shortName = "recordInstance")
 public final class RecordInstanceNode extends ExpressionNode {
-  @CompilationFinal private final String recordType;
-  @Children private final RecordFieldValueNode[] fields;
-  @Children private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
+  @CompilationFinal
+  private final String recordType;
+  @Children
+  private final RecordFieldValueNode[] fields;
+  @Children
+  private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
 
   public RecordInstanceNode(String recordType, RecordFieldValueNode[] fields, ExpressionNode[] moduleStack) {
     this.recordType = recordType;
@@ -59,6 +64,11 @@ public final class RecordInstanceNode extends ExpressionNode {
     } catch (UnexpectedResultException e) {
       throw new YattaException("Unexpected error when creating a record instance", e, this);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(fields);
   }
 
   @Override

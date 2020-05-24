@@ -98,7 +98,7 @@ options { tokenVocab=YattaLexer; }
         throw new ParseError(source, line, charPositionInLine + 1, length, msg.toString());
     }
 
-    public static RootCallTarget parseYatta(YattaLanguage language, Context context, Source source) {
+    public static ExpressionNode parseYattaExpression(YattaLanguage language, Context context, Source source) {
         YattaLexer lexer = new YattaLexer(CharStreams.fromString(source.getCharacters().toString()));
         YattaParser parser = new YattaParser(new CommonTokenStream(lexer));
         lexer.removeErrorListeners();
@@ -108,7 +108,11 @@ options { tokenVocab=YattaLexer; }
         parser.addErrorListener(listener);
         parser.setErrorHandler(new YattaErrorStrategy());
         parser.source = source;
-        ExpressionNode rootExpression = new ParserVisitor(language, context, source).visit(parser.input());
+        return new ParserVisitor(language, context, source).visit(parser.input());
+    }
+
+    public static RootCallTarget parseYatta(YattaLanguage language, Context context, Source source) {
+        ExpressionNode rootExpression = parseYattaExpression(language, context, source);
         FunctionRootNode rootNode = new FunctionRootNode(language, context.globalFrameDescriptor, rootExpression, source.createSection(1), null, "root");
         return Truffle.getRuntime().createCallTarget(rootNode);
     }

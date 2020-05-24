@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import java.util.Objects;
 
 @NodeInfo
-public final class IntegerNode extends ExpressionNode {
+public final class IntegerNode extends LiteralValueNode {
   public final long value;
 
   public IntegerNode(long value) {

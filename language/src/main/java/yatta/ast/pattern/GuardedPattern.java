@@ -1,14 +1,17 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.ConditionNode;
 import yatta.ast.expression.ThrowNode;
+import yatta.runtime.DependencyUtils;
 
 import java.util.Objects;
 
-public class GuardedPattern extends ExpressionNode implements PatternMatchable {
+@NodeInfo(shortName = "guardedPattern")
+public final class GuardedPattern extends PatternMatchable {
   @Child
   public MatchNode matchExpression;
   @Child
@@ -63,5 +66,10 @@ public class GuardedPattern extends ExpressionNode implements PatternMatchable {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     return null;
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(matchExpression, conditionNode);
   }
 }

@@ -1,17 +1,19 @@
 package yatta.ast.pattern;
 
-import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
-import yatta.ast.expression.FrameSlotAliasNode;
-import yatta.ast.expression.NameAliasNode;
-import yatta.ast.expression.IdentifierNode;
-import yatta.ast.expression.value.AnyValueNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.AliasNode;
+import yatta.ast.ExpressionNode;
+import yatta.ast.expression.FrameSlotAliasNode;
+import yatta.ast.expression.IdentifierNode;
+import yatta.ast.expression.NameAliasNode;
+import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.local.ReadLocalVariableNode;
 import yatta.runtime.exceptions.UninitializedFrameSlotException;
 
 import java.util.Objects;
 
+@NodeInfo(shortName = "valueMatch")
 public final class ValueMatchNode extends MatchNode {
   @Child
   private ExpressionNode expression;
@@ -81,7 +83,25 @@ public final class ValueMatchNode extends MatchNode {
     }
   }
 
+  @Override
+  public String[] requiredIdentifiers() {
+    return expression.getRequiredIdentifiers();
+  }
+
   public ExpressionNode getExpression() {
     return expression;
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    if (expression instanceof IdentifierNode) {
+      IdentifierNode identifierNode = (IdentifierNode) expression;
+      return new String[]{identifierNode.name()};
+    } else if (expression instanceof ReadLocalVariableNode) {
+      ReadLocalVariableNode readLocalVariableNode = (ReadLocalVariableNode) expression;
+      return new String[]{(String) readLocalVariableNode.getSlot().getIdentifier()};
+    } else {
+      return new String[0];
+    }
   }
 }

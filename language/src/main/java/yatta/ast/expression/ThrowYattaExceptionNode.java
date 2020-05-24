@@ -1,20 +1,25 @@
 package yatta.ast.expression;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.YattaSymbolException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.value.SymbolNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 import yatta.runtime.Symbol;
 import yatta.runtime.async.Promise;
 
 import java.util.Objects;
 
-public class ThrowYattaExceptionNode extends ExpressionNode {
-  @Child private SymbolNode symbolNode;
-  @Child private ExpressionNode stringNode;  // StringLiteralNode | StringInterpolationNode
+@NodeInfo(shortName = "throwYatta")
+public final class ThrowYattaExceptionNode extends ExpressionNode {
+  @Child
+  private SymbolNode symbolNode;
+  @Child
+  private ExpressionNode stringNode;  // StringLiteralNode | StringInterpolationNode
 
   public ThrowYattaExceptionNode(SymbolNode symbolNode, ExpressionNode stringNode) {
     this.symbolNode = symbolNode;
@@ -58,5 +63,10 @@ public class ThrowYattaExceptionNode extends ExpressionNode {
     } catch (UnexpectedResultException ex) {
       throw new YattaException("Unexpected error while constructing an Exception: " + ex.getMessage(), this);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(symbolNode, stringNode);
   }
 }

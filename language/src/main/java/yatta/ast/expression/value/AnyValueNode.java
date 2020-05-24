@@ -4,14 +4,13 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yatta.ast.ExpressionNode;
 
 import java.util.Objects;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 @NodeInfo
-public class AnyValueNode extends ExpressionNode {
+public class AnyValueNode extends LiteralValueNode {
   @CompilationFinal
   public final Object value;
 
@@ -44,5 +43,10 @@ public class AnyValueNode extends ExpressionNode {
   public Object executeGeneric(VirtualFrame frame) {
     CompilerAsserts.compilationConstant(value);
     return value;
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return new String[0];
   }
 }

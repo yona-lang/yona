@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.TypesGen;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.IdentifierNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Symbol;
 import yatta.runtime.Tuple;
 import yatta.runtime.YattaModule;
@@ -87,6 +87,11 @@ public final class RecordUpdateNode extends ExpressionNode {
     } else {
       throw YattaException.typeError(this, originalRecordValue);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiersWith(recordIdentifier, fields);
   }
 
   private Tuple executeTupleValue(VirtualFrame frame, Tuple originalRecordTuple) throws UnexpectedResultException {

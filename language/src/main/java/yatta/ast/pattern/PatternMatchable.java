@@ -1,8 +1,8 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.NodeInterface;
+import yatta.ast.ExpressionNode;
 
-public interface PatternMatchable extends NodeInterface {
-  Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException;
+public abstract class PatternMatchable extends ExpressionNode {
+  public abstract Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException;
 }

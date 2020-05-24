@@ -2,16 +2,18 @@ package yatta.ast.expression;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
 import yatta.ast.local.WriteLocalVariableNode;
 import yatta.ast.local.WriteLocalVariableNodeGen;
 
 import java.util.Objects;
 
-public final class FrameSlotAliasNode extends ExpressionNode implements AliasNode {
+@NodeInfo(shortName = "frameSlotAlias")
+public final class FrameSlotAliasNode extends AliasNode {
   public final FrameSlot frameSlot;
   @Node.Child
   public ExpressionNode expression;
@@ -49,5 +51,15 @@ public final class FrameSlotAliasNode extends ExpressionNode implements AliasNod
     CompilerDirectives.transferToInterpreterAndInvalidate();
     WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(expression, frameSlot);
     return writeLocalVariableNode.executeGeneric(frame);
+  }
+
+  @Override
+  public String[] requiredIdentifiers() {
+    return expression.getRequiredIdentifiers();
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return new String[]{(String) frameSlot.getIdentifier()};
   }
 }

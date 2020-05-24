@@ -1,18 +1,21 @@
 package yatta.ast.expression;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
 import yatta.ast.pattern.MatchNode;
 import yatta.ast.pattern.MatchResult;
 import yatta.runtime.Unit;
 import yatta.runtime.async.Promise;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.runtime.exceptions.NoMatchException;
 
 import java.util.Objects;
 
-public final class PatternAliasNode extends ExpressionNode {
+@NodeInfo(shortName = "patternAlias")
+public final class PatternAliasNode extends AliasNode {
   @Child
   public MatchNode matchNode;
   @Child
@@ -82,5 +85,15 @@ public final class PatternAliasNode extends ExpressionNode {
     } else {
       throw new NoMatchException(this);
     }
+  }
+
+  @Override
+  public String[] requiredIdentifiers() {
+    return expression.getRequiredIdentifiers();
+  }
+
+  @Override
+  public String[] providedIdentifiers() {
+    return matchNode.getProvidedIdentifiers();
   }
 }

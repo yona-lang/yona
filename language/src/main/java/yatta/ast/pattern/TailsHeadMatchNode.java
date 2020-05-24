@@ -1,13 +1,15 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
 import yatta.ast.expression.IdentifierNode;
 import yatta.ast.expression.NameAliasNode;
 import yatta.ast.expression.value.AnyValueNode;
 import yatta.ast.expression.value.EmptySequenceNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 
 import java.util.ArrayList;
@@ -15,13 +17,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-public final class HeadTailsMatchPatternNode extends MatchNode {
+@NodeInfo(shortName = "tailsHeadMatch")
+public final class TailsHeadMatchNode extends MatchNode {
   @Children
-  public MatchNode headNodes[];
+  public MatchNode[] headNodes;
   @Child
   public ExpressionNode tailsNode;
 
-  public HeadTailsMatchPatternNode(MatchNode headNodes[], ExpressionNode tailsNode) {
+  public TailsHeadMatchNode(ExpressionNode tailsNode, MatchNode[] headNodes) {
     this.headNodes = headNodes;
     this.tailsNode = tailsNode;
   }
@@ -30,7 +33,7 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    HeadTailsMatchPatternNode that = (HeadTailsMatchPatternNode) o;
+    TailsHeadMatchNode that = (TailsHeadMatchNode) o;
     return Objects.equals(headNodes, that.headNodes) &&
         Objects.equals(tailsNode, that.tailsNode);
   }
@@ -42,10 +45,15 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
 
   @Override
   public String toString() {
-    return "HeadTailsMatchPatternNode{" +
-        "headNodes=" + headNodes +
+    return "TailsHeadMatchPatternNode{" +
+        "headNode=" + headNodes +
         ", tailsNode=" + tailsNode +
         '}';
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return new String[0];
   }
 
   @Override
@@ -59,12 +67,12 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
       }
 
       if (sequence.length() > 0) {
-        for (int i = 0; i < headNodes.length; i++) {
+        for (int i = headNodes.length - 1; i >= 0; i--) {
           MatchNode headNode = headNodes[i];
-          MatchResult headMatches = headNode.match(sequence.first(this), frame);
+          MatchResult headMatches = headNode.match(sequence.last(this), frame);
           if (headMatches.isMatches()) {
             aliases.addAll(Arrays.asList(headMatches.getAliases()));
-            sequence = sequence.removeFirst(this);
+            sequence = sequence.removeLast(this);
           } else {
             return MatchResult.FALSE;
           }
@@ -75,7 +83,7 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
           IdentifierNode identifierNode = (IdentifierNode) tailsNode;
 
           if (identifierNode.isBound(frame)) {
-            Seq identifierValue = null;
+            Seq identifierValue;
             try {
               identifierValue = identifierNode.executeSequence(frame);
             } catch (UnexpectedResultException e) {
@@ -116,5 +124,10 @@ public final class HeadTailsMatchPatternNode extends MatchNode {
     }
 
     return MatchResult.FALSE;
+  }
+
+  @Override
+  protected String[] providedIdentifiers() {
+    return DependencyUtils.catenateProvidedIdentifiers(tailsNode.getRequiredIdentifiers(), headNodes);
   }
 }

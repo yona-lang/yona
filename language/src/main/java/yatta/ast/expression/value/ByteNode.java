@@ -1,6 +1,5 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -8,7 +7,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import java.util.Objects;
 
 @NodeInfo
-public final class ByteNode extends ExpressionNode {
+public final class ByteNode extends LiteralValueNode {
   public final byte value;
 
   public ByteNode(byte value) {

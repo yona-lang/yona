@@ -1,11 +1,11 @@
 package yatta.ast.expression.value;
 
 import yatta.ast.ExpressionNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Dict;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import yatta.runtime.Murmur3;
 
 import java.util.Objects;
 
@@ -52,6 +52,11 @@ public final class DictNode extends ExpressionNode {
     public Object executeGeneric(VirtualFrame frame) {
       return new Object[] {key.executeGeneric(frame), value.executeGeneric(frame)};
     }
+
+    @Override
+    protected String[] requiredIdentifiers() {
+      return DependencyUtils.catenateRequiredIdentifiers(key, value);
+    }
   }
 
   @Override
@@ -77,6 +82,11 @@ public final class DictNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     return execute(frame);
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(items);
   }
 
   @Override

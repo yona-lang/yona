@@ -34,6 +34,9 @@ public final class Launcher {
       source = Source.newBuilder(LANGUAGE_ID, new File(file)).interactive(true).build();
     }
 
+    if (options.size() > 0) {
+      System.out.println("Running with options: " + options);
+    }
     System.exit(executeSource(source, options));
   }
 

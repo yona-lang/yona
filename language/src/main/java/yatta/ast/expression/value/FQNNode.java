@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 @NodeInfo
-public final class FQNNode extends ExpressionNode {
+public final class FQNNode extends LiteralValueNode {
   public final String[] packageParts;
   public final String moduleName;
 

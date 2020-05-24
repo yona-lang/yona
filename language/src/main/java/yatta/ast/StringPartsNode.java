@@ -4,13 +4,17 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 import yatta.runtime.async.Promise;
 
 import java.util.Arrays;
 
+@NodeInfo(shortName = "stringParts")
 public final class StringPartsNode extends ExpressionNode {
-  @Children private ExpressionNode[] expressionNodes;
+  @Children
+  private ExpressionNode[] expressionNodes;
 
   public StringPartsNode(ExpressionNode[] expressionNodes) {
     this.expressionNodes = expressionNodes;
@@ -72,5 +76,10 @@ public final class StringPartsNode extends ExpressionNode {
         return sb;
       }, this);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(expressionNodes);
   }
 }

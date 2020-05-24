@@ -129,6 +129,25 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
     return false;
   }
 
+  private String[] cachedRequiredIdentifiers = null;
+
+  /**
+   * Identifiers used/required by this expression. Cached after first call.
+   */
+  public String[] getRequiredIdentifiers() {
+    if (cachedRequiredIdentifiers == null) {
+      cachedRequiredIdentifiers = requiredIdentifiers();
+      return cachedRequiredIdentifiers;
+    } else {
+      return cachedRequiredIdentifiers;
+    }
+  }
+
+  /**
+   * Identifiers used/required by this expression.
+   */
+  protected abstract String[] requiredIdentifiers();
+
   /*
    * Execute methods for specialized types. They all follow the same pattern: they call the
    * generic execution method and then expect a result of their return type. Type-specialized

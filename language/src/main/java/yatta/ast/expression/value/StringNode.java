@@ -1,6 +1,5 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -9,7 +8,7 @@ import yatta.runtime.Seq;
 import java.util.Objects;
 
 @NodeInfo(shortName = "string")
-public final class StringNode extends ExpressionNode {
+public final class StringNode extends LiteralValueNode {
   public final Seq value;
 
   public StringNode(Seq value) {

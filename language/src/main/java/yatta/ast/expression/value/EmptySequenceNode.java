@@ -1,13 +1,12 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.runtime.Seq;
 
 @NodeInfo
-public final class EmptySequenceNode extends ExpressionNode {
+public final class EmptySequenceNode extends LiteralValueNode {
   public EmptySequenceNode() {
   }
 

@@ -38,14 +38,11 @@ import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 
 public class Context {
   public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").internal(true).build();
@@ -482,5 +479,10 @@ public class Context {
       }
     }
     LOGGER.fine("Threading shut down");
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Set globallyProvidedIdentifiers() {
+    return Set.set(builtins.builtins.keySet().toArray());
   }
 }

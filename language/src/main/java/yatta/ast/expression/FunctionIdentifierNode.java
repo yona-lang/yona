@@ -1,15 +1,17 @@
 package yatta.ast.expression;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.value.FQNNode;
 import yatta.runtime.Function;
 import yatta.runtime.YattaModule;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import java.util.Objects;
 
+@NodeInfo(shortName = "functionIdentifier")
 public class FunctionIdentifierNode extends ExpressionNode {
   @Child
   public FQNNode fqnNode;
@@ -49,6 +51,11 @@ public class FunctionIdentifierNode extends ExpressionNode {
     } catch (UnexpectedResultException e) {
       return null;
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return new String[]{functionName};
   }
 
   @Override

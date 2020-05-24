@@ -56,4 +56,9 @@ public final class BinaryNegationNode extends ExpressionNode {
       throw YattaException.typeError(this, result);
     }
   }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return expression.getRequiredIdentifiers();
+  }
 }

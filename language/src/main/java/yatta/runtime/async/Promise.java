@@ -188,6 +188,19 @@ public final class Promise implements TruffleObject {
     }
   }
 
+  /**
+   * @return value of the promise, if it was fulfilled, otherwise returns null
+   */
+  public Object unwrapOrThrow() throws Throwable {
+    if (value instanceof Callback) {
+      return null;
+    } else if (value instanceof Throwable) {
+      throw (Throwable) value;
+    } else {
+      return value;
+    }
+  }
+
   public Object unwrapWithError() {
     if (value instanceof Callback) {
       return null;
@@ -350,6 +363,7 @@ public final class Promise implements TruffleObject {
     enum Nil implements Stack {
       INSTANCE
     }
+
   }
 
   private <T, R> Object applyTCOToFunction(Function<? super T, ? extends R> function, T argument, Node node) {

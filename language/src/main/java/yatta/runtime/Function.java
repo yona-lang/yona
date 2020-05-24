@@ -1,6 +1,5 @@
 package yatta.runtime;
 
-import yatta.YattaLanguage;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.dsl.Cached;
@@ -12,6 +11,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.source.SourceSection;
+import yatta.YattaLanguage;
 
 /**
  * Represents a Yatta function. On the Truffle level, a callable element is represented by a
@@ -26,13 +26,17 @@ public final class Function implements TruffleObject {
 
   private static final TruffleLogger LOG = TruffleLogger.getLogger(YattaLanguage.ID, Function.class);
 
-  /** The name of the function. */
+  /**
+   * The name of the function.
+   */
   private final String name;
   private final String moduleFQN;
 
   private int cardinality;
 
-  /** The current implementation of this function. */
+  /**
+   * The current implementation of this function.
+   */
   private RootCallTarget callTarget;
 
   private boolean unwrapArgumentPromises;
@@ -120,13 +124,12 @@ public final class Function implements TruffleObject {
      * that cachedTarget is a final field so that the compiler can optimize the check.
      * </p>
      *
+     * @param function       the dynamically provided function
+     * @param cachedFunction the cached function of the specialization instance
+     * @param callNode       the {@link DirectCallNode} specifically created for the
+     *                       {@link CallTarget} in cachedFunction.
      * @see Cached
      * @see Specialization
-     *
-     * @param function the dynamically provided function
-     * @param cachedFunction the cached function of the specialization instance
-     * @param callNode the {@link DirectCallNode} specifically created for the
-     *            {@link CallTarget} in cachedFunction.
      */
     @Specialization(limit = "INLINE_CACHE_SIZE", //
         guards = "function.getCallTarget() == cachedTarget")

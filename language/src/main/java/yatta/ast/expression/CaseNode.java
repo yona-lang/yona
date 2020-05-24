@@ -1,21 +1,24 @@
 package yatta.ast.expression;
 
-import yatta.ast.ExpressionNode;
-import yatta.ast.pattern.MatchControlFlowException;
-import yatta.ast.pattern.PatternMatchable;
-import yatta.runtime.async.Promise;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.ExpressionNode;
+import yatta.ast.pattern.MatchControlFlowException;
+import yatta.ast.pattern.PatternMatchable;
+import yatta.runtime.DependencyUtils;
+import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.NoMatchException;
 
 import java.util.Arrays;
 import java.util.Objects;
 
-public class CaseNode extends ExpressionNode {
+@NodeInfo(shortName = "case")
+public final class CaseNode extends ExpressionNode {
   @Node.Child
   public ExpressionNode expression;
 
@@ -55,7 +58,7 @@ public class CaseNode extends ExpressionNode {
   public void setIsTail(boolean isTail) {
     super.setIsTail(isTail);
     for (PatternMatchable patternMatchable : patternNodes) {
-      ((ExpressionNode) patternMatchable).setIsTail(isTail);
+      patternMatchable.setIsTail(isTail);
     }
   }
 
@@ -77,6 +80,11 @@ public class CaseNode extends ExpressionNode {
     } else {
       return execute(value, frame);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiersWith(expression, patternNodes);
   }
 
   @ExplodeLoop

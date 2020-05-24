@@ -3,7 +3,6 @@ package yatta.ast.expression;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yatta.YattaException;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.async.Promise;
@@ -57,5 +56,10 @@ public final class NegationNode extends ExpressionNode {
     } else {
       throw YattaException.typeError(this, result);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return expression.getRequiredIdentifiers();
   }
 }

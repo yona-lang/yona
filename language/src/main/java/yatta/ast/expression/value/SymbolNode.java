@@ -2,17 +2,15 @@ package yatta.ast.expression.value;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import yatta.YattaLanguage;
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import yatta.runtime.Context;
 import yatta.runtime.Symbol;
 
 import java.util.Objects;
 
 @NodeInfo(shortName = "symbol")
-public class SymbolNode extends ExpressionNode {
+public class SymbolNode extends LiteralValueNode {
   public final String value;
 
   /**

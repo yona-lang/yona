@@ -9,6 +9,7 @@ import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.ExpressionNode;
 import yatta.ast.expression.NameAliasNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Dict;
 import yatta.runtime.Function;
 import yatta.runtime.YattaModule;
@@ -61,6 +62,11 @@ public final class ModuleNode extends ExpressionNode {
     } catch (UnexpectedResultException ex) {
       throw new YattaException("Unable to load Module " + moduleFQN, ex, this);
     }
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(functions);
   }
 
   @Override

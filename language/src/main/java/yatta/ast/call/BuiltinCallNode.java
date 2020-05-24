@@ -9,7 +9,8 @@ import yatta.ast.local.ReadArgumentNode;
 
 @NodeInfo
 public final class BuiltinCallNode extends ExpressionNode {
-  @Child private BuiltinNode builtinNode;
+  @Child
+  private BuiltinNode builtinNode;
 
   public BuiltinCallNode(NodeFactory<? extends BuiltinNode> nodeFactory) {
     int argumentsCount = nodeFactory.getExecutionSignature().size();
@@ -31,5 +32,10 @@ public final class BuiltinCallNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     return builtinNode.executeGeneric(frame);
+  }
+
+  @Override
+  public String[] requiredIdentifiers() {
+    return builtinNode.getRequiredIdentifiers();
   }
 }

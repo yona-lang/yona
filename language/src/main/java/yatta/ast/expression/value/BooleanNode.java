@@ -1,12 +1,11 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 @NodeInfo
-public final class BooleanNode extends ExpressionNode {
+public final class BooleanNode extends LiteralValueNode {
   public static BooleanNode TRUE = new BooleanNode(Boolean.TRUE);
   public static BooleanNode FALSE = new BooleanNode(Boolean.FALSE);
 

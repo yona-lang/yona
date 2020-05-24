@@ -4,6 +4,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import yatta.ast.expression.PatternLetNode;
 
 import java.io.IOException;
 
@@ -28,7 +29,7 @@ public abstract class CommonTest {
    * This can be used in Context Builder using .option(, "<log level>")
    */
   @SuppressWarnings("unused")
-  private String logLevelOption(Class<?> cls) {
+  static String logLevelOption(Class<?> cls) {
     return "log." + YattaLanguage.ID + "." + cls.getName() + ".level";
   }
 }

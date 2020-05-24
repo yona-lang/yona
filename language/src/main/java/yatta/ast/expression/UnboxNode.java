@@ -77,4 +77,16 @@ public abstract class UnboxNode extends ExpressionNode {
       throw new AssertionError();
     }
   }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return value.getRequiredIdentifiers();
+  }
+
+  private ExpressionNode value;
+
+  public UnboxNode setValue(ExpressionNode value) {
+    this.value = value;
+    return this;
+  }
 }

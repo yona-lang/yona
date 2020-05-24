@@ -1,16 +1,15 @@
 package yatta.ast.expression.value;
 
-import yatta.ast.ExpressionNode;
-import yatta.runtime.StringList;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yatta.runtime.StringList;
 
 import java.util.Arrays;
 import java.util.Objects;
 
 @NodeInfo
-public final class NonEmptyStringListNode extends ExpressionNode {
+public final class NonEmptyStringListNode extends LiteralValueNode {
   public final String[] strings;
 
   public NonEmptyStringListNode(String[] strings) {
@@ -33,8 +32,8 @@ public final class NonEmptyStringListNode extends ExpressionNode {
   @Override
   public String toString() {
     return "NonEmptyStringListNode{" +
-           "strings=" + Arrays.toString(strings) +
-           '}';
+        "strings=" + Arrays.toString(strings) +
+        '}';
   }
 
   @Override

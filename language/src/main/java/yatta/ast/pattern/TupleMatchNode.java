@@ -1,9 +1,12 @@
 package yatta.ast.pattern;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
-import yatta.ast.expression.AliasNode;
+import yatta.runtime.DependencyUtils;
 import yatta.runtime.Tuple;
 
 import java.util.ArrayList;
@@ -11,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+@NodeInfo(shortName = "tupleMatch")
 public final class TupleMatchNode extends MatchNode {
   @Node.Children
   public ExpressionNode[] expressions;
@@ -24,6 +28,11 @@ public final class TupleMatchNode extends MatchNode {
     return "TupleMatchNode{" +
         "expressions=" + Arrays.toString(expressions) +
         '}';
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(expressions);
   }
 
   @Override
@@ -75,5 +84,28 @@ public final class TupleMatchNode extends MatchNode {
     }
 
     return MatchResult.FALSE;
+  }
+
+  @Override
+  @ExplodeLoop
+  protected String[] providedIdentifiers() {
+    int matchNodesLen = 0;
+
+    for (ExpressionNode expressionNode : expressions) {
+      if (expressionNode instanceof MatchNode) {
+        matchNodesLen += 1;
+      }
+    }
+
+    MatchNode[] matchNodes = new MatchNode[matchNodesLen];
+
+    int i = 0;
+    for (ExpressionNode expressionNode : expressions) {
+      if (expressionNode instanceof MatchNode) {
+        matchNodes[i++] = (MatchNode) expressionNode;
+      }
+    }
+
+    return DependencyUtils.catenateProvidedIdentifiers(matchNodes);
   }
 }

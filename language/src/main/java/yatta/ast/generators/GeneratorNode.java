@@ -16,7 +16,7 @@ import yatta.runtime.Context;
 import yatta.runtime.Function;
 import yatta.runtime.UninitializedFrameSlot;
 
-@NodeInfo
+@NodeInfo(shortName = "generator")
 public final class GeneratorNode extends ExpressionNode {
   @Child
   private InvokeNode callNode;
@@ -66,6 +66,11 @@ public final class GeneratorNode extends ExpressionNode {
   public Object executeGeneric(VirtualFrame frame) {
     this.replace(callNode);
     return callNode.executeGeneric(frame);
+  }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return callNode.getRequiredIdentifiers();
   }
 
   private String reducerForGeneratedCollection(GeneratedCollection type) {

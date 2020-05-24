@@ -45,4 +45,9 @@ public final class MainExpressionNode extends ExpressionNode {
 
     return result;
   }
+
+  @Override
+  protected String[] requiredIdentifiers() {
+    return expressionNode.requiredIdentifiers();
+  }
 }
