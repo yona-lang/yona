@@ -308,7 +308,6 @@ public final class TransactionalMemory implements TruffleObject {
   }
 
   public static final class ReadWriteTransaction extends Transaction {
-    static final VarHandle READ_FILTER_HANDLE = MethodHandles.arrayElementVarHandle(long[].class);
     static final VarHandle READ_FILTER_SUMMARY_HANDLE;
 
     static {
@@ -344,7 +343,7 @@ public final class TransactionalMemory implements TruffleObject {
 
     @Override
     void registerRead(final Var var) {
-      final long summaryDiff = filtersWrite(readFilter, BLOOM_FILTER_HASHES, var.id, READ_FILTER_HANDLE);
+      final long summaryDiff = filtersWriteAtomic(readFilter, BLOOM_FILTER_HASHES, var.id);
       long expectedSummary;
       long updatedSummary;
       do {
@@ -355,9 +354,9 @@ public final class TransactionalMemory implements TruffleObject {
 
     @Override
     void registerProtect(Var var, Node node) {
-      final long summaryDiff = filtersWrite(writeFilter, BLOOM_FILTER_HASHES, var.id);
+      final long summaryDiff = filtersWriteAtomic(writeFilter, BLOOM_FILTER_HASHES, var.id);
       writeFilterSummary |= summaryDiff;
-      filtersWrite(readFilter, BLOOM_FILTER_HASHES, var.id, READ_FILTER_HANDLE);
+      filtersWrite(readFilter, BLOOM_FILTER_HASHES, var.id);
       long expectedSummary;
       long updatedSummary;
       do {
@@ -480,7 +479,7 @@ public final class TransactionalMemory implements TruffleObject {
     return mixed >= 0 ? mixed : ~mixed;
   }
 
-  static long filtersWrite(final long[] filter, final int hashes, final long hash, final VarHandle handle) {
+  static long filtersWriteAtomic(final long[] filter, final int hashes, final long hash) {
     long result = 0L;
     int mix;
     long bit;
@@ -494,9 +493,9 @@ public final class TransactionalMemory implements TruffleObject {
       long expected;
       long updated;
       do {
-        expected = (long) handle.getVolatile(filter, idx);
+        expected = AtomicLongArrays.get(filter, idx);
         updated = expected | mask;
-      } while (!handle.compareAndSet(filter, idx, expected, updated));
+      } while (!AtomicLongArrays.compareAndSet(filter, idx, expected, updated));
       result |= (1L << idx);
     }
     return result;
