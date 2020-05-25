@@ -29,7 +29,7 @@ mkdir -p "$COMPONENT_DIR/META-INF"
 {
     echo "Bundle-Name: yatta";
     echo "Bundle-Symbolic-Name: yatta";
-    echo "Bundle-Version: 1.0.0-$CURRENT_TAG";
+    echo "Bundle-Version: 0.8.0-$CURRENT_TAG";
     echo 'Bundle-RequireCapability: org.graalvm; filter:="(&(graalvm_version=20.1.0)(os_arch=amd64))"';
     echo "x-GraalVM-Polyglot-Part: True"
 } > "$COMPONENT_DIR/META-INF/MANIFEST.MF"

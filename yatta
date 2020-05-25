@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION="0.1"
+VERSION="0.8.0"
 EXPECTED_GRAALVM_VERSION='"20.1.0"'
 TRUFFLE_VERSION="20.1.0"
 
