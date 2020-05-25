@@ -2,17 +2,14 @@ package yatta;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.debug.DebuggerTags;
-import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import yatta.ast.ShutdownNode;
-import yatta.ast.local.LexicalScope;
 import yatta.lang.YattaParser;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
@@ -20,8 +17,6 @@ import yatta.runtime.Unit;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
 
 @TruffleLanguage.Registration(id = YattaLanguage.ID, name = "yatta", defaultMimeType = YattaLanguage.MIME_TYPE, characterMimeTypes = YattaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, StandardTags.ReadVariableTag.class, StandardTags.WriteVariableTag.class, DebuggerTags.AlwaysHalt.class})
@@ -159,34 +154,6 @@ public class YattaLanguage extends TruffleLanguage<Context> {
       return f.getDeclaredLocation();
     }
     return null;
-  }
-
-  @Override
-  public Iterable<Scope> findLocalScopes(Context context, Node node, Frame frame) {
-    final LexicalScope scope = LexicalScope.createScope(node);
-    return () -> new Iterator<Scope>() {
-      private LexicalScope previousScope;
-      private LexicalScope nextScope = scope;
-
-      @Override
-      public boolean hasNext() {
-        if (nextScope == null) {
-          nextScope = previousScope.findParent();
-        }
-        return nextScope != null;
-      }
-
-      @Override
-      public Scope next() {
-        if (!hasNext()) {
-          throw new NoSuchElementException();
-        }
-        Scope vscope = Scope.newBuilder(nextScope.getName(), nextScope.getVariables(frame)).node(nextScope.getNode()).arguments(nextScope.getArguments(frame)).build();
-        previousScope = nextScope;
-        nextScope = null;
-        return vscope;
-      }
-    };
   }
 
   public static Context getCurrentContext() {
