@@ -1,5 +1,6 @@
 package yatta.ast.builtin.modules;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -27,6 +28,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "new")
   abstract static class STMBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public TransactionalMemory stm() {
       return new TransactionalMemory();
     }
@@ -35,6 +37,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "var")
   abstract static class VarBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public TransactionalMemory.Var var(TransactionalMemory memory, Object initial) {
       return new TransactionalMemory.Var(memory, initial);
     }
@@ -43,6 +46,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "transaction")
   abstract static class TransactionBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object transaction(TransactionalMemory stm, boolean readOnly, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       if (Threading.TX.get() != null) {
         throw new STMException("STM transaction is already running", this);
@@ -87,6 +91,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read")
   abstract static class ReadBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object read(TransactionalMemory.Var var) {
       TransactionalMemory.Transaction tx = Threading.TX.get();
       LOGGER.fine("STM::read " + tx);
@@ -101,6 +106,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "write")
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Unit write(TransactionalMemory.Var var, Object value) {
       TransactionalMemory.Transaction tx = Threading.TX.get();
       LOGGER.fine("STM::write " + tx + " value: " + value);
@@ -115,6 +121,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "protect")
   abstract static class ProtectBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Unit protect(TransactionalMemory.Var var) {
       TransactionalMemory.Transaction tx = Threading.TX.get();
       LOGGER.fine("STM::protect " + tx);
