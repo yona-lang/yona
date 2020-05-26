@@ -3,9 +3,13 @@
 [![Build Status](https://travis-ci.org/yatta-lang/yatta.svg?branch=master)](https://travis-ci.org/yatta-lang/yatta)
 [![Gitter](https://badges.gitter.im/yattalang/community.svg)](https://gitter.im/yattalang/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-**Mailing list**: yatta-lang@googlegroups.com
+**Gitter**: [yattalang community](https://gitter.im/yattalang/community)
+
+**Mailing list**: [Google Groups](https://groups.google.com/forum/#!forum/yatta-lang) or email to: yatta-lang@googlegroups.com
 
 **Home page**: [https://yatta-lang.org](https://yatta-lang.org)
+
+**Docker image**: [Docker Hub](https://hub.docker.com/r/akovari/yatta)
 
 Yatta is a minimalistic, opiniated, (strongly) dynamically typed, strict, functional programming language, with ML-like syntax, for GraalVM polyglot virtual machine (VM). Yatta puts a strong focus on readability of the code.
 
