@@ -11,7 +11,7 @@ install:
 - mkdir $HOME/jdk && tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk --strip-components=1
 - "$HOME/jdk/bin/gu install native-image"
 script:
-- mvn package -B
+- travis_wait 30 mvn package -B
 notifications:
   webhooks:
     urls:
