@@ -18,10 +18,11 @@ import yatta.runtime.Unit;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-@TruffleLanguage.Registration(id = YattaLanguage.ID, name = "yatta", defaultMimeType = YattaLanguage.MIME_TYPE, characterMimeTypes = YattaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class)
+@TruffleLanguage.Registration(id = YattaLanguage.ID, name = YattaLanguage.NAME, defaultMimeType = YattaLanguage.MIME_TYPE, characterMimeTypes = YattaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, StandardTags.ReadVariableTag.class, StandardTags.WriteVariableTag.class, DebuggerTags.AlwaysHalt.class})
 public class YattaLanguage extends TruffleLanguage<Context> {
   public static final String ID = "yatta";
+  public static final String NAME = "Yatta";
   public static final String MIME_TYPE = "application/x-yatta";
 
   public YattaLanguage() {
