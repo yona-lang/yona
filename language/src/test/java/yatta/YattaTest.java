@@ -58,7 +58,6 @@ public class YattaTest {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
             Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8))).out(out).err(out).allowAllAccess(true).environment("YATTA_STDLIB_HOME", "lib-yatta").build();
-            context.enter();
 
             /* Parse the Yatta source file. */
             Source source = Source.newBuilder(YattaLanguage.ID, sourceFile.toFile()).interactive(true).build();
@@ -92,7 +91,8 @@ public class YattaTest {
 
             assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
 
-            context.leave();
+            context.eval(Source.newBuilder("yatta", "shutdown", "shutdown").internal(true).build());
+            context.close();
           });
 
           foundCases.add(dynamicTest);

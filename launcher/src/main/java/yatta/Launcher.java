@@ -51,7 +51,6 @@ public final class Launcher {
     }
 
     try {
-      context.enter();
       context.eval(source);
       return 0;
     } catch (PolyglotException ex) {
@@ -74,8 +73,9 @@ public final class Launcher {
       try {
         context.eval(Source.newBuilder("yatta", "shutdown", "shutdown").internal(true).build());
       } catch (IOException e) {
+      } finally {
+        context.close();
       }
-      context.close();
     }
   }
 

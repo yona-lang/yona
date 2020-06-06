@@ -22,8 +22,8 @@ if [[ "$GRAALVM_VERSION" != "" ]]; then
         exit
     fi
 else
-    LANGUAGE_PATH="$SCRIPT_HOME/language/target/yatta-$VERSION-SNAPSHOT.jar"
-    LAUNCHER_PATH="$SCRIPT_HOME/launcher/target/launcher-$VERSION-SNAPSHOT.jar"
+    LANGUAGE_PATH="$SCRIPT_HOME/language/target/yatta-$VERSION.jar"
+    LAUNCHER_PATH="$SCRIPT_HOME/launcher/target/launcher-$VERSION.jar"
     # Check the GraalVM version in JAVA_HOME
     if [[ "$JAVA_HOME" != "" ]]; then
         GRAALVM_VERSION=$(grep "GRAALVM_VERSION" "$JAVA_HOME"/release)
