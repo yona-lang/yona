@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class Launcher {
@@ -56,8 +57,18 @@ public final class Launcher {
     } catch (PolyglotException ex) {
       if (!ex.isInternalError()) {
         System.err.println(prettyPrintException(ex.getMessage(), ex.getSourceLocation()));
+        if (ex.getGuestObject() != null) {
+          Object[] yattaExceptionTuple = ex.getGuestObject().as(Object[].class);
+          System.err.println(yattaExceptionTuple[0] + ": " + yattaExceptionTuple[1]);
+
+          List stackTrace = (List) yattaExceptionTuple[2];
+          for (Object line : stackTrace) {
+            System.err.println(line);
+          }
+        } else {
+          ex.printStackTrace(System.err);
+        }
       }
-      ex.printStackTrace();
       return ex.getExitStatus();
     } finally {
       try {

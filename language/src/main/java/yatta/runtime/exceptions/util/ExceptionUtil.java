@@ -3,6 +3,7 @@ package yatta.runtime.exceptions.util;
 import com.oracle.truffle.api.CompilerDirectives;
 import yatta.YattaException;
 import yatta.runtime.Context;
+import yatta.runtime.Seq;
 import yatta.runtime.Tuple;
 
 public final class ExceptionUtil {
@@ -13,7 +14,7 @@ public final class ExceptionUtil {
       return yattaException.asTuple();
     } else {
       // TODO deal with non Yatta exceptions ?
-      return new Tuple(context.symbol(throwable.getClass().getSimpleName()), throwable.getMessage(), YattaException.stacktraceToSequence(throwable));
+      return new Tuple(context.symbol(throwable.getClass().getSimpleName()), Seq.fromCharSequence(throwable.getMessage()), YattaException.stacktraceToSequence(throwable));
     }
   }
 }

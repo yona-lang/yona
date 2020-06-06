@@ -44,7 +44,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class Context {
+public final class Context {
   public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").internal(true).build();
   private static final SourceSection BUILTIN_SOURCE_SECTION = BUILTIN_SOURCE.createUnavailableSection();
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
@@ -63,7 +63,7 @@ public class Context {
   private Dict symbols = Dict.empty(Murmur3.INSTANCE, 0L);
   private Dict moduleCache = Dict.empty(Murmur3.INSTANCE, 0L);
   public final Threading threading;
-  public final ExecutorService ioExecutor;
+  public ExecutorService ioExecutor;
   public Dict globals = Dict.empty(Murmur3.INSTANCE, 0L);
   public final FrameDescriptor globalFrameDescriptor;
   public final MaterializedFrame globalFrame;
@@ -77,7 +77,6 @@ public class Context {
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
     this.builtinModules = new BuiltinModules();
-    this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yatta-io")));
     this.threading = new Threading(env);
     this.globalFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
     this.globalFrame = this.initGlobalFrame();
@@ -93,6 +92,7 @@ public class Context {
     }
 
     LOGGER.fine("Initializing threading");
+    this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yatta-io")));
     threading.initialize();
 
     installBuiltins();

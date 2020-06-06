@@ -1,2 +1,4 @@
 NoMatchException at OverrideBuiltinModule.yatta:
     JSON = module JSON exports generate as
+        generate = "wrong"
+    end

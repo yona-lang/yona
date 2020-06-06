@@ -5,19 +5,16 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
-import yatta.ast.expression.PatternLetNode;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -28,6 +25,10 @@ public class YattaTest {
   private static final String TESTS_DIRECTORY = "tests";
 
   private static final boolean REPORT_STACKTRACE = false;
+
+  private static String readAllLines(Path file) throws IOException {
+    return Files.readString(file, StandardCharsets.UTF_8);
+  }
 
   @TestFactory
   protected List<DynamicTest> tests() throws IOException {
@@ -68,15 +69,17 @@ public class YattaTest {
             } catch (PolyglotException ex) {
               if (!ex.isInternalError()) {
                 printer.println(YattaException.prettyPrint(ex.getMessage(), ex.getSourceLocation()));
-
                 if (REPORT_STACKTRACE) {
-                  printer.println("Stack Trace:");
-                  List<PolyglotException.StackFrame> reversedStackFrame = StreamSupport.
-                      stream(ex.getPolyglotStackTrace().spliterator(), false).
-                      collect(Collectors.toList());
-                  Collections.reverse(reversedStackFrame);
-                  for (PolyglotException.StackFrame stackFrame : reversedStackFrame) {
-                    printer.println(stackFrame);
+                  if (ex.getGuestObject() != null) {
+                    Object[] yattaExceptionTuple = ex.getGuestObject().as(Object[].class);
+                    printer.println(yattaExceptionTuple[0] + ": " + yattaExceptionTuple[1]);
+
+                    List stackTrace = (List) yattaExceptionTuple[2];
+                    for (Object line : stackTrace) {
+                      printer.println(line);
+                    }
+                  } else {
+                    ex.printStackTrace(printer);
                   }
                 }
               } else {
@@ -92,16 +95,11 @@ public class YattaTest {
             context.leave();
           });
 
-          if(baseName.equals("ZipKeysWithValues"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;
       }
     });
     return foundCases;
-  }
-
-  private static String readAllLines(Path file) throws IOException {
-    return Files.readString(file, StandardCharsets.UTF_8);
   }
 }

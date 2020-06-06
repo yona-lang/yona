@@ -1,0 +1,14 @@
+try
+    do
+        url = "https://github.com/yatta-lang/yatta/releases/latest/download/yatta-component.jar"
+
+        session = http\Client::session {:follow_redirects = :normal, :body_encoding = :text}  # :body_encoding should be :binary
+        (status, headers, body) = http\Client::get session url {}
+
+        fh = File::open "binary" {:write, :create, :binary}
+        File::write fh body
+        File::close fh
+    end
+catch
+    (:ioerror, "java.nio.BufferOverflowException", _stacktrace) -> "error_caught"
+end

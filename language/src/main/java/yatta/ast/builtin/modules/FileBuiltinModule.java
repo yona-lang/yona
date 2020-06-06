@@ -22,6 +22,7 @@ import yatta.runtime.stdlib.ExportedFunction;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
@@ -395,7 +396,7 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileWriteFileNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise writefile(FileTuple fileTuple, Seq data, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+    public Promise writefile(FileTuple fileTuple, Seq data, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
       final class WriteCompletionHandler implements CompletionHandler<Integer, Promise> {
 
         @Override
@@ -411,11 +412,13 @@ public final class FileBuiltinModule implements BuiltinModule {
 
       final Promise promise = new Promise(interopLibrary);
 
-      ByteBuffer byteBuffer = data.asByteBuffer(this);
       try {
+        ByteBuffer byteBuffer = data.asByteBuffer(this);
         fileTuple.fileHandle().write(byteBuffer, fileTuple.position(), promise, new WriteCompletionHandler());
+      } catch (BufferOverflowException ex) {
+        promise.fulfil(new yatta.runtime.exceptions.IOException(ex, this), this);
       } catch (Exception ex) {
-        promise.fulfil(new YattaException(ex.getMessage(), this), this);
+        promise.fulfil(new YattaException(ex, this), this);
       }
 
       return promise;

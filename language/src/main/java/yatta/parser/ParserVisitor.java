@@ -46,7 +46,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     ExpressionNode functionBodyNode = new MainExpressionNode(ctx.expression().accept(this));
     functionBodyNode.addRootTag();
 
-    ModuleFunctionNode mainFunctionNode = withSourceSection(ctx, new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), null, "$main", 0, context.globalFrameDescriptor, functionBodyNode));
+    ModuleFunctionNode mainFunctionNode = new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), null, "$main", 0, context.globalFrameDescriptor, functionBodyNode);
     return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new ExpressionNode[]{}));
   }
 
@@ -874,7 +874,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     for (int i = 0; i < ctx.catchExpr().catchPatternExpression().size(); i++) {
       YattaParser.CatchPatternExpressionContext patternExpressionContext = ctx.catchExpr().catchPatternExpression(i);
 
-      MatchNode matchExpression = null;
+      MatchNode matchExpression;
 
       if (patternExpressionContext.tripplePattern() != null) {
         matchExpression = visitTripplePattern(patternExpressionContext.tripplePattern());
@@ -1061,7 +1061,13 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   private <T extends ExpressionNode> T withSourceSection(ParserRuleContext parserRuleContext, T expressionNode) {
     final SourceSection sourceSection;
-    sourceSection = source.createSection(parserRuleContext.start.getLine());
+
+    sourceSection = source.createSection(
+        parserRuleContext.start.getLine(),
+        1,
+        parserRuleContext.stop.getLine(),
+        source.getLineLength(parserRuleContext.stop.getLine())
+    );
     expressionNode.setSourceSection(sourceSection);
     return expressionNode;
   }

@@ -8,7 +8,10 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
-import yatta.runtime.*;
+import yatta.runtime.Context;
+import yatta.runtime.Seq;
+import yatta.runtime.Tuple;
+import yatta.runtime.Unit;
 
 public class YattaException extends RuntimeException implements TruffleException {
   private static final long serialVersionUID = -6799734410727348507L;
@@ -55,7 +58,12 @@ public class YattaException extends RuntimeException implements TruffleException
 
   @TruffleBoundary
   public Tuple asTuple() {
-    return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), getMessage(), stacktraceToSequence(this));
+    return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), Seq.fromCharSequence(getMessage()), stacktraceToSequence(this));
+  }
+
+  @Override
+  public Object getExceptionObject() {
+    return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), getMessage(), stacktraceToSequence(this).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el))));
   }
 
   @TruffleBoundary
@@ -63,9 +71,13 @@ public class YattaException extends RuntimeException implements TruffleException
     StringBuilder sb = new StringBuilder();
     sb.append(message);
     sb.append(" at ");
-    sb.append(sourceLocation.getSource().getName());
-    sb.append(":\n");
-    sb.append(sourceLocation.getCharacters());
+    if (sourceLocation != null) {
+      sb.append(sourceLocation.getSource().getName());
+      sb.append(":\n");
+      sb.append(sourceLocation.getCharacters());
+    } else {
+      sb.append("<unknown>");
+    }
     return sb.toString();
   }
 
@@ -121,16 +133,18 @@ public class YattaException extends RuntimeException implements TruffleException
     Seq stackTraceSequence = Seq.EMPTY;
 
     for (TruffleStackTraceElement stackTraceElement : TruffleStackTrace.getStackTrace(throwable)) {
+      if (stackTraceElement.getTarget().getRootNode().getQualifiedName().equals("$main")) continue;
+
       Node location = stackTraceElement.getLocation();
       if (location != null && location.getSourceSection() != null) {
-        stackTraceSequence = stackTraceSequence.insertFirst(new Tuple(
+        stackTraceSequence = stackTraceSequence.insertLast(new Tuple(
             Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
             Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getQualifiedName()),
             location.getSourceSection().getStartLine(),
             location.getSourceSection().getStartColumn()
         ));
       } else {
-        stackTraceSequence = stackTraceSequence.insertFirst(new Tuple (
+        stackTraceSequence = stackTraceSequence.insertLast(new Tuple(
             Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
             Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getQualifiedName()),
             Unit.INSTANCE,
@@ -139,6 +153,31 @@ public class YattaException extends RuntimeException implements TruffleException
       }
     }
 
+    if (throwable.getCause() != null) {
+      for (StackTraceElement stackFrame : throwable.getCause().getStackTrace()) {
+        stackTraceSequence = stackTraceSequence.insertLast(new Tuple(
+            Seq.fromCharSequence(stackFrame.getClassName()),
+            Seq.fromCharSequence(stackFrame.getMethodName()),
+            Unit.INSTANCE,
+            Unit.INSTANCE
+        ));
+      }
+    }
+
     return stackTraceSequence;
+  }
+
+  public static String stackFrameTupleToString(Tuple tuple) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(tuple.get(0));
+    sb.append(":");
+    sb.append(tuple.get(1));
+    if (tuple.get(2) != Unit.INSTANCE) {
+      sb.append(":");
+      sb.append(tuple.get(2));
+      sb.append("-");
+      sb.append(tuple.get(3));
+    }
+    return sb.toString();
   }
 }
