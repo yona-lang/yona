@@ -71,7 +71,7 @@ DOT : '.' ;
 VLINE : '|';
 BACKSLASH : '\\' ;
 
-LOWERCASE_NAME : 'a'..'z' [a-zA-Z0-9_]* ;
+LOWERCASE_NAME : ('_' | 'a'..'z') [a-zA-Z0-9_]* ;
 UPPERCASE_NAME : 'A'..'Z' [a-zA-Z0-9_]* ;
 
 BYTE : '-'?[0-9]+ 'b' ;
