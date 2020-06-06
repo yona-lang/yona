@@ -26,6 +26,6 @@ deploy:
   file: 'component/yatta-component.jar'
   on:
     repo: yatta-lang/yatta
-    branch: master
+    tags: true
   skip_cleanup: 'true'
   overwrite: true
