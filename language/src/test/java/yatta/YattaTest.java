@@ -82,7 +82,14 @@ public class YattaTest {
                   }
                 }
               } else {
-                throw ex;
+                ex.printStackTrace(printer);
+              }
+            } finally {
+              try {
+                context.eval(Source.newBuilder("yatta", "shutdown", "shutdown").internal(true).build());
+              } catch (IOException e) {
+              } finally {
+                context.close();
               }
             }
 
@@ -90,9 +97,6 @@ public class YattaTest {
             String actualOutput = new String(out.toByteArray());
 
             assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
-
-            context.eval(Source.newBuilder("yatta", "shutdown", "shutdown").internal(true).build());
-            context.close();
           });
 
           foundCases.add(dynamicTest);

@@ -1,7 +1,6 @@
 try
     do
-        url = "https://github.com/yatta-lang/yatta/releases/latest/download/yatta-component.jar"
-
+        url = "https://httpbin.org/gzip"
         session = http\Client::session {:follow_redirects = :normal, :body_encoding = :text}  # :body_encoding should be :binary
         (status, headers, body) = http\Client::get session url {}
 
