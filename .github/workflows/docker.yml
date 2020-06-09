@@ -1,7 +1,7 @@
 name: Publish Docker image
 on:
   release:
-    types: [prereleased]
+    types: [published]
 
 jobs:
   push_to_registry:
@@ -18,3 +18,10 @@ jobs:
           repository: akovari/yatta
           tag_with_ref: true
           tags: latest
+      - name: Notify gitter
+        uses: juztcode/gitter-github-action@v1
+        with:
+          room-id: ${{ secrets.GITTER_ROOM_ID }}
+          token: ${{ secrets.GITTER_TOKEN }}
+          text: Docker image deployed to https://hub.docker.com/r/akovari/yatta
+          message-id: ${{ steps.initial.outputs.message-id }}

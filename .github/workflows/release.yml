@@ -44,3 +44,10 @@ jobs:
           asset_path: ./component/yatta-component.jar
           asset_name: yatta-component.jar
           asset_content_type: application/java-archive
+      - name: Notify gitter
+        uses: juztcode/gitter-github-action@v1
+        with:
+          room-id: ${{ secrets.GITTER_ROOM_ID }}
+          token: ${{ secrets.GITTER_TOKEN }}
+          text: Build succeeded
+          message-id: ${{ steps.initial.outputs.message-id }}
