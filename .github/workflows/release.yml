@@ -11,6 +11,8 @@ jobs:
       - uses: DeLaGuardo/setup-graalvm@3
         with:
           graalvm-version: 20.1.0.java11
+      - name: Install native-package
+        run: gu install native-image
       - uses: stCarolas/setup-maven@v3
         with:
           maven-version: 3.6.3
