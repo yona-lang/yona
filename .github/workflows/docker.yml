@@ -18,10 +18,3 @@ jobs:
           repository: akovari/yatta
           tag_with_ref: true
           add_git_labels: true
-      - name: Notify gitter
-        uses: juztcode/gitter-github-action@v1
-        with:
-          room-id: ${{ secrets.GITTER_ROOM_ID }}
-          token: ${{ secrets.GITTER_TOKEN }}
-          text: Docker image deployed to https://hub.docker.com/r/akovari/yatta
-          message-id: ${{ steps.initial.outputs.message-id }}
