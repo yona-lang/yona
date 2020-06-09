@@ -19,4 +19,11 @@
     <module>native</module>
     <module>component</module>
   </modules>
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <name>GitHub Packages</name>
+      <url>https://maven.pkg.github.com/yatta/yatta-lang</url>
+    </repository>
+  </distributionManagement>
 </project>

@@ -1,0 +1,25 @@
+name: Package
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@latest
+      - uses: DeLaGuardo/setup-graalvm@3
+        with:
+          graalvm-version: 20.1.0.java11
+      - uses: stCarolas/setup-maven@v3
+        with:
+          maven-version: 3.6.3
+      - name: Cache Maven packages
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      - name: Test
+        run: mvn -B test
+      - name: Package
+        run: mvn -B package
