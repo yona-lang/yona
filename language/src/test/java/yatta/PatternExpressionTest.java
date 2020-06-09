@@ -2,10 +2,12 @@ package yatta;
 
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import yatta.runtime.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class PatternExpressionTest extends CommonTest {
   @Test
   public void simpleTuplePatternTest() {

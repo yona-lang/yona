@@ -2,11 +2,13 @@ package yatta;
 
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import yatta.runtime.Tuple;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class ErrorsTest extends CommonTest {
   @Test
   public void oneArgFunctionTest() {

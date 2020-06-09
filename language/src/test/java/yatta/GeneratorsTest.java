@@ -1,6 +1,7 @@
 package yatta;
 
 import org.graalvm.polyglot.Value;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import yatta.ast.generators.GeneratedCollection;
@@ -11,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static yatta.ast.generators.GeneratedCollection.*;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class GeneratorsTest extends CommonTest {
   @ParameterizedTest
   @MethodSource("seqTestCases")
