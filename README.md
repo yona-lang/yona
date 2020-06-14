@@ -1,7 +1,7 @@
 # Yatta
 
 [![Actions Status](https://github.com/yatta-lang/yatta/workflows/Release/badge.svg)](https://github.com/yatta-lang/yatta/actions)
-![Publish Docker image](https://github.com/yatta-lang/yatta/workflows/Publish%20Docker%20image/badge.svg)
+![Publish Docker Image](https://github.com/yatta-lang/yatta/workflows/Publish%20Docker%20Image/badge.svg)
 [![Gitter](https://badges.gitter.im/yattalang/community.svg)](https://gitter.im/yattalang/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 **Gitter**: [yattalang community](https://gitter.im/yattalang/community)
