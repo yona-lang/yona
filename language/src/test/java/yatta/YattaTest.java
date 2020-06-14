@@ -69,7 +69,6 @@ public class YattaTest {
             } catch (PolyglotException ex) {
               if (!ex.isInternalError()) {
                 printer.println(YattaException.prettyPrint(ex.getMessage(), ex.getSourceLocation()));
-
                 if (REPORT_STACKTRACE) {
                   if (ex.getGuestObject() != null) {
                     Object[] yattaExceptionTuple = ex.getGuestObject().as(Object[].class);

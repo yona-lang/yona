@@ -5,7 +5,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
-import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
 
@@ -180,32 +179,6 @@ public final class TypesBuiltinModule implements BuiltinModule {
     }
   }
 
-  @NodeInfo(shortName = "is_stm")
-  abstract static class IsSTMBuiltin extends BuiltinNode {
-    @Specialization
-    public Object match(TransactionalMemory val) {
-      return true;
-    }
-
-    @Fallback
-    public Object otherwise(Object val) {
-      return false;
-    }
-  }
-
-  @NodeInfo(shortName = "is_var")
-  abstract static class IsVarBuiltin extends BuiltinNode {
-    @Specialization
-    public Object match(TransactionalMemory.Var val) {
-      return true;
-    }
-
-    @Fallback
-    public Object otherwise(Object val) {
-      return false;
-    }
-  }
-
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsBooleanBuiltinFactory.getInstance()));
@@ -222,8 +195,6 @@ public final class TypesBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsSetBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsNativeBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsSymbolBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsSTMBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsVarBuiltinFactory.getInstance()));
     return builtins;
   }
 }

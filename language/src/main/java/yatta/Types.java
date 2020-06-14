@@ -5,7 +5,6 @@ import com.oracle.truffle.api.dsl.TypeCheck;
 import com.oracle.truffle.api.dsl.TypeSystem;
 import yatta.runtime.*;
 import yatta.runtime.async.Promise;
-import yatta.runtime.async.TransactionalMemory;
 
 import java.lang.reflect.Array;
 
@@ -17,7 +16,7 @@ import java.lang.reflect.Array;
  */
 @TypeSystem({boolean.class, byte.class, long.class, double.class, int.class, String.class, Function.class, Unit.class,
     Tuple.class, YattaModule.class, StringList.class, Seq.class, Dict.class, Set.class, NativeObject.class,
-    Symbol.class, Promise.class, TransactionalMemory.class, TransactionalMemory.Var.class})
+    Symbol.class, Promise.class})
 public abstract class Types {
 
   /**
@@ -55,8 +54,7 @@ public abstract class Types {
         obj instanceof Double || obj instanceof Integer || obj instanceof String || obj instanceof Function ||
         obj instanceof Unit || obj instanceof Tuple || obj instanceof YattaModule || obj instanceof StringList ||
         obj instanceof Seq || obj instanceof Dict || obj instanceof Set || obj instanceof NativeObject ||
-        obj instanceof Symbol || obj instanceof Promise ||
-        obj instanceof TransactionalMemory || obj instanceof TransactionalMemory.Var);
+        obj instanceof Symbol || obj instanceof Promise);
   }
 
   public static Object foreignResultToYattaType(Object result) {
