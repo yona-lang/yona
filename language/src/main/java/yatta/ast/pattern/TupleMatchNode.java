@@ -19,7 +19,7 @@ public final class TupleMatchNode extends MatchNode {
   @Node.Children
   public ExpressionNode[] expressions;
 
-  public TupleMatchNode(ExpressionNode[] expressions) {
+  public TupleMatchNode(ExpressionNode... expressions) {
     this.expressions = expressions;
   }
 

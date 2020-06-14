@@ -22,8 +22,6 @@ import yatta.lang.YattaParserBaseVisitor;
 import yatta.runtime.Context;
 import yatta.runtime.Dict;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.BiFunction;
 
@@ -1052,6 +1050,15 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     }
 
     return new RecordUpdateNode(visitIdentifier(ctx.identifier()), fields, moduleStack.toArray(new ExpressionNode[]{}));
+  }
+
+  @Override
+  public WithExpression visitWithExpression(YattaParser.WithExpressionContext ctx) {
+    String name = null;
+    if (ctx.withExpr().name() != null) {
+      name = ctx.withExpr().name().getText();
+    }
+    return withSourceSection(ctx, new WithExpression(name, ctx.withExpr().context.accept(this), ctx.withExpr().body.accept(this)));
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {

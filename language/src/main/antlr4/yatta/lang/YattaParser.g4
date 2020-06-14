@@ -151,6 +151,7 @@ expression : PARENS_L expression PARENS_R                                       
            | importExpr                                                                                  #importExpression
            | tryCatchExpr                                                                                #tryCatchExpression
            | raiseExpr                                                                                   #raiseExpression
+           | withExpr                                                                                    #withExpression
            | generatorExpr                                                                               #generatorExpression
            | <assoc=right> left=expression NEWLINE? OP_PIPE_L right=expression                           #pipeLeftExpression
            | left=expression NEWLINE? OP_PIPE_R right=expression                                         #pipeRightExpression
@@ -311,6 +312,8 @@ catchPatternExpressionWithoutGuard : NEWLINE? OP_RIGHT_ARROW NEWLINE? expression
 catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_RIGHT_ARROW NEWLINE? expr=expression ;
 
 raiseExpr : KW_RAISE symbol stringLiteral ;
+
+withExpr : KW_WITH context=expression (KW_AS name)? NEWLINE? body=expression NEWLINE? KW_END ;
 
 generatorExpr : sequenceGeneratorExpr | setGeneratorExpr | dictGeneratorExpr ;
 sequenceGeneratorExpr : BRACKET_L reducer=expression VLINE collectionExtractor OP_LEFT_ARROW stepExpression=expression NEWLINE? (KW_IF condition=expression)? BRACKET_R ;

@@ -68,6 +68,7 @@ public final class Context {
   public final FrameDescriptor globalFrameDescriptor;
   public final MaterializedFrame globalFrame;
   private final Path languageHome;
+  public static final ThreadLocal<Dict> LOCAL_CONTEXTS = ThreadLocal.withInitial(Dict::empty);
 
   public Context(final YattaLanguage language, final TruffleLanguage.Env env, final Path languageHome) {
     this.env = env;
@@ -77,7 +78,7 @@ public final class Context {
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
     this.builtinModules = new BuiltinModules();
-    this.threading = new Threading(env);
+    this.threading = new Threading(this);
     this.globalFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
     this.globalFrame = this.initGlobalFrame();
     this.languageHome = languageHome;
@@ -141,7 +142,7 @@ public final class Context {
     builtinModules.register(new JavaBuiltinModule());
     builtinModules.register(new JavaTypesBuiltinModule());
     builtinModules.register(new SystemBuiltinModule());
-    //builtinModules.register(new STMBuiltinModule());
+    builtinModules.register(new STMBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {
@@ -473,7 +474,7 @@ public final class Context {
     assert ioExecutor.isShutdown();
     while (!ioExecutor.isTerminated()) {
       try {
-        Thread.sleep(1);
+        Thread.sleep(10);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -484,5 +485,31 @@ public final class Context {
   @CompilerDirectives.TruffleBoundary
   public Set globallyProvidedIdentifiers() {
     return Set.set(builtins.builtins.keySet().toArray());
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Object lookupLocalContext(String identifier) {
+    Object res = LOCAL_CONTEXTS.get().lookup("$context_" + identifier);
+    LOGGER.info("Looking up local context identifier: " + identifier + "(" + Thread.currentThread().getId() + ") = " + res);
+    return res;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public boolean containsLocalContext(String identifier) {
+    boolean res = LOCAL_CONTEXTS.get().contains("$context_" + identifier);
+    LOGGER.info("Checking local context identifier: " + identifier + "(" + Thread.currentThread().getId() + ") = " + res);
+    return res;
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public void putLocalContext(String identifier, Object value) {
+    LOCAL_CONTEXTS.set(LOCAL_CONTEXTS.get().add("$context_" + identifier, value));
+    LOGGER.info("Adding local context identifier: " + identifier + " with value: " + value + "(" + Thread.currentThread().getId() + ") = " + LOCAL_CONTEXTS.get());
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public void removeLocalContext(String identifier) {
+    LOCAL_CONTEXTS.set(LOCAL_CONTEXTS.get().remove("$context_" + identifier));
+    LOGGER.info("Removing local context identifier: " + identifier + "(" + Thread.currentThread().getId() + ") = " + LOCAL_CONTEXTS.get());
   }
 }

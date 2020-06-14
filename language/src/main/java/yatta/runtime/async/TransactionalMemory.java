@@ -2,7 +2,7 @@ package yatta.runtime.async;
 
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
-import yatta.YattaException;
+import yatta.runtime.exceptions.STMException;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -29,7 +29,7 @@ public final class TransactionalMemory implements TruffleObject {
       throw new AssertionError(e);
     }
   }
-  
+
   volatile TransactionsRecord lastCommittedRecord = new TransactionsRecord();
   final ReferenceQueue<TransactionsRecord> recordsQueue = new ReferenceQueue<>();
   final ReferenceQueue<Var> varsQueue = new ReferenceQueue<>();
@@ -166,7 +166,7 @@ public final class TransactionalMemory implements TruffleObject {
 
     public Object read(final Transaction transaction, final Node node) {
       if (transaction.parent() != parent) {
-        throw new YattaException("Transactional variable belongs to a different transactional memory instance.", node);
+        throw new STMException("Transactional variable belongs to a different transactional memory instance.", node);
       }
       transaction.registerRead(this);
       return fetchValue(transaction);
@@ -187,14 +187,14 @@ public final class TransactionalMemory implements TruffleObject {
 
     public void protect(final Transaction transaction, final Node node) {
       if (transaction.parent() != parent) {
-        throw new YattaException("Transactional variable belongs to a different transactional memory instance.", node);
+        throw new STMException("Transactional variable belongs to a different transactional memory instance.", node);
       }
       transaction.registerProtect(this, node);
     }
 
     public void write(final Transaction transaction, final Object value, final Node node) {
       if (transaction.parent() != parent) {
-        throw new YattaException("Transactional variable belongs to a different transactional memory instance.", node);
+        throw new STMException("Transactional variable belongs to a different transactional memory instance.", node);
       }
       transaction.registerWrite(this, value, node);
     }
@@ -263,16 +263,17 @@ public final class TransactionalMemory implements TruffleObject {
     }
 
     @Override
-    void registerRead(final Var var) { }
+    void registerRead(final Var var) {
+    }
 
     @Override
     void registerProtect(final Var var, final Node node) {
-      throw new YattaException("Can't protect in read-only transaction", node);
+      throw new STMException("Can't protect in read-only transaction", node);
     }
 
     @Override
     void registerWrite(final Var var, final Object value, final Node node) {
-      throw new YattaException("Can't write in read-only transaction", node);
+      throw new STMException("Can't write in read-only transaction", node);
     }
 
     @Override

@@ -2,16 +2,16 @@ let
     stm = STM::new
     balance = STM::var stm 1000f
 
-    withdraw = async \-> let old_balance = (STM::read balance) in STM::write balance (old_balance - 10f)
+    withdraw = \-> let old_balance = println (STM::read balance) in (async \-> STM::write balance (old_balance - 10f))
 
     max_iterations = 100
 
     run = \i -> case i of
       x | x >= max_iterations -> STM::read balance
       x -> do
-          STM::transaction stm false (\-> withdraw)
-          run (i + 1)
-          end
-        end
+        with (STM::write_tx stm) (STM::run (\-> withdraw)) end
+        run (i + 1)
+      end
+    end
 in
     run 0
