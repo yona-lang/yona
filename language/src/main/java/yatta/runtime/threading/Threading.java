@@ -1,11 +1,13 @@
 package yatta.runtime.threading;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.YattaLanguage;
 import yatta.runtime.Context;
 import yatta.runtime.Dict;
 import yatta.runtime.Function;
@@ -19,6 +21,7 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 public final class Threading {
+  private static final TruffleLogger LOGGER = YattaLanguage.getLogger(Threading.class);
   static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
 
   static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors() - 2;
@@ -64,6 +67,7 @@ public final class Threading {
           @Override
           void advance() {
             context.LOCAL_CONTEXTS.set(localContexts);
+            LOGGER.info("Setting LOCAL_CONTEXTS(" + Thread.currentThread().getId() + ") = " + context.LOCAL_CONTEXTS.get());
             try {
               execute(promise, function, dispatch, node);
             } finally {
@@ -72,6 +76,7 @@ public final class Threading {
               dispatch = null;
               node = null;
               context.LOCAL_CONTEXTS.remove();
+              LOGGER.info("Removed LOCAL_CONTEXTS in advance (" + Thread.currentThread().getId() + ") = " + context.LOCAL_CONTEXTS.get());
             }
           }
         };
@@ -147,6 +152,7 @@ public final class Threading {
       }
     }
     context.LOCAL_CONTEXTS.remove();
+    LOGGER.info("Removing LOCAL_CONTEXTS in submit: (" + Thread.currentThread().getId() + ") = " + context.LOCAL_CONTEXTS.get());
   }
 
   static void execute(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
