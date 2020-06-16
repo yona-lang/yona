@@ -78,11 +78,29 @@ public final class WithExpression extends ExpressionNode {
           return exception;
         }, this);
       } else {
+        boolean shouldCleanup = true;
         try {
           context.putLocalContext(name, contextValue);
-          return resultNode.executeGeneric(frame);
+          Object resultValue = resultNode.executeGeneric(frame);
+          shouldCleanup = false;
+
+          if (resultValue instanceof Promise) {
+            Promise resultPromise = (Promise) resultValue;
+
+            return resultPromise.map(value -> {
+              try {
+                return value;
+              } finally {
+                context.removeLocalContext(name);
+              }
+            }, this);
+          } else {
+            return resultValue;
+          }
         } finally {
-          context.removeLocalContext(name);
+          if (shouldCleanup) {
+            context.removeLocalContext(name);
+          }
         }
       }
     }

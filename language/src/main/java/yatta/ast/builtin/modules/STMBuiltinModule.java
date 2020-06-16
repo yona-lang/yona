@@ -14,6 +14,7 @@ import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
+import yatta.runtime.async.Promise;
 import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.exceptions.STMException;
 import yatta.runtime.stdlib.Builtins;
@@ -47,30 +48,43 @@ public class STMBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     public Object run(Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YattaLanguage.class) Context context) {
-      System.out.println(context.containsLocalContext(TX_CONTEXT_NAME));
       final TransactionalMemory.Transaction tx = (TransactionalMemory.Transaction) context.lookupLocalContext(TX_CONTEXT_NAME);
       Object result;
-      while (true) {
-        try {
-          tx.start();
-          System.out.println(tx);
-          result = dispatch.execute(function);
-          if (tx.validate()) {
-            tx.commit();
-            break;
-          } else {
+      try {
+        tx.start();
+        result = dispatch.execute(function);
+        if (result instanceof Promise) {
+          Promise resultPromise = (Promise) result;
+          result = resultPromise.map(value -> {
+            commitTx(tx);
+            return value;
+          }, exception -> {
             tx.abort();
-            tx.reset();
-          }
-        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-          tx.abort();
-          throw new YattaException(e, this);
-        } catch (Exception e) {
-          tx.abort();
-          throw e;
+            return exception;
+          }, this);
+        } else {
+          commitTx(tx);
         }
+      } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+        tx.abort();
+        throw new YattaException(e, this);
+      } catch (Exception e) {
+        tx.abort();
+        throw e;
       }
       return result;
+    }
+
+    private void commitTx(TransactionalMemory.Transaction tx) {
+      while (true) {
+        if (tx.validate()) {
+          tx.commit();
+          break;
+        } else {
+          tx.abort();
+          tx.reset();
+        }
+      }
     }
   }
 
