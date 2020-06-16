@@ -35,15 +35,13 @@ public final class Threading {
   final RingBuffer<Task> ringBuffer;
   final Lock lock = new ReentrantLock();
   final Condition condition = lock.newCondition();
-  private final Context context;
 
   volatile int waiters = 0;
 
-  public Threading(Context context) {
+  public Threading(final Context context) {
     ringBuffer = new RingBuffer<>(BUFFER_SIZE, Task::new);
     consumers = ringBuffer.subscribe(THREAD_COUNT);
     threads = new Thread[THREAD_COUNT];
-    this.context = context;
     for (int i = 0; i < THREAD_COUNT; i++) {
       Consumer consumer = consumers[i];
       threads[i] = context.getEnv().createThread(() -> {
@@ -66,8 +64,8 @@ public final class Threading {
 
           @Override
           void advance() {
-            context.LOCAL_CONTEXTS.set(localContexts);
-            LOGGER.info("Setting LOCAL_CONTEXTS(" + Thread.currentThread().getId() + ") = " + context.LOCAL_CONTEXTS.get());
+            Context.LOCAL_CONTEXTS.set(localContexts);
+            LOGGER.info("Setting LOCAL_CONTEXTS(" + Thread.currentThread().getId() + ") = " + Context.LOCAL_CONTEXTS.get());
             try {
               execute(promise, function, dispatch, node);
             } finally {
@@ -75,8 +73,8 @@ public final class Threading {
               function = null;
               dispatch = null;
               node = null;
-              context.LOCAL_CONTEXTS.remove();
-              LOGGER.info("Removed LOCAL_CONTEXTS in advance (" + Thread.currentThread().getId() + ") = " + context.LOCAL_CONTEXTS.get());
+              Context.LOCAL_CONTEXTS.remove();
+              LOGGER.info("Removed LOCAL_CONTEXTS in advance (" + Thread.currentThread().getId() + ") = " + Context.LOCAL_CONTEXTS.get());
             }
           }
         };
@@ -130,8 +128,8 @@ public final class Threading {
           spins++;
           continue;
         }
-        spins = 0;
         execute(promise, function, dispatch, node);
+        return;
       } else {
         break;
       }
@@ -141,7 +139,9 @@ public final class Threading {
     task.function = function;
     task.dispatch = dispatch;
     task.node = node;
-    task.localContexts = context.LOCAL_CONTEXTS.get();
+    task.localContexts = Context.LOCAL_CONTEXTS.get();
+    Context.LOCAL_CONTEXTS.remove();
+    LOGGER.info("Removing LOCAL_CONTEXTS in submit: (" + Thread.currentThread().getId() + ") = " + Context.LOCAL_CONTEXTS.get());
     ringBuffer.release(token, token);
     if (waiters != 0) {
       lock.lock();
@@ -151,8 +151,6 @@ public final class Threading {
         lock.unlock();
       }
     }
-    context.LOCAL_CONTEXTS.remove();
-    LOGGER.info("Removing LOCAL_CONTEXTS in submit: (" + Thread.currentThread().getId() + ") = " + context.LOCAL_CONTEXTS.get());
   }
 
   static void execute(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
