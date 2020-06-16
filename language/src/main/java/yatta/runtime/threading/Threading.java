@@ -140,8 +140,6 @@ public final class Threading {
     task.dispatch = dispatch;
     task.node = node;
     task.localContexts = Context.LOCAL_CONTEXTS.get();
-    Context.LOCAL_CONTEXTS.remove();
-    LOGGER.info("Removing LOCAL_CONTEXTS in submit: (" + Thread.currentThread().getId() + ") = " + Context.LOCAL_CONTEXTS.get());
     ringBuffer.release(token, token);
     if (waiters != 0) {
       lock.lock();
