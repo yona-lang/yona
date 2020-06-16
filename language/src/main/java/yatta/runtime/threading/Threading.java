@@ -1,15 +1,15 @@
 package yatta.runtime.threading;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
+import yatta.runtime.Context;
+import yatta.runtime.Dict;
 import yatta.runtime.Function;
 import yatta.runtime.async.Promise;
-import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.exceptions.UndefinedNameException;
 
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -21,9 +21,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class Threading {
   static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
 
-  public static final ThreadLocal<TransactionalMemory.Transaction> TX = new ThreadLocal<>();
-
-  static final int THREAD_COUNT = Math.max(2, Runtime.getRuntime().availableProcessors());
+  static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors() - 2;
   static final int BUFFER_SIZE = 1024;
   static final int PRODUCE_SPIN_MAX_ATTEMPTS = 1000;
   static final int CONSUME_YIELD_MAX_ATTEMPTS = 10;
@@ -37,19 +35,19 @@ public final class Threading {
 
   volatile int waiters = 0;
 
-  public Threading(TruffleLanguage.Env env) {
+  public Threading(final Context context) {
     ringBuffer = new RingBuffer<>(BUFFER_SIZE, Task::new);
     consumers = ringBuffer.subscribe(THREAD_COUNT);
     threads = new Thread[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
       Consumer consumer = consumers[i];
-      threads[i] = env.createThread(() -> {
+      threads[i] = context.getEnv().createThread(() -> {
         final Consumer.Callback callback = new Consumer.Callback() {
           Promise promise;
           Function function;
           InteropLibrary dispatch;
           Node node;
-          TransactionalMemory.Transaction tx;
+          Dict localContexts;
 
           @Override
           void prepare(final long token) {
@@ -58,12 +56,12 @@ public final class Threading {
             function = task.function;
             dispatch = task.dispatch;
             node = task.node;
-            tx = task.tx;
+            localContexts = task.localContexts;
           }
 
           @Override
           void advance() {
-            TX.set(tx);
+            Context.LOCAL_CONTEXTS.set(localContexts);
             try {
               execute(promise, function, dispatch, node);
             } finally {
@@ -71,7 +69,7 @@ public final class Threading {
               function = null;
               dispatch = null;
               node = null;
-              TX.remove();
+              Context.LOCAL_CONTEXTS.remove();
             }
           }
         };
@@ -125,8 +123,8 @@ public final class Threading {
           spins++;
           continue;
         }
-        spins = 0;
         execute(promise, function, dispatch, node);
+        return;
       } else {
         break;
       }
@@ -136,7 +134,7 @@ public final class Threading {
     task.function = function;
     task.dispatch = dispatch;
     task.node = node;
-    task.tx = TX.get();
+    task.localContexts = Context.LOCAL_CONTEXTS.get();
     ringBuffer.release(token, token);
     if (waiters != 0) {
       lock.lock();
@@ -146,7 +144,6 @@ public final class Threading {
         lock.unlock();
       }
     }
-    TX.remove();
   }
 
   static void execute(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {

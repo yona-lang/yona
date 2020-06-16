@@ -57,7 +57,7 @@ public class YattaTest {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
-            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8))).out(out).err(out).allowAllAccess(true).environment("YATTA_STDLIB_HOME", "lib-yatta").build();
+            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8))).out(out).err(out).allowAllAccess(true).environment("YATTA_STDLIB_HOME", "lib-yatta").option(CommonTest.logLevelOption(Context.class), "FINEST").build();
             context.enter();
 
             /* Parse the Yatta source file. */
