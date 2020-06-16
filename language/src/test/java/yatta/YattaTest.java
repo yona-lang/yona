@@ -24,7 +24,7 @@ public class YattaTest {
   private static final String OUTPUT_SUFFIX = ".output";
   private static final String TESTS_DIRECTORY = "tests";
 
-  private static final boolean REPORT_STACKTRACE = true;
+  private static final boolean REPORT_STACKTRACE = false;
 
   private static String readAllLines(Path file) throws IOException {
     return Files.readString(file, StandardCharsets.UTF_8);
@@ -102,7 +102,6 @@ public class YattaTest {
             assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
           });
 
-          if(baseName.equals("STM"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;

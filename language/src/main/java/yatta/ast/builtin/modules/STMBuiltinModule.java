@@ -48,7 +48,32 @@ public class STMBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     public Object run(Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YattaLanguage.class) Context context) {
-      final TransactionalMemory.Transaction tx = (TransactionalMemory.Transaction) context.lookupLocalContext(TX_CONTEXT_NAME);
+      Object result;
+      while (true) {
+        final TransactionalMemory.Transaction tx = (TransactionalMemory.Transaction) context.lookupLocalContext(TX_CONTEXT_NAME);
+        try {
+          result = tryExecuteTransaction(function, tx, dispatch);
+          if (!(result instanceof Promise)) {
+            if (tx.validate()) {
+              tx.commit();
+              break;
+            } else {
+              tx.abort();
+              tx.reset();
+            }
+          } else {
+            break;
+          }
+        } catch (Throwable t) {
+          tx.abort();
+          throw t;
+        }
+      }
+
+      return result;
+    }
+
+    private Object tryExecuteTransaction(final Function function, final TransactionalMemory.Transaction tx, final InteropLibrary dispatch) {
       Object result;
       try {
         tx.start();
@@ -56,35 +81,37 @@ public class STMBuiltinModule implements BuiltinModule {
         if (result instanceof Promise) {
           Promise resultPromise = (Promise) result;
           result = resultPromise.map(value -> {
-            commitTx(tx);
-            return value;
+            if (tx.validate()) {
+              tx.commit();
+              return value;
+            } else {
+              tx.abort();
+              tx.reset();
+              try {
+                return tryExecuteTransaction(function, tx, dispatch);
+              } catch (Throwable e) {
+                tx.abort();
+                e.printStackTrace();
+                throw e;
+              }
+            }
           }, exception -> {
             tx.abort();
             return exception;
           }, this);
-        } else {
-          commitTx(tx);
         }
       } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
         tx.abort();
-        throw new YattaException(e, this);
-      } catch (Exception e) {
+        throw new STMException(e, this);
+      } catch (YattaException e) {
+        tx.abort();
+        throw e;
+      } catch (Throwable e) {
         tx.abort();
         throw e;
       }
-      return result;
-    }
 
-    private void commitTx(TransactionalMemory.Transaction tx) {
-      while (true) {
-        if (tx.validate()) {
-          tx.commit();
-          break;
-        } else {
-          tx.abort();
-          tx.reset();
-        }
-      }
+      return result;
     }
   }
 

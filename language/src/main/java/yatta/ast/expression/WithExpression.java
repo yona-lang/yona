@@ -46,7 +46,7 @@ public final class WithExpression extends ExpressionNode {
     }
   }
 
-  private Object executeBodyWithIdentifier(VirtualFrame frame, String name, ExpressionNode contextExpression) {
+  private Object executeBodyWithIdentifier(final VirtualFrame frame, final String name, final ExpressionNode contextExpression) {
     Context context = lookupContextReference(YattaLanguage.class).get();
 
     if (context.containsLocalContext(name)) {
@@ -66,10 +66,26 @@ public final class WithExpression extends ExpressionNode {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         MaterializedFrame materializedFrame = frame.materialize();
 
-        return contextPromise.map(value -> {
+        return contextPromise.map(value -> executeResultNode(materializedFrame, name, context, resultNode, value), this);
+      } else {
+        return executeResultNode(frame, name, context, resultNode, contextValue);
+      }
+    }
+  }
+
+  private Object executeResultNode(final VirtualFrame frame, final String name, final Context context, final ExpressionNode resultNode, final Object contextValue) {
+    boolean shouldCleanup = true;
+    try {
+      context.putLocalContext(name, contextValue);
+      Object resultValue = resultNode.executeGeneric(frame);
+
+      if (resultValue instanceof Promise) {
+        shouldCleanup = false;
+        Promise resultPromise = (Promise) resultValue;
+
+        return resultPromise.map(value -> {
           try {
-            context.putLocalContext(name, value);
-            return resultNode.executeGeneric(materializedFrame);
+            return value;
           } finally {
             context.removeLocalContext(name);
           }
@@ -78,35 +94,16 @@ public final class WithExpression extends ExpressionNode {
           return exception;
         }, this);
       } else {
-        boolean shouldCleanup = true;
-        try {
-          context.putLocalContext(name, contextValue);
-          Object resultValue = resultNode.executeGeneric(frame);
-          shouldCleanup = false;
-
-          if (resultValue instanceof Promise) {
-            Promise resultPromise = (Promise) resultValue;
-
-            return resultPromise.map(value -> {
-              try {
-                return value;
-              } finally {
-                context.removeLocalContext(name);
-              }
-            }, this);
-          } else {
-            return resultValue;
-          }
-        } finally {
-          if (shouldCleanup) {
-            context.removeLocalContext(name);
-          }
-        }
+        return resultValue;
+      }
+    } finally {
+      if (shouldCleanup) {
+        context.removeLocalContext(name);
       }
     }
   }
 
-  private Object executeBodyWithoutIdentifierContext(VirtualFrame frame, Object contextValue) {
+  private Object executeBodyWithoutIdentifierContext(final VirtualFrame frame, final Object contextValue) {
     if (contextValue instanceof Tuple) {
       Tuple contextValueTuple = (Tuple) contextValue;
       if (contextValueTuple.length() != 2) {

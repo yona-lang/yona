@@ -2,7 +2,7 @@ let
     stm = STM::new
     balance = STM::var stm 1000f
 
-    withdraw = \-> let old_balance = (STM::read balance) in (STM::write balance (old_balance - 10f))
+    withdraw = \-> let old_balance = async \-> STM::read balance in async \-> STM::write balance (old_balance - 10f)
 
     max_iterations = 100
 
