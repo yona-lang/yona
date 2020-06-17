@@ -3,10 +3,7 @@ package yatta;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import yatta.ast.expression.PatternLetNode;
 
 import java.io.IOException;
 

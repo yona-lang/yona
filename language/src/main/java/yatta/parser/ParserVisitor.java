@@ -620,13 +620,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public SymbolNode visitSymbol(YattaParser.SymbolContext ctx) {
-    String symbolName;
-    if (ctx.LOWERCASE_NAME() != null) {
-      symbolName = ctx.LOWERCASE_NAME().getText();
-    } else {
-      symbolName = ctx.UPPERCASE_NAME().getText();
-    }
-    return withSourceSection(ctx, new SymbolNode(symbolName));
+    return withSourceSection(ctx, new SymbolNode(ctx.SYMBOL().getText().substring(1)));
   }
 
   @Override

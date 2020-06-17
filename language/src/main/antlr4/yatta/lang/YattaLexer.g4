@@ -117,6 +117,8 @@ OP_JOIN : '++';
 OP_PIPE_L : '<|' ;
 OP_PIPE_R : '|>' ;
 
+SYMBOL : COLON (LOWERCASE_NAME | UPPERCASE_NAME) ;
+
 COMMENT: NEWLINE? WS? '#' InputCharacter* -> channel(COMMENTS_CHANNEL) ;
 
 NEWLINE : NewLinePart+;

@@ -12,6 +12,8 @@
 
 **Docker image**: [Docker Hub](https://hub.docker.com/r/akovari/yatta)
 
+**IDEA Plugin**: [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/14536-yatta-language)
+
 Yatta is a minimalistic, opiniated, (strongly) dynamically typed, strict, functional programming language, with ML-like syntax, for GraalVM polyglot virtual machine (VM). Yatta puts a strong focus on readability of the code.
 
 Yatta abstract users from dealing with non-blocking asynchronous computations and parallelism. While these features are commonly available in other languages nowadays, they are almost exclusively non-native solutions that come in forms of libraries or frameworks and are difficult to integrate with existing codebases. On top of that, dealing with these additional libraries requires conscious effort of the programmer to choose/learn/integrate these libraries into their mindset when writing new code.

@@ -239,7 +239,7 @@ fqn : (packageName BACKSLASH)? moduleName ;
 packageName : LOWERCASE_NAME (BACKSLASH LOWERCASE_NAME)* ;
 moduleName : UPPERCASE_NAME ;
 
-symbol : COLON (LOWERCASE_NAME | UPPERCASE_NAME) ;
+symbol : SYMBOL ;
 identifier : name ;
 lambda : BACKSLASH pattern* OP_RIGHT_ARROW NEWLINE? expression ;
 underscore: UNDERSCORE ;
