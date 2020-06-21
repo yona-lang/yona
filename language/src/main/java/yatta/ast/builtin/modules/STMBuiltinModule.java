@@ -1,7 +1,6 @@
 package yatta.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -24,7 +23,11 @@ import yatta.runtime.stdlib.ExportedFunction;
 public class STMBuiltinModule implements BuiltinModule {
   private static final String TX_CONTEXT_NAME = "tx";
 
-  private static final TruffleLogger LOGGER = YattaLanguage.getLogger(STMBuiltinModule.class);
+  protected static final class STMContextManager extends ContextManager<NativeObject> {
+    public STMContextManager(TransactionalMemory.Transaction tx, Context context) {
+      super("tx", context.identityFunction, context.identityFunction, new NativeObject(tx));
+    }
+  }
 
   @NodeInfo(shortName = "new")
   abstract static class STMBuiltin extends BuiltinNode {
@@ -44,13 +47,18 @@ public class STMBuiltinModule implements BuiltinModule {
     }
   }
 
+  private static TransactionalMemory.Transaction lookupTx(Context context) {
+    ContextManager<NativeObject> txNative = (ContextManager<NativeObject>) context.lookupLocalContext(TX_CONTEXT_NAME);
+    return (TransactionalMemory.Transaction) txNative.data().getValue();
+  }
+
   @NodeInfo(shortName = "run")
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     public Object run(Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YattaLanguage.class) Context context) {
       Object result;
       while (true) {
-        final TransactionalMemory.Transaction tx = (TransactionalMemory.Transaction) context.lookupLocalContext(TX_CONTEXT_NAME);
+        final TransactionalMemory.Transaction tx = lookupTx(context);
         try {
           result = tryExecuteTransaction(function, tx, dispatch);
           if (!(result instanceof Promise)) {
@@ -118,16 +126,16 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read_tx")
   abstract static class ReadTxBuiltin extends BuiltinNode {
     @Specialization
-    public Tuple readTx(TransactionalMemory stm) {
-      return new Tuple(Seq.fromCharSequence(TX_CONTEXT_NAME), new TransactionalMemory.ReadOnlyTransaction(stm));
+    public Tuple readTx(TransactionalMemory stm, @CachedContext(YattaLanguage.class) Context context) {
+      return new STMContextManager(new TransactionalMemory.ReadOnlyTransaction(stm), context);
     }
   }
 
   @NodeInfo(shortName = "write_tx")
   abstract static class WriteTxBuiltin extends BuiltinNode {
     @Specialization
-    public Tuple writeTx(TransactionalMemory stm) {
-      return new Tuple(Seq.fromCharSequence(TX_CONTEXT_NAME), new TransactionalMemory.ReadWriteTransaction(stm));
+    public Tuple writeTx(TransactionalMemory stm, @CachedContext(YattaLanguage.class) Context context) {
+      return new STMContextManager(new TransactionalMemory.ReadWriteTransaction(stm), context);
     }
   }
 
@@ -138,7 +146,7 @@ public class STMBuiltinModule implements BuiltinModule {
       if (!context.containsLocalContext(TX_CONTEXT_NAME)) {
         return var.read();
       } else {
-        TransactionalMemory.Transaction tx = (TransactionalMemory.Transaction) context.lookupLocalContext(TX_CONTEXT_NAME);
+        final TransactionalMemory.Transaction tx = lookupTx(context);
         return var.read(tx, this);
       }
     }
@@ -148,7 +156,7 @@ public class STMBuiltinModule implements BuiltinModule {
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
     public Unit write(TransactionalMemory.Var var, Object value, @CachedContext(YattaLanguage.class) Context context) {
-      TransactionalMemory.Transaction tx = (TransactionalMemory.Transaction) context.lookupLocalContext(TX_CONTEXT_NAME);
+      final TransactionalMemory.Transaction tx = lookupTx(context);
       if (tx == null) {
         throw new STMException("There is no running STM transaction", this);
       }
@@ -161,7 +169,7 @@ public class STMBuiltinModule implements BuiltinModule {
   abstract static class ProtectBuiltin extends BuiltinNode {
     @Specialization
     public Unit protect(TransactionalMemory.Var var, @CachedContext(YattaLanguage.class) Context context) {
-      TransactionalMemory.Transaction tx = (TransactionalMemory.Transaction) context.lookupLocalContext(TX_CONTEXT_NAME);
+      final TransactionalMemory.Transaction tx = lookupTx(context);
       if (tx == null) {
         throw new STMException("There is no running STM transaction", this);
       }

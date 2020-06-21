@@ -1,0 +1,5 @@
+let
+    keys = with File::open "tests/Keys.txt" {:read} as keys_file File::read_lines keys_file end
+    values = with File::open "tests/Values.txt" {:read} as values_file File::read_lines values_file end
+in
+    Seq::zip keys values |> Dict::from_seq

@@ -73,6 +73,22 @@ public final class FileBuiltinModule implements BuiltinModule {
     }
   }
 
+  protected static final class FileContextManager extends ContextManager<FileTuple> {
+    private final Context context;
+
+    public FileContextManager(FileTuple fileTuple, Context context) {
+      super("file", context.lookupGlobalFunction(null, "identity"), context.lookupGlobalFunction("File", "close"), fileTuple);
+      this.context = context;
+    }
+
+    public FileContextManager copy(Object readBuffer, long position) {
+      return new FileContextManager(new FileTuple(data().fileHandle(), readBuffer, position, data().additionalOptions(), data().path()), context);
+    }
+
+    public static FileContextManager adopt(ContextManager<?> contextManager, Context context) {
+      return new FileContextManager((FileTuple) contextManager.data(), context);
+    }
+  }
 
   protected static final class FileOptions {
     final Set<OpenOption> openOptions = new HashSet<>();
@@ -88,7 +104,7 @@ public final class FileBuiltinModule implements BuiltinModule {
       try {
         AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, fileOptions.openOptions, context.ioExecutor);
 
-        return new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions, Seq.fromCharSequence(path.toString()));
+        return new FileContextManager(new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions, Seq.fromCharSequence(path.toString())), context);
       } catch (IOException e) {
         throw new yatta.runtime.exceptions.IOException(e, this);
       }
@@ -184,9 +200,10 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileCloseNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Unit close(FileTuple fileTuple) {
+    public Unit close(ContextManager contextManager, @CachedContext(YattaLanguage.class) Context context) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
       try {
-        fileTuple.fileHandle().close();
+        fileContextManager.data().fileHandle().close();
         return Unit.INSTANCE;
       } catch (IOException e) {
         throw new yatta.runtime.exceptions.IOException(e, this);
@@ -198,8 +215,9 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FilePathNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Seq path(FileTuple fileTuple) {
-      return fileTuple.path();
+    public Seq path(ContextManager contextManager, @CachedContext(YattaLanguage.class) Context context) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
+      return fileContextManager.data().path();
     }
   }
 
@@ -207,9 +225,10 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileDeleteNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Unit path(FileTuple fileTuple) {
+    public Unit path(ContextManager contextManager, @CachedContext(YattaLanguage.class) Context context) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
       try {
-        Files.deleteIfExists(Paths.get(fileTuple.path().asJavaString(this)));
+        Files.deleteIfExists(Paths.get(fileContextManager.data().path().asJavaString(this)));
         return Unit.INSTANCE;
       } catch (IOException e) {
         throw new yatta.runtime.exceptions.IOException(e, this);
@@ -222,8 +241,9 @@ public final class FileBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unchecked")
-    public FileTuple open(FileTuple fileTuple, long position) {
-      return fileTuple.seek(position);
+    public FileTuple open(ContextManager contextManager, long position, @CachedContext(YattaLanguage.class) Context context) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
+      return fileContextManager.data().seek(position);
     }
   }
 
@@ -264,14 +284,15 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileReadLineNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise readline(FileTuple fileTuple, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
-      AsynchronousFileChannel asynchronousFileChannel = (AsynchronousFileChannel) ((NativeObject) fileTuple.get(0)).getValue();
+    public Promise readline(ContextManager contextManager, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
+      AsynchronousFileChannel asynchronousFileChannel = (AsynchronousFileChannel) ((NativeObject) fileContextManager.data().get(0)).getValue();
       ByteBuffer buffer = ByteBuffer.allocate(FILE_READ_BUFFER_SIZE);
       Node thisNode = this;
       Promise promise = new Promise(interopLibrary);
 
       try {
-        asynchronousFileChannel.read(buffer, fileTuple.position(), buffer, new CompletionHandler<>() {
+        asynchronousFileChannel.read(buffer, fileContextManager.data().position(), buffer, new CompletionHandler<>() {
           @Override
           public void completed(Integer result, ByteBuffer attachment) {
             boolean fulfilled = false;
@@ -285,8 +306,8 @@ public final class FileBuiltinModule implements BuiltinModule {
 
             ByteBuffer output;
 
-            if (fileTuple.readBuffer() instanceof ByteBuffer) {
-              output = (ByteBuffer) fileTuple.readBuffer();
+            if (fileContextManager.data().readBuffer() instanceof ByteBuffer) {
+              output = (ByteBuffer) fileContextManager.data().readBuffer();
               output.flip();
             } else {
               output = ByteBuffer.allocate(length);
@@ -298,7 +319,7 @@ public final class FileBuiltinModule implements BuiltinModule {
                 continue;
               }
               if (b == '\n') {
-                promise.fulfil(new Tuple(context.symbol("ok"), bytesToSeq(output, fileTuple.additionalOptions(), context, thisNode), fileTuple.copy(null, fileTuple.position() + i + 1)), thisNode);
+                promise.fulfil(new Tuple(context.symbol("ok"), bytesToSeq(output, fileContextManager.data().additionalOptions(), context, thisNode), fileContextManager.copy(null, fileContextManager.data().position() + i + 1)), thisNode);
                 fulfilled = true;
                 break;
               } else {
@@ -308,7 +329,7 @@ public final class FileBuiltinModule implements BuiltinModule {
             attachment.clear();
 
             if (!fulfilled) {
-              readline(fileTuple.copy(output, fileTuple.position() + length), context, interopLibrary).map(res -> {
+              readline(fileContextManager.copy(output, fileContextManager.data().position() + length), context, interopLibrary).map(res -> {
                 promise.fulfil(res, thisNode);
                 return res;
               }, thisNode);
@@ -341,7 +362,8 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileReadFileNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise readfile(FileTuple fileTuple, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+    public Promise readfile(ContextManager contextManager, @CachedContext(YattaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
       final class CatenateCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         final AsynchronousFileChannel channel;
         final Promise promise;
@@ -361,7 +383,7 @@ public final class FileBuiltinModule implements BuiltinModule {
           } else {
             attachment.flip();
 
-            if (fileTuple.additionalOptions().contains(context.symbol("binary"), FileReadFileNode.this)) {
+            if (fileContextManager.data().additionalOptions().contains(context.symbol("binary"), FileReadFileNode.this)) {
               seq = Seq.catenate(seq, Seq.fromByteBuffer(attachment));
             } else {
               seq = Seq.catenate(seq, Seq.fromCharSequence(StandardCharsets.UTF_8.decode(attachment)));
@@ -383,7 +405,7 @@ public final class FileBuiltinModule implements BuiltinModule {
       final Promise promise = new Promise(interopLibrary);
 
       try {
-        fileTuple.fileHandle().read(buffer, fileTuple.position(), buffer, new CatenateCompletionHandler(fileTuple.fileHandle(), promise, fileTuple.position()));
+        fileContextManager.data().fileHandle().read(buffer, fileContextManager.data().position(), buffer, new CatenateCompletionHandler(fileContextManager.data().fileHandle(), promise, fileContextManager.data().position()));
       } catch (Exception ex) {
         promise.fulfil(new YattaException(ex.getMessage(), this), this);
       }
@@ -396,12 +418,13 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileWriteFileNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise writefile(FileTuple fileTuple, Seq data, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+    public Promise writefile(ContextManager contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary interopLibrary, @CachedContext(YattaLanguage.class) Context context) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
       final class WriteCompletionHandler implements CompletionHandler<Integer, Promise> {
 
         @Override
         public void completed(Integer result, Promise attachment) {
-          attachment.fulfil(fileTuple.copy(Unit.INSTANCE, fileTuple.position() + result), FileWriteFileNode.this);
+          attachment.fulfil(fileContextManager.data().copy(Unit.INSTANCE, fileContextManager.data().position() + result), FileWriteFileNode.this);
         }
 
         @Override
@@ -414,7 +437,7 @@ public final class FileBuiltinModule implements BuiltinModule {
 
       try {
         ByteBuffer byteBuffer = data.asByteBuffer(this);
-        fileTuple.fileHandle().write(byteBuffer, fileTuple.position(), promise, new WriteCompletionHandler());
+        fileContextManager.data().fileHandle().write(byteBuffer, fileContextManager.data().position(), promise, new WriteCompletionHandler());
       } catch (BufferOverflowException ex) {
         promise.fulfil(new yatta.runtime.exceptions.IOException(ex, this), this);
       } catch (Exception ex) {

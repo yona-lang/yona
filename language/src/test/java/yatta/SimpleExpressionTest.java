@@ -657,6 +657,18 @@ public class SimpleExpressionTest extends CommonTest {
     assertTrue(4d > ret);
   }
 
+  @Test
+  public void contextManagerTest() {
+    long ret = context.eval(YattaLanguage.ID, "with context\\Local::new \"test_context\" (\\arg -> arg * 2) identity 4 as test_context (context\\Local::get_data test_context) * 2 end").asLong();
+    assertEquals(16L, ret);
+  }
+
+  @Test
+  public void asyncContextManagerTest() {
+    long ret = context.eval(YattaLanguage.ID, "with context\\Local::new (async \\-> \"test_context\") (\\arg -> async \\-> arg * 2) (async \\-> identity) (async \\-> 4) as test_context (context\\Local::get_data test_context) * 2 end").asLong();
+    assertEquals(16L, ret);
+  }
+
   //docs state:
   //If the {@link #HAS_SIZE} message
   //     * returns <code>true</code> implementations for {@link #READ} and {@link #WRITE} messages with

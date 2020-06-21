@@ -53,6 +53,11 @@ public final class Context {
   private static final TruffleLogger LOGGER = YattaLanguage.getLogger(Context.class);
   public static final String YATTA_PATH = "YATTA_PATH";
 
+  /**
+   * cached instance of identity function as it is used commonly across the board
+   */
+  public Function identityFunction;
+
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
   private final PrintWriter output;
@@ -100,6 +105,9 @@ public final class Context {
     installBuiltinModules();
     registerBuiltins();
     installGlobals();
+
+    identityFunction = lookupGlobalFunction(null, "identity");
+
     LOGGER.config("Yatta Context initialized");
   }
 
@@ -458,9 +466,11 @@ public final class Context {
   }
 
   public Function lookupGlobalFunction(String fqn, String function) {
-    if (globals.contains(fqn)) {
+    if (fqn != null && globals.contains(fqn)) {
       YattaModule yattaModule = (YattaModule) globals.lookup(fqn);
       return yattaModule.getFunctions().get(function);
+    } else if (fqn == null) {
+      return (Function) globals.lookup(function);
     }
     return null;
   }

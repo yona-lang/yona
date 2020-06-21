@@ -1,0 +1,22 @@
+module context\Local exports new, get_name, get_enter, get_leave, get_data as
+
+    # Build a new local context tuple. Arguments:
+    # name: string - name of the context variable, if `as` syntax is not used
+    # enter: 1-arg function - takes `data` from the local context tuple and the returned value is used as an argument to the `leave` function
+    # leave: 1-arg function - takes result of the `enter` function and its result is ignored
+    # data whatever data included in the local context, such as STM transaction or the File object
+    new name enter leave data
+      | Types::is_seq name && Seq::is_string name && Types::is_function enter && Types::is_function leave = (name, enter, leave, data)
+
+    # Returns the name of the context variable from the local context tuple
+    get_name (name, _ , _, _) = name
+
+    # Returns the enter function from the local context tuple
+    get_enter (_, enter, _, _) = enter
+
+    # Returns the leave function from the local context tuple
+    get_leave (_, _, leave, _) = leave
+
+    # Returns the data from the local context tuple
+    get_data (_, _, _, data) = data
+end

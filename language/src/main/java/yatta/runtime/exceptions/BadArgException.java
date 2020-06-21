@@ -22,4 +22,9 @@ public final class BadArgException extends YattaException {
   public BadArgException(Throwable cause, Node location) {
     super(cause, location);
   }
+
+  @CompilerDirectives.TruffleBoundary
+  public BadArgException(String message, Throwable cause, Node location) {
+    super(message, cause, location);
+  }
 }

@@ -74,7 +74,7 @@ public class YattaTest {
                     Object[] yattaExceptionTuple = ex.getGuestObject().as(Object[].class);
                     printer.println(yattaExceptionTuple[0] + ": " + yattaExceptionTuple[1]);
 
-                    List stackTrace = (List) yattaExceptionTuple[2];
+                    List<?> stackTrace = (List<?>) yattaExceptionTuple[2];
                     for (Object line : stackTrace) {
                       printer.println(line);
                     }
