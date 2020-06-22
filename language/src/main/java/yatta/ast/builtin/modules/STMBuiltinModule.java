@@ -55,6 +55,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "run")
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object run(Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YattaLanguage.class) Context context) {
       Object result;
       while (true) {
@@ -81,6 +82,7 @@ public class STMBuiltinModule implements BuiltinModule {
       return result;
     }
 
+    @CompilerDirectives.TruffleBoundary
     private Object tryExecuteTransaction(final Function function, final TransactionalMemory.Transaction tx, final InteropLibrary dispatch) {
       Object result;
       try {
@@ -126,6 +128,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read_tx")
   abstract static class ReadTxBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Tuple readTx(TransactionalMemory stm, @CachedContext(YattaLanguage.class) Context context) {
       return new STMContextManager(new TransactionalMemory.ReadOnlyTransaction(stm), context);
     }
@@ -134,6 +137,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "write_tx")
   abstract static class WriteTxBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Tuple writeTx(TransactionalMemory stm, @CachedContext(YattaLanguage.class) Context context) {
       return new STMContextManager(new TransactionalMemory.ReadWriteTransaction(stm), context);
     }
@@ -142,6 +146,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read")
   abstract static class ReadBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Object read(TransactionalMemory.Var var, @CachedContext(YattaLanguage.class) Context context) {
       if (!context.containsLocalContext(TX_CONTEXT_NAME)) {
         return var.read();
@@ -155,6 +160,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "write")
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Unit write(TransactionalMemory.Var var, Object value, @CachedContext(YattaLanguage.class) Context context) {
       final TransactionalMemory.Transaction tx = lookupTx(context);
       if (tx == null) {
@@ -168,6 +174,7 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "protect")
   abstract static class ProtectBuiltin extends BuiltinNode {
     @Specialization
+    @CompilerDirectives.TruffleBoundary
     public Unit protect(TransactionalMemory.Var var, @CachedContext(YattaLanguage.class) Context context) {
       final TransactionalMemory.Transaction tx = lookupTx(context);
       if (tx == null) {
