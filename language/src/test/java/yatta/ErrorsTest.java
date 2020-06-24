@@ -345,7 +345,7 @@ public class ErrorsTest extends CommonTest {
   public void stringToIntBadFormatTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        double ret = context.eval(YattaLanguage.ID, "\"5x\" |> int").asDouble();
+        context.eval(YattaLanguage.ID, "\"5x\" |> int").asDouble();
       } catch (PolyglotException ex) {
         assertEquals("Unable to parse 5x as an integer", ex.getMessage());
         throw ex;
@@ -357,9 +357,21 @@ public class ErrorsTest extends CommonTest {
   public void stringToFloatBadFormatTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
-        double ret = context.eval(YattaLanguage.ID, "\"5x\" |> float").asDouble();
+        context.eval(YattaLanguage.ID, "\"5x\" |> float").asDouble();
       } catch (PolyglotException ex) {
         assertEquals("Unable to parse 5x as a float", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
+  @Test
+  public void badRegexpOptions() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YattaLanguage.ID, "Regexp::compile \"(a|(b))c\" {:unknown}");
+      } catch (PolyglotException ex) {
+        assertEquals("NoMatchException", ex.getMessage());
         throw ex;
       }
     });

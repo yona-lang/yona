@@ -129,6 +129,7 @@ public class YattaException extends RuntimeException implements TruffleException
     return new YattaException(result.toString(), operation);
   }
 
+  @TruffleBoundary
   public static Seq stacktraceToSequence(Throwable throwable) {
     Seq stackTraceSequence = Seq.EMPTY;
 

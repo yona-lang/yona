@@ -610,4 +610,38 @@ public class StdLibTest extends CommonTest {
     String ret = context.eval(YattaLanguage.ID, "[\"adam\", \"fedor\"] |> str").asString();
     assertEquals("[adam, fedor]", ret);
   }
+
+  @Test
+  public void regexpExecSuccessOneTest() {
+    Value ret = context.eval(YattaLanguage.ID, "Regexp::compile \"(a|(b))c\" {:ignore_case} |> Regexp::exec \"xacy\"");
+    assertEquals(2, ret.getArraySize());
+    assertEquals("ac", ret.getArrayElement(0).asString());
+    assertEquals("a", ret.getArrayElement(1).asString());
+  }
+
+  @Test
+  public void regexpExecSuccessTwoTest() {
+    Value ret = context.eval(YattaLanguage.ID, "Regexp::compile \"we\" {:ignore_case, :global} |> Regexp::exec \"We will, we will\"");
+    assertEquals(2, ret.getArraySize());
+    assertEquals("We", ret.getArrayElement(0).asString());
+    assertEquals("we", ret.getArrayElement(1).asString());
+  }
+
+  @Test
+  public void regexpExecFailTest() {
+    Value ret = context.eval(YattaLanguage.ID, "Regexp::compile \"(a|(b))c\" {:ignore_case} |> Regexp::exec \"xxx\"");
+    assertEquals(0, ret.getArraySize());
+  }
+
+  @Test
+  public void regexpReplaceOneTest() {
+    Value ret = context.eval(YattaLanguage.ID, "Regexp::compile \"we\" {:ignore_case, :global} |> Regexp::replace \"You We will, we will\" \"she\"");
+    assertEquals("You she will, she will", ret.asString());
+  }
+
+  @Test
+  public void regexpReplaceTwoTest() {
+    Value ret = context.eval(YattaLanguage.ID, "Regexp::compile \"HTML\" {:ignore_case, :global} |> Regexp::replace \"I love HTML\" \"$& and JavaScript\"");
+    assertEquals("I love HTML and JavaScript", ret.asString());
+  }
 }

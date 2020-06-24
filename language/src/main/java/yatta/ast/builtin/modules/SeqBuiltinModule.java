@@ -81,8 +81,24 @@ public final class SeqBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "split")
   abstract static class SplitBuiltin extends BuiltinNode {
     @Specialization
-    public Tuple length(Seq sequence, long idx) {
+    public Tuple length(long idx, Seq sequence) {
       return new Tuple((Object[]) sequence.split(idx, this));
+    }
+  }
+
+  @NodeInfo(shortName = "take")
+  abstract static class TakeBuiltin extends BuiltinNode {
+    @Specialization
+    public Seq take(long n, Seq sequence) {
+      return sequence.take(n, this);
+    }
+  }
+
+  @NodeInfo(shortName = "drop")
+  abstract static class DropBuiltin extends BuiltinNode {
+    @Specialization
+    public Seq drop(long n, Seq sequence) {
+      return sequence.drop(n, this);
     }
   }
 
@@ -112,6 +128,8 @@ public final class SeqBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.SplitBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.IsStringBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.TakeBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.DropBuiltinFactory.getInstance()));
     return builtins;
   }
 }

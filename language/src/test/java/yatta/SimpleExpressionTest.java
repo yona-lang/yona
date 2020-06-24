@@ -12,7 +12,7 @@ public class SimpleExpressionTest extends CommonTest {
   @Test
   public void longValueTest() {
     long ret = context.eval(YattaLanguage.ID, "5").asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -62,9 +62,9 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(3, tuple.getArraySize());
 
     Object[] array = tuple.as(Object[].class);
-    assertEquals(1l, array[0]);
-    assertEquals(2l, array[1]);
-    assertEquals(3l, array[2]);
+    assertEquals(1L, array[0]);
+    assertEquals(2L, array[1]);
+    assertEquals(3L, array[2]);
   }
 
   @Test
@@ -85,7 +85,7 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(1, sequence.getArraySize());
 
     Object[] array = sequence.as(Object[].class);
-    assertEquals(1l, array[0]);
+    assertEquals(1L, array[0]);
   }
 
   @Test
@@ -94,8 +94,8 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(2, sequence.getArraySize());
 
     Object[] array = sequence.as(Object[].class);
-    assertEquals(1l, array[0]);
-    assertEquals(2l, array[1]);
+    assertEquals(1L, array[0]);
+    assertEquals(2L, array[1]);
   }
 
   @Test
@@ -110,33 +110,33 @@ public class SimpleExpressionTest extends CommonTest {
     assertEquals(3, sequence.getArraySize());
 
     Object[] array = sequence.as(Object[].class);
-    assertEquals(1l, array[0]);
-    assertEquals(2l, array[1]);
-    assertEquals(3l, array[2]);
+    assertEquals(1L, array[0]);
+    assertEquals(2L, array[1]);
+    assertEquals(3L, array[2]);
   }
 
   @Test
   public void zeroArgFunctionTest() {
     long ret = context.eval(YattaLanguage.ID, "\\ -> 5").asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
   public void oneArgFunctionTest() {
     long ret = context.eval(YattaLanguage.ID, "\\arg -> arg").execute(6).asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
   public void twoArgFunctionFirstTest() {
     long ret = context.eval(YattaLanguage.ID, "\\argone argtwo -> argone").execute(5, 6).asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
   public void twoArgFunctionSecondTest() {
     long ret = context.eval(YattaLanguage.ID, "\\argone argtwo -> argtwo").execute(5, 6).asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -151,14 +151,14 @@ public class SimpleExpressionTest extends CommonTest {
     assertTrue(modVal.hasMember("other_fun"));
     assertFalse(modVal.hasMember("whatever"));
 
-    assertEquals(6l, modVal.getMember("fun").execute().asLong());
-    assertEquals(7l, modVal.getMember("other_fun").execute().asLong());
+    assertEquals(6L, modVal.getMember("fun").execute().asLong());
+    assertEquals(7L, modVal.getMember("other_fun").execute().asLong());
   }
 
   @Test
   public void letOneAliasTest() {
     long ret = context.eval(YattaLanguage.ID, "\\test -> let alias = test in alias").execute(5).asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -167,24 +167,24 @@ public class SimpleExpressionTest extends CommonTest {
         "    alias = test\n" +
         "    aliastwo = 6\n" +
         "in\n" +
-        "(alias, aliastwo)").execute(5l);
+        "(alias, aliastwo)").execute(5L);
     assertEquals(2, ret.getArraySize());
 
     Object[] array = ret.as(Object[].class);
-    assertEquals(5l, array[0]);
-    assertEquals(6l, array[1]);
+    assertEquals(5L, array[0]);
+    assertEquals(6L, array[1]);
   }
 
   @Test
   public void letNotInFunctionTest() {
     long ret = context.eval(YattaLanguage.ID, "let alias = 6 in alias").asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
   public void letFunctionAliasTest() {
     long ret = context.eval(YattaLanguage.ID, "let funalias = \\arg -> arg in funalias").execute(5).asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -192,8 +192,8 @@ public class SimpleExpressionTest extends CommonTest {
     long ret = context.eval(YattaLanguage.ID, "let\n" +
         "alias = 6\n" +
         "funalias = \\arg -> alias\n" +
-        "in funalias").execute(5l).asLong();
-    assertEquals(6l, ret);
+        "in funalias").execute(5L).asLong();
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -203,7 +203,7 @@ public class SimpleExpressionTest extends CommonTest {
         "alias = 6\n" +
         "funalias = \\arg -> funone alias\n" +
         "in funalias 5").asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -213,7 +213,7 @@ public class SimpleExpressionTest extends CommonTest {
         "curriedOne = \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
         "curried = \\curriedArg -> curriedOne curriedArg\n" +
         "in curried 5").asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -223,7 +223,7 @@ public class SimpleExpressionTest extends CommonTest {
         "curriedOne = \\curriedOneArg -> curriedFun curriedOneArg 6\n" +
         "curried = \\curriedArg -> curriedOne curriedArg\n" +
         "in curried 6").asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -232,7 +232,7 @@ public class SimpleExpressionTest extends CommonTest {
         "curriedFun = let fullFun = \\argone argtwo argthree -> argthree in fullFun 1\n" +
         "curried = \\curriedArg -> curriedFun 3 curriedArg\n" +
         "in curried 6").asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -241,7 +241,7 @@ public class SimpleExpressionTest extends CommonTest {
         "curriedFun = \\ -> 1\n" +
         "curried = \\curriedArg -> curriedFun\n" +
         "in curried").execute(6).asLong();
-    assertEquals(1l, ret);
+    assertEquals(1L, ret);
   }
 
   @Test
@@ -249,7 +249,7 @@ public class SimpleExpressionTest extends CommonTest {
     long ret = context.eval(YattaLanguage.ID, "let\n" +
         "zeroArgFun = \\-> 5\n" +
         "in zeroArgFun").asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -259,13 +259,13 @@ public class SimpleExpressionTest extends CommonTest {
         "funone argone = funtwo argone\n" +
         "funtwo argone = argone\n" +
         "end in testMod::funone 6").asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
   public void intSumTest() {
     long ret = context.eval(YattaLanguage.ID, "2 + 5").asLong();
-    assertEquals(7l, ret);
+    assertEquals(7L, ret);
   }
 
   @Test
@@ -276,7 +276,7 @@ public class SimpleExpressionTest extends CommonTest {
         "two = 2\n" +
         "one + two\n" +
         "end\n").asLong();
-    assertEquals(3l, ret);
+    assertEquals(3L, ret);
   }
 
   @Test
@@ -350,7 +350,7 @@ public class SimpleExpressionTest extends CommonTest {
         "_ -> 2\n" +
         "end\n").asLong();
 
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
@@ -359,7 +359,7 @@ public class SimpleExpressionTest extends CommonTest {
         "    func = \\aa bb -> aa + bb\n" +
         "in 2 `func` 3").asLong();
 
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -368,7 +368,7 @@ public class SimpleExpressionTest extends CommonTest {
         "    func = \\aa bb -> aa + bb\n" +
         "in (let xx = 2 in xx) `func` 3").asLong();
 
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -378,7 +378,7 @@ public class SimpleExpressionTest extends CommonTest {
         "    curried = 2 `func` 3\n" +
         "in curried 4").asLong();
 
-    assertEquals(9l, ret);
+    assertEquals(9L, ret);
   }
 
   @Test
@@ -402,19 +402,19 @@ public class SimpleExpressionTest extends CommonTest {
   @Test
   public void binaryNotTest() {
     long ret = context.eval(YattaLanguage.ID, "~0").asLong();
-    assertEquals(-1l, ret);
+    assertEquals(-1L, ret);
   }
 
   @Test
   public void binaryNotPromiseTest() {
     long ret = context.eval(YattaLanguage.ID, "~(async \\->0)").asLong();
-    assertEquals(-1l, ret);
+    assertEquals(-1L, ret);
   }
 
   @Test
   public void singleLetterNames() {
-    long ret = context.eval(YattaLanguage.ID, "\\a b -> a+b").execute(1l, 2l).asLong();
-    assertEquals(3l, ret);
+    long ret = context.eval(YattaLanguage.ID, "\\a b -> a+b").execute(1L, 2L).asLong();
+    assertEquals(3L, ret);
   }
 
   @Test
@@ -428,10 +428,10 @@ public class SimpleExpressionTest extends CommonTest {
     Value ret = context.eval(YattaLanguage.ID, "[1, 2] |- 3 |- 4");
     assertEquals(4, ret.getArraySize());
     Long[] array = ret.as(Long[].class);
-    assertEquals(1l, array[0]);
-    assertEquals(2l, array[1]);
-    assertEquals(3l, array[2]);
-    assertEquals(4l, array[3]);
+    assertEquals(1L, array[0]);
+    assertEquals(2L, array[1]);
+    assertEquals(3L, array[2]);
+    assertEquals(4L, array[3]);
   }
 
   @Test
@@ -439,10 +439,10 @@ public class SimpleExpressionTest extends CommonTest {
     Value ret = context.eval(YattaLanguage.ID, "1 -| 2 -| [3, 4]");
     assertEquals(4, ret.getArraySize());
     Long[] array = ret.as(Long[].class);
-    assertEquals(1l, array[0]);
-    assertEquals(2l, array[1]);
-    assertEquals(3l, array[2]);
-    assertEquals(4l, array[3]);
+    assertEquals(1L, array[0]);
+    assertEquals(2L, array[1]);
+    assertEquals(3L, array[2]);
+    assertEquals(4L, array[3]);
   }
 
   @Test
@@ -451,7 +451,7 @@ public class SimpleExpressionTest extends CommonTest {
         "    plus = \\a b -> a + b\n" +
         "    multiply = \\a b -> a * b\n" +
         "in 5 |> plus 3 |> multiply 10").asLong();
-    assertEquals(80l, ret);
+    assertEquals(80L, ret);
   }
 
   @Test
@@ -462,7 +462,7 @@ public class SimpleExpressionTest extends CommonTest {
         "in 5 \n" +
         "|> plus 3\n" +
         "|> multiply 10").asLong();
-    assertEquals(80l, ret);
+    assertEquals(80L, ret);
   }
 
   @Test
@@ -471,7 +471,7 @@ public class SimpleExpressionTest extends CommonTest {
         "    plus = \\a b -> a + b\n" +
         "    multiply = \\a b -> a * b\n" +
         "in plus 5 <| multiply 10 <| 3").asLong();
-    assertEquals(35l, ret);
+    assertEquals(35L, ret);
   }
 
   @Test
@@ -482,13 +482,13 @@ public class SimpleExpressionTest extends CommonTest {
         "in plus 5" +
         "<| multiply 10" +
         "<| 3").asLong();
-    assertEquals(35l, ret);
+    assertEquals(35L, ret);
   }
 
   @Test
   public void simpleOperatorPrecedenceAndApplication() {
     long ret = context.eval(YattaLanguage.ID, "identity 5 + 3").asLong();
-    assertEquals(8l, ret);
+    assertEquals(8L, ret);
   }
 
   @Test
@@ -505,7 +505,7 @@ public class SimpleExpressionTest extends CommonTest {
         "in testMod::fun";
     long ret = context.eval(YattaLanguage.ID, src).asLong();
 
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -517,7 +517,7 @@ public class SimpleExpressionTest extends CommonTest {
         "in testMod::fun";
     long ret = context.eval(YattaLanguage.ID, src).asLong();
 
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -531,7 +531,7 @@ public class SimpleExpressionTest extends CommonTest {
 
     Object[] array = tuple.as(Object[].class);
     assertEquals("TestRecord", array[0]);
-    assertEquals(1l, array[1]);
+    assertEquals(1L, array[1]);
     assertNull(array[2]);
   }
 
@@ -550,7 +550,7 @@ public class SimpleExpressionTest extends CommonTest {
     Object[] array = tuple.as(Object[].class);
     assertEquals("TestRecord", array[0]);
     assertNull(array[1]);
-    assertEquals(1l, array[2]);
+    assertEquals(1L, array[2]);
   }
 
   @Test
@@ -561,7 +561,7 @@ public class SimpleExpressionTest extends CommonTest {
         "rec.argone\n" +
         "end").getMember("funone").execute().asLong();
 
-    assertEquals(1l, ret);
+    assertEquals(1L, ret);
   }
 
   @Test
@@ -572,7 +572,7 @@ public class SimpleExpressionTest extends CommonTest {
         "rec.argone\n" +
         "end").getMember("funone").execute().asLong();
 
-    assertEquals(1l, ret);
+    assertEquals(1L, ret);
   }
 
   @Test
@@ -594,7 +594,7 @@ public class SimpleExpressionTest extends CommonTest {
         "rec.argone\n" +
         "end in mod::funone").asLong();
 
-    assertEquals(1l, ret);
+    assertEquals(1L, ret);
   }
 
   @Test
@@ -605,7 +605,7 @@ public class SimpleExpressionTest extends CommonTest {
         "let rectwo = rec(argone = 2) in rectwo.argone\n" +
         "end").getMember("funone").execute().asLong();
 
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
@@ -616,7 +616,7 @@ public class SimpleExpressionTest extends CommonTest {
         "let rectwo = rec(argtwo = 2) in rectwo.argtwo\n" +
         "end").getMember("funone").execute().asLong();
 
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
@@ -628,16 +628,16 @@ public class SimpleExpressionTest extends CommonTest {
         "end in\n" +
         "mod::funone").asLong();
 
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
   public void closureTest() {
     long ret = context.eval(YattaLanguage.ID, "\\a b -> let\n" +
         "x = \\-> a + b\n" +
-        "in x").execute(1l, 2l).asLong();
+        "in x").execute(1L, 2L).asLong();
 
-    assertEquals(3l, ret);
+    assertEquals(3L, ret);
   }
 
   @Test

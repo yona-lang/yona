@@ -152,6 +152,7 @@ public final class Context {
     builtinModules.register(new SystemBuiltinModule());
     builtinModules.register(new STMBuiltinModule());
     builtinModules.register(new LocalContextBuiltinModule());
+    builtinModules.register(new RegexpBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

@@ -18,7 +18,7 @@ import yatta.runtime.Unit;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-@TruffleLanguage.Registration(id = YattaLanguage.ID, name = YattaLanguage.NAME, defaultMimeType = YattaLanguage.MIME_TYPE, characterMimeTypes = YattaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class)
+@TruffleLanguage.Registration(id = YattaLanguage.ID, name = YattaLanguage.NAME, defaultMimeType = YattaLanguage.MIME_TYPE, characterMimeTypes = YattaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class, dependentLanguages = {"regex"})
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, StandardTags.ReadVariableTag.class, StandardTags.WriteVariableTag.class, DebuggerTags.AlwaysHalt.class})
 public class YattaLanguage extends TruffleLanguage<Context> {
   public static final String ID = "yatta";

@@ -5,7 +5,7 @@ if [[ $YATTA_BUILD_NATIVE == "false" ]]; then
 fi
 "$JAVA_HOME"/bin/native-image \
     --enable-http --enable-https --enable-all-security-services \
-    --macro:truffle --no-fallback --initialize-at-build-time \
+    --macro:truffle --no-fallback --initialize-at-build-time --language:regex --language:js \
     -cp ../language/target/yatta.jar:../launcher/target/launcher-0.8.1-SNAPSHOT.jar:$JAVA_HOME/lib/src.zip \
     yatta.Launcher \
     yattanative
