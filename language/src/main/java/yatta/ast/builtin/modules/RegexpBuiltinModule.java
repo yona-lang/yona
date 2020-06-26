@@ -136,9 +136,7 @@ public final class RegexpBuiltinModule implements BuiltinModule {
             }
 
             sb.append(replacementString.replace("$&", group.toString()));
-
             lastIndex = end;
-
           }
         } else {
           sb.append(inputString);

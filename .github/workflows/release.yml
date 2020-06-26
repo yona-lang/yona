@@ -22,8 +22,10 @@ jobs:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
+      - name: Test
+        run: mvn -B test
       - name: Package
-        run: mvn -B package
+        run: mvn -B -DskipTests package
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
