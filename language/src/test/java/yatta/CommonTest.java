@@ -8,15 +8,15 @@ import org.junit.jupiter.api.BeforeAll;
 import java.io.IOException;
 
 public abstract class CommonTest {
-  protected Context context;
+  protected static Context context;
 
   @BeforeAll
-  public void initEngine() {
+  public static void initEngine() {
     context = Context.newBuilder().allowAllAccess(true).environment("YATTA_STDLIB_HOME", "lib-yatta").build();
   }
 
   @AfterAll
-  public void dispose() {
+  public static void dispose() {
     try {
       context.eval(Source.newBuilder(YattaLanguage.ID, "shutdown", "shutdown").internal(true).build());
     } catch (IOException e) {

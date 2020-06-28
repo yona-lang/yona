@@ -23,10 +23,8 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven-
-      - name: Test
-        run: mvn test
       - name: Package
-        run: mvn -DskipTests package
+        run: mvn -B -DskipTests package
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
