@@ -29,27 +29,27 @@ public class GeneratorsTest extends CommonTest {
   static Stream<SeqGeneratorTestCase> seqTestCases() {
     return Stream.of(
         // SEQ -> SEQ
-        new SeqGeneratorTestCase("x * 2", "x <- [1, 2, 3]", 3, 2l, 4l, 6l),
-        new SeqGeneratorTestCase("x * 2", "x <- async \\-> [1, 2, 3]", 3, 2l, 4l, 6l),
-        new SeqGeneratorTestCase("async \\-> x * 2", "x <- [1, 2, 3]", 3, 2l, 4l, 6l),
-        new SeqGeneratorTestCase("x * 2", "x <- [1, 2, 3]", "x < 3", 2, 2l, 4l),
-        new SeqGeneratorTestCase("x * 2", "x <- [1, 2, 3]", "async \\-> x < 3", 2, 2l, 4l),
+        new SeqGeneratorTestCase("x * 2", "x <- [1, 2, 3]", 3, 2L, 4L, 6L),
+        new SeqGeneratorTestCase("x * 2", "x <- async \\-> [1, 2, 3]", 3, 2L, 4L, 6L),
+        new SeqGeneratorTestCase("async \\-> x * 2", "x <- [1, 2, 3]", 3, 2L, 4L, 6L),
+        new SeqGeneratorTestCase("x * 2", "x <- [1, 2, 3]", "x < 3", 2, 2L, 4L),
+        new SeqGeneratorTestCase("x * 2", "x <- [1, 2, 3]", "async \\-> x < 3", 2, 2L, 4L),
 
         // SET -> SEQ
-        new SeqGeneratorTestCase("x * 2", "x <- {1, 2, 3}", 3, 2l, 4l, 6l),
-        new SeqGeneratorTestCase("x * 2", "x <- async \\-> {1, 2, 3}", 3, 2l, 4l, 6l),
-        new SeqGeneratorTestCase("async \\-> x * 2", "x <- {1, 2, 3}", 3, 2l, 4l, 6l),
-        new SeqGeneratorTestCase("x * 2", "x <- {1, 2, 3}", "x < 3", 2, 2l, 4l),
-        new SeqGeneratorTestCase("x * 2", "x <- {1, 2, 3}", "async \\-> x < 3", 2, 2l, 4l),
+        new SeqGeneratorTestCase("x * 2", "x <- {1, 2, 3}", 3, 2L, 4L, 6L),
+        new SeqGeneratorTestCase("x * 2", "x <- async \\-> {1, 2, 3}", 3, 2L, 4L, 6L),
+        new SeqGeneratorTestCase("async \\-> x * 2", "x <- {1, 2, 3}", 3, 2L, 4L, 6L),
+        new SeqGeneratorTestCase("x * 2", "x <- {1, 2, 3}", "x < 3", 2, 2L, 4L),
+        new SeqGeneratorTestCase("x * 2", "x <- {1, 2, 3}", "async \\-> x < 3", 2, 2L, 4L),
 
         // DICT -> SEQ
-        new SeqGeneratorTestCase("k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", 3, 2l, 6l, 12l),
-        new SeqGeneratorTestCase("k * k", "k = _ <- {1 = 2, 2 = 3, 3 = 4}", 3, 1l, 4l, 9l),
-        new SeqGeneratorTestCase("v * v", "_ = v <- {1 = 2, 2 = 3, 3 = 4}", 3, 4l, 9l, 16l),
-        new SeqGeneratorTestCase("k * v", "k = v <- async \\-> {1 = 2, 2 = 3, 3 = 4}", 3, 2l, 6l, 12l),
-        new SeqGeneratorTestCase("async \\-> k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", 3, 2l, 6l, 12l),
-        new SeqGeneratorTestCase("k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", "v < 4", 2, 2l, 6l),
-        new SeqGeneratorTestCase("k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", "async \\-> v < 4", 2, 2l, 6l)
+        new SeqGeneratorTestCase("k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", 3, 2L, 6L, 12L),
+        new SeqGeneratorTestCase("k * k", "k = _ <- {1 = 2, 2 = 3, 3 = 4}", 3, 1L, 4L, 9L),
+        new SeqGeneratorTestCase("v * v", "_ = v <- {1 = 2, 2 = 3, 3 = 4}", 3, 4L, 9L, 16L),
+        new SeqGeneratorTestCase("k * v", "k = v <- async \\-> {1 = 2, 2 = 3, 3 = 4}", 3, 2L, 6L, 12L),
+        new SeqGeneratorTestCase("async \\-> k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", 3, 2L, 6L, 12L),
+        new SeqGeneratorTestCase("k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", "v < 4", 2, 2L, 6L),
+        new SeqGeneratorTestCase("k * v", "k = v <- {1 = 2, 2 = 3, 3 = 4}", "async \\-> v < 4", 2, 2L, 6L)
         );
   }
 
