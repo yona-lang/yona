@@ -1,2 +1,2 @@
 NoMatchException at OverrideBuiltinFunction.yatta:
-    println = "wrong"
+    sleep = "wrong"

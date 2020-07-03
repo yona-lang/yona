@@ -1,1 +1,1 @@
-println "hello world!"
+IO::println "hello world!"

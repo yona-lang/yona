@@ -106,7 +106,7 @@ public class AsyncTest extends CommonTest {
   public void simpleDoTest() {
     long ret = context.eval(YattaLanguage.ID, "do\n" +
         "one = async \\-> 1\n" +
-        "println one\n" +
+        "IO::println one\n" +
         "two = async \\-> 2\n" +
         "one + two\n" +
         "end\n").asLong();

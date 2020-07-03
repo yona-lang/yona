@@ -64,7 +64,7 @@ module tests\CommonFunctions exports
     print_sequence []     = ()
     print_sequence h -| t =
         do
-            println h
+            IO::println h
             print_sequence t
         end
 

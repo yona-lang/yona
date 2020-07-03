@@ -495,7 +495,7 @@ public class StdLibTest extends CommonTest {
   public void readTest() {
     Context customContext = Context.newBuilder().allowAllAccess(true).in(new ByteArrayInputStream("x".getBytes())).build();
     customContext.enter();
-    int ret = customContext.eval(YattaLanguage.ID, "read").asInt();
+    int ret = customContext.eval(YattaLanguage.ID, "IO::read").asInt();
     assertEquals('x', ret);
     customContext.leave();
   }
@@ -504,7 +504,7 @@ public class StdLibTest extends CommonTest {
   public void readlnTest() {
     Context customContext = Context.newBuilder().allowAllAccess(true).in(new ByteArrayInputStream("hello\n".getBytes())).build();
     customContext.enter();
-    String ret = customContext.eval(YattaLanguage.ID, "readln").asString();
+    String ret = customContext.eval(YattaLanguage.ID, "IO::readln").asString();
     assertEquals("hello", ret);
     customContext.leave();
   }

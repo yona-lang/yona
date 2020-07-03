@@ -1,6 +1,6 @@
 do
     one = 1
-    println one
+    IO::println one
     two = 2
     one + two
 end

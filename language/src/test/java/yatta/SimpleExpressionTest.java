@@ -272,7 +272,7 @@ public class SimpleExpressionTest extends CommonTest {
   public void simpleDoTest() {
     long ret = context.eval(YattaLanguage.ID, "do\n" +
         "one = 1\n" +
-        "println one\n" +
+        "IO::println one\n" +
         "two = 2\n" +
         "one + two\n" +
         "end\n").asLong();
@@ -493,7 +493,7 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void simplePrintlnTest() {
-    context.eval(YattaLanguage.ID, "println \"hello\"");
+    context.eval(YattaLanguage.ID, "IO::println \"hello\"");
   }
 
   @Test

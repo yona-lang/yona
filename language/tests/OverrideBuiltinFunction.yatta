@@ -1,4 +1,4 @@
 let
-    println = "wrong"
+    sleep = "wrong"
 in
-    println "test"
+    sleep \-> "test"

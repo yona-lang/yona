@@ -117,7 +117,6 @@ public final class Context {
   }
 
   private void installBuiltins() {
-    builtins.register(new ExportedFunction(PrintlnBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SleepBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(AsyncBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(IdentityBuiltinFactory.getInstance()));
@@ -125,8 +124,6 @@ public final class Context {
     builtins.register(new ExportedFunction(ToFloatBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(ToIntegerBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(EvalBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(ReadlnBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(ReadBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(NeverBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(TimeoutBuiltinFactory.getInstance()) {
       @Override
@@ -141,6 +138,7 @@ public final class Context {
     builtinModules.register(new SeqBuiltinModule());
     builtinModules.register(new SetBuiltinModule());
     builtinModules.register(new DictBuiltinModule());
+    builtinModules.register(new IOBuiltinModule());
     builtinModules.register(new FileBuiltinModule());
     builtinModules.register(new TransducersBuiltinModule());
     builtinModules.register(new JSONBuiltinModule());
