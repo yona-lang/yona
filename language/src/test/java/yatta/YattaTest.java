@@ -87,7 +87,7 @@ public class YattaTest {
               }
             } finally {
               try {
-                context.eval(Source.newBuilder("yatta", "shutdown", "shutdown").internal(true).build());
+                context.eval(Source.newBuilder(YattaLanguage.ID, "shutdown", "shutdown").internal(true).build());
               } catch (IOException e) {
               } finally {
                 context.leave();
@@ -101,7 +101,6 @@ public class YattaTest {
             assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
           });
 
-          if(baseName.startsWith("Zip"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;

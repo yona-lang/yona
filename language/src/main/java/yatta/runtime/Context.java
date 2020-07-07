@@ -45,8 +45,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class Context {
-  public static final Source BUILTIN_SOURCE = Source.newBuilder(YattaLanguage.ID, "", "Yatta builtin").internal(true).build();
-  private static final SourceSection BUILTIN_SOURCE_SECTION = BUILTIN_SOURCE.createUnavailableSection();
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
   public static final Source SHUTDOWN_SOURCE = Source.newBuilder(YattaLanguage.ID, "shutdown", "shutdown").internal(true).build();
@@ -159,7 +157,7 @@ public final class Context {
 
     builtins.builtins.forEach((name, stdLibFunction) -> {
       int argumentsCount = stdLibFunction.node.getExecutionSignature().size();
-      FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, fqn, name);
+      FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), stdLibFunction.sourceSection(), fqn, name);
       if (stdLibFunction.isExported()) {
         exports.add(name);
       }
@@ -174,7 +172,7 @@ public final class Context {
     builtins.builtins.forEach((name, stdLibFunction) -> {
       int cardinality = stdLibFunction.node.getExecutionSignature().size();
 
-      FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), BUILTIN_SOURCE_SECTION, null, name);
+      FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), stdLibFunction.sourceSection(), null, name);
       Function function = new Function(null, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality, stdLibFunction.unwrapArgumentPromises());
 
       String partiallyAppliedFunctionName = "$partial-0/" + function.getCardinality() + "-" + function.getName();
@@ -198,7 +196,7 @@ public final class Context {
       WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), partialFrameDescriptor.addFrameSlot(function.getName()));
 
       YattaBlockNode blockNode = new YattaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
-      FunctionRootNode partiallyAppliedFunctionRootNode = new FunctionRootNode(language, partialFrameDescriptor, blockNode, BUILTIN_SOURCE_SECTION, null, partiallyAppliedFunctionName);
+      FunctionRootNode partiallyAppliedFunctionRootNode = new FunctionRootNode(language, partialFrameDescriptor, blockNode, stdLibFunction.sourceSection(), null, partiallyAppliedFunctionName);
 
       insertGlobal(name, new Function(null, partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(partiallyAppliedFunctionRootNode), cardinality, stdLibFunction.unwrapArgumentPromises()));
     });

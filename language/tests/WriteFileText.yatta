@@ -1,10 +1,8 @@
-do
-    temp_file = File::make_temp "test_" ".yatta" {:write}
-    File::write temp_file "{{\"hello\": \"world\"}}"
-    File::close temp_file
-
-    source_file = File::open (File::path temp_file) {:read}  # can be read as :binary, but also as a text
-    {"hello" = world} = File::read source_file |> JSON::parse
-    File::delete temp_file
-    "hello {world}"
+with File::make_temp "test_" ".yatta" {:write, :delete_on_close} as temp_file
+    do
+        File::write temp_file "{{\"hello\": \"world\"}}"
+        with File::open (File::path temp_file) {:read} as source_file # can be read as :binary, but also as a text
+            let {"hello" = world} = File::read source_file |> JSON::parse in "hello {world}"
+        end
+    end
 end

@@ -146,6 +146,8 @@ public final class FileBuiltinModule implements BuiltinModule {
       switch (symbolName) {
         case "binary":
           return true;
+        case "delete_on_close":
+          return true;
         default:
           return false;
       }
@@ -166,8 +168,6 @@ public final class FileBuiltinModule implements BuiltinModule {
           return StandardOpenOption.CREATE;
         case "create_new":
           return StandardOpenOption.CREATE_NEW;
-        case "delete_on_close":
-          return StandardOpenOption.DELETE_ON_CLOSE;
         case "sparse":
           return StandardOpenOption.SPARSE;
         case "sync":
@@ -205,9 +205,9 @@ public final class FileBuiltinModule implements BuiltinModule {
             try {
               return value;
             } finally {
-              RunBuiltin.closeFile(fileContextManager, value, this);
+              RunBuiltin.closeFile(fileContextManager, value, this, context);
             }
-          }, exception -> RunBuiltin.closeFile(fileContextManager, exception, this), this);
+          }, exception -> RunBuiltin.closeFile(fileContextManager, exception, this, context), this);
         } else {
           return result;
         }
@@ -215,14 +215,18 @@ public final class FileBuiltinModule implements BuiltinModule {
         throw new YattaException(e, this);
       } finally {
         if (shouldClose) {
-          RunBuiltin.closeFile(fileContextManager, Unit.INSTANCE, this);
+          RunBuiltin.closeFile(fileContextManager, Unit.INSTANCE, this, context);
         }
       }
     }
 
-    private static <T> T closeFile(FileContextManager fileContextManager, T result, Node node) {
+    private static <T> T closeFile(FileContextManager fileContextManager, T result, Node node, Context context) {
       try {
-        fileContextManager.data().fileHandle().close();
+        AsynchronousFileChannel fileHandle = fileContextManager.data().fileHandle();
+        fileHandle.close();
+        if (fileContextManager.data().additionalOptions().contains(context.symbol("delete_on_close"), node)) {
+          new File(fileContextManager.data().path().asJavaString(node)).delete();
+        }
         return result;
       } catch (IOException e) {
         throw new yatta.runtime.exceptions.IOException(e, node);
@@ -238,16 +242,6 @@ public final class FileBuiltinModule implements BuiltinModule {
     public Object open(Seq uri, yatta.runtime.Set modes, @CachedContext(YattaLanguage.class) Context context) {
       Path path = Paths.get(uri.asJavaString(this));
       return openPath(path, modes, context);
-    }
-  }
-
-  @NodeInfo(shortName = "close")
-  abstract static class FileCloseNode extends BuiltinNode {
-    @Specialization
-    @CompilerDirectives.TruffleBoundary
-    public Unit close(ContextManager contextManager, @CachedContext(YattaLanguage.class) Context context) {
-      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
-      return RunBuiltin.closeFile(fileContextManager, Unit.INSTANCE, this);
     }
   }
 

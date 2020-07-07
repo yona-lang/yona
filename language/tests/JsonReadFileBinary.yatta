@@ -1,7 +1,8 @@
 do
-    file = File::open "tests/JsonSample.json" {:read, :binary}
-    file_contents = File::read file
-    File::close file
-    {"glossary" = {"title" = title}} = JSON::parse file_contents
-    title
+    with File::open "tests/JsonSample.json" {:read, :binary} as file let
+        file_contents = File::read file
+        {"glossary" = {"title" = title}} = JSON::parse file_contents
+    in
+        title
+    end
 end

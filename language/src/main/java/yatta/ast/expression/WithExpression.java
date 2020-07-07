@@ -70,7 +70,7 @@ public final class WithExpression extends ExpressionNode {
   private Object executeResultNode(final VirtualFrame frame, final String name, final Context context, final Function wrapFunction, final Object contextValue) {
     boolean shouldCleanup = true;
     try {
-      ContextManager contextManager = new ContextManager<>(name, wrapFunction, contextValue);
+      ContextManager<?> contextManager = new ContextManager<>(name, wrapFunction, contextValue);
       context.putLocalContext(name, contextManager);
       // Execute the body. The result should be a function, or a promise with a function. This function is then passed as an argument to the wrapping function from the ctx manager.
       Object resultValue = resultNode.executeGeneric(frame);
@@ -80,22 +80,67 @@ public final class WithExpression extends ExpressionNode {
         Promise resultPromise = (Promise) resultValue;
 
         return resultPromise.map(value -> {
-            try {
-                return library.execute(wrapFunction, contextManager, TypesGen.expectFunction(value));
-            } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException | UnexpectedResultException e) {
-                throw new YattaException(e, this);
-            } finally {
-                context.removeLocalContext(name);
+          boolean shouldCleanupInPromise = true;
+          try {
+            Object result = library.execute(wrapFunction, contextManager, TypesGen.expectFunction(value));
+            if (result instanceof Promise) {
+              Promise finalResultPromise = (Promise) result;
+              shouldCleanupInPromise = false;
+              return finalResultPromise.map(finalResult -> {
+                try {
+                  return finalResult;
+                } finally {
+                  context.removeLocalContext(name);
+                }
+              }, exception -> {
+                try {
+                  return exception;
+                } finally {
+                  context.removeLocalContext(name);
+                }
+              }, this);
+            } else {
+              return result;
             }
+          } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException | UnexpectedResultException e) {
+            throw new YattaException(e, this);
+          } finally {
+            if (shouldCleanupInPromise) {
+              context.removeLocalContext(name);
+            }
+          }
         }, exception -> {
           context.removeLocalContext(name);
           return exception;
         }, this);
       } else {
-        return library.execute(wrapFunction, contextManager, TypesGen.expectFunction(resultValue));
+        try {
+          Object result = library.execute(wrapFunction, contextManager, TypesGen.expectFunction(resultValue));
+          if (result instanceof Promise) {
+            shouldCleanup = false;
+            Promise resultPromise = (Promise) result;
+            return resultPromise.map(finalResult -> {
+              try {
+                return finalResult;
+              } finally {
+                context.removeLocalContext(name);
+              }
+            }, exception -> {
+              try {
+                return exception;
+              } finally {
+                context.removeLocalContext(name);
+              }
+            }, this);
+          } else {
+            return result;
+          }
+        } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException | UnexpectedResultException e) {
+          throw new YattaException(e, this);
+        } finally {
+          context.removeLocalContext(name);
+        }
       }
-    } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException | UnexpectedResultException e) {
-      throw new YattaException(e, this);
     } finally {
       if (shouldCleanup) {
         context.removeLocalContext(name);

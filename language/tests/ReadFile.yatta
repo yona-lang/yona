@@ -1,6 +1,5 @@
-do
-    file = File::open "tests/big.txt" {:read, :binary}
+with File::open "tests/big.txt" {:read, :binary} as file let
     file_contents = File::read file
-    File::close file
+in
     Seq::len file_contents
 end
