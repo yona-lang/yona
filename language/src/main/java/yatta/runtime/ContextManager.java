@@ -7,36 +7,32 @@ import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 
 public class ContextManager<T> extends Tuple {
-  public ContextManager(String contextIdentifier, Function enterFunction, Function leaveFunction, T data) {
-    super(Seq.fromCharSequence(contextIdentifier), enterFunction, leaveFunction, data);
+  public ContextManager(String contextIdentifier, Function wrapperFunction, T data) {
+    super(Seq.fromCharSequence(contextIdentifier), wrapperFunction, data);
   }
 
-  public ContextManager(Seq contextIdentifier, Function enterFunction, Function leaveFunction, T data) {
-    super(contextIdentifier, enterFunction, leaveFunction, data);
+  public ContextManager(Seq contextIdentifier, Function wrapperFunction, T data) {
+    super(contextIdentifier, wrapperFunction, data);
   }
 
   public Seq contextIdentifier() {
     return (Seq) items[0];
   }
 
-  public Function enterFunction() {
+  public Function wrapperFunction() {
     return (Function) items[1];
   }
 
-  public Function leaveFunction() {
-    return (Function) items[2];
-  }
-
   public T data() {
-    return (T) items[3];
+    return (T) items[2];
   }
 
   public static <T> ContextManager<T> fromItems(Object[] items, Node node) {
-    if (items.length != 4) {
+    if (items.length != 3) {
       throw invalidContextException(items, null, node);
     } else {
       try {
-        return new ContextManager<T>(TypesGen.expectSeq(items[0]), TypesGen.expectFunction(items[1]), TypesGen.expectFunction(items[2]), (T) items[3]);
+        return new ContextManager<T>(TypesGen.expectSeq(items[0]), TypesGen.expectFunction(items[1]), (T) items[2]);
       } catch (UnexpectedResultException e) {
         throw invalidContextException(items, e, node);
       }
@@ -44,7 +40,7 @@ public class ContextManager<T> extends Tuple {
   }
 
   public static Object ensureValid(Tuple tuple, Node node) {
-    if (tuple.length() != 4) {
+    if (tuple.length() != 3) {
       throw invalidContextException(tuple, null, node);
     }
 
@@ -59,6 +55,6 @@ public class ContextManager<T> extends Tuple {
   }
 
   public static RuntimeException invalidContextException(Object was, Throwable cause, Node node) {
-    return new BadArgException("Invalid context manager tuple. Must be a tuple in form of (identifier, enterFunction, leaveFunction, contextValue). Was: " + was, cause, node);
+    return new BadArgException("Invalid context manager tuple. Must be a tuple in form of (identifier, wrapFunction, contextValue). Was: " + was, cause, node);
   }
 }

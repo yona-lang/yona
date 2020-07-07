@@ -101,6 +101,7 @@ public class YattaTest {
             assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
           });
 
+          if(baseName.startsWith("Zip"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;

@@ -18,6 +18,7 @@ import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.exceptions.STMException;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
+import yatta.runtime.stdlib.PrivateFunction;
 
 @BuiltinModuleInfo(moduleName = "STM")
 public class STMBuiltinModule implements BuiltinModule {
@@ -25,7 +26,7 @@ public class STMBuiltinModule implements BuiltinModule {
 
   protected static final class STMContextManager extends ContextManager<NativeObject> {
     public STMContextManager(TransactionalMemory.Transaction tx, Context context) {
-      super("tx", context.identityFunction, context.identityFunction, new NativeObject(tx));
+      super("tx", context.lookupGlobalFunction("STM", "run"), new NativeObject(tx));
     }
   }
 
@@ -56,7 +57,7 @@ public class STMBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YattaLanguage.class) Context context) {
+    public Object run(ContextManager contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YattaLanguage.class) Context context) {
       Object result;
       while (true) {
         final TransactionalMemory.Transaction tx = lookupTx(context);
@@ -190,7 +191,7 @@ public class STMBuiltinModule implements BuiltinModule {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(STMBuiltinModuleFactory.STMBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(STMBuiltinModuleFactory.VarBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
+    builtins.register(new PrivateFunction(STMBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(STMBuiltinModuleFactory.ReadTxBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(STMBuiltinModuleFactory.WriteTxBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(STMBuiltinModuleFactory.ReadBuiltinFactory.getInstance()));

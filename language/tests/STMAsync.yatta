@@ -9,7 +9,7 @@ let
     run = \i -> case i of
       x | x >= max_iterations -> STM::read balance
       x -> do
-        with (STM::write_tx stm) STM::run (\-> withdraw) end
+        with (STM::write_tx stm) withdraw end
         run (i + 1)
       end
     end

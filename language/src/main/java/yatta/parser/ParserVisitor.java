@@ -420,7 +420,11 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
         ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
         ctx.expression().stop.getLine(),
         ctx.expression().stop.getCharPositionInLine() + 1
-    ), currentModuleName(), "$lambda" + lambdaCount++ + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor, bodyNode));
+    ), currentModuleName(), nextLambdaName() + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor, bodyNode));
+  }
+
+  private String nextLambdaName() {
+    return "$lambda" + lambdaCount++;
   }
 
   private String currentModuleName() {
@@ -1052,7 +1056,9 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
     if (ctx.withExpr().name() != null) {
       name = ctx.withExpr().name().getText();
     }
-    return withSourceSection(ctx, new WithExpression(name, ctx.withExpr().context.accept(this), ctx.withExpr().body.accept(this)));
+    YattaParser.ExpressionContext bodyCtx = ctx.withExpr().body;
+    FunctionNode bodyNode = withSourceSection(bodyCtx, new FunctionNode(language, sourceSectionForRule(bodyCtx), currentModuleName(), nextLambdaName(), 0, context.globalFrameDescriptor, bodyCtx.accept(this)));
+    return withSourceSection(ctx, new WithExpression(name, ctx.withExpr().context.accept(this), bodyNode));
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {
@@ -1061,6 +1067,12 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
   }
 
   private <T extends ExpressionNode> T withSourceSection(ParserRuleContext parserRuleContext, T expressionNode) {
+    final SourceSection sourceSection = sourceSectionForRule(parserRuleContext);
+    expressionNode.setSourceSection(sourceSection);
+    return expressionNode;
+  }
+
+  private SourceSection sourceSectionForRule(ParserRuleContext parserRuleContext) {
     final SourceSection sourceSection;
 
     sourceSection = source.createSection(
@@ -1069,7 +1081,6 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
         parserRuleContext.stop.getLine(),
         source.getLineLength(parserRuleContext.stop.getLine())
     );
-    expressionNode.setSourceSection(sourceSection);
-    return expressionNode;
+    return sourceSection;
   }
 }

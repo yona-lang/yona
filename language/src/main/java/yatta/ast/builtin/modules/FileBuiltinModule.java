@@ -5,7 +5,10 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -16,9 +19,11 @@ import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 import yatta.runtime.async.Promise;
+import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
+import yatta.runtime.stdlib.PrivateFunction;
 
 import java.io.File;
 import java.io.IOException;
@@ -77,7 +82,7 @@ public final class FileBuiltinModule implements BuiltinModule {
     private final Context context;
 
     public FileContextManager(FileTuple fileTuple, Context context) {
-      super("file", context.lookupGlobalFunction(null, "identity"), context.lookupGlobalFunction("File", "close"), fileTuple);
+      super("file", context.lookupGlobalFunction("File", "run"), fileTuple);
       this.context = context;
     }
 
@@ -103,7 +108,6 @@ public final class FileBuiltinModule implements BuiltinModule {
     protected Object openFile(Path path, FileOptions fileOptions, Context context) {
       try {
         AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, fileOptions.openOptions, context.ioExecutor);
-
         return new FileContextManager(new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions, Seq.fromCharSequence(path.toString())), context);
       } catch (IOException e) {
         throw new yatta.runtime.exceptions.IOException(e, this);
@@ -185,6 +189,47 @@ public final class FileBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "run")
+  abstract static class RunBuiltin extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Object run(ContextManager contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YattaLanguage.class) Context context) {
+      FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
+      boolean shouldClose = true;
+      try {
+        Object result = dispatch.execute(function);
+        if (result instanceof Promise) {
+          Promise resultPromise = (Promise) result;
+          shouldClose = false;
+          return resultPromise.map(value -> {
+            try {
+              return value;
+            } finally {
+              RunBuiltin.closeFile(fileContextManager, value, this);
+            }
+          }, exception -> RunBuiltin.closeFile(fileContextManager, exception, this), this);
+        } else {
+          return result;
+        }
+      } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException e) {
+        throw new YattaException(e, this);
+      } finally {
+        if (shouldClose) {
+          RunBuiltin.closeFile(fileContextManager, Unit.INSTANCE, this);
+        }
+      }
+    }
+
+    private static <T> T closeFile(FileContextManager fileContextManager, T result, Node node) {
+      try {
+        fileContextManager.data().fileHandle().close();
+        return result;
+      } catch (IOException e) {
+        throw new yatta.runtime.exceptions.IOException(e, node);
+      }
+    }
+  }
+
   @NodeInfo(shortName = "open")
   abstract static class FileOpenNode extends NewFileNode {
     @Specialization
@@ -202,12 +247,7 @@ public final class FileBuiltinModule implements BuiltinModule {
     @CompilerDirectives.TruffleBoundary
     public Unit close(ContextManager contextManager, @CachedContext(YattaLanguage.class) Context context) {
       FileContextManager fileContextManager = FileContextManager.adopt(contextManager, context);
-      try {
-        fileContextManager.data().fileHandle().close();
-        return Unit.INSTANCE;
-      } catch (IOException e) {
-        throw new yatta.runtime.exceptions.IOException(e, this);
-      }
+      return RunBuiltin.closeFile(fileContextManager, Unit.INSTANCE, this);
     }
   }
 
@@ -451,7 +491,6 @@ public final class FileBuiltinModule implements BuiltinModule {
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileOpenNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileCloseNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.CreateTempFileNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileDeleteNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FilePathNodeFactory.getInstance()));
@@ -460,6 +499,7 @@ public final class FileBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadLineNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadFileNodeFactory.getInstance()));
     builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileWriteFileNodeFactory.getInstance()));
+    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
     return builtins;
   }
 }

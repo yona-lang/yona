@@ -659,13 +659,13 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void contextManagerTest() {
-    long ret = context.eval(YattaLanguage.ID, "with context\\Local::new \"test_context\" (\\arg -> arg * 2) identity 4 as test_context let data = context\\Local::get_data test_context in data * 2 end").asLong();
+    long ret = context.eval(YattaLanguage.ID, "with context\\Local::new \"test_context\" (\\ctx_mgr cb -> (cb) * 2) 4 as test_context let data = context\\Local::get_data test_context in data * 2 end").asLong();
     assertEquals(16L, ret);
   }
 
   @Test
   public void asyncContextManagerTest() {
-    long ret = context.eval(YattaLanguage.ID, "with context\\Local::new (async \\-> \"test_context\") (\\arg -> async \\-> arg * 2) (async \\-> identity) (async \\-> 4) as test_context let data = context\\Local::get_data test_context in data * 2 end").asLong();
+    long ret = context.eval(YattaLanguage.ID, "with context\\Local::new (async \\-> \"test_context\") (\\ctx_mgr cb -> async \\-> (cb) * 2) (async \\-> 4) as test_context let data = context\\Local::get_data test_context in data * 2 end").asLong();
     assertEquals(16L, ret);
   }
 
