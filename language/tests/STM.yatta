@@ -2,14 +2,17 @@ let
     stm = STM::new
     balance = STM::var stm 1000f
 
-    withdraw = \-> let old_balance = (STM::read balance) in (STM::write balance (old_balance - 10f))
-
     max_iterations = 100
 
     run = \i -> case i of
       x | x >= max_iterations -> STM::read balance
       x -> do
-        with (STM::write_tx stm) withdraw end
+        with STM::write_tx stm
+            let
+                old_balance = STM::read balance
+            in
+                STM::write balance (old_balance - 10f)
+        end
         run (i + 1)
       end
     end

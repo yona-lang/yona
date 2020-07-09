@@ -78,7 +78,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
-  @NodeInfo(shortName = "split")
+  @NodeInfo(shortName = "splitAt")
   abstract static class SplitBuiltin extends BuiltinNode {
     @Specialization
     public Tuple length(long idx, Seq sequence) {
