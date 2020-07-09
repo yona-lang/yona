@@ -12,9 +12,6 @@ import yatta.ast.expression.value.EmptySequenceNode;
 import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 
 @NodeInfo(shortName = "tailsHeadMatch")
@@ -60,7 +57,7 @@ public final class TailsHeadMatchNode extends MatchNode {
   public MatchResult match(Object value, VirtualFrame frame) {
     if (value instanceof Seq) {
       Seq sequence = (Seq) value;
-      List<AliasNode> aliases = new ArrayList<>();
+      Seq aliases = Seq.EMPTY;
 
       if (headNodes.length > sequence.length()) {
         return MatchResult.FALSE;
@@ -71,7 +68,7 @@ public final class TailsHeadMatchNode extends MatchNode {
           MatchNode headNode = headNodes[i];
           MatchResult headMatches = headNode.match(sequence.last(this), frame);
           if (headMatches.isMatches()) {
-            aliases.addAll(Arrays.asList(headMatches.getAliases()));
+            aliases = Seq.catenate(aliases, Seq.sequence((Object[]) headMatches.getAliases()));
             sequence = sequence.removeLast(this);
           } else {
             return MatchResult.FALSE;
@@ -94,7 +91,7 @@ public final class TailsHeadMatchNode extends MatchNode {
               return MatchResult.FALSE;
             }
           } else {
-            aliases.add(new NameAliasNode(identifierNode.name(), new AnyValueNode(sequence)));
+            aliases = aliases.insertLast(new NameAliasNode(identifierNode.name(), new AnyValueNode(sequence)));
           }
         } else if (tailsNode instanceof EmptySequenceNode) {
           if (sequence.length() > 0) {
@@ -115,9 +112,10 @@ public final class TailsHeadMatchNode extends MatchNode {
           }
         }
 
-        for (AliasNode nameAliasNode : aliases) {
-          nameAliasNode.executeGeneric(frame);
-        }
+        aliases.foldLeft(null, (acc, alias) -> {
+          ((AliasNode) alias).executeGeneric(frame);
+          return null;
+        });
 
         return MatchResult.TRUE;
       }

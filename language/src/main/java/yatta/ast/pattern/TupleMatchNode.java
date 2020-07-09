@@ -7,11 +7,10 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.DependencyUtils;
+import yatta.runtime.Seq;
 import yatta.runtime.Tuple;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 
 @NodeInfo(shortName = "tupleMatch")
@@ -54,7 +53,7 @@ public final class TupleMatchNode extends MatchNode {
       Tuple tuple = (Tuple) value;
 
       if (tuple.size() == expressions.length) {
-        List<AliasNode> aliases = new ArrayList<>();
+        Seq aliases = Seq.EMPTY;
 
         for (int i = 0; i < expressions.length; i++) {
           if (expressions[i] instanceof MatchNode) {
@@ -64,7 +63,7 @@ public final class TupleMatchNode extends MatchNode {
             if (!nestedMatchResult.isMatches()) {
               return MatchResult.FALSE;
             } else {
-              aliases.addAll(Arrays.asList(nestedMatchResult.getAliases()));
+              aliases = Seq.catenate(aliases, Seq.sequence((Object[]) nestedMatchResult.getAliases()));
             }
           } else {
             Object exprVal = expressions[i].executeGeneric(frame);
@@ -75,9 +74,10 @@ public final class TupleMatchNode extends MatchNode {
           }
         }
 
-        for (AliasNode nameAliasNode : aliases) {
-          nameAliasNode.executeGeneric(frame);
-        }
+        aliases.foldLeft(null, (acc, alias) -> {
+          ((AliasNode) alias).executeGeneric(frame);
+          return null;
+        });
 
         return MatchResult.TRUE;
       }

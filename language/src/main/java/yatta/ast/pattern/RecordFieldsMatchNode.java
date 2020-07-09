@@ -9,9 +9,7 @@ import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.*;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -88,7 +86,7 @@ public final class RecordFieldsMatchNode extends MatchNode {
         Symbol recordTypeSymbol = context.symbol(recordType);
 
         if (tuple.get(0) instanceof Symbol && recordTypeSymbol.equals((tuple.get(0))) && recordFields.length + 1 == tuple.length()) {
-          List<AliasNode> aliases = new ArrayList<>();
+          Seq aliases = Seq.EMPTY;
 
           boolean matched = false;
           for (RecordPatternFieldNode fieldMatchNode : fieldMatchNodes) {
@@ -97,14 +95,15 @@ public final class RecordFieldsMatchNode extends MatchNode {
               continue;
             } else {
               matched = true;
-              aliases.addAll(Arrays.asList(matchResult.getAliases()));
+              aliases = Seq.catenate(aliases, Seq.sequence((Object[]) matchResult.getAliases()));
             }
           }
 
           if (matched) {
-            for (AliasNode nameAliasNode : aliases) {
-              nameAliasNode.executeGeneric(frame);
-            }
+            aliases.foldLeft(null, (acc, alias) -> {
+              ((AliasNode) alias).executeGeneric(frame);
+              return null;
+            });
 
             return MatchResult.TRUE;
           }

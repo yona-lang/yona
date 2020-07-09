@@ -3,14 +3,9 @@ package yatta.ast.pattern;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import yatta.ast.AliasNode;
 import yatta.ast.ExpressionNode;
-import yatta.runtime.ArrayUtils;
-import yatta.runtime.DependencyUtils;
-import yatta.runtime.Dict;
-import yatta.runtime.Unit;
+import yatta.runtime.*;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 public final class DictMatchNode extends MatchNode {
   @Children
@@ -60,7 +55,7 @@ public final class DictMatchNode extends MatchNode {
         }
       }
 
-      List<AliasNode> aliases = new ArrayList<>();
+      Seq aliases = Seq.EMPTY;
       for (int i = 0; i < expressionNodes.length; i++) {
         Object key = expressionNodes[i].executeGeneric(frame);
 
@@ -72,14 +67,15 @@ public final class DictMatchNode extends MatchNode {
           if (!matchResult.isMatches()) {
             return MatchResult.FALSE;
           } else {
-            aliases.addAll(Arrays.asList(matchResult.getAliases()));
+            aliases = Seq.catenate(aliases, Seq.sequence((Object[]) matchResult.getAliases()));
           }
         }
       }
 
-      for (AliasNode nameAliasNode : aliases) {
-        nameAliasNode.executeGeneric(frame);
-      }
+      aliases.foldLeft(null, (acc, alias) -> {
+        ((AliasNode) alias).executeGeneric(frame);
+        return null;
+      });
 
       return MatchResult.TRUE;
     }

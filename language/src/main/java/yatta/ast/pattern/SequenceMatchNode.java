@@ -7,9 +7,7 @@ import yatta.ast.AliasNode;
 import yatta.runtime.DependencyUtils;
 import yatta.runtime.Seq;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 @NodeInfo(shortName = "sequenceMatch")
 public final class SequenceMatchNode extends MatchNode {
@@ -51,7 +49,7 @@ public final class SequenceMatchNode extends MatchNode {
       Seq sequence = (Seq) value;
 
       if (sequence.length() == matchNodes.length) {
-        List<AliasNode> aliases = new ArrayList<>();
+        Seq aliases = Seq.EMPTY;
 
         for (int i = 0; i < matchNodes.length; i++) {
           MatchNode matchNode = matchNodes[i];
@@ -60,13 +58,14 @@ public final class SequenceMatchNode extends MatchNode {
           if (!matchResult.isMatches()) {
             return MatchResult.FALSE;
           } else {
-            aliases.addAll(Arrays.asList(matchResult.getAliases()));
+            aliases = Seq.catenate(aliases, Seq.sequence((Object[]) matchResult.getAliases()));
           }
         }
 
-        for (AliasNode nameAliasNode : aliases) {
-          nameAliasNode.executeGeneric(frame);
-        }
+        aliases.foldLeft(null, (acc, alias) -> {
+          ((AliasNode) alias).executeGeneric(frame);
+          return null;
+        });
 
         return MatchResult.TRUE;
       }
