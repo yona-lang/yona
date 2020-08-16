@@ -10,6 +10,16 @@ import yatta.runtime.async.Promise;
 @NodeInfo(shortName = "-")
 public abstract class MinusNode extends BinaryOpNode {
   @Specialization
+  public long chars(int left, Object right) {
+    throw YattaException.typeError(this, left, right);
+  }
+
+  @Specialization
+  public long chars(Object left, int right) {
+    throw YattaException.typeError(this, left, right);
+  }
+
+  @Specialization
   public long longs(long left, long right) {
     return left - right;
   }

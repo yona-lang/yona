@@ -1,5 +1,4 @@
 module context\Local exports new, get_name, get_wrapper, get_data as
-
     # Build a new local context tuple. Arguments:
     # name: string - name of the context variable, if `as` syntax is not used
     # wrapper: 1-arg function - takes `context_manager` and a callback that is called from within this wrapper

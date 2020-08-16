@@ -8,6 +8,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 @ExportLibrary(InteropLibrary.class)
 public class StringList implements TruffleObject {
@@ -20,6 +21,11 @@ public class StringList implements TruffleObject {
   @CompilerDirectives.TruffleBoundary
   public List<String> asJavaList() {
     return Arrays.asList(items);
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Set<String> asJavaSet() {
+    return Set.of((String[]) items);
   }
 
   @Override

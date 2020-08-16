@@ -2,122 +2,6 @@ parser grammar YattaParser;
 
 options { tokenVocab=YattaLexer; }
 
-@parser::header
-{
-    import java.util.*;
-
-    import com.oracle.truffle.api.Truffle;
-    import com.oracle.truffle.api.frame.FrameDescriptor;
-    import com.oracle.truffle.api.source.Source;
-    import com.oracle.truffle.api.RootCallTarget;
-    import yatta.YattaLanguage;
-    import yatta.ast.ExpressionNode;
-    import yatta.ast.FunctionRootNode;
-    import yatta.parser.ParseError;
-    import yatta.parser.ParserVisitor;
-    import yatta.runtime.Context;
-}
-
-@parser::members
-{
-    private Source source;
-
-    private static final class YattaErrorListener extends BaseErrorListener {
-        private final Source source;
-        YattaErrorListener(Source source) {
-            this.source = source;
-        }
-        @Override
-        public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
-            throwParseError(source, recognizer, (Token) offendingSymbol, line, charPositionInLine, msg);
-        }
-    }
-
-    public static final class YattaErrorStrategy extends DefaultErrorStrategy {
-        @Override
-        public void reportNoViableAlternative(Parser parser, NoViableAltException e) throws RecognitionException {
-            Recognizer recognizer = e.getRecognizer();
-            StringBuilder msg = new StringBuilder();
-            List<String> stack = parser.getRuleInvocationStack();
-
-            Collections.reverse(stack);
-
-            msg.append("can't choose next alternative. Parser stack: [");
-            for(String item : stack) {
-                msg.append(item);
-                msg.append(", ");
-            }
-            if(stack.size() > 0) {
-                msg.delete(msg.length() - 2, msg.length());
-            }
-            msg.append("]. Valid alternatives are: ");
-            msg.append(e.getExpectedTokens().toString(recognizer.getVocabulary()));
-
-            parser.notifyErrorListeners(e.getOffendingToken(), msg.toString(), e);
-        }
-    }
-
-    private static void throwParseError(Source source, Recognizer recognizer, Token offendingToken, int line, int charPositionInLine, String syntaxErrMsg) {
-        StringBuilder msg = new StringBuilder();
-        msg.append("Error(s) parsing script:\n");
-        msg.append("-- line ");
-        msg.append(line);
-        msg.append(": ");
-        msg.append(charPositionInLine);
-        msg.append(" ");
-        msg.append(syntaxErrMsg);
-        msg.append("\n");
-        String input;
-        if (recognizer.getInputStream() instanceof TokenStream) {
-            TokenStream tokens = (TokenStream) recognizer.getInputStream();
-            input = tokens.getTokenSource().getInputStream().toString();
-        } else {
-            CharStream tokens = (CharStream) recognizer.getInputStream();
-            input = tokens.getText(Interval.of(0, tokens.size())).toString();
-        }
-        String[] lines = input.split("\n");
-        String errorLine = lines[line - 1];
-        msg.append(errorLine);
-        msg.append("\n");
-        for(int i = 0; i < charPositionInLine; i++) {
-            msg.append(" ");
-        }
-        int length;
-        if(offendingToken != null) {
-            int start = offendingToken.getStartIndex();
-            int stop = offendingToken.getStopIndex();
-            if (start >= 0 && stop >= 0) {
-                for (int i = start; i <= stop; i++) {
-                    msg.append("^");
-                }
-            }
-            length = Math.max(stop - start, 0);
-        } else {
-            length = 0;
-        }
-        throw new ParseError(source, line, charPositionInLine + 1, length, msg.toString());
-    }
-
-    public static ExpressionNode parseYattaExpression(YattaLanguage language, Context context, Source source) {
-        YattaLexer lexer = new YattaLexer(CharStreams.fromString(source.getCharacters().toString()));
-        YattaParser parser = new YattaParser(new CommonTokenStream(lexer));
-        lexer.removeErrorListeners();
-        parser.removeErrorListeners();
-        YattaErrorListener listener = new YattaErrorListener(source);
-        lexer.addErrorListener(listener);
-        parser.addErrorListener(listener);
-        parser.setErrorHandler(new YattaErrorStrategy());
-        parser.source = source;
-        return new ParserVisitor(language, context, source).visit(parser.input());
-    }
-
-    public static RootCallTarget parseYatta(YattaLanguage language, Context context, Source source) {
-        ExpressionNode rootExpression = parseYattaExpression(language, context, source);
-        FunctionRootNode rootNode = new FunctionRootNode(language, context.globalFrameDescriptor, rootExpression, source.createSection(1), null, "root");
-        return Truffle.getRuntime().createCallTarget(rootNode);
-    }
-}
-
 input : NEWLINE? expression NEWLINE? EOF ;
 
 function : NEWLINE* name pattern* NEWLINE? functionBody ;
@@ -190,7 +74,7 @@ patternValue : unit
 
 name : LOWERCASE_NAME ;
 
-let : KW_LET NEWLINE? alias+ KW_IN NEWLINE? expression ;
+let : KW_LET NEWLINE? alias* KW_IN NEWLINE? expression ;
 alias : lambdaAlias | moduleAlias | valueAlias | patternAlias | fqnAlias ;
 lambdaAlias : name OP_ASSIGN lambda NEWLINE? ;
 moduleAlias : name OP_ASSIGN module NEWLINE? ;
@@ -250,7 +134,7 @@ otherSequence: BRACKET_L NEWLINE? expression (COMMA NEWLINE? expression)* NEWLIN
 caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ NEWLINE? KW_END ;
 patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWithGuard+) NEWLINE ;
 
-doExpr : KW_DO NEWLINE? doOneStep+ NEWLINE? KW_END ;
+doExpr : KW_DO NEWLINE? doOneStep* NEWLINE? KW_END ;
 doOneStep : (alias | expression) NEWLINE ;
 
 patternExpressionWithoutGuard : NEWLINE? OP_RIGHT_ARROW NEWLINE? expression ;

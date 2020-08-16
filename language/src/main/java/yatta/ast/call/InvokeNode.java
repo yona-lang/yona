@@ -95,18 +95,17 @@ public final class InvokeNode extends ExpressionNode {
           if (value instanceof Function) {
             return execute((Function) value, frame);
           } else {
-            throw notAFucntion(functionNode);
+            throw notAFucntion(value);
           }
         }, this);
       } else {
-        throw notAFucntion(functionNode);
+        throw notAFucntion(maybeFunction);
       }
     }
   }
 
-  private RuntimeException notAFucntion(ExpressionNode functionNode) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
-    return new YattaException("Cannot invoke non-function node: " + functionNode, this);
+  private RuntimeException notAFucntion(Object value) {
+    return new YattaException("Cannot invoke non-function value: " + value, this);
   }
 
   private Object execute(Function function, VirtualFrame frame) {

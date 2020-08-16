@@ -27,3 +27,6 @@ Here is a list of some ideas on what to do:
 - standard library modules
 - IDEs / editor integration
 - examples, tutorials, etc.
+
+## Credits
+Autosuggest code in REPL is from https://github.com/oranoran/antlr4-autosuggest

@@ -6,7 +6,10 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
@@ -16,12 +19,13 @@ import com.oracle.truffle.regex.RegexObject;
 import yatta.YattaException;
 import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
-import yatta.runtime.*;
+import yatta.runtime.Context;
+import yatta.runtime.Seq;
+import yatta.runtime.Set;
+import yatta.runtime.Symbol;
 import yatta.runtime.exceptions.NoMatchException;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
-
-import java.util.Arrays;
 
 @BuiltinModuleInfo(moduleName = "Regexp")
 public final class RegexpBuiltinModule implements BuiltinModule {

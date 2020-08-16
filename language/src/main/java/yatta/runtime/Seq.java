@@ -13,7 +13,12 @@ import yatta.runtime.exceptions.TransducerDoneException;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.BinaryOperator;
+import java.util.function.Supplier;
+import java.util.stream.Collector;
 
 @ExportLibrary(InteropLibrary.class)
 public final class Seq implements TruffleObject {
@@ -1683,5 +1688,57 @@ public final class Seq implements TruffleObject {
       nonLeaf[0] = meta;
     }
     return nonLeaf;
+  }
+
+  private static final class SeqBuilder {
+    private Seq seq;
+
+    public SeqBuilder() {
+      this.seq = Seq.EMPTY;
+    }
+
+    public void add(Object obj) {
+      this.seq = this.seq.insertLast(obj);
+    }
+
+    public SeqBuilder catenate(SeqBuilder other) {
+      this.seq = Seq.catenate(this.seq, other.seq);
+      return this;
+    }
+
+    public Seq build() {
+      return this.seq;
+    }
+  }
+
+  private static final class SeqCollector implements Collector<Object, SeqBuilder, Seq> {
+    @Override
+    public Supplier<SeqBuilder> supplier() {
+      return SeqBuilder::new;
+    }
+
+    @Override
+    public BiConsumer<SeqBuilder, Object> accumulator() {
+      return SeqBuilder::add;
+    }
+
+    @Override
+    public BinaryOperator<SeqBuilder> combiner() {
+      return SeqBuilder::catenate;
+    }
+
+    @Override
+    public java.util.function.Function<SeqBuilder, Seq> finisher() {
+      return SeqBuilder::build;
+    }
+
+    @Override
+    public Set<Characteristics> characteristics() {
+      return Set.of();
+    }
+  }
+
+  public static SeqCollector collect() {
+    return new SeqCollector();
   }
 }

@@ -14,10 +14,7 @@ import yatta.runtime.Dict;
 import yatta.runtime.Function;
 import yatta.runtime.YattaModule;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 @NodeInfo(shortName = "module")
 public final class ModuleNode extends ExpressionNode {
@@ -77,7 +74,7 @@ public final class ModuleNode extends ExpressionNode {
   @Override
   public YattaModule executeModule(VirtualFrame frame) throws UnexpectedResultException {
     String executedModuleFQN = moduleFQN.executeString(frame);
-    List<String> executedExports = exports.executeStringList(frame).asJavaList();
+    Set<String> executedExports = exports.executeStringList(frame).asJavaSet();
     CompilerDirectives.transferToInterpreterAndInvalidate();
     List<Function> executedFunctions = new ArrayList<>(functions.length);
 

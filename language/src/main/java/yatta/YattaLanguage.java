@@ -9,8 +9,12 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
+import yatta.ast.ExpressionNode;
+import yatta.ast.FunctionRootNode;
 import yatta.ast.ShutdownNode;
-import yatta.lang.YattaParser;
+import yatta.parser.*;
 import yatta.runtime.Context;
 import yatta.runtime.Function;
 import yatta.runtime.Unit;
@@ -32,18 +36,22 @@ public class YattaLanguage extends TruffleLanguage<Context> {
   @Override
   protected Context createContext(Env env) {
     String languageHome = getLanguageHome();
-    Path languageHomePath = null;
+    Path languageHomePath, stdlibHomePath;
+
     if (languageHome == null) {
+      languageHomePath = Paths.get(env.getEnvironment().get("JAVA_HOME"), "languages", ID);
+
       if (env.getEnvironment().containsKey("YATTA_STDLIB_HOME")) {
-        languageHomePath = Paths.get(env.getEnvironment().get("YATTA_STDLIB_HOME"));
-      } else if (env.getEnvironment().containsKey("JAVA_HOME")) {
-        languageHomePath = Paths.get(env.getEnvironment().get("JAVA_HOME"), "languages", ID, "lib-yatta");
+        stdlibHomePath = Paths.get(env.getEnvironment().get("YATTA_STDLIB_HOME"));
+      } else {
+        stdlibHomePath = Paths.get(languageHomePath.toFile().getAbsolutePath(), "lib-yatta");
       }
     } else {
-      languageHomePath = Paths.get(languageHome, "lib-yatta");
+      languageHomePath = Path.of(languageHome);
+      stdlibHomePath = Paths.get(languageHome, "lib-yatta");
     }
 
-    return new Context(this, env, languageHomePath);
+    return new Context(this, env, languageHomePath, stdlibHomePath);
   }
 
   @Override
@@ -57,15 +65,32 @@ public class YattaLanguage extends TruffleLanguage<Context> {
     if (source.equals(Context.SHUTDOWN_SOURCE)) {
       return Truffle.getRuntime().createCallTarget(new ShutdownNode(this));
     } else {
-      RootCallTarget rootCallTarget = YattaParser.parseYatta(this, getCurrentContext(), source);
+      RootCallTarget rootCallTarget = parseYatta(this, getCurrentContext(), source);
       return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
     }
   }
 
+  private static ExpressionNode parseYattaExpression(YattaLanguage language, Context context, Source source) {
+    YattaLexer lexer = new YattaLexer(CharStreams.fromString(source.getCharacters().toString()));
+    YattaParser parser = new YattaParser(new CommonTokenStream(lexer));
+    lexer.removeErrorListeners();
+    parser.removeErrorListeners();
+    YattaErrorListener listener = new YattaErrorListener(source);
+    lexer.addErrorListener(listener);
+    parser.addErrorListener(listener);
+    parser.setErrorHandler(new YattaErrorStrategy(source));
+    return new ParserVisitor(language, context, source).visit(parser.input());
+  }
+
+  private static RootCallTarget parseYatta(YattaLanguage language, Context context, Source source) {
+    ExpressionNode rootExpression = parseYattaExpression(language, context, source);
+    FunctionRootNode rootNode = new FunctionRootNode(language, context.globalFrameDescriptor, rootExpression, source.createSection(1), null, "root");
+    return Truffle.getRuntime().createCallTarget(rootNode);
+  }
+
   @Override
   protected boolean isVisible(Context context, Object value) {
-    return !InteropLibrary.getFactory().getUncached(value).isNull(value);
-
+    return context.isPrintAllResults();
   }
 
   @Override
@@ -97,7 +122,7 @@ public class YattaLanguage extends TruffleLanguage<Context> {
       } else if (interop.isString(value)) {
         return interop.asString(value);
       } else if (interop.isNull(value)) {
-        return "NONE";
+        return "()";
       } else if (interop.isExecutable(value)) {
         if (value instanceof Function) {
           return ((Function) value).getName();

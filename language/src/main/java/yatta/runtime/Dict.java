@@ -14,6 +14,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.BinaryOperator;
+import java.util.function.Supplier;
+import java.util.stream.Collector;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class Dict implements TruffleObject, Comparable<Dict> {
@@ -152,7 +155,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
   }
 
   @CompilerDirectives.TruffleBoundary
-  public Map toMap() {
+  public Map<?, ?> toMap() {
     return fold(new HashMap<>(), (acc, key, val) -> {
       acc.put(key, val);
       return acc;
@@ -725,6 +728,77 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     @Override
     Object valueAt(final int idx) {
       return entries[idx * 2 + 1];
+    }
+  }
+
+  private static final class DictBuilder<K, V> {
+    private Dict dict;
+
+    public DictBuilder() {
+      this.dict = Dict.empty();
+    }
+
+    public void add(Map.Entry<K, V> obj) {
+      this.dict = this.dict.add(obj.getKey(), obj.getValue());
+    }
+
+    public DictBuilder<K, V> catenate(DictBuilder<K, V> other) {
+      this.dict = this.dict.union(other.dict);
+      return this;
+    }
+
+    public Dict build() {
+      return this.dict;
+    }
+  }
+
+  private static final class DictCollector<K, V> implements Collector<Map.Entry<K, V>, DictBuilder<K, V>, Dict> {
+    @Override
+    public Supplier<DictBuilder<K, V>> supplier() {
+      return DictBuilder::new;
+    }
+
+    @Override
+    public BiConsumer<DictBuilder<K, V>, Map.Entry<K, V>> accumulator() {
+      return DictBuilder::add;
+    }
+
+    @Override
+    public BinaryOperator<DictBuilder<K, V>> combiner() {
+      return DictBuilder::catenate;
+    }
+
+    @Override
+    public java.util.function.Function<DictBuilder<K, V>, Dict> finisher() {
+      return DictBuilder::build;
+    }
+
+    @Override
+    public java.util.Set<Characteristics> characteristics() {
+      return java.util.Set.of();
+    }
+  }
+
+  public static <K, V> DictCollector<K, V> collect() {
+    return new DictCollector<>();
+  }
+
+  @CompilerDirectives.ValueType
+  public static final class DictEntry {
+    public final Object key;
+    public final Object value;
+
+    protected DictEntry(Object key, Object value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    public Object getKey() {
+      return key;
+    }
+
+    public Object getValue() {
+      return value;
     }
   }
 }

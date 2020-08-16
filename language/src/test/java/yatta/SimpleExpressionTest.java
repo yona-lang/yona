@@ -68,6 +68,12 @@ public class SimpleExpressionTest extends CommonTest {
   }
 
   @Test
+  public void minusTest() {
+    long ret = context.eval(YattaLanguage.ID, "5- 2").asLong();
+    assertEquals(3L, ret);
+  }
+
+  @Test
   public void setValueTest() {
     String ret = context.eval(YattaLanguage.ID, "{1, 2, 3}").asString();
     assertEquals("{1, 2, 3}", ret);
@@ -667,6 +673,12 @@ public class SimpleExpressionTest extends CommonTest {
   public void asyncContextManagerTest() {
     long ret = context.eval(YattaLanguage.ID, "with context\\Local::new (async \\-> \"test_context\") (\\ctx_mgr cb -> async \\-> (cb) * 2) (async \\-> 4) as test_context let data = context\\Local::get_data test_context in data * 2 end").asLong();
     assertEquals(16L, ret);
+  }
+
+  @Test
+  public void emptyDoTest() {
+    Value ret = context.eval(YattaLanguage.ID, "do\nend");
+    assertTrue(ret.isNull());
   }
 
   //docs state:

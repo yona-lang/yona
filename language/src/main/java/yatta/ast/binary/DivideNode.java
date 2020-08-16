@@ -8,6 +8,16 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 @NodeInfo(shortName = "/")
 public abstract class DivideNode extends BinaryOpNode {
   @Specialization
+  public long chars(int left, Object right) {
+    throw YattaException.typeError(this, left, right);
+  }
+
+  @Specialization
+  public long chars(Object left, int right) {
+    throw YattaException.typeError(this, left, right);
+  }
+
+  @Specialization
   public long longs(long left, long right) {
     return left / right;
   }

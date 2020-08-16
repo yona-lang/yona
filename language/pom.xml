@@ -7,7 +7,7 @@
     <artifactId>yatta-parent</artifactId>
     <version>0.8.1-SNAPSHOT</version>
   </parent>
-  <artifactId>yatta</artifactId>
+  <artifactId>language</artifactId>
   <properties>
     <jar.dir>target/jars</jar.dir>
     <test.argLine>--upgrade-module-path='${jar.dir}/truffle-api.jar' --add-opens org.graalvm.sdk/org.graalvm.polyglot=ALL-UNNAMED --add-exports java.base/jdk.internal.module=ALL-UNNAMED</test.argLine>
@@ -54,6 +54,9 @@
           <environmentVariables>
             <YATTA_STDLIB_HOME>lib-yatta</YATTA_STDLIB_HOME>
           </environmentVariables>
+          <parallel>all</parallel>
+          <useUnlimitedThreads>true</useUnlimitedThreads>
+          <threadCountClasses>2</threadCountClasses>
         </configuration>
       </plugin>
       <plugin>
@@ -67,7 +70,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <finalName>yatta</finalName>
+              <finalName>language</finalName>
               <artifactSet>
                 <excludes>
                   <exclude>junit:junit</exclude>
@@ -79,22 +82,6 @@
                   <exclude>org.graalvm:graal-sdk</exclude>
                 </excludes>
               </artifactSet>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.antlr</groupId>
-        <artifactId>antlr4-maven-plugin</artifactId>
-        <version>${antlr.version}</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>antlr4</goal>
-            </goals>
-            <configuration>
-              <listener>false</listener>
-              <visitor>true</visitor>
             </configuration>
           </execution>
         </executions>
@@ -114,6 +101,11 @@
     </pluginManagement>
   </build>
   <dependencies>
+    <dependency>
+      <groupId>yatta</groupId>
+      <artifactId>parser</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.graalvm.truffle</groupId>
       <artifactId>truffle-api</artifactId>
@@ -166,11 +158,6 @@
       <artifactId>junit-vintage-engine</artifactId>
       <version>${junit.version}</version>
       <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.antlr</groupId>
-      <artifactId>antlr4-runtime</artifactId>
-      <version>${antlr.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>

@@ -11,9 +11,15 @@
     <junit.version>5.5.2</junit.version>
     <antlr.version>4.7.2</antlr.version>
     <commons.lang.version>3.10</commons.lang.version>
+    <jline.version>3.16.0</jline.version>
+    <hamcrest.version>2.2</hamcrest.version>
+    <antlr4.junit.autocomplete.version>0.0.1-SNAPSHOT</antlr4.junit.autocomplete.version>
+    <jna.version>5.6.0</jna.version>
+    <argparse4j.version>0.8.1</argparse4j.version>
   </properties>
   <packaging>pom</packaging>
   <modules>
+    <module>parser</module>
     <module>language</module>
     <module>launcher</module>
     <module>native</module>

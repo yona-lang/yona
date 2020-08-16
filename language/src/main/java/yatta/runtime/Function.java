@@ -24,8 +24,6 @@ import yatta.YattaLanguage;
 public final class Function implements TruffleObject {
   public static final int INLINE_CACHE_SIZE = 2;
 
-  private static final TruffleLogger LOG = TruffleLogger.getLogger(YattaLanguage.ID, Function.class);
-
   /**
    * The name of the function.
    */

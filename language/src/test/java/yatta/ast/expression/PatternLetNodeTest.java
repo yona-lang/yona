@@ -20,8 +20,8 @@ public class PatternLetNodeTest {
         new PatternAliasNode(new ValueMatchNode(new IdentifierNode(null, "values_file", null)), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "open", new ExpressionNode[]{new StringPartsNode(new ExpressionNode[]{new StringNode("tests/Values.txt")}), new SetNode(new ExpressionNode[]{new SymbolNode("read")})}, null)),
         new PatternAliasNode(new ValueMatchNode(new IdentifierNode(null, "keys", null)), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "read_lines", new ExpressionNode[]{new IdentifierNode(null, "keys_file", null)}, null)),
         new PatternAliasNode(new ValueMatchNode(new IdentifierNode(null, "values", null)), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "read_lines", new ExpressionNode[]{new IdentifierNode(null, "values_file", null)}, null)),
-        new PatternAliasNode(new ValueMatchNode(new UnitNode()), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "keys_file", null)}, null)),
-        new PatternAliasNode(new ValueMatchNode(new UnitNode()), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "values_file", null)}, null))
+        new PatternAliasNode(new ValueMatchNode(UnitNode.INSTANCE), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "keys_file", null)}, null)),
+        new PatternAliasNode(new ValueMatchNode(UnitNode.INSTANCE), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "values_file", null)}, null))
     );
     Set globallyProvidedIdentifiers = Set.set("never", "read", "sleep", "readln", "timeout", "str", "async", "identity", "eval", "float", "int", "println");
 
@@ -41,8 +41,8 @@ public class PatternLetNodeTest {
                     new PatternAliasNode(new ValueMatchNode(new IdentifierNode(null, "values", null)), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "read_lines", new ExpressionNode[]{new IdentifierNode(null, "values_file", null)}, null))
                 )),
             Seq.sequence(
-                new PatternAliasNode(new ValueMatchNode(new UnitNode()), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "keys_file", null)}, null)),
-                new PatternAliasNode(new ValueMatchNode(new UnitNode()), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "values_file", null)}, null))
+                new PatternAliasNode(new ValueMatchNode(UnitNode.INSTANCE), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "keys_file", null)}, null)),
+                new PatternAliasNode(new ValueMatchNode(UnitNode.INSTANCE), new ModuleCallNode(null, new FQNNode(new String[0], "File"), "close", new ExpressionNode[]{new IdentifierNode(null, "values_file", null)}, null))
             ));
 
     assertEquals(expectedAliasTree.toString(), aliasTree.toString());

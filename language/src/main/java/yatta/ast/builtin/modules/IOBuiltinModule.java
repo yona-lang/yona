@@ -11,7 +11,6 @@ import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.Context;
 import yatta.runtime.NativeObject;
 import yatta.runtime.Seq;
-import yatta.runtime.Tuple;
 import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.stdlib.Builtins;
@@ -24,6 +23,17 @@ import java.io.PrintWriter;
 public final class IOBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "println")
   abstract static class PrintlnBuiltin extends BuiltinNode {
+    @Specialization
+    public long println(int value, @CachedContext(YattaLanguage.class) Context context) {
+      doPrint(context.getOutput(), value);
+      return value;
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private void doPrint(PrintWriter out, int value) {
+      out.println(Character.toChars(value));
+    }
+
     @Specialization
     public long println(long value, @CachedContext(YattaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
@@ -63,11 +73,6 @@ public final class IOBuiltinModule implements BuiltinModule {
         doPrint(context.getOutput(), val);
         return val;
       }, this);
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private void doPrint(PrintWriter out, Promise value) {
-      out.println(value);
     }
 
     @Specialization

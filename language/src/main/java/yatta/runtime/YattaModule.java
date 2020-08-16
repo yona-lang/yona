@@ -7,17 +7,19 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
+import java.util.Set;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @ExportLibrary(InteropLibrary.class)
 @SuppressWarnings("static-method")
 public final class YattaModule implements TruffleObject {
   final String fqn;
-  final List<String> exports;
+  final Set<String> exports;
   final Map<String, Function> functions = new HashMap<>();
   final Dict records; // <String, String[]>
 
-  public YattaModule(String fqn, List<String> exports, List<Function> functionsList, Dict records) {
+  public YattaModule(String fqn, Set<String> exports, List<Function> functionsList, Dict records) {
     this.fqn = fqn;
     this.exports = exports;
 
@@ -39,7 +41,7 @@ public final class YattaModule implements TruffleObject {
       acc.append(", ");
       return acc;
     });
-    if(records.size() > 0) {
+    if (records.size() > 0) {
       recordsSB.deleteCharAt(recordsSB.length() - 1);
       recordsSB.deleteCharAt(recordsSB.length() - 1);
     }
@@ -47,7 +49,7 @@ public final class YattaModule implements TruffleObject {
 
     return "Module{" +
         "fqn=" + fqn +
-        ", exports=" + exports +
+        ", exports=" + exports.stream().sorted().collect(Collectors.toUnmodifiableList()) +
         ", functions=" + functions +
         ", records=" + recordsSB.toString() +
         "}";
@@ -57,7 +59,7 @@ public final class YattaModule implements TruffleObject {
     return fqn;
   }
 
-  public List<String> getExports() {
+  public Set<String> getExports() {
     return exports;
   }
 
@@ -70,7 +72,7 @@ public final class YattaModule implements TruffleObject {
   }
 
   public YattaModule merge(YattaModule other) {
-    List<String> newExports = new ArrayList<>();
+    Set<String> newExports = new HashSet<>();
     newExports.addAll(exports);
     newExports.addAll(other.exports);
 
@@ -105,7 +107,7 @@ public final class YattaModule implements TruffleObject {
   Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
     return new ModuleFunctionNamesObject(functions.keySet().toArray());
   }
-  
+
   @ExportLibrary(InteropLibrary.class)
   static final class ModuleFunctionNamesObject implements TruffleObject {
 

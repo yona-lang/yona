@@ -5,6 +5,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.TypesGen;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.DependencyUtils;
 import yatta.runtime.async.Promise;
@@ -76,7 +77,7 @@ public final class DoNode extends ExpressionNode {
     if (promise != null) {
       return promise;
     } else {
-      return result;
+      return TypesGen.ensureNotNull(result);
     }
   }
 

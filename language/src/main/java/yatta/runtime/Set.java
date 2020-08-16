@@ -9,8 +9,8 @@ import yatta.runtime.async.Promise;
 import yatta.runtime.exceptions.TransducerDoneException;
 
 import java.lang.reflect.Array;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
+import java.util.function.*;
+import java.util.stream.Collector;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class Set implements TruffleObject, Comparable<Set> {
@@ -135,7 +135,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   @CompilerDirectives.TruffleBoundary
   public Set intersection(Set other) {
     return other.fold(Set.set(), (acc, el) -> {
-      if(contains(el) && other.contains(el)) {
+      if (contains(el) && other.contains(el)) {
         return acc.add(el);
       } else {
         return acc;
@@ -146,7 +146,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   @CompilerDirectives.TruffleBoundary
   public Set symmetricDifference(Set other) {
     return union(other).fold(Set.set(), (acc, el) -> {
-      if((contains(el) && !other.contains(el)) || (!contains(el) && other.contains(el))) {
+      if ((contains(el) && !other.contains(el)) || (!contains(el) && other.contains(el))) {
         return acc.add(el);
       } else {
         return acc;
@@ -157,7 +157,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   @CompilerDirectives.TruffleBoundary
   public Set difference(Set other) {
     return fold(Set.set(), (acc, el) -> {
-      if(contains(el) && !other.contains(el)) {
+      if (contains(el) && !other.contains(el)) {
         return acc.add(el);
       } else {
         return acc;
@@ -171,7 +171,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     StringBuilder sb = new StringBuilder();
     sb.append("{");
     fold(sb, (res, el) -> res.append(el).append(", "));
-    if(size() > 0) {
+    if (size() > 0) {
       sb.deleteCharAt(sb.length() - 1);
       sb.deleteCharAt(sb.length() - 1);
     }
@@ -211,16 +211,16 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
 
   final Set merge(final Object fst, final long fstHash, final Object snd, final long sndHash, final int shift) {
     if (shift > (1 << BITS)) {
-      return new Collision(hasher, seed, fstHash, new Object[]{ fst, snd });
+      return new Collision(hasher, seed, fstHash, new Object[]{fst, snd});
     }
     final long fstMask = mask(fstHash, shift);
     final long sndMask = mask(sndHash, shift);
     if (fstMask < sndMask) {
-      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ fst, snd });
+      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{fst, snd});
     } else if (fstMask > sndMask) {
-      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{ snd, fst });
+      return new Bitmap(hasher, seed, 0, pos(fstMask) | pos(sndMask), new Object[]{snd, fst});
     } else {
-      return new Bitmap(hasher, seed, pos(fstMask), 0, new Object[]{ merge(fst, fstHash, snd, sndHash, shift + BITS) });
+      return new Bitmap(hasher, seed, pos(fstMask), 0, new Object[]{merge(fst, fstHash, snd, sndHash, shift + BITS)});
     }
   }
 
@@ -237,7 +237,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public static Set singleton(final Hasher hasher, final long seed, final Object value) {
-    return new Bitmap(hasher, seed, 0L, pos(mask(hasher.hash(seed, value), 0)), new Object[]{ value });
+    return new Bitmap(hasher, seed, 0L, pos(mask(hasher.hash(seed, value), 0)), new Object[]{value});
   }
 
   static long mask(final long hash, final int shift) {
@@ -333,7 +333,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
         if (value.equals(dataAt(dataIndex))) {
           if (Long.bitCount(dataBmp) == 2 && Long.bitCount(nodeBmp) == 0) {
             final long newDataBmp = (shift == 0) ? dataBmp ^ pos : pos(mask(hash, 0));
-            return dataIndex == 0 ? new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ dataAt(1) }) : new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{ dataAt(0) });
+            return dataIndex == 0 ? new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{dataAt(1)}) : new Bitmap(hasher, seed, 0L, newDataBmp, new Object[]{dataAt(0)});
           } else {
             return removeValue(pos);
           }
@@ -390,7 +390,8 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
         for (int i = 0; i < arity(nodeBmp); i++) {
           state = nodeAt(i).fold(state, step, dispatch);
         }
-      } catch (TransducerDoneException ignored) {}
+      } catch (TransducerDoneException ignored) {
+      }
       return dispatch.execute(complete, state);
     }
 
@@ -567,7 +568,8 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
         for (Object val : values) {
           state = dispatch.execute(step, state, val);
         }
-      } catch (TransducerDoneException ignored) {}
+      } catch (TransducerDoneException ignored) {
+      }
       return dispatch.execute(complete, state);
     }
 
@@ -644,5 +646,57 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     Object dataAt(final int idx) {
       return values[idx];
     }
+  }
+
+  private static final class SetBuilder {
+    private Set set;
+
+    public SetBuilder() {
+      this.set = empty();
+    }
+
+    public void add(Object obj) {
+      this.set = this.set.add(obj);
+    }
+
+    public SetBuilder catenate(SetBuilder other) {
+      this.set = this.set.union(other.set);
+      return this;
+    }
+
+    public Set build() {
+      return this.set;
+    }
+  }
+
+  private static final class SetCollector implements Collector<Object, SetBuilder, Set> {
+    @Override
+    public Supplier<SetBuilder> supplier() {
+      return SetBuilder::new;
+    }
+
+    @Override
+    public BiConsumer<SetBuilder, Object> accumulator() {
+      return SetBuilder::add;
+    }
+
+    @Override
+    public BinaryOperator<SetBuilder> combiner() {
+      return SetBuilder::catenate;
+    }
+
+    @Override
+    public java.util.function.Function<SetBuilder, Set> finisher() {
+      return SetBuilder::build;
+    }
+
+    @Override
+    public java.util.Set<Characteristics> characteristics() {
+      return java.util.Set.of();
+    }
+  }
+
+  public static SetCollector collect() {
+    return new SetCollector();
   }
 }

@@ -1,0 +1,26 @@
+syntax "yatta" "\.yatta"
+comment "#"
+
+## Keywords
+color red "\<(let|in|if|then|else|module|exports|as|case|of|import|from|end|do|try|catch|raise|record|with)\>"
+
+## Various symbols
+color cyan "(\||@|!|::|->|<-<\||%|\+|-|\|>|<<|>>|>>>|\+\+|-\||\|-|!|^|_|~|=|\\|;|\(\)|,|\[|\]|\{|\}|==|!=|&&|\|\||<|>|<=|>=)"
+
+## Various symbols
+color cyan "(->|<-|=>)"
+color magenta "\.|\$"
+
+## Data constructors
+color magenta "\<(true|false)\>"
+
+## Strings
+color yellow ""([^\"]|\\.)*""
+## Chars
+color brightyellow "'([^\']|\\.)'"
+
+## Comments
+color green "#.*"
+
+## Trailing spaces
+# color ,white "[[:space:]]+$"

@@ -60,12 +60,21 @@ public final class SetBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "to_seq")
+  abstract static class ToSeqBuiltin extends BuiltinNode {
+    @Specialization
+    public Seq length(Set set) {
+      return set.fold(Seq.EMPTY, Seq::insertLast);
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SetBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.ToSeqBuiltinFactory.getInstance()));
     return builtins;
   }
 }

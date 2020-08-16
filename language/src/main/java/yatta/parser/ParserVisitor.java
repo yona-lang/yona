@@ -17,8 +17,6 @@ import yatta.ast.generators.GeneratedCollection;
 import yatta.ast.generators.GeneratorNode;
 import yatta.ast.local.ReadArgumentNode;
 import yatta.ast.pattern.*;
-import yatta.lang.YattaParser;
-import yatta.lang.YattaParserBaseVisitor;
 import yatta.runtime.Context;
 import yatta.runtime.Dict;
 
@@ -329,7 +327,7 @@ public final class ParserVisitor extends YattaParserBaseVisitor<ExpressionNode> 
 
   @Override
   public UnitNode visitUnit(YattaParser.UnitContext ctx) {
-    return withSourceSection(ctx, new UnitNode());
+    return withSourceSection(ctx, UnitNode.INSTANCE);
   }
 
   @Override

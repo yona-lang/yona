@@ -25,8 +25,6 @@ public final class PatternLetNode extends LexicalScopeNode {
   @Child
   public ExpressionNode expression;
 
-  private static final TruffleLogger LOGGER = YattaLanguage.getLogger(PatternLetNode.class);
-
   public PatternLetNode(AliasNode[] patternAliases, ExpressionNode expression) {
     this.patternAliases = patternAliases;
     this.expression = expression;
@@ -125,6 +123,8 @@ public final class PatternLetNode extends LexicalScopeNode {
   static class AliasTreeSingletonNode extends AliasTree {
     final AliasNode aliasNode;
 
+    private final TruffleLogger LOGGER = YattaLanguage.getLogger(AliasTreeSingletonNode.class);
+
     public AliasTreeSingletonNode(final AliasTree parent, final AliasNode aliasNode) {
       LOGGER.finest("Singleton.new: " + aliasNode);
       this.parent = parent;
@@ -185,6 +185,8 @@ public final class PatternLetNode extends LexicalScopeNode {
 
   static class AliasTreeBatchNode extends AliasTree {
     Seq aliasNodes;
+
+    private final TruffleLogger LOGGER = YattaLanguage.getLogger(AliasTreeBatchNode.class);
 
     public AliasTreeBatchNode(final AliasTree parent, final Seq aliasNodes) {
       LOGGER.finest("Batch.new: " + aliasNodes);
@@ -263,6 +265,8 @@ public final class PatternLetNode extends LexicalScopeNode {
 
   static final class AliasNodeRootNode extends AliasTree {
     final private Set alreadyProvidedDependencies;
+
+    private final TruffleLogger LOGGER = YattaLanguage.getLogger(AliasNodeRootNode.class);
 
     public AliasNodeRootNode(final Set alreadyProvidedDependencies) {
       LOGGER.finest("Root.new: " + alreadyProvidedDependencies);

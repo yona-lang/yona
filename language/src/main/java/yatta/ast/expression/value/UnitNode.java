@@ -7,7 +7,9 @@ import yatta.runtime.Unit;
 
 @NodeInfo
 public final class UnitNode extends LiteralValueNode {
-  public UnitNode() {
+  public static final UnitNode INSTANCE = new UnitNode();
+
+  private UnitNode() {
   }
 
   @Override
@@ -21,7 +23,12 @@ public final class UnitNode extends LiteralValueNode {
   }
 
   @Override
-  public Unit executeUnit(VirtualFrame frame) throws UnexpectedResultException {
+  public Unit executeUnit(VirtualFrame frame) {
     return Unit.INSTANCE;
+  }
+
+  @Override
+  public boolean isAdoptable() {
+    return false;
   }
 }

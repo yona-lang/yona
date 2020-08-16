@@ -188,6 +188,15 @@ public final class SystemBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "language_home")
+  abstract static class LanguageHomeBuiltin extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Seq languageHome(@CachedContext(YattaLanguage.class) Context context) {
+      return context.languageHome();
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
@@ -195,6 +204,7 @@ public final class SystemBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetEnvBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PidBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetArgsBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.LanguageHomeBuiltinFactory.getInstance()));
     return builtins;
   }
 }

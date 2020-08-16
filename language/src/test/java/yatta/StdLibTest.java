@@ -644,4 +644,51 @@ public class StdLibTest extends CommonTest {
     Value ret = context.eval(YattaLanguage.ID, "Regexp::compile \"HTML\" {:ignore_case, :global} |> Regexp::replace \"I love HTML\" \"$& and JavaScript\"");
     assertEquals("I love HTML and JavaScript", ret.asString());
   }
+
+  @Test
+  public void reflectionModulesTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let mods = Reflect::modules in (\"File\" in mods)").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void reflectionFunctionsTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let funs = Reflect::functions \"File\" in (\"path\" in funs)").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void reflectionFunctionsInvalidModTest() {
+    long ret = context.eval(YattaLanguage.ID, "let funs = Reflect::functions \"Invalid\" in (Dict::len funs)").asLong();
+    assertEquals(0L, ret);
+  }
+
+  @Test
+  public void reflectionFunctionsTwoTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let funs = Reflect::functions \"http\\\\Client\" in (\"post\" in funs)").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void reflectionFunctionsThreeTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "mod = module Test exports test as\n" +
+        "test = 1\n" +
+        "end\n" +
+        "funs = Reflect::functions mod\n" +
+        "in (\"test\" in funs)").asBoolean();
+    assertTrue(ret);
+  }
+
+  @Test
+  public void reflectionFunctionsFourTest() {
+    boolean ret = context.eval(YattaLanguage.ID, "let\n" +
+        "mod = module Test exports test as\n" +
+        "test = 1\n" +
+        "priv = 2\n" +
+        "end\n" +
+        "funs = Reflect::functions mod\n" +
+        "in (\"priv\" in funs)").asBoolean();
+    assertFalse(ret);
+  }
 }

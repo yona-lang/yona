@@ -57,8 +57,15 @@ public class YattaTest {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
-            Context context = Context.newBuilder().in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8))).out(out).err(out).allowAllAccess(true).environment("YATTA_STDLIB_HOME", "lib-yatta").option(CommonTest.logLevelOption(Context.class), "FINEST").build();
-            context.enter();
+            Context context = Context.newBuilder(YattaLanguage.ID)
+                .in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8)))
+                .out(out)
+                .err(out)
+                .allowAllAccess(true)
+                .environment("YATTA_STDLIB_HOME", "lib-yatta")
+                .environment("YATTA_PRINT_ALL_RESULTS", "true")
+                .option(CommonTest.logLevelOption(Context.class), "FINEST")
+                .build();
 
             /* Parse the Yatta source file. */
             Source source = Source.newBuilder(YattaLanguage.ID, sourceFile.toFile()).interactive(true).build();
@@ -90,7 +97,6 @@ public class YattaTest {
                 context.eval(Source.newBuilder(YattaLanguage.ID, "shutdown", "shutdown").internal(true).build());
               } catch (IOException e) {
               } finally {
-                context.leave();
                 context.close();
               }
             }

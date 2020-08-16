@@ -3,6 +3,7 @@ package yatta.ast.controlflow;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.BlockNode;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yatta.TypesGen;
 import yatta.ast.ExpressionNode;
 import yatta.runtime.DependencyUtils;
 
@@ -38,7 +39,7 @@ public final class YattaBlockNode extends ExpressionNode implements BlockNode.El
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return block.executeGeneric(frame, 0);
+    return TypesGen.ensureNotNull(block.executeGeneric(frame, 0));
   }
 
   @Override

@@ -7,6 +7,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import yatta.runtime.async.Promise;
 
+import java.util.Map;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -17,7 +19,7 @@ public class DictTest {
   private static final int M = 1 << 12;
 
   @ParameterizedTest
-  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  @ValueSource(longs = {0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
   public void testAddLookup(final long seed) {
     Dict dict = Dict.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
@@ -38,7 +40,7 @@ public class DictTest {
   }
 
   @ParameterizedTest
-  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  @ValueSource(longs = {0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
   public void testAddOverwrite(final long seed) {
     Dict dict = Dict.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
@@ -53,7 +55,7 @@ public class DictTest {
   }
 
   @ParameterizedTest
-  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  @ValueSource(longs = {0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
   public void testRemoveLookup(final long seed) {
     Dict dict = Dict.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
@@ -77,7 +79,7 @@ public class DictTest {
   }
 
   @ParameterizedTest
-  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  @ValueSource(longs = {0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
   public void testEqualityAndHash(final long seed) {
     Dict fst = Dict.empty(Murmur3.INSTANCE, seed);
     Dict snd = Dict.empty(Murmur3.INSTANCE, seed);
@@ -153,5 +155,15 @@ public class DictTest {
     public int hashCode() {
       return (int) value;
     }
+  }
+
+  @Test
+  public void testDictCollector() {
+    Map<?, ?> input = Map.of("a", 1L, "b", 2L, "c", 3L);
+    Dict expected = Dict.empty().add("a", 1L).add("b", 2L).add("c", 3L);
+    Dict result = input.entrySet().stream().collect(Dict.collect());
+
+    assertEquals(expected.size(), result.size());
+    assertEquals(expected, result);
   }
 }

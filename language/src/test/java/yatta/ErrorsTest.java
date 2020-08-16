@@ -5,8 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import yatta.runtime.Tuple;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class ErrorsTest extends CommonTest {
@@ -80,7 +79,7 @@ public class ErrorsTest extends CommonTest {
             "funalias = \\arg -> alias 7 funone\n" +
             "in funalias").execute(5).asLong();
       } catch (PolyglotException ex) {
-        assertEquals("Cannot invoke non-function node: Unnamed:4~", ex.getMessage());
+        assertEquals("Cannot invoke non-function value: 6", ex.getMessage());
         throw ex;
       }
     });
@@ -375,5 +374,14 @@ public class ErrorsTest extends CommonTest {
         throw ex;
       }
     });
+  }
+
+  @Test
+  public void incompleteSourceTest() {
+    try {
+      context.eval(YattaLanguage.ID, "do\n");
+    } catch (PolyglotException ex) {
+      assertTrue(ex.isIncompleteSource());
+    }
   }
 }

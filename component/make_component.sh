@@ -10,7 +10,7 @@ fi
 rm -rf COMPONENT_DIR
 
 mkdir -p "$LANGUAGE_PATH"
-cp ../language/target/yatta.jar "$LANGUAGE_PATH"
+cp ../language/target/language.jar "$LANGUAGE_PATH"
 
 mkdir -p "$LANGUAGE_PATH/launcher"
 cp ../launcher/target/yatta-launcher.jar "$LANGUAGE_PATH/launcher/"
@@ -22,8 +22,15 @@ if [[ $INCLUDE_YATTANATIVE -eq "TRUE" ]]; then
 fi
 
 cp -R ../language/lib-yatta "$LANGUAGE_PATH"
+cp -R ../yatta.nanorc "$LANGUAGE_PATH"
 
 touch "$LANGUAGE_PATH/native-image.properties"
+
+{
+  echo "Requires = language:regex"
+  echo "JavaArgs = -Xmx3G \\"
+  echo "           -Dpolyglot.image-build-time.PreinitializeContexts=yatta"
+} > "$LANGUAGE_PATH/native-image.properties"
 
 mkdir -p "$COMPONENT_DIR/META-INF"
 {

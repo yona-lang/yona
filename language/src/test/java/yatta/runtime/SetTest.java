@@ -5,9 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
-
+import static org.junit.Assert.assertEquals;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("slow")
@@ -16,7 +14,7 @@ public class SetTest {
   private static final int M = 1 << 12;
 
   @ParameterizedTest
-  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  @ValueSource(longs = {0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
   public void testAddContains(final long seed) {
     Set set = Set.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
@@ -37,7 +35,7 @@ public class SetTest {
   }
 
   @ParameterizedTest
-  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  @ValueSource(longs = {0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
   public void testRemoveContains(final long seed) {
     Set set = Set.empty(Murmur3.INSTANCE, seed);
     for (int i = 0; i < N; i++) {
@@ -61,7 +59,7 @@ public class SetTest {
   }
 
   @ParameterizedTest
-  @ValueSource(longs = { 0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
+  @ValueSource(longs = {0L, 0xaaaaaaaaaaaaaaaaL, 0xffffffffffffffffL})
   public void testEqualityAndHash(final long seed) {
     Set fst = Set.empty(Murmur3.INSTANCE, seed);
     Set snd = Set.empty(Murmur3.INSTANCE, seed);
@@ -109,5 +107,15 @@ public class SetTest {
     public int hashCode() {
       return (int) value;
     }
+  }
+
+  @Test
+  public void testSetCollector() {
+    java.util.Set<Long> input = java.util.Set.of(1L, 2L, 3L);
+    Set expected = Set.set(2L, 4L, 6L);
+    Set result = input.stream().map(i -> i * 2).collect(Set.collect());
+
+    assertEquals(expected.size(), result.size());
+    assertEquals(expected, result);
   }
 }

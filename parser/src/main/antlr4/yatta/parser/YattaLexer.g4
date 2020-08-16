@@ -9,6 +9,11 @@ channels { COMMENTS_CHANNEL }
 {
 private int interpolatedStringLevel;
 private Stack<Integer> curlyLevels = new Stack<Integer>();
+private int openLevel = 0;
+
+public boolean isOpened() {
+    return openLevel > 0 || interpolatedStringLevel > 0;
+}
 }
 
 UNIT: '()' ;
@@ -39,10 +44,10 @@ KW_RAISE : 'raise' ;
 KW_RECORD : 'record' ;
 KW_WITH : 'with' ;
 
-BRACKET_L : '[' ;
-BRACKET_R : ']' ;
-PARENS_L : '(' ;
-PARENS_R : ')' ;
+BRACKET_L : '[' {openLevel++;} ;
+BRACKET_R : ']' {openLevel--;};
+PARENS_L : '(' {openLevel++;};
+PARENS_R : ')' {openLevel--;};
 
 CURLY_L:               '{'
 {
@@ -75,11 +80,6 @@ BACKSLASH : '\\' ;
 LOWERCASE_NAME : ('_' | 'a'..'z') [a-zA-Z0-9_]* ;
 UPPERCASE_NAME : 'A'..'Z' [a-zA-Z0-9_]* ;
 
-BYTE : '-'?[0-9]+ 'b' ;
-FLOAT_INTEGER : '-'?[0-9]+ 'f' ;
-INTEGER : '-'?[0-9]+ ;
-FLOAT : ('0' .. '9') + ('.' ('0' .. '9') +)? ;
-
 // Operators
 OP_ASSIGN : '=';
 OP_EQ : '==' ;
@@ -97,6 +97,11 @@ OP_DIVIDE : '/';
 OP_MODULO : '%';
 OP_PLUS : '+' ;
 OP_MINUS : '-';
+
+BYTE : [0-9]+ 'b' ;
+FLOAT_INTEGER : '-'?[0-9]+ 'f' ;
+INTEGER : '-'?[0-9]+ ;
+FLOAT : ('0' .. '9') + ('.' ('0' .. '9') +)? ;
 
 OP_LEFTSHIFT : '<<';
 OP_RIGHTSHIFT : '>>';

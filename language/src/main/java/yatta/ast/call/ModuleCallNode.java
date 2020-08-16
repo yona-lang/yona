@@ -95,6 +95,7 @@ public final class ModuleCallNode extends ExpressionNode {
       } else {
         Function function = module.getFunctions().get(functionName);
         InvokeNode invokeNode = new InvokeNode(language, function, argumentNodes, moduleStack);
+
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
       }
@@ -106,6 +107,7 @@ public final class ModuleCallNode extends ExpressionNode {
       if (method != null) {
         Function javaFunction = JavaMethodRootNode.buildFunction(language, method, frame.getFrameDescriptor(), nativeObject.getValue());
         InvokeNode invokeNode = new InvokeNode(language, javaFunction, argumentNodes, moduleStack);
+
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
       } else {
@@ -120,19 +122,21 @@ public final class ModuleCallNode extends ExpressionNode {
   private Method lookupAccessibleMethod(Object obj, Class<?> cls) {
     Method[] methods = cls.getMethods();
     CompilerAsserts.compilationConstant(methods.length);
-    for (int i = 0; i < methods.length; i++) {
-      Method method = methods[i];
+
+    for (Method method : methods) {
       if (method.getName().equals(functionName)) {
         if (method.canAccess(obj)) {
           return method;
         } else {
           Class<?> supercls = cls.getSuperclass();
+
           if (supercls != null) {
             Method possibleMethod = lookupAccessibleMethod(obj, supercls);
             if (possibleMethod != null) {
               return possibleMethod;
             }
           }
+
           for (Class<?> intf : cls.getInterfaces()) {
             Method possibleMethod = lookupAccessibleMethod(obj, intf);
             if (possibleMethod != null) {
@@ -142,6 +146,7 @@ public final class ModuleCallNode extends ExpressionNode {
         }
       }
     }
+
     return null;
   }
 }

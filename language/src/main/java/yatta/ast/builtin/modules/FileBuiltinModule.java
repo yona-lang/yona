@@ -19,11 +19,9 @@ import yatta.YattaLanguage;
 import yatta.ast.builtin.BuiltinNode;
 import yatta.runtime.*;
 import yatta.runtime.async.Promise;
-import yatta.runtime.async.TransactionalMemory;
 import yatta.runtime.exceptions.BadArgException;
 import yatta.runtime.stdlib.Builtins;
 import yatta.runtime.stdlib.ExportedFunction;
-import yatta.runtime.stdlib.PrivateFunction;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +37,6 @@ import java.util.Set;
 
 @BuiltinModuleInfo(moduleName = "File")
 public final class FileBuiltinModule implements BuiltinModule {
-
   protected static final int FILE_READ_BUFFER_SIZE = 4096;
 
   protected static final class FileTuple extends Tuple {

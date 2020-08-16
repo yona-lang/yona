@@ -5,7 +5,6 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
@@ -40,6 +39,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,7 +48,7 @@ public final class Context {
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
   public static final Source SHUTDOWN_SOURCE = Source.newBuilder(YattaLanguage.ID, "shutdown", "shutdown").internal(true).build();
-  private static final TruffleLogger LOGGER = YattaLanguage.getLogger(Context.class);
+//  private TruffleLogger LOGGER;
   public static final String YATTA_PATH = "YATTA_PATH";
 
   /**
@@ -70,10 +70,12 @@ public final class Context {
   public Dict globals = Dict.empty(Murmur3.INSTANCE, 0L);
   public final FrameDescriptor globalFrameDescriptor;
   public final MaterializedFrame globalFrame;
+  private final Path stdlibHome;
   private final Path languageHome;
   public static final ThreadLocal<Dict> LOCAL_CONTEXTS = ThreadLocal.withInitial(Dict::empty);
+  private final boolean printAllResults;
 
-  public Context(final YattaLanguage language, final TruffleLanguage.Env env, final Path languageHome) {
+  public Context(final YattaLanguage language, final TruffleLanguage.Env env, final Path languageHomePath, final Path stdlibHomePath) {
     this.env = env;
     this.input = new BufferedReader(new InputStreamReader(env.in()));
     this.output = new PrintWriter(env.out(), true);
@@ -84,18 +86,30 @@ public final class Context {
     this.threading = new Threading(this);
     this.globalFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
     this.globalFrame = this.initGlobalFrame();
-    this.languageHome = languageHome;
-    LOGGER.config("Yatta language home: " + languageHome);
+    this.languageHome = languageHomePath;
+    this.stdlibHome = stdlibHomePath;
+    if (env.getEnvironment().containsKey("YATTA_PRINT_ALL_RESULTS")) {
+      this.printAllResults = Boolean.parseBoolean(env.getEnvironment().get("YATTA_PRINT_ALL_RESULTS"));
+    } else {
+      this.printAllResults = false;
+    }
   }
 
   public void initialize() throws Exception {
-    LOGGER.config("Yatta Context initializing");
+//    LOGGER = YattaLanguage.getLogger(Context.class);
+//
+//    LOGGER.config("Yatta Context initializing");
+//    LOGGER.config("Yatta language home: " + stdlibHome);
 
     if (languageHome == null) {
       throw new IOException("Unable to locate language home. Please set up JAVA_HOME environment variable to point to the GraalVM root folder.");
     }
 
-    LOGGER.fine("Initializing threading");
+    if (stdlibHome == null) {
+      throw new IOException("Unable to locate language home. Please set up YATTA_STDLIB_HOME environment variable to point to the GraalVM root folder.");
+    }
+
+//    LOGGER.fine("Initializing threading");
     this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yatta-io")));
     threading.initialize();
 
@@ -106,7 +120,7 @@ public final class Context {
 
     identityFunction = lookupGlobalFunction(null, "identity");
 
-    LOGGER.config("Yatta Context initialized");
+//    LOGGER.config("Yatta Context initialized");
   }
 
   private MaterializedFrame initGlobalFrame() {
@@ -149,10 +163,11 @@ public final class Context {
     builtinModules.register(new STMBuiltinModule());
     builtinModules.register(new LocalContextBuiltinModule());
     builtinModules.register(new RegexpBuiltinModule());
+    builtinModules.register(new ReflectionBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {
-    final List<String> exports = new ArrayList<>(builtins.builtins.size());
+    final java.util.Set<String> exports = new HashSet<>(builtins.builtins.size());
     final List<Function> functions = new ArrayList<>(builtins.builtins.size());
 
     builtins.builtins.forEach((name, stdLibFunction) -> {
@@ -205,9 +220,9 @@ public final class Context {
   private void installGlobals() {
     builtinModules.builtins.forEach(this::installBuiltinsGlobals);
 
-    LOGGER.config("Installing globals from: " + languageHome);
+//    LOGGER.config("Installing globals from: " + stdlibHome);
     try {
-      env.getInternalTruffleFile(languageHome.toUri()).visit(new FileVisitor<>() {
+      env.getInternalTruffleFile(stdlibHome.toUri()).visit(new FileVisitor<>() {
         @Override
         public FileVisitResult preVisitDirectory(TruffleFile dir, BasicFileAttributes attrs) {
           return FileVisitResult.CONTINUE;
@@ -215,15 +230,15 @@ public final class Context {
 
         @Override
         public FileVisitResult visitFile(TruffleFile file, BasicFileAttributes attrs) {
-          String relativizedPath = languageHome.toUri().relativize(file.toUri()).getPath();
+          String relativizedPath = stdlibHome.toUri().relativize(file.toUri()).getPath();
           if (relativizedPath.endsWith("." + YattaLanguage.ID)) {
             String moduleFQN = relativizedPath.substring(0, relativizedPath.lastIndexOf(".")).replaceAll("/", "\\\\");
-            LOGGER.config("Loading stdlib module: " + moduleFQN);
+//            LOGGER.config("Loading stdlib module: " + moduleFQN);
             try {
               YattaModule module = loadStdModule(file, moduleFQN);
               insertGlobal(moduleFQN, module);
             } catch (IOException e) {
-              LOGGER.config(e.getMessage());
+//              LOGGER.config(e.getMessage());
             }
           }
           return FileVisitResult.CONTINUE;
@@ -397,10 +412,10 @@ public final class Context {
   @CompilerDirectives.TruffleBoundary
   private YattaModule loadJavaModule(String FQN) {
     try {
-      Class cls = Class.forName(FQN.replace("\\", "."));
+      Class<?> cls = Class.forName(FQN.replace("\\", "."));
       Method[] methods = cls.getMethods();
       List<Function> functions = new ArrayList<>(methods.length);
-      List<String> exports = new ArrayList<>(methods.length);
+      java.util.Set<String> exports = new HashSet<>(methods.length);
 
       for (Method method : methods) {
         exports.add(method.getName());
@@ -429,10 +444,6 @@ public final class Context {
     } else {
       return moduleName;
     }
-  }
-
-  public TruffleObject getPolyglotBindings() {
-    return (TruffleObject) env.getPolyglotBindings();
   }
 
   public static Context getCurrent() {
@@ -475,7 +486,7 @@ public final class Context {
 
   @CompilerDirectives.TruffleBoundary
   public void dispose() {
-    LOGGER.fine("Threading shutting down");
+//    LOGGER.fine("Threading shutting down");
     threading.dispose();
     ioExecutor.shutdown();
     assert ioExecutor.shutdownNow().isEmpty();
@@ -487,7 +498,7 @@ public final class Context {
         e.printStackTrace();
       }
     }
-    LOGGER.fine("Threading shut down");
+//    LOGGER.fine("Threading shut down");
   }
 
   @CompilerDirectives.TruffleBoundary
@@ -513,5 +524,14 @@ public final class Context {
   @CompilerDirectives.TruffleBoundary
   public void removeLocalContext(String identifier) {
     LOCAL_CONTEXTS.set(LOCAL_CONTEXTS.get().remove("$context_" + identifier));
+  }
+
+  @CompilerDirectives.TruffleBoundary
+  public Seq languageHome() {
+    return Seq.fromCharSequence(languageHome.toFile().getAbsolutePath());
+  }
+
+  public boolean isPrintAllResults() {
+    return printAllResults;
   }
 }

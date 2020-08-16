@@ -58,12 +58,30 @@ public final class DictBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "entries")
+  abstract static class EntriesBuiltin extends BuiltinNode {
+    @Specialization
+    public Seq reduce(Dict dict) {
+      return dict.fold(Seq.EMPTY, (acc, key, val) -> acc.insertLast(new Tuple(key, val)));
+    }
+  }
+
+  @NodeInfo(shortName = "keys")
+  abstract static class KeysBuiltin extends BuiltinNode {
+    @Specialization
+    public Set reduce(Dict dict) {
+      return dict.keys();
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.EntriesBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.KeysBuiltinFactory.getInstance()));
     return builtins;
   }
 }
