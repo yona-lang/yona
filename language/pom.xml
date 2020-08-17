@@ -3,8 +3,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>yatta</groupId>
-    <artifactId>yatta-parent</artifactId>
+    <groupId>yona</groupId>
+    <artifactId>yona-parent</artifactId>
     <version>0.8.1-SNAPSHOT</version>
   </parent>
   <artifactId>language</artifactId>
@@ -52,7 +52,7 @@
           </includes>
           <argLine>-Dgraalvm.locatorDisabled=true ${test.argLine}</argLine>
           <environmentVariables>
-            <YATTA_STDLIB_HOME>lib-yatta</YATTA_STDLIB_HOME>
+            <YONA_STDLIB_HOME>lib-yona</YONA_STDLIB_HOME>
           </environmentVariables>
           <parallel>all</parallel>
           <useUnlimitedThreads>true</useUnlimitedThreads>
@@ -102,7 +102,7 @@
   </build>
   <dependencies>
     <dependency>
-      <groupId>yatta</groupId>
+      <groupId>yona</groupId>
       <artifactId>parser</artifactId>
       <version>${project.version}</version>
     </dependency>

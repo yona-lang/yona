@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-[ -f yattanative ] && rm yattanative || echo "yattanative not found."
+[ -f yonanative ] && rm yonanative || echo "yonanative not found."

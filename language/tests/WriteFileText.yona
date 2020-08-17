@@ -1,0 +1,8 @@
+with File::make_temp "test_" ".yona" {:write, :delete_on_close} as temp_file
+    do
+        File::write temp_file "{{\"hello\": \"world\"}}"
+        with File::open (File::path temp_file) {:read} as source_file # can be read as :binary, but also as a text
+            let {"hello" = world} = File::read source_file |> JSON::parse in "hello {world}"
+        end
+    end
+end

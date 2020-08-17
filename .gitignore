@@ -204,3 +204,5 @@ hs_err_pid*
 
 target
 .idea
+native/yonanative
+gen

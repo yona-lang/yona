@@ -3,16 +3,16 @@
 $version = "0.8.1-SNAPSHOT"
 
 function localDockerBuild() {
-    hilite docker build -t akovari/yatta:latest -t akovari/yatta:$version -f Dockerfile.local .
+    hilite docker build -t akovari/yona:latest -t akovari/yona:$version -f Dockerfile.local .
 }
 
 function dockerPush() {
-    hilite docker push akovari/yatta:latest
-    hilite docker push akovari/yatta:$version
+    hilite docker push akovari/yona:latest
+    hilite docker push akovari/yona:$version
 }
 
 function run([string[]]$programArgs) {
-    hilite ./yatta $programArgs
+    hilite ./yona $programArgs
 }
 
 function mvnFastBuild() {

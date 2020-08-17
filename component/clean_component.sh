@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-[ -f yatta-component.jar ] && rm yatta-component.jar || echo "yatta-component.jar not found"
+[ -f yona-component.jar ] && rm yona-component.jar || echo "yona-component.jar not found"

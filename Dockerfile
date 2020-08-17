@@ -27,13 +27,13 @@ RUN mkdir -p /usr/share/maven /usr/share/maven/ref \
 ENV MAVEN_HOME /usr/share/maven
 ENV MAVEN_CONFIG "$USER_HOME_DIR/.m2"
 
-RUN git clone https://github.com/yatta-lang/yatta.git /yatta
-RUN cd yatta/; mvn -B dependency:resolve
-RUN cd /yatta/; mvn -B package -DskipTests
-RUN gu install -L /yatta/component/yatta-component.jar
+RUN git clone https://github.com/yona-lang/yona.git /yona
+RUN cd yona/; mvn -B dependency:resolve
+RUN cd /yona/; mvn -B package -DskipTests
+RUN gu install -L /yona/component/yona-component.jar
 
-RUN alternatives --remove yatta /opt/graalvm-ce-java11-20.1.0//bin/yatta
+RUN alternatives --remove yona /opt/graalvm-ce-java11-20.1.0//bin/yona
 
 WORKDIR /sources
 
-ENTRYPOINT ["/opt/graalvm-ce-java11-20.1.0/bin/yatta"]
+ENTRYPOINT ["/opt/graalvm-ce-java11-20.1.0/bin/yona"]

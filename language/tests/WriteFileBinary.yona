@@ -1,0 +1,12 @@
+do
+    http_session = http\Client::session {}
+    (200, headers, body) = http\Client::get http_session "https://httpbin.org/get" {}
+    with File::make_temp "test_" ".yona" {:write, :binary, :delete_on_close} as temp_file
+        do
+            File::write temp_file body
+            with File::open (File::path temp_file) {:read} as source_file # can be read as :binary, but also as a text
+                let {"url" = url} = File::read source_file |> JSON::parse in url
+            end
+        end
+    end
+end

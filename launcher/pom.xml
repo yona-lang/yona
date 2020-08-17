@@ -3,8 +3,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>yatta</groupId>
-    <artifactId>yatta-parent</artifactId>
+    <groupId>yona</groupId>
+    <artifactId>yona-parent</artifactId>
     <version>0.8.1-SNAPSHOT</version>
   </parent>
   <artifactId>launcher</artifactId>
@@ -31,7 +31,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <finalName>yatta-launcher</finalName>
+              <finalName>yona-launcher</finalName>
               <artifactSet>
                 <excludes>
                   <exclude>junit:junit</exclude>
@@ -66,7 +66,7 @@
   </build>
   <dependencies>
     <dependency>
-      <groupId>yatta</groupId>
+      <groupId>yona</groupId>
       <artifactId>parser</artifactId>
       <version>${project.version}</version>
     </dependency>

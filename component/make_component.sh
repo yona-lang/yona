@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 readonly COMPONENT_DIR="component_temp_dir"
-readonly LANGUAGE_PATH="$COMPONENT_DIR/languages/yatta"
+readonly LANGUAGE_PATH="$COMPONENT_DIR/languages/yona"
 readonly CURRENT_TAG=$(git describe --tags --exact-match || echo "SNAPSHOT")
-if [[ -f ../native/yattanative ]]; then
-    INCLUDE_YATTANATIVE="TRUE"
+if [[ -f ../native/yonanative ]]; then
+    INCLUDE_YONANATIVE="TRUE"
 fi
 
 rm -rf COMPONENT_DIR
@@ -13,29 +13,29 @@ mkdir -p "$LANGUAGE_PATH"
 cp ../language/target/language.jar "$LANGUAGE_PATH"
 
 mkdir -p "$LANGUAGE_PATH/launcher"
-cp ../launcher/target/yatta-launcher.jar "$LANGUAGE_PATH/launcher/"
+cp ../launcher/target/yona-launcher.jar "$LANGUAGE_PATH/launcher/"
 
 mkdir -p "$LANGUAGE_PATH/bin"
-cp ../yatta $LANGUAGE_PATH/bin/
-if [[ $INCLUDE_YATTANATIVE -eq "TRUE" ]]; then
-    cp ../native/yattanative $LANGUAGE_PATH/bin/
+cp ../yona $LANGUAGE_PATH/bin/
+if [[ $INCLUDE_YONANATIVE -eq "TRUE" ]]; then
+    cp ../native/yonanative $LANGUAGE_PATH/bin/
 fi
 
-cp -R ../language/lib-yatta "$LANGUAGE_PATH"
-cp -R ../yatta.nanorc "$LANGUAGE_PATH"
+cp -R ../language/lib-yona "$LANGUAGE_PATH"
+cp -R ../yona.nanorc "$LANGUAGE_PATH"
 
 touch "$LANGUAGE_PATH/native-image.properties"
 
 {
   echo "Requires = language:regex"
   echo "JavaArgs = -Xmx3G \\"
-  echo "           -Dpolyglot.image-build-time.PreinitializeContexts=yatta"
+  echo "           -Dpolyglot.image-build-time.PreinitializeContexts=yona"
 } > "$LANGUAGE_PATH/native-image.properties"
 
 mkdir -p "$COMPONENT_DIR/META-INF"
 {
-    echo "Bundle-Name: yatta";
-    echo "Bundle-Symbolic-Name: yatta";
+    echo "Bundle-Name: yona";
+    echo "Bundle-Symbolic-Name: yona";
     echo "Bundle-Version: 0.8.1-$CURRENT_TAG";
     echo 'Bundle-RequireCapability: org.graalvm; filter:="(&(graalvm_version=20.1.0)(os_arch=amd64))"';
     echo "x-GraalVM-Polyglot-Part: True"
@@ -43,18 +43,18 @@ mkdir -p "$COMPONENT_DIR/META-INF"
 
 (
 cd $COMPONENT_DIR || exit 1
-jar cfm ../yatta-component.jar META-INF/MANIFEST.MF .
+jar cfm ../yona-component.jar META-INF/MANIFEST.MF .
 
-echo "bin/yatta = ../languages/yatta/bin/yatta" > META-INF/symlinks
-if [[ $INCLUDE_YATTANATIVE -eq "TRUE" ]]; then
-    echo "bin/yattanative = ../languages/yatta/bin/yattanative" >> META-INF/symlinks
+echo "bin/yona = ../languages/yona/bin/yona" > META-INF/symlinks
+if [[ $INCLUDE_YONANATIVE -eq "TRUE" ]]; then
+    echo "bin/yonanative = ../languages/yona/bin/yonanative" >> META-INF/symlinks
 fi
-jar uf ../yatta-component.jar META-INF/symlinks
+jar uf ../yona-component.jar META-INF/symlinks
 
 {
-    echo "languages/yatta/bin/yatta = rwxrwxr-x"
-    echo "languages/yatta/bin/yattanative = rwxrwxr-x"
+    echo "languages/yona/bin/yona = rwxrwxr-x"
+    echo "languages/yona/bin/yonanative = rwxrwxr-x"
 } > META-INF/permissions
-jar uf ../yatta-component.jar META-INF/permissions
+jar uf ../yona-component.jar META-INF/permissions
 )
 rm -rf $COMPONENT_DIR

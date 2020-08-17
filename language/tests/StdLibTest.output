@@ -1,2 +1,2 @@
-YattaError <assert>: Assertion Error at Test.yatta:
+YonaError <assert>: Assertion Error at Test.yona:
     assert e = if e then true else raise :assert "Assertion Error"
