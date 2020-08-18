@@ -3,7 +3,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>yona</groupId>
+    <groupId>org.yona-lang</groupId>
     <artifactId>yona-parent</artifactId>
     <version>0.8.1-SNAPSHOT</version>
   </parent>
@@ -66,7 +66,7 @@
   </build>
   <dependencies>
     <dependency>
-      <groupId>yona</groupId>
+      <groupId>${project.parent.groupId}</groupId>
       <artifactId>parser</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -108,7 +108,7 @@
       <version>1.0.3</version>
     </dependency>
     <dependency>
-      <groupId>akovari</groupId>
+      <groupId>com.github.akovari</groupId>
       <artifactId>antlr4-autocomplete</artifactId>
       <version>${antlr4.junit.autocomplete.version}</version>
     </dependency>
