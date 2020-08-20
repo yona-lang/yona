@@ -127,7 +127,7 @@ SYMBOL : COLON (LOWERCASE_NAME | UPPERCASE_NAME) ;
 COMMENT: NEWLINE? WS? '#' InputCharacter* -> channel(COMMENTS_CHANNEL) ;
 
 NEWLINE : NewLinePart+;
-WS: WHITESPACE+ -> skip;
+WS: WHITESPACE+ -> channel(HIDDEN);
 
 INTERPOLATED_REGULAR_STRING_START:   '"'
     { interpolatedStringLevel++; } -> pushMode(INTERPOLATION_STRING);

@@ -1,12 +1,12 @@
 # Yona
 
-[![Latest Release](https://img.shields.io/github/v/release/yona-lang/yona)](github.com/yona-lang/yona/releases/latest/)
+[![Latest Release](https://img.shields.io/github/v/release/yona-lang/yona)](https://github.com/yona-lang/yona/releases/latest/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/akovari/yona)](https://hub.docker.com/r/akovari/yona)
-[![IDEA Plugin](https://img.shields.io/jetbrains/plugin/d/14536-yona-language?label=IDEA%20Plugin)](https://plugins.jetbrains.com/plugin/14536-yona-language)
+[![IDEA Plugin](https://img.shields.io/jetbrains/plugin/d/14917-yona-language?label=IDEA%20Plugin)](https://plugins.jetbrains.com/plugin/14917-yona-language)
 ![License](https://img.shields.io/github/license/yona-lang/yona)
-[![Follow me on Twitter](https://img.shields.io/twitter/follow/kovariadam?style=social)](https://twitter.com/kovariadam)
+![Twitter](https://img.shields.io/twitter/follow/kovariadam?style=social)
 
-[![Gitter](https://badges.gitter.im/yonalang/community.svg)](https://gitter.im/yonalang/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![Gitter](https://badges.gitter.im/yona/community.svg)](https://gitter.im/yonalang/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![Google group : yona-lang](https://img.shields.io/badge/yona--lang-Google%20group-blue)](https://groups.google.com/forum/#!forum/yona-lang)
 
 [![Actions Status](https://github.com/yona-lang/yona/workflows/Release/badge.svg)](https://github.com/yona-lang/yona/actions)
