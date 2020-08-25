@@ -10,7 +10,6 @@
 [![Google group : yona-lang](https://img.shields.io/badge/yona--lang-Google%20group-blue)](https://groups.google.com/forum/#!forum/yona-lang)
 
 [![Actions Status](https://github.com/yona-lang/yona/workflows/Release/badge.svg)](https://github.com/yona-lang/yona/actions)
-![Test](https://github.com/yona-lang/yona/workflows/Test/badge.svg)
 
 **Home page**: [https://yona-lang.org](https://yona-lang.org)
 
