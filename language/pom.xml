@@ -54,9 +54,6 @@
           <environmentVariables>
             <YONA_STDLIB_HOME>lib-yona</YONA_STDLIB_HOME>
           </environmentVariables>
-          <parallel>all</parallel>
-          <useUnlimitedThreads>true</useUnlimitedThreads>
-          <threadCountClasses>2</threadCountClasses>
         </configuration>
       </plugin>
       <plugin>
