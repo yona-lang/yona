@@ -7,7 +7,7 @@ language: generic
 env:
   - JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$PATH GRAALVM_VERSION="20.1.0" GRAALVM_JAVA_VERSION="11"
 before_install:
-  - wget -qO- "https://github.com/crazy-max/travis-wait-enhanced/releases/download/v1.2.0/travis-wait-enhanced_1.2.0_linux_x86_64.tar.gz" | tar -zxvf - $HOME/travis-wait-enhanced
+  - cd $HOME; wget -qO- "https://github.com/crazy-max/travis-wait-enhanced/releases/download/v1.2.0/travis-wait-enhanced_1.2.0_linux_x86_64.tar.gz" | tar -zxvf - travis-wait-enhanced
 install:
   - travis_retry wget --no-verbose -O $HOME/jdk.tar.gz https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-20.1.0/graalvm-ce-java11-linux-amd64-20.1.0.tar.gz
   - mkdir $HOME/jdk && tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk --strip-components=1
