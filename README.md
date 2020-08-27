@@ -9,7 +9,7 @@
 [![Gitter](https://badges.gitter.im/yona/community.svg)](https://gitter.im/yonalang/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![Google group : yona-lang](https://img.shields.io/badge/yona--lang-Google%20group-blue)](https://groups.google.com/forum/#!forum/yona-lang)
 
-[![Actions Status](https://github.com/yona-lang/yona/workflows/Release/badge.svg)](https://github.com/yona-lang/yona/actions)
+[![Build Status](https://travis-ci.org/yona-lang/yona.svg?branch=master)](https://travis-ci.org/yona-lang/yona)
 
 **Home page**: [https://yona-lang.org](https://yona-lang.org)
 
