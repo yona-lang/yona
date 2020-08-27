@@ -4,9 +4,11 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 
+@ExtendWith(LoggingExtension.class)
 public abstract class CommonTest {
   protected static Context context;
 
