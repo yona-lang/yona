@@ -50,7 +50,7 @@
             <include>**/*TestSuite.java</include>
             <include>**/*Test.java</include>
           </includes>
-          <argLine>-Dgraalvm.locatorDisabled=true -Xmx2G ${test.argLine}</argLine>
+          <argLine>-Dgraalvm.locatorDisabled=true -Xmx4G ${test.argLine}</argLine>
           <environmentVariables>
             <YONA_STDLIB_HOME>lib-yona</YONA_STDLIB_HOME>
           </environmentVariables>

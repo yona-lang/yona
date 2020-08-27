@@ -19,7 +19,7 @@ public abstract class CommonTest {
   public static void dispose() {
     try {
       context.eval(Source.newBuilder(YonaLanguage.ID, "shutdown", "shutdown").internal(true).build());
-    } catch (IOException e) {
+    } catch (IOException ignored) {
     }
     context.close();
   }
