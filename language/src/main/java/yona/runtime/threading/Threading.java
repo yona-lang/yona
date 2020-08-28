@@ -21,7 +21,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class Threading {
   static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
 
-  static final int THREAD_COUNT = Runtime.getRuntime().availableProcessors() - 2;
+  static final int THREAD_COUNT = Math.max(2, Runtime.getRuntime().availableProcessors() - 2);
   static final int BUFFER_SIZE = 1024;
   static final int PRODUCE_SPIN_MAX_ATTEMPTS = 1000;
   static final int CONSUME_YIELD_MAX_ATTEMPTS = 10;
