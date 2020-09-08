@@ -81,8 +81,4 @@ final class BloomFilters {
         final int n = Integer.numberOfLeadingZeros(value - 1);
         return 1 << -n;
     }
-
-    public static void main(String[] args) {
-        encodeAtomically(new long[64], 12342423, 4);
-    }
 }
