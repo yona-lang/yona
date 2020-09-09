@@ -12,6 +12,7 @@ import yona.runtime.Function;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.UndefinedNameException;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -21,28 +22,37 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class Threading {
   static final AtomicIntegerFieldUpdater<Threading> WAITERS_UPDATER = AtomicIntegerFieldUpdater.newUpdater(Threading.class, "waiters");
 
-  static final int THREAD_COUNT = Math.max(2, Runtime.getRuntime().availableProcessors() - 2);
+  public static final int CPU_THREADS = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+  public static final ThreadLocal<Integer> CPU_THREAD_ID = new ThreadLocal<>();
+
+  static final AtomicInteger CPU_THREAD_ID_COUNTER = new AtomicInteger();
   static final int BUFFER_SIZE = 1024;
   static final int PRODUCE_SPIN_MAX_ATTEMPTS = 1000;
   static final int CONSUME_YIELD_MAX_ATTEMPTS = 10;
   static final int CONSUME_PARK_MAX_ATTEMPTS = 100;
 
   final Thread[] threads;
-  final Consumer[] consumers;
-  final RingBuffer<Task> ringBuffer;
+  final Task[] ringBuffer;
+  final MultiProducerMultiConsumerCursors ringBufferCursors;
+  final MultiConsumer[] consumers;
   final Lock lock = new ReentrantLock();
   final Condition condition = lock.newCondition();
 
   volatile int waiters = 0;
 
   public Threading(final Context context) {
-    ringBuffer = new RingBuffer<>(BUFFER_SIZE, Task::new);
-    consumers = ringBuffer.subscribe(THREAD_COUNT);
-    threads = new Thread[THREAD_COUNT];
-    for (int i = 0; i < THREAD_COUNT; i++) {
-      Consumer consumer = consumers[i];
+    ringBuffer = new Task[BUFFER_SIZE];
+    for (int i = 0; i < ringBuffer.length; i++) {
+      ringBuffer[i] = new Task();
+    }
+    ringBufferCursors = new MultiProducerMultiConsumerCursors(BUFFER_SIZE);
+    consumers = ringBufferCursors.subscribe(CPU_THREADS);
+    threads = new Thread[CPU_THREADS];
+    for (int i = 0; i < CPU_THREADS; i++) {
+      MultiConsumer consumer = consumers[i];
       threads[i] = context.getEnv().createThread(() -> {
-        final Consumer.Callback callback = new Consumer.Callback() {
+        CPU_THREAD_ID.set(CPU_THREAD_ID_COUNTER.incrementAndGet());
+        final MultiConsumer.Callback callback = new MultiConsumer.Callback() {
           Promise promise;
           Function function;
           InteropLibrary dispatch;
@@ -50,8 +60,8 @@ public final class Threading {
           Dict localContexts;
 
           @Override
-          void prepare(final long token) {
-            final Task task = ringBuffer.read(token);
+          public void prepare(final long token) {
+            final Task task = ringBuffer[ringBufferCursors.index(token)];
             promise = task.promise;
             function = task.function;
             dispatch = task.dispatch;
@@ -60,10 +70,10 @@ public final class Threading {
           }
 
           @Override
-          void advance() {
+          public void execute() {
             Context.LOCAL_CONTEXTS.set(localContexts);
             try {
-              execute(promise, function, dispatch, node);
+              Threading.execute(promise, function, dispatch, node);
             } finally {
               promise = null;
               function = null;
@@ -106,7 +116,7 @@ public final class Threading {
   }
 
   public void initialize() {
-    for (int i = 0; i < THREAD_COUNT; i++) {
+    for (int i = 0; i < CPU_THREADS; i++) {
       threads[i].start();
     }
   }
@@ -116,7 +126,7 @@ public final class Threading {
     int spins = 0;
     long token;
     while (true) {
-      token = ringBuffer.tryClaim(1);
+      token = ringBufferCursors.tryClaim(1);
       if (token == -1) {
         if (spins != PRODUCE_SPIN_MAX_ATTEMPTS) {
           Thread.onSpinWait();
@@ -129,13 +139,13 @@ public final class Threading {
         break;
       }
     }
-    Task task = ringBuffer.read(token);
+    Task task = ringBuffer[ringBufferCursors.index(token)];
     task.promise = promise;
     task.function = function;
     task.dispatch = dispatch;
     task.node = node;
     task.localContexts = Context.LOCAL_CONTEXTS.get();
-    ringBuffer.release(token, token);
+    ringBufferCursors.release(token, token);
     if (waiters != 0) {
       lock.lock();
       try {
@@ -157,7 +167,7 @@ public final class Threading {
   }
 
   public void dispose() {
-    for (int i = 0; i < THREAD_COUNT; i++) {
+    for (int i = 0; i < CPU_THREADS; i++) {
       try {
         threads[i].interrupt();
         threads[i].join();
