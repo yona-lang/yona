@@ -27,13 +27,13 @@ public final class MultiProducerMultiConsumerCursors extends MultiProducerCursor
     @Override
     protected boolean hasCapacity(final int n, final long start) {
         final long end = start + n - size;
-        final long consumer = cachedSlowestConsumer.get();
+        final long consumer = cachedSlowestConsumer.getAcquire();
         if (start < consumer || consumer < end) {
             long min = start;
             for (AtomicLong cursor : consumers) {
-                min = Math.min(min, cursor.get());
+                min = Math.min(min, cursor.getAcquire());
             }
-            cachedSlowestConsumer.set(min);
+            cachedSlowestConsumer.setRelease(min);
             return end <= min;
         } else return true;
     }
