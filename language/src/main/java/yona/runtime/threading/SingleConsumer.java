@@ -28,6 +28,9 @@ public final class SingleConsumer {
     }
 
     public static abstract class Callback {
+        // Consume data in the slot addressed by the provided token.
+        // token - token of the currently consumed item
+        // endToken - token of the last item in the batch
         public abstract void execute(long token, long endToken);
     }
 }

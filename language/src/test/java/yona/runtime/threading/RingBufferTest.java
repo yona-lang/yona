@@ -9,17 +9,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 public class RingBufferTest {
-  private static final int N = 1000000;
-  private static final int M = 1 << 10;
+  private static final int N = 5;
+  private static final int M = 2000000;
+  private static final int S = 1 << 10;
 
-  @RepeatedTest(50)
+  @RepeatedTest(25)
   @Tag("slow")
   public void testMultiConsumer() throws InterruptedException {
-    final boolean[] values = new boolean[N];
+    final boolean[] values = new boolean[N * M];
     final AtomicInteger c = new AtomicInteger(0);
-    int[] buffer = new int[M];
-    final MultiProducerMultiConsumerCursors cursors = new MultiProducerMultiConsumerCursors(M);
-    final int nThreads = Math.min(2, Runtime.getRuntime().availableProcessors() / 2);
+    int[] buffer = new int[S];
+    final MultiProducerMultiConsumerCursors cursors = new MultiProducerMultiConsumerCursors(S);
+    final int nThreads = Math.min(1, Runtime.getRuntime().availableProcessors());
     final MultiConsumer[] consumers = cursors.subscribe(nThreads);
     final CountDownLatch done = new CountDownLatch(nThreads);
     final Thread[] producerThreads = new Thread[nThreads];
@@ -27,7 +28,7 @@ public class RingBufferTest {
       producerThreads[i] = new Thread(() -> {
         while (true) {
           int v = c.getAndIncrement();
-          if (v >= N) {
+          if (v >= N * M) {
             done.countDown();
             break;
           } else {
@@ -50,7 +51,7 @@ public class RingBufferTest {
       final MultiConsumer consumer = consumers[i];
       consumerThreads[i] = new Thread(() -> {
         final MultiConsumer.Callback callback = new MultiConsumer.Callback() {
-          int value = Integer.MIN_VALUE;
+          int value = -1;
 
           @Override
           public void prepare(final long token) {
@@ -83,17 +84,17 @@ public class RingBufferTest {
       consumerThreads[i].join();
     }
     for (int i = 0; i < N; i++) {
-      assertTrue(String.valueOf(i), values[i]);
+      assertTrue(values[i]);
     }
   }
 
-  @RepeatedTest(50)
+  @RepeatedTest(25)
   @Tag("slow")
   public void testSingleConsumer() throws InterruptedException {
-    final boolean[] values = new boolean[N];
+    final int[] values = new int[N];
     final AtomicInteger c = new AtomicInteger(0);
-    int[] buffer = new int[M];
-    final MultiProducerSingleConsumerCursors cursors = new MultiProducerSingleConsumerCursors(M);
+    int[] buffer = new int[S];
+    final MultiProducerSingleConsumerCursors cursors = new MultiProducerSingleConsumerCursors(S);
     final int nThreads = Math.min(2, Runtime.getRuntime().availableProcessors() / 2);
     final CountDownLatch done = new CountDownLatch(nThreads);
     final SingleConsumer consumer = cursors.subscribe();
@@ -102,7 +103,7 @@ public class RingBufferTest {
       producerThreads[i] = new Thread(() -> {
         while (true) {
           int v = c.getAndIncrement();
-          if (v >= N) {
+          if (v >= N * M) {
             done.countDown();
             break;
           } else {
@@ -127,20 +128,20 @@ public class RingBufferTest {
       @Override
       public void execute(long token, long endToken) {
         final int value = buffer[cursors.index(token)];
-        values[value] = !values[value];
+        values[value % N] = values[value % N] + 1;
       }
     };
     while (done.getCount() != 0) {
       consumer.consume(callback);
     }
-    for (int j = 0; j < M; j++) {
+    for (int j = 0; j < S; j++) {
       consumer.consume(callback);
     }
     for (int i = 0; i < nThreads; i++) {
       producerThreads[i].join();
     }
     for (int i = 0; i < N; i++) {
-      assertTrue(String.valueOf(i), values[i]);
+      assertEquals(M, values[i]);
     }
   }
 }
