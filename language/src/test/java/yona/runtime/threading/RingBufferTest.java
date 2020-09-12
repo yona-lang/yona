@@ -10,10 +10,10 @@ import static org.junit.Assert.*;
 
 public class RingBufferTest {
   private static final int N = 5;
-  private static final int M = 2000000;
+  private static final int M = 200000;
   private static final int S = 1 << 10;
 
-  @RepeatedTest(25)
+  @RepeatedTest(10)
   @Tag("slow")
   public void testMultiConsumer() throws InterruptedException {
     final boolean[] values = new boolean[N * M];
@@ -88,7 +88,7 @@ public class RingBufferTest {
     }
   }
 
-  @RepeatedTest(25)
+  @RepeatedTest(10)
   @Tag("slow")
   public void testSingleConsumer() throws InterruptedException {
     final int[] values = new int[N];
