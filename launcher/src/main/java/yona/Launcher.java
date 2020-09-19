@@ -36,7 +36,6 @@ public final class Launcher extends AbstractLanguageLauncher {
 
   private final static String LANGUAGE_ID = "yona";
   private static final String MIME_TYPE = "application/x-yona";
-  private final static Source SHUTDOWN_SOURCE = Source.newBuilder("yona", "shutdown", "shutdown").internal(true).buildLiteral();
   private static final String PROGRAM_NAME = BASH_LAUNCHER_EXEC_NAME != null ? BASH_LAUNCHER_EXEC_NAME : LANGUAGE_ID;
 
   private ArrayList<String> programArgs = new ArrayList<>();
@@ -277,11 +276,7 @@ public final class Launcher extends AbstractLanguageLauncher {
       File f = new File(inputFile);
       src = Source.newBuilder(LANGUAGE_ID, f).mimeType(MIME_TYPE).build();
     }
-    try {
-      context.eval(src);
-    } finally {
-      context.eval(SHUTDOWN_SOURCE);
-    }
+    context.eval(src);
   }
 
   static final String NORMAL_PROMPT = ">>> ";
@@ -373,7 +368,6 @@ public final class Launcher extends AbstractLanguageLauncher {
     } catch (ExitException e) {
       return e.code;
     } finally {
-      context.eval(SHUTDOWN_SOURCE);
       consoleHandler.saveHistory();
     }
   }
@@ -399,7 +393,7 @@ public final class Launcher extends AbstractLanguageLauncher {
     System.err.println(Launcher.class.getCanonicalName() + ": can't open file '" + e.getFile() + "': " + reason);
   }
 
-  private static enum State {
+  private enum State {
     NORMAL,
     SINGLE_QUOTE,
     DOUBLE_QUOTE,

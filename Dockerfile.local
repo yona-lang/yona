@@ -1,4 +1,4 @@
-FROM oracle/graalvm-ce:20.1.0-java11
+FROM oracle/graalvm-ce:20.2.0-java11
 
 MAINTAINER Adam Kovari <kovariadam@gmail.com>
 
@@ -32,8 +32,8 @@ RUN cd yona/; mvn -B dependency:resolve
 RUN cd /yona/; mvn -B package -DskipTests
 RUN gu install -L /yona/component/yona-component.jar
 
-RUN alternatives --remove yona /opt/graalvm-ce-java11-20.1.0//bin/yona
+RUN alternatives --remove yona /opt/graalvm-ce-java11-20.2.0//bin/yona
 
 WORKDIR /sources
 
-ENTRYPOINT ["/opt/graalvm-ce-java11-20.1.0/bin/yona"]
+ENTRYPOINT ["/opt/graalvm-ce-java11-20.2.0/bin/yona"]

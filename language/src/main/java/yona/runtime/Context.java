@@ -47,7 +47,6 @@ import java.util.concurrent.Executors;
 public final class Context {
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
-  public static final Source SHUTDOWN_SOURCE = Source.newBuilder(YonaLanguage.ID, "shutdown", "shutdown").internal(true).build();
 //  private TruffleLogger LOGGER;
   public static final String YONA_PATH = "YONA_PATH";
 

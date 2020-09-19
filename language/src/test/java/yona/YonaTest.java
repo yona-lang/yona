@@ -92,13 +92,6 @@ public class YonaTest {
               } else {
                 ex.printStackTrace(printer);
               }
-            } finally {
-              try {
-                context.eval(Source.newBuilder(YonaLanguage.ID, "shutdown", "shutdown").internal(true).build());
-              } catch (IOException e) {
-              } finally {
-                context.close();
-              }
             }
 
             printer.flush();

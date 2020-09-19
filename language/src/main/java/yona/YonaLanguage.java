@@ -13,7 +13,6 @@ import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import yona.ast.ExpressionNode;
 import yona.ast.FunctionRootNode;
-import yona.ast.ShutdownNode;
 import yona.parser.*;
 import yona.runtime.Context;
 import yona.runtime.Function;
@@ -60,14 +59,15 @@ public class YonaLanguage extends TruffleLanguage<Context> {
   }
 
   @Override
+  protected void finalizeContext(Context context) {
+    context.dispose();
+  }
+
+  @Override
   public CallTarget parse(ParsingRequest request) {
     Source source = request.getSource();
-    if (source.equals(Context.SHUTDOWN_SOURCE)) {
-      return Truffle.getRuntime().createCallTarget(new ShutdownNode(this));
-    } else {
-      RootCallTarget rootCallTarget = parseYona(this, getCurrentContext(), source);
-      return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
-    }
+    RootCallTarget rootCallTarget = parseYona(this, getCurrentContext(), source);
+    return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
   }
 
   private static ExpressionNode parseYonaExpression(YonaLanguage language, Context context, Source source) {
