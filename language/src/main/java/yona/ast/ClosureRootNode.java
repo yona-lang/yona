@@ -13,7 +13,7 @@ import yona.YonaLanguage;
  * builtin functions, the {@link #bodyNode} is a subclass of {@link yona.ast.builtin.BuiltinNode}.
  */
 @NodeInfo(language = "yona", description = "The root of all yona execution trees")
-public class ClosureRootNode extends RootNode {
+public class ClosureRootNode extends YonaRootNode {
   /**
    * The function body that is executed, and specialized during execution.
    */

@@ -1,33 +1,34 @@
 package yona;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
+import yona.ast.YonaRootNode;
 import yona.runtime.Context;
 import yona.runtime.Seq;
 import yona.runtime.Tuple;
 import yona.runtime.Unit;
 
-public class YonaException extends RuntimeException implements TruffleException {
+@ExportLibrary(InteropLibrary.class)
+public class YonaException extends AbstractTruffleException {
   private static final long serialVersionUID = -6799734410727348507L;
-
-  private final Node location;
 
   @TruffleBoundary
   public YonaException(String message, Node location) {
-    super(message);
-    this.location = location;
+    super(message, location);
   }
 
   @TruffleBoundary
   public YonaException(String message, Throwable cause, Node location) {
-    super(message, cause);
-    this.location = location;
+    super(message, cause, UNLIMITED_STACK_TRACE, location);
   }
 
   @TruffleBoundary
@@ -42,18 +43,7 @@ public class YonaException extends RuntimeException implements TruffleException 
 
   @TruffleBoundary
   public YonaException(Throwable cause, Node location) {
-    super(cause);
-    this.location = location;
-  }
-
-  @SuppressWarnings("sync-override")
-  @Override
-  public final Throwable fillInStackTrace() {
-    return this;
-  }
-
-  public Node getLocation() {
-    return location;
+    super(cause.getMessage() != null ? cause.getClass().getName() + ": " + cause.getMessage() : cause.getClass().getName(), cause, UNLIMITED_STACK_TRACE, location);
   }
 
   @TruffleBoundary
@@ -61,9 +51,46 @@ public class YonaException extends RuntimeException implements TruffleException 
     return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), Seq.fromCharSequence(getMessage()), stacktraceToSequence(this));
   }
 
-  @Override
-  public Object getExceptionObject() {
-    return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), getMessage(), stacktraceToSequence(this).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el))));
+  @ExportMessage
+  public boolean isException() {
+    return true;
+  }
+
+  @ExportMessage
+  public boolean hasExceptionCause() {
+    return this.getCause() != null;
+  }
+
+  @ExportMessage
+  public Object getExceptionCause() {
+    return this.getCause();
+  }
+
+
+  @ExportMessage
+  public boolean hasExceptionMessage() {
+    return this.getMessage() != null;
+  }
+
+  @ExportMessage
+  public Object getExceptionMessage() {
+    return this.getMessage();
+  }
+
+  @ExportMessage
+  public RuntimeException throwException() {
+    return this;
+  }
+
+  @ExportMessage
+  public Object getExceptionStackTrace() {
+//    return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), getMessage(), stacktraceToSequence(this).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el))));
+    return stacktraceToSequence(this).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el)));
+  }
+
+  @ExportMessage
+  public boolean hasExceptionStackTrace() {
+    return true;
   }
 
   @TruffleBoundary
@@ -134,23 +161,11 @@ public class YonaException extends RuntimeException implements TruffleException 
     Seq stackTraceSequence = Seq.EMPTY;
 
     for (TruffleStackTraceElement stackTraceElement : TruffleStackTrace.getStackTrace(throwable)) {
-      if (stackTraceElement.getTarget().getRootNode().getQualifiedName().equals("$main")) continue;
+      Tuple tuple = YonaRootNode.translateSTE(stackTraceElement);
 
-      Node location = stackTraceElement.getLocation();
-      if (location != null && location.getSourceSection() != null) {
-        stackTraceSequence = stackTraceSequence.insertLast(new Tuple(
-            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
-            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getQualifiedName()),
-            location.getSourceSection().getStartLine(),
-            location.getSourceSection().getStartColumn()
-        ));
-      } else {
-        stackTraceSequence = stackTraceSequence.insertLast(new Tuple(
-            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getSourceSection().getSource().getName()),
-            Seq.fromCharSequence(stackTraceElement.getTarget().getRootNode().getQualifiedName()),
-            Unit.INSTANCE,
-            Unit.INSTANCE
-        ));
+      if (tuple != null) {
+        if (stackTraceElement.getTarget().getRootNode().getQualifiedName().equals("$main")) continue;
+        stackTraceSequence = stackTraceSequence.insertLast(tuple);
       }
     }
 

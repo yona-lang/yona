@@ -91,6 +91,16 @@ public final class Function implements TruffleObject {
     return true;
   }
 
+  @ExportMessage
+  boolean hasExecutableName() {
+    return true;
+  }
+
+  @ExportMessage
+  String getExecutableName() {
+    return name;
+  }
+
   /**
    * We allow languages to execute this function. We implement the interop execute message that
    * forwards to a function dispatch.

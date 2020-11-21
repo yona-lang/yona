@@ -100,6 +100,7 @@ public class YonaTest {
             assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
           });
 
+          if(baseName.startsWith("DownloadTextAndWriteBinary"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;

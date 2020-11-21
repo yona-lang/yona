@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 VERSION="0.8.1-SNAPSHOT"
-EXPECTED_GRAALVM_VERSION='"20.2.0"'
-TRUFFLE_VERSION="20.2.0"
+EXPECTED_GRAALVM_VERSION='"20.3.0"'
+TRUFFLE_VERSION="20.3.0"
 
 MAIN_CLASS="yona.Launcher"
 SCRIPT_HOME="$(cd "$(dirname "$0")" && pwd -P)"

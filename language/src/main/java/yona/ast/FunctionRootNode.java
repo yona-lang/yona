@@ -2,6 +2,7 @@ package yona.ast;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
@@ -13,11 +14,11 @@ import yona.YonaLanguage;
  * builtin functions, the {@link #bodyNode} is a subclass of {@link yona.ast.builtin.BuiltinNode}.
  */
 @NodeInfo(language = "yona", description = "The root of all yona execution trees")
-public class FunctionRootNode extends RootNode {
+public class FunctionRootNode extends YonaRootNode {
   /**
    * The function body that is executed, and specialized during execution.
    */
-  @Child
+  @Node.Child
   private ExpressionNode bodyNode;
 
   /**
