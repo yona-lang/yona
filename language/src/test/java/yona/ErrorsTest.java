@@ -329,6 +329,18 @@ public class ErrorsTest extends CommonTest {
   }
 
   @Test
+  public void timeoutAsyncInLambdaTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YonaLanguage.ID, "timeout (:millis, 500) (\\ -> sleep (:seconds, 2))");
+      } catch (PolyglotException ex) {
+        assertEquals("Async value timed out", ex.getMessage());
+        throw ex;
+      }
+    });
+  }
+
+  @Test
   public void timeoutAsyncTimeoutTest() {
     assertThrows(PolyglotException.class, () -> {
       try {

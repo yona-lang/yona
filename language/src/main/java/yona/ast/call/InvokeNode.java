@@ -129,20 +129,27 @@ public final class InvokeNode extends ExpressionNode {
       return createPartiallyAppliedClosure(function, frame);
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
-      boolean unwrapPromises = checkArgsForPromises(frame, argumentValues);
+      boolean unwrapPromises = checkArgsForPromises(frame, argumentValues, function.isUnwrapArgumentPromises());
       return dispatchFunction(function, argumentValues, function.isUnwrapArgumentPromises() && unwrapPromises);
     }
   }
 
   @ExplodeLoop
-  private boolean checkArgsForPromises(VirtualFrame frame, Object[] argumentValues) {
+  private boolean checkArgsForPromises(VirtualFrame frame, Object[] argumentValues, boolean isUnwrapArgumentPromises) {
     boolean argsArePromise = false;
     for (int i = 0; i < argumentNodes.length; i++) {
       Object argValue = argumentNodes[i].executeGeneric(frame);
       if (argValue instanceof Promise) {
         argsArePromise = true;
+        argumentValues[i] = argValue;
+      } else if (argValue instanceof Function && !isUnwrapArgumentPromises) {
+        argsArePromise = true;
+        Promise promise = new Promise(library);
+        promise.map((result) -> argValue, this);
+        argumentValues[i] = promise;
+      } else {
+        argumentValues[i] = argValue;
       }
-      argumentValues[i] = argValue;
     }
     return argsArePromise;
   }

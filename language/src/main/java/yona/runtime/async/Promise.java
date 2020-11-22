@@ -41,6 +41,13 @@ public final class Promise implements TruffleObject {
     library = InteropLibrary.getFactory().getUncached();
   }
 
+  @Override
+  public String toString() {
+    return "Promise{" +
+        "value=" + value +
+        '}';
+  }
+
   public void fulfil(Object result, Node node) {
     fulfil(this, result, node).run();
   }

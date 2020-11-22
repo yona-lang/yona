@@ -10,7 +10,7 @@ public class AsyncTest extends CommonTest {
   @Test
   public void simpleAsyncTest() {
     long ret = context.eval(YonaLanguage.ID, "async \\-> 5").asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -20,19 +20,19 @@ public class AsyncTest extends CommonTest {
         "(1, 2) -> 4\n" +
         "_      -> 3\n" +
         "end\n").asLong();
-    assertEquals(4l, ret);
+    assertEquals(4L, ret);
   }
 
   @Test
   public void functionCallWithAsyncArgTest() {
     long ret = context.eval(YonaLanguage.ID, "let fun = \\argone argtwo -> argone + argtwo in fun 1 (async \\-> 2)").asLong();
-    assertEquals(3l, ret);
+    assertEquals(3L, ret);
   }
 
   @Test
   public void functionCallWithMultipleAsyncArgTest() {
     long ret = context.eval(YonaLanguage.ID, "let fun = \\argone argtwo -> argone + argtwo in fun (async \\-> 1) (async \\-> 2)").asLong();
-    assertEquals(3l, ret);
+    assertEquals(3L, ret);
   }
 
   @Test
@@ -74,13 +74,13 @@ public class AsyncTest extends CommonTest {
   @Test
   public void conditionTrueAsyncArgTest() {
     long ret = context.eval(YonaLanguage.ID, "if (async \\-> true) then 1 else 2").asLong();
-    assertEquals(1l, ret);
+    assertEquals(1L, ret);
   }
 
   @Test
   public void conditionFalseAsyncArgTest() {
     long ret = context.eval(YonaLanguage.ID, "if (async \\-> false) then 1 else 2").asLong();
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
@@ -89,7 +89,7 @@ public class AsyncTest extends CommonTest {
         "(1, x) = async \\-> (1, 2)\n" +
         "y      = async \\-> x - 1\n" +
         "in y").asLong();
-    assertEquals(1l, ret);
+    assertEquals(1L, ret);
   }
 
   @Test
@@ -99,7 +99,7 @@ public class AsyncTest extends CommonTest {
         "y = async \\-> 2\n" +
         "z = x + y\n" +
         "in z").asLong();
-    assertEquals(3l, ret);
+    assertEquals(3L, ret);
   }
 
   @Test
@@ -110,7 +110,7 @@ public class AsyncTest extends CommonTest {
         "two = async \\-> 2\n" +
         "one + two\n" +
         "end\n").asLong();
-    assertEquals(3l, ret);
+    assertEquals(3L, ret);
   }
 
   @Test
@@ -131,6 +131,6 @@ public class AsyncTest extends CommonTest {
         "   fun = \\a b -> a + b\n" +
         "   afun = async \\-> fun\n" +
         "in afun 1 2").asLong();
-    assertEquals(3l, ret);
+    assertEquals(3L, ret);
   }
 }
