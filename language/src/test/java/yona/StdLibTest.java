@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
 import java.io.ByteArrayInputStream;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -231,7 +232,7 @@ public class StdLibTest extends CommonTest {
         "    type = Java::type \"java.math.BigInteger\"\n" +
         "    instance = Java::new type [\"-2\"]\n" +
         "in instance::longValue").asLong();
-    assertEquals(-2l, ret);
+    assertEquals(-2L, ret);
   }
 
   @Test
@@ -242,13 +243,13 @@ public class StdLibTest extends CommonTest {
         "    big_three = Java::new type [\"3\"]\n" +
         "    result = big_two::multiply big_three\n" +
         "in result::longValue").asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
   public void javaCallStaticMethodTest() {
     long ret = context.eval(YonaLanguage.ID, "(java\\util\\Collections::singletonList 5)::get (java\\Types::to_int 0)").asLong();
-    assertEquals(5l, ret);
+    assertEquals(5L, ret);
   }
 
   @Test
@@ -260,7 +261,7 @@ public class StdLibTest extends CommonTest {
         "    set_second 6\n" +
         "    list::get <| java\\Types::to_int 0\n" +
         "end").asLong();
-    assertEquals(6l, ret);
+    assertEquals(6L, ret);
   }
 
   @Test
@@ -270,25 +271,25 @@ public class StdLibTest extends CommonTest {
         "    list::add (async \\ -> 5)\n" +
         "    list::size\n" +
         "end").asLong();
-    assertEquals(1l, ret);
+    assertEquals(1L, ret);
   }
 
   @Test
   public void javaCallDictArgTest() {
     long ret = context.eval(YonaLanguage.ID, "yona\\TestUtil::mapSize {:one = 1, :two = 2}").asLong();
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
   public void javaCallSeqArgTest() {
     long ret = context.eval(YonaLanguage.ID, "yona\\TestUtil::arraySize [:one, :two]").asLong();
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
   public void javaCallTupleArgTest() {
     long ret = context.eval(YonaLanguage.ID, "yona\\TestUtil::arraySize (:one, :two)").asLong();
-    assertEquals(2l, ret);
+    assertEquals(2L, ret);
   }
 
   @Test
