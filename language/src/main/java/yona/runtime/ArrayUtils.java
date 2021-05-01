@@ -3,6 +3,8 @@ package yona.runtime;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 
 import java.lang.reflect.Array;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.function.Function;
 
 public final class ArrayUtils {
@@ -40,7 +42,9 @@ public final class ArrayUtils {
   }
 
   @ExplodeLoop
-  public static <T> String[] catenateMany(T[] args, Function<T, String[]> getter) {
+  @SuppressWarnings("unchecked")
+  public static <T> String[] catenateMany(T[] argsRaw, Function<T, String[]> getter) {
+    T[] args = (T[]) Arrays.stream(argsRaw).filter(Objects::nonNull).toArray();
     String[][] identifiers = new String[args.length][];
     int totalLen = 0;
     for (int i = 0; i < args.length; i++) {

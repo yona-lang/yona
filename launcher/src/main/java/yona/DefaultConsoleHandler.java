@@ -14,15 +14,11 @@ public class DefaultConsoleHandler extends ConsoleHandler {
   }
 
   @Override
-  public String readLine(boolean showPrompt) {
-    try {
-      if (prompt != null && showPrompt) {
-        out.print(prompt);
-      }
-      return in.readLine();
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+  public String readLine(boolean showPrompt) throws IOException {
+    if (prompt != null && showPrompt) {
+      out.print(prompt);
     }
+    return in.readLine();
   }
 
   @Override

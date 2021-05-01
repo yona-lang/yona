@@ -118,6 +118,22 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "encode")
+  abstract static class EncodeBuiltin extends BuiltinNode {
+    @Specialization
+    public Object encode(Seq sequence) {
+      return sequence.map(el -> (byte) ((int) el));
+    }
+  }
+
+  @NodeInfo(shortName = "decode")
+  abstract static class DecodeBuiltin extends BuiltinNode {
+    @Specialization
+    public Object decode(Seq sequence) {
+      return sequence.map(el -> (int) ((byte) el));
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
@@ -130,6 +146,8 @@ public final class SeqBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.TakeBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.DropBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.EncodeBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.DecodeBuiltinFactory.getInstance()));
     return builtins;
   }
 }

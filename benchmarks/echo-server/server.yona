@@ -1,0 +1,6 @@
+with socket\Server::channel "127.0.0.1" 5555 as channel
+  (\ ->
+  with daemon socket\Server::accept channel as connection
+    socket\Connection::read_line connection |> Seq::decode |> IO::println |> socket\Connection::write connection
+  end) |> infi
+end

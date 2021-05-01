@@ -3,16 +3,21 @@ package yona.runtime;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.TypesGen;
+import yona.YonaException;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
 
 public class ContextManager<T> extends Tuple {
+  private final Class<T> dataType;
+
   public ContextManager(String contextIdentifier, Function wrapperFunction, T data) {
     super(Seq.fromCharSequence(contextIdentifier), wrapperFunction, data);
+    this.dataType = (Class<T>) data.getClass();
   }
 
   public ContextManager(Seq contextIdentifier, Function wrapperFunction, T data) {
     super(contextIdentifier, wrapperFunction, data);
+    this.dataType = (Class<T>) data.getClass();
   }
 
   public Seq contextIdentifier() {
@@ -23,10 +28,15 @@ public class ContextManager<T> extends Tuple {
     return (Function) items[1];
   }
 
-  public T data() {
-    return (T) items[2];
+  public T getData(Node node) {
+    if (!(dataType.isAssignableFrom(items[2].getClass()))) {
+      throw YonaException.typeError(node, items[2]);
+    } else {
+      return dataType.cast(items[2]);
+    }
   }
 
+  @SuppressWarnings("unchecked")
   public static <T> ContextManager<T> fromItems(Object[] items, Node node) {
     if (items.length != 3) {
       throw invalidContextException(items, null, node);
@@ -50,7 +60,7 @@ public class ContextManager<T> extends Tuple {
 
       return evaluatedTuplePromise.map((items) -> fromItems((Object[]) items, node), node);
     } else {
-      return fromItems((Object[]) tuple.items, node);
+      return fromItems(tuple.items, node);
     }
   }
 

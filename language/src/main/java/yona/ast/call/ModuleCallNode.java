@@ -100,7 +100,7 @@ public final class ModuleCallNode extends ExpressionNode {
         return invokeNode.executeGeneric(frame);
       }
     } else if (maybeModule instanceof NativeObject) {
-      NativeObject nativeObject = (NativeObject) maybeModule;
+      NativeObject<?> nativeObject = (NativeObject<?>) maybeModule;
       Object obj = nativeObject.getValue();
       Method method = lookupAccessibleMethod(obj, obj.getClass());
 
@@ -114,7 +114,7 @@ public final class ModuleCallNode extends ExpressionNode {
         throw new PolyglotException(String.format("Unable to find an accessible method '%s' in object '%s'.", functionName, obj), this);
       }
     } else {
-      throw new YonaException("Unexpected error while invoking a module function: : returned value is not a Yona Module", this);
+      throw new YonaException("Unexpected error while invoking a module function: returned value is not a Yona Module", this);
     }
   }
 

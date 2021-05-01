@@ -8,6 +8,7 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.YonaException;
 import yona.YonaLanguage;
@@ -24,9 +25,9 @@ import yona.runtime.stdlib.PrivateFunction;
 public class STMBuiltinModule implements BuiltinModule {
   private static final String TX_CONTEXT_NAME = "tx";
 
-  protected static final class STMContextManager extends ContextManager<NativeObject> {
+  protected static final class STMContextManager extends NativeObjectContextManager<TransactionalMemory.Transaction> {
     public STMContextManager(TransactionalMemory.Transaction tx, Context context) {
-      super("tx", context.lookupGlobalFunction("STM", "run"), new NativeObject(tx));
+      super("tx", context.lookupGlobalFunction("STM", "run"), tx);
     }
   }
 
@@ -48,19 +49,19 @@ public class STMBuiltinModule implements BuiltinModule {
     }
   }
 
-  private static TransactionalMemory.Transaction lookupTx(Context context) {
-    ContextManager<NativeObject> txNative = (ContextManager<NativeObject>) context.lookupLocalContext(TX_CONTEXT_NAME);
-    return (TransactionalMemory.Transaction) txNative.data().getValue();
+  private static TransactionalMemory.Transaction lookupTx(Context context, Node node) {
+    STMContextManager txNative = (STMContextManager) context.lookupLocalContext(TX_CONTEXT_NAME);
+    return txNative.nativeData(node);
   }
 
   @NodeInfo(shortName = "run")
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(ContextManager contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+    public Object run(STMContextManager contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       Object result;
       while (true) {
-        final TransactionalMemory.Transaction tx = lookupTx(context);
+        final TransactionalMemory.Transaction tx = lookupTx(context, this);
         try {
           result = tryExecuteTransaction(function, tx, dispatch);
           if (!(result instanceof Promise)) {
@@ -152,7 +153,7 @@ public class STMBuiltinModule implements BuiltinModule {
       if (!context.containsLocalContext(TX_CONTEXT_NAME)) {
         return var.read();
       } else {
-        final TransactionalMemory.Transaction tx = lookupTx(context);
+        final TransactionalMemory.Transaction tx = lookupTx(context, this);
         return var.read(tx, this);
       }
     }
@@ -163,7 +164,7 @@ public class STMBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Unit write(TransactionalMemory.Var var, Object value, @CachedContext(YonaLanguage.class) Context context) {
-      final TransactionalMemory.Transaction tx = lookupTx(context);
+      final TransactionalMemory.Transaction tx = lookupTx(context, this);
       if (tx == null) {
         throw new STMException("There is no running STM transaction", this);
       }
@@ -177,7 +178,7 @@ public class STMBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Unit protect(TransactionalMemory.Var var, @CachedContext(YonaLanguage.class) Context context) {
-      final TransactionalMemory.Transaction tx = lookupTx(context);
+      final TransactionalMemory.Transaction tx = lookupTx(context, this);
       if (tx == null) {
         throw new STMException("There is no running STM transaction", this);
       }

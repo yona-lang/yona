@@ -1,16 +1,10 @@
 package yona.runtime.threading;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.Node;
 import yona.runtime.Context;
 import yona.runtime.Dict;
-import yona.runtime.Function;
+import yona.runtime.network.NIOSelectorThread;
 import yona.runtime.async.Promise;
-import yona.runtime.exceptions.UndefinedNameException;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -31,6 +25,7 @@ public final class Threading {
   static final int CONSUME_YIELD_MAX_ATTEMPTS = 10;
   static final int CONSUME_PARK_MAX_ATTEMPTS = 100;
 
+  final NIOSelectorThread NIOSelectorThread;
   final Thread[] threads;
   final Task[] ringBuffer;
   final MultiProducerMultiConsumerCursors ringBufferCursors;
@@ -41,6 +36,7 @@ public final class Threading {
   volatile int waiters = 0;
 
   public Threading(final Context context) {
+    NIOSelectorThread = new NIOSelectorThread(context);
     ringBuffer = new Task[BUFFER_SIZE];
     for (int i = 0; i < ringBuffer.length; i++) {
       ringBuffer[i] = new Task();
@@ -54,9 +50,7 @@ public final class Threading {
         CPU_THREAD_ID.set(CPU_THREAD_ID_COUNTER.incrementAndGet());
         final MultiConsumer.Callback callback = new MultiConsumer.Callback() {
           Promise promise;
-          Function function;
-          InteropLibrary dispatch;
-          Node node;
+          ExecutableFunction function;
           Dict localContexts;
 
           @Override
@@ -64,8 +58,6 @@ public final class Threading {
             final Task task = ringBuffer[ringBufferCursors.index(token)];
             promise = task.promise;
             function = task.function;
-            dispatch = task.dispatch;
-            node = task.node;
             localContexts = task.localContexts;
           }
 
@@ -73,12 +65,10 @@ public final class Threading {
           public void execute() {
             Context.LOCAL_CONTEXTS.set(localContexts);
             try {
-              Threading.execute(promise, function, dispatch, node);
+              Threading.execute(promise, function);
             } finally {
               promise = null;
               function = null;
-              dispatch = null;
-              node = null;
               Context.LOCAL_CONTEXTS.remove();
             }
           }
@@ -119,10 +109,11 @@ public final class Threading {
     for (int i = 0; i < CPU_THREADS; i++) {
       threads[i].start();
     }
+    NIOSelectorThread.start();
   }
 
   @CompilerDirectives.TruffleBoundary
-  public void submit(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
+  public Promise submit(final Promise promise, final ExecutableFunction function) {
     int spins = 0;
     long token;
     while (true) {
@@ -133,8 +124,8 @@ public final class Threading {
           spins++;
           continue;
         }
-        execute(promise, function, dispatch, node);
-        return;
+        execute(promise, function);
+        return promise;
       } else {
         break;
       }
@@ -142,8 +133,6 @@ public final class Threading {
     Task task = ringBuffer[ringBufferCursors.index(token)];
     task.promise = promise;
     task.function = function;
-    task.dispatch = dispatch;
-    task.node = node;
     task.localContexts = Context.LOCAL_CONTEXTS.get();
     ringBufferCursors.release(token, token);
     if (waiters != 0) {
@@ -154,16 +143,12 @@ public final class Threading {
         lock.unlock();
       }
     }
+
+    return promise;
   }
 
-  static void execute(final Promise promise, final Function function, final InteropLibrary dispatch, final Node node) {
-    try {
-      promise.fulfil(dispatch.execute(function), node);
-    } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-      promise.fulfil(UndefinedNameException.undefinedFunction(node, function), node);
-    } catch (Throwable e) {
-      promise.fulfil(e, node);
-    }
+  static void execute(final Promise promise, final ExecutableFunction function) {
+    function.execute(promise);
   }
 
   public void dispose() {
@@ -174,6 +159,12 @@ public final class Threading {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+    }
+    try {
+      NIOSelectorThread.interrupt();
+      NIOSelectorThread.join();
+    } catch (InterruptedException e) {
+      e.printStackTrace();
     }
   }
 }

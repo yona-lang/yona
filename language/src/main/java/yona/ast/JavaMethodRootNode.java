@@ -2,13 +2,10 @@ package yona.ast;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 import yona.TypesGen;
 import yona.YonaException;
@@ -70,7 +67,7 @@ public class JavaMethodRootNode extends YonaRootNode {
     for (int i = 0; i < method.getParameterCount(); i++) {
       Object arg = new ReadArgumentNode(i).executeGeneric(frame);
       if (arg instanceof NativeObject) {
-        arg = ((NativeObject) arg).getValue();
+        arg = ((NativeObject<?>) arg).getValue();
       } else if (arg instanceof Seq) {
         if (((Seq) arg).isString()) {
           arg = ((Seq) arg).asJavaString(this);

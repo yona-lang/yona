@@ -1,0 +1,3 @@
+module string\Regexp exports match as
+    match s r = s
+end

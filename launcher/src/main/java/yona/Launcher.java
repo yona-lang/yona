@@ -38,7 +38,7 @@ public final class Launcher extends AbstractLanguageLauncher {
   private static final String MIME_TYPE = "application/x-yona";
   private static final String PROGRAM_NAME = BASH_LAUNCHER_EXEC_NAME != null ? BASH_LAUNCHER_EXEC_NAME : LANGUAGE_ID;
 
-  private ArrayList<String> programArgs = new ArrayList<>();
+  private List<String> programArgs = new ArrayList<>();
   private String commandString = null;
   private String inputFile = null;
   private VersionAction versionAction = VersionAction.None;
@@ -110,9 +110,9 @@ public final class Launcher extends AbstractLanguageLauncher {
 
   @Override
   protected List<String> preprocessArguments(List<String> givenArgs, Map<String, String> polyglotOptions) {
-    ArrayList<String> unrecognized = new ArrayList<>();
+    List<String> unrecognized = new ArrayList<>();
     List<String> defaultEnvironmentArgs = getDefaultEnvironmentArgs();
-    ArrayList<String> inputArgs = new ArrayList<>(defaultEnvironmentArgs);
+    List<String> inputArgs = new ArrayList<>(defaultEnvironmentArgs);
     inputArgs.addAll(givenArgs);
     givenArguments = new ArrayList<>(inputArgs);
     List<String> subprocessArgs = new ArrayList<>();
@@ -175,6 +175,9 @@ public final class Launcher extends AbstractLanguageLauncher {
       subExec(inputArgs, subprocessArgs);
     }
 
+    programArgs.addAll(unrecognized.stream().filter(arg -> !arg.startsWith("-")).toList());
+    unrecognized = unrecognized.stream().filter(arg -> arg.startsWith("-")).toList();
+
     return unrecognized;
   }
 
@@ -185,11 +188,12 @@ public final class Launcher extends AbstractLanguageLauncher {
     }
 
     int rc = 1;
-    try (Context context = contextBuilder.build()) {
+    try (Context context = contextBuilder
+        .arguments(getLanguageId(), programArgs.toArray(String[]::new))
+        .in(ConsoleHandler.createInputStream())
+        .build()) {
       ConsoleHandler consoleHandler = createConsoleHandler(System.in, System.out, context);
-      contextBuilder.arguments(getLanguageId(), programArgs.toArray(new String[0])).in(consoleHandler.createInputStream());
-//    contextBuilder.option("yona.TerminalWidth", Integer.toString(consoleHandler.getTerminalWidth()));
-//    contextBuilder.option("yona.TerminalHeight", Integer.toString(consoleHandler.getTerminalHeight()));
+      ConsoleHandler.INSTANCE = consoleHandler;
 
       runVersionAction(versionAction, context.getEngine());
       consoleHandler.setContext(context);
@@ -262,11 +266,6 @@ public final class Launcher extends AbstractLanguageLauncher {
     return sb.toString();
   }
 
-  private static void printShortHelp() {
-    System.out.println("usage: " + PROGRAM_NAME + " [option] ... [-c cmd | -m mod | file | -] [arg] ...\n" +
-        "Try `" + PROGRAM_NAME + " -h' for more information.");
-  }
-
   private void evalNonInteractive(Context context) throws IOException {
     Source src;
     if (commandString != null) {
@@ -279,8 +278,8 @@ public final class Launcher extends AbstractLanguageLauncher {
     context.eval(src);
   }
 
-  static final String NORMAL_PROMPT = ">>> ";
-  static final String CONTINUE_PROMPT = "... ";
+  static final String NORMAL_PROMPT = ConsoleColor.Blink.colorize(">>> ");
+  static final String CONTINUE_PROMPT = ConsoleColor.Normal.colorize("... ");
 
   /**
    * The read-eval-print loop, which can take input from a console, command line expression or a
@@ -293,7 +292,7 @@ public final class Launcher extends AbstractLanguageLauncher {
    * exiting. So,in either case, we never return.
    */
   public int readEvalPrint(Context context, ConsoleHandler consoleHandler) {
-    System.out.println("Welcome to Yona REPL. Type in an expression and press enter to execute or Ctrl-D to exit.");
+    System.out.println(ConsoleColor.BgRed.and(ConsoleColor.HighIntensity.and(ConsoleColor.White)).colorize("Welcome to Yona REPL. Type in an expression and press enter to execute or Ctrl-D to exit."));
     System.out.println();
     int lastStatus = 0;
     try {
@@ -340,7 +339,7 @@ public final class Launcher extends AbstractLanguageLauncher {
                 lastStatus = 1;
                 System.out.println(e.getMessage());
               } else if (e.isInternalError()) {
-                System.err.println("An internal error occurred:");
+                System.err.println(ConsoleColor.Red.colorize("An internal error occurred:"));
                 e.printStackTrace();
 
                 // we continue the repl even though the system may be broken
@@ -365,6 +364,9 @@ public final class Launcher extends AbstractLanguageLauncher {
           // interrupted by ctrl-c
         }
       }
+    } catch (IOException e) {
+      e.printStackTrace();
+      return 1;
     } catch (ExitException e) {
       return e.code;
     } finally {
@@ -597,6 +599,8 @@ public final class Launcher extends AbstractLanguageLauncher {
   }
 
   private static void printStackTrace(PolyglotException e) {
+    System.err.println(ConsoleColor.Red.colorize(e.getMessage()));
+
     ArrayList<String> stack = new ArrayList<>();
     for (PolyglotException.StackFrame frame : e.getPolyglotStackTrace()) {
       if (frame.isGuestFrame()) {
@@ -621,18 +625,7 @@ public final class Launcher extends AbstractLanguageLauncher {
         }
       }
     }
-    System.err.println("Traceback (most recent call last):");
-
-    Object[] yonaExceptionTuple = new Object[(int) e.getGuestObject().getArraySize()];
-    for (int i = 0; i < e.getGuestObject().getArraySize(); i++) {
-      yonaExceptionTuple[i] = e.getGuestObject().getArrayElement(i).as(Object.class);
-    }
-
-    System.err.println(yonaExceptionTuple[0] + ": " + yonaExceptionTuple[1]);
-
-    List<?> stackTrace = (List<?>) yonaExceptionTuple[2];
-    for (Object line : stackTrace) {
-      System.err.println(line);
-    }
+    System.err.println(ConsoleColor.White.colorize("Traceback (most recent call last):"));
+    stack.forEach(System.err::println);
   }
 }

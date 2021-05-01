@@ -1,5 +1,6 @@
 package yona.runtime.stm;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -19,6 +20,7 @@ public class LinearProbingHashSetsTest {
 
     @ParameterizedTest
     @ValueSource(longs = {6L, 28L, 496L, 8128L, 33550336L, 8589869056L, 137438691328L, 2305843008139952128L})
+    @Tag("slow")
     public void testAddLookup(final long seed) {
         final Set<Long> src = new HashSet<>();
         Long[] set = new Long[1];

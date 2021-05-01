@@ -9,7 +9,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 import yona.ast.YonaRootNode;
 import yona.runtime.Context;
@@ -114,6 +113,7 @@ public class YonaException extends AbstractTruffleException {
    */
   @TruffleBoundary
   public static YonaException typeError(Node operation, Object... values) {
+    InteropLibrary interopLibrary = InteropLibrary.getFactory().getUncached();
     StringBuilder result = new StringBuilder();
     result.append("Type error");
 
@@ -139,16 +139,16 @@ public class YonaException extends AbstractTruffleException {
       Object value = values[i];
       result.append(sep);
       sep = ", ";
-      if (value == null || InteropLibrary.getFactory().getUncached().isNull(value)) {
+      if (value == null || interopLibrary.isNull(value)) {
         result.append(YonaLanguage.toString(value));
       } else {
         result.append(YonaLanguage.getMetaObject(value));
         result.append(" ");
-        if (InteropLibrary.getFactory().getUncached().isString(value)) {
+        if (interopLibrary.isString(value)) {
           result.append("\"");
         }
         result.append(YonaLanguage.toString(value));
-        if (InteropLibrary.getFactory().getUncached().isString(value)) {
+        if (interopLibrary.isString(value)) {
           result.append("\"");
         }
       }

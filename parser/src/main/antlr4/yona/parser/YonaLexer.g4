@@ -43,6 +43,7 @@ KW_CATCH : 'catch' ;
 KW_RAISE : 'raise' ;
 KW_RECORD : 'record' ;
 KW_WITH : 'with' ;
+KW_DAEMON : 'daemon' ;
 
 BRACKET_L : '[' {openLevel++;} ;
 BRACKET_R : ']' {openLevel--;};

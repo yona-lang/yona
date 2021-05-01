@@ -30,12 +30,14 @@ public final class WithExpression extends ExpressionNode {
   private InteropLibrary library;
   @Child
   public ExpressionNode resultNode;
+  private final boolean isDaemon;
 
-  public WithExpression(String name, ExpressionNode contextExpression, FunctionNode bodyExpression) {
+  public WithExpression(String name, ExpressionNode contextExpression, FunctionNode bodyExpression, boolean isDaemon) {
     this.name = name;
     this.contextExpression = contextExpression;
     this.bodyExpression = bodyExpression;
     this.library = InteropLibrary.getFactory().createDispatched(3);
+    this.isDaemon = isDaemon;
 
     if (this.name != null) {
       resultNode = new LetNode(new NameAliasNode[]{new NameAliasNode(name, new ContextLookupNode(name))}, bodyExpression);
@@ -70,21 +72,19 @@ public final class WithExpression extends ExpressionNode {
   private Object executeResultNode(final VirtualFrame frame, final String name, final Context context, final Function wrapFunction, final Object contextValue) {
     boolean shouldCleanup = true;
     try {
-      ContextManager<?> contextManager = new ContextManager<>(name, wrapFunction, contextValue);
+      ContextManager<Object> contextManager = new ContextManager<>(name, wrapFunction, contextValue);
       context.putLocalContext(name, contextManager);
       // Execute the body. The result should be a function, or a promise with a function. This function is then passed as an argument to the wrapping function from the ctx manager.
       Object resultValue = resultNode.executeGeneric(frame);
 
-      if (resultValue instanceof Promise) {
+      if (resultValue instanceof Promise resultPromise) {
         shouldCleanup = false;
-        Promise resultPromise = (Promise) resultValue;
 
-        return resultPromise.map(value -> {
+        Object mappedResult = resultPromise.map(value -> {
           boolean shouldCleanupInPromise = true;
           try {
             Object result = library.execute(wrapFunction, contextManager, TypesGen.expectFunction(value));
-            if (result instanceof Promise) {
-              Promise finalResultPromise = (Promise) result;
+            if (result instanceof Promise finalResultPromise) {
               shouldCleanupInPromise = false;
               return finalResultPromise.map(finalResult -> {
                 try {
@@ -113,13 +113,17 @@ public final class WithExpression extends ExpressionNode {
           context.removeLocalContext(name);
           return exception;
         }, this);
+        if (isDaemon) {
+          return Unit.INSTANCE;
+        } else {
+          return mappedResult;
+        }
       } else {
         try {
           Object result = library.execute(wrapFunction, contextManager, TypesGen.expectFunction(resultValue));
-          if (result instanceof Promise) {
+          if (result instanceof Promise resultPromise) {
             shouldCleanup = false;
-            Promise resultPromise = (Promise) result;
-            return resultPromise.map(finalResult -> {
+            Promise mappedResult = resultPromise.map(finalResult -> {
               try {
                 return finalResult;
               } finally {
@@ -132,8 +136,17 @@ public final class WithExpression extends ExpressionNode {
                 context.removeLocalContext(name);
               }
             }, this);
+            if (isDaemon) {
+              return Unit.INSTANCE;
+            } else {
+              return mappedResult;
+            }
           } else {
-            return result;
+            if (isDaemon) {
+              return Unit.INSTANCE;
+            } else {
+              return result;
+            }
           }
         } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException | UnexpectedResultException e) {
           throw new YonaException(e, this);
@@ -149,14 +162,12 @@ public final class WithExpression extends ExpressionNode {
   }
 
   private Object executeBodyWithoutIdentifierContext(final VirtualFrame frame, final Object contextValue) {
-    if (contextValue instanceof ContextManager) {
-      ContextManager<?> contextManager = (ContextManager<?>) contextValue;
-      return executeBodyWithIdentifier(frame, name != null ? name : contextManager.contextIdentifier().asJavaString(this), contextManager.wrapperFunction(), contextManager.data());
+    if (contextValue instanceof ContextManager<?> contextManager) {
+      return executeBodyWithIdentifier(frame, name != null ? name : contextManager.contextIdentifier().asJavaString(this), contextManager.wrapperFunction(), contextManager.getData(this));
     } else if (contextValue instanceof Tuple) {
       Object contextValueObj = ContextManager.ensureValid((Tuple) contextValue, this);
       return executeBodyWithoutIdentifierContext(frame, contextValueObj);
-    } else if (contextValue instanceof Promise) {
-      Promise contextValuePromise = (Promise) contextValue;
+    } else if (contextValue instanceof Promise contextValuePromise) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       MaterializedFrame materializedFrame = frame.materialize();
       return contextValuePromise.map((result) -> executeBodyWithoutIdentifierContext(materializedFrame, result), this);

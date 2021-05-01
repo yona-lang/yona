@@ -35,12 +35,12 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   protected static final class HttpSessionTuple extends Tuple {
     public HttpSessionTuple(HttpClient client, Set additionalOptions) {
       this.items = new Object[]{
-          new NativeObject(client), additionalOptions
+          new NativeObject<>(client), additionalOptions
       };
     }
 
-    public HttpClient httpClient() {
-      return (HttpClient) ((NativeObject) items[0]).getValue();
+    public HttpClient httpClient(Node node) {
+      return ((NativeObject<HttpClient>) items[0]).getValue();
     }
 
     public Set additionalOptions() {
@@ -195,7 +195,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       Promise promise = new Promise(dispatch);
       context.ioExecutor.submit(() -> {
         try {
-          HttpResponse<?> response = sessionTuple.httpClient().send(request, bodyHandlerForHttpSession(sessionTuple, context));
+          HttpResponse<?> response = sessionTuple.httpClient(this).send(request, bodyHandlerForHttpSession(sessionTuple, context));
           promise.fulfil(responseToTuple(sessionTuple, response, context), this);
         } catch (Exception e) {
           promise.fulfil(e, this);

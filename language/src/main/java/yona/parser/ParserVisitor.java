@@ -24,10 +24,10 @@ import java.util.*;
 import java.util.function.BiFunction;
 
 public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
-  private YonaLanguage language;
-  private Source source;
+  private final YonaLanguage language;
+  private final Source source;
   private int lambdaCount = 0;
-  private Stack<FQNNode> moduleStack;
+  private final Stack<FQNNode> moduleStack;
   private final Context context;
 
   public ParserVisitor(YonaLanguage language, Context context, Source source) {
@@ -98,18 +98,15 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     ExpressionNode left = newUnboxNode(ctx.left);
     ExpressionNode right = newUnboxNode(ctx.right);
 
-    switch (ctx.op.getText()) {
-      case "+":
-        return withSourceSection(ctx, newBinaryOpNode(PlusNodeGen::create, left, right));
-      case "-":
-        return withSourceSection(ctx, newBinaryOpNode(MinusNodeGen::create, left, right));
-      default:
-        throw new ParseError(source,
-            ctx.op.getLine(),
-            ctx.op.getCharPositionInLine(),
-            ctx.op.getText().length(),
-            "Binary operation '" + ctx.op.getText() + "' not supported");
-    }
+    return switch (ctx.op.getText()) {
+      case "+" -> withSourceSection(ctx, newBinaryOpNode(PlusNodeGen::create, left, right));
+      case "-" -> withSourceSection(ctx, newBinaryOpNode(MinusNodeGen::create, left, right));
+      default -> throw new ParseError(source,
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '" + ctx.op.getText() + "' not supported");
+    };
   }
 
   @Override
@@ -117,20 +114,16 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     ExpressionNode left = newUnboxNode(ctx.left);
     ExpressionNode right = newUnboxNode(ctx.right);
 
-    switch (ctx.op.getText()) {
-      case "<<":
-        return withSourceSection(ctx, newBinaryOpNode(LeftShiftNodeGen::create, left, right));
-      case ">>":
-        return withSourceSection(ctx, newBinaryOpNode(RightShiftNodeGen::create, left, right));
-      case ">>>":
-        return withSourceSection(ctx, newBinaryOpNode(ZerofillRightShiftNodeGen::create, left, right));
-      default:
-        throw new ParseError(source,
-            ctx.op.getLine(),
-            ctx.op.getCharPositionInLine(),
-            ctx.op.getText().length(),
-            "Binary operation '" + ctx.op.getText() + "' not supported");
-    }
+    return switch (ctx.op.getText()) {
+      case "<<" -> withSourceSection(ctx, newBinaryOpNode(LeftShiftNodeGen::create, left, right));
+      case ">>" -> withSourceSection(ctx, newBinaryOpNode(RightShiftNodeGen::create, left, right));
+      case ">>>" -> withSourceSection(ctx, newBinaryOpNode(ZerofillRightShiftNodeGen::create, left, right));
+      default -> throw new ParseError(source,
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '" + ctx.op.getText() + "' not supported");
+    };
   }
 
   @Override
@@ -138,22 +131,17 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     ExpressionNode left = newUnboxNode(ctx.left);
     ExpressionNode right = newUnboxNode(ctx.right);
 
-    switch (ctx.op.getText()) {
-      case "**":
-        return withSourceSection(ctx, newBinaryOpNode(PowerNodeGen::create, left, right));
-      case "*":
-        return withSourceSection(ctx, newBinaryOpNode(MultiplyNodeGen::create, left, right));
-      case "/":
-        return withSourceSection(ctx, newBinaryOpNode(DivideNodeGen::create, left, right));
-      case "%":
-        return withSourceSection(ctx, newBinaryOpNode(ModuloNodeGen::create, left, right));
-      default:
-        throw new ParseError(source,
-            ctx.op.getLine(),
-            ctx.op.getCharPositionInLine(),
-            ctx.op.getText().length(),
-            "Binary operation '" + ctx.op.getText() + "' not supported");
-    }
+    return switch (ctx.op.getText()) {
+      case "**" -> withSourceSection(ctx, newBinaryOpNode(PowerNodeGen::create, left, right));
+      case "*" -> withSourceSection(ctx, newBinaryOpNode(MultiplyNodeGen::create, left, right));
+      case "/" -> withSourceSection(ctx, newBinaryOpNode(DivideNodeGen::create, left, right));
+      case "%" -> withSourceSection(ctx, newBinaryOpNode(ModuloNodeGen::create, left, right));
+      default -> throw new ParseError(source,
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '" + ctx.op.getText() + "' not supported");
+    };
   }
 
   @Override
@@ -161,26 +149,19 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     ExpressionNode left = newUnboxNode(ctx.left);
     ExpressionNode right = newUnboxNode(ctx.right);
 
-    switch (ctx.op.getText()) {
-      case "==":
-        return withSourceSection(ctx, newBinaryOpNode(EqualsNodeGen::create, left, right));
-      case "!=":
-        return withSourceSection(ctx, newBinaryOpNode(NotEqualsNodeGen::create, left, right));
-      case "<=":
-        return withSourceSection(ctx, newBinaryOpNode(LowerThanOrEqualsNodeGen::create, left, right));
-      case "<":
-        return withSourceSection(ctx, newBinaryOpNode(LowerThanNodeGen::create, left, right));
-      case ">=":
-        return withSourceSection(ctx, newBinaryOpNode(GreaterThanOrEqualsNodeGen::create, left, right));
-      case ">":
-        return withSourceSection(ctx, newBinaryOpNode(GreaterThanNodeGen::create, left, right));
-      default:
-        throw new ParseError(source,
-            ctx.op.getLine(),
-            ctx.op.getCharPositionInLine(),
-            ctx.op.getText().length(),
-            "Binary operation '" + ctx.op.getText() + "' not supported");
-    }
+    return switch (ctx.op.getText()) {
+      case "==" -> withSourceSection(ctx, newBinaryOpNode(EqualsNodeGen::create, left, right));
+      case "!=" -> withSourceSection(ctx, newBinaryOpNode(NotEqualsNodeGen::create, left, right));
+      case "<=" -> withSourceSection(ctx, newBinaryOpNode(LowerThanOrEqualsNodeGen::create, left, right));
+      case "<" -> withSourceSection(ctx, newBinaryOpNode(LowerThanNodeGen::create, left, right));
+      case ">=" -> withSourceSection(ctx, newBinaryOpNode(GreaterThanOrEqualsNodeGen::create, left, right));
+      case ">" -> withSourceSection(ctx, newBinaryOpNode(GreaterThanNodeGen::create, left, right));
+      default -> throw new ParseError(source,
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '" + ctx.op.getText() + "' not supported");
+    };
   }
 
   @Override
@@ -708,7 +689,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
 
   @Override
   public TupleMatchNode visitTuplePattern(YonaParser.TuplePatternContext ctx) {
-    ExpressionNode expressions[] = new ExpressionNode[ctx.pattern().size()];
+    ExpressionNode[] expressions = new ExpressionNode[ctx.pattern().size()];
 
     for (int i = 0; i < ctx.pattern().size(); i++) {
       expressions[i] = ctx.pattern(i).accept(this);
@@ -897,7 +878,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
 
   @Override
   public TupleMatchNode visitTripplePattern(YonaParser.TripplePatternContext ctx) {
-    ExpressionNode expressions[] = new ExpressionNode[ctx.pattern().size()];
+    ExpressionNode[] expressions = new ExpressionNode[ctx.pattern().size()];
 
     for (int i = 0; i < ctx.pattern().size(); i++) {
       expressions[i] = ctx.pattern(i).accept(this);
@@ -1056,7 +1037,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     }
     YonaParser.ExpressionContext bodyCtx = ctx.withExpr().body;
     FunctionNode bodyNode = withSourceSection(bodyCtx, new FunctionNode(language, sourceSectionForRule(bodyCtx), currentModuleName(), nextLambdaName(), 0, context.globalFrameDescriptor, bodyCtx.accept(this)));
-    return withSourceSection(ctx, new WithExpression(name, ctx.withExpr().context.accept(this), bodyNode));
+    return withSourceSection(ctx, new WithExpression(name, ctx.withExpr().context.accept(this), bodyNode, ctx.withExpr().KW_DAEMON() != null));
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {

@@ -1,0 +1,7 @@
+module IO exports println as
+    println s = let
+        res = print "{s}{System::newline}"
+        ()  = flush
+    in
+        res
+end

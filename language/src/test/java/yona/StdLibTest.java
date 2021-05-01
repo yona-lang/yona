@@ -122,28 +122,31 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void systemCommandTest() {
     Value tuple = context.eval(YonaLanguage.ID, "System::run [\"echo\", \"ahoj\"]");
     assertTrue(tuple.hasArrayElements());
 
     Object[] array = tuple.as(Object[].class);
     assertEquals(0L, array[0]);
-    assertEquals("ahoj", ((List) array[1]).get(0));
+    assertEquals("ahoj", ((List<String>) array[1]).get(0));
     assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void systemAsyncCommandTest() {
     Value tuple = context.eval(YonaLanguage.ID, "System::run [async \\->\"echo\", \"ahoj\"]");
     assertTrue(tuple.hasArrayElements());
 
     Object[] array = tuple.as(Object[].class);
     assertEquals(0L, array[0]);
-    assertEquals("ahoj", ((List) array[1]).get(0));
+    assertEquals("ahoj", ((List<String>) array[1]).get(0));
     assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void systemPipelineCommandTest() {
     Value tuple = context.eval(YonaLanguage.ID, "System::pipeline [\n" +
         "[\"echo\", \"hello\"],\n" +
@@ -153,11 +156,12 @@ public class StdLibTest extends CommonTest {
 
     Object[] array = tuple.as(Object[].class);
     assertEquals(0L, array[0]);
-    assertEquals("olleh", ((List) array[1]).get(0));
+    assertEquals("olleh", ((List<String>) array[1]).get(0));
     assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void systemPipelineAsyncCommandTest() {
     Value tuple = context.eval(YonaLanguage.ID, "System::pipeline [\n" +
         "[\"echo\", \"hello\"],\n" +
@@ -167,7 +171,7 @@ public class StdLibTest extends CommonTest {
 
     Object[] array = tuple.as(Object[].class);
     assertEquals(0L, array[0]);
-    assertEquals("olleh", ((List) array[1]).get(0));
+    assertEquals("olleh", ((List<String>) array[1]).get(0));
     assertTrue(((String) array[2]).isEmpty()); // empty Seq will always evaluate isString to 0 and then polyglot will return empty string (even though technically it should be an empty Seq of Seqs(strings, lines))
   }
 
@@ -691,5 +695,11 @@ public class StdLibTest extends CommonTest {
         "funs = Reflect::functions mod\n" +
         "in (\"priv\" in funs)").asBoolean();
     assertFalse(ret);
+  }
+
+  @Test
+  public void ordTest() {
+    byte ret = context.eval(YonaLanguage.ID, "ord 'x'").asByte();
+    assertEquals((byte) 120, ret);
   }
 }

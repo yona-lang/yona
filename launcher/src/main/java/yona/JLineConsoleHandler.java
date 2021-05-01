@@ -3,6 +3,7 @@ package yona;
 import org.jline.builtins.Nano;
 import org.jline.reader.*;
 import org.jline.reader.impl.DefaultHighlighter;
+import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedString;
 
@@ -23,12 +24,15 @@ public class JLineConsoleHandler extends ConsoleHandler {
 
   public JLineConsoleHandler(Path nanorcPath, InputStream inStream, OutputStream outStream, Function<String, Collection<Candidate>> completer) {
     try {
+      DefaultParser parser = new DefaultParser();
+      parser.setEscapeChars(null);
       Nano.SyntaxHighlighter highlighter = Nano.SyntaxHighlighter.build(nanorcPath.toUri().toURL().toString());
       lineReader = LineReaderBuilder.builder()
           .terminal(TerminalBuilder.builder().streams(inStream, outStream).jna(true).system(true).build())
           .variable(LineReader.HISTORY_FILE, HISTORY_FILE)
           .variable(LineReader.INDENTATION, true)
           .variable(LineReader.COMMENT_BEGIN, "#")
+          .parser(parser)
           .completer((reader, line, candidates) -> candidates.addAll(completer.apply(line.line())))
           .highlighter(new DefaultHighlighter() {
             @Override
@@ -60,13 +64,11 @@ public class JLineConsoleHandler extends ConsoleHandler {
   }
 
   @Override
-  public String readLine(boolean showPrompt) {
+  public String readLine(boolean showPrompt) throws IOException {
     try {
       return lineReader.readLine(showPrompt ? prompt : null);
     } catch (UserInterruptException | EndOfFileException e) {
       return null;
-    } catch (Exception ex) {
-      throw new RuntimeException(ex);
     }
   }
 

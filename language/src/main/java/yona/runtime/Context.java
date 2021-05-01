@@ -16,6 +16,9 @@ import yona.ast.FunctionRootNode;
 import yona.ast.JavaMethodRootNode;
 import yona.ast.builtin.*;
 import yona.ast.builtin.modules.*;
+import yona.ast.builtin.modules.socket.SocketClientBuiltinModule;
+import yona.ast.builtin.modules.socket.SocketConnectionBuiltinModule;
+import yona.ast.builtin.modules.socket.SocketServerBuiltinModule;
 import yona.ast.call.BuiltinCallNode;
 import yona.ast.call.InvokeNode;
 import yona.ast.controlflow.YonaBlockNode;
@@ -35,6 +38,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.nio.channels.Selector;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -47,7 +52,7 @@ import java.util.concurrent.Executors;
 public final class Context {
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
-//  private TruffleLogger LOGGER;
+  //  private TruffleLogger LOGGER;
   public static final String YONA_PATH = "YONA_PATH";
 
   /**
@@ -64,7 +69,7 @@ public final class Context {
   public final BuiltinModules builtinModules;
   private Dict symbols = Dict.empty(Murmur3.INSTANCE, 0L);
   private Dict moduleCache = Dict.empty(Murmur3.INSTANCE, 0L);
-  public final Threading threading;
+  public Threading threading;
   public ExecutorService ioExecutor;
   public Dict globals = Dict.empty(Murmur3.INSTANCE, 0L);
   public final FrameDescriptor globalFrameDescriptor;
@@ -73,16 +78,16 @@ public final class Context {
   private final Path languageHome;
   public static final ThreadLocal<Dict> LOCAL_CONTEXTS = ThreadLocal.withInitial(Dict::empty);
   private final boolean printAllResults;
+  public Selector socketSelector;
 
   public Context(final YonaLanguage language, final TruffleLanguage.Env env, final Path languageHomePath, final Path stdlibHomePath) {
     this.env = env;
     this.input = new BufferedReader(new InputStreamReader(env.in()));
-    this.output = new PrintWriter(env.out(), true);
+    this.output = new PrintWriter(env.out(), true, StandardCharsets.UTF_8);
     this.language = language;
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
     this.builtinModules = new BuiltinModules();
-    this.threading = new Threading(this);
     this.globalFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
     this.globalFrame = this.initGlobalFrame();
     this.languageHome = languageHomePath;
@@ -109,7 +114,11 @@ public final class Context {
     }
 
 //    LOGGER.fine("Initializing threading");
+
+    this.socketSelector = Selector.open();
+
     this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yona-io")));
+    this.threading = new Threading(this);
     threading.initialize();
 
     installBuiltins();
@@ -136,6 +145,10 @@ public final class Context {
     builtins.register(new ExportedFunction(ToIntegerBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(EvalBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(NeverBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(InfiBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(TimesBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(DropBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(OrdBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(TimeoutBuiltinFactory.getInstance()) {
       @Override
       public boolean unwrapArgumentPromises() {
@@ -163,6 +176,9 @@ public final class Context {
     builtinModules.register(new LocalContextBuiltinModule());
     builtinModules.register(new RegexpBuiltinModule());
     builtinModules.register(new ReflectionBuiltinModule());
+    builtinModules.register(new SocketServerBuiltinModule());
+    builtinModules.register(new SocketClientBuiltinModule());
+    builtinModules.register(new SocketConnectionBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {
@@ -229,9 +245,9 @@ public final class Context {
 
         @Override
         public FileVisitResult visitFile(TruffleFile file, BasicFileAttributes attrs) {
-          String relativizedPath = stdlibHome.toUri().relativize(file.toUri()).getPath();
-          if (relativizedPath.endsWith("." + YonaLanguage.ID)) {
-            String moduleFQN = relativizedPath.substring(0, relativizedPath.lastIndexOf(".")).replaceAll("/", "\\\\");
+          String relativePath = stdlibHome.toUri().relativize(file.toUri()).getPath();
+          if (relativePath.endsWith("." + YonaLanguage.ID)) {
+            String moduleFQN = relativePath.substring(0, relativePath.lastIndexOf(".")).replaceAll("/", "\\\\");
 //            LOGGER.config("Loading stdlib module: " + moduleFQN);
             try {
               YonaModule module = loadStdModule(file, moduleFQN);
@@ -486,6 +502,11 @@ public final class Context {
   @CompilerDirectives.TruffleBoundary
   public void dispose() {
 //    LOGGER.fine("Threading shutting down");
+    try {
+      socketSelector.close();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
     threading.dispose();
     ioExecutor.shutdown();
     assert ioExecutor.shutdownNow().isEmpty();

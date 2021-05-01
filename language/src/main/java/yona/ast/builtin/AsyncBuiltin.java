@@ -11,6 +11,7 @@ import yona.runtime.Context;
 import yona.runtime.Function;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
+import yona.runtime.threading.ExecutableFunction;
 
 @NodeInfo(shortName = "async")
 public abstract class AsyncBuiltin extends BuiltinNode {
@@ -20,8 +21,6 @@ public abstract class AsyncBuiltin extends BuiltinNode {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new BadArgException("async function accepts only functions with zero arguments. Function " + function + " expects " + function.getCardinality() + "arguments", this);
     }
-    Promise promise = new Promise();
-    context.threading.submit(promise, function, dispatch, this);
-    return promise;
+    return context.threading.submit(new Promise(dispatch), new ExecutableFunction.YonaExecutableFunction(function, dispatch, this));
   }
 }

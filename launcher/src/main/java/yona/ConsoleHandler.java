@@ -11,22 +11,23 @@ import java.nio.charset.StandardCharsets;
  * implementations for different contexts.
  */
 public abstract class ConsoleHandler {
+  public static ConsoleHandler INSTANCE;
 
   /**
    * Read a line of input, newline is <b>NOT</b> included in result.
    */
-  public final String readLine() {
+  public final String readLine() throws IOException {
     return readLine(true);
   }
 
-  public abstract String readLine(boolean prompt);
+  public abstract String readLine(boolean prompt) throws IOException;
 
-  public abstract void setPrompt(String prompt);
+  public abstract void setPrompt(String prompt) throws IOException;
 
   public void setContext(@SuppressWarnings("unused") Context context) {
   }
 
-  public InputStream createInputStream() {
+  public final static InputStream createInputStream() {
     return new InputStream() {
       byte[] buffer = null;
       int pos = 0;
@@ -38,7 +39,7 @@ public abstract class ConsoleHandler {
           return -1;
         } else if (buffer == null) {
           assert pos == 0;
-          String line = readLine(false);
+          String line = INSTANCE.readLine(false);
           if (line == null) {
             return -1;
           }
@@ -63,5 +64,6 @@ public abstract class ConsoleHandler {
     return 25;
   }
 
-  public void saveHistory() {}
+  public void saveHistory() {
+  }
 }

@@ -1,3 +1,0 @@
-module string\Regex exports match as
-    match s r = s
-end

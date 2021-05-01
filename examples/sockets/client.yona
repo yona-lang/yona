@@ -1,0 +1,18 @@
+# Simple Echo Client
+
+let
+    addr = "127.0.0.1"
+    port = 5555
+
+    keep_reading = \b -> if b == (ord 'o') then false else true  # end on 'o'
+in
+with socket\Client::connect addr port as connection
+    do
+        _prog_name -| msg -| _ = System::args
+        socket\Connection::read_line connection
+        IO::println "<- {msg}"
+        socket\Connection::write connection msg
+        IO::print "-> "
+        socket\Connection::read_until connection keep_reading |> Seq::decode |> IO::println
+    end
+end

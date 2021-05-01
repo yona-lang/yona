@@ -197,6 +197,15 @@ public final class SystemBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "newline")
+  abstract static class NewLineBuiltin extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Seq newline() {
+      return Seq.fromCharSequence(System.lineSeparator());
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
@@ -205,6 +214,7 @@ public final class SystemBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PidBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetArgsBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.LanguageHomeBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.NewLineBuiltinFactory.getInstance()));
     return builtins;
   }
 }

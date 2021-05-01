@@ -197,7 +197,7 @@ catchPatternExpressionWithGuard : NEWLINE? VLINE guard=expression OP_RIGHT_ARROW
 
 raiseExpr : KW_RAISE symbol stringLiteral ;
 
-withExpr : KW_WITH context=expression (KW_AS name)? NEWLINE? body=expression NEWLINE? KW_END ;
+withExpr : KW_WITH KW_DAEMON? context=expression (KW_AS name)? NEWLINE? body=expression NEWLINE? KW_END ;
 
 generatorExpr : sequenceGeneratorExpr | setGeneratorExpr | dictGeneratorExpr ;
 sequenceGeneratorExpr : BRACKET_L reducer=expression VLINE collectionExtractor OP_LEFT_ARROW stepExpression=expression NEWLINE? (KW_IF condition=expression)? BRACKET_R ;

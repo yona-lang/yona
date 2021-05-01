@@ -4,6 +4,7 @@ import com.oracle.truffle.api.nodes.Node;
 import yona.ast.AliasNode;
 import yona.ast.ExpressionNode;
 
+import java.util.Arrays;
 import java.util.Iterator;
 
 public final class DependencyUtils {

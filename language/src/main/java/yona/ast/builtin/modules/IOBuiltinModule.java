@@ -11,6 +11,7 @@ import yona.ast.builtin.BuiltinNode;
 import yona.runtime.Context;
 import yona.runtime.NativeObject;
 import yona.runtime.Seq;
+import yona.runtime.Unit;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
 import yona.runtime.stdlib.Builtins;
@@ -21,54 +22,54 @@ import java.io.PrintWriter;
 
 @BuiltinModuleInfo(moduleName = "IO")
 public final class IOBuiltinModule implements BuiltinModule {
-  @NodeInfo(shortName = "println")
-  abstract static class PrintlnBuiltin extends BuiltinNode {
+  @NodeInfo(shortName = "print")
+  abstract static class PrintBuiltin extends BuiltinNode {
     @Specialization
-    public long println(int value, @CachedContext(YonaLanguage.class) Context context) {
+    public long print(int value, @CachedContext(YonaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
       return value;
     }
 
     @CompilerDirectives.TruffleBoundary
     private void doPrint(PrintWriter out, int value) {
-      out.println(Character.toChars(value));
+      out.print(Character.toChars(value));
     }
 
     @Specialization
-    public long println(long value, @CachedContext(YonaLanguage.class) Context context) {
+    public long print(long value, @CachedContext(YonaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
       return value;
     }
 
     @CompilerDirectives.TruffleBoundary
     private void doPrint(PrintWriter out, long value) {
-      out.println(value);
+      out.print(value);
     }
 
     @Specialization
-    public boolean println(boolean value, @CachedContext(YonaLanguage.class) Context context) {
+    public boolean print(boolean value, @CachedContext(YonaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
       return value;
     }
 
     @CompilerDirectives.TruffleBoundary
     private void doPrint(PrintWriter out, boolean value) {
-      out.println(value);
+      out.print(value);
     }
 
     @Specialization
-    public String println(String value, @CachedContext(YonaLanguage.class) Context context) {
+    public String print(String value, @CachedContext(YonaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
       return value;
     }
 
     @CompilerDirectives.TruffleBoundary
     private void doPrint(PrintWriter out, String value) {
-      out.println(value);
+      out.print(value);
     }
 
     @Specialization
-    public Object println(Promise value, @CachedContext(YonaLanguage.class) Context context) {
+    public Object print(Promise value, @CachedContext(YonaLanguage.class) Context context) {
       return value.map(val -> {
         doPrint(context.getOutput(), val);
         return val;
@@ -76,7 +77,7 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public Object println(Seq value, @CachedContext(YonaLanguage.class) Context context) {
+    public Object print(Seq value, @CachedContext(YonaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
       return value;
     }
@@ -84,32 +85,32 @@ public final class IOBuiltinModule implements BuiltinModule {
     @CompilerDirectives.TruffleBoundary
     private void doPrint(PrintWriter out, Seq value) {
       try {
-        out.println(value.asJavaString(this));
+        out.print(value.asJavaString(this));
       } catch (BadArgException e) {
-        out.println(value.toString());
+        out.print(value.toString());
       }
     }
 
     @Specialization
-    public Object println(NativeObject value, @CachedContext(YonaLanguage.class) Context context) {
+    public Object print(NativeObject<?> value, @CachedContext(YonaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
       return value;
     }
 
     @CompilerDirectives.TruffleBoundary
-    private void doPrint(PrintWriter out, NativeObject value) {
-      out.println(value.getValue());
+    private void doPrint(PrintWriter out, NativeObject<?> value) {
+      out.print(value.getValue());
     }
 
     @Specialization
-    public Object println(Object value, @CachedContext(YonaLanguage.class) Context context) {
+    public Object print(Object value, @CachedContext(YonaLanguage.class) Context context) {
       doPrint(context.getOutput(), value);
       return value;
     }
 
     @CompilerDirectives.TruffleBoundary
     private void doPrint(PrintWriter out, Object value) {
-      out.println(value);
+      out.print(value);
     }
   }
 
@@ -147,11 +148,22 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "flush")
+  abstract static class FlushBuiltin extends BuiltinNode {
+    @Specialization
+    @CompilerDirectives.TruffleBoundary
+    public Unit flush(@CachedContext(YonaLanguage.class) Context context) {
+      context.getOutput().flush();
+      return Unit.INSTANCE;
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(IOBuiltinModuleFactory.PrintlnBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(IOBuiltinModuleFactory.PrintBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(IOBuiltinModuleFactory.ReadBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(IOBuiltinModuleFactory.ReadlnBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(IOBuiltinModuleFactory.FlushBuiltinFactory.getInstance()));
     return builtins;
   }
 }

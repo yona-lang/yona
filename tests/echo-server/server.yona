@@ -1,0 +1,13 @@
+let
+  _ -| port -| repetitions -| _ = System::args
+
+  accept = \channel -> do
+      with daemon socket\Server::accept channel as connection
+          socket\Connection::read_line connection |> socket\Connection::write connection
+      end
+  end
+in
+
+with socket\Server::channel "127.0.0.1" (int port) as channel
+  (int repetitions) `times` (\-> accept channel)
+end

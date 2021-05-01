@@ -1,6 +1,7 @@
 package yona.runtime.strings;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import yona.runtime.NativeObject;
 import yona.runtime.Seq;
 import yona.runtime.Symbol;
 

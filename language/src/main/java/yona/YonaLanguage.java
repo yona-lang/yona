@@ -9,8 +9,10 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.regex.RegexLanguage;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.TokenStreamRewriter;
 import yona.ast.ExpressionNode;
 import yona.ast.FunctionRootNode;
 import yona.parser.*;
@@ -20,8 +22,9 @@ import yona.runtime.Unit;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 
-@TruffleLanguage.Registration(id = YonaLanguage.ID, name = YonaLanguage.NAME, defaultMimeType = YonaLanguage.MIME_TYPE, characterMimeTypes = YonaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class, dependentLanguages = {"regex"})
+@TruffleLanguage.Registration(id = YonaLanguage.ID, name = YonaLanguage.NAME, defaultMimeType = YonaLanguage.MIME_TYPE, characterMimeTypes = YonaLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = FiletypeDetector.class, dependentLanguages = {RegexLanguage.ID})
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, StandardTags.ReadVariableTag.class, StandardTags.WriteVariableTag.class, DebuggerTags.AlwaysHalt.class})
 public class YonaLanguage extends TruffleLanguage<Context> {
   public static final String ID = "yona";

@@ -11,7 +11,6 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import yona.TypesGen;
-import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.runtime.*;
@@ -35,7 +34,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
   abstract static class CreateBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public NativeObject create(Seq host, long port, long backlog, @CachedContext(YonaLanguage.class) Context context) {
+    public NativeObject<HttpServer> create(Seq host, long port, long backlog, @CachedContext(YonaLanguage.class) Context context) {
       try {
         if (port > Integer.MAX_VALUE) {
           throw new BadArgException("Port must be < Integer.MAX_VALUE", this);
@@ -45,7 +44,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
         }
         HttpServer server = HttpServer.create(new InetSocketAddress(host.asJavaString(this), (int) port), (int) backlog);
         server.setExecutor(context.ioExecutor);
-        return new NativeObject(server);
+        return new NativeObject<>(server);
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, this);
       }
@@ -56,14 +55,10 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
   abstract static class StartBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object start(NativeObject server) {
-      Object hopefullyHttpServer = (server).getValue();
-      if (hopefullyHttpServer instanceof HttpServer) {
-        ((HttpServer) hopefullyHttpServer).start();
-        return server;
-      } else {
-        throw YonaException.typeError(this, hopefullyHttpServer);
-      }
+    public Object start(NativeObject<?> server) {
+      HttpServer httpServer = server.getValue(HttpServer.class, this);
+      httpServer.start();
+      return server;
     }
   }
 
@@ -71,7 +66,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
   abstract static class StopBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object stop(NativeObject server, Tuple timeUnit) {
+    public Object stop(NativeObject<?> server, Tuple timeUnit) {
       Object delayObj = TimeUnitUtil.getSeconds(timeUnit, this);
 
       if (delayObj instanceof Long) {
@@ -89,19 +84,15 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
     }
 
     @CompilerDirectives.TruffleBoundary
-    private Object stopServer(NativeObject server, Object delayObj) {
+    private Object stopServer(NativeObject<?> server, Object delayObj) {
       try {
         long delay = TypesGen.expectLong(delayObj);
         if (delay > Integer.MAX_VALUE) {
           throw new BadArgException("Delay must be < " + Integer.MAX_VALUE, this);
         }
-        Object hopefullyHttpServer = (server).getValue();
-        if (hopefullyHttpServer instanceof HttpServer) {
-          ((HttpServer) hopefullyHttpServer).stop((int) delay);
-          return server;
-        } else {
-          throw YonaException.typeError(this, hopefullyHttpServer);
-        }
+        HttpServer httpServer = server.getValue(HttpServer.class, this);
+        httpServer.stop((int) delay);
+        return server;
       } catch (UnexpectedResultException e) {
         throw new BadArgException(e, this);
       }
@@ -112,31 +103,26 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
   abstract static class HandleBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object handle(Seq path, Symbol bodyEncoding, Function handler, NativeObject server, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      final Object hopefullyHttpServer = (server).getValue();
-      if (hopefullyHttpServer instanceof HttpServer) {
-        final HttpServer httpServer = (HttpServer) server.getValue();
-        final String bodyEncodingStr = validateBodyEncoding(bodyEncoding);
-        httpServer.createContext(path.asJavaString(this), (httpExchange) -> {
-          Dict exchangeParams = Dict.EMPTY
-              .add("local_address", Seq.fromCharSequence(httpExchange.getLocalAddress().toString()))
-              .add("protocol", Seq.fromCharSequence(httpExchange.getProtocol()))
-              .add("remote_address", Seq.fromCharSequence(httpExchange.getRemoteAddress().toString()))
-              .add("method", context.symbol(httpExchange.getRequestMethod()))
-              .add("uri", Seq.fromCharSequence(httpExchange.getRequestURI().toString()));
-          final Dict headers = headersToDict(httpExchange.getRequestHeaders());
-          final Seq body = bodyToSeq(httpExchange.getRequestBody(), bodyEncodingStr);
-          try {
-            final Object handlerResult = dispatch.execute(handler, exchangeParams, headers, body);
-            sendResponse(handlerResult, httpExchange);
-          } catch (Throwable e) {
-            returnErrorResponse(httpExchange, e, context);
-          }
-        });
-        return server;
-      } else {
-        throw YonaException.typeError(this, hopefullyHttpServer);
-      }
+    public Object handle(Seq path, Symbol bodyEncoding, Function handler, NativeObject<?> server, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      final HttpServer httpServer = server.getValue(HttpServer.class, this);
+      final String bodyEncodingStr = validateBodyEncoding(bodyEncoding);
+      httpServer.createContext(path.asJavaString(this), (httpExchange) -> {
+        Dict exchangeParams = Dict.EMPTY
+            .add("local_address", Seq.fromCharSequence(httpExchange.getLocalAddress().toString()))
+            .add("protocol", Seq.fromCharSequence(httpExchange.getProtocol()))
+            .add("remote_address", Seq.fromCharSequence(httpExchange.getRemoteAddress().toString()))
+            .add("method", context.symbol(httpExchange.getRequestMethod()))
+            .add("uri", Seq.fromCharSequence(httpExchange.getRequestURI().toString()));
+        final Dict headers = headersToDict(httpExchange.getRequestHeaders());
+        final Seq body = bodyToSeq(httpExchange.getRequestBody(), bodyEncodingStr);
+        try {
+          final Object handlerResult = dispatch.execute(handler, exchangeParams, headers, body);
+          sendResponse(handlerResult, httpExchange);
+        } catch (Throwable e) {
+          returnErrorResponse(httpExchange, e, context);
+        }
+      });
+      return server;
     }
 
     private void returnErrorResponse(HttpExchange httpExchange, Throwable e, Context context) throws IOException {

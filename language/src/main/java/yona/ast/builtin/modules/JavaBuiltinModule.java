@@ -8,6 +8,8 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yona.Types;
+import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.runtime.Context;
@@ -48,8 +50,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
   abstract static class RaiseBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(object.getValue())", "isThrowable(object.getValue())"})
     @CompilerDirectives.TruffleBoundary
-    public Object type(NativeObject object) {
-      Throwable throwable = (Throwable) object.getValue();
+    public Object type(NativeObject<?> object) {
+      Throwable throwable = object.getValue(Throwable.class, this);
       throw new JavaException(throwable, this);
     }
   }
@@ -103,7 +105,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
 
       try {
         if (constructor != null) {
-          return new NativeObject(constructor.newInstance(javaObjects));
+          return new NativeObject<>(constructor.newInstance(javaObjects));
         } else {
           CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("No constructor found for arguments: %s", args), this);
@@ -137,7 +139,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "instanceof")
   abstract static class InstanceOfBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(object.getValue())", "isForeignObject(klass)"})
-    public boolean check(NativeObject object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
+    public boolean check(NativeObject<?> object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
       TruffleLanguage.Env env = context.getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
@@ -189,12 +191,12 @@ public final class JavaBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "cast")
   abstract static class CastBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(object.getValue())", "isForeignObject(klass)"})
-    public Object cast(NativeObject object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
+    public Object cast(NativeObject<?> object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
       TruffleLanguage.Env env = context.getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
         if (hostKlass instanceof Class<?>) {
-          return new NativeObject(((Class<?>) hostKlass).cast(object.getValue()));
+          return new NativeObject<>(((Class<?>) hostKlass).cast(object.getValue()));
         } else {
           CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
@@ -211,7 +213,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
       try {
         Object hostKlass = env.asHostObject(klass);
         if (hostKlass instanceof Class<?>) {
-          return new NativeObject(((Class<?>) hostKlass).cast(object));
+          return new NativeObject<>(((Class<?>) hostKlass).cast(object));
         } else {
           CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
@@ -229,7 +231,7 @@ public final class JavaBuiltinModule implements BuiltinModule {
         Object hostObject = env.asHostObject(object);
         Object hostKlass = env.asHostObject(klass);
         if (hostKlass instanceof Class<?>) {
-          return new NativeObject(((Class<?>) hostKlass).cast(hostObject));
+          return new NativeObject<>(((Class<?>) hostKlass).cast(hostObject));
         } else {
           CompilerDirectives.transferToInterpreterAndInvalidate();
           throw new PolyglotException(String.format("klass argument '%s' is not a valid class", klass), this);
