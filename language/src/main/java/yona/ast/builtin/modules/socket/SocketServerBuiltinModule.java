@@ -112,6 +112,7 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
       YonaServerChannel yonaServerChannel = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);
       yonaServerChannel.connectionPromises.submit(promise);
+      context.socketSelector.wakeup();
       return promise.map(yonaConnection -> new ConnectionContextManager((YonaConnection) yonaConnection, context), this);
     }
   }

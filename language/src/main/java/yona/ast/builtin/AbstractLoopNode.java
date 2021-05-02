@@ -14,8 +14,7 @@ public abstract class AbstractLoopNode extends BuiltinNode {
   protected void runCallback(Function function, InteropLibrary dispatch) {
     try {
       Object result = dispatch.execute(function);
-      if (result instanceof Promise) {
-        Promise promise = (Promise) result;
+      if (result instanceof Promise promise) {
         if (!promise.isFulfilled()) {
           Promise.await(promise);
         }

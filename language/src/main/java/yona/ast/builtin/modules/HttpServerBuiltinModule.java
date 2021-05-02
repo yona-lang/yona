@@ -168,19 +168,15 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
 
     @CompilerDirectives.TruffleBoundary
     private Object sendResponse(Object result, HttpExchange httpExchange) {
-      if (result instanceof Tuple) {
-        Tuple resultTuple = (Tuple) result;
+      if (result instanceof Tuple resultTuple) {
         if (resultTuple.length() == 3) {
           Object unwrappedResultTuple = resultTuple.unwrapPromises(this);
-          if (unwrappedResultTuple instanceof Object[]) {
-            Object[] elements = (Object[]) unwrappedResultTuple;
-            if (elements[0] instanceof Long && elements[1] instanceof Dict && elements[2] instanceof Seq) {
+          if (unwrappedResultTuple instanceof Object[] elements) {
+            if (elements[0] instanceof Long && elements[1] instanceof Dict headers && elements[2] instanceof Seq body) {
               long rCode = (long) elements[0];
               if (rCode > Integer.MAX_VALUE) {
                 throw new BadArgException("Invalid response code, it must be < Integer.MAX_VALUE: " + rCode, this);
               }
-              Dict headers = (Dict) elements[1];
-              Seq body = (Seq) elements[2];
               try {
                 writeResponseHeaders(headers, httpExchange.getResponseHeaders());
                 httpExchange.sendResponseHeaders((int) rCode, body.length());
@@ -197,9 +193,8 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
           }
           return Unit.INSTANCE;
         }
-      } else if (result instanceof Promise) {
+      } else if (result instanceof Promise resultPromise) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        Promise resultPromise = (Promise) result;
         return resultPromise.map(res -> sendResponse(res, httpExchange), this);
       }
 

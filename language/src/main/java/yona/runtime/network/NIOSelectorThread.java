@@ -31,10 +31,8 @@ public final class NIOSelectorThread extends Thread {
   @Override
   public void run() {
     while (context.socketSelector.isOpen()) {
-      int selected;
       try {
-        selected = context.socketSelector.select();
-        if (selected > 0) {
+        if (context.socketSelector.select() >= 0) {
           for (SelectionKey key : context.socketSelector.selectedKeys()) {
             if (key.isValid()) {
               if (key.isAcceptable()) {

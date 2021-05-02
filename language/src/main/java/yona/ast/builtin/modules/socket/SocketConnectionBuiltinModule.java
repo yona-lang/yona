@@ -90,6 +90,7 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
       YonaConnection yonaConnection = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);
       yonaConnection.readQueue.submit(new YonaConnection.ReadRequest(untilCallback, promise));
+      context.socketSelector.wakeup();
       return promise;
     }
   }
@@ -102,6 +103,7 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
       YonaConnection yonaConnection = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);
       yonaConnection.writeQueue.submit(new YonaConnection.WriteRequest(data, promise));
+      context.socketSelector.wakeup();
       return promise;
     }
   }
