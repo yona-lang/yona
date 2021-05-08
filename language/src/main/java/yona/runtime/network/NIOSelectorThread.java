@@ -72,27 +72,21 @@ public final class NIOSelectorThread extends Thread {
   // accept client connection
   private void accept(TCPServerChannel TCPServerChannel, SelectionKey acceptKey) throws IOException, InterruptedException {
     ServerSocketChannel serverSocketChannel = (ServerSocketChannel) acceptKey.channel();
-    SocketChannel socketChannel = serverSocketChannel.accept();
-    socketChannel.configureBlocking(false);
-    SelectionKey readKey = socketChannel.register(context.socketSelector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-    YonaConnection yonaConnection = new YonaConnection(readKey, yonaServerChannel.dispatch, yonaServerChannel.context, yonaServerChannel.node);
-    readKey.attach(yonaConnection);
 
-    context.threading.submit(new Promise(yonaServerChannel.dispatch), new ExecutableFunction.JavaExecutableFunction(() -> {
-      while (true) {
-        Promise[] promises = yonaServerChannel.connectionPromises.consume();
+    Promise promise = TCPServerChannel.connectionPromises.consume();
 
-        if (promises.length == 0) {
-          continue;
-        }
-
-        assert promises.length == 1;
-
-        promises[0].fulfil(yonaConnection, yonaConnection.node);
-        break;
+    if (promise != null) {
+      try {
+        SocketChannel socketChannel = serverSocketChannel.accept();
+        socketChannel.configureBlocking(false);
+        SelectionKey readKey = socketChannel.register(context.socketSelector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+        TCPConnection TCPConnection = new TCPConnection(readKey, TCPServerChannel.dispatch, TCPServerChannel.context, TCPServerChannel.node);
+        readKey.attach(TCPConnection);
+        promise.fulfil(TCPConnection, TCPConnection.node);
+      } catch (IOException e) {
+        promise.fulfil(new yona.runtime.exceptions.IOException(e, TCPServerChannel.node), TCPServerChannel.node);
       }
-      return Unit.INSTANCE;
-    }, yonaServerChannel.node));
+    }
   }
 
   // connect to the server
@@ -114,67 +108,81 @@ public final class NIOSelectorThread extends Thread {
     }
   }
 
-  private void read(YonaConnection yonaConnection, SocketChannel client, SelectionKey key) throws IOException, InterruptedException {
-    for (YonaConnection.ReadRequest readRequest : yonaConnection.readQueue.consume()) {
-      Seq result = Seq.EMPTY;
-      Object finalResult;
-      try {
-        client.configureBlocking(false);
-        ByteBuffer bf = ByteBuffer.allocate(SOCKET_READ_BUFFER_SIZE);
-        int read;
-        while (true) {
-          bf.clear();
-          read = client.read(bf);
-          if (read <= 0) {
-            break;
-          }
-          Object untilCallbackResult = yonaConnection.dispatch.execute(readRequest.untilCallback(), read);
-          if (!(untilCallbackResult instanceof Boolean) && !(untilCallbackResult instanceof Promise)) { // TODO handle promise
-            throw YonaException.typeError(yonaConnection.node, untilCallbackResult);
-          }
-          if (untilCallbackResult instanceof Promise) {
-            // TODO
-          }
-          if (!(Boolean) untilCallbackResult) {
-            break;
-          }
-          bf.flip();
-          result = Seq.catenate(result, Seq.fromByteBuffer(bf));
-        }
-        key.interestOps(SelectionKey.OP_WRITE);
-
-        finalResult = result;
-      } catch (ClosedChannelException ignored) {
-        finalResult = result;
-      } catch (IOException e) {
-        e.printStackTrace();
-        finalResult = new yona.runtime.exceptions.IOException(e, yonaConnection.node);
-      } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException e) {
-        finalResult = new BadArgException("Callback in read_until function must accept byte and return boolean (true if continue reading).", e, yonaConnection.node);
-      }
-
-      readRequest.resultPromise().fulfil(finalResult, yonaConnection.node);
+  private void read(TCPConnection TCPConnection, SocketChannel client, SelectionKey key) throws IOException, InterruptedException {
+    TCPConnection.ReadRequest readRequest = TCPConnection.readQueue.consume();
+    if (readRequest == null) {
+      return;
     }
+    Seq result = Seq.EMPTY;
+    Object finalResult;
+    try {
+      client.configureBlocking(false);
+      ByteBuffer bf = ByteBuffer.allocate(SOCKET_READ_BUFFER_SIZE);
+      int read;
+      while (true) {
+        bf.clear();
+        read = client.read(bf);
+        if (read <= 0) {
+          break;
+        }
+        Object untilCallbackResult = TCPConnection.dispatch.execute(readRequest.untilCallback(), read);
+        if (!(untilCallbackResult instanceof Boolean) && !(untilCallbackResult instanceof Promise)) { // TODO handle promise
+          throw YonaException.typeError(TCPConnection.node, untilCallbackResult);
+        }
+
+        boolean keepReading;
+        if (untilCallbackResult instanceof Promise untilCallbackResultPromise) {
+          // this waiting is within the context of the NIO Selector thread. Not ideal, but probably the least harmful solution.
+          // Actually mapping a promise at this point simply be too complicated to handle...
+          Promise.await(untilCallbackResultPromise);
+          keepReading = TypesGen.expectBoolean(untilCallbackResultPromise.unwrapOrThrow());
+        } else {
+          keepReading = (Boolean) untilCallbackResult;
+        }
+
+        if (!keepReading) {
+          break;
+        }
+
+        bf.flip();
+        result = Seq.catenate(result, Seq.fromByteBuffer(bf));
+      }
+      key.interestOps(SelectionKey.OP_WRITE);
+
+      finalResult = result;
+    } catch (ClosedChannelException ignored) {
+      finalResult = result;
+    } catch (IOException e) {
+      e.printStackTrace();
+      finalResult = new yona.runtime.exceptions.IOException(e, TCPConnection.node);
+    } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException e) {
+      finalResult = new BadArgException("Callback in read_until function must accept byte and return boolean (true if continue reading).", e, TCPConnection.node);
+    } catch (Throwable e) {
+      finalResult = new YonaException(e, TCPConnection.node);
+    }
+    readRequest.resultPromise().fulfil(finalResult, TCPConnection.node);
   }
 
-  private void write(YonaConnection yonaConnection, SocketChannel client, SelectionKey key) throws IOException {
-    for (YonaConnection.WriteRequest writeRequest : yonaConnection.writeQueue.consume()) {
-      Object result;
-      try {
-        client.configureBlocking(false);
-        Seq writeBuffer = writeRequest.buffer();
-        client.write(writeBuffer.asByteBuffer(yonaConnection.node));
-        key.interestOps(SelectionKey.OP_READ);
-
-        result = writeBuffer;
-      } catch (ClosedChannelException ignored) {
-        result = Seq.EMPTY;
-      } catch (IOException e) {
-        e.printStackTrace();
-        result = new yona.runtime.exceptions.IOException(e, yonaConnection.node);
-      }
-
-      writeRequest.completedPromise().fulfil(result, yonaConnection.node);
+  private void write(TCPConnection TCPConnection, SocketChannel client, SelectionKey key) throws IOException {
+    TCPConnection.WriteRequest writeRequest = TCPConnection.writeQueue.consume();
+    if (writeRequest == null) {
+      return;
     }
+    Object result;
+    try {
+      client.configureBlocking(false);
+      Seq writeBuffer = writeRequest.buffer();
+      client.write(writeBuffer.asByteBuffer(TCPConnection.node));
+      key.interestOps(SelectionKey.OP_READ);
+
+      result = writeBuffer;
+    } catch (ClosedChannelException ignored) {
+      result = Seq.EMPTY;
+    } catch (IOException e) {
+      e.printStackTrace();
+      result = new yona.runtime.exceptions.IOException(e, TCPConnection.node);
+    }
+
+    writeRequest.completedPromise().fulfil(result, TCPConnection.node);
   }
 }

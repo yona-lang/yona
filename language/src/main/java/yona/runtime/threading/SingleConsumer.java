@@ -17,11 +17,12 @@ public final class SingleConsumer {
         final long limit = producerCursors.findLastReleased(next);
         if (next <= limit) {
             long consumed;
+            boolean shouldContinue;
             do {
-                callback.execute(next, limit);
+                shouldContinue = callback.execute(next, limit);
                 consumed = next;
                 next++;
-            } while (next <= limit);
+            } while (shouldContinue && next <= limit);
             cursor.set(consumed);
             return true;
         } else return false;
@@ -31,6 +32,7 @@ public final class SingleConsumer {
         // Consume data in the slot addressed by the provided token.
         // token - token of the currently consumed item
         // endToken - token of the last item in the batch
-        public abstract void execute(long token, long endToken);
+        // returns true to proceed consumption, false otherwise
+        public abstract boolean execute(long token, long endToken);
     }
 }

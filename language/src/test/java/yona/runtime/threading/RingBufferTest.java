@@ -126,9 +126,10 @@ public class RingBufferTest {
     }
     final SingleConsumer.Callback callback = new SingleConsumer.Callback() {
       @Override
-      public void execute(long token, long endToken) {
+      public boolean execute(long token, long endToken) {
         final int value = buffer[cursors.index(token)];
         values[value % N] = values[value % N] + 1;
+        return true;
       }
     };
     while (done.getCount() != 0) {
