@@ -4,9 +4,9 @@ let
     keep_reading = \b -> if b == (ord 'o') then false else true  # end on 'o'
 in
 
-with socket\Client::connect "127.0.0.1" (int port) as connection
+with socket\tcp\Client::connect "127.0.0.1" (int port) as connection
     do
-        socket\Connection::write connection "hello"
-        resp = Seq::decode <| socket\Connection::read_until connection keep_reading
+        socket\tcp\Connection::write connection "hello"
+        socket\tcp\Connection::read_until connection keep_reading
     end
 end

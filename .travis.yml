@@ -7,6 +7,10 @@ language: generic
 env:
   - JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$HOME/bin:$PATH GRAALVM_VERSION="21.0.0" GRAALVM_JAVA_VERSION="11"
 before_install:
+  - curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+  - curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/microsoft.list
+  - sudo apt-get update
+  - sudo apt-get install -y powershell
   - travis_retry wget --no-verbose -O $HOME/travis-wait-enhanced.tar.gz https://github.com/crazy-max/travis-wait-enhanced/releases/download/v1.2.0/travis-wait-enhanced_1.2.0_linux_x86_64.tar.gz
   - mkdir -p $HOME/bin
   - tar -zxf $HOME/travis-wait-enhanced.tar.gz -C $HOME/bin

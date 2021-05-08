@@ -13,8 +13,8 @@ import yona.runtime.Context;
 import yona.runtime.Seq;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
-import yona.runtime.network.YonaClientChannel;
-import yona.runtime.network.YonaConnection;
+import yona.runtime.network.TCPClientChannel;
+import yona.runtime.network.TCPConnection;
 import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
 
@@ -23,7 +23,7 @@ import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
-@BuiltinModuleInfo(packageParts = {"socket"}, moduleName = "Client")
+@BuiltinModuleInfo(packageParts = {"socket", "tcp"}, moduleName = "Client")
 public final class SocketClientBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "connect")
   abstract static class ConnectBuiltin extends BuiltinNode {
@@ -37,9 +37,9 @@ public final class SocketClientBuiltinModule implements BuiltinModule {
         clientSocketChannel.configureBlocking(false);
         clientSocketChannel.connect(new InetSocketAddress(hostname.asJavaString(this), (int) port));
         SelectionKey selectionKey = clientSocketChannel.register(context.socketSelector, SelectionKey.OP_CONNECT);
-        YonaClientChannel yonaClientChannel = new YonaClientChannel(context, clientSocketChannel, selectionKey, this, dispatch);
-        selectionKey.attach(yonaClientChannel);
-        Promise result = yonaClientChannel.yonaConnectionPromise.map((yonaConnection) -> new ConnectionContextManager((YonaConnection) yonaConnection, context), this);
+        TCPClientChannel TCPClientChannel = new TCPClientChannel(context, clientSocketChannel, selectionKey, this, dispatch);
+        selectionKey.attach(TCPClientChannel);
+        Promise result = TCPClientChannel.yonaConnectionPromise.map((yonaConnection) -> new ConnectionContextManager((TCPConnection) yonaConnection, context), this);
         context.socketSelector.wakeup();
         return result;
       } catch (IOException e) {

@@ -3,25 +3,23 @@ package yona.runtime.network;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import yona.TypesGen;
 import yona.YonaException;
 import yona.runtime.Context;
 import yona.runtime.Seq;
-import yona.runtime.Unit;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
-import yona.runtime.threading.ExecutableFunction;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 
 public final class NIOSelectorThread extends Thread {
   protected static final int SOCKET_READ_BUFFER_SIZE = 128;
 
   private final Context context;
+
+  private volatile boolean closing = false;
 
   public NIOSelectorThread(Context context) {
     this.context = context;
@@ -30,25 +28,24 @@ public final class NIOSelectorThread extends Thread {
 
   @Override
   public void run() {
-    while (context.socketSelector.isOpen()) {
+    while (!closing && context.socketSelector.isOpen()) {
       try {
         if (context.socketSelector.select() >= 0) {
           for (SelectionKey key : context.socketSelector.selectedKeys()) {
             if (key.isValid()) {
               if (key.isAcceptable()) {
-                // a connection was accepted by a ServerSocketChannel.
-                accept((YonaServerChannel) key.attachment(), key);
+                accept((TCPServerChannel) key.attachment(), key);
               } else if (key.isConnectable()) {
-                connect((YonaClientChannel) key.attachment(), key);
+                connect((TCPClientChannel) key.attachment(), key);
               } else {
+                SelectableChannel selectableChannel = key.channel();
+
                 if (key.isReadable()) {
-                  // a channel is ready for reading
-                  read((YonaConnection) key.attachment(), (SocketChannel) key.channel(), key);
+                  read((TCPConnection) key.attachment(), (SocketChannel) selectableChannel, key);
                 }
 
                 if (key.isValid() && key.isWritable()) {
-                  // a channel is ready for writing
-                  write((YonaConnection) key.attachment(), (SocketChannel) key.channel(), key);
+                  write((TCPConnection) key.attachment(), (SocketChannel) selectableChannel, key);
                 }
               }
             }
@@ -59,10 +56,21 @@ public final class NIOSelectorThread extends Thread {
         e.printStackTrace();
       }
     }
+
+    if (closing) {
+      try {
+        context.socketSelector.close();
+      } catch (IOException ignored) {
+      }
+    }
+  }
+
+  public void close() {
+    this.closing = true;
   }
 
   // accept client connection
-  private void accept(YonaServerChannel yonaServerChannel, SelectionKey acceptKey) throws IOException, InterruptedException {
+  private void accept(TCPServerChannel TCPServerChannel, SelectionKey acceptKey) throws IOException, InterruptedException {
     ServerSocketChannel serverSocketChannel = (ServerSocketChannel) acceptKey.channel();
     SocketChannel socketChannel = serverSocketChannel.accept();
     socketChannel.configureBlocking(false);
@@ -88,17 +96,21 @@ public final class NIOSelectorThread extends Thread {
   }
 
   // connect to the server
-  private void connect(YonaClientChannel yonaClientChannel, SelectionKey acceptKey) throws IOException, InterruptedException {
-    SocketChannel socketChannel = (SocketChannel) acceptKey.channel();
-    socketChannel.configureBlocking(false);
-    if (!yonaClientChannel.yonaConnectionPromise.isFulfilled()) {
-      while (socketChannel.isConnectionPending()) {
-        socketChannel.finishConnect();
+  private void connect(TCPClientChannel TCPClientChannel, SelectionKey acceptKey) throws IOException, InterruptedException {
+    try {
+      SocketChannel socketChannel = (SocketChannel) acceptKey.channel();
+      socketChannel.configureBlocking(false);
+      if (!TCPClientChannel.yonaConnectionPromise.isFulfilled()) {
+        while (socketChannel.isConnectionPending()) {
+          socketChannel.finishConnect();
+        }
+        SelectionKey readKey = socketChannel.register(context.socketSelector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+        TCPConnection TCPConnection = new TCPConnection(readKey, TCPClientChannel.dispatch, TCPClientChannel.context, TCPClientChannel.node);
+        TCPClientChannel.yonaConnectionPromise.fulfil(TCPConnection, TCPConnection.node);
+        readKey.attach(TCPConnection);
       }
-      SelectionKey readKey = socketChannel.register(context.socketSelector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-      YonaConnection yonaConnection = new YonaConnection(readKey, yonaClientChannel.dispatch, yonaClientChannel.context, yonaClientChannel.node);
-      yonaClientChannel.yonaConnectionPromise.fulfil(yonaConnection, yonaConnection.node);
-      readKey.attach(yonaConnection);
+    } catch (IOException e) {
+      TCPClientChannel.yonaConnectionPromise.fulfil(new yona.runtime.exceptions.IOException(e, TCPClientChannel.node), TCPClientChannel.node);
     }
   }
 

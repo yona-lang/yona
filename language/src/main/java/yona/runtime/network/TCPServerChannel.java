@@ -6,19 +6,19 @@ import yona.runtime.Context;
 import yona.runtime.async.Promise;
 
 import java.nio.channels.SelectionKey;
-import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.spi.AbstractSelectableChannel;
 
-public class YonaServerChannel {
+public class TCPServerChannel {
   public static final int MAX_CONNECTIONS = 1024;
 
   public final Context context;
-  public final ServerSocketChannel serverSocketChannel;
+  public final AbstractSelectableChannel serverSocketChannel;
   public final Node node;
   public final SelectionKey selectionKey;
   public final NIOQueue<Promise> connectionPromises;
   public final InteropLibrary dispatch;
 
-  public YonaServerChannel(Context context, ServerSocketChannel serverSocketChannel, SelectionKey selectionKey, Node node, InteropLibrary dispatch) {
+  public TCPServerChannel(Context context, AbstractSelectableChannel serverSocketChannel, SelectionKey selectionKey, Node node, InteropLibrary dispatch) {
     this.context = context;
     this.serverSocketChannel = serverSocketChannel;
     this.selectionKey = selectionKey;

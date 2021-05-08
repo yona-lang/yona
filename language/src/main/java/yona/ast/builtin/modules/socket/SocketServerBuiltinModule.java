@@ -10,6 +10,8 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import yona.TypesGen;
 import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
@@ -18,26 +20,25 @@ import yona.ast.builtin.modules.BuiltinModuleInfo;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
-import yona.runtime.network.YonaConnection;
-import yona.runtime.network.YonaServerChannel;
+import yona.runtime.network.TCPConnection;
+import yona.runtime.network.TCPServerChannel;
 import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
-import yona.runtime.threading.ExecutableFunction;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 
-@BuiltinModuleInfo(packageParts = {"socket"}, moduleName = "Server")
+@BuiltinModuleInfo(packageParts = {"socket", "tcp"}, moduleName = "Server")
 public final class SocketServerBuiltinModule implements BuiltinModule {
-  private static final class ChannelContextManager extends NativeObjectContextManager<YonaServerChannel> {
-    public ChannelContextManager(YonaServerChannel yonaServerChannel, Context context) {
-      super("server_channel", context.lookupGlobalFunction("socket\\Server", "run"), yonaServerChannel);
+  private static final class ChannelContextManager extends NativeObjectContextManager<TCPServerChannel> {
+    public ChannelContextManager(TCPServerChannel TCPServerChannel, Context context) {
+      super("server_channel", context.lookupGlobalFunction("socket\\Server", "run"), TCPServerChannel);
     }
 
     public static ChannelContextManager adapt(ContextManager<?> contextManager, Context context, Node node) {
-      return new ChannelContextManager(((NativeObject<YonaServerChannel>) contextManager.getData(node)).getValue(), context);
+      return new ChannelContextManager(((NativeObject<TCPServerChannel>) contextManager.getData(node)).getValue(), context);
     }
   }
 
@@ -73,8 +74,8 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
 
     private static <T> T closeChannel(ChannelContextManager connectionContextManager, T result, Node node) {
       try {
-        YonaServerChannel yonaServerChannel = connectionContextManager.nativeData(node);
-        yonaServerChannel.serverSocketChannel.close();
+        TCPServerChannel TCPServerChannel = connectionContextManager.nativeData(node);
+        TCPServerChannel.serverSocketChannel.close();
         return result;
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, node);
@@ -85,7 +86,54 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "channel")
   abstract static class ChannelBuiltin extends BuiltinNode {
     @Specialization
-    public Object channel(Seq hostname, long port, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object channel(Tuple args, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Object unwrappedArgs = args.unwrapPromises(this);
+      if (unwrappedArgs instanceof Promise unwrappedArgsPromise) {
+        return unwrappedArgsPromise.map((resultArgs) -> createSocket((Object[]) resultArgs, context, dispatch), this);
+      } else if (unwrappedArgs instanceof Object[]) {
+        return createSocket((Object[]) unwrappedArgs, context, dispatch);
+      } else {
+        throw YonaException.typeError(this, unwrappedArgs);
+      }
+    }
+
+    private ChannelContextManager createSocket(Object[] args, Context context, InteropLibrary dispatch) {
+      if (args.length != 3) {
+        throw new BadArgException("socket\tcp::Channel expects triple of a type, host and port. Type must be :tcp", this);
+      }
+
+      Symbol socketType;
+      try {
+        socketType = TypesGen.expectSymbol(args[0]);
+      } catch (UnexpectedResultException e) {
+        throw new BadArgException("Expected symbol, got " + args[0], e, this);
+      }
+
+      switch (socketType.asString()) {
+        case "tcp":
+          Seq hostname;
+          long port;
+          try {
+            hostname = TypesGen.expectSeq(args[1]);
+          } catch (UnexpectedResultException e) {
+            throw new BadArgException("Expected string, got: " + args[1], e, this);
+          }
+          try {
+            port = TypesGen.expectLong(args[2]);
+          } catch (UnexpectedResultException e) {
+            throw new BadArgException("Expected integer, got: " + args[2], e, this);
+          }
+
+          return tcpSocket(hostname, port, context, dispatch);
+
+//        case "unix":
+//          // TODO implement
+        default:
+          throw new BadArgException("Unsupported socket type: " + socketType, this);
+      }
+    }
+
+    private ChannelContextManager tcpSocket(Seq hostname, long port, Context context, InteropLibrary dispatch) {
       if (port < 0L || port >= 65535L) {
         throw new BadArgException("port must be between 0 and 65535", this);
       }
@@ -94,7 +142,7 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
         serverSocketChannel.bind(new InetSocketAddress(hostname.asJavaString(this), (int) port));
         serverSocketChannel.configureBlocking(false);
         SelectionKey selectionKey = serverSocketChannel.register(context.socketSelector, SelectionKey.OP_ACCEPT);
-        YonaServerChannel result = new YonaServerChannel(context, serverSocketChannel, selectionKey, this, dispatch);
+        TCPServerChannel result = new TCPServerChannel(context, serverSocketChannel, selectionKey, this, dispatch);
         selectionKey.attach(result);
         context.socketSelector.wakeup();
         return new ChannelContextManager(result, context);
@@ -109,11 +157,11 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
     @Specialization
     public Object accept(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       ChannelContextManager connectionContextManager = ChannelContextManager.adapt(contextManager, context, this);
-      YonaServerChannel yonaServerChannel = connectionContextManager.nativeData(this);
+      TCPServerChannel TCPServerChannel = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);
-      yonaServerChannel.connectionPromises.submit(promise);
+      TCPServerChannel.connectionPromises.submit(promise);
       context.socketSelector.wakeup();
-      return promise.map(yonaConnection -> new ConnectionContextManager((YonaConnection) yonaConnection, context), this);
+      return promise.map(yonaConnection -> new ConnectionContextManager((TCPConnection) yonaConnection, context), this);
     }
   }
 

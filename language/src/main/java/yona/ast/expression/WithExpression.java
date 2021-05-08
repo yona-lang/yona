@@ -120,6 +120,7 @@ public final class WithExpression extends ExpressionNode {
         }
       } else {
         try {
+          // TODO if isDaemon, resultValue should be wrapped into promise and the code from the branch above should apply to it
           Object result = library.execute(wrapFunction, contextManager, TypesGen.expectFunction(resultValue));
           if (result instanceof Promise resultPromise) {
             shouldCleanup = false;

@@ -1,11 +1,12 @@
 import asyncore
 
-class EchoHandler(asyncore.dispatcher_with_send):
 
+class EchoHandler(asyncore.dispatcher_with_send):
     def handle_read(self):
         data = self.recv(8192)
         if data:
             self.send(data)
+
 
 class EchoServer(asyncore.dispatcher):
 
@@ -19,6 +20,7 @@ class EchoServer(asyncore.dispatcher):
     def handle_accepted(self, sock, addr):
         print('Incoming connection from %s' % repr(addr))
         handler = EchoHandler(sock)
+
 
 server = EchoServer('localhost', 5555)
 asyncore.loop()

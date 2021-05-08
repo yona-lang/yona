@@ -11,7 +11,6 @@ public final class NIOQueue<T> {
   public final SingleConsumer consumer;
 
   public final T[] items;
-  private final Class<T> itemElementType;
 
   public NIOQueue(Class<T> itemsType, int maxLength) {
     this.queue = new MultiProducerSingleConsumerCursors(maxLength);

@@ -17,14 +17,13 @@ import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
-import yona.runtime.network.YonaConnection;
+import yona.runtime.network.TCPConnection;
 import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
-import yona.runtime.threading.ExecutableFunction;
 
 import java.io.IOException;
 
-@BuiltinModuleInfo(packageParts = {"socket"}, moduleName = "Connection")
+@BuiltinModuleInfo(packageParts = {"socket", "tcp"}, moduleName = "Connection")
 public final class SocketConnectionBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "run")
   abstract static class RunBuiltin extends BuiltinNode {
@@ -58,8 +57,8 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
 
     private static <T> T closeConnection(ConnectionContextManager connectionContextManager, T result, Node node) {
       try {
-        YonaConnection yonaConnection = connectionContextManager.nativeData(node);
-        yonaConnection.selectionKey.channel().close();
+        TCPConnection TCPConnection = connectionContextManager.nativeData(node);
+        TCPConnection.selectionKey.channel().close();
         return result;
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, node);
@@ -73,8 +72,8 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
     public Object close(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context) {
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
       try {
-        YonaConnection yonaConnection = connectionContextManager.nativeData(this);
-        yonaConnection.selectionKey.channel().close();
+        TCPConnection TCPConnection = connectionContextManager.nativeData(this);
+        TCPConnection.selectionKey.channel().close();
         return Unit.INSTANCE;
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, this);
@@ -87,9 +86,9 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
     @Specialization
     public Object readUntil(ContextManager<?> contextManager, Function untilCallback, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
-      YonaConnection yonaConnection = connectionContextManager.nativeData(this);
+      TCPConnection TCPConnection = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);
-      yonaConnection.readQueue.submit(new YonaConnection.ReadRequest(untilCallback, promise));
+      TCPConnection.readQueue.submit(new TCPConnection.ReadRequest(untilCallback, promise));
       context.socketSelector.wakeup();
       return promise;
     }
@@ -100,9 +99,9 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
     @Specialization
     public Object write(ContextManager<?> contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
-      YonaConnection yonaConnection = connectionContextManager.nativeData(this);
+      TCPConnection TCPConnection = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);
-      yonaConnection.writeQueue.submit(new YonaConnection.WriteRequest(data, promise));
+      TCPConnection.writeQueue.submit(new TCPConnection.WriteRequest(data, promise));
       context.socketSelector.wakeup();
       return promise;
     }

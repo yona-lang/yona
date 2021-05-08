@@ -8,7 +8,7 @@ import yona.runtime.async.Promise;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
-public class YonaClientChannel {
+public class TCPClientChannel {
   public final Context context;
   public final SocketChannel clientSocketChannel;
   public final Node node;
@@ -16,7 +16,7 @@ public class YonaClientChannel {
   public final SelectionKey selectionKey;
   public final InteropLibrary dispatch;
 
-  public YonaClientChannel(Context context, SocketChannel clientSocketChannel, SelectionKey selectionKey, Node node, InteropLibrary dispatch) {
+  public TCPClientChannel(Context context, SocketChannel clientSocketChannel, SelectionKey selectionKey, Node node, InteropLibrary dispatch) {
     this.context = context;
     this.clientSocketChannel = clientSocketChannel;
     this.selectionKey = selectionKey;

@@ -9,7 +9,7 @@ import yona.runtime.async.Promise;
 
 import java.nio.channels.SelectionKey;
 
-public class YonaConnection {
+public class TCPConnection {
   private final static int MAX_RW_QUEUE_LENGTH = 16;
 
   public final SelectionKey selectionKey;
@@ -20,7 +20,7 @@ public class YonaConnection {
   public final NIOQueue<WriteRequest> writeQueue;
   public final NIOQueue<ReadRequest> readQueue;
 
-  public YonaConnection(SelectionKey selectionKey, InteropLibrary dispatch, Context context, Node node) {
+  public TCPConnection(SelectionKey selectionKey, InteropLibrary dispatch, Context context, Node node) {
     this.selectionKey = selectionKey;
     this.dispatch = dispatch;
     this.context = context;

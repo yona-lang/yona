@@ -161,6 +161,7 @@ public final class Threading {
       }
     }
     try {
+      NIOSelectorThread.close();
       NIOSelectorThread.interrupt();
       NIOSelectorThread.join();
     } catch (InterruptedException e) {

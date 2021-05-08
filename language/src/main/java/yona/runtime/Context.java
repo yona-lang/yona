@@ -502,11 +502,6 @@ public final class Context {
   @CompilerDirectives.TruffleBoundary
   public void dispose() {
 //    LOGGER.fine("Threading shutting down");
-    try {
-      socketSelector.close();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
     threading.dispose();
     ioExecutor.shutdown();
     assert ioExecutor.shutdownNow().isEmpty();

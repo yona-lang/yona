@@ -377,7 +377,7 @@ public class ErrorsTest extends CommonTest {
   }
 
   @Test
-  public void badRegexpOptions() {
+  public void badRegexpOptionsTest() {
     assertThrows(PolyglotException.class, () -> {
       try {
         context.eval(YonaLanguage.ID, "Regexp::compile \"(a|(b))c\" {:unknown}");
@@ -395,5 +395,17 @@ public class ErrorsTest extends CommonTest {
     } catch (PolyglotException ex) {
       assertTrue(ex.isIncompleteSource());
     }
+  }
+
+  @Test
+  public void socketClientConnectionRefusedTest() {
+    assertThrows(PolyglotException.class, () -> {
+      try {
+        context.eval(YonaLanguage.ID, "socket\\tcp\\Client::connect \"localhost\" 6666");
+      } catch (PolyglotException ex) {
+        assertEquals("java.net.ConnectException: Connection refused", ex.getMessage());
+        throw ex;
+      }
+    });
   }
 }
