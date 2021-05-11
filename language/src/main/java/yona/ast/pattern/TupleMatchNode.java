@@ -49,15 +49,13 @@ public final class TupleMatchNode extends MatchNode {
 
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
-    if (value instanceof Tuple) {
-      Tuple tuple = (Tuple) value;
+    if (value instanceof Tuple tuple) {
 
       if (tuple.size() == expressions.length) {
         Seq aliases = Seq.EMPTY;
 
         for (int i = 0; i < expressions.length; i++) {
-          if (expressions[i] instanceof MatchNode) {
-            MatchNode matchNode = (MatchNode) expressions[i];
+          if (expressions[i] instanceof MatchNode matchNode) {
             MatchResult nestedMatchResult = matchNode.match(tuple.get(i), frame);
 
             if (!nestedMatchResult.isMatches()) {

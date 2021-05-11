@@ -1,0 +1,27 @@
+module Client exports main as
+    send_lines connection fh =
+        case File::read_line fh of
+            (:ok, line, new_fh) ->
+                do
+                    IO::println line
+                    socket\tcp\Connection::write_line connection line
+                    IO::println :here
+                    send_lines connection new_fh
+                end
+            :eof ->
+                do
+                    IO::println :eof
+                    socket\tcp\Connection::write connection [0b]
+                end
+        end
+
+    main =
+        with socket\tcp\Client::connect "localhost" 5555 as connection
+            with File::open "../data/big.txt" {:read} as file
+                do
+                    IO::println :start
+                    send_lines connection file
+                end
+            end
+        end
+end

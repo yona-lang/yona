@@ -75,6 +75,7 @@ DCOLON : '::' ;
 COLON : ':' ;
 
 DOT : '.' ;
+DDOT : '..' ;
 VLINE : '|';
 BACKSLASH : '\\' ;
 

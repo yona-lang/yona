@@ -4,6 +4,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.YonaException;
 import yona.runtime.Function;
+import yona.runtime.YonaModule;
 import yona.runtime.async.Promise;
 
 @NodeInfo(shortName = "main")
@@ -25,8 +26,7 @@ public final class MainExpressionNode extends ExpressionNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     Object result = expressionNode.executeGeneric(frame);
-    if (result instanceof Promise) {
-      Promise promise = (Promise) result;
+    if (result instanceof Promise promise) {
       try {
         result = Promise.await(promise);
       } catch (YonaException e) {
@@ -36,8 +36,16 @@ public final class MainExpressionNode extends ExpressionNode {
       }
     }
 
-    if (result instanceof Function) {
-      Function function = (Function) result;
+    if (result instanceof Function function) {
+      // TODO handle promise returning function
+      if (function.getCardinality() == 0) {
+        return function.getCallTarget().getRootNode().execute(frame);
+      }
+    }
+
+    if (result instanceof YonaModule module && module.getExports().contains("main")) {
+      // TODO handle promise returning module
+      Function function = module.getFunctions().get("main");
       if (function.getCardinality() == 0) {
         return function.getCallTarget().getRootNode().execute(frame);
       }

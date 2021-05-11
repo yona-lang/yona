@@ -116,7 +116,7 @@ tuple : PARENS_L expression NEWLINE? (COMMA NEWLINE? expression)+ PARENS_R ;
 dict : CURLY_L NEWLINE? (dictKey OP_ASSIGN dictVal (COMMA NEWLINE? dictKey OP_ASSIGN dictVal)*)? NEWLINE? CURLY_R ;
 dictKey : expression ;
 dictVal : expression ;
-sequence : emptySequence | otherSequence ;
+sequence : emptySequence | otherSequence | rangeSequence;
 set : CURLY_L NEWLINE? expression (COMMA NEWLINE? expression)* NEWLINE? CURLY_R ;
 
 fqn : (packageName BACKSLASH)? moduleName ;
@@ -130,6 +130,7 @@ underscore: UNDERSCORE ;
 
 emptySequence: BRACKET_L BRACKET_R ;
 otherSequence: BRACKET_L NEWLINE? expression (COMMA NEWLINE? expression)* NEWLINE? BRACKET_R ;
+rangeSequence: BRACKET_L NEWLINE? (step=expression NEWLINE? COMMA)? start=expression NEWLINE? DDOT NEWLINE? end=expression NEWLINE? BRACKET_R ;
 
 caseExpr: KW_CASE expression KW_OF NEWLINE? patternExpression+ NEWLINE? KW_END ;
 patternExpression : pattern (patternExpressionWithoutGuard | patternExpressionWithGuard+) NEWLINE ;

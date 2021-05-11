@@ -34,7 +34,7 @@ import java.nio.channels.ServerSocketChannel;
 public final class SocketServerBuiltinModule implements BuiltinModule {
   private static final class ChannelContextManager extends NativeObjectContextManager<TCPServerChannel> {
     public ChannelContextManager(TCPServerChannel TCPServerChannel, Context context) {
-      super("server_channel", context.lookupGlobalFunction("socket\\Server", "run"), TCPServerChannel);
+      super("server_channel", context.lookupGlobalFunction("socket\\tcp\\Server", "run"), TCPServerChannel);
     }
 
     public static ChannelContextManager adapt(ContextManager<?> contextManager, Context context, Node node) {
@@ -99,7 +99,7 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
 
     private ChannelContextManager createSocket(Object[] args, Context context, InteropLibrary dispatch) {
       if (args.length != 3) {
-        throw new BadArgException("socket\tcp::Channel expects triple of a type, host and port. Type must be :tcp", this);
+        throw new BadArgException("socket\\tcp::Channel expects triple of a type, host and port. Type must be :tcp", this);
       }
 
       Symbol socketType;
@@ -161,7 +161,7 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
       Promise promise = new Promise(dispatch);
       TCPServerChannel.connectionPromises.submit(promise);
       context.socketSelector.wakeup();
-      return promise.map(yonaConnection -> new ConnectionContextManager((TCPConnection) yonaConnection, context), this);
+      return promise.map(connection -> new ConnectionContextManager((TCPConnection) connection, context), this);
     }
   }
 

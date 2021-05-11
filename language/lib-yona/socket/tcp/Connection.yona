@@ -1,4 +1,6 @@
-module socket\tcp\Connection exports read_line as
+module socket\tcp\Connection exports read_line, write_line as
     # read from socket, until LF (ord 10)
     read_line connection = read_until connection (\b -> b != 10b)
+
+    write_line connection data = write connection "{data}{System::newline}"
 end

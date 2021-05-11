@@ -89,8 +89,7 @@ public final class InvokeNode extends ExpressionNode {
       Object maybeFunction = functionNode.executeGeneric(frame);
       if (maybeFunction instanceof Function) {
         return execute((Function) maybeFunction, frame);
-      } else if (maybeFunction instanceof Promise) {
-        Promise promise = (Promise) maybeFunction;
+      } else if (maybeFunction instanceof Promise promise) {
         return promise.map(value -> {
           if (value instanceof Function) {
             return execute((Function) value, frame);

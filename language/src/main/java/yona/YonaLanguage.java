@@ -41,7 +41,12 @@ public class YonaLanguage extends TruffleLanguage<Context> {
     Path languageHomePath, stdlibHomePath;
 
     if (languageHome == null) {
-      languageHomePath = Paths.get(env.getEnvironment().get("JAVA_HOME"), "languages", ID);
+      if (env.getEnvironment().containsKey("JAVA_HOME")) {
+        languageHomePath = Paths.get(env.getEnvironment().get("JAVA_HOME"), "languages", ID);
+      } else {
+        languageHomePath = Paths.get(".");
+        // TODO this should print some warning probably
+      }
 
       if (env.getEnvironment().containsKey("YONA_STDLIB_HOME")) {
         stdlibHomePath = Paths.get(env.getEnvironment().get("YONA_STDLIB_HOME"));

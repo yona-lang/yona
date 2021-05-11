@@ -147,7 +147,7 @@ public final class NIOSelectorThread extends Thread {
         bf.flip();
         result = Seq.catenate(result, Seq.fromByteBuffer(bf));
       }
-      key.interestOps(SelectionKey.OP_WRITE);
+      key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
       finalResult = result;
     } catch (ClosedChannelException ignored) {
@@ -173,7 +173,7 @@ public final class NIOSelectorThread extends Thread {
       client.configureBlocking(false);
       Seq writeBuffer = writeRequest.buffer();
       client.write(writeBuffer.asByteBuffer(TCPConnection.node));
-      key.interestOps(SelectionKey.OP_READ);
+      key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
       result = writeBuffer;
     } catch (ClosedChannelException ignored) {

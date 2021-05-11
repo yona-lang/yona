@@ -18,6 +18,7 @@ import yona.runtime.stdlib.ExportedFunction;
 
 @BuiltinModuleInfo(moduleName = "Seq")
 public final class SeqBuiltinModule implements BuiltinModule {
+  // TODO reorder arguments to match Haskell
   @NodeInfo(shortName = "foldl")
   abstract static class FoldLeftBuiltin extends BuiltinNode {
     @Specialization

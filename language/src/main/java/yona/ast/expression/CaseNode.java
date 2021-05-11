@@ -67,8 +67,7 @@ public final class CaseNode extends ExpressionNode {
     CompilerDirectives.transferToInterpreterAndInvalidate();
     Object value = expression.executeGeneric(frame);
 
-    if (value instanceof Promise) {
-      Promise promise = (Promise) value;
+    if (value instanceof Promise promise) {
       Object unwrappedValue = promise.unwrap();
 
       if (unwrappedValue != null) {
@@ -95,8 +94,7 @@ public final class CaseNode extends ExpressionNode {
       try {
         retValue = patternNodes[i].patternMatch(value, frame);
         break;
-      } catch (MatchControlFlowException ex) {
-        continue;
+      } catch (MatchControlFlowException ignored) {
       }
     }
 

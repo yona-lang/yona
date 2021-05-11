@@ -5,6 +5,8 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -679,6 +681,39 @@ public class SimpleExpressionTest extends CommonTest {
   public void emptyDoTest() {
     Value ret = context.eval(YonaLanguage.ID, "do\nend");
     assertTrue(ret.isNull());
+  }
+
+  @Test
+  public void simpleRangeTest() {
+    Value sequence = context.eval(YonaLanguage.ID, "[0..3]");
+    assertEquals(3, sequence.getArraySize());
+
+    Object[] array = sequence.as(Object[].class);
+    assertEquals(0L, array[0]);
+    assertEquals(1L, array[1]);
+    assertEquals(2L, array[2]);
+  }
+
+  @Test
+  public void simpleAsyncRangeTest() {
+    Value sequence = context.eval(YonaLanguage.ID, "[(async \\->0)..3]");
+    assertEquals(3, sequence.getArraySize());
+
+    Object[] array = sequence.as(Object[].class);
+    assertEquals(0L, array[0]);
+    assertEquals(1L, array[1]);
+    assertEquals(2L, array[2]);
+  }
+
+  @Test
+  public void rangeWithStepTest() {
+    Value sequence = context.eval(YonaLanguage.ID, "[2, 5..10]");
+    assertEquals(3, sequence.getArraySize());
+
+    Object[] array = sequence.as(Object[].class);
+    assertEquals(5L, array[0]);
+    assertEquals(7L, array[1]);
+    assertEquals(9L, array[2]);
   }
 
   //docs state:

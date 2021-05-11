@@ -1,9 +1,11 @@
-module File exports read_lines as
+module File exports read_lines, write_line as
     read_lines fh = read_lines_acc fh []
 
     read_lines_acc fh acc =
         case read_line fh of
-            (:ok, body, new_fh)  -> read_lines_acc new_fh acc |- body
+            (:ok, body, new_fh)  -> read_lines_acc new_fh (acc |- body)
             :eof                 -> acc
         end
+
+    write_line fh data = write fh "{data}{System::newline}"
 end

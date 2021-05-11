@@ -1,0 +1,6 @@
+with File::open "../data/big.txt" {:read} as file
+    let
+        (nanos, _) = Stopwatch::nanos (\-> File::read_lines file)
+    in
+        IO::println (nanos / 1000)
+end

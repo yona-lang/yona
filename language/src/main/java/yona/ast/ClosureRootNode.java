@@ -48,11 +48,27 @@ public class ClosureRootNode extends YonaRootNode {
 
   @Override
   public Object execute(VirtualFrame frame) {
+    final FrameDescriptor fd = lexicalScope.getFrameDescriptor();
     CompilerDirectives.transferToInterpreterAndInvalidate();
-    for (Object identifier : lexicalScope.getFrameDescriptor().getIdentifiers()) {
-      FrameSlot oldFrameSlot = lexicalScope.getFrameDescriptor().findFrameSlot(identifier);
-      FrameSlot newFrameSlot = frame.getFrameDescriptor().findOrAddFrameSlot(identifier, FrameSlotKind.Illegal);
-      frame.setObject(newFrameSlot, lexicalScope.getValue(oldFrameSlot));
+    for (Object identifier : fd.getIdentifiers()) {
+      FrameSlot oldFrameSlot = fd.findFrameSlot(identifier);
+      FrameSlotKind kind = fd.getFrameSlotKind(oldFrameSlot);
+      FrameSlot newFrameSlot = frame.getFrameDescriptor().findOrAddFrameSlot(identifier, kind);
+
+      try {
+        switch (kind) {
+          case Long -> frame.setLong(newFrameSlot, lexicalScope.getLong(oldFrameSlot));
+          case Int -> frame.setInt(newFrameSlot, lexicalScope.getInt(oldFrameSlot));
+          case Double -> frame.setDouble(newFrameSlot, lexicalScope.getDouble(oldFrameSlot));
+          case Float -> frame.setFloat(newFrameSlot, lexicalScope.getFloat(oldFrameSlot));
+          case Boolean -> frame.setBoolean(newFrameSlot, lexicalScope.getBoolean(oldFrameSlot));
+          case Byte -> frame.setByte(newFrameSlot, lexicalScope.getByte(oldFrameSlot));
+          case Object -> frame.setObject(newFrameSlot, lexicalScope.getObject(oldFrameSlot));
+          case Illegal -> frame.setObject(newFrameSlot, lexicalScope.getValue(oldFrameSlot));
+        }
+      } catch (FrameSlotTypeException e) {
+        frame.setObject(newFrameSlot, lexicalScope.getValue(oldFrameSlot));
+      }
     }
 
     return bodyNode.executeGeneric(frame);

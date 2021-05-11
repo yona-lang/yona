@@ -179,6 +179,7 @@ public final class Context {
     builtinModules.register(new SocketServerBuiltinModule());
     builtinModules.register(new SocketClientBuiltinModule());
     builtinModules.register(new SocketConnectionBuiltinModule());
+    builtinModules.register(new StopWatchBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

@@ -450,6 +450,12 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
   }
 
   @Override
+  public ExpressionNode visitRangeSequence(YonaParser.RangeSequenceContext ctx) {
+    ExpressionNode step = ctx.step != null ? withSourceSection(ctx.step, ctx.step.accept(this)) : null;
+    return withSourceSection(ctx, new RangeNode(step, ctx.start.accept(this), ctx.end.accept(this)));
+  }
+
+  @Override
   public ModuleNode visitModule(YonaParser.ModuleContext ctx) {
     FQNNode moduleFQN = visitFqn(ctx.fqn());
     String moduleFQNString = ctx.fqn().getText();

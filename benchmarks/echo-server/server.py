@@ -18,7 +18,6 @@ class EchoServer(asyncore.dispatcher):
         self.listen(5)
 
     def handle_accepted(self, sock, addr):
-        print('Incoming connection from %s' % repr(addr))
         handler = EchoHandler(sock)
 
 

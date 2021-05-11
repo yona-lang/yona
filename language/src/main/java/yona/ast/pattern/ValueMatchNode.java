@@ -44,8 +44,7 @@ public final class ValueMatchNode extends MatchNode {
 
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
-    if (expression instanceof IdentifierNode) {
-      IdentifierNode identifierNode = (IdentifierNode) expression;
+    if (expression instanceof IdentifierNode identifierNode) {
 
       if (identifierNode.isBound(frame)) {
         Object identifierValue = identifierNode.executeGeneric(frame);
@@ -58,8 +57,7 @@ public final class ValueMatchNode extends MatchNode {
       } else {
         return new MatchResult(true, new AliasNode[]{new NameAliasNode(identifierNode.name(), new AnyValueNode(value))});
       }
-    } else if (expression instanceof ReadLocalVariableNode) {
-      ReadLocalVariableNode readLocalVariableNode = (ReadLocalVariableNode) expression;
+    } else if (expression instanceof ReadLocalVariableNode readLocalVariableNode) {
       boolean isBound;
       try {
         readLocalVariableNode.executeGeneric(frame);
@@ -94,11 +92,9 @@ public final class ValueMatchNode extends MatchNode {
 
   @Override
   protected String[] providedIdentifiers() {
-    if (expression instanceof IdentifierNode) {
-      IdentifierNode identifierNode = (IdentifierNode) expression;
+    if (expression instanceof IdentifierNode identifierNode) {
       return new String[]{identifierNode.name()};
-    } else if (expression instanceof ReadLocalVariableNode) {
-      ReadLocalVariableNode readLocalVariableNode = (ReadLocalVariableNode) expression;
+    } else if (expression instanceof ReadLocalVariableNode readLocalVariableNode) {
       return new String[]{(String) readLocalVariableNode.getSlot().getIdentifier()};
     } else {
       return new String[0];
