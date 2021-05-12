@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 
 param (
-    [Int16] $Port = 5555,
+    [Int16] $Port = 6666,
     [Int16] $Repetitions = 5
 )
 

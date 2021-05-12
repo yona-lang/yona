@@ -8,16 +8,12 @@ import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
 
 public class ContextManager<T> extends Tuple {
-  private final Class<T> dataType;
-
   public ContextManager(String contextIdentifier, Function wrapperFunction, T data) {
     super(Seq.fromCharSequence(contextIdentifier), wrapperFunction, data);
-    this.dataType = (Class<T>) data.getClass();
   }
 
   public ContextManager(Seq contextIdentifier, Function wrapperFunction, T data) {
     super(contextIdentifier, wrapperFunction, data);
-    this.dataType = (Class<T>) data.getClass();
   }
 
   public Seq contextIdentifier() {
@@ -28,7 +24,7 @@ public class ContextManager<T> extends Tuple {
     return (Function) items[1];
   }
 
-  public T getData(Node node) {
+  public <X> X getData(Class<X> dataType, Node node) {
     if (!(dataType.isAssignableFrom(items[2].getClass()))) {
       throw YonaException.typeError(node, items[2]);
     } else {

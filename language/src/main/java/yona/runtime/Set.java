@@ -45,6 +45,7 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   }
 
   @CompilerDirectives.TruffleBoundary
+  @SuppressWarnings("unchecked")
   public <T> T[] toArray(Class<T> cls) {
     assert size() < Integer.MAX_VALUE;
     T[] res = (T[]) Array.newInstance(cls, (int) size());

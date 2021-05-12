@@ -38,7 +38,7 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
     }
 
     public static ChannelContextManager adapt(ContextManager<?> contextManager, Context context, Node node) {
-      return new ChannelContextManager(((NativeObject<TCPServerChannel>) contextManager.getData(node)).getValue(), context);
+      return new ChannelContextManager(((NativeObject<TCPServerChannel>) contextManager.getData(NativeObject.class, node)).getValue(), context);
     }
   }
 

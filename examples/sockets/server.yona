@@ -8,12 +8,12 @@ let
         with daemon socket\tcp\Server::accept channel as connection
             do
                 IO::println "connection accepted"
-                socket\tcp\Connection::write connection "welcome: "
+                socket\tcp\Connection::write connection {:read} "welcome: "
                 IO::println "-> welcome: "
                 IO::print "<- "
-                request = socket\Connection::read_line connection |> Seq::decode
+                request = socket\Connection::read_line connection {:write} |> Seq::decode
                 IO::println request
-                request |> socket\Connection::write connection
+                request |> socket\Connection::write connection {:read}
                 IO::println "-> {request}"
             end
         end

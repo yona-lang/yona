@@ -24,6 +24,11 @@ public abstract class UnboxNode extends ExpressionNode {
   }
 
   @Specialization
+  protected static int fromInt(int value) {
+    return value;
+  }
+
+  @Specialization
   protected static long fromLong(long value) {
     return value;
   }

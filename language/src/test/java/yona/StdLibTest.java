@@ -702,4 +702,10 @@ public class StdLibTest extends CommonTest {
     byte ret = context.eval(YonaLanguage.ID, "ord 'x'").asByte();
     assertEquals((byte) 120, ret);
   }
+
+  @Test
+  public void trimTest() {
+    String ret = context.eval(YonaLanguage.ID, "Seq::trim \" ahoj \n\t\r\"").asString();
+    assertEquals("ahoj", ret);
+  }
 }

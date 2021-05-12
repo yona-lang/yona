@@ -29,9 +29,9 @@ public class TCPConnection {
     this.readQueue = new NIOQueue<>(ReadRequest.class, MAX_RW_QUEUE_LENGTH);
   }
 
-  public static final record WriteRequest(Seq buffer, Promise completedPromise) {
+  public static final record WriteRequest(Seq buffer, Promise completedPromise, int interestOps) {
   }
 
-  public static final record ReadRequest(Function untilCallback, Promise resultPromise) {
+  public static final record ReadRequest(Function untilCallback, Promise resultPromise, int interestOps) {
   }
 }

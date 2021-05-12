@@ -73,7 +73,7 @@ public abstract class Types {
     } else if (result instanceof CharSequence) {
       return Seq.fromCharSequence((CharSequence) result);
     } else if (isForeignObject(result)) {
-      return new NativeObject(result);
+      return new NativeObject<>(result);
     } else if (result instanceof Character) {
       return Character.codePointAt(new char[]{((char) result)}, 0);
     } else {

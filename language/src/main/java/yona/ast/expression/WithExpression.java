@@ -164,7 +164,7 @@ public final class WithExpression extends ExpressionNode {
 
   private Object executeBodyWithoutIdentifierContext(final VirtualFrame frame, final Object contextValue) {
     if (contextValue instanceof ContextManager<?> contextManager) {
-      return executeBodyWithIdentifier(frame, name != null ? name : contextManager.contextIdentifier().asJavaString(this), contextManager.wrapperFunction(), contextManager.getData(this));
+      return executeBodyWithIdentifier(frame, name != null ? name : contextManager.contextIdentifier().asJavaString(this), contextManager.wrapperFunction(), contextManager.getData(Object.class, this));
     } else if (contextValue instanceof Tuple) {
       Object contextValueObj = ContextManager.ensureValid((Tuple) contextValue, this);
       return executeBodyWithoutIdentifierContext(frame, contextValueObj);

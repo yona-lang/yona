@@ -1,18 +1,15 @@
 module Server exports main as
     read_and_write connection fh = do
-            line = socket\tcp\Connection::read_line connection |> Seq::decode |> IO::print
-            if line == [0b] then () else File::write fh line |> read_and_write connection
-        end
+        line = socket\tcp\Connection::read_line connection {:read} |> Seq::decode |> Seq::trim
+        if 0 == Seq::len line then () else File::write_line fh line |> read_and_write connection
+    end
 
     main =
         with File::open "result.txt" {:write, :create, :truncate_existing} as file
             with socket\tcp\Server::channel (:tcp, "127.0.0.1", 5555) as channel
-                with socket\tcp\Server::accept channel as connection
-                    do
-                        IO::println :here
-                        read_and_write connection file
-                   end
-                end
+                infi (\-> with socket\tcp\Server::accept channel as connection
+                    read_and_write connection file
+                end) # TODO remove infi
             end
         end
 end

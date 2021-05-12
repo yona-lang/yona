@@ -13,6 +13,6 @@ final class ConnectionContextManager extends NativeObjectContextManager<TCPConne
   }
 
   public static ConnectionContextManager adapt(ContextManager<?> contextManager, Context context, Node node) {
-    return new ConnectionContextManager(((NativeObject<TCPConnection>) contextManager.getData(node)).getValue(), context);
+    return new ConnectionContextManager(((NativeObject<TCPConnection>) contextManager.getData(NativeObject.class, node)).getValue(), context);
   }
 }

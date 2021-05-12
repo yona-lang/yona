@@ -8,6 +8,6 @@ public abstract class NativeObjectContextManager<T> extends ContextManager<Nativ
   }
 
   public T nativeData(Node node) {
-    return getData(node).getValue();
+    return (T) getData(NativeObject.class, node).getValue();
   }
 }

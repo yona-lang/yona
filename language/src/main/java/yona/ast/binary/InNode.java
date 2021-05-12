@@ -6,6 +6,8 @@ import yona.YonaException;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 
+import java.util.Arrays;
+
 @NodeInfo(shortName = "in")
 public abstract class InNode extends BinaryOpNode {
   @Specialization
@@ -21,6 +23,33 @@ public abstract class InNode extends BinaryOpNode {
   @Specialization
   public boolean seq(Object el, Seq seq) {
     return seq.contains(el, this);
+  }
+
+  @Specialization
+  public boolean set(int el, Set set) {
+    System.err.println("int: " + el);
+    System.err.println(set);
+    return set.contains(el);
+  }
+
+  @Specialization
+  public boolean set(long el, Set set) {
+    return set.contains(el);
+  }
+
+  @Specialization
+  public boolean set(byte el, Set set) {
+    return set.contains(el);
+  }
+
+  @Specialization
+  public boolean set(double el, Set set) {
+    return set.contains(el);
+  }
+
+  @Specialization
+  public boolean set(boolean el, Set set) {
+    return set.contains(el);
   }
 
   @Specialization

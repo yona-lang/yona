@@ -118,4 +118,10 @@ public class SetTest {
     assertEquals(expected.size(), result.size());
     assertEquals(expected, result);
   }
+
+  @Test
+  public void testContains() {
+    Set set = Set.set(32, 92);
+    assertTrue(set.contains(32));
+  }
 }
