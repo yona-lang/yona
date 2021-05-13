@@ -206,3 +206,7 @@ target
 .idea
 native/yonanative
 gen
+
+package.json
+yarn.lock
+node_modules
