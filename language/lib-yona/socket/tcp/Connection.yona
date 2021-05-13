@@ -1,6 +1,6 @@
 module socket\tcp\Connection exports read_line, write_line as
     # read from socket, until LF (ord 10)
-    read_line connection flags = read_until connection flags (\b -> b != 10b)
+    read_line connection = read_until connection (\b -> b != 10b)
 
-    write_line connection flags data = write connection flags "{data}{System::newline}"
+    write_line connection data = write connection "{data}{System::newline}"
 end

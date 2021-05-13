@@ -3,7 +3,7 @@ let
 
   accept = \channel -> do
       with daemon socket\tcp\Server::accept channel as connection
-          socket\tcp\Connection::read_line connection {:write} |> socket\tcp\Connection::write connection {:read}
+          socket\tcp\Connection::read_line connection |> socket\tcp\Connection::write connection
       end
   end
 in

@@ -114,6 +114,7 @@ public final class Promise implements TruffleObject {
     return Trampoline.Done.INSTANCE;
   }
 
+  // TODO make the Function<> argument type checked
   @CompilerDirectives.TruffleBoundary
   public Promise map(Function<? super Object, ?> function, Node node) {
     Promise result = null;

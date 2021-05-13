@@ -11,7 +11,6 @@ import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
 import yona.runtime.Context;
 import yona.runtime.Seq;
-import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
 import yona.runtime.network.TCPClientChannel;
 import yona.runtime.network.TCPConnection;
@@ -35,13 +34,12 @@ public final class SocketClientBuiltinModule implements BuiltinModule {
       try {
         SocketChannel clientSocketChannel = context.socketSelector.provider().openSocketChannel();
         clientSocketChannel.configureBlocking(false);
-        clientSocketChannel.connect(new InetSocketAddress(hostname.asJavaString(this), (int) port));
         SelectionKey selectionKey = clientSocketChannel.register(context.socketSelector, SelectionKey.OP_CONNECT);
-        TCPClientChannel TCPClientChannel = new TCPClientChannel(context, clientSocketChannel, selectionKey, this, dispatch);
-        selectionKey.attach(TCPClientChannel);
-        Promise result = TCPClientChannel.yonaConnectionPromise.map((yonaConnection) -> new ConnectionContextManager((TCPConnection) yonaConnection, context), this);
+        clientSocketChannel.connect(new InetSocketAddress(hostname.asJavaString(this), (int) port));
+        TCPClientChannel channel = new TCPClientChannel(context, clientSocketChannel, selectionKey, this, dispatch);
+        selectionKey.attach(channel);
         context.socketSelector.wakeup();
-        return result;
+        return channel.yonaConnectionPromise.map((connection) -> new ConnectionContextManager((TCPConnection) connection, context), this);
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, this);
       }
@@ -50,8 +48,8 @@ public final class SocketClientBuiltinModule implements BuiltinModule {
 
   @Override
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(SocketClientBuiltinModuleFactory.ConnectBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(SocketClientBuiltinModuleFactory.ConnectBuiltinFactory.getInstance())
+    );
   }
 }

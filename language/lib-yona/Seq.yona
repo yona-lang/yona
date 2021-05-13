@@ -1,12 +1,5 @@
-module Seq exports zip, trim as
+module Seq exports zip as
     zip [] _ = []
     zip _ [] = []
     zip (x -| xs) (y -| ys) = (x, y) -| zip xs ys
-
-    trim s = reducel s <| Transducers::filter \c -> !(is_whitespace c) ("", \acc c -> acc |- c, identity)
-
-    # private
-    is_whitespace c
-        | Types::is_byte c = (c >= 9b && c <= 13) || c == 32
-        | Types::is_char c = is_whitespace <| ord c
 end

@@ -139,9 +139,9 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
       }
       try {
         ServerSocketChannel serverSocketChannel = context.socketSelector.provider().openServerSocketChannel();
-        serverSocketChannel.bind(new InetSocketAddress(hostname.asJavaString(this), (int) port));
         serverSocketChannel.configureBlocking(false);
         SelectionKey selectionKey = serverSocketChannel.register(context.socketSelector, SelectionKey.OP_ACCEPT);
+        serverSocketChannel.bind(new InetSocketAddress(hostname.asJavaString(this), (int) port));
         TCPServerChannel result = new TCPServerChannel(context, serverSocketChannel, selectionKey, this, dispatch);
         selectionKey.attach(result);
         context.socketSelector.wakeup();

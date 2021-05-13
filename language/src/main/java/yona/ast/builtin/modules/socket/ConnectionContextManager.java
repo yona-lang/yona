@@ -7,7 +7,7 @@ import yona.runtime.NativeObject;
 import yona.runtime.NativeObjectContextManager;
 import yona.runtime.network.TCPConnection;
 
-final class ConnectionContextManager extends NativeObjectContextManager<TCPConnection> {
+public final class ConnectionContextManager extends NativeObjectContextManager<TCPConnection> {
   public ConnectionContextManager(TCPConnection TCPConnection, Context context) {
     super("connection", context.lookupGlobalFunction("socket\\tcp\\Connection", "run"), TCPConnection);
   }

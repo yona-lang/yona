@@ -318,6 +318,7 @@ public final class FileBuiltinModule implements BuiltinModule {
               return;
             }
 
+
             attachment.flip();
             int length = attachment.limit();
 
@@ -336,7 +337,8 @@ public final class FileBuiltinModule implements BuiltinModule {
                 continue;
               }
               if (b == '\n') {
-                promise.fulfil(new Tuple(context.symbol("ok"), bytesToSeq(output, fileTuple.additionalOptions(), context, thisNode), fileContextManager.copy(null, fileTuple.position() + i + 1, thisNode)), thisNode);
+                Seq resultSeq = bytesToSeq(output, fileTuple.additionalOptions(), context, thisNode);
+                promise.fulfil(new Tuple(context.symbol("ok"), resultSeq, fileContextManager.copy(null, fileTuple.position() + i + 1, thisNode)), thisNode);
                 fulfilled = true;
                 break;
               } else {

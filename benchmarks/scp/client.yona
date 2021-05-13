@@ -1,29 +1,19 @@
 module Client exports main as
-    send_lines connection fh = do
-        res = File::read_line fh
-        IO::println fh
-        IO::println res
-        case res of
+    send_lines connection fh =
+        case File::read_line fh of
             (:ok, line, new_fh) ->
                 do
-                    IO::println line
-                    socket\tcp\Connection::write_line connection {:write} line
-                    IO::println (:here, new_fh)
+                    socket\tcp\Connection::write_line connection line
                     send_lines connection new_fh
                 end
             :eof ->
-                do
-                    IO::println :eof
-                    socket\tcp\Connection::write connection {:read} ""
-                end
+                socket\tcp\Connection::write_line connection "--over--"
         end
-    end
 
     main =
         with socket\tcp\Client::connect "localhost" 5555 as connection
             with File::open "../data/big.txt" {:read} as file
-#                Stopwatch::nanos (\-> send_lines connection file) |> IO::println
-                send_lines connection file
+                Stopwatch::nanos (\-> send_lines connection file) |> IO::println
             end
         end
 end

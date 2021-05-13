@@ -5,6 +5,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import yona.TypesGen;
 import yona.YonaException;
+import yona.ast.builtin.modules.socket.ConnectionContextManager;
 import yona.runtime.Context;
 import yona.runtime.Seq;
 import yona.runtime.async.Promise;
@@ -81,9 +82,9 @@ public final class NIOSelectorThread extends Thread {
         SocketChannel socketChannel = serverSocketChannel.accept();
         socketChannel.configureBlocking(false);
         SelectionKey readKey = socketChannel.register(context.socketSelector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-        TCPConnection TCPConnection = new TCPConnection(readKey, TCPServerChannel.dispatch, TCPServerChannel.context, TCPServerChannel.node);
-        readKey.attach(TCPConnection);
-        promise.fulfil(TCPConnection, TCPConnection.node);
+        TCPConnection connection = new TCPConnection(readKey, TCPServerChannel.dispatch, TCPServerChannel.context, TCPServerChannel.node);
+        readKey.attach(connection);
+        promise.fulfil(connection, connection.node);
       } catch (IOException e) {
         promise.fulfil(new yona.runtime.exceptions.IOException(e, TCPServerChannel.node), TCPServerChannel.node);
       }
@@ -148,7 +149,6 @@ public final class NIOSelectorThread extends Thread {
         bf.flip();
         result = Seq.catenate(result, Seq.fromByteBuffer(bf));
       }
-      key.interestOps(readRequest.interestOps());
 
       finalResult = result;
     } catch (ClosedChannelException ignored) {
@@ -174,8 +174,6 @@ public final class NIOSelectorThread extends Thread {
       client.configureBlocking(false);
       Seq writeBuffer = writeRequest.buffer();
       client.write(writeBuffer.asByteBuffer(connection.node));
-      key.interestOps(writeRequest.interestOps());
-
       result = writeBuffer;
     } catch (ClosedChannelException ignored) {
       result = Seq.EMPTY;

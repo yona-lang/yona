@@ -705,7 +705,7 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void trimTest() {
-    String ret = context.eval(YonaLanguage.ID, "Seq::trim \" ahoj \n\t\r\"").asString();
-    assertEquals("ahoj", ret);
+    String ret = context.eval(YonaLanguage.ID, "Seq::trim \" ahoj  hallo \n\t\r\"").asString();
+    assertEquals("ahoj  hallo", ret);
   }
 }

@@ -6,7 +6,7 @@ in
 
 with socket\tcp\Client::connect "127.0.0.1" (int port) as connection
     do
-        socket\tcp\Connection::write connection {:read} "hello"
-        socket\tcp\Connection::read_until connection {:read} keep_reading
+        socket\tcp\Connection::write connection "hello"
+        socket\tcp\Connection::read_until connection keep_reading
     end
 end

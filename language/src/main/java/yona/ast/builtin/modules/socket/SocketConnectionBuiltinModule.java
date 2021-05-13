@@ -15,16 +15,13 @@ import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
-import yona.ast.builtin.utils.FlagsUtils;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
-import yona.runtime.exceptions.BadArgException;
 import yona.runtime.network.TCPConnection;
 import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
 
 import java.io.IOException;
-import java.nio.channels.SelectionKey;
 
 @BuiltinModuleInfo(packageParts = {"socket", "tcp"}, moduleName = "Connection")
 public final class SocketConnectionBuiltinModule implements BuiltinModule {
@@ -87,53 +84,27 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read_until")
   abstract static class ReadUntilBuiltin extends BuiltinNode {
     @Specialization
-    public Object readUntil(ContextManager<?> contextManager, Set flags, Function untilCallback, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+    public Object readUntil(ContextManager<?> contextManager, Function untilCallback, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
       TCPConnection TCPConnection = connectionContextManager.nativeData(this);
-
-      return FlagsUtils.withFlags(interestOpsFromFlags(flags, this), interestOps -> {
-        int interestOpsOr = 0;
-
-        for (Object interestOp : interestOps) {
-          interestOpsOr |= (int) interestOp;
-        }
-
-        Promise promise = new Promise(dispatch);
-        TCPConnection.readQueue.submit(new TCPConnection.ReadRequest(untilCallback, promise, interestOpsOr));
-        context.socketSelector.wakeup();
-        return promise;
-      }, this);
+      Promise promise = new Promise(dispatch);
+      TCPConnection.readQueue.submit(new TCPConnection.ReadRequest(untilCallback, promise));
+      context.socketSelector.wakeup();
+      return promise;
     }
   }
 
   @NodeInfo(shortName = "write")
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
-    public Object write(ContextManager<?> contextManager, Set flags, Seq data, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+    public Object write(ContextManager<?> contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
       TCPConnection TCPConnection = connectionContextManager.nativeData(this);
-
-      return FlagsUtils.withFlags(interestOpsFromFlags(flags, this), interestOps -> {
-        int interestOpsOr = 0;
-
-        for (Object interestOp : interestOps) {
-          interestOpsOr |= (int) interestOp;
-        }
-
-        Promise promise = new Promise(dispatch);
-        TCPConnection.writeQueue.submit(new TCPConnection.WriteRequest(data, promise, interestOpsOr));
-        context.socketSelector.wakeup();
-        return promise;
-      }, this);
+      Promise promise = new Promise(dispatch);
+      TCPConnection.writeQueue.submit(new TCPConnection.WriteRequest(data, promise));
+      context.socketSelector.wakeup();
+      return promise;
     }
-  }
-
-  private static Object interestOpsFromFlags(Set flags, Node node) {
-    return FlagsUtils.extractFlags(flags, flag -> switch (flag) {
-      case "read" -> SelectionKey.OP_READ;
-      case "write" -> SelectionKey.OP_WRITE;
-      default -> throw new BadArgException("Invalid interest flag: " + flag, node);
-    }, node);
   }
 
   @Override

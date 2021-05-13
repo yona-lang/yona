@@ -135,6 +135,14 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
+  @NodeInfo(shortName = "trim")
+  abstract static class TrimBuiltin extends BuiltinNode {
+    @Specialization
+    public Object trim(Seq sequence) {
+      return Seq.fromCharSequence(sequence.asJavaString(this).trim());
+    }
+  }
+
   public Builtins builtins() {
     Builtins builtins = new Builtins();
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
@@ -149,6 +157,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.DropBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.EncodeBuiltinFactory.getInstance()));
     builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.DecodeBuiltinFactory.getInstance()));
+    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.TrimBuiltinFactory.getInstance()));
     return builtins;
   }
 }
