@@ -11,8 +11,6 @@ accept(LSocket) ->
   accept(LSocket).
 loop(Socket) ->
   case gen_tcp:recv(Socket, 0) of
-    {ok, <<"bye\n">>} ->
-      gen_tcp:send(Socket, list_to_binary("bye buddy!"));
     {ok, Data} ->
       gen_tcp:send(Socket, Data),
       gen_tcp:close(Socket);

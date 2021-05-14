@@ -20,9 +20,9 @@ async function processLineByLine() {
 
     for await (const line of rl) {
         // Each line in input.txt will be successively available here as `line`.
-        await promiseSocket.write(await line + '\n', 'utf8');
+        await promiseSocket.write(await line, 'utf8');
     }
-    await promiseSocket.write('--over--\n', 'utf8');
+    await promiseSocket.write('--over--', 'utf8');
     await promiseSocket.end();
 }
 
