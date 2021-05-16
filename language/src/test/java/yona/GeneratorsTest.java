@@ -56,7 +56,7 @@ public class GeneratorsTest extends CommonTest {
   @ParameterizedTest
   @MethodSource("setTestCases")
   void testSetGenerator(SetDictGeneratorTestCase args) {
-    boolean ret = context.eval(YonaLanguage.ID, args.expectedValue + " == " + args.toString()).asBoolean();
+    boolean ret = context.eval(YonaLanguage.ID, args.expectedValue + " == " + args).asBoolean();
     assertTrue(ret);
   }
 
@@ -90,7 +90,7 @@ public class GeneratorsTest extends CommonTest {
   @ParameterizedTest
   @MethodSource("dictTestCases")
   void testDictGenerator(SetDictGeneratorTestCase args) {
-    boolean ret = context.eval(YonaLanguage.ID, args.expectedValue + " == " + args.toString()).asBoolean();
+    boolean ret = context.eval(YonaLanguage.ID, args.expectedValue + " == " + args).asBoolean();
     assertTrue(ret);
   }
 
@@ -174,12 +174,10 @@ public class GeneratorsTest extends CommonTest {
     @Override
     public String toString() {
       String body = reducer + " | " + innerCollection + (condition == null ? "" : " if " + condition);
-      switch (type) {
-        case SEQ: return "[" + body + "]";
-        case SET: return "{" + body + "}";
-        case DICT: return "{" + body + "}";
-      }
-      return null;
+      return switch (type) {
+        case SEQ -> "[" + body + "]";
+        case SET, DICT -> "{" + body + "}";
+      };
     }
   }
 }

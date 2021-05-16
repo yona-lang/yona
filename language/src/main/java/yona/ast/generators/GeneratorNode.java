@@ -58,7 +58,7 @@ public final class GeneratorNode extends ExpressionNode {
       filterInvoke = new InvokeNode(language, filterTransducer, new ExpressionNode[]{conditionFunction, mapInvoke}, moduleStack);
     }
 
-    ExpressionNode[] reduceArgs = new ExpressionNode[]{stepExpression, filterInvoke == null ? mapInvoke : filterInvoke};
+    ExpressionNode[] reduceArgs = new ExpressionNode[]{filterInvoke == null ? mapInvoke : filterInvoke, stepExpression};
     return new InvokeNode(language, context.lookupGlobalFunction("Reducers", "reduce"), reduceArgs, moduleStack);
   }
 

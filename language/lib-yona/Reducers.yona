@@ -6,8 +6,8 @@ module Reducers exports to_seq, to_set, to_dict, reduce as
     to_dict = ({}, \acc val-> acc + val, identity)
 
     # reduce dispatcher, based on collection type
-    reduce val transducer
-      | Types::is_seq(val) = Seq::reducel val transducer
-      | Types::is_set(val) = Set::reduce val transducer
-      | Types::is_dict(val) = Dict::reduce val transducer
+    reduce transducer val
+      | Types::is_seq(val) = Seq::reducel transducer val
+      | Types::is_set(val) = Set::reduce transducer val
+      | Types::is_dict(val) = Dict::reduce transducer val
 end

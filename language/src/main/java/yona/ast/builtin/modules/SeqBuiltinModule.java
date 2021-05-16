@@ -18,11 +18,10 @@ import yona.runtime.stdlib.ExportedFunction;
 
 @BuiltinModuleInfo(moduleName = "Seq")
 public final class SeqBuiltinModule implements BuiltinModule {
-  // TODO reorder arguments to match Haskell
   @NodeInfo(shortName = "foldl")
   abstract static class FoldLeftBuiltin extends BuiltinNode {
     @Specialization
-    public Object foldLeft(Seq sequence, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object foldLeft(Function function, Object initialValue, Seq sequence, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
         return sequence.foldLeft(initialValue, function, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
@@ -35,7 +34,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "foldr")
   abstract static class FoldRightBuiltin extends BuiltinNode {
     @Specialization
-    public Object foldRight(Seq sequence, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object foldRight(Function function, Object initialValue, Seq sequence, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
         return sequence.foldRight(initialValue, function, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
@@ -48,7 +47,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "reducel")
   abstract static class ReduceLeftBuiltin extends BuiltinNode {
     @Specialization
-    public Object reduceLeft(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object reduceLeft(Tuple reducer, Seq sequence, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
         return sequence.reduceLeft(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
@@ -61,7 +60,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "reducer")
   abstract static class ReduceRightBuiltin extends BuiltinNode {
     @Specialization
-    public Object reduceRight(Seq sequence, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object reduceRight(Tuple reducer, Seq sequence, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
         return sequence.reduceRight(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {

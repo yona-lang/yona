@@ -21,7 +21,7 @@ public final class SetBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "fold")
   abstract static class FoldBuiltin extends BuiltinNode {
     @Specialization
-    public Object fold(Set set, Function function, Object initialValue, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object fold(Function function, Object initialValue, Set set, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
         return set.fold(initialValue, function, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
@@ -34,7 +34,7 @@ public final class SetBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "reduce")
   abstract static class ReduceBuiltin extends BuiltinNode {
     @Specialization
-    public Object reduce(Set set, Tuple reducer, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object reduce(Tuple reducer, Set set, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
         return set.reduce(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {

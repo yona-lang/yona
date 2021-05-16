@@ -46,6 +46,7 @@ public class YonaLanguage extends TruffleLanguage<Context> {
       } else {
         languageHomePath = Paths.get(".");
         // TODO this should print some warning probably
+        env.getLogger(getClass()).severe("JAVA_HOME environment variable must be set, otherwise stdlib from current directory is loaded. This is a potential security risk.");
       }
 
       if (env.getEnvironment().containsKey("YONA_STDLIB_HOME")) {

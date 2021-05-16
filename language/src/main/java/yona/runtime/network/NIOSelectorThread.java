@@ -128,7 +128,7 @@ public final class NIOSelectorThread extends Thread {
           break;
         }
         Object untilCallbackResult = connection.dispatch.execute(readRequest.untilCallback(), read);
-        if (!(untilCallbackResult instanceof Boolean) && !(untilCallbackResult instanceof Promise)) { // TODO handle promise
+        if (!(untilCallbackResult instanceof Boolean) && !(untilCallbackResult instanceof Promise)) {
           throw YonaException.typeError(connection.node, untilCallbackResult);
         }
 

@@ -1,26 +1,30 @@
 #!/usr/bin/env pwsh
 
-$version = "0.8.1-SNAPSHOT"
+$version = "0.8.2-SNAPSHOT"
 
 function localDockerBuild() {
-    hilite docker build -t akovari/yona:latest -t akovari/yona:$version -f Dockerfile.local .
+    docker build -t akovari/yona:latest -t akovari/yona:$version -f Dockerfile.local .
 }
 
 function dockerPush() {
-    hilite docker push akovari/yona:latest
-    hilite docker push akovari/yona:$version
+    docker push akovari/yona:latest
+    docker push akovari/yona:$version
 }
 
 function run([string[]]$programArgs) {
-    hilite ./yona $programArgs
+    ./yona $programArgs
 }
 
 function mvnFastBuild() {
-    hilite mvn package -DskipTests -pl '!native' -pl '!component'
+    mvn package -DskipTests -pl '!native' -pl '!component'
 }
 
 function mvnPackage {
-    hilite mvn package -DexcludedGroups=slow
+    mvn package -DexcludedGroups=slow
+}
+
+function mvnRelease {
+    mvn release:update-versions -DautoVersionSubmodules=true
 }
 
 [string[]]$programArgs = @()
@@ -35,5 +39,6 @@ switch($args[0]) {
     "run" { run($programArgs) }
     "package" { mvnPackage }
     "local-launcher" { mvnFastBuild; run($programArgs) }
+    "release" { release }
     default { Write-Error "unknown option $($args[0])" }
 }

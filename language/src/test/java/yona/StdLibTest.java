@@ -21,103 +21,103 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void sequenceFoldLeftTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::foldl [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::foldl (\\acc val -> acc + val) 0 [1, 2, 3]").asLong();
     assertEquals(6L, ret);
   }
 
   @Test
   public void sequenceFoldRightTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::foldr [1, 2, 3] (\\acc val -> acc + val) 0").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::foldr (\\acc val -> acc + val) 0 [1, 2, 3]").asLong();
     assertEquals(6L, ret);
   }
 
   @Test
   public void sequenceFoldLeftWithinLetTest() {
-    long ret = context.eval(YonaLanguage.ID, "let xx = 5 in Seq::foldl [1, 2, 3] (\\acc val -> acc + val + xx) 0").asLong();
+    long ret = context.eval(YonaLanguage.ID, "let xx = 5 in Seq::foldl (\\acc val -> acc + val + xx) 0 [1, 2, 3]").asLong();
     assertEquals(21L, ret);
   }
 
   @Test
   public void sequenceReduceLeftFilterTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [-2,-1,0,1,2] <| Transducers::filter \\val -> val < 0 (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::filter \\val -> val < 0 (0, \\acc val -> acc + val, \\acc -> acc * 2)) [-2,-1,0,1,2]").asLong();
     assertEquals(-6L, ret);
   }
 
   @Test
   public void sequenceReduceRightFilterTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducer [-2,-1,0,1,2] <| Transducers::filter \\val -> val < 0 (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducer (Transducers::filter \\val -> val < 0 (0, \\acc val -> acc + val, \\acc -> acc * 2)) [-2,-1,0,1,2]").asLong();
     assertEquals(-6L, ret);
   }
 
   @Test
   public void sequenceReduceLeftDropNTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [-2,-1,0,1,2] <| Transducers::drop 2 (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::drop 2 (0, \\acc val -> acc + val, \\acc -> acc * 2)) [-2,-1,0,1,2]").asLong();
     assertEquals(6L, ret);
   }
 
   @Test
   public void sequenceReduceLeftTakeNTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [-2,-1,0,1,2] <| Transducers::take 2 (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::take 2 (0, \\acc val -> acc + val, \\acc -> acc * 2)) [-2,-1,0,1,2]").asLong();
     assertEquals(-6L, ret);
   }
 
   @Test
   public void sequenceReduceLeftDedupeTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [1, 1, 2, 3, 3, 4] <| Transducers::dedupe (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::dedupe (0, \\acc val -> acc + val, \\acc -> acc * 2)) [1, 1, 2, 3, 3, 4]").asLong();
     assertEquals(20L, ret);
   }
 
   @Test
   public void sequenceReduceLeftDistinctTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [1, 2, 3, 4, 1, 2, 3, 4] <| Transducers::distinct (0, \\acc val -> acc + val, \\acc -> acc * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::distinct (0, \\acc val -> acc + val, \\acc -> acc * 2)) [1, 2, 3, 4, 1, 2, 3, 4]").asLong();
     assertEquals(20L, ret);
   }
 
   @Test
   public void sequenceReduceLeftChunkTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [6, 1, 5, 2, 4, 3] <| Transducers::chunk 2 (1, \\acc val -> acc * Seq::len val, identity)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::chunk 2 (1, \\acc val -> acc * Seq::len val, identity)) [6, 1, 5, 2, 4, 3]").asLong();
     assertEquals(8L, ret);
   }
 
   @Test
   public void sequenceReduceLeftScanTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [1, 2, 3] <| Transducers::scan (0, \\ acc val -> acc + Seq::len val, identity)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::scan (0, \\ acc val -> acc + Seq::len val, identity)) [1, 2, 3]").asLong();
     assertEquals(6L, ret);
   }
 
   @Test
   public void sequenceReduceLeftCatTest() {
-    long ret = context.eval(YonaLanguage.ID, "Seq::reducel [{1, 2}, {3, 4}] <| Transducers::cat (Set::reduce) (0, \\acc val -> acc + val, identity)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Seq::reducel (Transducers::cat (Set::reduce) (0, \\acc val -> acc + val, identity)) [{1, 2}, {3, 4}]").asLong();
     assertEquals(10L, ret);
   }
 
   @Test
   public void dictFoldTest() {
-    long ret = context.eval(YonaLanguage.ID, "Dict::fold {'a' = 1, 'b' = 2, 'c' = 3} (\\acc _ -> acc + 1) 0").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Dict::fold (\\acc _ -> acc + 1) 0 {'a' = 1, 'b' = 2, 'c' = 3}").asLong();
     assertEquals(3L, ret);
   }
 
   @Test
   public void dictReduceMapTest() {
-    long ret = context.eval(YonaLanguage.ID, "Dict::reduce {'a' = 1, 'b' = 2, 'c' = 3} <| Transducers::map \\val -> val (0, \\state val -> state + 1, \\state -> state * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Dict::reduce (Transducers::map \\val -> val (0, \\state val -> state + 1, \\state -> state * 2)) {'a' = 1, 'b' = 2, 'c' = 3}").asLong();
     assertEquals(6L, ret);
   }
 
   @Test
   public void setFoldTest() {
-    long ret = context.eval(YonaLanguage.ID, "Set::fold {1, 2, 3} (\\acc val -> acc + val) 0").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Set::fold (\\acc val -> acc + val) 0 {1, 2, 3}").asLong();
     assertEquals(6L, ret);
   }
 
   @Test
   public void setReduceFilterTest() {
-    long ret = context.eval(YonaLanguage.ID, "Set::reduce {-2,-1,0,1,2} <| Transducers::filter \\val -> val < 0 (0, \\state val -> state + val, \\state -> state * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Set::reduce (Transducers::filter \\val -> val < 0 (0, \\state val -> state + val, \\state -> state * 2)) {-2,-1,0,1,2}").asLong();
     assertEquals(-6L, ret);
   }
 
   @Test
   public void setReduceMapTest() {
-    long ret = context.eval(YonaLanguage.ID, "Set::reduce {1, 2, 3} <| Transducers::map \\val -> val + 1 (0, \\state val -> state + val, \\state -> state * 2)").asLong();
+    long ret = context.eval(YonaLanguage.ID, "Set::reduce (Transducers::map \\val -> val + 1 (0, \\state val -> state + val, \\state -> state * 2)) {1, 2, 3}").asLong();
     assertEquals(18L, ret);
   }
 

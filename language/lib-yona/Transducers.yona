@@ -80,7 +80,7 @@ module Transducers exports filter, map, drop, take, dedupe, distinct, chunk, sca
     # step: function of two arguments (accumulator, element) returning new value of the accumulator
     # complete: function of one argument (final state of accumulator) returning final return value
     cat reduce (init, step, complete) = let
-      new_step = \acc val -> reduce val (acc, \inner_acc inner_val -> step inner_acc inner_val, identity)
+      new_step = \acc val -> reduce (acc, \inner_acc inner_val -> step inner_acc inner_val, identity) val
     in
       (init, new_step, complete)
 end
