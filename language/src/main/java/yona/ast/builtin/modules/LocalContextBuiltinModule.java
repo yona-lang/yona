@@ -29,9 +29,9 @@ public final class LocalContextBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(LocalContextBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(LocalContextBuiltinModuleFactory.ContainsBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(LocalContextBuiltinModuleFactory.LookupBuiltinFactory.getInstance()),
+        new ExportedFunction(LocalContextBuiltinModuleFactory.ContainsBuiltinFactory.getInstance())
+    );
   }
 }

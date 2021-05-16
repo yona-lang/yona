@@ -207,14 +207,14 @@ public final class SystemBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PipelineBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetEnvBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.PidBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.GetArgsBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.LanguageHomeBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SystemBuiltinModuleFactory.NewLineBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(SystemBuiltinModuleFactory.RunBuiltinFactory.getInstance()),
+        new ExportedFunction(SystemBuiltinModuleFactory.PipelineBuiltinFactory.getInstance()),
+        new ExportedFunction(SystemBuiltinModuleFactory.GetEnvBuiltinFactory.getInstance()),
+        new ExportedFunction(SystemBuiltinModuleFactory.PidBuiltinFactory.getInstance()),
+        new ExportedFunction(SystemBuiltinModuleFactory.GetArgsBuiltinFactory.getInstance()),
+        new ExportedFunction(SystemBuiltinModuleFactory.LanguageHomeBuiltinFactory.getInstance()),
+        new ExportedFunction(SystemBuiltinModuleFactory.NewLineBuiltinFactory.getInstance())
+    );
   }
 }

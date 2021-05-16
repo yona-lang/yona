@@ -245,12 +245,12 @@ public final class JavaBuiltinModule implements BuiltinModule {
 
   @Override
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.TypeBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.InstanceOfBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.NewBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.RaiseBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(JavaBuiltinModuleFactory.CastBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(JavaBuiltinModuleFactory.TypeBuiltinFactory.getInstance()),
+        new ExportedFunction(JavaBuiltinModuleFactory.InstanceOfBuiltinFactory.getInstance()),
+        new ExportedFunction(JavaBuiltinModuleFactory.NewBuiltinFactory.getInstance()),
+        new ExportedFunction(JavaBuiltinModuleFactory.RaiseBuiltinFactory.getInstance()),
+        new ExportedFunction(JavaBuiltinModuleFactory.CastBuiltinFactory.getInstance())
+    );
   }
 }

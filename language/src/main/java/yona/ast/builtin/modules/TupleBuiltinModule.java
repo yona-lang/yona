@@ -19,8 +19,8 @@ public final class TupleBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(TupleBuiltinModuleFactory.ToSeqBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(TupleBuiltinModuleFactory.ToSeqBuiltinFactory.getInstance())
+    );
   }
 }

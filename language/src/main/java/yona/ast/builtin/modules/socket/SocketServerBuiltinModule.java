@@ -167,10 +167,10 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
 
   @Override
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(SocketServerBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SocketServerBuiltinModuleFactory.ChannelBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SocketServerBuiltinModuleFactory.AcceptBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(SocketServerBuiltinModuleFactory.RunBuiltinFactory.getInstance()),
+        new ExportedFunction(SocketServerBuiltinModuleFactory.ChannelBuiltinFactory.getInstance()),
+        new ExportedFunction(SocketServerBuiltinModuleFactory.AcceptBuiltinFactory.getInstance())
+    );
   }
 }

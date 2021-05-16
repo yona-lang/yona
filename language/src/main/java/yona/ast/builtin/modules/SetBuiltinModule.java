@@ -36,7 +36,7 @@ public final class SetBuiltinModule implements BuiltinModule {
     @Specialization
     public Object reduce(Tuple reducer, Set set, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return set.reduce(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
+        return set.reduce(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YonaException(e, this);
@@ -69,12 +69,12 @@ public final class SetBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SetBuiltinModuleFactory.ToSeqBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(SetBuiltinModuleFactory.FoldBuiltinFactory.getInstance()),
+        new ExportedFunction(SetBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()),
+        new ExportedFunction(SetBuiltinModuleFactory.EmptyBuiltinFactory.getInstance()),
+        new ExportedFunction(SetBuiltinModuleFactory.LengthBuiltinFactory.getInstance()),
+        new ExportedFunction(SetBuiltinModuleFactory.ToSeqBuiltinFactory.getInstance())
+    );
   }
 }

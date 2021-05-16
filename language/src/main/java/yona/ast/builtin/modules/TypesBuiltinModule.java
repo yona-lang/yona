@@ -180,21 +180,21 @@ public final class TypesBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsBooleanBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsByteBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsIntegerBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsFloatBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsCharBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsFunctionBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsTupleBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsModuleBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsSeqBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsSetBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsDictBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsSetBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsNativeBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(TypesBuiltinModuleFactory.IsSymbolBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(TypesBuiltinModuleFactory.IsBooleanBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsByteBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsIntegerBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsFloatBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsCharBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsFunctionBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsTupleBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsModuleBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsSeqBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsSetBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsDictBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsSetBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsNativeBuiltinFactory.getInstance()),
+        new ExportedFunction(TypesBuiltinModuleFactory.IsSymbolBuiltinFactory.getInstance())
+    );
   }
 }

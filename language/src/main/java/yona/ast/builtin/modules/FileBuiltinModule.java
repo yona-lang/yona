@@ -471,17 +471,17 @@ public final class FileBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileOpenNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.CreateTempFileNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileDeleteNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FilePathNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileSeekNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileListNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadLineNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileReadFileNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.FileWriteFileNodeFactory.getInstance()));
-    builtins.register(new ExportedFunction(FileBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(FileBuiltinModuleFactory.FileOpenNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.CreateTempFileNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.FileDeleteNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.FilePathNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.FileSeekNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.FileListNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.FileReadLineNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.FileReadFileNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.FileWriteFileNodeFactory.getInstance()),
+        new ExportedFunction(FileBuiltinModuleFactory.RunBuiltinFactory.getInstance())
+    );
   }
 }

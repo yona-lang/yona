@@ -39,7 +39,7 @@ public final class StopWatchBuiltinModule implements BuiltinModule {
         Object result = dispatch.execute(function);
         if (result instanceof Promise promise) {
           if (!promise.isFulfilled()) {
-            return promise.map(res -> new Tuple(System.nanoTime() - start, res) ,this);
+            return promise.map(res -> new Tuple(System.nanoTime() - start, res), this);
           } else {
             return new Tuple(System.nanoTime() - start, promise.unwrapOrThrow());
           }
@@ -57,8 +57,8 @@ public final class StopWatchBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(StopWatchBuiltinModuleFactory.NanosBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(StopWatchBuiltinModuleFactory.NanosBuiltinFactory.getInstance())
+    );
   }
 }

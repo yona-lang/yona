@@ -1,4 +1,4 @@
-package yona.ast.builtin.modules;
+package yona.ast.builtin.modules.http;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
@@ -13,6 +13,8 @@ import com.sun.net.httpserver.HttpServer;
 import yona.TypesGen;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
+import yona.ast.builtin.modules.BuiltinModule;
+import yona.ast.builtin.modules.BuiltinModuleInfo;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
@@ -227,11 +229,11 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
 
   @Override
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(HttpServerBuiltinModuleFactory.CreateBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(HttpServerBuiltinModuleFactory.StartBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(HttpServerBuiltinModuleFactory.StopBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(HttpServerBuiltinModuleFactory.HandleBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(HttpServerBuiltinModuleFactory.CreateBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpServerBuiltinModuleFactory.StartBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpServerBuiltinModuleFactory.StopBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpServerBuiltinModuleFactory.HandleBuiltinFactory.getInstance())
+    );
   }
 }

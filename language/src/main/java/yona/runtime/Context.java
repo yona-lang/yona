@@ -16,6 +16,8 @@ import yona.ast.FunctionRootNode;
 import yona.ast.JavaMethodRootNode;
 import yona.ast.builtin.*;
 import yona.ast.builtin.modules.*;
+import yona.ast.builtin.modules.http.HttpClientBuiltinModule;
+import yona.ast.builtin.modules.http.HttpServerBuiltinModule;
 import yona.ast.builtin.modules.socket.SocketClientBuiltinModule;
 import yona.ast.builtin.modules.socket.SocketConnectionBuiltinModule;
 import yona.ast.builtin.modules.socket.SocketServerBuiltinModule;

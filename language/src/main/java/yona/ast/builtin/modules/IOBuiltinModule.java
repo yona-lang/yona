@@ -159,11 +159,11 @@ public final class IOBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(IOBuiltinModuleFactory.PrintBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(IOBuiltinModuleFactory.ReadBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(IOBuiltinModuleFactory.ReadlnBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(IOBuiltinModuleFactory.FlushBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(IOBuiltinModuleFactory.PrintBuiltinFactory.getInstance()),
+        new ExportedFunction(IOBuiltinModuleFactory.ReadBuiltinFactory.getInstance()),
+        new ExportedFunction(IOBuiltinModuleFactory.ReadlnBuiltinFactory.getInstance()),
+        new ExportedFunction(IOBuiltinModuleFactory.FlushBuiltinFactory.getInstance())
+    );
   }
 }

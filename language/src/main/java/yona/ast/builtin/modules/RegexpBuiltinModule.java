@@ -138,10 +138,10 @@ public final class RegexpBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(RegexpBuiltinModuleFactory.CompileBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(RegexpBuiltinModuleFactory.ExecBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(RegexpBuiltinModuleFactory.ReplaceBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(RegexpBuiltinModuleFactory.CompileBuiltinFactory.getInstance()),
+        new ExportedFunction(RegexpBuiltinModuleFactory.ExecBuiltinFactory.getInstance()),
+        new ExportedFunction(RegexpBuiltinModuleFactory.ReplaceBuiltinFactory.getInstance())
+    );
   }
 }

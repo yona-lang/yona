@@ -18,8 +18,8 @@ public final class TransducersBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(TransducersBuiltinModuleFactory.RaiseDoneBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(TransducersBuiltinModuleFactory.RaiseDoneBuiltinFactory.getInstance())
+    );
   }
 }

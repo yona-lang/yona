@@ -14,7 +14,6 @@ public class Builtins {
     }
   }
 
-  @Deprecated
   public void register(StdLibFunction stdLibFunction) {
     this.builtins.put(Context.lookupNodeInfo(stdLibFunction.node.getNodeClass()).shortName(), stdLibFunction);
   }

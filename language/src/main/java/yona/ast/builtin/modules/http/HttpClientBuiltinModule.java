@@ -1,4 +1,4 @@
-package yona.ast.builtin.modules;
+package yona.ast.builtin.modules.http;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
@@ -12,6 +12,8 @@ import yona.TypesGen;
 import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
+import yona.ast.builtin.modules.BuiltinModule;
+import yona.ast.builtin.modules.BuiltinModuleInfo;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
@@ -316,12 +318,12 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(HttpClientBuiltinModuleFactory.SessionBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(HttpClientBuiltinModuleFactory.GetBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(HttpClientBuiltinModuleFactory.DeleteBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(HttpClientBuiltinModuleFactory.PostBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(HttpClientBuiltinModuleFactory.PutBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(HttpClientBuiltinModuleFactory.SessionBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.GetBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.DeleteBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.PostBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.PutBuiltinFactory.getInstance())
+    );
   }
 }

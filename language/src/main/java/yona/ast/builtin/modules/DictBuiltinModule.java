@@ -34,7 +34,7 @@ public final class DictBuiltinModule implements BuiltinModule {
     @Specialization
     public Object reduce(Tuple reducer, Dict dict, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       try {
-        return dict.reduce(new Object[] {reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
+        return dict.reduce(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         /* Execute was not successful. */
         throw new YonaException(e, this);
@@ -75,13 +75,13 @@ public final class DictBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.EntriesBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(DictBuiltinModuleFactory.KeysBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(DictBuiltinModuleFactory.FoldBuiltinFactory.getInstance()),
+        new ExportedFunction(DictBuiltinModuleFactory.ReduceBuiltinFactory.getInstance()),
+        new ExportedFunction(DictBuiltinModuleFactory.LengthBuiltinFactory.getInstance()),
+        new ExportedFunction(DictBuiltinModuleFactory.LookupBuiltinFactory.getInstance()),
+        new ExportedFunction(DictBuiltinModuleFactory.EntriesBuiltinFactory.getInstance()),
+        new ExportedFunction(DictBuiltinModuleFactory.KeysBuiltinFactory.getInstance())
+    );
   }
 }

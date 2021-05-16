@@ -189,15 +189,15 @@ public class STMBuiltinModule implements BuiltinModule {
 
   @Override
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.STMBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.VarBuiltinFactory.getInstance()));
-    builtins.register(new PrivateFunction(STMBuiltinModuleFactory.RunBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.ReadTxBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.WriteTxBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.ReadBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.WriteBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(STMBuiltinModuleFactory.ProtectBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(STMBuiltinModuleFactory.STMBuiltinFactory.getInstance()),
+        new ExportedFunction(STMBuiltinModuleFactory.VarBuiltinFactory.getInstance()),
+        new PrivateFunction(STMBuiltinModuleFactory.RunBuiltinFactory.getInstance()),
+        new ExportedFunction(STMBuiltinModuleFactory.ReadTxBuiltinFactory.getInstance()),
+        new ExportedFunction(STMBuiltinModuleFactory.WriteTxBuiltinFactory.getInstance()),
+        new ExportedFunction(STMBuiltinModuleFactory.ReadBuiltinFactory.getInstance()),
+        new ExportedFunction(STMBuiltinModuleFactory.WriteBuiltinFactory.getInstance()),
+        new ExportedFunction(STMBuiltinModuleFactory.ProtectBuiltinFactory.getInstance())
+    );
   }
 }

@@ -38,9 +38,9 @@ public final class JavaTypesBuiltinModule implements BuiltinModule {
 
   @Override
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(JavaTypesBuiltinModuleFactory.ToIntBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(JavaTypesBuiltinModuleFactory.ToFloatBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(JavaTypesBuiltinModuleFactory.ToIntBuiltinFactory.getInstance()),
+        new ExportedFunction(JavaTypesBuiltinModuleFactory.ToFloatBuiltinFactory.getInstance())
+    );
   }
 }

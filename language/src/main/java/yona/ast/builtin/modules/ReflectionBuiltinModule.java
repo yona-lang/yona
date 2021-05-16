@@ -99,10 +99,10 @@ public final class ReflectionBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(ReflectionBuiltinModuleFactory.ModulesBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(ReflectionBuiltinModuleFactory.FunctionsBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(ReflectionBuiltinModuleFactory.AutocompleteBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(ReflectionBuiltinModuleFactory.ModulesBuiltinFactory.getInstance()),
+        new ExportedFunction(ReflectionBuiltinModuleFactory.FunctionsBuiltinFactory.getInstance()),
+        new ExportedFunction(ReflectionBuiltinModuleFactory.AutocompleteBuiltinFactory.getInstance())
+    );
   }
 }

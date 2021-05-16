@@ -78,8 +78,8 @@ public final class JSONBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(JSONBuiltinModuleFactory.ParseBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(JSONBuiltinModuleFactory.ParseBuiltinFactory.getInstance())
+    );
   }
 }

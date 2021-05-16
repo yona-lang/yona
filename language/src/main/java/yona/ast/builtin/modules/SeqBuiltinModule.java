@@ -78,7 +78,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
     }
   }
 
-  @NodeInfo(shortName = "splitAt")
+  @NodeInfo(shortName = "split_at")
   abstract static class SplitBuiltin extends BuiltinNode {
     @Specialization
     public Tuple length(long idx, Seq sequence) {
@@ -143,20 +143,20 @@ public final class SeqBuiltinModule implements BuiltinModule {
   }
 
   public Builtins builtins() {
-    Builtins builtins = new Builtins();
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.SplitBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.IsStringBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.LookupBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.TakeBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.DropBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.EncodeBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.DecodeBuiltinFactory.getInstance()));
-    builtins.register(new ExportedFunction(SeqBuiltinModuleFactory.TrimBuiltinFactory.getInstance()));
-    return builtins;
+    return new Builtins(
+        new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.SplitBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.IsStringBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.LookupBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.TakeBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.DropBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.EncodeBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.DecodeBuiltinFactory.getInstance()),
+        new ExportedFunction(SeqBuiltinModuleFactory.TrimBuiltinFactory.getInstance())
+    );
   }
 }
