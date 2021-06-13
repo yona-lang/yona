@@ -7,6 +7,7 @@ import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.TestInstance;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -110,20 +111,20 @@ public class StringTest extends CommonTest {
 
   @TestFactory
   Stream<DynamicTest> escapeSequencesCurly() {
-    String[] escapeSequences = {
-        "\\'",
-        "\\a",
-        "\\b",
-        "\\f",
-        "\\n",
-        "\\r",
-        "\\t",
-        "\\v"
-    };
+    Map<String, String> escapeSequences = Map.of(
+        "\\'", "\'",
+        "\\a", String.valueOf((char) 7),
+        "\\b", "\b",
+        "\\f", "\f",
+        "\\n", "\n",
+        "\\r", "\r",
+        "\\t", "\t",
+        "\\v", String.valueOf((char) 9)
+    );
 
-    return Arrays.stream(escapeSequences).map(sequence -> DynamicTest.dynamicTest(sequence, () -> {
-      String ret = context.eval(YonaLanguage.ID, '"' + sequence + '"').asString();
-      assertEquals(sequence, ret);
+    return escapeSequences.entrySet().stream().map(sequence -> DynamicTest.dynamicTest(sequence.getKey(), () -> {
+      String ret = context.eval(YonaLanguage.ID, '"' + sequence.getKey() + '"').asString();
+      assertEquals(sequence.getValue(), ret);
     }));
   }
 

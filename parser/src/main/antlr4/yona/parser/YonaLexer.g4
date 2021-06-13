@@ -1,20 +1,12 @@
 lexer grammar YonaLexer;
 
-@lexer::header
-{import java.util.Stack;}
+tokens { OPEN_INTERP, CLOSE_INTERP }
+
+options {
+    superClass=YonaLexerBase;
+}
 
 channels { COMMENTS_CHANNEL }
-
-@lexer::members
-{
-private int interpolatedStringLevel;
-private Stack<Integer> curlyLevels = new Stack<Integer>();
-private int openLevel = 0;
-
-public boolean isOpened() {
-    return openLevel > 0 || interpolatedStringLevel > 0;
-}
-}
 
 UNIT: '()' ;
 UNDERSCORE : '_' ;
@@ -45,31 +37,13 @@ KW_RECORD : 'record' ;
 KW_WITH : 'with' ;
 KW_DAEMON : 'daemon' ;
 
-BRACKET_L : '[' {openLevel++;} ;
-BRACKET_R : ']' {openLevel--;};
-PARENS_L : '(' {openLevel++;};
-PARENS_R : ')' {openLevel--;};
+BRACKET_L : '[';
+BRACKET_R : ']';
+PARENS_L : '(';
+PARENS_R : ')';
 
-CURLY_L:               '{'
-{
-if (interpolatedStringLevel > 0)
-{
-    curlyLevels.push(curlyLevels.pop() + 1);
-}};
-CURLY_R:              '}'
-{
-if (interpolatedStringLevel > 0)
-{
-    curlyLevels.push(curlyLevels.pop() - 1);
-    if (curlyLevels.peek() == 0)
-    {
-        curlyLevels.pop();
-        skip();
-        popMode();
-    }
-}
-};
-
+CURLY_L: '{' {openCurly();};
+CURLY_R: '}' {closeCurly();};
 COMMA : ',' ;
 DCOLON : '::' ;
 COLON : ':' ;
@@ -131,22 +105,17 @@ COMMENT: NEWLINE? WS? '#' InputCharacter* -> channel(COMMENTS_CHANNEL) ;
 NEWLINE : NewLinePart+;
 WS: WHITESPACE+ -> channel(HIDDEN);
 
-INTERPOLATED_REGULAR_STRING_START:   '"'
-    { interpolatedStringLevel++; } -> pushMode(INTERPOLATION_STRING);
+STRING_START:   '"'
+    { interpolationOpened(); } -> pushMode(INTERPOLATION_STRING);
 
-CHARACTER_LITERAL:                   '\'' (~['\\\r\n\u0085\u2028\u2029] | CommonCharacter) '\'';
+CHARACTER_LITERAL:                   '\'' (~['\\\r\n\u0085\u2028\u2029] | CommonCharacter | SimpleEscapeSequence) '\'';
 
 mode INTERPOLATION_STRING;
-DOUBLE_CURLY_INSIDE:           '{{';
-OPEN_BRACE_INSIDE:             '{' { curlyLevels.push(1); } -> skip, pushMode(DEFAULT_MODE);
-REGULAR_CHAR_INSIDE:           SimpleEscapeSequence { setText(getText().replace("\\\\", "\\").replace("\\\"", "\"")); } | CommonCharacter;
-DOUBLE_QUOTE_INSIDE:           '"' { interpolatedStringLevel--; } -> popMode;
-REGULAR_STRING_INSIDE:         ~('{' | '\\' | '"')+;
-
-mode INTERPOLATION_FORMAT;
-DOUBLE_CURLY_CLOSE_INSIDE:      '}}' -> type(FORMAT_STRING);
-CLOSE_BRACE_INSIDE:             '}' { curlyLevels.pop(); }   -> skip, popMode;
-FORMAT_STRING:                  ~'}'+;
+DOUBLE_CURLY_OPEN_INSIDE:      '{{' { interpolatedDoubleCurlyOpened(); };
+DOUBLE_CURLY_CLOSE_INSIDE:     '}}' { interpolatedDoubleCurlyClosed(); };
+OPEN_BRACE_INSIDE:             '{' { interpolatedCurlyOpened(); } -> type(OPEN_INTERP), pushMode(DEFAULT_MODE);
+REGULAR_STRING_INSIDE:         (SimpleEscapeSequence | ~["{}])+;
+STRING_STOP:                   '"' { interpolationClosed(); } -> popMode;
 
 fragment InputCharacter:       ~[\r\n\u0085\u2028\u2029];
 

@@ -95,19 +95,8 @@ byteLiteral : BYTE;
 floatLiteral : FLOAT | FLOAT_INTEGER;
 integerLiteral : INTEGER ;
 
-stringLiteral: INTERPOLATED_REGULAR_STRING_START interpolatedStringPart* DOUBLE_QUOTE_INSIDE ;
-interpolatedStringPart
-	: interpolatedStringExpression
-	| DOUBLE_CURLY_INSIDE
-	| DOUBLE_CURLY_CLOSE_INSIDE
-	| REGULAR_CHAR_INSIDE
-	| REGULAR_STRING_INSIDE
-	;
-
-interpolatedStringExpression
-	: interpolationExpression=expression (COMMA alignment=expression)?
-	;
-
+stringLiteral : STRING_START (rawStringPart=REGULAR_STRING_INSIDE | interpolatedStringPart)* STRING_STOP;
+interpolatedStringPart : OPEN_INTERP interpolationExpression=expression (COMMA alignment=expression)? CLOSE_INTERP;
 
 characterLiteral : CHARACTER_LITERAL ;
 booleanLiteral : KW_TRUE | KW_FALSE ;

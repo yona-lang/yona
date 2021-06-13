@@ -6,9 +6,9 @@ module JSON exports generate as
         | Types::is_tuple val = generate <| Tuple::to_seq val
         | Types::is_module val = raise :nomatch "Modules cannot be serialized to JSON"
         | Types::is_seq val && Seq::is_string val = "\"{val}\""
-        | Types::is_seq val = "[{let (res, _) = Seq::foldl element_fold ("", Seq::len val) val in res}]"
-        | Types::is_dict val = "{{{let (res, _) = Dict::fold key_val_fold ("", Dict::len val) val in res}}}"
-        | Types::is_set val = "[{let (res, _) = Set::fold element_fold ("", Set::len val) val in res}]"
+        | Types::is_seq val = "[{let (res, _) = Seq::foldl element_fold ([], Seq::len val) val in res}]"
+        | Types::is_dict val = "{{{let (res, _) = Dict::fold key_val_fold ([], Dict::len val) val in res}}}"
+        | Types::is_set val = "[{let (res, _) = Set::fold element_fold ([], Set::len val) val in res}]"
         | Types::is_native val = raise :nomatch "Native Objects cannot be serialized to JSON"
         | Types::is_symbol val = "\"{val}\""
         | true = "{val}"

@@ -183,7 +183,7 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void asyncEvalTest() {
-    long ret = context.eval(YonaLanguage.ID, "eval :yona \"async \\\\-> 1\"").asLong();
+    long ret = context.eval(YonaLanguage.ID, "eval :yona \"async \\-> 1\"").asLong();
     assertEquals(1L, ret);
   }
 

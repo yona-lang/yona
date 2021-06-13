@@ -3,6 +3,8 @@ package yona.parser;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 import yona.YonaLanguage;
 import yona.ast.AliasNode;
 import yona.ast.ExpressionNode;
@@ -19,6 +21,7 @@ import yona.ast.local.ReadArgumentNode;
 import yona.ast.pattern.*;
 import yona.runtime.Context;
 import yona.runtime.Dict;
+import yona.runtime.Seq;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -335,34 +338,37 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
 
   @Override
   public ExpressionNode visitStringLiteral(YonaParser.StringLiteralContext ctx) {
-    ExpressionNode[] expressionNodes = new ExpressionNode[ctx.interpolatedStringPart().size()];
+    List<ExpressionNode> expressionNodes = new ArrayList<>();
 
-    for (int i = 0; i < ctx.interpolatedStringPart().size(); i++) {
-      expressionNodes[i] = ctx.interpolatedStringPart(i).accept(this);
+    for (ParseTree child : ctx.children) {
+      if (child instanceof YonaParser.InterpolatedStringPartContext) {
+        expressionNodes.add(visitInterpolatedStringPart((YonaParser.InterpolatedStringPartContext) child));
+      } else if (child instanceof TerminalNode terminalNode && terminalNode.getSymbol().getType() == YonaLexer.REGULAR_STRING_INSIDE) {
+        expressionNodes.add(new StringNode(child.getText()
+          .replace("\\'", "'")    // Single quotation mark
+          .replace("\\\"", "\"")  // Double quotation mark
+          .replace("\\\\", "\\")  // Backslash
+          .replace("\\0", "\0")
+          .replace("\\a", String.valueOf((char) 7)) // Bell (alert)
+          .replace("\\b", "\b")  // Backspace
+          .replace("\\f", "\f")  // Form feed
+          .replace("\\n", "\n")  // New line
+          .replace("\\r", "\r")  // Carriage return
+          .replace("\\t", "\t")  // Horizontal tab
+          .replace("\\v", String.valueOf((char) 9))  // Vertical tab
+        ));
+      }
     }
 
-    return new StringPartsNode(expressionNodes);
+    return new StringPartsNode(expressionNodes.toArray(new ExpressionNode[0]));
   }
 
   @Override
   public ExpressionNode visitInterpolatedStringPart(YonaParser.InterpolatedStringPartContext ctx) {
-    if (ctx.interpolatedStringExpression() != null) {
-      return visitInterpolatedStringExpression(ctx.interpolatedStringExpression());
-    } else if (ctx.DOUBLE_CURLY_INSIDE() != null) {
-      return withSourceSection(ctx, new StringNode("{"));
-    } else if (ctx.REGULAR_CHAR_INSIDE() != null) {
-      return withSourceSection(ctx, new StringNode(ctx.REGULAR_CHAR_INSIDE().getText()));
-    } else {
-      return withSourceSection(ctx, new StringNode(ctx.REGULAR_STRING_INSIDE().getText().replace("}}", "}")));
-    }
-  }
-
-  @Override
-  public ExpressionNode visitInterpolatedStringExpression(YonaParser.InterpolatedStringExpressionContext ctx) {
     ExpressionNode expressionNode = ctx.interpolationExpression.accept(this);
     ExpressionNode alignmentNode = (ctx.alignment != null) ? ctx.alignment.accept(this) : null;
 
-    return new StringInterpolationNode(expressionNode, alignmentNode);
+    return withSourceSection(ctx, new StringInterpolationNode(expressionNode, alignmentNode));
   }
 
   @Override
