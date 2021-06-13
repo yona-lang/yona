@@ -47,16 +47,16 @@ abstract class YonaLexerBase extends Lexer {
     }
 
     public void interpolatedDoubleCurlyOpened() {
-        this.emit(commonToken(YonaLexer.REGULAR_STRING_INSIDE, "{"));
+        this.emit(curlyToken("{"));
     }
 
     public void interpolatedDoubleCurlyClosed() {
-        this.emit(commonToken(YonaLexer.REGULAR_STRING_INSIDE, "}"));
+        this.emit(curlyToken("}"));
     }
 
-    private CommonToken commonToken(final int type, final String text) {
+    private CommonToken curlyToken(final String text) {
         int stop = this.getCharIndex() - 1;
-        int start = text.isEmpty() ? stop : stop - text.length() + 1;
-        return new CommonToken(this._tokenFactorySourcePair, type, DEFAULT_TOKEN_CHANNEL, start, stop);
+        int start = text.isEmpty() ? stop : stop - text.length();
+        return new CommonToken(this._tokenFactorySourcePair, YonaLexer.REGULAR_STRING_INSIDE, DEFAULT_TOKEN_CHANNEL, start, stop);
     }
 }

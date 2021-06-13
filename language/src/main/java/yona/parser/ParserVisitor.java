@@ -356,6 +356,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
           .replace("\\r", "\r")  // Carriage return
           .replace("\\t", "\t")  // Horizontal tab
           .replace("\\v", String.valueOf((char) 9))  // Vertical tab
+          .replace("{{", "{")
+          .replace("}}", "}")
         ));
       }
     }
