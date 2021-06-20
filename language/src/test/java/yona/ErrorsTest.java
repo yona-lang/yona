@@ -403,7 +403,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YonaLanguage.ID, "socket\\tcp\\Client::connect \"localhost\" 6666");
       } catch (PolyglotException ex) {
-        assertEquals("java.net.ConnectException: Connection refused", ex.getMessage());
+        assertTrue(ex.getMessage().startsWith("java.net.ConnectException"));
         throw ex;
       }
     });

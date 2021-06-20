@@ -148,10 +148,11 @@ public class StdLibTest extends CommonTest {
   @Test
   @SuppressWarnings("unchecked")
   public void systemPipelineCommandTest() {
-    Value tuple = context.eval(YonaLanguage.ID, "System::pipeline [\n" +
-        "[\"echo\", \"hello\"],\n" +
-        "[\"rev\"]" +
-        "]");
+    Value tuple = context.eval(YonaLanguage.ID, """
+      System::pipeline [
+        ["echo", "hello"],
+        ["rev"]
+      ]""");
     assertTrue(tuple.hasArrayElements());
 
     Object[] array = tuple.as(Object[].class);
@@ -163,10 +164,11 @@ public class StdLibTest extends CommonTest {
   @Test
   @SuppressWarnings("unchecked")
   public void systemPipelineAsyncCommandTest() {
-    Value tuple = context.eval(YonaLanguage.ID, "System::pipeline [\n" +
-        "[\"echo\", \"hello\"],\n" +
-        "[async \\->\"rev\"]" +
-        "]");
+    Value tuple = context.eval(YonaLanguage.ID, """
+      System::pipeline [
+        ["echo", "hello"],
+        [async \\->"rev"]
+      ]""");
     assertTrue(tuple.hasArrayElements());
 
     Object[] array = tuple.as(Object[].class);
@@ -201,52 +203,57 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void javaTypeEvalTest() {
-    boolean ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    type = Java::type \"java.math.BigInteger\"\n" +
-        "    instance = Java::new type [\"50\"]\n" +
-        "in Java::instanceof instance type").asBoolean();
+    boolean ret = context.eval(YonaLanguage.ID, """
+      let
+          type = Java::type "java.math.BigInteger"
+          instance = Java::new type ["50"]
+      in Java::instanceof instance type""").asBoolean();
     assertTrue(ret);
   }
 
   @Test
   public void javaAsyncTypeEvalTest() {
-    boolean ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    type = Java::type \"java.math.BigInteger\"\n" +
-        "    instance = Java::new type [async \\-> \"50\"]\n" +
-        "in Java::instanceof instance type").asBoolean();
+    boolean ret = context.eval(YonaLanguage.ID, """
+      let
+          type = Java::type "java.math.BigInteger"
+          instance = Java::new type [async \\-> "50"]
+      in Java::instanceof instance type""").asBoolean();
     assertTrue(ret);
   }
 
   @Test
   public void javaCatchTest() {
-    String ret = context.eval(YonaLanguage.ID, "try\n" +
-        "let\n" +
-        "    type = Java::type \"java.lang.ArithmeticException\"\n" +
-        "    error = Java::new type [\"testing error\"]\n" +
-        "in Java::throw error\n" +
-        "catch\n" +
-        "    (:java, error_msg, _) -> error_msg\n" +
-        "end").asString();
+    String ret = context.eval(YonaLanguage.ID, """
+      try
+      let
+          type = Java::type "java.lang.ArithmeticException"
+          error = Java::new type ["testing error"]
+      in Java::throw error
+      catch
+          (:java, error_msg, _) -> error_msg
+      end""").asString();
     assertEquals("java.lang.ArithmeticException: testing error", ret);
   }
 
   @Test
   public void javaCallNoArgMethodTest() {
-    long ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    type = Java::type \"java.math.BigInteger\"\n" +
-        "    instance = Java::new type [\"-2\"]\n" +
-        "in instance::longValue").asLong();
+    long ret = context.eval(YonaLanguage.ID, """
+      let
+          type = Java::type "java.math.BigInteger"
+          instance = Java::new type ["-2"]
+      in instance::longValue""").asLong();
     assertEquals(-2L, ret);
   }
 
   @Test
   public void javaCallArgMethodTest() {
-    long ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    type = Java::type \"java.math.BigInteger\"\n" +
-        "    big_two = Java::new type [\"2\"]\n" +
-        "    big_three = Java::new type [\"3\"]\n" +
-        "    result = big_two::multiply big_three\n" +
-        "in result::longValue").asLong();
+    long ret = context.eval(YonaLanguage.ID, """
+      let
+          type = Java::type "java.math.BigInteger"
+          big_two = Java::new type ["2"]
+          big_three = Java::new type ["3"]
+          result = big_two::multiply big_three
+      in result::longValue""").asLong();
     assertEquals(6L, ret);
   }
 
@@ -258,23 +265,25 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void javaCallCurriedMethodTest() {
-    long ret = context.eval(YonaLanguage.ID, "do\n" +
-        "    list = Java::new (Java::type \"java.util.ArrayList\") []\n" +
-        "    list::add 5\n" +
-        "    set_second = list::set <| java\\Types::to_int 0\n" +
-        "    set_second 6\n" +
-        "    list::get <| java\\Types::to_int 0\n" +
-        "end").asLong();
+    long ret = context.eval(YonaLanguage.ID, """
+      do
+          list = Java::new (Java::type "java.util.ArrayList") []
+          list::add 5
+          set_second = list::set <| java\\Types::to_int 0
+          set_second 6
+          list::get <| java\\Types::to_int 0
+      end""").asLong();
     assertEquals(6L, ret);
   }
 
   @Test
   public void javaCallStaticWithAsyncMethodTest() {
-    long ret = context.eval(YonaLanguage.ID, "do\n" +
-        "    list = Java::new (Java::type \"java.util.ArrayList\") []\n" +
-        "    list::add (async \\ -> 5)\n" +
-        "    list::size\n" +
-        "end").asLong();
+    long ret = context.eval(YonaLanguage.ID, """
+      do
+          list = Java::new (Java::type "java.util.ArrayList") []
+          list::add (async \\ -> 5)
+          list::size
+      end""").asLong();
     assertEquals(1L, ret);
   }
 
@@ -424,75 +433,94 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void httpClientTest() {
-    long ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    session = http\\Client::session {}\n" +
-        "    (status, headers, body) = http\\Client::get session \"https://httpbin.org/get\" {}\n" +
-        "in\n" +
-        "    status").asLong();
+    long ret = context.eval(YonaLanguage.ID, """
+      let
+          session = http\\Client::session {}
+          (status, headers, body) = http\\Client::get session "https://httpbin.org/get" {}
+      in
+          status""").asLong();
+    assertEquals(200L, ret);
+  }
+
+  @Test
+  public void httpClientContextManagerTest() {
+    long ret = context.eval(YonaLanguage.ID, """
+      with http\\Client::session {} as session
+        let
+          (status, headers, body) = http\\Client::get session "https://httpbin.org/get" {}
+        in
+          status
+      end""").asLong();
     assertEquals(200L, ret);
   }
 
   @Test
   public void httpClientAsyncTest() {
-    long ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    session = async \\-> http\\Client::session {}\n" +
-        "    (status, headers, body) = http\\Client::get session (async \\->\"https://httpbin.org/get\") (async \\->{})\n" +
-        "in\n" +
-        "    status").asLong();
+    long ret = context.eval(YonaLanguage.ID, """
+      let
+          session = async \\-> http\\Client::session {}
+          (status, headers, body) = http\\Client::get session (async \\->"https://httpbin.org/get") (async \\->{})
+      in
+          status""").asLong();
     assertEquals(200L, ret);
   }
 
   @Test
   public void httpClientAuthTest() {
-    String ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    session = http\\Client::session {:authenticator = (:password, \"test\", \"test\")}\n" +
-        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/basic-auth/test/test\" {}\n" +
-        "    {\"user\" = user, \"authenticated\" = true} = JSON::parse body\n" +
-        "in\n" +
-        "    user").asString();
+    String ret = context.eval(YonaLanguage.ID, """
+      let
+          session = http\\Client::session {:authenticator = (:password, "test", "test")}
+          (200, headers, body) = http\\Client::get session "https://httpbin.org/basic-auth/test/test" {}
+          {"user" = user, "authenticated" = true} = JSON::parse body
+      in
+          user""").asString();
     assertEquals("test", ret);
   }
 
   @Test
   public void httpClientAuthAsyncTest() {
-    String ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    session = http\\Client::session <| async \\-> {async \\-> :authenticator = async \\-> (async \\-> :password, \"test\", \"test\")}\n" +
-        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/basic-auth/test/test\" {}\n" +
-        "    {\"user\" = user, \"authenticated\" = true} = JSON::parse body\n" +
-        "in\n" +
-        "    user").asString();
+    String ret = context.eval(YonaLanguage.ID, """
+      let
+          session = http\\Client::session <| async \\-> {async \\-> :authenticator = async \\-> (async \\-> :password, "test", "test")}
+          (200, headers, body) = http\\Client::get session "https://httpbin.org/basic-auth/test/test" {}
+          {"user" = user, "authenticated" = true} = JSON::parse body
+      in
+          user""").asString();
     assertEquals("test", ret);
   }
 
   @Test
   public void httpClientHeadersTest() {
-    String ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    session = http\\Client::session {}\n" +
-        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/headers\" {:accept = \"application/json\"}\n" +
-        "    {\"headers\" = response_headers} = JSON::parse body\n" +
-        "in\n" +
-        "    Dict::lookup \"Accept\" response_headers").asString();
+    String ret = context.eval(YonaLanguage.ID, """
+      let
+          session = http\\Client::session {}
+          (200, headers, body) = http\\Client::get session "https://httpbin.org/headers" {:accept = "application/json"}
+          {"headers" = response_headers} = JSON::parse body
+      in
+          Dict::lookup "Accept" response_headers""").asString();
     assertEquals("application/json", ret);
   }
 
   @Test
   public void httpClientHeadersBinaryBodyTest() {
-    boolean ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    session = http\\Client::session {:body_encoding = :binary}\n" +
-        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/image\" {:accept = \"image/jpeg\"}\n" +
-        "in\n" +
-        "    Seq::is_string body").asBoolean();
+    boolean ret = context.eval(YonaLanguage.ID, """
+      let
+          session = http\\Client::session {:body_encoding = :binary}
+          (200, headers, body) = http\\Client::get session "https://httpbin.org/image" {:accept = "image/jpeg"}
+      in
+          Seq::is_string body""").asBoolean();
     assertFalse(ret);
   }
 
   @Test
   public void httpClientHeadersAsyncTest() {
-    String ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    session = http\\Client::session {}\n" +
-        "    (200, headers, body) = http\\Client::get session \"https://httpbin.org/headers\" <| async \\-> {async \\-> :accept = async \\-> \"application/json\"}\n" +
-        "    {\"headers\" = response_headers} = JSON::parse body\n" +
-        "in\n" +
-        "    Dict::lookup \"Accept\" response_headers").asString();
+    String ret = context.eval(YonaLanguage.ID, """
+      let
+          session = http\\Client::session {}
+          (200, headers, body) = http\\Client::get session "https://httpbin.org/headers" <| async \\-> {async \\-> :accept = async \\-> "application/json"}
+          {"headers" = response_headers} = JSON::parse body
+      in
+          Dict::lookup "Accept" response_headers""").asString();
     assertEquals("application/json", ret);
   }
 
@@ -676,24 +704,28 @@ public class StdLibTest extends CommonTest {
 
   @Test
   public void reflectionFunctionsThreeTest() {
-    boolean ret = context.eval(YonaLanguage.ID, "let\n" +
-        "mod = module Test exports test as\n" +
-        "test = 1\n" +
-        "end\n" +
-        "funs = Reflect::functions mod\n" +
-        "in (\"test\" in funs)").asBoolean();
+    boolean ret = context.eval(YonaLanguage.ID, """
+      let
+        mod = module Test exports test as
+          test = 1
+        end
+        funs = Reflect::functions mod
+      in
+      ("test" in funs)""").asBoolean();
     assertTrue(ret);
   }
 
   @Test
   public void reflectionFunctionsFourTest() {
-    boolean ret = context.eval(YonaLanguage.ID, "let\n" +
-        "mod = module Test exports test as\n" +
-        "test = 1\n" +
-        "priv = 2\n" +
-        "end\n" +
-        "funs = Reflect::functions mod\n" +
-        "in (\"priv\" in funs)").asBoolean();
+    boolean ret = context.eval(YonaLanguage.ID, """
+      let
+        mod = module Test exports test as
+          test = 1
+          priv = 2
+        end
+        funs = Reflect::functions mod
+      in
+        ("priv" in funs)""").asBoolean();
     assertFalse(ret);
   }
 
