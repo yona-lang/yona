@@ -201,10 +201,10 @@ valueCollectionExtractor : identifierOrUnderscore ;
 keyValueCollectionExtractor : key=identifierOrUnderscore OP_ASSIGN val=identifierOrUnderscore ;
 identifierOrUnderscore : identifier | underscore ;
 
-record : KW_RECORD UPPERCASE_NAME OP_ASSIGN PARENS_L identifier (NEWLINE? COMMA NEWLINE? identifier)* PARENS_R NEWLINE;
+record : KW_RECORD UPPERCASE_NAME OP_ASSIGN PARENS_L identifier (NEWLINE? COMMA NEWLINE? identifier)* NEWLINE? PARENS_R NEWLINE;
 
-recordInstance : recordType PARENS_L (name OP_ASSIGN expression) (COMMA name OP_ASSIGN expression)* PARENS_R ;
+recordInstance : recordType PARENS_L NEWLINE? (name OP_ASSIGN expression) (NEWLINE? COMMA NEWLINE? name OP_ASSIGN expression)* NEWLINE? PARENS_R ;
 recordType : UPPERCASE_NAME ;
 
 fieldAccessExpr : identifier DOT name ;
-fieldUpdateExpr : identifier PARENS_L (name OP_ASSIGN expression) (COMMA name OP_ASSIGN expression)* PARENS_R ;
+fieldUpdateExpr : identifier PARENS_L (name OP_ASSIGN expression) (NEWLINE? COMMA NEWLINE? name OP_ASSIGN expression)* NEWLINE? PARENS_R ;

@@ -34,6 +34,7 @@ import java.nio.file.*;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
 
 // TODO use FlagsUtils
 @BuiltinModuleInfo(moduleName = "File")
@@ -222,7 +223,7 @@ public final class FileBuiltinModule implements BuiltinModule {
     @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unchecked")
     public Object open(Seq uri, yona.runtime.Set modes, @CachedContext(YonaLanguage.class) Context context) {
-      final Path path = Paths.get(uri.asJavaString(this));
+      final Path path = Paths.get(uri.asJavaString(this).replaceFirst("^~", Matcher.quoteReplacement(System.getProperty("user.home"))));
       return openPath(path, modes, context);
     }
   }
