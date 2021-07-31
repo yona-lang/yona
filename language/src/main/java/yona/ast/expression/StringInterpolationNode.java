@@ -55,9 +55,9 @@ public final class StringInterpolationNode extends ExpressionNode {
 
     if (interpolationValue instanceof Promise || alignmentValue instanceof Promise) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
-      return Promise.all(new Object[]{interpolationValue, alignmentValue}, this).map(fulfiled -> {
+      return Promise.all(new Object[]{interpolationValue, alignmentValue}, this).map(fulfilled -> {
         try {
-          Object[] fulfiledArgs = (Object[]) fulfiled;
+          Object[] fulfiledArgs = (Object[]) fulfilled;
           Seq fulfiledInterpolationValue = StringUtil.yonaValueAsYonaString(fulfiledArgs[0]);
           Object fulfiledAlignmentValue = fulfiledArgs[1];
 
@@ -68,7 +68,7 @@ public final class StringInterpolationNode extends ExpressionNode {
             return Seq.fromCharSequence(String.format("%" + TypesGen.expectLong(fulfiledAlignmentValue) + "s", fulfiledInterpolationValue.asJavaString(this)));
           }
         } catch (UnexpectedResultException e) {
-          throw new NoMatchException(e, this);
+          throw new NoMatchException(e, this, fulfilled);
         }
       }, this);
     } else {
@@ -81,7 +81,7 @@ public final class StringInterpolationNode extends ExpressionNode {
           return Seq.fromCharSequence(String.format("%" + TypesGen.expectLong(alignmentValue) + "s", interpolationValueString.asJavaString(this)));
         }
       } catch (UnexpectedResultException e) {
-        throw new NoMatchException(e, this);
+        throw new NoMatchException(e, this, interpolationValue);
       }
     }
   }

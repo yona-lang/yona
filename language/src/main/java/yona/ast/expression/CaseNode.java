@@ -101,7 +101,7 @@ public final class CaseNode extends ExpressionNode {
     if (retValue != null) {
       return retValue;
     } else {
-      throw new NoMatchException(this);
+      throw new NoMatchException(this, value);
     }
   }
 }

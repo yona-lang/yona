@@ -8,12 +8,12 @@ import yona.runtime.annotations.ExceptionSymbol;
 @ExceptionSymbol("nomatch")
 public final class NoMatchException extends YonaException {
   @CompilerDirectives.TruffleBoundary
-  public NoMatchException(Node location) {
-    super("NoMatchException", location);
+  public NoMatchException(Node location, Object value) {
+    super("NoMatchException: " + value, location);
   }
 
   @CompilerDirectives.TruffleBoundary
-  public NoMatchException(Throwable cause, Node location) {
-    super(cause, location);
+  public NoMatchException(Throwable cause, Node location, Object value) {
+    super("NoMatchException: " + value, cause, location);
   }
 }

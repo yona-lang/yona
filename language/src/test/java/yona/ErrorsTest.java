@@ -128,7 +128,7 @@ public class ErrorsTest extends CommonTest {
             "2 -> 3\n" +
             "end\n").execute(3l).asLong();
       } catch (PolyglotException ex) {
-        assertEquals("NoMatchException", ex.getMessage());
+        assertEquals("NoMatchException: 3", ex.getMessage());
         throw ex;
       }
     });
@@ -382,7 +382,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YonaLanguage.ID, "Regexp::compile \"(a|(b))c\" {:unknown}");
       } catch (PolyglotException ex) {
-        assertEquals("NoMatchException", ex.getMessage());
+        assertEquals("NoMatchException: :unknown", ex.getMessage());
         throw ex;
       }
     });

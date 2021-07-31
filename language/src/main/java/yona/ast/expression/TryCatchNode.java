@@ -118,7 +118,7 @@ public final class TryCatchNode extends ExpressionNode {
     if (retValue != null) {
       return retValue;
     } else {
-      throw new NoMatchException(this);
+      throw new NoMatchException(this, throwable.getMessage());
     }
   }
 }

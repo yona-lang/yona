@@ -149,7 +149,7 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void moduleTest() {
-    String src = "module Test exports fun as\n" +
+    String src = "module TestMod exports fun as\n" +
         "fun = 6\n" +
         "other_fun = 7\n" +
         "end";
@@ -345,7 +345,7 @@ public class SimpleExpressionTest extends CommonTest {
         "(:nomatch, message, stacktrace) -> message\n" +
         "end\n").asString();
 
-    assertEquals("NoMatchException", ret);
+    assertEquals("NoMatchException: 1", ret);
   }
 
   @Test

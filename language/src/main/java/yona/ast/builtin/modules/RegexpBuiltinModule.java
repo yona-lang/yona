@@ -56,7 +56,7 @@ public final class RegexpBuiltinModule implements BuiltinModule {
           }
         }
 
-        throw new NoMatchException(this);
+        throw new NoMatchException(this, option);
       }).toString();
     }
   }

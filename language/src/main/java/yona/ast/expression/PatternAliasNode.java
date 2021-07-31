@@ -83,7 +83,7 @@ public final class PatternAliasNode extends AliasNode {
 
       return Unit.INSTANCE;
     } else {
-      throw new NoMatchException(this);
+      throw new NoMatchException(this, value);
     }
   }
 

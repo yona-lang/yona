@@ -3,6 +3,7 @@ package yona.parser;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import yona.YonaLanguage;
@@ -21,7 +22,6 @@ import yona.ast.local.ReadArgumentNode;
 import yona.ast.pattern.*;
 import yona.runtime.Context;
 import yona.runtime.Dict;
-import yona.runtime.Seq;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -30,13 +30,13 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
   private final YonaLanguage language;
   private final Source source;
   private int lambdaCount = 0;
-  private final Stack<FQNNode> moduleStack;
+  private final Deque<FQNNode> moduleStack;
   private final Context context;
 
   public ParserVisitor(YonaLanguage language, Context context, Source source) {
     this.language = language;
     this.source = source;
-    this.moduleStack = new Stack<>();
+    this.moduleStack = new ArrayDeque<>();
     this.context = context;
   }
 
@@ -105,10 +105,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case "+" -> withSourceSection(ctx, newBinaryOpNode(PlusNodeGen::create, left, right));
       case "-" -> withSourceSection(ctx, newBinaryOpNode(MinusNodeGen::create, left, right));
       default -> throw new ParseError(source,
-          ctx.op.getLine(),
-          ctx.op.getCharPositionInLine(),
-          ctx.op.getText().length(),
-          "Binary operation '" + ctx.op.getText() + "' not supported");
+        ctx.op.getLine(),
+        ctx.op.getCharPositionInLine(),
+        ctx.op.getText().length(),
+        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -122,10 +122,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case ">>" -> withSourceSection(ctx, newBinaryOpNode(RightShiftNodeGen::create, left, right));
       case ">>>" -> withSourceSection(ctx, newBinaryOpNode(ZerofillRightShiftNodeGen::create, left, right));
       default -> throw new ParseError(source,
-          ctx.op.getLine(),
-          ctx.op.getCharPositionInLine(),
-          ctx.op.getText().length(),
-          "Binary operation '" + ctx.op.getText() + "' not supported");
+        ctx.op.getLine(),
+        ctx.op.getCharPositionInLine(),
+        ctx.op.getText().length(),
+        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -140,10 +140,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case "/" -> withSourceSection(ctx, newBinaryOpNode(DivideNodeGen::create, left, right));
       case "%" -> withSourceSection(ctx, newBinaryOpNode(ModuloNodeGen::create, left, right));
       default -> throw new ParseError(source,
-          ctx.op.getLine(),
-          ctx.op.getCharPositionInLine(),
-          ctx.op.getText().length(),
-          "Binary operation '" + ctx.op.getText() + "' not supported");
+        ctx.op.getLine(),
+        ctx.op.getCharPositionInLine(),
+        ctx.op.getText().length(),
+        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -160,10 +160,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case ">=" -> withSourceSection(ctx, newBinaryOpNode(GreaterThanOrEqualsNodeGen::create, left, right));
       case ">" -> withSourceSection(ctx, newBinaryOpNode(GreaterThanNodeGen::create, left, right));
       default -> throw new ParseError(source,
-          ctx.op.getLine(),
-          ctx.op.getCharPositionInLine(),
-          ctx.op.getText().length(),
-          "Binary operation '" + ctx.op.getText() + "' not supported");
+        ctx.op.getLine(),
+        ctx.op.getCharPositionInLine(),
+        ctx.op.getText().length(),
+        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -379,7 +379,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public FunctionNode visitLambda(YonaParser.LambdaContext ctx) {
+  public ExpressionNode visitLambda(YonaParser.LambdaContext ctx) {
     int argsCount = ctx.pattern().size();
     ExpressionNode bodyNode;
     if (ctx.pattern().size() > 0) {
@@ -400,14 +400,18 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       bodyNode = ctx.expression().accept(this);
     }
 
-    bodyNode.addRootTag();
+    if (bodyNode instanceof LiteralValueNode) {
+      return bodyNode;
+    } else {
+      bodyNode.addRootTag();
 
-    return withSourceSection(ctx, new FunctionNode(language, source.createSection(
+      return withSourceSection(ctx, new FunctionNode(language, source.createSection(
         ctx.BACKSLASH().getSymbol().getLine(),
         ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
         ctx.expression().stop.getLine(),
         ctx.expression().stop.getCharPositionInLine() + 1
-    ), currentModuleName(), nextLambdaName() + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor, bodyNode));
+      ), currentModuleName(), nextLambdaName() + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor, bodyNode));
+    }
   }
 
   private String nextLambdaName() {
@@ -415,11 +419,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
   }
 
   private String currentModuleName() {
-    try {
-      return moduleStack.peek().moduleName;
-    } catch (EmptyStackException e) {
-      return null;
-    }
+    return !moduleStack.isEmpty() ? moduleStack.peek().moduleName : null;
   }
 
   @Override
@@ -463,6 +463,47 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     return withSourceSection(ctx, new RangeNode(step, ctx.start.accept(this), ctx.end.accept(this)));
   }
 
+  private interface FunctionPattern {
+    FunctionLikeNode getFunctionNode(String functionName, int cardinality, String moduleFQNString, SourceSection sourceSection);
+  }
+
+  private class FunctionPatternWithArgs implements FunctionPattern {
+    final List<PatternMatchable> patternNodes;
+
+    public FunctionPatternWithArgs() {
+      this.patternNodes = new ArrayList<>();
+    }
+
+    @Override
+    public FunctionLikeNode getFunctionNode(String functionName, int cardinality, String moduleFQNString, SourceSection sourceSection) {
+      ExpressionNode[] argumentNodes = new ExpressionNode[cardinality];
+      for (int j = 0; j < argumentNodes.length; j++) {
+        argumentNodes[j] = new ReadArgumentNode(j);
+      }
+
+      TupleNode argsTuple = new TupleNode(argumentNodes);
+      CaseNode caseNode = new CaseNode(argsTuple, patternNodes.toArray(new PatternMatchable[]{}));
+
+      caseNode.addRootTag();
+      caseNode.setIsTail(true);
+
+      return new FunctionNode(language, sourceSection, moduleFQNString, functionName, cardinality, context.globalFrameDescriptor, caseNode);
+    }
+  }
+
+  private class FunctionPatternWithoutArgs implements FunctionPattern {
+    final LiteralValueNode literalValueNode;
+
+    public FunctionPatternWithoutArgs(LiteralValueNode literalValueNode) {
+      this.literalValueNode = literalValueNode;
+    }
+
+    @Override
+    public FunctionLikeNode getFunctionNode(String functionName, int cardinality, String moduleFQNString, SourceSection sourceSection) {
+      return new LiteralFunctionNode(language, sourceSection, moduleFQNString, functionName, context.globalFrameDescriptor, literalValueNode);
+    }
+  }
+
   @Override
   public ModuleNode visitModule(YonaParser.ModuleContext ctx) {
     FQNNode moduleFQN = visitFqn(ctx.fqn());
@@ -471,7 +512,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     NonEmptyStringListNode exports = visitNonEmptyListOfNames(ctx.nonEmptyListOfNames());
 
     int functionPatternsCount = ctx.function().size();
-    Map<String, List<PatternMatchable>> functionPatterns = new HashMap<>();
+    Map<String, FunctionPattern> functionPatterns = new HashMap<>();
     Map<String, Integer> functionCardinality = new HashMap<>();
     Map<String, SourceSection> functionSourceSections = new HashMap<>();
     Dict records = Dict.EMPTY;
@@ -493,107 +534,92 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       YonaParser.FunctionContext functionContext = ctx.function(i);
 
       String functionName = functionContext.name().getText();
+      Token functionNameStartToken = functionContext.name().start;
+      Token functionBodyStopToken = functionContext.functionBody().stop;
 
       if (lastFunctionName != null && !lastFunctionName.equals(functionName) && functionPatterns.containsKey(functionName)) {
-        throw new ParseError(source,
-            functionContext.name().start.getLine(),
-            functionContext.name().start.getCharPositionInLine() + 1,
-            functionContext.name().getText().length(), "Function " + functionName + " was already defined previously.");
+        throw new ParseError(source, functionNameStartToken.getLine(), functionNameStartToken.getCharPositionInLine() + 1, functionName.length(), "Function %s was already defined previously.".formatted(functionName));
       }
       lastFunctionName = functionName;
 
-      if (!functionPatterns.containsKey(functionName)) {
-        functionPatterns.put(functionName, new ArrayList<>());
-      }
-
       if (!functionSourceSections.containsKey(functionName)) {
-        functionSourceSections.put(functionName, source.createSection(
-            functionContext.name().start.getLine(),
-            functionContext.name().start.getCharPositionInLine() + 1,
-            functionContext.functionBody().stop.getLine(),
-            functionContext.functionBody().stop.getCharPositionInLine() + 1)
-        );
+        functionSourceSections.put(functionName, source.createSection(functionNameStartToken.getLine(), functionNameStartToken.getCharPositionInLine() + 1, functionBodyStopToken.getLine(), functionBodyStopToken.getCharPositionInLine() + 1));
       } else {
         SourceSection sourceSection = functionSourceSections.get(functionName);
-        functionSourceSections.put(functionName, source.createSection(
-            sourceSection.getStartLine(),
-            sourceSection.getStartColumn(),
-            functionContext.functionBody().stop.getLine(),
-            functionContext.functionBody().stop.getCharPositionInLine() + 1)
-        );
+        functionSourceSections.put(functionName, source.createSection(sourceSection.getStartLine(), sourceSection.getStartColumn(), functionBodyStopToken.getLine(), functionBodyStopToken.getCharPositionInLine() + 1));
       }
 
       int patternsLength = functionContext.pattern().size();
 
-      MatchNode argPatterns;
+      if (!functionCardinality.containsKey(functionName)) {
+        functionCardinality.put(functionName, patternsLength);
+      } else if (!functionCardinality.get(functionName).equals(patternsLength)) {
+        throw new ParseError(source, functionNameStartToken.getLine(), functionNameStartToken.getCharPositionInLine() + 1, functionName.length(), "Function %s is defined using patterns of varying size.".formatted(functionName));
+      }
+
       if (patternsLength == 0) {
-        argPatterns = new UnderscoreMatchNode();
+        ExpressionNode expressionNode = functionContext.functionBody().bodyWithoutGuard().expression().accept(this);
+        if (expressionNode instanceof LiteralValueNode literalValueNode) {
+          functionPatterns.put(functionName, new FunctionPatternWithoutArgs(literalValueNode));
+        } else {
+          FunctionPatternWithArgs functionPattern = new FunctionPatternWithArgs();
+          functionPattern.patternNodes.add(new PatternNode(new UnderscoreMatchNode(), expressionNode));
+          functionPatterns.put(functionName, functionPattern);
+        }
       } else {
         MatchNode[] patterns = new MatchNode[patternsLength];
         for (int j = 0; j < patternsLength; j++) {
           patterns[j] = visitPattern(functionContext.pattern(j));
         }
-        argPatterns = new TupleMatchNode(patterns);
-      }
+        MatchNode argPatterns = new TupleMatchNode(patterns);
 
-      if (!functionCardinality.containsKey(functionName)) {
-        functionCardinality.put(functionName, patternsLength);
-      } else if (!functionCardinality.get(functionName).equals(patternsLength)) {
-        throw new ParseError(source,
-            functionContext.name().start.getLine(),
-            functionContext.name().start.getCharPositionInLine() + 1,
-            functionContext.name().getText().length(), "Function " + functionName + " is defined using patterns of varying size.");
-      }
+        FunctionPatternWithArgs functionPattern;
+        if (!functionPatterns.containsKey(functionName)) {
+          functionPattern = new FunctionPatternWithArgs();
+          functionPatterns.put(functionName, functionPattern);
+        } else {
+          functionPattern = (FunctionPatternWithArgs) functionPatterns.get(functionName);
+        }
 
-      YonaParser.FunctionBodyContext functionBodyContext = functionContext.functionBody();
-      if (functionBodyContext.bodyWithoutGuard() != null) {
-        functionPatterns.get(functionName).add(new PatternNode(argPatterns, functionBodyContext.bodyWithoutGuard().expression().accept(this)));
-      } else {
-        for (int j = 0; j < functionBodyContext.bodyWithGuards().size(); j++) {
-          YonaParser.BodyWithGuardsContext bodyWithGuardsContext = functionBodyContext.bodyWithGuards(j);
+        YonaParser.FunctionBodyContext functionBodyContext = functionContext.functionBody();
+        if (functionBodyContext.bodyWithoutGuard() != null) {
+          functionPattern.patternNodes.add(new PatternNode(argPatterns, functionBodyContext.bodyWithoutGuard().expression().accept(this)));
+        } else {
+          for (int j = 0; j < functionBodyContext.bodyWithGuards().size(); j++) {
+            YonaParser.BodyWithGuardsContext bodyWithGuardsContext = functionBodyContext.bodyWithGuards(j);
 
-          ExpressionNode guardExpression = bodyWithGuardsContext.guard.accept(this);
-          ExpressionNode expression = bodyWithGuardsContext.expr.accept(this);
+            ExpressionNode guardExpression = bodyWithGuardsContext.guard.accept(this);
+            ExpressionNode expression = bodyWithGuardsContext.expr.accept(this);
 
-          GuardedPattern guardedPattern = withSourceSection(bodyWithGuardsContext, new GuardedPattern(argPatterns, guardExpression, expression));
+            GuardedPattern guardedPattern = withSourceSection(bodyWithGuardsContext, new GuardedPattern(argPatterns, guardExpression, expression));
 
-          functionPatterns.get(functionName).add(guardedPattern);
+            functionPattern.patternNodes.add(guardedPattern);
+          }
         }
       }
     }
 
-    List<FunctionLikeNode> functions = new ArrayList<>();
-    for (Map.Entry<String, List<PatternMatchable>> pair : functionPatterns.entrySet()) {
+    FunctionLikeNode[] functions = new FunctionLikeNode[functionPatterns.size()];
+    int i = 0;
+    for (Map.Entry<String, FunctionPattern> pair : functionPatterns.entrySet()) {
       String functionName = pair.getKey();
-      List<PatternMatchable> patternNodes = pair.getValue();
+      FunctionPattern functionPattern = pair.getValue();
       int cardinality = functionCardinality.get(functionName);
 
-      ExpressionNode[] argumentNodes = new ExpressionNode[cardinality];
-      for (int j = 0; j < argumentNodes.length; j++) {
-        argumentNodes[j] = new ReadArgumentNode(j);
-      }
-
-      TupleNode argsTuple = new TupleNode(argumentNodes);
-      CaseNode caseNode = new CaseNode(argsTuple, patternNodes.toArray(new PatternMatchable[]{}));
-
-      caseNode.addRootTag();
-      caseNode.setIsTail(true);
-
-      FunctionNode functionNode = new FunctionNode(language, functionSourceSections.get(functionName), moduleFQNString, functionName, cardinality, context.globalFrameDescriptor, caseNode);
-      functions.add(functionNode);
+      functions[i++] = functionPattern.getFunctionNode(functionName, cardinality, moduleFQNString, functionSourceSections.get(functionName));
     }
 
     for (String exportedFunction : exports.strings) {
       if (!functionCardinality.containsKey(exportedFunction)) {
         throw new ParseError(source,
-            ctx.KW_MODULE().getSymbol().getLine(),
-            ctx.KW_MODULE().getSymbol().getCharPositionInLine() + 1,
-            ctx.stop.getStopIndex() - ctx.start.getStartIndex(), "Module " + moduleFQN + " is trying to export function " + exportedFunction + " that is not defined.");
+          ctx.KW_MODULE().getSymbol().getLine(),
+          ctx.KW_MODULE().getSymbol().getCharPositionInLine() + 1,
+          ctx.stop.getStopIndex() - ctx.start.getStartIndex(), "Module %s is trying to export function %s that is not defined.".formatted(moduleFQN, exportedFunction));
       }
     }
 
     moduleStack.pop();
-    return withSourceSection(ctx, new ModuleNode(moduleFQN, exports, functions.toArray(new FunctionLikeNode[]{}), records));
+    return withSourceSection(ctx, new ModuleNode(moduleFQN, exports, functions, records));
   }
 
   @Override
@@ -967,8 +993,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       stepMatchNodes = new MatchNode[]{visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
     } else {
       stepMatchNodes = new MatchNode[]{
-          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
-          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
       };
     }
 
@@ -986,8 +1012,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       stepMatchNodes = new MatchNode[]{visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
     } else {
       stepMatchNodes = new MatchNode[]{
-          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
-          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
       };
     }
 
@@ -1005,8 +1031,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       stepMatchNodes = new MatchNode[]{visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
     } else {
       stepMatchNodes = new MatchNode[]{
-          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
-          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
       };
     }
 
@@ -1069,10 +1095,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     final SourceSection sourceSection;
 
     sourceSection = source.createSection(
-        parserRuleContext.start.getLine(),
-        1,
-        parserRuleContext.stop.getLine(),
-        source.getLineLength(parserRuleContext.stop.getLine())
+      parserRuleContext.start.getLine(),
+      1,
+      parserRuleContext.stop.getLine(),
+      source.getLineLength(parserRuleContext.stop.getLine())
     );
     return sourceSection;
   }

@@ -7,8 +7,7 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.YonaLanguage;
-import yona.runtime.Context;
-import yona.runtime.Function;
+import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
 import yona.runtime.threading.ExecutableFunction;
@@ -22,5 +21,61 @@ public abstract class AsyncBuiltin extends BuiltinNode {
       throw new BadArgException("async function accepts only functions with zero arguments. Function " + function + " expects " + function.getCardinality() + "arguments", this);
     }
     return context.threading.submit(new Promise(dispatch), new ExecutableFunction.YonaExecutableFunction(function, dispatch, this));
+  }
+
+  @Specialization
+  public byte async(byte value) {
+    return value;
+  }
+
+  @Specialization
+  public long async(long value) {
+    return value;
+  }
+
+  @Specialization
+  public double async(double value) {
+    return value;
+  }
+
+  @Specialization
+  public int async(int value) {
+    return value;
+  }
+
+  @Specialization
+  public boolean async(boolean value) {
+    return value;
+  }
+
+  @Specialization
+  public Symbol async(Symbol value) {
+    return value;
+  }
+
+  @Specialization
+  public Unit async(Unit value) {
+    return value;
+  }
+
+  @Specialization
+  public String async(String value) {
+    return value;
+  }
+
+  @Specialization
+  public StringList async(StringList value) {
+    return value;
+  }
+
+  @Specialization
+  public YonaModule async(YonaModule value) {
+    return value;
+  }
+
+
+  @Specialization
+  public Seq async(Seq value) {
+    return value;
   }
 }

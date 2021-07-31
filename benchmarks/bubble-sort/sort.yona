@@ -39,5 +39,5 @@ module Sort exports main as
         in
             smaller -| (bubble_up (larger -| xs))
 
-    bubble_sort l = Seq::foldl [0 .. Seq::len l] (\acc _ -> bubble_up acc) l
+    bubble_sort l = Seq::foldl (\acc _ -> bubble_up acc) l [0 .. Seq::len l]
 end

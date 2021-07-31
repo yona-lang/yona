@@ -64,6 +64,12 @@ public final class FunctionNode extends FunctionLikeNode {
   }
 
   @Override
+  public void setIsTail(boolean isTail) {
+    super.setIsTail(isTail);
+    this.expression.setIsTail(isTail);
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     return execute(frame);
   }

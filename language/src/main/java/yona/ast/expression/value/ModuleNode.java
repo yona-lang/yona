@@ -53,11 +53,21 @@ public final class ModuleNode extends ExpressionNode {
   }
 
   @Override
+  public String toString() {
+    return "ModuleNode{" +
+           "moduleFQN=" + moduleFQN +
+           ", exports=" + exports +
+           ", functions=" + Arrays.toString(functions) +
+           ", records=" + records +
+           '}';
+  }
+
+  @Override
   public Object executeGeneric(VirtualFrame frame) {
     try {
       return executeModule(frame);
     } catch (UnexpectedResultException ex) {
-      throw new YonaException("Unable to load Module " + moduleFQN, ex, this);
+      throw new YonaException("Unable to load module " + moduleFQN, ex, this);
     }
   }
 

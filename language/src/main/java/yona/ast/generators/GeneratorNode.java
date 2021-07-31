@@ -74,14 +74,10 @@ public final class GeneratorNode extends ExpressionNode {
   }
 
   private String reducerForGeneratedCollection(GeneratedCollection type) {
-    switch (type) {
-      case SEQ:
-        return "to_seq";
-      case SET:
-        return "to_set";
-      case DICT:
-        return "to_dict";
-    }
-    return "what";  // wtf is this required
+    return switch (type) {
+      case SEQ -> "to_seq";
+      case SET -> "to_set";
+      case DICT -> "to_dict";
+    };
   }
 }
