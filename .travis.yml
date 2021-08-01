@@ -5,7 +5,7 @@ dist: focal
 sudo: false
 language: generic
 env:
-  - JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$HOME/bin:$PATH GRAALVM_VERSION="21.0.0" GRAALVM_JAVA_VERSION="11"
+  - JAVA_HOME=$HOME/jdk PATH=$JAVA_HOME/bin:$HOME/bin:$PATH GRAALVM_VERSION="21.2.0" GRAALVM_JAVA_VERSION="16"
 before_install:
   - curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
   - curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/microsoft.list
@@ -15,7 +15,7 @@ before_install:
   - mkdir -p $HOME/bin
   - tar -zxf $HOME/travis-wait-enhanced.tar.gz -C $HOME/bin
 install:
-  - travis_retry wget --no-verbose -O $HOME/jdk.tar.gz https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-21.1.0/graalvm-ce-java16-linux-amd64-21.1.0.tar.gz
+  - travis_retry wget --no-verbose -O $HOME/jdk.tar.gz https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-21.2.0/graalvm-ce-java16-linux-amd64-21.2.0.tar.gz
   - mkdir -p $HOME/jdk
   - tar -xzf $HOME/jdk.tar.gz -C $HOME/jdk --strip-components=1
   # - "$HOME/jdk/bin/gu install native-image"
