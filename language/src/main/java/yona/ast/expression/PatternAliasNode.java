@@ -75,7 +75,8 @@ public final class PatternAliasNode extends AliasNode {
   }
 
   private Object execute(Object value, VirtualFrame frame) {
-    MatchResult matchResult = matchNode.match(value, frame);
+    matchNode.setValue(value);
+    MatchResult matchResult = (MatchResult) matchNode.executeGeneric(frame);
     if (matchResult.isMatches()) {
       for (AliasNode nameAliasNode : matchResult.getAliases()) {
         nameAliasNode.executeGeneric(frame);

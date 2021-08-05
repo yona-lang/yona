@@ -45,7 +45,8 @@ public final class AsDataStructureMatchNode extends MatchNode {
 
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
-    MatchResult matchResult = matchNode.match(value, frame);
+    matchNode.setValue(value);
+    MatchResult matchResult = (MatchResult) matchNode.executeGeneric(frame);
     if (!matchResult.isMatches()) {
       return MatchResult.FALSE;
     } else {

@@ -36,7 +36,7 @@ public final class CaseNode extends ExpressionNode {
     if (o == null || getClass() != o.getClass()) return false;
     CaseNode caseNode = (CaseNode) o;
     return Objects.equals(expression, caseNode.expression) &&
-        Arrays.equals(patternNodes, caseNode.patternNodes);
+           Arrays.equals(patternNodes, caseNode.patternNodes);
   }
 
   @Override
@@ -49,9 +49,9 @@ public final class CaseNode extends ExpressionNode {
   @Override
   public String toString() {
     return "CaseNode{" +
-        "expression=" + expression +
-        ", patternNodes=" + Arrays.toString(patternNodes) +
-        '}';
+           "expression=" + expression +
+           ", patternNodes=" + Arrays.toString(patternNodes) +
+           '}';
   }
 
   @Override
@@ -64,7 +64,6 @@ public final class CaseNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     Object value = expression.executeGeneric(frame);
 
     if (value instanceof Promise promise) {
@@ -73,6 +72,7 @@ public final class CaseNode extends ExpressionNode {
       if (unwrappedValue != null) {
         return execute(unwrappedValue, frame);
       } else {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         MaterializedFrame materializedFrame = frame.materialize();
         return promise.map(val -> execute(val, materializedFrame), this);
       }
@@ -89,19 +89,15 @@ public final class CaseNode extends ExpressionNode {
   @ExplodeLoop
   private Object execute(Object value, VirtualFrame frame) {
     CompilerAsserts.compilationConstant(patternNodes.length);
-    Object retValue = null;
-    for (int i = 0; i < patternNodes.length; i++) {
+
+    for (PatternMatchable patternNode : patternNodes) {
       try {
-        retValue = patternNodes[i].patternMatch(value, frame);
-        break;
+        patternNode.setValue(value);
+        return patternNode.executeGeneric(frame);
       } catch (MatchControlFlowException ignored) {
       }
     }
 
-    if (retValue != null) {
-      return retValue;
-    } else {
-      throw new NoMatchException(this, value);
-    }
+    throw new NoMatchException(this, value);
   }
 }

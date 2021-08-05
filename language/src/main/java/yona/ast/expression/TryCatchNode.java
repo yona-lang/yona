@@ -11,6 +11,7 @@ import yona.ast.ExpressionNode;
 import yona.ast.pattern.MatchControlFlowException;
 import yona.ast.pattern.PatternMatchable;
 import yona.runtime.DependencyUtils;
+import yona.runtime.Tuple;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.NoMatchException;
 import yona.runtime.exceptions.util.ExceptionUtil;
@@ -36,7 +37,7 @@ public final class TryCatchNode extends ExpressionNode {
     if (o == null || getClass() != o.getClass()) return false;
     TryCatchNode that = (TryCatchNode) o;
     return Objects.equals(tryExpression, that.tryExpression) &&
-        Arrays.equals(catchPatterns, that.catchPatterns);
+           Arrays.equals(catchPatterns, that.catchPatterns);
   }
 
   @Override
@@ -49,9 +50,9 @@ public final class TryCatchNode extends ExpressionNode {
   @Override
   public String toString() {
     return "TryCatchNode{" +
-        "tryExpression=" + tryExpression +
-        ", catchPatterns=" + Arrays.toString(catchPatterns) +
-        '}';
+           "tryExpression=" + tryExpression +
+           ", catchPatterns=" + Arrays.toString(catchPatterns) +
+           '}';
   }
 
   @Override
@@ -68,8 +69,7 @@ public final class TryCatchNode extends ExpressionNode {
     try {
       Object value = tryExpression.executeGeneric(frame);
 
-      if (value instanceof Promise) {
-        Promise promise = (Promise) value;
+      if (value instanceof Promise promise) {
         Object unwrappedValue = promise.unwrapWithError();
 
         if (unwrappedValue != null) {
@@ -78,9 +78,9 @@ public final class TryCatchNode extends ExpressionNode {
           CompilerDirectives.transferToInterpreterAndInvalidate();
           MaterializedFrame materializedFrame = frame.materialize();
           return promise.map(
-              (val) -> execute(val, materializedFrame),
-              (val) -> execute(val, materializedFrame),
-              this);
+            (val) -> execute(val, materializedFrame),
+            (val) -> execute(val, materializedFrame),
+            this);
         }
       } else {
         return value;
@@ -99,26 +99,20 @@ public final class TryCatchNode extends ExpressionNode {
   private Object execute(Object value, VirtualFrame frame) {
     CompilerAsserts.compilationConstant(catchPatterns.length);
 
-    if (!(value instanceof Throwable)) {
+    if (!(value instanceof Throwable throwable)) {
       return value;
     }
 
-    Throwable throwable = (Throwable) value;
+    Tuple tuple = ExceptionUtil.throwableToTuple(throwable, lookupContextReference(YonaLanguage.class).get());
 
-    Object retValue = null;
-    for (int i = 0; i < catchPatterns.length; i++) {
+    for (PatternMatchable catchPattern : catchPatterns) {
       try {
-        retValue = catchPatterns[i].patternMatch(ExceptionUtil.throwableToTuple(throwable, lookupContextReference(YonaLanguage.class).get()), frame);
-        break;
+        catchPattern.setValue(tuple);
+        return catchPattern.executeGeneric(frame);
       } catch (MatchControlFlowException ex) {
-        continue;
       }
     }
 
-    if (retValue != null) {
-      return retValue;
-    } else {
-      throw new NoMatchException(this, throwable.getMessage());
-    }
+    throw new NoMatchException(this, throwable.getMessage());
   }
 }

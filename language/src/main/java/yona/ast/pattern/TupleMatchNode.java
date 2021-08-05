@@ -50,7 +50,6 @@ public final class TupleMatchNode extends MatchNode {
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
     if (value instanceof Tuple tuple) {
-
       if (tuple.size() == expressions.length) {
         Seq aliases = Seq.EMPTY;
 

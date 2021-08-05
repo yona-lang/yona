@@ -25,8 +25,8 @@ public final class ValueMatchNode extends MatchNode {
   @Override
   public String toString() {
     return "ValueMatchNode{" +
-        "expression=" + expression +
-        '}';
+           "expression=" + expression +
+           '}';
   }
 
   @Override
@@ -45,7 +45,6 @@ public final class ValueMatchNode extends MatchNode {
   @Override
   public MatchResult match(Object value, VirtualFrame frame) {
     if (expression instanceof IdentifierNode identifierNode) {
-
       if (identifierNode.isBound(frame)) {
         Object identifierValue = identifierNode.executeGeneric(frame);
 

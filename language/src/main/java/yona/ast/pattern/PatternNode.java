@@ -3,6 +3,7 @@ package yona.ast.pattern;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 import yona.ast.AliasNode;
 import yona.ast.ExpressionNode;
 import yona.runtime.DependencyUtils;
@@ -16,6 +17,8 @@ public class PatternNode extends PatternMatchable {
 
   @Node.Child
   public ExpressionNode valueExpression;
+
+  private final ConditionProfile condition = ConditionProfile.createCountingProfile();
 
   public PatternNode(MatchNode matchExpression, ExpressionNode valueExpression) {
     this.matchExpression = matchExpression;
@@ -51,9 +54,10 @@ public class PatternNode extends PatternMatchable {
   }
 
   @Override
-  public Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException {
-    MatchResult matchResult = matchExpression.match(value, frame);
-    if (matchResult.isMatches()) {
+  public Object executeGeneric(VirtualFrame frame) {
+    matchExpression.setValue(value);
+    MatchResult matchResult = (MatchResult) matchExpression.executeGeneric(frame);
+    if (condition.profile(matchResult.isMatches())) {
       for (AliasNode nameAliasNode : matchResult.getAliases()) {
         nameAliasNode.executeGeneric(frame);
       }
@@ -61,11 +65,6 @@ public class PatternNode extends PatternMatchable {
     } else {
       throw MatchControlFlowException.INSTANCE;
     }
-  }
-
-  @Override
-  public Object executeGeneric(VirtualFrame frame) {
-    return null;
   }
 
   @Override

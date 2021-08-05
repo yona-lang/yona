@@ -17,6 +17,8 @@ public final class GuardedPattern extends PatternMatchable {
   @Child
   public ConditionNode conditionNode;
 
+  public Object value;
+
   public GuardedPattern(MatchNode matchExpression, ExpressionNode guardExpression, ExpressionNode valueExpression) {
     this.matchExpression = matchExpression;
     this.conditionNode = new ConditionNode(guardExpression, valueExpression, new ThrowNode(MatchControlFlowException.INSTANCE));
@@ -51,8 +53,9 @@ public final class GuardedPattern extends PatternMatchable {
   }
 
   @Override
-  public Object patternMatch(Object value, VirtualFrame frame) throws MatchControlFlowException {
-    MatchResult matchResult = matchExpression.match(value, frame);
+  public Object executeGeneric(VirtualFrame frame) {
+    matchExpression.setValue(value);
+    MatchResult matchResult = (MatchResult) matchExpression.executeGeneric(frame);
     if (matchResult.isMatches()) {
       for (AliasNode aliasNode : matchResult.getAliases()) {
         aliasNode.executeGeneric(frame);
@@ -64,12 +67,12 @@ public final class GuardedPattern extends PatternMatchable {
   }
 
   @Override
-  public Object executeGeneric(VirtualFrame frame) {
-    return null;
+  protected String[] requiredIdentifiers() {
+    return DependencyUtils.catenateRequiredIdentifiers(matchExpression, conditionNode);
   }
 
   @Override
-  protected String[] requiredIdentifiers() {
-    return DependencyUtils.catenateRequiredIdentifiers(matchExpression, conditionNode);
+  public void setValue(Object value) {
+    this.value = value;
   }
 }

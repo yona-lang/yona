@@ -77,8 +77,7 @@ public final class ConditionNode extends ExpressionNode {
 
     Object condValue = ifExpression.executeGeneric(frame);
 
-    if (condValue instanceof Promise) {
-      Promise promise = (Promise) condValue;
+    if (condValue instanceof Promise promise) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
       MaterializedFrame materializedFrame = frame.materialize();
 
