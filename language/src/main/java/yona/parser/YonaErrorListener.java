@@ -27,8 +27,7 @@ public class YonaErrorListener extends BaseErrorListener {
     msg.append(syntaxErrMsg);
     msg.append("\n");
     String input;
-    if (recognizer.getInputStream() instanceof TokenStream) {
-      TokenStream tokens = (TokenStream) recognizer.getInputStream();
+    if (recognizer.getInputStream() instanceof TokenStream tokens) {
       input = tokens.getTokenSource().getInputStream().toString();
     } else {
       CharStream tokens = (CharStream) recognizer.getInputStream();

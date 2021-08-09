@@ -7,6 +7,8 @@ import org.antlr.v4.runtime.misc.IntervalSet;
 import java.util.Collections;
 import java.util.List;
 
+import static yona.parser.ParserUtil.positionOfToken;
+
 public class YonaErrorStrategy extends DefaultErrorStrategy {
   private final Source source;
 
@@ -23,7 +25,9 @@ public class YonaErrorStrategy extends DefaultErrorStrategy {
 
     Collections.reverse(stack);
 
-    msg.append("can't choose next alternative. Parser stack: [");
+    msg.append("Error(s) parsing script at: " + positionOfToken(parser.getCurrentToken(), parser.getVocabulary().getDisplayName(parser.getCurrentToken().getType()), source));
+    msg.append("\n. Reason: * can't choose next alternative. ");
+    msg.append("Parser stack: [");
 
     for (String item : stack) {
       msg.append(item);

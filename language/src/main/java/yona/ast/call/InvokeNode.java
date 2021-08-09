@@ -49,7 +49,7 @@ public final class InvokeNode extends ExpressionNode {
   @Children
   private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode | Because this is created from Stack.toArray, the last pushed element is the last element of the array
 
-  private YonaLanguage language;
+  private final YonaLanguage language;
 
   public InvokeNode(YonaLanguage language, ExpressionNode functionNode, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
     assert functionNode != null;
@@ -104,7 +104,7 @@ public final class InvokeNode extends ExpressionNode {
   }
 
   private RuntimeException notAFucntion(Object value) {
-    return new YonaException("Cannot invoke non-function value: " + value, this);
+    return new YonaException("Cannot invoke non-function value: %s".formatted(value), this);
   }
 
   private Object execute(Function function, VirtualFrame frame) {
@@ -120,8 +120,7 @@ public final class InvokeNode extends ExpressionNode {
 
     if (argumentNodes.length > function.getCardinality()) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
-      throw new YonaException("Unexpected number of arguments when calling '" + function.getName() +
-          "': " + argumentNodes.length + " expected: " + function.getCardinality(), this);
+      throw new YonaException("Unexpected number of arguments when calling '%s': %d expected: %d".formatted(function.getName(), argumentNodes.length, function.getCardinality()), this);
     } else if (argumentNodes.length == 0 && function.getCardinality() > 0) {
       return function;
     } else if (argumentNodes.length < function.getCardinality()) {
@@ -189,7 +188,7 @@ public final class InvokeNode extends ExpressionNode {
     /*
      * Create a closure for `partial`ly applied function
      */
-    String partiallyAppliedFunctionName = "$partial-" + argumentNodes.length + "/" + function.getCardinality() + "-" + function.getName();
+    String partiallyAppliedFunctionName = "$partial-%d/%d-%s".formatted(argumentNodes.length, function.getCardinality(), function.getName());
     ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
 
     setEvaluatedArgs(frame, allArgumentNodes);
