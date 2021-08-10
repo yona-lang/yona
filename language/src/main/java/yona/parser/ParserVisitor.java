@@ -344,25 +344,11 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       if (child instanceof YonaParser.InterpolatedStringPartContext) {
         expressionNodes.add(visitInterpolatedStringPart((YonaParser.InterpolatedStringPartContext) child));
       } else if (child instanceof TerminalNode terminalNode && terminalNode.getSymbol().getType() == YonaLexer.REGULAR_STRING_INSIDE) {
-        expressionNodes.add(new StringNode(child.getText()
-          .replace("\\'", "'")    // Single quotation mark
-          .replace("\\\"", "\"")  // Double quotation mark
-          .replace("\\\\", "\\")  // Backslash
-          .replace("\\0", "\0")
-          .replace("\\a", String.valueOf((char) 7)) // Bell (alert)
-          .replace("\\b", "\b")  // Backspace
-          .replace("\\f", "\f")  // Form feed
-          .replace("\\n", "\n")  // New line
-          .replace("\\r", "\r")  // Carriage return
-          .replace("\\t", "\t")  // Horizontal tab
-          .replace("\\v", String.valueOf((char) 9))  // Vertical tab
-          .replace("{{", "{")
-          .replace("}}", "}")
-        ));
+        expressionNodes.add(new StringNode(child.getText()));
       }
     }
 
-    return new StringPartsNode(expressionNodes.toArray(new ExpressionNode[0]));
+    return new StringPartsNode(expressionNodes.toArray(ExpressionNode[]::new));
   }
 
   @Override

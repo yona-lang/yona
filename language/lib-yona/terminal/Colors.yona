@@ -1,0 +1,20 @@
+module terminal\Colors exports set, reset as
+
+    set :bold = "\u001B[1m"
+    set :bright = set :bold
+    set :dim = "\u001B[2m"
+    set :underlined = "\u001B[4m"
+    set :blink = "\u001B[5m"
+    set :inverted = "\u001B[7m"  # invert the foreground and background colors
+    set :hidden = "\u001B[8m"  # useful for passwords
+
+    reset :all = "\u001B[0m"
+    reset :bold = "\u001B[21m"
+    reset :bright = reset :bold
+    reset :dim = "\u001B[22m"
+    reset :underline = "\u001B[24m"
+    reset :blink = "e[25m"
+    reset :reverse = "\u001B[27m"
+    reset :hidden = "\u001B[28m"
+
+end

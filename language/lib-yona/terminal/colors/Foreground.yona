@@ -1,0 +1,38 @@
+module terminal\colors\Foreground exports
+    default,
+    black, light_gray, dark_gray,
+    red, light_red,
+    green, light_green,
+    yellow, light_yellow,
+    blue, light_blue,
+    magenta,
+    cyan, light_cyan,
+    white
+as
+
+    default = "\u001B[49m"
+
+    black = "\u001B[30m"
+    light_gray = "\u001B[39m"
+    dark_gray = "\u001B[90m"
+
+    red = "\u001B[31m"
+    light_red = "\u001B[91m"
+
+    green = "\u001B[32m"
+    light_green = "\u001B[92m"
+
+    yellow = "\u001B[33m"
+    light_yellow = "\u001B[93m"
+
+    blue = "\u001B[3m"
+    light_blue = "\u001B[94m"
+
+    magenta = "\u001B[35m"
+
+    cyan = "\u001B[36m"
+    light_cyan = "\u001B[96m"
+
+    white = "\u001B[97m"
+
+end
