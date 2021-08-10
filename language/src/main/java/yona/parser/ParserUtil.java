@@ -19,9 +19,9 @@ public final class ParserUtil {
   };
   public static final CharSequenceTranslator UNESCAPE_YONA =
     new AggregateTranslator(
-      new OctalUnescaper(),     // .between('\1', '\377'),
+      new OctalUnescaper(),     // .between('\1', '\377')
       new UnicodeUnescaper(),
-      new LookupTranslator(EntityArrays.JAVA_CTRL_CHARS_UNESCAPE()),
+      new LookupTranslator(YONA_CTRL_CHARS_UNESCAPE),
       new LookupTranslator(
         new String[][]{
           {"\\\"", "\""},
@@ -35,7 +35,7 @@ public final class ParserUtil {
         })
     );
 
-  public static String escapeYonaString(CharSequence rawString) {
+  public static String unescapeYonaString(CharSequence rawString) {
     return UNESCAPE_YONA.translate(rawString);
   }
 }

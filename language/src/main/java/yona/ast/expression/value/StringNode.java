@@ -7,7 +7,7 @@ import yona.runtime.Seq;
 
 import java.util.Objects;
 
-import static yona.parser.ParserUtil.escapeYonaString;
+import static yona.parser.ParserUtil.unescapeYonaString;
 
 @NodeInfo(shortName = "string")
 public final class StringNode extends LiteralValueNode {
@@ -18,7 +18,7 @@ public final class StringNode extends LiteralValueNode {
   }
 
   public StringNode(CharSequence value) {
-    this.value = Seq.fromCharSequence(escapeYonaString(value));
+    this.value = Seq.fromCharSequence(unescapeYonaString(value));
   }
 
   @Override

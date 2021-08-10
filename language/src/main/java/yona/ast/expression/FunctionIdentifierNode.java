@@ -14,7 +14,7 @@ import java.util.Objects;
 @NodeInfo(shortName = "functionIdentifier")
 public class FunctionIdentifierNode extends ExpressionNode {
   @Child
-  public FQNNode fqnNode;
+  public ExpressionNode fqnNode;
   private final String functionName;
 
   public FunctionIdentifierNode(FQNNode fqnNode, String functionName) {
