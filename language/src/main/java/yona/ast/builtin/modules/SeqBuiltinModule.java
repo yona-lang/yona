@@ -12,6 +12,7 @@ import yona.ast.builtin.BuiltinNode;
 import yona.runtime.Function;
 import yona.runtime.Seq;
 import yona.runtime.Tuple;
+import yona.runtime.async.Promise;
 import yona.runtime.exceptions.UndefinedNameException;
 import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
@@ -144,19 +145,19 @@ public final class SeqBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     return new Builtins(
-        new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.SplitBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.IsStringBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.LookupBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.TakeBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.DropBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.EncodeBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.DecodeBuiltinFactory.getInstance()),
-        new ExportedFunction(SeqBuiltinModuleFactory.TrimBuiltinFactory.getInstance())
+      new ExportedFunction(SeqBuiltinModuleFactory.LengthBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.FoldLeftBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.FoldRightBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.ReduceLeftBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.ReduceRightBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.SplitBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.IsStringBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.LookupBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.TakeBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.DropBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.EncodeBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.DecodeBuiltinFactory.getInstance()),
+      new ExportedFunction(SeqBuiltinModuleFactory.TrimBuiltinFactory.getInstance())
     );
   }
 }

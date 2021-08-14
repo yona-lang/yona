@@ -740,4 +740,20 @@ public class StdLibTest extends CommonTest {
     String ret = context.eval(YonaLanguage.ID, "Seq::trim \" ahoj  hallo \n\t\r\"").asString();
     assertEquals("ahoj  hallo", ret);
   }
+
+  @Test
+  public void seqFlattenTest() {
+    Value tuple = context.eval(YonaLanguage.ID, "Seq::flatten [[1, 2], [3, [4, 5, [6, 7]]]]");
+    assertEquals(7, tuple.getArraySize());
+
+    Object[] array = tuple.as(Object[].class);
+    int i = 0;
+    assertEquals(1L, array[i++]);
+    assertEquals(2L, array[i++]);
+    assertEquals(3L, array[i++]);
+    assertEquals(4L, array[i++]);
+    assertEquals(5L, array[i++]);
+    assertEquals(6L, array[i++]);
+    assertEquals(7L, array[i++]);
+  }
 }

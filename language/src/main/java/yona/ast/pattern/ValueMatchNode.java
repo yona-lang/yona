@@ -1,5 +1,6 @@
 package yona.ast.pattern;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.ast.AliasNode;
@@ -9,7 +10,7 @@ import yona.ast.expression.IdentifierNode;
 import yona.ast.expression.NameAliasNode;
 import yona.ast.expression.value.AnyValueNode;
 import yona.ast.local.ReadLocalVariableNode;
-import yona.runtime.exceptions.UninitializedFrameSlotException;
+import yona.runtime.UninitializedFrameSlot;
 
 import java.util.Objects;
 
@@ -57,16 +58,9 @@ public final class ValueMatchNode extends MatchNode {
         return new MatchResult(true, new AliasNode[]{new NameAliasNode(identifierNode.name(), new AnyValueNode(value))});
       }
     } else if (expression instanceof ReadLocalVariableNode readLocalVariableNode) {
-      boolean isBound;
-      try {
-        readLocalVariableNode.executeGeneric(frame);
-        isBound = true;
-      } catch (UninitializedFrameSlotException | IllegalStateException e) {
-        isBound = false;
-      }
-      if (isBound) {
-        Object readValue = readLocalVariableNode.executeGeneric(frame);
-        if (!Objects.equals(readValue, value)) {
+      Object result = readLocalVariableNode.executeGeneric(frame);
+      if (result != UninitializedFrameSlot.INSTANCE) {
+        if (!Objects.equals(result, value)) {
           return MatchResult.FALSE;
         } else {
           return MatchResult.TRUE;

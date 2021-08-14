@@ -13,11 +13,7 @@ import yona.ast.call.InvokeNode;
 import yona.ast.expression.value.AnyValueNode;
 import yona.ast.local.ReadLocalVariableNode;
 import yona.ast.local.ReadLocalVariableNodeGen;
-import yona.runtime.Context;
-import yona.runtime.Function;
-import yona.runtime.Unit;
-import yona.runtime.YonaModule;
-import yona.runtime.exceptions.UninitializedFrameSlotException;
+import yona.runtime.*;
 
 @NodeInfo(shortName = "identifier")
 public final class IdentifierNode extends ExpressionNode {
@@ -35,8 +31,8 @@ public final class IdentifierNode extends ExpressionNode {
   @Override
   public String toString() {
     return "IdentifierNode{" +
-        "name='" + name + '\'' +
-        '}';
+           "name='" + name + '\'' +
+           '}';
   }
 
   @Override
@@ -45,25 +41,21 @@ public final class IdentifierNode extends ExpressionNode {
     Object globalValue = context.get().globals.lookup(name);
     if (!Unit.INSTANCE.equals(globalValue)) {
       if (globalValue instanceof Function && ((Function) globalValue).getCardinality() == 0) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         InvokeNode invokeNode = new InvokeNode(language, (Function) globalValue, new ExpressionNode[]{}, moduleStack);
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
       } else {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         this.replace(new AnyValueNode(globalValue));
         return globalValue;
       }
     }
 
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     FrameSlot frameSlot = getFrameSlot(frame);
     if (moduleStack.length > 0) {
       for (int i = moduleStack.length - 1; i >= 0; i--) {
         try {
           YonaModule module = moduleStack[i].executeModule(frame);
           if (module.getFunctions().containsKey(name)) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             InvokeNode invokeNode = new InvokeNode(language, module.getFunctions().get(name), new ExpressionNode[]{}, moduleStack);
             this.replace(invokeNode);
             return invokeNode.executeGeneric(frame);
@@ -79,9 +71,8 @@ public final class IdentifierNode extends ExpressionNode {
     if (frameSlot != null) {
       ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
       Object result;
-      try {
-        result = node.executeGeneric(frame);
-      } catch (UninitializedFrameSlotException ignored) {
+      result = node.executeGeneric(frame);
+      if (result == UninitializedFrameSlot.INSTANCE) {
         throw new YonaException("Identifier '" + name + "' not found in the current scope", this);
       }
 
@@ -93,7 +84,6 @@ public final class IdentifierNode extends ExpressionNode {
         }
       }
 
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       this.replace(node);
       return result;
     } else {
@@ -115,14 +105,8 @@ public final class IdentifierNode extends ExpressionNode {
     if (frameSlot == null) {
       return false;
     } else {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
-      try {
-        node.executeGeneric(frame);
-        return true;
-      } catch (UninitializedFrameSlotException ignored) {
-        return false;
-      }
+      return node.executeGeneric(frame) != UninitializedFrameSlot.INSTANCE;
     }
   }
 

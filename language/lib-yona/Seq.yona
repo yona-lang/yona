@@ -1,5 +1,15 @@
-module Seq exports zip as
+module Seq exports flatten, zip as
+
+    # Flatten a sequence.
+    flatten [] = []
+    flatten [x] = flatten x
+    flatten (x -| xs) = (flatten x) ++ (flatten xs)
+    flatten x = [x]
+
+    # Zip two sequences together, producing tuples containing an elemenet from the sequence and second sequence.
+    # If sequences are not equal size, only the min length sequence is produced.
     zip [] _ = []
     zip _ [] = []
     zip (x -| xs) (y -| ys) = (x, y) -| (zip xs ys)
+
 end

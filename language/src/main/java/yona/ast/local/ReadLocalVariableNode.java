@@ -1,5 +1,6 @@
 package yona.ast.local;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -7,8 +8,6 @@ import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.ast.ExpressionNode;
-import yona.runtime.UninitializedFrameSlot;
-import yona.runtime.exceptions.UninitializedFrameSlotException;
 
 /**
  * Node to read a local variable from a function's {@link VirtualFrame frame}. The Truffle frame API
@@ -47,13 +46,17 @@ public abstract class ReadLocalVariableNode extends ExpressionNode {
 
   @Specialization(replaces = {"readLong", "readBoolean", "readByte"})
   protected Object readObject(VirtualFrame frame) {
-    Object value = FrameUtil.getObjectSafe(frame, getSlot());
-
-    if (value == UninitializedFrameSlot.INSTANCE) {
-      throw UninitializedFrameSlotException.INSTANCE;
-    }
-
-    return value;
+    /*
+     * The FrameSlotKind has been set to Object, so from now on all writes to the local
+     * variable will be Object writes. However, now we are in a frame that still has an old
+     * non-Object value. This is a slow-path operation: we read the non-Object value, and
+     * write it immediately as an Object value so that we do not hit this path again
+     * multiple times for the same variable of the same frame.
+     */
+    CompilerDirectives.transferToInterpreter();
+    Object result = frame.getValue(getSlot());
+    frame.setObject(getSlot(), result);
+    return result;
   }
 
   @Override

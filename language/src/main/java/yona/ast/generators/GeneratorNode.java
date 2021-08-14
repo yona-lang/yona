@@ -27,7 +27,7 @@ public final class GeneratorNode extends ExpressionNode {
     this.moduleFQN = moduleFQN;
   }
 
-  protected InvokeNode getGeneratorNode(YonaLanguage language, GeneratedCollection type, ExpressionNode reducer, ExpressionNode condition, MatchNode[] stepMatchNodes, ExpressionNode stepExpression, ExpressionNode[] moduleStack) {
+  private InvokeNode getGeneratorNode(YonaLanguage language, GeneratedCollection type, ExpressionNode reducer, ExpressionNode condition, MatchNode[] stepMatchNodes, ExpressionNode stepExpression, ExpressionNode[] moduleStack) {
     Context context = Context.getCurrent();
 
     Function mapTransducer = context.lookupGlobalFunction("Transducers", "map");

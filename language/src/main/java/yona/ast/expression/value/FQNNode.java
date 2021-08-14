@@ -10,9 +10,8 @@ import yona.YonaLanguage;
 import yona.ast.local.ReadLocalVariableNode;
 import yona.ast.local.ReadLocalVariableNodeGen;
 import yona.runtime.Context;
-import yona.runtime.YonaModule;
-import yona.runtime.exceptions.UninitializedFrameSlotException;
 import yona.runtime.Unit;
+import yona.runtime.YonaModule;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -33,7 +32,7 @@ public final class FQNNode extends LiteralValueNode {
     if (o == null || getClass() != o.getClass()) return false;
     FQNNode fqnNode = (FQNNode) o;
     return Arrays.equals(packageParts, fqnNode.packageParts) &&
-        Objects.equals(moduleName, fqnNode.moduleName);
+           Objects.equals(moduleName, fqnNode.moduleName);
   }
 
   @Override
@@ -46,9 +45,9 @@ public final class FQNNode extends LiteralValueNode {
   @Override
   public String toString() {
     return "FQNNode{" +
-        "packageParts=" + Arrays.toString(packageParts) +
-        ", moduleName='" + moduleName + '\'' +
-        '}';
+           "packageParts=" + Arrays.toString(packageParts) +
+           ", moduleName='" + moduleName + '\'' +
+           '}';
   }
 
   @Override
@@ -61,32 +60,30 @@ public final class FQNNode extends LiteralValueNode {
   }
 
   @Override
-  public String executeString(VirtualFrame frame) throws UnexpectedResultException {
+  public String executeString(VirtualFrame frame) {
     return lookupContextReference(YonaLanguage.class).get().getFQN(packageParts, moduleName);
   }
 
   @Override
   public YonaModule executeModule(VirtualFrame frame) throws UnexpectedResultException {
     Context context = lookupContextReference(YonaLanguage.class).get();
-    try {
-      String fqn = Context.getFQN(packageParts, moduleName);
-      Object globalValue = context.globals.lookup(fqn);
-      if (!Unit.INSTANCE.equals(globalValue)) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        this.replace(new AnyValueNode(globalValue));
-        return (YonaModule) globalValue;
-      }
+    String fqn = Context.getFQN(packageParts, moduleName);
+    Object globalValue = context.globals.lookup(fqn);
+    if (!Unit.INSTANCE.equals(globalValue)) {
+      this.replace(new AnyValueNode(globalValue));
+      return (YonaModule) globalValue;
+    }
 
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-      FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(fqn);
-      if (frameSlot != null) {
-        ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        this.replace(node);
-        return node.executeModule(frame);
-      }
-    } catch (UninitializedFrameSlotException | UnexpectedResultException e) {
-      throw new YonaException("Unexpected error while loading a module " + moduleName, e, this);
+    CompilerDirectives.transferToInterpreterAndInvalidate();
+    FrameSlot frameSlot = frame.getFrameDescriptor().findFrameSlot(fqn);
+    if (frameSlot != null) {
+      ReadLocalVariableNode node = ReadLocalVariableNodeGen.create(frameSlot);
+      this.replace(node);
+      Object result = node.executeGeneric(frame);
+      if (!(result instanceof YonaModule)) {
+        throw new YonaException("Unexpected error while loading a module " + moduleName, this);
+      } else
+        return (YonaModule) result;
     }
 
     return context.lookupModule(packageParts, moduleName, this);

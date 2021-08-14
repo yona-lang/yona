@@ -184,7 +184,6 @@ public final class InvokeNode extends ExpressionNode {
   }
 
   private Object createPartiallyAppliedClosure(Function function, VirtualFrame frame) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     /*
      * Create a closure for `partial`ly applied function
      */
