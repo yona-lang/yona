@@ -1,12 +1,12 @@
-FROM oracle/graalvm-ce:21.2.0-java16
+FROM docker.pkg.github.com/graalvm/container/community:21.2.0-java16-amd64
 
 MAINTAINER Adam Kovari <kovariadam@gmail.com>
 
 RUN yum install -y git
 #RUN gu install native-image
 
-ARG MAVEN_VERSION=3.6.3
-ARG SHA=c35a1803a6e70a126e80b2b3ae33eed961f83ed74d18fcd16909b2d44d7dada3203f1ffe726c17ef8dcca2dcaa9fca676987befeadc9b9f759967a8cb77181c0
+ARG MAVEN_VERSION=3.8.2
+ARG SHA=b0bf39460348b2d8eae1c861ced6c3e8a077b6e761fb3d4669be5de09490521a74db294cf031b0775b2dfcd57bd82246e42ce10904063ef8e3806222e686f222
 ARG BASE_URL=https://apache.osuosl.org/maven/maven-3/${MAVEN_VERSION}/binaries
 
 # 5- Create the directories, download maven, validate the download, install it, remove downloaded file and set links
