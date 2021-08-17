@@ -182,6 +182,7 @@ public final class Context {
     builtinModules.register(new SocketClientBuiltinModule());
     builtinModules.register(new SocketConnectionBuiltinModule());
     builtinModules.register(new StopWatchBuiltinModule());
+    builtinModules.register(new TimeBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {
