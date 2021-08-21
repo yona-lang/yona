@@ -1,4 +1,8 @@
-module Seq exports flatten, zip as
+module Seq exports join, flatten, zip as
+
+    join sep [] = []
+    join sep [x] = x
+    join sep (x -| xs) = x ++ sep ++ (join sep xs)
 
     # Flatten a sequence.
     flatten [] = []

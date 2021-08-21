@@ -3,10 +3,7 @@ package yona.ast.builtin.modules.http;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -17,11 +14,10 @@ import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
-import yona.ast.builtin.modules.socket.ConnectionContextManager;
+import yona.ast.call.InvokeNode;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
-import yona.runtime.network.TCPConnection;
 import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
 import yona.runtime.strings.StringUtil;
@@ -42,7 +38,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   protected static final class HttpSessionTuple extends Tuple {
     public HttpSessionTuple(HttpClient client, Set additionalOptions) {
       this.items = new Object[]{
-        new NativeObject<>(client), additionalOptions
+          new NativeObject<>(client), additionalOptions
       };
     }
 
@@ -75,11 +71,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
     @CompilerDirectives.TruffleBoundary
     public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       HttpSessionConnectionManager httpClientContextManager = HttpSessionConnectionManager.adapt(contextManager, context, this);
-      try {
-        return dispatch.execute(function);
-      } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException e) {
-        throw new YonaException(e, this);
-      }
+      return InvokeNode.dispatchFunction(function, dispatch, this);
     }
   }
 
@@ -97,7 +89,6 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         if (unwrappedParams instanceof Dict) {
           return buildSession((Dict) unwrappedParams, context, builder);
         } else { // Promise
-          CompilerDirectives.transferToInterpreterAndInvalidate();
           Promise paramsPromise = (Promise) unwrappedParams;
           return paramsPromise.map((paramsDict) -> buildSession((Dict) paramsDict, context, builder), this);
         }
@@ -106,7 +97,6 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
 
     @CompilerDirectives.TruffleBoundary
     private Object buildSession(Dict params, Context context, HttpClient.Builder builder) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       Set additionalOptions = Set.empty();
       Symbol followRedirectsSymbol = context.symbol("follow_redirects");
       if (params.contains(followRedirectsSymbol)) {
@@ -132,11 +122,9 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         if (authenticatorObj instanceof Authenticator) {
           builder.authenticator((Authenticator) authenticatorObj);
         } else { // Promise
-          CompilerDirectives.transferToInterpreterAndInvalidate();
           Promise authenticatorPromise = (Promise) authenticatorObj;
           Set finalAdditionalOptions = additionalOptions;
           return authenticatorPromise.map(authenticator -> {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             builder.authenticator((Authenticator) authenticator);
             return new HttpSessionConnectionManager(builder.build(), finalAdditionalOptions, context);
           }, this);
@@ -193,12 +181,10 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
             }
           }
         } else { // Promise
-          CompilerDirectives.transferToInterpreterAndInvalidate();
           Promise authenticatorTuplePromise = (Promise) authenticatorTupleObj;
           return authenticatorTuplePromise.map(this::extractAuthenticator, this);
         }
       } else if (authenticatorObj instanceof Promise authenticatorObjPromise) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         return authenticatorObjPromise.map(this::extractAuthenticator, this);
       } else {
         throw YonaException.typeError(this, authenticatorObj);
@@ -214,7 +200,6 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       if (requestObj instanceof HttpRequest) {
         return runRequest(httpSessionConnectionManager, (HttpRequest) requestObj, context, dispatch);
       } else {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         return ((Promise) requestObj).map(request -> runRequest(httpSessionConnectionManager, (HttpRequest) request, context, dispatch), this);
       }
     }
@@ -270,7 +255,6 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
 
       Object unwrappedHeadersObj = headers.unwrapPromises(this);
       if (unwrappedHeadersObj instanceof Promise) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         return ((Promise) unwrappedHeadersObj).map(unwrappedHeaders -> applyHeadersToRequest(requestType, body, builder, (Dict) unwrappedHeaders), this);
       } else {
         return applyHeadersToRequest(requestType, body, builder, (Dict) unwrappedHeadersObj);
@@ -280,8 +264,8 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
     @CompilerDirectives.TruffleBoundary
     private HttpRequest applyHeadersToRequest(RequestType requestType, Seq body, HttpRequest.Builder builder, Dict headers) {
       headers.forEach((k, v) -> builder.setHeader(
-        StringUtil.yonaValueAsYonaString(k).asJavaString(this),
-        StringUtil.yonaValueAsYonaString(v).asJavaString(this)
+          StringUtil.yonaValueAsYonaString(k).asJavaString(this),
+          StringUtil.yonaValueAsYonaString(v).asJavaString(this)
       ));
 
       return requestType.buildRequest(builder, body, this);
@@ -341,12 +325,12 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
 
   public Builtins builtins() {
     return new Builtins(
-      new ExportedFunction(HttpClientBuiltinModuleFactory.SessionBuiltinFactory.getInstance()),
-      new ExportedFunction(HttpClientBuiltinModuleFactory.RunBuiltinFactory.getInstance()),
-      new ExportedFunction(HttpClientBuiltinModuleFactory.GetBuiltinFactory.getInstance()),
-      new ExportedFunction(HttpClientBuiltinModuleFactory.DeleteBuiltinFactory.getInstance()),
-      new ExportedFunction(HttpClientBuiltinModuleFactory.PostBuiltinFactory.getInstance()),
-      new ExportedFunction(HttpClientBuiltinModuleFactory.PutBuiltinFactory.getInstance())
+        new ExportedFunction(HttpClientBuiltinModuleFactory.SessionBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.RunBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.GetBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.DeleteBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.PostBuiltinFactory.getInstance()),
+        new ExportedFunction(HttpClientBuiltinModuleFactory.PutBuiltinFactory.getInstance())
     );
   }
 }

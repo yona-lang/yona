@@ -1063,7 +1063,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     }
     YonaParser.ExpressionContext bodyCtx = ctx.withExpr().body;
     FunctionNode bodyNode = withSourceSection(bodyCtx, new FunctionNode(language, sourceSectionForRule(bodyCtx), currentModuleName(), nextLambdaName(), 0, context.globalFrameDescriptor, bodyCtx.accept(this)));
-    return withSourceSection(ctx, new WithExpression(name, ctx.withExpr().context.accept(this), bodyNode, ctx.withExpr().KW_DAEMON() != null));
+    return withSourceSection(ctx, new WithExpression(language, name, ctx.withExpr().context.accept(this), bodyNode, ctx.withExpr().KW_DAEMON() != null));
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {

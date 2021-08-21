@@ -3,12 +3,10 @@ package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleFile;
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -17,6 +15,7 @@ import yona.TypesGen;
 import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
+import yona.ast.call.InvokeNode;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
@@ -34,12 +33,13 @@ import java.nio.file.*;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 
 // TODO use FlagsUtils
 @BuiltinModuleInfo(moduleName = "File")
 public final class FileBuiltinModule implements BuiltinModule {
-  protected static final int FILE_READ_BUFFER_SIZE = 4096;
+  private static final int FILE_READ_BUFFER_SIZE = 4096;
 
   protected static final class FileTuple extends Tuple {
     public FileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position, Seq additionalOptions, Seq path) {
@@ -174,35 +174,30 @@ public final class FileBuiltinModule implements BuiltinModule {
 
   @NodeInfo(shortName = "run")
   abstract static class RunBuiltin extends BuiltinNode {
+    private final TruffleLogger LOGGER = YonaLanguage.getLogger(RunBuiltin.class);
+
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
-      boolean shouldClose = true;
-      try {
-        final Object result = dispatch.execute(function);
-        if (result instanceof Promise resultPromise) {
-          shouldClose = false;
-          return resultPromise.map(value -> {
-            try {
-              return value;
-            } finally {
-              RunBuiltin.closeFile(fileContextManager, value, this, context);
-            }
-          }, exception -> RunBuiltin.closeFile(fileContextManager, exception, this, context), this);
-        } else {
-          return result;
-        }
-      } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException e) {
-        throw new YonaException(e, this);
-      } finally {
-        if (shouldClose) {
-          RunBuiltin.closeFile(fileContextManager, Unit.INSTANCE, this, context);
-        }
+      final Object result = InvokeNode.dispatchFunction(function, dispatch, this);
+
+      if (result instanceof Promise promise) {
+        return promise.map(value -> {
+          RunBuiltin.closeFile(fileContextManager, value, this, context, LOGGER);
+          return value;
+        }, exception -> {
+          RunBuiltin.closeFile(fileContextManager, exception, this, context, LOGGER);
+          return exception;
+        }, this);
+      } else {
+        RunBuiltin.closeFile(fileContextManager, result, this, context, LOGGER);
+        return result;
       }
     }
 
-    private static <T> T closeFile(FileContextManager fileContextManager, T result, Node node, Context context) {
+    @CompilerDirectives.TruffleBoundary
+    private static <T> void closeFile(FileContextManager fileContextManager, T result, Node node, Context context, TruffleLogger LOGGER) {
       try {
         final FileTuple fileTuple = fileContextManager.getData(FileTuple.class, node);
         final AsynchronousFileChannel fileHandle = fileTuple.fileHandle();
@@ -210,7 +205,7 @@ public final class FileBuiltinModule implements BuiltinModule {
         if (fileTuple.additionalOptions().contains(context.symbol("delete_on_close"), node)) {
           new File(fileTuple.path().asJavaString(node)).delete();
         }
-        return result;
+        LOGGER.log(Level.FINE, "File::close " + fileTuple.path().asJavaString(node) + " with result: " + result);
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, node);
       }
@@ -219,11 +214,14 @@ public final class FileBuiltinModule implements BuiltinModule {
 
   @NodeInfo(shortName = "open")
   abstract static class FileOpenNode extends NewFileNode {
+    private final TruffleLogger LOGGER = YonaLanguage.getLogger(FileOpenNode.class);
+
     @Specialization
     @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unchecked")
     public Object open(Seq uri, yona.runtime.Set modes, @CachedContext(YonaLanguage.class) Context context) {
       final Path path = Paths.get(uri.asJavaString(this).replaceFirst("^~", Matcher.quoteReplacement(System.getProperty("user.home"))));
+      LOGGER.log(Level.FINE, "File::open " + path + " with modes: " + modes);
       return openPath(path, modes, context);
     }
   }
@@ -380,6 +378,8 @@ public final class FileBuiltinModule implements BuiltinModule {
 
   @NodeInfo(shortName = "read")
   abstract static class FileReadFileNode extends BuiltinNode {
+    private final TruffleLogger LOGGER = YonaLanguage.getLogger(FileReadFileNode.class);
+
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Promise readfile(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
@@ -399,6 +399,7 @@ public final class FileBuiltinModule implements BuiltinModule {
 
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
+          LOGGER.fine("read " + result);
           if (result <= 0) {
             promise.fulfil(seq, FileReadFileNode.this);
           } else {
@@ -418,6 +419,7 @@ public final class FileBuiltinModule implements BuiltinModule {
 
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
+          LOGGER.warning("failed: " + exc.getMessage());
           promise.fulfil(new yona.runtime.exceptions.IOException(exc.getMessage(), FileReadFileNode.this), FileReadFileNode.this);
         }
       }
@@ -437,6 +439,8 @@ public final class FileBuiltinModule implements BuiltinModule {
 
   @NodeInfo(shortName = "write")
   abstract static class FileWriteFileNode extends BuiltinNode {
+    private final TruffleLogger LOGGER = YonaLanguage.getLogger(FileWriteFileNode.class);
+
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Promise writefile(ContextManager<?> contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary interopLibrary, @CachedContext(YonaLanguage.class) Context context) {
@@ -444,14 +448,15 @@ public final class FileBuiltinModule implements BuiltinModule {
       final FileTuple fileTuple = fileContextManager.getData(FileTuple.class, this);
       final Node thisNode = this;
       final class WriteCompletionHandler implements CompletionHandler<Integer, Promise> {
-
         @Override
         public void completed(Integer result, Promise attachment) {
+          LOGGER.fine("written " + result);
           attachment.fulfil(fileContextManager.copy(Unit.INSTANCE, fileTuple.position() + result, thisNode), thisNode);
         }
 
         @Override
         public void failed(Throwable exc, Promise attachment) {
+          LOGGER.warning("failed: " + exc.getMessage());
           attachment.fulfil(new yona.runtime.exceptions.IOException(exc.getMessage(), FileWriteFileNode.this), FileWriteFileNode.this);
         }
       }

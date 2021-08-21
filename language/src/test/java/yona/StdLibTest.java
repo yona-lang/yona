@@ -92,6 +92,12 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  public void sequenceReduceLeftCatJoinTest() {
+    String ret = context.eval(YonaLanguage.ID, "Seq::join \" \" [\"ahoj\", \"svet\"]").asString();
+    assertEquals("ahoj svet", ret);
+  }
+
+  @Test
   public void dictFoldTest() {
     long ret = context.eval(YonaLanguage.ID, "Dict::fold (\\acc _ -> acc + 1) 0 {'a' = 1, 'b' = 2, 'c' = 3}").asLong();
     assertEquals(3L, ret);

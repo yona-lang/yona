@@ -1,0 +1,14 @@
+module Scheduler exports run as
+
+    # example: Scheduler::run (:every, :minute) (\-> IO::println "hello")  # print hello every 10 seconds, each minute, plus 0sec offset
+    run how_often what = let
+        (initial_delay, period) = calculate how_often (0, 0, 0)
+    in
+        run_at_fixed_rate initial_delay period (\-> what)
+
+    calculate (:every, unit) offset | Types::is_symbol unit = let
+        initial_delay = (seconds_until_next unit) + (offset_from_now_in_seconds offset)
+    in
+        (initial_delay, (unit, 1))
+
+end

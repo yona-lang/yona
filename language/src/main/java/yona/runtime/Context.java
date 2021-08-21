@@ -25,6 +25,7 @@ import yona.ast.call.BuiltinCallNode;
 import yona.ast.call.InvokeNode;
 import yona.ast.controlflow.YonaBlockNode;
 import yona.ast.expression.SimpleIdentifierNode;
+import yona.ast.expression.WithExpression;
 import yona.ast.expression.value.AnyValueNode;
 import yona.ast.local.ReadArgumentNode;
 import yona.ast.local.WriteLocalVariableNode;
@@ -50,11 +51,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.logging.Level;
 
 public final class Context {
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
-  //  private TruffleLogger LOGGER;
+  private final TruffleLogger LOGGER = YonaLanguage.getLogger(Context.class);
   public static final String YONA_PATH = "YONA_PATH";
 
   /**
@@ -65,6 +68,7 @@ public final class Context {
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
   private final PrintWriter output;
+  private final PrintWriter error;
   private final YonaLanguage language;
   private final AllocationReporter allocationReporter;  // TODO use this
   public final Builtins builtins;
@@ -73,6 +77,7 @@ public final class Context {
   private Dict moduleCache = Dict.empty(Murmur3.INSTANCE, 0L);
   public Threading threading;
   public ExecutorService ioExecutor;
+  public ScheduledExecutorService schedulerExecutor;
   public Dict globals = Dict.empty(Murmur3.INSTANCE, 0L);
   public final FrameDescriptor globalFrameDescriptor;
   public final MaterializedFrame globalFrame;
@@ -86,6 +91,7 @@ public final class Context {
     this.env = env;
     this.input = new BufferedReader(new InputStreamReader(env.in()));
     this.output = new PrintWriter(env.out(), true, StandardCharsets.UTF_8);
+    this.error = new PrintWriter(env.err(), true, StandardCharsets.UTF_8);
     this.language = language;
     this.allocationReporter = env.lookup(AllocationReporter.class);
     this.builtins = new Builtins();
@@ -120,6 +126,7 @@ public final class Context {
     this.socketSelector = Selector.open();
 
     this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yona-io")));
+    this.schedulerExecutor = Executors.newScheduledThreadPool(1, runnable -> env.createThread(runnable, null, new ThreadGroup("yona-scheduler")));
     this.threading = new Threading(this);
     threading.initialize();
 
@@ -183,6 +190,7 @@ public final class Context {
     builtinModules.register(new SocketConnectionBuiltinModule());
     builtinModules.register(new StopWatchBuiltinModule());
     builtinModules.register(new TimeBuiltinModule());
+    builtinModules.register(new SchedulerBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {
@@ -296,6 +304,14 @@ public final class Context {
    */
   public PrintWriter getOutput() {
     return output;
+  }
+
+  /**
+   * The default error output. To allow unit
+   * testing, we do not use {@link System#out} directly.
+   */
+  public PrintWriter getError() {
+    return error;
   }
 
   public static NodeInfo lookupNodeInfo(Class<?> clazz) {
@@ -517,6 +533,18 @@ public final class Context {
         e.printStackTrace();
       }
     }
+    schedulerExecutor.shutdown();
+    assert schedulerExecutor.shutdownNow().isEmpty();
+    assert schedulerExecutor.isShutdown();
+    while (!schedulerExecutor.isTerminated()) {
+      try {
+        Thread.sleep(10);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+    output.flush();
+    error.flush();
 //    LOGGER.fine("Threading shut down");
   }
 
@@ -527,21 +555,25 @@ public final class Context {
 
   @CompilerDirectives.TruffleBoundary
   public Object lookupLocalContext(String identifier) {
+    LOGGER.log(Level.FINE, "@context: " + identifier);
     return LOCAL_CONTEXTS.get().lookup("$context_" + identifier);
   }
 
   @CompilerDirectives.TruffleBoundary
   public boolean containsLocalContext(String identifier) {
+    LOGGER.log(Level.FINE, "?context: " + identifier);
     return LOCAL_CONTEXTS.get().contains("$context_" + identifier);
   }
 
   @CompilerDirectives.TruffleBoundary
   public void putLocalContext(String identifier, Object value) {
+    LOGGER.log(Level.FINE, "+context: " + identifier + ": " + value);
     LOCAL_CONTEXTS.set(LOCAL_CONTEXTS.get().add("$context_" + identifier, value));
   }
 
   @CompilerDirectives.TruffleBoundary
   public void removeLocalContext(String identifier) {
+    LOGGER.log(Level.FINE, "-context: " + identifier);
     LOCAL_CONTEXTS.set(LOCAL_CONTEXTS.get().remove("$context_" + identifier));
   }
 

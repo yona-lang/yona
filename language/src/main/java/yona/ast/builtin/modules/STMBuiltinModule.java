@@ -13,6 +13,7 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
+import yona.ast.builtin.modules.http.HttpClientBuiltinModule;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.async.TransactionalMemory;
@@ -28,6 +29,10 @@ public class STMBuiltinModule implements BuiltinModule {
   protected static final class STMContextManager extends NativeObjectContextManager<TransactionalMemory.Transaction> {
     public STMContextManager(TransactionalMemory.Transaction tx, Context context) {
       super("tx", context.lookupGlobalFunction("STM", "run"), tx);
+    }
+
+    public static STMContextManager adapt(ContextManager<?> contextManager, Context context, Node node) {
+      return new STMContextManager(((NativeObject<TransactionalMemory.Transaction>) contextManager.getData(NativeObject.class, node)).getValue(), context);
     }
   }
 
@@ -50,7 +55,7 @@ public class STMBuiltinModule implements BuiltinModule {
   }
 
   private static TransactionalMemory.Transaction lookupTx(Context context, Node node) {
-    STMContextManager txNative = (STMContextManager) context.lookupLocalContext(TX_CONTEXT_NAME);
+    STMContextManager txNative = STMContextManager.adapt((ContextManager<?>) context.lookupLocalContext(TX_CONTEXT_NAME), context, node);
     return txNative.nativeData(node);
   }
 
@@ -58,7 +63,7 @@ public class STMBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(STMContextManager contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
       Object result;
       while (true) {
         final TransactionalMemory.Transaction tx = lookupTx(context, this);
@@ -90,8 +95,7 @@ public class STMBuiltinModule implements BuiltinModule {
       try {
         tx.start();
         result = dispatch.execute(function);
-        if (result instanceof Promise) {
-          Promise resultPromise = (Promise) result;
+        if (result instanceof Promise resultPromise) {
           result = resultPromise.map(value -> {
             if (tx.validate()) {
               tx.commit();

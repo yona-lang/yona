@@ -1,4 +1,4 @@
-NoMatchException at OverrideBuiltinModule.yona:
+NoMatchException: Module{fqn=JSON, exports=[generate], functions={generate=generate/0}, records={}} at OverrideBuiltinModule.yona:
     JSON = module JSON exports generate as
         generate = "wrong"
     end

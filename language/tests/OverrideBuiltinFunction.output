@@ -1,2 +1,2 @@
-NoMatchException at OverrideBuiltinFunction.yona:
+NoMatchException: wrong at OverrideBuiltinFunction.yona:
     sleep = "wrong"

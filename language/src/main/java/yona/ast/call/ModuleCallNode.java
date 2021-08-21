@@ -88,8 +88,7 @@ public final class ModuleCallNode extends ExpressionNode {
 
   private Object invokeModuleFunction(VirtualFrame frame, Object maybeModule) {
     CompilerDirectives.transferToInterpreterAndInvalidate();
-    if (maybeModule instanceof YonaModule) {
-      YonaModule module = (YonaModule) maybeModule;
+    if (maybeModule instanceof YonaModule module) {
       if (!module.getExports().contains(functionName)) {
         throw new YonaException("Function " + functionName + " is not present in " + module, this);
       } else {
@@ -99,8 +98,7 @@ public final class ModuleCallNode extends ExpressionNode {
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
       }
-    } else if (maybeModule instanceof NativeObject) {
-      NativeObject<?> nativeObject = (NativeObject<?>) maybeModule;
+    } else if (maybeModule instanceof NativeObject<?> nativeObject) {
       Object obj = nativeObject.getValue();
       Method method = lookupAccessibleMethod(obj, obj.getClass());
 

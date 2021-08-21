@@ -72,7 +72,6 @@ public final class CaseNode extends ExpressionNode {
       if (unwrappedValue != null) {
         return execute(unwrappedValue, frame);
       } else {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         MaterializedFrame materializedFrame = frame.materialize();
         return promise.map(val -> execute(val, materializedFrame), this);
       }

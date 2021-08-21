@@ -38,7 +38,7 @@ public final class Launcher extends AbstractLanguageLauncher {
   private static final String MIME_TYPE = "application/x-yona";
   private static final String PROGRAM_NAME = BASH_LAUNCHER_EXEC_NAME != null ? BASH_LAUNCHER_EXEC_NAME : LANGUAGE_ID;
 
-  private List<String> programArgs = new ArrayList<>();
+  private final List<String> programArgs = new ArrayList<>();
   private String commandString = null;
   private String inputFile = null;
   private VersionAction versionAction = VersionAction.None;
@@ -79,9 +79,10 @@ public final class Launcher extends AbstractLanguageLauncher {
     argumentParser.addArgument("-debug-java").help("Enable Java debugger on port 8000").action(storeTrue()).dest("debugJava");
     argumentParser.addArgument("-debug-perf").help("Enable performance logging").action(storeTrue()).dest("debugPerf");
     argumentParser.addArgument("-compile-truffle-immediately").help("Enable performance logging").action(storeTrue()).dest("compileTruffleImmediately");
-    argumentParser.epilog("Other environment variables:\n" +
-        "  YONA_STDLIB_HOME                     location of the standard library (provided by Yona distribution by default)\n" +
-        "  YONA_PATH                            ':'-separated list of directories prefixed to the default module search path");
+    argumentParser.epilog("""
+        Other environment variables:
+          YONA_STDLIB_HOME                     location of the standard library (provided by Yona distribution by default)
+          YONA_PATH                            ':'-separated list of directories prefixed to the default module search path""");
   }
 
   @Override
@@ -296,7 +297,6 @@ public final class Launcher extends AbstractLanguageLauncher {
     System.out.println();
     int lastStatus = 0;
     try {
-      NORMAL:
       while (true) {
         consoleHandler.setPrompt(NORMAL_PROMPT);
 
@@ -379,6 +379,7 @@ public final class Launcher extends AbstractLanguageLauncher {
   }
 
   private static final class ExitException extends RuntimeException {
+    @Serial
     private static final long serialVersionUID = 1L;
     private final int code;
 
@@ -475,7 +476,7 @@ public final class Launcher extends AbstractLanguageLauncher {
       ArrayList<String> execList = new ArrayList<>(relaunchArgs.size() + 1);
       execList.add(executableName);
       execList.addAll(relaunchArgs);
-      return execList.toArray(new String[execList.size()]);
+      return execList.toArray(new String[0]);
     }
   }
 

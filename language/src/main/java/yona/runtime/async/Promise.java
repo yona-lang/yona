@@ -65,8 +65,7 @@ public final class Promise implements TruffleObject {
     Trampoline trampoline = Trampoline.Done.INSTANCE;
     Callback callback = (Callback) snapshot;
     while (callback != Callback.Nil.INSTANCE) {
-      if (callback instanceof Callback.Transform) {
-        Callback.Transform transform = (Callback.Transform) callback;
+      if (callback instanceof Callback.Transform transform) {
         try {
           final Object o;
           if (result instanceof Throwable) {
@@ -224,9 +223,8 @@ public final class Promise implements TruffleObject {
     AtomicInteger counter = new AtomicInteger(data.length);
     for (int i = 0; i < data.length; i++) {
       Object arg = data[i];
-      if (arg instanceof Promise) {
+      if (arg instanceof Promise promise) {
         int idx = i;
-        Promise promise = (Promise) arg;
         Object snapshot;
         Object update;
         do {

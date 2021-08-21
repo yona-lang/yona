@@ -1,18 +1,12 @@
 package yona.ast.expression;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import yona.TypesGen;
-import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.ExpressionNode;
+import yona.ast.call.InvokeNode;
 import yona.ast.expression.value.ContextLookupNode;
 import yona.ast.expression.value.FunctionNode;
 import yona.runtime.*;
@@ -30,9 +24,12 @@ public final class WithExpression extends ExpressionNode {
   private InteropLibrary library;
   @Child
   public ExpressionNode resultNode;
-  private final boolean isDaemon;
 
-  public WithExpression(String name, ExpressionNode contextExpression, FunctionNode bodyExpression, boolean isDaemon) {
+  private final boolean isDaemon;
+  private final YonaLanguage language;
+
+  public WithExpression(YonaLanguage language, String name, ExpressionNode contextExpression, FunctionNode bodyExpression, boolean isDaemon) {
+    this.language = language;
     this.name = name;
     this.contextExpression = contextExpression;
     this.bodyExpression = bodyExpression;
@@ -62,104 +59,58 @@ public final class WithExpression extends ExpressionNode {
     Context context = lookupContextReference(YonaLanguage.class).get();
 
     if (context.containsLocalContext(name)) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       throw new BadArgException("Duplicate context identifier '" + name + "'", this);
-    } else {
-      return executeResultNode(frame, name, context, wrapFunction, contextManagerData);
     }
-  }
 
-  private Object executeResultNode(final VirtualFrame frame, final String name, final Context context, final Function wrapFunction, final Object contextValue) {
-    boolean shouldCleanup = true;
+    final ContextManager<Object> contextManager = new ContextManager<>(name, wrapFunction, contextManagerData);
+    context.putLocalContext(name, contextManager);
+    Object finalResult;
+
     try {
-      ContextManager<Object> contextManager = new ContextManager<>(name, wrapFunction, contextValue);
-      context.putLocalContext(name, contextManager);
       // Execute the body. The result should be a function, or a promise with a function. This function is then passed as an argument to the wrapping function from the ctx manager.
       Object resultValue = resultNode.executeGeneric(frame);
 
       if (resultValue instanceof Promise resultPromise) {
-        shouldCleanup = false;
-
-        Object mappedResult = resultPromise.map(value -> {
-          boolean shouldCleanupInPromise = true;
+        finalResult = resultPromise.map(value -> {
           try {
-            Object result = library.execute(wrapFunction, contextManager, TypesGen.expectFunction(value));
-            if (result instanceof Promise finalResultPromise) {
-              shouldCleanupInPromise = false;
-              return finalResultPromise.map(finalResult -> {
-                try {
-                  return finalResult;
-                } finally {
-                  context.removeLocalContext(name);
-                }
+            final Object result = InvokeNode.dispatchFunction(wrapFunction, library, this, contextManager, value);
+
+            if (result instanceof Promise promise) {
+              return promise.map(res -> {
+                context.removeLocalContext(name);
+                return res;
               }, exception -> {
-                try {
-                  return exception;
-                } finally {
-                  context.removeLocalContext(name);
-                }
+                context.removeLocalContext(name);
+                return exception;
               }, this);
             } else {
               return result;
             }
-          } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException | UnexpectedResultException e) {
-            throw new YonaException(e, this);
           } finally {
-            if (shouldCleanupInPromise) {
-              context.removeLocalContext(name);
-            }
+            context.removeLocalContext(name);
           }
         }, exception -> {
           context.removeLocalContext(name);
           return exception;
         }, this);
-        if (isDaemon) {
-          return Unit.INSTANCE;
-        } else {
-          return mappedResult;
-        }
       } else {
-        try {
-          // TODO if isDaemon, resultValue should be wrapped into promise and the code from the branch above should apply to it
-          Object result = library.execute(wrapFunction, contextManager, TypesGen.expectFunction(resultValue));
-          if (result instanceof Promise resultPromise) {
-            shouldCleanup = false;
-            Promise mappedResult = resultPromise.map(finalResult -> {
-              try {
-                return finalResult;
-              } finally {
-                context.removeLocalContext(name);
-              }
-            }, exception -> {
-              try {
-                return exception;
-              } finally {
-                context.removeLocalContext(name);
-              }
-            }, this);
-            if (isDaemon) {
-              return Unit.INSTANCE;
-            } else {
-              return mappedResult;
-            }
-          } else {
-            if (isDaemon) {
-              return Unit.INSTANCE;
-            } else {
-              return result;
-            }
-          }
-        } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException | UnexpectedResultException e) {
-          throw new YonaException(e, this);
-        } finally {
-          context.removeLocalContext(name);
+        finalResult = InvokeNode.dispatchFunction(wrapFunction, library, this, contextManager, resultValue);
+
+        if (finalResult instanceof Promise promise) {
+          finalResult = promise.map(res -> {
+            context.removeLocalContext(name);
+            return res;
+          }, exception -> {
+            context.removeLocalContext(name);
+            return exception;
+          }, this);
         }
       }
     } finally {
-      if (shouldCleanup) {
-        context.removeLocalContext(name);
-      }
+      context.removeLocalContext(name);
     }
+
+    return isDaemon ? Unit.INSTANCE : finalResult;
   }
 
   private Object executeBodyWithoutIdentifierContext(final VirtualFrame frame, final Object contextValue) {
@@ -169,7 +120,6 @@ public final class WithExpression extends ExpressionNode {
       Object contextValueObj = ContextManager.ensureValid((Tuple) contextValue, this);
       return executeBodyWithoutIdentifierContext(frame, contextValueObj);
     } else if (contextValue instanceof Promise contextValuePromise) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       MaterializedFrame materializedFrame = frame.materialize();
       return contextValuePromise.map((result) -> executeBodyWithoutIdentifierContext(materializedFrame, result), this);
     } else if (contextValue instanceof Object[]) {

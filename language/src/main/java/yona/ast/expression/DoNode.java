@@ -63,8 +63,6 @@ public final class DoNode extends ExpressionNode {
           promise = (Promise) result;
         }
       } else {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-
         if (materializedFrame == null) {
           materializedFrame = frame.materialize();
         }

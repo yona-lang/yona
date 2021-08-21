@@ -128,7 +128,7 @@ public final class InvokeNode extends ExpressionNode {
     } else {
       Object[] argumentValues = new Object[argumentNodes.length];
       boolean unwrapPromises = checkArgsForPromises(frame, argumentValues, function.isUnwrapArgumentPromises());
-      return dispatchFunction(function, argumentValues, function.isUnwrapArgumentPromises() && unwrapPromises);
+      return dispatchFunction(function, function.isUnwrapArgumentPromises() && unwrapPromises, library, this, (Object[]) argumentValues);
     }
   }
 
@@ -152,33 +152,37 @@ public final class InvokeNode extends ExpressionNode {
     return argsArePromise;
   }
 
-  private Object dispatchFunction(Function function, Object[] argumentValues, boolean unwrapPromises) {
+  public static Object dispatchFunction(Function function, boolean unwrapPromises, InteropLibrary library, ExpressionNode node, Object... argumentValues) {
     if (unwrapPromises) {
-      Promise argsPromise = Promise.all(argumentValues, this);
+      Promise argsPromise = Promise.all(argumentValues, node);
       return argsPromise.map(argValues -> {
         try {
           return library.execute(function, (Object[]) argValues);
         } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
           /* Execute was not successful. */
-          return UndefinedNameException.undefinedFunction(this, function);
+          return UndefinedNameException.undefinedFunction(node, function);
         }
-      }, this);
+      }, node);
     } else {
-      if (this.isTail()) {
+      if (node.isTail()) {
         throw new TailCallException(function, argumentValues);
       }
 
-      Function dispatchFunction = function;
-      while (true) {
-        try {
-          return library.execute(dispatchFunction, argumentValues);
-        } catch (TailCallException e) {
-          dispatchFunction = e.function;
-          argumentValues = e.arguments;
-        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-          /* Execute was not successful. */
-          throw UndefinedNameException.undefinedFunction(this, dispatchFunction);
-        }
+      return dispatchFunction(function, library, node, (Object[]) argumentValues);
+    }
+  }
+
+  public static Object dispatchFunction(Function function, InteropLibrary library, ExpressionNode node, Object... argumentValues) {
+    Function dispatchFunction = function;
+    while (true) {
+      try {
+        return library.execute(dispatchFunction, argumentValues);
+      } catch (TailCallException e) {
+        dispatchFunction = e.function;
+        argumentValues = e.arguments;
+      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
+        /* Execute was not successful. */
+        throw UndefinedNameException.undefinedFunction(node, dispatchFunction);
       }
     }
   }
@@ -220,6 +224,7 @@ public final class InvokeNode extends ExpressionNode {
    */
   @ExplodeLoop
   private void setNotEvaluatedArgs(Function function, ExpressionNode[] allArgumentNodes) {
+    CompilerAsserts.compilationConstant(argumentNodes.length);
     for (int i = argumentNodes.length, j = 0; i < function.getCardinality(); i++, j++) {
       allArgumentNodes[i] = new ReadArgumentNode(j);
     }
@@ -230,6 +235,7 @@ public final class InvokeNode extends ExpressionNode {
    */
   @ExplodeLoop
   private void setEvaluatedArgs(VirtualFrame frame, ExpressionNode[] allArgumentNodes) {
+    CompilerAsserts.compilationConstant(argumentNodes.length);
     for (int i = 0; i < argumentNodes.length; i++) {
       allArgumentNodes[i] = new AnyValueNode(argumentNodes[i].executeGeneric(frame));
     }

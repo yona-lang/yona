@@ -10,12 +10,12 @@ import yona.runtime.stdlib.ExportedFunction;
 import java.time.Instant;
 
 @BuiltinModuleInfo(moduleName = "Time")
-public class TimeBuiltinModule implements BuiltinModule {
+public final class TimeBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "unix")
   abstract static class UnixBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public long newline() {
+    public long unix() {
       return Instant.now().getEpochSecond();
     }
   }

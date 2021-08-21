@@ -135,8 +135,7 @@ public class YonaException extends AbstractTruffleException {
     result.append(" not defined for");
 
     String sep = " ";
-    for (int i = 0; i < values.length; i++) {
-      Object value = values[i];
+    for (Object value : values) {
       result.append(sep);
       sep = ", ";
       if (value == null || interopLibrary.isNull(value)) {
@@ -153,6 +152,7 @@ public class YonaException extends AbstractTruffleException {
         }
       }
     }
+
     return new YonaException(result.toString(), operation);
   }
 

@@ -4,7 +4,7 @@ try
         session = http\Client::session {:follow_redirects = :normal, :body_encoding = :text}  # :body_encoding should be :binary
         (status, headers, body) = http\Client::get session url {}
 
-        with File::open "binary" {:write, :create, :binary} as fh
+        with File::open "./binary" {:write, :create, :binary} as fh
             File::write fh body
         end
     end

@@ -36,8 +36,7 @@ public final class SystemBuiltinModule implements BuiltinModule {
     public Promise system(Seq sequence, @CachedContext(YonaLanguage.class) Context context) {
       Object processBuilderObj = buildProcess(sequence.unwrapPromises(this), this);
 
-      if (processBuilderObj instanceof ProcessBuilder) {
-        ProcessBuilder processBuilder = (ProcessBuilder) processBuilderObj;
+      if (processBuilderObj instanceof ProcessBuilder processBuilder) {
         return startProcess(processBuilder, context);
       } else { // Promise
         return ((Promise) processBuilderObj).map((obj) -> startProcess((ProcessBuilder) obj, context), this);
@@ -93,8 +92,7 @@ public final class SystemBuiltinModule implements BuiltinModule {
 
   @CompilerDirectives.TruffleBoundary
   private static Object buildProcess(Object sequenceObj, Node node) {
-    if (sequenceObj instanceof Seq) {
-      Seq sequence = (Seq) sequenceObj;
+    if (sequenceObj instanceof Seq sequence) {
       CompilerAsserts.compilationConstant(sequence.length());
       String[] strings = new String[(int) sequence.length()];
 

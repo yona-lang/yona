@@ -3,7 +3,9 @@ package yona.ast.builtin.modules;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import org.antlr.v4.runtime.*;
+import yona.TypesGen;
 import yona.YonaException;
 import yona.ast.builtin.BuiltinNode;
 import yona.json.JSONLexer;
@@ -24,10 +26,15 @@ public final class JSONBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Object parse(Seq str) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
+      return parseSeq(str);
+    }
+
+    private Object parseSeq(Seq str) {
       JSONLexer lexer = new JSONLexer(seqToCharStream(str));
+      lexer.removeErrorListeners();
       TokenStream tokens = new CommonTokenStream(lexer);
       JSONParser parser = new JSONParser(tokens);
+      parser.removeErrorListeners();
       JSONParserVisitor visitor = new JSONParserVisitor();
 
       return visitor.visit(parser.json());
@@ -36,19 +43,11 @@ public final class JSONBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     public Object parse(Promise promise) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       return promise.map(obj -> {
-        if (obj instanceof Seq) {
-          CompilerDirectives.transferToInterpreterAndInvalidate();
-          Seq str = (Seq) obj;
-          JSONLexer lexer = new JSONLexer(seqToCharStream(str));
-          TokenStream tokens = new CommonTokenStream(lexer);
-          JSONParser parser = new JSONParser(tokens);
-          JSONParserVisitor visitor = new JSONParserVisitor();
-
-          return visitor.visit(parser.json());
-        } else {
-          return YonaException.typeError(this, obj);
+        try {
+          return parseSeq(TypesGen.expectSeq(obj));
+        } catch (UnexpectedResultException e) {
+          throw YonaException.typeError(this, obj);
         }
       }, this);
     }

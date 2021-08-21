@@ -67,8 +67,7 @@ public final class PatternLetNode extends LexicalScopeNode {
 
     Object result = resolveDependencies(Seq.sequence((AliasNode[]) patternAliases), context.globallyProvidedIdentifiers()).executeGeneric(materializedFrame, this);
 
-    if (result instanceof Promise) {
-      Promise resultPromise = (Promise) result;
+    if (result instanceof Promise resultPromise) {
       if (resultPromise.isFulfilled()) {
         try {
           resultPromise.unwrapOrThrow();
@@ -167,17 +166,16 @@ public final class PatternLetNode extends LexicalScopeNode {
     @Override
     public Object executeGeneric(VirtualFrame frame, ExpressionNode node) {
       final Object parentResult = parent.executeGeneric(frame, node);
-      LOGGER.fine("Singleton.execute.aliasNode: " + aliasNode);
-      LOGGER.fine("Singleton.execute.parentResult: " + parentResult);
+      LOGGER.finest("Singleton.execute.aliasNode: " + aliasNode);
+      LOGGER.finest("Singleton.execute.parentResult: " + parentResult);
 
-      if (parentResult instanceof Promise) {
-        final Promise parentPromise = (Promise) parentResult;
+      if (parentResult instanceof final Promise parentPromise) {
         Object result = parentPromise.map(unit -> aliasNode.executeGeneric(frame), node);
-        LOGGER.fine("Singleton.execute.result: " + result);
+        LOGGER.finest("Singleton.execute.result: " + result);
         return result;
       } else {
         Object result = aliasNode.executeGeneric(frame);
-        LOGGER.fine("Singleton.execute.result: " + result);
+        LOGGER.finest("Singleton.execute.result: " + result);
         return result;
       }
     }
@@ -233,8 +231,7 @@ public final class PatternLetNode extends LexicalScopeNode {
         LOGGER.finest("Batch.execute.alias.aliasNode: " + aliasNode);
         LOGGER.finest("Batch.execute.alias.acc: " + acc);
 
-        if (acc instanceof Promise) {
-          final Promise promise = (Promise) acc;
+        if (acc instanceof final Promise promise) {
           return promise.map(unit -> aliasNode.executeGeneric(frame), node);
         } else {
           Object result = aliasNode.executeGeneric(frame);
@@ -247,17 +244,16 @@ public final class PatternLetNode extends LexicalScopeNode {
     @Override
     public Object executeGeneric(final VirtualFrame frame, final ExpressionNode node) {
       final Object parentResult = parent.executeGeneric(frame, node);
-      LOGGER.fine("Batch.execute.aliasNodes: " + aliasNodes);
-      LOGGER.fine("Batch.execute.parentResult: " + parentResult);
+      LOGGER.finest("Batch.execute.aliasNodes: " + aliasNodes);
+      LOGGER.finest("Batch.execute.parentResult: " + parentResult);
 
-      if (parentResult instanceof Promise) {
-        final Promise parentPromise = (Promise) parentResult;
+      if (parentResult instanceof final Promise parentPromise) {
         Object result = parentPromise.map(ignore -> executeAliases(frame, node), node);
-        LOGGER.fine("Batch.execute.result: " + result);
+        LOGGER.finest("Batch.execute.result: " + result);
         return result;
       } else {
         Object result = executeAliases(frame, node);
-        LOGGER.fine("Batch.execute.result: " + result);
+        LOGGER.finest("Batch.execute.result: " + result);
         return result;
       }
     }

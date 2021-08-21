@@ -1,6 +1,12 @@
-module IO exports println as
+module IO exports println, println_err as
     println s = let
         res = print "{s}{System::newline}"
+        ()  = flush
+    in
+        res
+
+    println_err s = let
+        res = print_err "{s}{System::newline}"
         ()  = flush
     in
         res

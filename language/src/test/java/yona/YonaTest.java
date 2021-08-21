@@ -64,7 +64,7 @@ public class YonaTest {
                 .allowAllAccess(true)
                 .environment("YONA_STDLIB_HOME", "lib-yona")
                 .environment("YONA_PRINT_ALL_RESULTS", "true")
-                .option(CommonTest.logLevelOption(Context.class), "FINEST")
+//                .option("log.yona.level", "FINE")
                 .build();
 
             /* Parse the Yona source file. */
@@ -72,7 +72,9 @@ public class YonaTest {
 
             try {
               /* Call the main entry point, without any arguments. */
+              System.out.println("Running " + sourceName);
               context.eval(source);
+//              System.out.println("Finished " + sourceName);
             } catch (PolyglotException ex) {
               if (!ex.isInternalError()) {
                 printer.println(YonaException.prettyPrint(ex.getMessage(), ex.getSourceLocation()));
@@ -95,12 +97,11 @@ public class YonaTest {
             }
 
             printer.flush();
-            String actualOutput = new String(out.toByteArray());
+            String actualOutput = out.toString();
 
             assertEquals(expectedOutput.replace("\r", "").strip(), actualOutput.replace("\r", "").strip(), sourceName);
           });
 
-          if(baseName.startsWith("DownloadTextAndWriteBinary"))
           foundCases.add(dynamicTest);
         }
         return FileVisitResult.CONTINUE;

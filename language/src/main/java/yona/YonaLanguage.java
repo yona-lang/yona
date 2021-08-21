@@ -104,10 +104,9 @@ public class YonaLanguage extends TruffleLanguage<Context> {
 
   @Override
   protected boolean isObjectOfLanguage(Object object) {
-    if (!(object instanceof TruffleObject)) {
+    if (!(object instanceof TruffleObject truffleObject)) {
       return false;
     }
-    TruffleObject truffleObject = (TruffleObject) object;
     return truffleObject instanceof Function;
   }
 
@@ -184,8 +183,7 @@ public class YonaLanguage extends TruffleLanguage<Context> {
 
   @Override
   protected SourceSection findSourceLocation(Context context, Object value) {
-    if (value instanceof Function) {
-      Function f = (Function) value;
+    if (value instanceof Function f) {
       return f.getDeclaredLocation();
     }
     return null;

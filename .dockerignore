@@ -1,0 +1,13 @@
+Dockerfile*
+*.ps1
+*.xml
+*.md
+*tests*
+*.g4
+*.java
+*.js
+*.erl
+*.beam
+*.py
+*.yona
+node_modules

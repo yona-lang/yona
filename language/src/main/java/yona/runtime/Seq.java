@@ -692,8 +692,7 @@ public final class Seq implements TruffleObject {
   static boolean appendCodePoints(final CharBuffer buffer, final Object node, final int shift) {
     final int len = nodeLength(node);
     if (shift == 0) {
-      if (node instanceof byte[]) {
-        final byte[] bytes = (byte[]) node;
+      if (node instanceof final byte[] bytes) {
         if (!decodeIsUtf8(bytes[0])) {
           return false;
         }
@@ -748,8 +747,7 @@ public final class Seq implements TruffleObject {
   static boolean appendBytes(final ByteBuffer buffer, final Object node, final int shift) {
     final int len = nodeLength(node);
     if (shift == 0) {
-      if (node instanceof byte[]) {
-        final byte[] bytes = (byte[]) node;
+      if (node instanceof final byte[] bytes) {
         buffer.put(bytes, 1, bytes.length - 1);
       } else {
         for (int i = 0; i < len; i++) {
@@ -809,10 +807,9 @@ public final class Seq implements TruffleObject {
     if (o == this) {
       return true;
     }
-    if (!(o instanceof Seq)) {
+    if (!(o instanceof Seq that)) {
       return false;
     }
-    Seq that = (Seq) o;
     if (this.length() != that.length()) {
       return false;
     }
@@ -835,8 +832,7 @@ public final class Seq implements TruffleObject {
   }
 
   static Object[] objectify(final Object node) {
-    if (node instanceof byte[]) {
-      final byte[] bytes = (byte[]) node;
+    if (node instanceof final byte[] bytes) {
       final Object[] result = new Object[nodeLength(node) + 1];
       if (decodeIsUtf8(bytes[0])) {
         for (int i = 1; i < result.length; i++) {
@@ -887,8 +883,7 @@ public final class Seq implements TruffleObject {
   }
 
   static Object nodeLookup(final Object node, final int i) {
-    if (node instanceof byte[]) {
-      final byte[] bytes = (byte[]) node;
+    if (node instanceof final byte[] bytes) {
       if (decodeIsUtf8(bytes[0])) {
         return UnicodeUtils.utf8Decode(bytes, UnicodeUtils.utf8Offset(bytes, 1, i));
       } else {
