@@ -1,6 +1,6 @@
 # Yona
 
-[![Build Status](https://travis-ci.org/yona-lang/yona.svg?branch=master)](https://travis-ci.org/yona-lang/yona)
+[![Build Status](https://app.travis-ci.com/yona-lang/yona.svg?branch=master)](https://app.travis-ci.com/yona-lang/yona)
 [![Latest Release](https://img.shields.io/github/v/release/yona-lang/yona)](https://github.com/yona-lang/yona/releases/latest/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/akovari/yona)](https://hub.docker.com/r/akovari/yona)
 [![IDEA Plugin](https://img.shields.io/jetbrains/plugin/d/14917-yona-language?label=IDEA%20Plugin)](https://plugins.jetbrains.com/plugin/14917-yona-language)
