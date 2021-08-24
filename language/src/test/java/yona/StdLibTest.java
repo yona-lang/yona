@@ -420,6 +420,12 @@ public class StdLibTest extends CommonTest {
   }
 
   @Test
+  public void stringQuotesJsonGenerateTest() {
+    String ret = context.eval(YonaLanguage.ID, "JSON::generate \"\\\"x\\\"\"").asString();
+    assertEquals("\"\\\"x\\\"\"", ret);
+  }
+
+  @Test
   public void timeoutPromiseTest() {
     long ret = context.eval(YonaLanguage.ID, "timeout (:millis, 500) (let _ = sleep (:millis, 100) in 1)").asLong();
     assertEquals(1L, ret);

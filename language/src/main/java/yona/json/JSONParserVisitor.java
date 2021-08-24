@@ -1,11 +1,20 @@
 package yona.json;
 
+import com.oracle.truffle.api.nodes.Node;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ErrorNode;
 import yona.runtime.Dict;
 import yona.runtime.Seq;
 import yona.runtime.Unit;
+import yona.runtime.exceptions.JSONParserException;
 
 public class JSONParserVisitor extends JSONBaseVisitor<Object> {
+  private final Node node;
+
+  public JSONParserVisitor(Node node) {
+    this.node = node;
+  }
+
   @Override
   public Dict visitObj(JSONParser.ObjContext ctx) {
     Dict dict = Dict.EMPTY;
@@ -64,5 +73,10 @@ public class JSONParserVisitor extends JSONBaseVisitor<Object> {
 
   private Seq normalizeString(String st) {
     return Seq.fromCharSequence(st.substring(1, st.length() - 1));
+  }
+
+  @Override
+  public Object visitErrorNode(ErrorNode node) {
+    throw new JSONParserException(node.getText(), this.node);
   }
 }

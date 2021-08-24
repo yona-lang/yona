@@ -83,7 +83,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
       if (params.size() == 0L) {
         return new HttpSessionConnectionManager(HttpClient.newHttpClient(), Set.empty(), context);
       } else {
-        HttpClient.Builder builder = HttpClient.newBuilder().executor(context.ioExecutor);
+        HttpClient.Builder builder = HttpClient.newBuilder().executor(context.ioExecutor).version(HttpClient.Version.HTTP_1_1);
 
         Object unwrappedParams = params.unwrapPromises(this);
         if (unwrappedParams instanceof Dict) {

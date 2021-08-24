@@ -35,7 +35,7 @@ public final class JSONBuiltinModule implements BuiltinModule {
       TokenStream tokens = new CommonTokenStream(lexer);
       JSONParser parser = new JSONParser(tokens);
       parser.removeErrorListeners();
-      JSONParserVisitor visitor = new JSONParserVisitor();
+      JSONParserVisitor visitor = new JSONParserVisitor(this);
 
       return visitor.visit(parser.json());
     }

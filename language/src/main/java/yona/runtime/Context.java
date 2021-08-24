@@ -123,17 +123,17 @@ public final class Context {
 
 //    LOGGER.fine("Initializing threading");
 
+    installBuiltins();
+    installBuiltinModules();
+    registerBuiltins();
+    installGlobals();
+
     this.socketSelector = Selector.open();
 
     this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yona-io")));
     this.schedulerExecutor = Executors.newScheduledThreadPool(1, runnable -> env.createThread(runnable, null, new ThreadGroup("yona-scheduler")));
     this.threading = new Threading(this);
     threading.initialize();
-
-    installBuiltins();
-    installBuiltinModules();
-    registerBuiltins();
-    installGlobals();
 
     identityFunction = lookupGlobalFunction(null, "identity");
 

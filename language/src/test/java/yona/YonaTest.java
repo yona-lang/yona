@@ -58,7 +58,11 @@ public class YonaTest {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
             Thread.sleep(1000);
-            Context context = Context.newBuilder(YonaLanguage.ID)
+            //                .option("log.yona.level", "FINE")
+
+            /* Parse the Yona source file. */
+
+            try (Context context = Context.newBuilder(YonaLanguage.ID)
                 .in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8)))
                 .out(out)
                 .err(out)
@@ -66,12 +70,8 @@ public class YonaTest {
                 .environment("YONA_STDLIB_HOME", "lib-yona")
                 .environment("YONA_PRINT_ALL_RESULTS", "true")
 //                .option("log.yona.level", "FINE")
-                .build();
-
-            /* Parse the Yona source file. */
-            Source source = Source.newBuilder(YonaLanguage.ID, sourceFile.toFile()).interactive(true).build();
-
-            try {
+                .build()) {
+              Source source = Source.newBuilder(YonaLanguage.ID, sourceFile.toFile()).interactive(true).build();
               /* Call the main entry point, without any arguments. */
               System.out.println("Running " + sourceName);
               context.eval(source);
@@ -95,8 +95,6 @@ public class YonaTest {
               } else {
                 ex.printStackTrace(printer);
               }
-            } finally {
-              context.close(true);
             }
 
             printer.flush();
