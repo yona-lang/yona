@@ -13,6 +13,7 @@ import yona.runtime.exceptions.TransducerDoneException;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -661,14 +662,21 @@ public final class Seq implements TruffleObject {
 
   public byte[] asByteArray(Node caller) {
     long len = length();
-    if (len > Integer.MAX_VALUE) {
+    if (len * Character.BYTES > Integer.MAX_VALUE) {
       throw new BadArgException("Sequence too long to be converted to Java byte array", caller);
     }
-    ByteBuffer byteBuffer = ByteBuffer.allocate((int) len);
+    ByteBuffer byteBuffer = ByteBuffer.allocate((int) len * Character.BYTES);
     if (asBytes(byteBuffer)) {
       byteBuffer.limit(byteBuffer.position());
       byteBuffer.position(0);
-      return byteBuffer.array();
+
+      byte[] byteArray = byteBuffer.array();
+      int first0 = ArrayUtils.indexOf(byteArray, (byte) 0);
+      if (first0 == -1) {
+        return byteArray;
+      } else {
+        return Arrays.copyOfRange(byteArray, 0, first0);
+      }
     } else {
       throw new BadArgException("Unable to convert sequence to Java byte array", caller);
     }
@@ -676,14 +684,20 @@ public final class Seq implements TruffleObject {
 
   public ByteBuffer asByteBuffer(Node caller) {
     long len = length();
-    if (len > Integer.MAX_VALUE) {
+    if (len * Character.BYTES > Integer.MAX_VALUE) {
       throw new BadArgException("Sequence too long to be converted to Java ByteBuffer", caller);
     }
-    ByteBuffer byteBuffer = ByteBuffer.allocate((int) len);
+    ByteBuffer byteBuffer = ByteBuffer.allocate((int) len * Character.BYTES);
     if (asBytes(byteBuffer)) {
       byteBuffer.limit(byteBuffer.position());
       byteBuffer.position(0);
-      return byteBuffer;
+      byte[] byteArray = byteBuffer.array();
+      int first0 = ArrayUtils.indexOf(byteArray, (byte) 0);
+      if (first0 == -1) {
+        return byteBuffer;
+      } else {
+        return ByteBuffer.wrap(Arrays.copyOfRange(byteArray, 0, first0));
+      }
     } else {
       throw new BadArgException("Unable to convert sequence to Java ByteBuffer", caller);
     }

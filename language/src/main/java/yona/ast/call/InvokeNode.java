@@ -26,6 +26,7 @@ import yona.ast.local.WriteLocalVariableNodeGen;
 import yona.runtime.DependencyUtils;
 import yona.runtime.Function;
 import yona.runtime.async.Promise;
+import yona.runtime.exceptions.BadArgException;
 import yona.runtime.exceptions.UndefinedNameException;
 
 import java.util.Arrays;
@@ -120,7 +121,7 @@ public final class InvokeNode extends ExpressionNode {
 
     if (argumentNodes.length > function.getCardinality()) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
-      throw new YonaException("Unexpected number of arguments when calling '%s': %d expected: %d".formatted(function.getName(), argumentNodes.length, function.getCardinality()), this);
+      throw new BadArgException("Unexpected number of arguments when calling '%s': %d expected: %d".formatted(function.getName(), argumentNodes.length, function.getCardinality()), this);
     } else if (argumentNodes.length == 0 && function.getCardinality() > 0) {
       return function;
     } else if (argumentNodes.length < function.getCardinality()) {

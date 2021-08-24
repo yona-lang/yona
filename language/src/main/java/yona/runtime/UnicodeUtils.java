@@ -106,30 +106,11 @@ public final class UnicodeUtils {
   public static int utf8Offset(final byte[] bytes, int offset, int idx) {
     while (idx > 0) {
       switch ((0xf0 & bytes[offset]) >>> 4) {
-        case 0b0000:
-        case 0b0001:
-        case 0b0010:
-        case 0b0011:
-        case 0b0100:
-        case 0b0101:
-        case 0b0110:
-        case 0b0111:
-          offset += 1;
-          break;
-        case 0b1000:
-        case 0b1001:
-        case 0b1010:
-        case 0b1011:
-          throw new AssertionError();
-        case 0b1100:
-        case 0b1101:
-          offset += 2;
-          break;
-        case 0b1110:
-          offset += 3;
-          break;
-        case 0b1111:
-          offset += 4;
+        case 0b0000, 0b0001, 0b0010, 0b0011, 0b0100, 0b0101, 0b0110, 0b0111 -> offset += 1;
+        case 0b1000, 0b1001, 0b1010, 0b1011 -> throw new AssertionError();
+        case 0b1100, 0b1101 -> offset += 2;
+        case 0b1110 -> offset += 3;
+        case 0b1111 -> offset += 4;
       }
       idx--;
     }
@@ -138,29 +119,25 @@ public final class UnicodeUtils {
 
   public static void utf8Encode(final ByteBuffer dst, int codePoint) {
     switch (utf8Length(codePoint)) {
-      case 1: {
+      case 1 -> {
         dst.put((byte) codePoint);
-        break;
       }
-      case 2: {
+      case 2 -> {
         dst.put((byte) (0xc0 | (codePoint >> 6)));
         dst.put((byte) (0x80 | (codePoint & 0x3f)));
-        break;
       }
-      case 3: {
+      case 3 -> {
         dst.put((byte) (0xe0 | (codePoint >> 12)));
         dst.put((byte) (0x80 | ((codePoint >> 6) & 0x3f)));
         dst.put((byte) (0x80 | (codePoint & 0x3f)));
-        break;
       }
-      case 4: {
+      case 4 -> {
         dst.put((byte) (0xf0 | (codePoint >> 18)));
         dst.put((byte) (0x80 | ((codePoint >> 12) & 0x3f)));
-        dst.put((byte) (0x80 | ((codePoint >>  6) & 0x3f)));
+        dst.put((byte) (0x80 | ((codePoint >> 6) & 0x3f)));
         dst.put((byte) (0x80 | (codePoint & 0x3f)));
-        break;
       }
-      default: throw new AssertionError();
+      default -> throw new AssertionError();
     }
   }
 }

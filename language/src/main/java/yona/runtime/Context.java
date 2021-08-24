@@ -191,6 +191,8 @@ public final class Context {
     builtinModules.register(new StopWatchBuiltinModule());
     builtinModules.register(new TimeBuiltinModule());
     builtinModules.register(new SchedulerBuiltinModule());
+    builtinModules.register(new ExceptionBuiltinModule());
+    builtinModules.register(new RandomBuiltinModule());
   }
 
   public void installBuiltinsGlobals(String fqn, Builtins builtins) {

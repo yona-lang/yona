@@ -57,6 +57,7 @@ public class YonaTest {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PrintWriter printer = new PrintWriter(out);
+            Thread.sleep(1000);
             Context context = Context.newBuilder(YonaLanguage.ID)
                 .in(new ByteArrayInputStream(testInput.getBytes(StandardCharsets.UTF_8)))
                 .out(out)
@@ -94,6 +95,8 @@ public class YonaTest {
               } else {
                 ex.printStackTrace(printer);
               }
+            } finally {
+              context.close(true);
             }
 
             printer.flush();

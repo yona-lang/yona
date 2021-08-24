@@ -1,13 +1,10 @@
-try
-    do
-        url = "https://httpbin.org/gzip"
-        session = http\Client::session {:follow_redirects = :normal, :body_encoding = :text}  # :body_encoding should be :binary
-        (status, headers, body) = http\Client::get session url {}
+do
+    url = "https://httpbin.org/gzip"
+    session = http\Client::session {:follow_redirects = :normal, :body_encoding = :text}  # :body_encoding should be :binary
+    (status, headers, body) = http\Client::get session url {}
 
-        with File::open "./binary" {:write, :create, :binary} as fh
-            File::write fh body
-        end
+    with File::open "./binary" {:write, :create, :binary} as fh
+        File::write fh body
     end
-catch
-    (:ioerror, "java.nio.BufferOverflowException", _stacktrace) -> "error_caught"
+    :ok
 end

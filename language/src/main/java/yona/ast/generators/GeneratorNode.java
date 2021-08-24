@@ -31,7 +31,7 @@ public final class GeneratorNode extends ExpressionNode {
     Context context = Context.getCurrent();
 
     Function mapTransducer = context.lookupGlobalFunction("Transducers", "map");
-    Function finalShapeReducer = context.lookupGlobalFunction("Reducers", reducerForGeneratedCollection(type));
+    Function finalShapeReducer = context.lookupGlobalFunction("Reducers", type.reducerForGeneratedCollection());
     InvokeNode toSeqInvoke = new InvokeNode(language, finalShapeReducer, new ExpressionNode[]{}, moduleStack);
 
     MatchNode argPatterns;
@@ -71,13 +71,5 @@ public final class GeneratorNode extends ExpressionNode {
   @Override
   protected String[] requiredIdentifiers() {
     return callNode.getRequiredIdentifiers();
-  }
-
-  private String reducerForGeneratedCollection(GeneratedCollection type) {
-    return switch (type) {
-      case SEQ -> "to_seq";
-      case SET -> "to_set";
-      case DICT -> "to_dict";
-    };
   }
 }

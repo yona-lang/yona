@@ -50,7 +50,7 @@ public final class StringInterpolationNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    Object interpolationValue = interpolationExpression.executeGeneric(frame);
+    Object interpolationValue = TypesGen.ensureNotNull(interpolationExpression.executeGeneric(frame));
     Object alignmentValue = alignmentExpression != null ? alignmentExpression.executeGeneric(frame) : null;
 
     if (interpolationValue instanceof Promise || alignmentValue instanceof Promise) {

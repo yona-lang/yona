@@ -11,4 +11,9 @@ module Scheduler exports run as
     in
         (initial_delay, (unit, 1))
 
+#    calculate (:every, n, units) offset | Types::is_integer n && Types::is_symbol unit = let
+#        initial_delay = (seconds_until_next unit) + (offset_from_now_in_seconds offset)
+#    in
+#        (initial_delay, (unit, 1))
+
 end

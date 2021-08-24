@@ -164,7 +164,7 @@ public class YonaException extends AbstractTruffleException {
       Tuple tuple = YonaRootNode.translateSTE(stackTraceElement);
 
       if (tuple != null) {
-        if (stackTraceElement.getTarget().getRootNode().getQualifiedName().equals("$main")) continue;
+        if ("$main".equals(stackTraceElement.getTarget().getRootNode().getQualifiedName())) continue;
         stackTraceSequence = stackTraceSequence.insertLast(tuple);
       }
     }

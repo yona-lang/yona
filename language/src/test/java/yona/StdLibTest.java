@@ -762,4 +762,10 @@ public class StdLibTest extends CommonTest {
     assertEquals(6L, array[i++]);
     assertEquals(7L, array[i++]);
   }
+
+  @Test
+  public void randomTest() {
+    long ret = context.eval(YonaLanguage.ID, "Random::integer_lt 50").asLong();
+    assertTrue(ret >= 0 && ret < 50);
+  }
 }

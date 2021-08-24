@@ -64,4 +64,24 @@ public final class ArrayUtils {
     }
     return ret;
   }
+
+  public static <T> int indexOf(T[] array, T elem) {
+    for (int i = 0; i < array.length; i++) {
+      if (elem.equals(array[i])) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
+  public static int indexOf(byte[] array, byte elem) {
+    for (int i = 0; i < array.length; i++) {
+      if (elem == array[i]) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
 }

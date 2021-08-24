@@ -74,6 +74,14 @@
           <environmentVariables>
             <YONA_STDLIB_HOME>lib-yona</YONA_STDLIB_HOME>
           </environmentVariables>
+          <runOrder>alphabetical</runOrder>
+          <properties>
+            <configurationParameters>
+              junit.jupiter.execution.parallel.enabled = true
+              junit.jupiter.execution.parallel.mode.default = concurrent
+              junit.jupiter.execution.parallel.mode.classes.default = same_thread
+            </configurationParameters>
+          </properties>
         </configuration>
       </plugin>
       <plugin>

@@ -19,8 +19,8 @@ public abstract class YonaRootNode extends RootNode {
     RootNode rootNode = element.getTarget().getRootNode();
     if (location != null && location.getSourceSection() != null) {
       return new Tuple(
-          Seq.fromCharSequence(rootNode.getSourceSection().getSource().getName()),
-          Seq.fromCharSequence(rootNode.getQualifiedName()),
+          Seq.fromCharSequence(location.getSourceSection().getSource().getName()),
+          Seq.fromCharSequence(location.getRootNode().getQualifiedName()),
           location.getSourceSection().getStartLine(),
           location.getSourceSection().getStartColumn()
       );

@@ -1,5 +1,6 @@
 package yona.ast.expression;
 
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -66,28 +67,40 @@ public final class WithExpression extends ExpressionNode {
     context.putLocalContext(name, contextManager);
     Object finalResult;
 
+    boolean contextRemovedInPromise = false;
     try {
       // Execute the body. The result should be a function, or a promise with a function. This function is then passed as an argument to the wrapping function from the ctx manager.
       Object resultValue = resultNode.executeGeneric(frame);
 
       if (resultValue instanceof Promise resultPromise) {
+        contextRemovedInPromise = true;
         finalResult = resultPromise.map(value -> {
+          boolean contextRemovedInPromise2 = false;
           try {
             final Object result = InvokeNode.dispatchFunction(wrapFunction, library, this, contextManager, value);
 
             if (result instanceof Promise promise) {
+              contextRemovedInPromise2 = true;
               return promise.map(res -> {
-                context.removeLocalContext(name);
-                return res;
+                try {
+                  return res;
+                } finally {
+                  context.removeLocalContext(name);
+                }
               }, exception -> {
-                context.removeLocalContext(name);
-                return exception;
+                try {
+                  return exception;
+                } finally {
+                  context.removeLocalContext(name);
+                }
               }, this);
             } else {
               return result;
             }
           } finally {
-            context.removeLocalContext(name);
+            if (!contextRemovedInPromise2) {
+              context.removeLocalContext(name);
+            }
           }
         }, exception -> {
           context.removeLocalContext(name);
@@ -97,17 +110,26 @@ public final class WithExpression extends ExpressionNode {
         finalResult = InvokeNode.dispatchFunction(wrapFunction, library, this, contextManager, resultValue);
 
         if (finalResult instanceof Promise promise) {
+          contextRemovedInPromise = true;
           finalResult = promise.map(res -> {
-            context.removeLocalContext(name);
-            return res;
+            try {
+              return res;
+            } finally {
+              context.removeLocalContext(name);
+            }
           }, exception -> {
-            context.removeLocalContext(name);
-            return exception;
+            try {
+              return exception;
+            } finally {
+              context.removeLocalContext(name);
+            }
           }, this);
         }
       }
     } finally {
-      context.removeLocalContext(name);
+      if (!contextRemovedInPromise) {
+        context.removeLocalContext(name);
+      }
     }
 
     return isDaemon ? Unit.INSTANCE : finalResult;

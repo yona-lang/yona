@@ -8,13 +8,12 @@ import yona.runtime.Tuple;
 
 public final class ExceptionUtil {
   @CompilerDirectives.TruffleBoundary
-  public static final Tuple throwableToTuple(final Throwable throwable, final Context context) {
-    if (throwable instanceof YonaException) {
-      YonaException yonaException = (YonaException) throwable;
+  public static Tuple throwableToTuple(final Throwable throwable, final Context context) {
+    if (throwable instanceof YonaException yonaException) {
       return yonaException.asTuple();
     } else {
       // TODO deal with non Yona exceptions ?
-      return new Tuple(context.symbol(throwable.getClass().getSimpleName()), Seq.fromCharSequence(throwable.getMessage()), YonaException.stacktraceToSequence(throwable));
+      return new Tuple(context.symbol(throwable.getClass().getSimpleName()), throwable.getMessage() != null ? Seq.fromCharSequence(throwable.getMessage()) : Seq.EMPTY, YonaException.stacktraceToSequence(throwable));
     }
   }
 }

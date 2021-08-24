@@ -1,0 +1,7 @@
+module Exception exports pretty_print_stacktrace as
+
+    pretty_print_stacktrace [] = ()
+    pretty_print_stacktrace [x] = pretty_print_frame x
+    pretty_print_stacktrace (x -| xs) = "{pretty_print_frame x}\n{pretty_print_stacktrace xs}"
+
+end

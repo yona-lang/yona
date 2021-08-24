@@ -280,7 +280,6 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
           case POST -> builder.POST(bodyPublisher(body, node)).build();
           case PUT -> builder.PUT(bodyPublisher(body, node)).build();
           case DELETE -> builder.DELETE().build();
-          default -> throw new BadArgException(this.name(), node);
         };
       }
 
