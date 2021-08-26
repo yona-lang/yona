@@ -19,6 +19,9 @@ Yona abstract users from dealing with non-blocking asynchronous computations and
 ## Installation Instructions
 Follow the [installation instructions](https://yona-lang.org/getting_started/installation/).
 
+## News
+Check out the [release notes](https://yona-lang.org/getting_started/release-notes/) for the most up to date news.
+
 ## Contributing
 Here is a list of some ideas on what to do:
 
