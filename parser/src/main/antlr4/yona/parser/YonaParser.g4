@@ -4,7 +4,8 @@ options { tokenVocab=YonaLexer; }
 
 input : NEWLINE? expression NEWLINE? EOF ;
 
-function : NEWLINE* name pattern* NEWLINE? functionBody ;
+function : NEWLINE* functionName pattern* NEWLINE? functionBody ;
+functionName : name ;
 functionBody : bodyWithGuards+ | bodyWithoutGuard ;
 
 bodyWithGuards : NEWLINE? VLINE guard=expression OP_ASSIGN NEWLINE? expr=expression NEWLINE ;
@@ -201,7 +202,7 @@ valueCollectionExtractor : identifierOrUnderscore ;
 keyValueCollectionExtractor : key=identifierOrUnderscore OP_ASSIGN val=identifierOrUnderscore ;
 identifierOrUnderscore : identifier | underscore ;
 
-record : KW_RECORD UPPERCASE_NAME OP_ASSIGN PARENS_L identifier (NEWLINE? COMMA NEWLINE? identifier)* NEWLINE? PARENS_R NEWLINE;
+record : KW_RECORD recordType OP_ASSIGN PARENS_L identifier (NEWLINE? COMMA NEWLINE? identifier)* NEWLINE? PARENS_R NEWLINE;
 
 recordInstance : recordType PARENS_L NEWLINE? (name OP_ASSIGN expression) (NEWLINE? COMMA NEWLINE? name OP_ASSIGN expression)* NEWLINE? PARENS_R ;
 recordType : UPPERCASE_NAME ;

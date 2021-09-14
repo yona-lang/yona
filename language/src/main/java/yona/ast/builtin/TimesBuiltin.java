@@ -14,8 +14,7 @@ public abstract class TimesBuiltin extends AbstractLoopNode {
   @Specialization
   public Object times(long repetitions, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
     if (function.getCardinality() > 0) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-      throw new BadArgException("times function accepts only functions with zero arguments. Function " + function + " expects " + function.getCardinality() + "arguments", this);
+      throw new BadArgException("times function accepts only functions with zero arguments. Function %s expects %d arguments".formatted(function, function.getCardinality()), this);
     }
 
     for (long i = 0; i < repetitions; i++) {

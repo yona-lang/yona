@@ -200,7 +200,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YonaLanguage.ID, "async \\a b -> a + b");
       } catch (PolyglotException ex) {
-        assertEquals("async function accepts only functions with zero arguments. Function $lambda0-2/2 expects 2arguments", ex.getMessage());
+        assertEquals("async function accepts only functions with zero arguments. Function $lambda0-2/2 expects 2 arguments", ex.getMessage());
         throw ex;
       }
     });

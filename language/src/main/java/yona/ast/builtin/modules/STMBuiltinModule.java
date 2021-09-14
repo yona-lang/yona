@@ -3,17 +3,16 @@ package yona.ast.builtin.modules;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaException;
 import yona.YonaLanguage;
+import yona.ast.ExpressionNode;
 import yona.ast.builtin.BuiltinNode;
-import yona.ast.builtin.modules.http.HttpClientBuiltinModule;
+import yona.ast.call.InvokeNode;
+import yona.ast.expression.value.StringNode;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.async.TransactionalMemory;
@@ -22,17 +21,20 @@ import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
 import yona.runtime.stdlib.PrivateFunction;
 
+import java.util.Objects;
+
 @BuiltinModuleInfo(moduleName = "STM")
 public class STMBuiltinModule implements BuiltinModule {
-  private static final String TX_CONTEXT_NAME = "tx";
+  private static final String TX_CONTEXT_NAME = "$tx";
+  private static final Seq TX_CONTEXT_NAME_SEQ = Seq.fromCharSequence(TX_CONTEXT_NAME);
 
   protected static final class STMContextManager extends NativeObjectContextManager<TransactionalMemory.Transaction> {
     public STMContextManager(TransactionalMemory.Transaction tx, Context context) {
-      super("tx", context.lookupGlobalFunction("STM", "run"), tx);
+      super(TX_CONTEXT_NAME_SEQ, context.lookupGlobalFunction("STM", "run"), tx);
     }
 
     public static STMContextManager adapt(ContextManager<?> contextManager, Context context, Node node) {
-      return new STMContextManager(((NativeObject<TransactionalMemory.Transaction>) contextManager.getData(NativeObject.class, node)).getValue(), context);
+      return new STMContextManager(((NativeObject<TransactionalMemory.Transaction>) Objects.requireNonNull(contextManager).getData(NativeObject.class, node)).getValue(), context);
     }
   }
 
@@ -54,19 +56,25 @@ public class STMBuiltinModule implements BuiltinModule {
     }
   }
 
-  private static TransactionalMemory.Transaction lookupTx(Context context, Node node) {
-    STMContextManager txNative = STMContextManager.adapt((ContextManager<?>) context.lookupLocalContext(TX_CONTEXT_NAME), context, node);
+  private static TransactionalMemory.Transaction lookupTx(VirtualFrame frame, Context context, Node node) {
+    Object contextManager = LocalContextBuiltinModuleFactory.LookupBuiltinFactory.create(new ExpressionNode[]{new StringNode(TX_CONTEXT_NAME_SEQ)}).executeGeneric(frame);
+    if (contextManager == UninitializedFrameSlot.INSTANCE) {
+      throw new STMException("There is no running STM transaction", node);
+    }
+    STMContextManager txNative = STMContextManager.adapt((ContextManager<?>) contextManager, context, node);
     return txNative.nativeData(node);
   }
 
   @NodeInfo(shortName = "run")
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
-    @CompilerDirectives.TruffleBoundary
     public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+      STMContextManager txNative = STMContextManager.adapt(contextManager, context, this);
       Object result;
+
       while (true) {
-        final TransactionalMemory.Transaction tx = lookupTx(context, this);
+        final TransactionalMemory.Transaction tx;
+        tx = txNative.nativeData(this);
         try {
           result = tryExecuteTransaction(function, tx, dispatch);
           if (!(result instanceof Promise)) {
@@ -94,7 +102,7 @@ public class STMBuiltinModule implements BuiltinModule {
       Object result;
       try {
         tx.start();
-        result = dispatch.execute(function);
+        result = InvokeNode.dispatchFunction(function, dispatch, this);
         if (result instanceof Promise resultPromise) {
           result = resultPromise.map(value -> {
             if (tx.validate()) {
@@ -116,12 +124,6 @@ public class STMBuiltinModule implements BuiltinModule {
             return exception;
           }, this);
         }
-      } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-        tx.abort();
-        throw new STMException(e, this);
-      } catch (YonaException e) {
-        tx.abort();
-        throw e;
       } catch (Throwable e) {
         tx.abort();
         throw e;
@@ -134,7 +136,6 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read_tx")
   abstract static class ReadTxBuiltin extends BuiltinNode {
     @Specialization
-    @CompilerDirectives.TruffleBoundary
     public Tuple readTx(TransactionalMemory stm, @CachedContext(YonaLanguage.class) Context context) {
       return new STMContextManager(new TransactionalMemory.ReadOnlyTransaction(stm), context);
     }
@@ -143,7 +144,6 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "write_tx")
   abstract static class WriteTxBuiltin extends BuiltinNode {
     @Specialization
-    @CompilerDirectives.TruffleBoundary
     public Tuple writeTx(TransactionalMemory stm, @CachedContext(YonaLanguage.class) Context context) {
       return new STMContextManager(new TransactionalMemory.ReadWriteTransaction(stm), context);
     }
@@ -152,26 +152,23 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read")
   abstract static class ReadBuiltin extends BuiltinNode {
     @Specialization
-    @CompilerDirectives.TruffleBoundary
-    public Object read(TransactionalMemory.Var var, @CachedContext(YonaLanguage.class) Context context) {
-      if (!context.containsLocalContext(TX_CONTEXT_NAME)) {
-        return var.read();
-      } else {
-        final TransactionalMemory.Transaction tx = lookupTx(context, this);
+    public Object read(VirtualFrame frame, TransactionalMemory.Var var, @CachedContext(YonaLanguage.class) Context context) {
+      Object contextManager = LocalContextBuiltinModuleFactory.LookupBuiltinFactory.create(new ExpressionNode[]{new StringNode(TX_CONTEXT_NAME_SEQ)}).executeGeneric(frame);
+      if (contextManager != UninitializedFrameSlot.INSTANCE) {
+        STMContextManager stmContextManager = STMContextManager.adapt((ContextManager<?>) contextManager, context, this);
+        final TransactionalMemory.Transaction tx = stmContextManager.nativeData(this);
         return var.read(tx, this);
       }
+
+      return var.read();
     }
   }
 
   @NodeInfo(shortName = "write")
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
-    @CompilerDirectives.TruffleBoundary
-    public Unit write(TransactionalMemory.Var var, Object value, @CachedContext(YonaLanguage.class) Context context) {
-      final TransactionalMemory.Transaction tx = lookupTx(context, this);
-      if (tx == null) {
-        throw new STMException("There is no running STM transaction", this);
-      }
+    public Unit write(VirtualFrame frame, TransactionalMemory.Var var, Object value, @CachedContext(YonaLanguage.class) Context context) {
+      final TransactionalMemory.Transaction tx = lookupTx(frame, context, this);
       var.write(tx, value, this);
       return Unit.INSTANCE;
     }
@@ -180,12 +177,8 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "protect")
   abstract static class ProtectBuiltin extends BuiltinNode {
     @Specialization
-    @CompilerDirectives.TruffleBoundary
-    public Unit protect(TransactionalMemory.Var var, @CachedContext(YonaLanguage.class) Context context) {
-      final TransactionalMemory.Transaction tx = lookupTx(context, this);
-      if (tx == null) {
-        throw new STMException("There is no running STM transaction", this);
-      }
+    public Unit protect(VirtualFrame frame, TransactionalMemory.Var var, @CachedContext(YonaLanguage.class) Context context) {
+      final TransactionalMemory.Transaction tx = lookupTx(frame, context, this);
       var.protect(tx, this);
       return Unit.INSTANCE;
     }

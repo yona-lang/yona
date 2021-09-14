@@ -51,9 +51,7 @@ public class ContextManager<T> extends Tuple {
     }
 
     Object evaluatedTuple = tuple.unwrapPromises(node);
-    if (evaluatedTuple instanceof Promise) {
-      Promise evaluatedTuplePromise = (Promise) evaluatedTuple;
-
+    if (evaluatedTuple instanceof Promise evaluatedTuplePromise) {
       return evaluatedTuplePromise.map((items) -> fromItems((Object[]) items, node), node);
     } else {
       return fromItems(tuple.items, node);

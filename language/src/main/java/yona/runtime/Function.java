@@ -28,14 +28,14 @@ public final class Function implements TruffleObject {
   private final String name;
   private final String moduleFQN;
 
-  private int cardinality;
+  private final int cardinality;
 
   /**
    * The current implementation of this function.
    */
-  private RootCallTarget callTarget;
+  private final RootCallTarget callTarget;
 
-  private boolean unwrapArgumentPromises;
+  private final boolean unwrapArgumentPromises;
 
   public Function(String moduleFQN, String name, RootCallTarget callTarget, int cardinality, boolean unwrapArgumentPromises) {
     this.moduleFQN = moduleFQN;

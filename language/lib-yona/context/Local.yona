@@ -1,10 +1,12 @@
 module context\Local exports new, get_name, get_wrapper, get_data as
-    # Build a new local context tuple. Arguments:
-    # name: string - name of the context variable, if `as` syntax is not used
-    # wrapper: 1-arg function - takes `context_manager` and a callback that is called from within this wrapper
-    # function and of which result is returned as a result of this wrapper. The wrapper can perfrom initialization
-    # and finalization of resources around calling the callback.
-    # data whatever data included in the local context, such as STM transaction or the File object
+    # Build a new local context tuple.
+    #
+    # Arguments:
+    # * name: string - name of the context variable, if `as` syntax is not used
+    # * wrapper: 1-arg function - takes `context_manager` and a callback that is called from within this wrapper
+    #            function and of which result is returned as a result of this wrapper. The wrapper can perfrom initialization
+    #            and finalization of resources around calling the callback.
+    # * data whatever data included in the local context, such as STM transaction or the File object
     new name wrapper data
       | Types::is_seq name && Seq::is_string name && Types::is_function wrapper = (name, wrapper, data)
 

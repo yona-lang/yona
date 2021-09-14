@@ -18,7 +18,7 @@ public abstract class AsyncBuiltin extends BuiltinNode {
   public Promise async(Function function, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
     if (function.getCardinality() > 0) {
       CompilerDirectives.transferToInterpreterAndInvalidate();
-      throw new BadArgException("async function accepts only functions with zero arguments. Function " + function + " expects " + function.getCardinality() + "arguments", this);
+      throw new BadArgException("async function accepts only functions with zero arguments. Function %s expects %d arguments".formatted(function, function.getCardinality()), this);
     }
     return context.threading.submit(new Promise(dispatch), new ExecutableFunction.YonaExecutableFunction(function, dispatch, this));
   }
@@ -72,7 +72,6 @@ public abstract class AsyncBuiltin extends BuiltinNode {
   public YonaModule async(YonaModule value) {
     return value;
   }
-
 
   @Specialization
   public Seq async(Seq value) {

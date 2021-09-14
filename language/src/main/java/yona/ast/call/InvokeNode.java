@@ -30,6 +30,7 @@ import yona.runtime.exceptions.BadArgException;
 import yona.runtime.exceptions.UndefinedNameException;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * The node for function invocation in Yona. Since Yona has first class functions, the {@link yona.runtime.Function
@@ -48,7 +49,7 @@ public final class InvokeNode extends ExpressionNode {
   @Child
   private InteropLibrary library;
   @Children
-  private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode | Because this is created from Stack.toArray, the last pushed element is the last element of the array
+  private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode | Because this is created from Stack.toArray, the last pushed element is the last element of the array
 
   private final YonaLanguage language;
 
@@ -81,7 +82,6 @@ public final class InvokeNode extends ExpressionNode {
         '}';
   }
 
-  @ExplodeLoop
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     if (this.function != null) {
@@ -133,8 +133,12 @@ public final class InvokeNode extends ExpressionNode {
     }
   }
 
+  /**
+   * Execute all arguments and return true if any of the results is a promise.
+   */
   @ExplodeLoop
-  private boolean checkArgsForPromises(VirtualFrame frame, Object[] argumentValues, boolean isUnwrapArgumentPromises) {
+  public boolean checkArgsForPromises(VirtualFrame frame, Object[] argumentValues, boolean isUnwrapArgumentPromises) {
+    CompilerAsserts.compilationConstant(argumentNodes.length);
     boolean argsArePromise = false;
     for (int i = 0; i < argumentNodes.length; i++) {
       Object argValue = argumentNodes[i].executeGeneric(frame);
@@ -173,7 +177,7 @@ public final class InvokeNode extends ExpressionNode {
     }
   }
 
-  public static Object dispatchFunction(Function function, InteropLibrary library, ExpressionNode node, Object... argumentValues) {
+  public static Object dispatchFunction(Function function, InteropLibrary library, Node node, Object... argumentValues) {
     Function dispatchFunction = function;
     while (true) {
       try {
@@ -208,13 +212,7 @@ public final class InvokeNode extends ExpressionNode {
      * We need to make sure that the original function is still accessible within the closure, even if the partially
      * applied function already leaves the scope with the original function
      */
-    WriteLocalVariableNode writeLocalVariableNode;
-    if (functionNode != null) {
-      writeLocalVariableNode = WriteLocalVariableNodeGen.create(functionNode, frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
-    } else {
-      writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(function), frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
-    }
-
+    WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(Objects.requireNonNullElse(functionNode, new AnyValueNode(function)), frame.getFrameDescriptor().findOrAddFrameSlot(function.getName()));
     YonaBlockNode blockNode = new YonaBlockNode(new ExpressionNode[]{writeLocalVariableNode, invokeNode});
     ClosureRootNode rootNode = new ClosureRootNode(language, frame.getFrameDescriptor(), blockNode, getSourceSection(), function.getModuleFQN(), partiallyAppliedFunctionName, frame.materialize());
     return new Function(function.getModuleFQN(), partiallyAppliedFunctionName, Truffle.getRuntime().createCallTarget(rootNode), function.getCardinality() - argumentNodes.length, function.isUnwrapArgumentPromises());

@@ -1,6 +1,6 @@
 module Scheduler exports run as
 
-    # example: Scheduler::run (:every, :minute) (\-> IO::println "hello")  # print hello every 10 seconds, each minute, plus 0sec offset
+    # example: Scheduler::run (:every, :minute) (\-> IO::println "hello")  # print hello every  minute
     run how_often what = let
         (initial_delay, period) = calculate how_often (0, 0, 0)
     in

@@ -1,12 +1,10 @@
 package yona.ast.expression.value;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 import yona.YonaLanguage;
 import yona.ast.ClosureRootNode;
@@ -20,14 +18,15 @@ import java.util.Objects;
  */
 @NodeInfo
 public final class FunctionNode extends FunctionLikeNode {
-  private final String moduleFQN, name;
-  private int cardinality;
   @Node.Child
   public ExpressionNode expression;
 
-  private YonaLanguage language;
-  private SourceSection sourceSection;
-  private FrameDescriptor frameDescriptor;
+  private final String moduleFQN, name;
+  private final int cardinality;
+
+  private final YonaLanguage language;
+  private final SourceSection sourceSection;
+  private final FrameDescriptor frameDescriptor;
 
   public FunctionNode(YonaLanguage language, SourceSection sourceSection, String moduleFQN, String name, int cardinality, FrameDescriptor frameDescriptor, ExpressionNode expression) {
     this.moduleFQN = moduleFQN;
@@ -80,12 +79,11 @@ public final class FunctionNode extends FunctionLikeNode {
   }
 
   @Override
-  public Function executeFunction(VirtualFrame frame) throws UnexpectedResultException {
+  public Function executeFunction(VirtualFrame frame) {
     return execute(frame);
   }
 
   private Function execute(VirtualFrame frame) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     ClosureRootNode rootNode = new ClosureRootNode(language, frameDescriptor, expression, sourceSection, moduleFQN, name, frame.materialize());
     return new Function(moduleFQN, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality, true);
   }

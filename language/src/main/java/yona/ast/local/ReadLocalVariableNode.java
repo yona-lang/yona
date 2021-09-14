@@ -1,6 +1,5 @@
 package yona.ast.local;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -53,7 +52,6 @@ public abstract class ReadLocalVariableNode extends ExpressionNode {
      * write it immediately as an Object value so that we do not hit this path again
      * multiple times for the same variable of the same frame.
      */
-    CompilerDirectives.transferToInterpreter();
     Object result = frame.getValue(getSlot());
     frame.setObject(getSlot(), result);
     return result;

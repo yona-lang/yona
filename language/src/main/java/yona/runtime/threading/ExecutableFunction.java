@@ -1,14 +1,11 @@
 package yona.runtime.threading;
 
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import yona.YonaException;
+import yona.ast.call.InvokeNode;
 import yona.runtime.Function;
 import yona.runtime.async.Promise;
-import yona.runtime.exceptions.UndefinedNameException;
 
 import java.util.function.Supplier;
 
@@ -46,9 +43,7 @@ public interface ExecutableFunction {
 
     public void execute(Promise promise) {
       try {
-        promise.fulfil(dispatch.execute(function), node);
-      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-        promise.fulfil(UndefinedNameException.undefinedFunction(node, function), node);
+        promise.fulfil(InvokeNode.dispatchFunction(function, dispatch, node), node);
       } catch (Throwable e) {
         promise.fulfil(e, node);
       }

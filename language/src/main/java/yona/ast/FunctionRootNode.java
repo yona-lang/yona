@@ -26,7 +26,7 @@ public class FunctionRootNode extends YonaRootNode {
    */
   private String name;
 
-  private String moduleFQN;
+  private final String moduleFQN;
 
   private final SourceSection sourceSection;
 

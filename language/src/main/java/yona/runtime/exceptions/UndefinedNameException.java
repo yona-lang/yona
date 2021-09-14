@@ -5,7 +5,9 @@ import com.oracle.truffle.api.nodes.Node;
 import yona.YonaException;
 import yona.runtime.Function;
 import yona.runtime.Seq;
+import yona.runtime.annotations.ExceptionSymbol;
 
+@ExceptionSymbol("undefinedname")
 public final class UndefinedNameException extends YonaException {
 
   private static final long serialVersionUID = 1L;

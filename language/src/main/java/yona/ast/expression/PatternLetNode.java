@@ -61,8 +61,6 @@ public final class PatternLetNode extends LexicalScopeNode {
   @Override
   public Object executeGeneric(VirtualFrame frame) {
     Context context = lookupContextReference(YonaLanguage.class).get();
-
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     MaterializedFrame materializedFrame = frame.materialize();
 
     Object result = resolveDependencies(Seq.sequence((AliasNode[]) patternAliases), context.globallyProvidedIdentifiers()).executeGeneric(materializedFrame, this);

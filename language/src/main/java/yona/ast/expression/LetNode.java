@@ -4,6 +4,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import yona.ast.AliasNode;
 import yona.ast.ExpressionNode;
 import yona.runtime.DependencyUtils;
 
@@ -13,11 +14,11 @@ import java.util.Objects;
 @NodeInfo(shortName = "let")
 public final class LetNode extends LexicalScopeNode {
   @Node.Children
-  public NameAliasNode[] aliases;
+  public AliasNode[] aliases;
   @Node.Child
   public ExpressionNode expression;
 
-  public LetNode(NameAliasNode[] aliases, ExpressionNode expression) {
+  public LetNode(AliasNode[] aliases, ExpressionNode expression) {
     this.aliases = aliases;
     this.expression = expression;
   }
@@ -53,7 +54,7 @@ public final class LetNode extends LexicalScopeNode {
   @Override
   @ExplodeLoop
   public Object executeGeneric(VirtualFrame frame) {
-    for (NameAliasNode alias : aliases) {
+    for (AliasNode alias : aliases) {
       alias.executeGeneric(frame);
     }
     return expression.executeGeneric(frame);

@@ -1,10 +1,10 @@
 package yona.runtime.threading;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import yona.YonaLanguage;
 import yona.runtime.Context;
-import yona.runtime.Dict;
-import yona.runtime.network.NIOSelectorThread;
 import yona.runtime.async.Promise;
+import yona.runtime.network.NIOSelectorThread;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -35,7 +35,7 @@ public final class Threading {
 
   volatile int waiters = 0;
 
-  public Threading(final Context context) {
+  public Threading(final YonaLanguage language, final Context context) {
     NIOSelectorThread = new NIOSelectorThread(context);
     ringBuffer = new Task[BUFFER_SIZE];
     for (int i = 0; i < ringBuffer.length; i++) {
@@ -51,25 +51,21 @@ public final class Threading {
         final MultiConsumer.Callback callback = new MultiConsumer.Callback() {
           Promise promise;
           ExecutableFunction function;
-          Dict localContexts;
 
           @Override
           public void prepare(final long token) {
             final Task task = ringBuffer[ringBufferCursors.index(token)];
             promise = task.promise;
             function = task.function;
-            localContexts = task.localContexts;
           }
 
           @Override
           public void execute() {
-            Context.LOCAL_CONTEXTS.set(localContexts);
             try {
               Threading.execute(promise, function);
             } finally {
               promise = null;
               function = null;
-              Context.LOCAL_CONTEXTS.remove();
             }
           }
         };
@@ -133,7 +129,6 @@ public final class Threading {
     Task task = ringBuffer[ringBufferCursors.index(token)];
     task.promise = promise;
     task.function = function;
-    task.localContexts = Context.LOCAL_CONTEXTS.get();
     ringBufferCursors.release(token, token);
     if (waiters != 0) {
       lock.lock();

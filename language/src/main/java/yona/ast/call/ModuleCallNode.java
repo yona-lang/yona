@@ -1,7 +1,6 @@
 package yona.ast.call;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -26,10 +25,10 @@ public final class ModuleCallNode extends ExpressionNode {
   @Child
   private ExpressionNode nameNode;
   @Children
-  private ExpressionNode[] argumentNodes;
-  private String functionName;
+  private final ExpressionNode[] argumentNodes;
+  private final String functionName;
   @Children
-  private ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
+  private final ExpressionNode[] moduleStack;  // FQNNode or AnyValueNode
   private final YonaLanguage language;
 
   public ModuleCallNode(YonaLanguage language, ExpressionNode nameNode, String functionName, ExpressionNode[] argumentNodes, ExpressionNode[] moduleStack) {
@@ -70,14 +69,13 @@ public final class ModuleCallNode extends ExpressionNode {
     Object executedName = nameNode.executeGeneric(frame);
 
     if (executedName instanceof Promise) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
       MaterializedFrame materializedFrame = frame.materialize();
 
       return ((Promise) executedName).map(maybeModule -> invokeModuleFunction(materializedFrame, maybeModule), this);
     } else if (executedName instanceof YonaModule || executedName instanceof NativeObject) {
       return invokeModuleFunction(frame, executedName);
     } else {
-      throw new YonaException("Unexpected error while invoking a module function: : returned value is not a Yona Module, nor a Native Object", this);
+      throw new YonaException("Unexpected error while invoking a module function %s: returned value is not a Yona Module, nor a Native Object".formatted(functionName), this);
     }
   }
 
@@ -87,10 +85,9 @@ public final class ModuleCallNode extends ExpressionNode {
   }
 
   private Object invokeModuleFunction(VirtualFrame frame, Object maybeModule) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     if (maybeModule instanceof YonaModule module) {
       if (!module.getExports().contains(functionName)) {
-        throw new YonaException("Function " + functionName + " is not present in " + module, this);
+        throw new YonaException("Function %s is not present in %s".formatted(functionName, module), this);
       } else {
         Function function = module.getFunctions().get(functionName);
         InvokeNode invokeNode = new InvokeNode(language, function, argumentNodes, moduleStack);
@@ -103,7 +100,7 @@ public final class ModuleCallNode extends ExpressionNode {
       Method method = lookupAccessibleMethod(obj, obj.getClass());
 
       if (method != null) {
-        Function javaFunction = JavaMethodRootNode.buildFunction(language, method, frame.getFrameDescriptor(), nativeObject.getValue());
+        Function javaFunction = JavaMethodRootNode.buildFunction(language, method, frame.getFrameDescriptor().copy(), nativeObject.getValue());
         InvokeNode invokeNode = new InvokeNode(language, javaFunction, argumentNodes, moduleStack);
 
         this.replace(invokeNode);

@@ -25,7 +25,7 @@ public class ClosureRootNode extends YonaRootNode {
    */
   private String name;
 
-  private String moduleFQN;
+  private final String moduleFQN;
 
   private final SourceSection sourceSection;
 
@@ -48,8 +48,8 @@ public class ClosureRootNode extends YonaRootNode {
 
   @Override
   public Object execute(VirtualFrame frame) {
-    final FrameDescriptor fd = lexicalScope.getFrameDescriptor();
     CompilerDirectives.transferToInterpreterAndInvalidate();
+    final FrameDescriptor fd = lexicalScope.getFrameDescriptor();
     for (Object identifier : fd.getIdentifiers()) {
       FrameSlot oldFrameSlot = fd.findFrameSlot(identifier);
       FrameSlotKind kind = fd.getFrameSlotKind(oldFrameSlot);

@@ -45,7 +45,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     ExpressionNode functionBodyNode = new MainExpressionNode(ctx.expression().accept(this));
     functionBodyNode.addRootTag();
 
-    ModuleFunctionNode mainFunctionNode = new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), null, "$main", 0, context.globalFrameDescriptor, functionBodyNode);
+    ModuleFunctionNode mainFunctionNode = new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), null, "$main", 0, context.globalFrameDescriptor.copy(), functionBodyNode);
     return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new ExpressionNode[]{}));
   }
 
@@ -105,10 +105,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case "+" -> withSourceSection(ctx, newBinaryOpNode(PlusNodeGen::create, left, right));
       case "-" -> withSourceSection(ctx, newBinaryOpNode(MinusNodeGen::create, left, right));
       default -> throw new ParseError(source,
-        ctx.op.getLine(),
-        ctx.op.getCharPositionInLine(),
-        ctx.op.getText().length(),
-        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -122,10 +122,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case ">>" -> withSourceSection(ctx, newBinaryOpNode(RightShiftNodeGen::create, left, right));
       case ">>>" -> withSourceSection(ctx, newBinaryOpNode(ZerofillRightShiftNodeGen::create, left, right));
       default -> throw new ParseError(source,
-        ctx.op.getLine(),
-        ctx.op.getCharPositionInLine(),
-        ctx.op.getText().length(),
-        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -140,10 +140,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case "/" -> withSourceSection(ctx, newBinaryOpNode(DivideNodeGen::create, left, right));
       case "%" -> withSourceSection(ctx, newBinaryOpNode(ModuloNodeGen::create, left, right));
       default -> throw new ParseError(source,
-        ctx.op.getLine(),
-        ctx.op.getCharPositionInLine(),
-        ctx.op.getText().length(),
-        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -160,10 +160,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       case ">=" -> withSourceSection(ctx, newBinaryOpNode(GreaterThanOrEqualsNodeGen::create, left, right));
       case ">" -> withSourceSection(ctx, newBinaryOpNode(GreaterThanNodeGen::create, left, right));
       default -> throw new ParseError(source,
-        ctx.op.getLine(),
-        ctx.op.getCharPositionInLine(),
-        ctx.op.getText().length(),
-        "Binary operation '%s' not supported".formatted(ctx.op.getText()));
+          ctx.op.getLine(),
+          ctx.op.getCharPositionInLine(),
+          ctx.op.getText().length(),
+          "Binary operation '%s' not supported".formatted(ctx.op.getText()));
     };
   }
 
@@ -392,11 +392,11 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       bodyNode.addRootTag();
 
       return withSourceSection(ctx, new FunctionNode(language, source.createSection(
-        ctx.BACKSLASH().getSymbol().getLine(),
-        ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
-        ctx.expression().stop.getLine(),
-        ctx.expression().stop.getCharPositionInLine() + 1
-      ), currentModuleName(), nextLambdaName() + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor, bodyNode));
+          ctx.BACKSLASH().getSymbol().getLine(),
+          ctx.BACKSLASH().getSymbol().getCharPositionInLine() + 1,
+          ctx.expression().stop.getLine(),
+          ctx.expression().stop.getCharPositionInLine() + 1
+      ), currentModuleName(), nextLambdaName() + "-" + argsCount, ctx.pattern().size(), context.globalFrameDescriptor.copy(), bodyNode));
     }
   }
 
@@ -473,7 +473,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       caseNode.addRootTag();
       caseNode.setIsTail(true);
 
-      return new FunctionNode(language, sourceSection, moduleFQNString, functionName, cardinality, context.globalFrameDescriptor, caseNode);
+      return new FunctionNode(language, sourceSection, moduleFQNString, functionName, cardinality, context.globalFrameDescriptor.copy(), caseNode);
     }
   }
 
@@ -486,7 +486,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
 
     @Override
     public FunctionLikeNode getFunctionNode(String functionName, int cardinality, String moduleFQNString, SourceSection sourceSection) {
-      return new LiteralFunctionNode(language, sourceSection, moduleFQNString, functionName, context.globalFrameDescriptor, literalValueNode);
+      return new LiteralFunctionNode(language, sourceSection, moduleFQNString, functionName, context.globalFrameDescriptor.copy(), literalValueNode);
     }
   }
 
@@ -513,14 +513,14 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
         fields[j] = recordContext.identifier(j).getText();
       }
 
-      records = records.add(recordContext.UPPERCASE_NAME().getText(), fields);
+      records = records.add(recordContext.recordType().UPPERCASE_NAME().getText(), fields);
     }
 
     for (int i = 0; i < functionPatternsCount; i++) {
       YonaParser.FunctionContext functionContext = ctx.function(i);
 
-      String functionName = functionContext.name().getText();
-      Token functionNameStartToken = functionContext.name().start;
+      String functionName = functionContext.functionName().name().getText();
+      Token functionNameStartToken = functionContext.functionName().name().start;
       Token functionBodyStopToken = functionContext.functionBody().stop;
 
       if (lastFunctionName != null && !lastFunctionName.equals(functionName) && functionPatterns.containsKey(functionName)) {
@@ -598,9 +598,9 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     for (String exportedFunction : exports.strings) {
       if (!functionCardinality.containsKey(exportedFunction)) {
         throw new ParseError(source,
-          ctx.KW_MODULE().getSymbol().getLine(),
-          ctx.KW_MODULE().getSymbol().getCharPositionInLine() + 1,
-          ctx.stop.getStopIndex() - ctx.start.getStartIndex(), "Module %s is trying to export function %s that is not defined.".formatted(moduleFQN, exportedFunction));
+            ctx.KW_MODULE().getSymbol().getLine(),
+            ctx.KW_MODULE().getSymbol().getCharPositionInLine() + 1,
+            ctx.stop.getStopIndex() - ctx.start.getStartIndex(), "Module %s is trying to export function %s that is not defined.".formatted(moduleFQN, exportedFunction));
       }
     }
 
@@ -979,8 +979,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       stepMatchNodes = new MatchNode[]{visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
     } else {
       stepMatchNodes = new MatchNode[]{
-        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
-        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
       };
     }
 
@@ -998,8 +998,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       stepMatchNodes = new MatchNode[]{visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
     } else {
       stepMatchNodes = new MatchNode[]{
-        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
-        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
       };
     }
 
@@ -1017,8 +1017,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       stepMatchNodes = new MatchNode[]{visitIdentifierOrUnderscore(ctx.collectionExtractor().valueCollectionExtractor().identifierOrUnderscore())};
     } else {
       stepMatchNodes = new MatchNode[]{
-        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
-        visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().key),
+          visitIdentifierOrUnderscore(ctx.collectionExtractor().keyValueCollectionExtractor().val)
       };
     }
 
@@ -1056,14 +1056,17 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
   }
 
   @Override
-  public WithExpression visitWithExpression(YonaParser.WithExpressionContext ctx) {
+  public ExpressionNode visitWithExpression(YonaParser.WithExpressionContext ctx) {
     String name = null;
     if (ctx.withExpr().name() != null) {
       name = ctx.withExpr().name().getText();
     }
     YonaParser.ExpressionContext bodyCtx = ctx.withExpr().body;
-    FunctionNode bodyNode = withSourceSection(bodyCtx, new FunctionNode(language, sourceSectionForRule(bodyCtx), currentModuleName(), nextLambdaName(), 0, context.globalFrameDescriptor, bodyCtx.accept(this)));
-    return withSourceSection(ctx, new WithExpression(language, name, ctx.withExpr().context.accept(this), bodyNode, ctx.withExpr().KW_DAEMON() != null));
+    FunctionNode bodyNode = withSourceSection(bodyCtx, new FunctionNode(language, sourceSectionForRule(bodyCtx), currentModuleName(), nextLambdaName(), 0, context.globalFrameDescriptor.copy(), bodyCtx.accept(this)));
+    ExtractContextNameNode extractContextNameNode = new ExtractContextNameNode(name, ctx.withExpr().context.accept(this));
+    boolean isDaemon = ctx.withExpr().KW_DAEMON() != null;
+    WithNode letNode = new WithNode(extractContextNameNode, bodyNode);
+    return withSourceSection(ctx, isDaemon ? new DropResultNode(letNode) : letNode);
   }
 
   public ExpressionNode visitOptional(ParserRuleContext ctx) {
@@ -1081,10 +1084,10 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     final SourceSection sourceSection;
 
     sourceSection = source.createSection(
-      parserRuleContext.start.getLine(),
-      1,
-      parserRuleContext.stop.getLine(),
-      source.getLineLength(parserRuleContext.stop.getLine())
+        parserRuleContext.start.getLine(),
+        1,
+        parserRuleContext.stop.getLine(),
+        source.getLineLength(parserRuleContext.stop.getLine())
     );
     return sourceSection;
   }

@@ -25,7 +25,6 @@ import yona.ast.call.BuiltinCallNode;
 import yona.ast.call.InvokeNode;
 import yona.ast.controlflow.YonaBlockNode;
 import yona.ast.expression.SimpleIdentifierNode;
-import yona.ast.expression.WithExpression;
 import yona.ast.expression.value.AnyValueNode;
 import yona.ast.local.ReadArgumentNode;
 import yona.ast.local.WriteLocalVariableNode;
@@ -52,7 +51,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.logging.Level;
 
 public final class Context {
   public static final Source JAVA_BUILTIN_SOURCE = Source.newBuilder("java", "", "Java builtin").internal(true).build();
@@ -83,7 +81,6 @@ public final class Context {
   public final MaterializedFrame globalFrame;
   private final Path stdlibHome;
   private final Path languageHome;
-  public static final ThreadLocal<Dict> LOCAL_CONTEXTS = ThreadLocal.withInitial(Dict::empty);
   private final boolean printAllResults;
   public Selector socketSelector;
 
@@ -132,7 +129,7 @@ public final class Context {
 
     this.ioExecutor = Executors.newCachedThreadPool(runnable -> env.createThread(runnable, null, new ThreadGroup("yona-io")));
     this.schedulerExecutor = Executors.newScheduledThreadPool(1, runnable -> env.createThread(runnable, null, new ThreadGroup("yona-scheduler")));
-    this.threading = new Threading(this);
+    this.threading = new Threading(language, this);
     threading.initialize();
 
     identityFunction = lookupGlobalFunction(null, "identity");
@@ -456,7 +453,7 @@ public final class Context {
 
       for (Method method : methods) {
         exports.add(method.getName());
-        Function javaFunction = JavaMethodRootNode.buildFunction(language, method, globalFrameDescriptor, null);
+        Function javaFunction = JavaMethodRootNode.buildFunction(language, method, globalFrameDescriptor.copy(), null);
         functions.add(javaFunction);
       }
 
@@ -553,30 +550,6 @@ public final class Context {
   @CompilerDirectives.TruffleBoundary
   public Set globallyProvidedIdentifiers() {
     return Set.set(builtins.builtins.keySet().toArray());
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  public Object lookupLocalContext(String identifier) {
-    LOGGER.log(Level.FINE, "@context: " + identifier);
-    return LOCAL_CONTEXTS.get().lookup("$context_" + identifier);
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  public boolean containsLocalContext(String identifier) {
-    LOGGER.log(Level.FINE, "?context: " + identifier);
-    return LOCAL_CONTEXTS.get().contains("$context_" + identifier);
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  public void putLocalContext(String identifier, Object value) {
-    LOGGER.log(Level.FINE, "+context: " + identifier + ": " + value);
-    LOCAL_CONTEXTS.set(LOCAL_CONTEXTS.get().add("$context_" + identifier, value));
-  }
-
-  @CompilerDirectives.TruffleBoundary
-  public void removeLocalContext(String identifier) {
-    LOGGER.log(Level.FINE, "-context: " + identifier);
-    LOCAL_CONTEXTS.set(LOCAL_CONTEXTS.get().remove("$context_" + identifier));
   }
 
   @CompilerDirectives.TruffleBoundary
