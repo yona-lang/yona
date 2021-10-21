@@ -1,4 +1,4 @@
-FROM docker.pkg.github.com/graalvm/container/community:21.2.0-java16-amd64
+FROM ghcr.io/graalvm/graalvm-ce:java17-21
 
 MAINTAINER Adam Kovari <kovariadam@gmail.com>
 
@@ -32,8 +32,6 @@ RUN cd yona/; mvn -B dependency:resolve
 RUN cd /yona/; mvn -B package -DskipTests
 RUN gu install -L /yona/component/yona-component.jar
 
-RUN alternatives --remove yona /opt/graalvm-ce-java16-21.2.0//bin/yona
-
 WORKDIR /sources
 
-ENTRYPOINT ["/opt/graalvm-ce-java16-21.2.0/bin/yona"]
+ENTRYPOINT ["/opt/graalvm-ce-java17-21.3.0/bin/yona"]
