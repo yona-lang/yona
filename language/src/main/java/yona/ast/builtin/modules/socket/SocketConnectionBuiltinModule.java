@@ -3,18 +3,15 @@ package yona.ast.builtin.modules.socket;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
+import yona.ast.call.InvokeNode;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.network.TCPConnection;
@@ -33,7 +30,7 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
       boolean shouldClose = true;
       try {
-        Object result = dispatch.execute(function);
+        Object result = InvokeNode.dispatchFunction(function, dispatch, this);
         if (result instanceof Promise resultPromise) {
           shouldClose = false;
           return resultPromise.map(value -> {
@@ -46,8 +43,6 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
         } else {
           return result;
         }
-      } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException e) {
-        throw new YonaException(e, this);
       } finally {
         if (shouldClose) {
           closeConnection(connectionContextManager, Unit.INSTANCE, this);

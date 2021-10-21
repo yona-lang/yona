@@ -22,9 +22,9 @@ import yona.ast.builtin.modules.socket.SocketClientBuiltinModule;
 import yona.ast.builtin.modules.socket.SocketConnectionBuiltinModule;
 import yona.ast.builtin.modules.socket.SocketServerBuiltinModule;
 import yona.ast.call.BuiltinCallNode;
+import yona.ast.call.FunctionInvokeNode;
 import yona.ast.call.InvokeNode;
 import yona.ast.controlflow.YonaBlockNode;
-import yona.ast.expression.SimpleIdentifierNode;
 import yona.ast.expression.value.AnyValueNode;
 import yona.ast.local.ReadArgumentNode;
 import yona.ast.local.WriteLocalVariableNode;
@@ -44,10 +44,7 @@ import java.nio.channels.Selector;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -59,9 +56,15 @@ public final class Context {
   public static final String YONA_PATH = "YONA_PATH";
 
   /**
-   * cached instance of identity function as it is used commonly across the board
+   * cached instance of commonly used functions since they are used commonly across the board
    */
   public Function identityFunction;
+  public Function generatorMapTransducer;
+  public Function generatorFinalShapeReducer_seq;
+  public Function generatorFinalShapeReducer_set;
+  public Function generatorFinalShapeReducer_dict;
+  public Function generatorFilterTransducer;
+  public Function generatorReduceFunction;
 
   private final TruffleLanguage.Env env;
   private final BufferedReader input;
@@ -133,6 +136,12 @@ public final class Context {
     threading.initialize();
 
     identityFunction = lookupGlobalFunction(null, "identity");
+    generatorMapTransducer = lookupGlobalFunction("Transducers", "map");
+    generatorFinalShapeReducer_seq = lookupGlobalFunction("Reducers", GeneratedCollection.SEQ.reducerForGeneratedCollection());
+    generatorFinalShapeReducer_set = lookupGlobalFunction("Reducers", GeneratedCollection.SET.reducerForGeneratedCollection());
+    generatorFinalShapeReducer_dict = lookupGlobalFunction("Reducers", GeneratedCollection.DICT.reducerForGeneratedCollection());
+    generatorFilterTransducer = lookupGlobalFunction("Transducers", "filter");
+    generatorReduceFunction = lookupGlobalFunction("Reducers", "reduce");
 
 //    LOGGER.config("Yona Context initialized");
   }
@@ -227,7 +236,7 @@ public final class Context {
        * Partially applied function will just invoke the original function with arguments constructed as a combination
        * of those which were provided when this closure was created and those to be read on the following application
        */
-      InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(function.getName()), allArgumentNodes, null);
+      InvokeNode invokeNode = new FunctionInvokeNode(language, function, allArgumentNodes, null);
 
       FrameDescriptor partialFrameDescriptor = new FrameDescriptor(UninitializedFrameSlot.INSTANCE);
       /*

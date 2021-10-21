@@ -1,11 +1,12 @@
 package yona.runtime.async;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.nodes.Node;
+import yona.ast.call.InvokeNode;
 import yona.ast.call.TailCallException;
-import yona.runtime.exceptions.UndefinedNameException;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -369,26 +370,13 @@ public final class Promise implements TruffleObject {
     enum Nil implements Stack {
       INSTANCE
     }
-
   }
 
   private <T, R> Object applyTCOToFunction(Function<? super T, ? extends R> function, T argument, Node node) {
     try {
       return function.apply(argument);
     } catch (TailCallException e) {
-      yona.runtime.Function dispatchFunction = e.function;
-      Object[] argumentValues = e.arguments;
-      while (true) {
-        try {
-          return library.execute(dispatchFunction, argumentValues);
-        } catch (TailCallException te) {
-          dispatchFunction = te.function;
-          argumentValues = te.arguments;
-        } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException ignored) {
-          /* Execute was not successful. */
-          throw UndefinedNameException.undefinedFunction(node, dispatchFunction);
-        }
-      }
+      return InvokeNode.dispatchFunction(e.function, library, node, e.arguments);
     }
   }
 }

@@ -15,6 +15,7 @@ import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
+import yona.ast.call.InvokeNode;
 import yona.runtime.*;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
@@ -118,7 +119,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
         final Dict headers = headersToDict(httpExchange.getRequestHeaders());
         final Seq body = bodyToSeq(httpExchange.getRequestBody(), bodyEncodingStr);
         try {
-          final Object handlerResult = dispatch.execute(handler, exchangeParams, headers, body);
+          final Object handlerResult = InvokeNode.dispatchFunction(handler, dispatch, this, exchangeParams, headers, body);
           sendResponse(handlerResult, httpExchange);
         } catch (Throwable e) {
           returnErrorResponse(httpExchange, e, context);

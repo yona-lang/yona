@@ -3,7 +3,7 @@ package yona.ast.call;
 import yona.runtime.Function;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 
-public class TailCallException extends ControlFlowException {
+public final class TailCallException extends ControlFlowException {
   public final Function function;
   public final Object[] arguments;
 

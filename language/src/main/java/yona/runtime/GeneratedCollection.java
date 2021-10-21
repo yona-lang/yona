@@ -1,4 +1,4 @@
-package yona.ast.generators;
+package yona.runtime;
 
 public enum GeneratedCollection {
   SEQ, SET, DICT;
@@ -16,6 +16,14 @@ public enum GeneratedCollection {
       case SEQ -> "to_seq";
       case SET -> "to_set";
       case DICT -> "to_dict";
+    };
+  }
+
+  public Function finalShapReducerFunction(Context context) {
+    return switch (this) {
+      case SEQ -> context.generatorFinalShapeReducer_seq;
+      case SET -> context.generatorFinalShapeReducer_set;
+      case DICT -> context.generatorFinalShapeReducer_dict;
     };
   }
 }

@@ -2,8 +2,10 @@ package yona.ast;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.YonaException;
+import yona.ast.call.InvokeNode;
 import yona.runtime.Function;
 import yona.runtime.YonaModule;
 import yona.runtime.async.Promise;
@@ -12,9 +14,12 @@ import yona.runtime.async.Promise;
 public final class MainExpressionNode extends ExpressionNode {
   @Child
   public ExpressionNode expressionNode;
+  @Child
+  private InteropLibrary library;
 
   public MainExpressionNode(ExpressionNode expressionNode) {
     this.expressionNode = expressionNode;
+    this.library = InteropLibrary.getFactory().createDispatched(3);
   }
 
   @Override
@@ -30,14 +35,14 @@ public final class MainExpressionNode extends ExpressionNode {
 
     if (result instanceof Function function) {
       if (function.getCardinality() == 0) {
-        result = function.getCallTarget().getRootNode().execute(frame);
+        result = InvokeNode.dispatchFunction(function, library, this);
       }
     }
 
     if (result instanceof YonaModule module && module.getExports().contains("main")) {
       Function function = module.getFunctions().get("main");
       if (function.getCardinality() == 0) {
-        result = function.getCallTarget().getRootNode().execute(frame);
+        result = InvokeNode.dispatchFunction(function, library, this);
       }
     }
 

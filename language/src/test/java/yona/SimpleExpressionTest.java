@@ -5,8 +5,6 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
-import java.util.Arrays;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -545,13 +543,22 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void nestedModuleRecordTest() {
-    Value tuple = context.eval(YonaLanguage.ID, "module RecordModule exports funone as\n" +
-        "record TestRecord = (argone, argtwo)\n" +
-        "funone = let nestedModule = module NestedModule exports funtwo as\n" +
-        "funtwo = TestRecord(argtwo = 1)\n" +
-        "end\n" +
-        "in nestedModule::funtwo\n" +
-        "end").getMember("funone").execute();
+    Value tuple = context.eval(YonaLanguage.ID, """
+        let
+          recmodule = module RecordModule exports funone as
+            record TestRecord = (argone, argtwo)
+          
+            funone =
+              let
+                nestedModule = module NestedModule exports funtwo as
+                  funtwo = TestRecord(argtwo = 1)
+                end
+        
+              in
+                nestedModule::funtwo
+          end
+        in
+          recmodule::funone""");
 
     assertEquals(3, tuple.getArraySize());
 
@@ -650,16 +657,17 @@ public class SimpleExpressionTest extends CommonTest {
 
   @Test
   public void calculatePiTest() {
-    double ret = context.eval(YonaLanguage.ID, "let\n" +
-        "    calculator = module PiCalculator exports run as\n" +
-        "        iteration i = (-1f ** (i + 1f)) / ((2f * i) - 1f)\n" +
-        "        max_iterations = 10000\n" +
-        "        run i acc\n" +
-        "          | i >= max_iterations = acc\n" +
-        "          | true = run (i + 1) (acc + (iteration <| float i))\n" +
-        "    end\n" +
-        "in\n" +
-        "    4f * calculator::run 1 0f").asDouble();
+    double ret = context.eval(YonaLanguage.ID, """
+        let
+            calculator = module PiCalculator exports run as
+                iteration i = (-1f ** (i + 1f)) / ((2f * i) - 1f)
+                max_iterations = 10000
+                run i acc
+                  | i >= max_iterations = acc
+                  | true = run (i + 1) (acc + (iteration <| float i))
+            end
+        in
+            4f * calculator::run 1 0f""").asDouble();
 
     assertTrue(3d < ret);
     assertTrue(4d > ret);

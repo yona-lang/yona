@@ -49,6 +49,10 @@ public abstract class Types {
     }
   }
 
+  public static boolean isYonaCollection(Object value) {
+    return value instanceof Seq || value instanceof Set || value instanceof Dict;
+  }
+
   public static boolean isForeignObject(Object obj) {
     return !(obj instanceof Boolean || obj instanceof Byte || obj instanceof Long ||
         obj instanceof Double || obj instanceof Integer || obj instanceof String || obj instanceof Function ||

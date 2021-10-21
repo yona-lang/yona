@@ -38,6 +38,12 @@ public abstract class ExpressionNode extends Node implements InstrumentableNode 
     this.isTail = isTail;
   }
 
+  @Override
+  protected void onReplace(Node newNode, CharSequence reason) {
+    ((ExpressionNode) newNode).setIsTail(isTail);
+  }
+
+
   /*
    * The creation of source section can be implemented lazily by looking up the root node source
    * and then creating the source section object using the indices stored in the node. This avoids

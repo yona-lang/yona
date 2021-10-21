@@ -6,6 +6,7 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
+import yona.ast.call.InvokeNode;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
 import yona.runtime.exceptions.TransducerDoneException;
@@ -526,32 +527,32 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public Object reduceLeft(final Object[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+  public Object reduceLeft(final Object[] reducer, final InteropLibrary dispatch, final Node node) {
     final Function step = (Function) reducer[1];
     final Function complete = (Function) reducer[2];
     Object state = reducer[0];
     try {
       for (int i = 0; i < prefixSize; i++) {
-        state = dispatch.execute(step, state, nodeLookup(prefix, i));
+        state = InvokeNode.dispatchFunction(step, dispatch, node, state, nodeLookup(prefix, i));
       }
-      state = nodeFoldLeft(root, shift, state, step, dispatch);
+      state = nodeFoldLeft(root, shift, state, step, dispatch, node);
       for (int i = 0; i < suffixSize; i++) {
-        state = dispatch.execute(step, state, nodeLookup(suffix, i));
+        state = InvokeNode.dispatchFunction(step, dispatch, node, state, nodeLookup(suffix, i));
       }
     } catch (TransducerDoneException ignored) {
     }
-    return dispatch.execute(complete, state);
+    return InvokeNode.dispatchFunction(complete, dispatch, node, state);
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public Object foldLeft(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+  public Object foldLeft(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
     Object result = initial;
     for (int i = 0; i < prefixSize; i++) {
-      result = dispatch.execute(function, result, nodeLookup(prefix, i));
+      result = InvokeNode.dispatchFunction(function, dispatch, node, result, nodeLookup(prefix, i));
     }
-    result = nodeFoldLeft(root, shift, result, function, dispatch);
+    result = nodeFoldLeft(root, shift, result, function, dispatch, node);
     for (int i = 0; i < suffixSize; i++) {
-      result = dispatch.execute(function, result, nodeLookup(suffix, i));
+      result = InvokeNode.dispatchFunction(function, dispatch, node, result, nodeLookup(suffix, i));
     }
     return result;
   }
@@ -569,32 +570,32 @@ public final class Seq implements TruffleObject {
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public Object reduceRight(final Object[] reducer, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+  public Object reduceRight(final Object[] reducer, final InteropLibrary dispatch, final Node node) {
     final Function step = (Function) reducer[1];
     final Function complete = (Function) reducer[2];
     Object state = reducer[0];
     try {
       for (int i = suffixSize - 1; i >= 0; i--) {
-        state = dispatch.execute(step, state, nodeLookup(suffix, i));
+        state = InvokeNode.dispatchFunction(step, dispatch, node, state, nodeLookup(suffix, i));
       }
-      state = nodeFoldRight(root, shift, state, step, dispatch);
+      state = nodeFoldRight(root, shift, state, step, dispatch, node);
       for (int i = prefixSize - 1; i >= 0; i--) {
-        state = dispatch.execute(step, state, nodeLookup(prefix, i));
+        state = InvokeNode.dispatchFunction(step, dispatch, node, state, nodeLookup(prefix, i));
       }
     } catch (TransducerDoneException ignored) {
     }
-    return dispatch.execute(complete, state);
+    return InvokeNode.dispatchFunction(complete, dispatch, node, state);
   }
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public Object foldRight(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+  public Object foldRight(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
     Object result = initial;
     for (int i = suffixSize - 1; i >= 0; i--) {
-      result = dispatch.execute(function, result, nodeLookup(suffix, i));
+      result = InvokeNode.dispatchFunction(function, dispatch, node, result, nodeLookup(suffix, i));
     }
-    result = nodeFoldRight(root, shift, result, function, dispatch);
+    result = nodeFoldRight(root, shift, result, function, dispatch, node);
     for (int i = prefixSize - 1; i >= 0; i--) {
-      result = dispatch.execute(function, result, nodeLookup(prefix, i));
+      result = InvokeNode.dispatchFunction(function, dispatch, node, result, nodeLookup(prefix, i));
     }
     return result;
   }
@@ -916,16 +917,16 @@ public final class Seq implements TruffleObject {
     return nodeLookup(node, nodeLength(node) - 1);
   }
 
-  static Object nodeFoldLeft(final Object node, final int shift, final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+  static Object nodeFoldLeft(final Object node, final int shift, final Object initial, final Function function, final InteropLibrary dispatch, final Node caller) {
     final int len = nodeLength(node);
     Object result = initial;
     if (shift == 0) {
       for (int i = 0; i < len; i++) {
-        result = dispatch.execute(function, result, nodeLookup(node, i));
+        result = InvokeNode.dispatchFunction(function, dispatch, caller, result, nodeLookup(node, i));
       }
     } else {
       for (int i = 0; i < len; i++) {
-        result = nodeFoldLeft(nodeLookup(node, i), shift - BITS, result, function, dispatch);
+        result = nodeFoldLeft(nodeLookup(node, i), shift - BITS, result, function, dispatch, caller);
       }
     }
     return result;
@@ -946,16 +947,16 @@ public final class Seq implements TruffleObject {
     return result;
   }
 
-  static Object nodeFoldRight(final Object node, final int shift, final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+  static Object nodeFoldRight(final Object node, final int shift, final Object initial, final Function function, final InteropLibrary dispatch, final Node caller) {
     final int len = nodeLength(node);
     Object result = initial;
     if (shift == 0) {
       for (int i = len - 1; i >= 0; i--) {
-        result = dispatch.execute(function, result, nodeLookup(node, i));
+        result = InvokeNode.dispatchFunction(function, dispatch, caller, result, nodeLookup(node, i));
       }
     } else {
       for (int i = len - 1; i >= 0; i--) {
-        result = nodeFoldRight(nodeLookup(node, i), shift - BITS, result, function, dispatch);
+        result = nodeFoldRight(nodeLookup(node, i), shift - BITS, result, function, dispatch, caller);
       }
     }
     return result;

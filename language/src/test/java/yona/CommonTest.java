@@ -10,7 +10,7 @@ public abstract class CommonTest {
 
   @BeforeAll
   public static void initEngine() {
-    context = Context.newBuilder().allowAllAccess(true).environment("YONA_STDLIB_HOME", "lib-yona").build();
+    context = Context.newBuilder(YonaLanguage.ID).allowAllAccess(true).environment("YONA_STDLIB_HOME", "lib-yona").build();
   }
 
   /**

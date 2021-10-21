@@ -1,6 +1,5 @@
 package yona.ast.expression;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -9,6 +8,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.YonaException;
 import yona.YonaLanguage;
 import yona.ast.ExpressionNode;
+import yona.ast.call.FunctionInvokeNode;
 import yona.ast.call.InvokeNode;
 import yona.ast.expression.value.AnyValueNode;
 import yona.ast.local.ReadLocalVariableNode;
@@ -31,8 +31,8 @@ public final class IdentifierNode extends ExpressionNode {
   @Override
   public String toString() {
     return "IdentifierNode{" +
-           "name='" + name + '\'' +
-           '}';
+        "name='" + name + '\'' +
+        '}';
   }
 
   @Override
@@ -41,7 +41,7 @@ public final class IdentifierNode extends ExpressionNode {
     Object globalValue = context.get().globals.lookup(name);
     if (!Unit.INSTANCE.equals(globalValue)) {
       if (globalValue instanceof Function && ((Function) globalValue).getCardinality() == 0) {
-        InvokeNode invokeNode = new InvokeNode(language, (Function) globalValue, new ExpressionNode[]{}, moduleStack);
+        InvokeNode invokeNode = new FunctionInvokeNode(language, (Function) globalValue, new ExpressionNode[]{}, moduleStack);
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
       } else {
@@ -56,7 +56,7 @@ public final class IdentifierNode extends ExpressionNode {
         try {
           YonaModule module = moduleStack[i].executeModule(frame);
           if (module.getFunctions().containsKey(name)) {
-            InvokeNode invokeNode = new InvokeNode(language, module.getFunctions().get(name), new ExpressionNode[]{}, moduleStack);
+            InvokeNode invokeNode = new FunctionInvokeNode(language, module.getFunctions().get(name), new ExpressionNode[]{}, moduleStack);
             this.replace(invokeNode);
             return invokeNode.executeGeneric(frame);
           }
@@ -78,7 +78,7 @@ public final class IdentifierNode extends ExpressionNode {
 
       if (result instanceof Function function) {
         if (function.getCardinality() == 0) {
-          InvokeNode invokeNode = new InvokeNode(language, new SimpleIdentifierNode(name), new ExpressionNode[]{}, moduleStack);
+          InvokeNode invokeNode = new FunctionInvokeNode(language, function, new ExpressionNode[]{}, moduleStack);
           this.replace(invokeNode);
           return invokeNode.executeGeneric(frame);
         }
@@ -111,7 +111,6 @@ public final class IdentifierNode extends ExpressionNode {
   }
 
   private FrameSlot getFrameSlot(VirtualFrame frame) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     return frame.getFrameDescriptor().findFrameSlot(name);
   }
 

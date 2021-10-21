@@ -5,6 +5,7 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
+import yona.ast.call.InvokeNode;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.TransducerDoneException;
 
@@ -95,10 +96,10 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
   abstract Set remove(Object value, long hash, int shift);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public abstract Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+  public abstract Object reduce(Object[] reducer, InteropLibrary dispatch, Node node);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+  public abstract Object fold(Object initial, Function function, InteropLibrary dispatch, Node node);
 
   public abstract <T> T fold(final T initial, final BiFunction<T, Object, T> function);
 
@@ -380,30 +381,30 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     @Override
-    public Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object reduce(final Object[] reducer, final InteropLibrary dispatch, final Node node) {
       final Function step = (Function) reducer[1];
       final Function complete = (Function) reducer[2];
       Object state = reducer[0];
       try {
         for (int i = 0; i < arity(dataBmp); i++) {
-          state = dispatch.execute(step, state, dataAt(i));
+          state = InvokeNode.dispatchFunction(step, dispatch, node, state, dataAt(i));
         }
         for (int i = 0; i < arity(nodeBmp); i++) {
-          state = nodeAt(i).fold(state, step, dispatch);
+          state = nodeAt(i).fold(state, step, dispatch, node);
         }
       } catch (TransducerDoneException ignored) {
       }
-      return dispatch.execute(complete, state);
+      return InvokeNode.dispatchFunction(complete, dispatch, node, state);
     }
 
     @Override
-    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
       Object result = initial;
       for (int i = 0; i < arity(dataBmp); i++) {
-        result = dispatch.execute(function, result, dataAt(i));
+        result = InvokeNode.dispatchFunction(function, dispatch, node, result, dataAt(i));
       }
       for (int i = 0; i < arity(nodeBmp); i++) {
-        result = nodeAt(i).fold(result, function, dispatch);
+        result = nodeAt(i).fold(result, function, dispatch, node);
       }
       return result;
     }
@@ -561,24 +562,24 @@ public abstract class Set implements TruffleObject, Comparable<Set> {
     }
 
     @Override
-    public Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object reduce(final Object[] reducer, final InteropLibrary dispatch, final Node node) {
       final Function step = (Function) reducer[1];
       final Function complete = (Function) reducer[2];
       Object state = reducer[0];
       try {
         for (Object val : values) {
-          state = dispatch.execute(step, state, val);
+          state = InvokeNode.dispatchFunction(step, dispatch, node, state, val);
         }
       } catch (TransducerDoneException ignored) {
       }
-      return dispatch.execute(complete, state);
+      return InvokeNode.dispatchFunction(complete, dispatch, node, state);
     }
 
     @Override
-    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
       Object result = initial;
       for (Object val : values) {
-        result = dispatch.execute(function, result, val);
+        result = InvokeNode.dispatchFunction(function, dispatch, node, result, val);
       }
       return result;
     }

@@ -1,16 +1,14 @@
 package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaException;
 import yona.ast.builtin.BuiltinNode;
-import yona.runtime.*;
-import yona.runtime.exceptions.UndefinedNameException;
+import yona.runtime.Function;
+import yona.runtime.Seq;
+import yona.runtime.Set;
+import yona.runtime.Tuple;
 import yona.runtime.stdlib.Builtins;
 import yona.runtime.stdlib.ExportedFunction;
 
@@ -22,12 +20,7 @@ public final class SetBuiltinModule implements BuiltinModule {
   abstract static class FoldBuiltin extends BuiltinNode {
     @Specialization
     public Object fold(Function function, Object initialValue, Set set, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      try {
-        return set.fold(initialValue, function, dispatch);
-      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-        /* Execute was not successful. */
-        throw UndefinedNameException.undefinedFunction(this, function);
-      }
+      return set.fold(initialValue, function, dispatch, this);
     }
   }
 
@@ -35,12 +28,7 @@ public final class SetBuiltinModule implements BuiltinModule {
   abstract static class ReduceBuiltin extends BuiltinNode {
     @Specialization
     public Object reduce(Tuple reducer, Set set, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      try {
-        return set.reduce(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch);
-      } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
-        /* Execute was not successful. */
-        throw new YonaException(e, this);
-      }
+      return set.reduce(new Object[]{reducer.get(0), reducer.get(1), reducer.get(2)}, dispatch, this);
     }
   }
 

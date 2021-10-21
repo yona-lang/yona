@@ -1,10 +1,12 @@
 package yona.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.*;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
+import yona.ast.call.InvokeNode;
 import yona.common.TriFunction;
 import yona.runtime.async.Promise;
 import yona.runtime.exceptions.BadArgException;
@@ -58,10 +60,10 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
   abstract Dict remove(Object key, long hash, int shift);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public abstract Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+  public abstract Object reduce(Object[] reducer, InteropLibrary dispatch, Node node);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
-  public abstract Object fold(Object initial, Function function, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException;
+  public abstract Object fold(Object initial, Function function, InteropLibrary dispatch, Node node);
 
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   public abstract <T> T fold(final T initial, final TriFunction<T, Object, Object, T> function);
@@ -162,6 +164,17 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     });
   }
 
+  @CompilerDirectives.TruffleBoundary
+  public Object[] toArray() {
+    assert size() < Integer.MAX_VALUE;
+    Object[] res = new Object[(int) size()];
+    fold(0, (acc, key, val) -> {
+      res[acc] = new Object[]{key, val};
+      return acc + 1;
+    });
+    return res;
+  }
+
   public final boolean contains(final Object key) {
     return lookup(key, hasher.hash(seed, key), 0) != null;
   }
@@ -214,7 +227,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
 
   @CompilerDirectives.TruffleBoundary
   public Object unwrapPromises(final Node node) {
-    Object[] foldRes = fold(new Object[] {empty(hasher, seed), Seq.EMPTY}, (acc, k, v) -> {
+    Object[] foldRes = fold(new Object[]{empty(hasher, seed), Seq.EMPTY}, (acc, k, v) -> {
       Dict resultDict = (Dict) acc[0];
       Seq promiseVals = (Seq) acc[1];
       if (k instanceof Promise && v instanceof Promise) {
@@ -241,7 +254,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       } else {
         resultDict = resultDict.add(k, v);
       }
-      return new Object[] {resultDict, promiseVals};
+      return new Object[]{resultDict, promiseVals};
     });
 
     Dict resultDict = (Dict) foldRes[0];
@@ -412,30 +425,30 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     }
 
     @Override
-    public Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object reduce(final Object[] reducer, final InteropLibrary dispatch, final Node node) {
       final Function step = (Function) reducer[1];
       final Function complete = (Function) reducer[2];
       Object state = reducer[0];
       try {
         for (int i = 0; i < arity(dataBmp); i++) {
-          state = dispatch.execute(step, state, new Tuple(keyAt(i), valueAt(i)));
+          state = InvokeNode.dispatchFunction(step, dispatch, node, state, new Tuple(keyAt(i), valueAt(i)));
         }
         for (int i = 0; i < arity(nodeBmp); i++) {
-          state = nodeAt(i).fold(state, step, dispatch);
+          state = nodeAt(i).fold(state, step, dispatch, node);
         }
       } catch (TransducerDoneException ignored) {
       }
-      return dispatch.execute(complete, state);
+      return InvokeNode.dispatchFunction(complete, dispatch, node, state);
     }
 
     @Override
-    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
       Object result = initial;
       for (int i = 0; i < arity(dataBmp); i++) {
-        result = dispatch.execute(function, result, new Tuple(keyAt(i), valueAt(i)));
+        result = InvokeNode.dispatchFunction(function, dispatch, node, result, new Tuple(keyAt(i), valueAt(i)));
       }
       for (int i = 0; i < arity(nodeBmp); i++) {
-        result = nodeAt(i).fold(result, function, dispatch);
+        result = nodeAt(i).fold(result, function, dispatch, node);
       }
       return result;
     }
@@ -627,24 +640,24 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     }
 
     @Override
-    public Object reduce(Object[] reducer, InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object reduce(final Object[] reducer, final InteropLibrary dispatch, final Node node) {
       final Function step = (Function) reducer[1];
       final Function complete = (Function) reducer[2];
       Object state = reducer[0];
       try {
         for (int i = 0; i < entries.length; i += 2) {
-          state = dispatch.execute(step, state, new Tuple(entries[i], entries[i + 1]));
+          state = InvokeNode.dispatchFunction(step, dispatch, node, state, new Tuple(entries[i], entries[i + 1]));
         }
       } catch (TransducerDoneException ignored) {
       }
-      return dispatch.execute(complete, state);
+      return InvokeNode.dispatchFunction(complete, dispatch, node, state);
     }
 
     @Override
-    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch) throws UnsupportedMessageException, ArityException, UnsupportedTypeException {
+    public Object fold(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
       Object result = initial;
       for (int i = 0; i < entries.length; i += 2) {
-        result = dispatch.execute(function, result, new Tuple(entries[i], entries[2]));
+        result = InvokeNode.dispatchFunction(function, dispatch, node, result, new Tuple(entries[i], entries[2]));
       }
       return result;
     }

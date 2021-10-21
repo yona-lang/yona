@@ -21,7 +21,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 @NodeInfo
-public final class ModuleCallNode extends ExpressionNode {
+public final class ModuleCallNode extends InvokeNode {
   @Child
   private ExpressionNode nameNode;
   @Children
@@ -75,7 +75,7 @@ public final class ModuleCallNode extends ExpressionNode {
     } else if (executedName instanceof YonaModule || executedName instanceof NativeObject) {
       return invokeModuleFunction(frame, executedName);
     } else {
-      throw new YonaException("Unexpected error while invoking a module function %s: returned value is not a Yona Module, nor a Native Object".formatted(functionName), this);
+      throw YonaException.typeError(this, executedName);
     }
   }
 
@@ -90,7 +90,7 @@ public final class ModuleCallNode extends ExpressionNode {
         throw new YonaException("Function %s is not present in %s".formatted(functionName, module), this);
       } else {
         Function function = module.getFunctions().get(functionName);
-        InvokeNode invokeNode = new InvokeNode(language, function, argumentNodes, moduleStack);
+        InvokeNode invokeNode = new FunctionInvokeNode(language, function, argumentNodes, moduleStack);
 
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);
@@ -101,7 +101,7 @@ public final class ModuleCallNode extends ExpressionNode {
 
       if (method != null) {
         Function javaFunction = JavaMethodRootNode.buildFunction(language, method, frame.getFrameDescriptor().copy(), nativeObject.getValue());
-        InvokeNode invokeNode = new InvokeNode(language, javaFunction, argumentNodes, moduleStack);
+        InvokeNode invokeNode = new FunctionInvokeNode(language, javaFunction, argumentNodes, moduleStack);
 
         this.replace(invokeNode);
         return invokeNode.executeGeneric(frame);

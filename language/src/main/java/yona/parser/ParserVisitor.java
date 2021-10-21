@@ -1,5 +1,6 @@
 package yona.parser;
 
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -12,16 +13,19 @@ import yona.ast.ExpressionNode;
 import yona.ast.MainExpressionNode;
 import yona.ast.StringPartsNode;
 import yona.ast.binary.*;
+import yona.ast.call.ExpressionInvokeNode;
+import yona.ast.call.FunctionInvokeNode;
 import yona.ast.call.InvokeNode;
 import yona.ast.call.ModuleCallNode;
 import yona.ast.expression.*;
 import yona.ast.expression.value.*;
-import yona.ast.generators.GeneratedCollection;
-import yona.ast.generators.GeneratorNode;
+import yona.runtime.GeneratedCollection;
 import yona.ast.local.ReadArgumentNode;
 import yona.ast.pattern.*;
 import yona.runtime.Context;
 import yona.runtime.Dict;
+import yona.runtime.Function;
+import yona.runtime.UninitializedFrameSlot;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -46,7 +50,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
     functionBodyNode.addRootTag();
 
     ModuleFunctionNode mainFunctionNode = new ModuleFunctionNode(language, source.createSection(ctx.getSourceInterval().a, ctx.getSourceInterval().b), null, "$main", 0, context.globalFrameDescriptor.copy(), functionBodyNode);
-    return new InvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new ExpressionNode[]{}));
+    return new ExpressionInvokeNode(language, mainFunctionNode, new ExpressionNode[]{}, moduleStack.toArray(new ExpressionNode[]{}));
   }
 
   @Override
@@ -945,18 +949,18 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       return withSourceSection(ctx, new ModuleCallNode(language, nameNode, functionName, argNodes, moduleStackArray));
     } else {
       String functionName = callCtx.name().getText();
-      return withSourceSection(ctx, new InvokeNode(language, withSourceSection(callCtx.name(), new IdentifierNode(language, functionName, moduleStackArray)), argNodes, moduleStackArray));
+      return withSourceSection(ctx, new ExpressionInvokeNode(language, withSourceSection(callCtx.name(), new IdentifierNode(language, functionName, moduleStackArray)), argNodes, moduleStackArray));
     }
   }
 
   @Override
   public ExpressionNode visitPipeLeftExpression(YonaParser.PipeLeftExpressionContext ctx) {
-    return withSourceSection(ctx, new InvokeNode(language, ctx.left.accept(this), new ExpressionNode[]{ctx.right.accept(this)}, moduleStack.toArray(new ExpressionNode[]{})));
+    return withSourceSection(ctx, new ExpressionInvokeNode(language, ctx.left.accept(this), new ExpressionNode[]{ctx.right.accept(this)}, moduleStack.toArray(new ExpressionNode[]{})));
   }
 
   @Override
   public ExpressionNode visitPipeRightExpression(YonaParser.PipeRightExpressionContext ctx) {
-    return withSourceSection(ctx, new InvokeNode(language, ctx.right.accept(this), new ExpressionNode[]{ctx.left.accept(this)}, moduleStack.toArray(new ExpressionNode[]{})));
+    return withSourceSection(ctx, new ExpressionInvokeNode(language, ctx.right.accept(this), new ExpressionNode[]{ctx.left.accept(this)}, moduleStack.toArray(new ExpressionNode[]{})));
   }
 
   @Override
@@ -984,7 +988,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       };
     }
 
-    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SEQ, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[]{}), currentModuleName()));
+    return withSourceSection(ctx, getGeneratorNode(language, GeneratedCollection.SEQ, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[]{})));
   }
 
   @Override
@@ -1003,7 +1007,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       };
     }
 
-    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.SET, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[]{}), currentModuleName()));
+    return withSourceSection(ctx, getGeneratorNode(language, GeneratedCollection.SET, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[]{})));
   }
 
   @Override
@@ -1022,7 +1026,7 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       };
     }
 
-    return withSourceSection(ctx, new GeneratorNode(language, GeneratedCollection.DICT, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[]{}), currentModuleName()));
+    return withSourceSection(ctx, getGeneratorNode(language, GeneratedCollection.DICT, reducer, condition, stepMatchNodes, stepExpression, moduleStack.toArray(new ExpressionNode[]{})));
   }
 
   @Override
@@ -1090,5 +1094,35 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
         source.getLineLength(parserRuleContext.stop.getLine())
     );
     return sourceSection;
+  }
+
+  private InvokeNode getGeneratorNode(YonaLanguage language, GeneratedCollection type, ExpressionNode reducer, ExpressionNode condition, MatchNode[] stepMatchNodes, ExpressionNode stepExpression, ExpressionNode[] moduleStackNodes) {
+    InvokeNode toSeqInvoke = new FunctionInvokeNode(language, type.finalShapReducerFunction(context), new ExpressionNode[]{}, moduleStackNodes);
+
+    MatchNode argPatterns;
+    if (stepMatchNodes.length == 1) {
+      /* If there is only one stepName (aka bound variable), then this is a seq/set element */
+      argPatterns = stepMatchNodes[0];
+    } else {
+      /* Otherwise, then this is a dict key/value tuple, so the appropriate pattern for a tuple must be constructed */
+      argPatterns = new TupleMatchNode(stepMatchNodes);
+    }
+
+    ExpressionNode reducerBodyNode = new CaseNode(new ReadArgumentNode(0), new PatternNode[]{new PatternNode(argPatterns, reducer)});
+    reducerBodyNode.addRootTag();
+
+    FunctionNode reduceFunction = new FunctionNode(language, reducer.getSourceSection(), currentModuleName(), "$" + type.toLowerString() + "_reducer", 1, context.globalFrameDescriptor.copy(), reducerBodyNode);
+    InvokeNode mapInvoke = new FunctionInvokeNode(language, context.generatorMapTransducer, new ExpressionNode[]{reduceFunction, toSeqInvoke}, moduleStackNodes);
+
+    InvokeNode filterInvoke = null;
+    if (condition != null) {
+      ExpressionNode conditionBodyNode = new CaseNode(new ReadArgumentNode(0), new PatternNode[]{new PatternNode(argPatterns, condition)});
+      conditionBodyNode.addRootTag();
+      FunctionNode conditionFunction = new FunctionNode(language, reducer.getSourceSection(), currentModuleName(), "$" + type.toLowerString() + "_filter", 1, context.globalFrameDescriptor.copy(), conditionBodyNode);
+      filterInvoke = new FunctionInvokeNode(language, context.generatorFilterTransducer, new ExpressionNode[]{conditionFunction, mapInvoke}, moduleStackNodes);
+    }
+
+    ExpressionNode[] reduceArgs = new ExpressionNode[]{filterInvoke == null ? mapInvoke : filterInvoke, stepExpression};
+    return new FunctionInvokeNode(language, context.generatorReduceFunction, reduceArgs, moduleStackNodes);
   }
 }

@@ -1,16 +1,11 @@
 package yona.runtime.network;
 
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import yona.TypesGen;
 import yona.YonaException;
-import yona.ast.builtin.modules.socket.ConnectionContextManager;
+import yona.ast.call.InvokeNode;
 import yona.runtime.Context;
 import yona.runtime.Seq;
 import yona.runtime.async.Promise;
-import yona.runtime.exceptions.BadArgException;
-import yona.runtime.threading.ExecutableFunction;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -127,7 +122,7 @@ public final class NIOSelectorThread extends Thread {
         if (read <= 0) {
           break;
         }
-        Object untilCallbackResult = connection.dispatch.execute(readRequest.untilCallback(), read);
+        Object untilCallbackResult = InvokeNode.dispatchFunction(readRequest.untilCallback(), connection.dispatch, connection.node, read);
         if (!(untilCallbackResult instanceof Boolean) && !(untilCallbackResult instanceof Promise)) {
           throw YonaException.typeError(connection.node, untilCallbackResult);
         }
@@ -156,8 +151,6 @@ public final class NIOSelectorThread extends Thread {
     } catch (IOException e) {
       e.printStackTrace();
       finalResult = new yona.runtime.exceptions.IOException(e, connection.node);
-    } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException e) {
-      finalResult = new BadArgException("Callback in read_until function must accept byte and return boolean (true if continue reading).", e, connection.node);
     } catch (Throwable e) {
       finalResult = new YonaException(e, connection.node);
     }
