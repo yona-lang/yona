@@ -4,6 +4,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
 import yona.YonaLanguage;
 import yona.ast.FunctionRootNode;
@@ -11,6 +12,7 @@ import yona.runtime.Function;
 
 import java.util.Objects;
 
+@NodeInfo
 public final class LiteralFunctionNode extends FunctionLikeNode {
   private final String moduleFQN, name;
   @Node.Child

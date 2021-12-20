@@ -48,7 +48,6 @@ public final class FrameSlotAliasNode extends AliasNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
     WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(expression, frameSlot);
     return writeLocalVariableNode.executeGeneric(frame);
   }
