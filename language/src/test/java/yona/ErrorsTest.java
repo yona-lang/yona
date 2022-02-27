@@ -152,7 +152,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YonaLanguage.ID, "!\"hello\"");
       } catch (PolyglotException ex) {
-        assertEquals("Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"", ex.getMessage());
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"!\" not defined for \"hello\"", ex.getMessage());
         throw ex;
       }
     });
@@ -164,7 +164,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YonaLanguage.ID, "!(async \\->\"hello\")");
       } catch (PolyglotException ex) {
-        assertEquals("Type error at Unnamed line 1 col 1: operation \"!\" not defined for String \"hello\"", ex.getMessage());
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"!\" not defined for \"hello\"", ex.getMessage());
         throw ex;
       }
     });
@@ -176,7 +176,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YonaLanguage.ID, "~\"hello\"");
       } catch (PolyglotException ex) {
-        assertEquals("Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"", ex.getMessage());
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"~\" not defined for \"hello\"", ex.getMessage());
         throw ex;
       }
     });
@@ -188,7 +188,7 @@ public class ErrorsTest extends CommonTest {
       try {
         context.eval(YonaLanguage.ID, "~(async \\->\"hello\")");
       } catch (PolyglotException ex) {
-        assertEquals("Type error at Unnamed line 1 col 1: operation \"~\" not defined for String \"hello\"", ex.getMessage());
+        assertEquals("Type error at Unnamed line 1 col 1: operation \"~\" not defined for \"hello\"", ex.getMessage());
         throw ex;
       }
     });
@@ -246,7 +246,7 @@ public class ErrorsTest extends CommonTest {
             "rec.argone\n" +
             "end in mod::funone").asLong();
       } catch (PolyglotException ex) {
-        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for String \"whatever\"", ex.getMessage());
+        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for \":whatever\"", ex.getMessage());
         throw ex;
       }
     });
@@ -278,7 +278,7 @@ public class ErrorsTest extends CommonTest {
             "rec.argone\n" +
             "end in mod::funone").asLong();
       } catch (PolyglotException ex) {
-        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for String \"whatever\"", ex.getMessage());
+        assertEquals("Type error at Unnamed line 4 col 1: operation \"fieldAccess\" not defined for \":whatever\"", ex.getMessage());
         throw ex;
       }
     });

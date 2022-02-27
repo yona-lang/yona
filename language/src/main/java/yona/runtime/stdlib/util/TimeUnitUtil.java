@@ -1,6 +1,5 @@
 package yona.runtime.stdlib.util;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.nodes.Node;
 import yona.runtime.Symbol;
 import yona.runtime.Tuple;

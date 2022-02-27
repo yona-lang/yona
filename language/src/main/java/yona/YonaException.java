@@ -5,6 +5,7 @@ import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
@@ -139,14 +140,12 @@ public class YonaException extends AbstractTruffleException {
       result.append(sep);
       sep = ", ";
       if (value == null || interopLibrary.isNull(value)) {
-        result.append(YonaLanguage.toString(value));
+        result.append(interopLibrary.toDisplayString(value));
       } else {
-        result.append(YonaLanguage.getMetaObject(value));
-        result.append(" ");
         if (interopLibrary.isString(value)) {
           result.append("\"");
         }
-        result.append(YonaLanguage.toString(value));
+        result.append(interopLibrary.toDisplayString(value));
         if (interopLibrary.isString(value)) {
           result.append("\"");
         }

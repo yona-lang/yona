@@ -4,11 +4,7 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.debug.DebuggerTags;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.regex.RegexLanguage;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -16,8 +12,6 @@ import yona.ast.ExpressionNode;
 import yona.ast.FunctionRootNode;
 import yona.parser.*;
 import yona.runtime.Context;
-import yona.runtime.Function;
-import yona.runtime.Unit;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -98,93 +92,6 @@ public class YonaLanguage extends TruffleLanguage<Context> {
   @Override
   protected boolean isVisible(Context context, Object value) {
     return context.isPrintAllResults();
-  }
-
-  @Override
-  protected boolean isObjectOfLanguage(Object object) {
-    if (!(object instanceof TruffleObject truffleObject)) {
-      return false;
-    }
-    return truffleObject instanceof Function;
-  }
-
-  @Override
-  protected String toString(Context context, Object value) {
-    return toString(value);
-  }
-
-  public static String toString(Object value) {
-    try {
-      if (value == null) {
-        return "ANY";
-      }
-      InteropLibrary interop = InteropLibrary.getFactory().getUncached(value);
-      if (interop.fitsInLong(value)) {
-        return Long.toString(interop.asLong(value));
-      } else if (interop.fitsInDouble(value)) {
-        return Double.toString(interop.asDouble(value));
-      } else if (interop.isBoolean(value)) {
-        return Boolean.toString(interop.asBoolean(value));
-      } else if (interop.isString(value)) {
-        return interop.asString(value);
-      } else if (interop.isNull(value)) {
-        return "()";
-      } else if (interop.isExecutable(value)) {
-        if (value instanceof Function) {
-          return ((Function) value).getName();
-        } else {
-          return "Function";
-        }
-      } else {
-        if (value == Unit.INSTANCE) {
-          return "()";
-        } else if (value instanceof Module) {
-          return ((Module) value).toString();
-        } else {
-          return "Unsupported";
-        }
-      }
-    } catch (UnsupportedMessageException e) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
-      throw new AssertionError();
-    }
-  }
-
-  @Override
-  protected Object findMetaObject(Context context, Object value) {
-    return getMetaObject(value);
-  }
-
-  public static String getMetaObject(Object value) {
-    if (value == null) {
-      return "ANY";
-    }
-    InteropLibrary interop = InteropLibrary.getFactory().getUncached(value);
-    if (interop.isNumber(value)) {
-      return "Number";
-    } else if (interop.isBoolean(value)) {
-      return "Boolean";
-    } else if (interop.isString(value)) {
-      return "String";
-    } else if (interop.isExecutable(value)) {
-      return "Function";
-    } else {
-      if (value == Unit.INSTANCE) {
-        return "Unit";
-      } else if (value instanceof Module) {
-        return "Module";
-      } else {
-        return "Unsupported";
-      }
-    }
-  }
-
-  @Override
-  protected SourceSection findSourceLocation(Context context, Object value) {
-    if (value instanceof Function f) {
-      return f.getDeclaredLocation();
-    }
-    return null;
   }
 
   public static Context getCurrentContext() {
