@@ -1,6 +1,5 @@
 package yona.parser;
 
-import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -18,14 +17,14 @@ import yona.ast.call.FunctionInvokeNode;
 import yona.ast.call.InvokeNode;
 import yona.ast.call.ModuleCallNode;
 import yona.ast.expression.*;
+import yona.ast.expression.aliasTree.AliasTreeNode;
 import yona.ast.expression.value.*;
-import yona.runtime.GeneratedCollection;
 import yona.ast.local.ReadArgumentNode;
 import yona.ast.pattern.*;
 import yona.runtime.Context;
 import yona.runtime.Dict;
-import yona.runtime.Function;
-import yona.runtime.UninitializedFrameSlot;
+import yona.runtime.GeneratedCollection;
+import yona.runtime.Seq;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -260,7 +259,8 @@ public final class ParserVisitor extends YonaParserBaseVisitor<ExpressionNode> {
       aliasNodes[i] = visitAlias(ctx.let().alias(i));
     }
 
-    return withSourceSection(ctx, new PatternLetNode(aliasNodes, ctx.let().expression().accept(this)));
+    AliasTreeNode aliasTreeNode = PatternLetNode.resolveDependencies(Seq.sequence((Object[]) aliasNodes), context.globallyProvidedIdentifiers());
+    return withSourceSection(ctx, new PatternLetNode(aliasTreeNode, ctx.let().expression().accept(this)));
   }
 
   @Override
