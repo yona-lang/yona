@@ -89,10 +89,11 @@ public final class Context {
   public final MaterializedFrame globalFrame;
   private final Path stdlibHome;
   private final Path languageHome;
+  private final Path cwdPath;
   private final boolean printAllResults;
   public Selector socketSelector;
 
-  public Context(final YonaLanguage language, final TruffleLanguage.Env env, final Path languageHomePath, final Path stdlibHomePath) {
+  public Context(final YonaLanguage language, final TruffleLanguage.Env env, final Path languageHomePath, final Path stdlibHomePath, final Path cwdPath) {
     this.env = env;
     this.input = new BufferedReader(new InputStreamReader(env.in()));
     this.output = new PrintWriter(env.out(), true, StandardCharsets.UTF_8);
@@ -105,6 +106,7 @@ public final class Context {
     this.globalFrame = this.initGlobalFrame();
     this.languageHome = languageHomePath;
     this.stdlibHome = stdlibHomePath;
+    this.cwdPath = cwdPath;
     if (env.getEnvironment().containsKey("YONA_PRINT_ALL_RESULTS")) {
       this.printAllResults = Boolean.parseBoolean(env.getEnvironment().get("YONA_PRINT_ALL_RESULTS"));
     } else {
@@ -230,7 +232,7 @@ public final class Context {
       FunctionRootNode rootNode = new FunctionRootNode(language, globalFrameDescriptor, new BuiltinCallNode(stdLibFunction.node), stdLibFunction.sourceSection(), null, name);
       Function function = new Function(null, name, Truffle.getRuntime().createCallTarget(rootNode), cardinality, stdLibFunction.unwrapArgumentPromises());
 
-      String partiallyAppliedFunctionName = "$partial-0/" + function.getCardinality() + "-" + function.getName();
+      String partiallyAppliedFunctionName = "$partial-0/%d-%s".formatted(function.getCardinality(), function.getName());
       ExpressionNode[] allArgumentNodes = new ExpressionNode[function.getCardinality()];
 
       for (int i = 0; i < function.getCardinality(); i++) {
@@ -407,7 +409,7 @@ public final class Context {
         }
       }
       CompilerDirectives.transferToInterpreterAndInvalidate();
-      throw new YonaException("Module " + FQN + " not found in YONA_PATH: " + Arrays.toString(yonaPaths), node);
+      throw new YonaException("Module %s not found in YONA_PATH: %s".formatted(FQN, Arrays.toString(yonaPaths)), node);
     }
   }
 
@@ -417,7 +419,7 @@ public final class Context {
     if (module != null) {
       return module;
     } else {
-      throw new IOException("StdLib Module " + FQN + " not found: ");
+      throw new IOException("StdLib Module %s not found: ".formatted(FQN));
     }
   }
 
@@ -430,7 +432,7 @@ public final class Context {
       pathParts[pathParts.length - 1] = moduleName + "." + YonaLanguage.ID;
       path = Paths.get(packageParts[0], pathParts);
     } else {
-      path = Paths.get(moduleName + "." + YonaLanguage.ID);
+      path = Paths.get("%s.%s".formatted(moduleName, YonaLanguage.ID));
     }
 
     return path;
@@ -444,8 +446,9 @@ public final class Context {
       YonaModule module = (YonaModule) callTarget.call();
 
       if (!FQN.equals(module.getFqn())) {
+        Context context = Context.get(node);
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        throw new YonaException("Module file " + file.getPath() + " has incorrectly defined module as " + module.getFqn(), node);
+        throw new YonaException("Module file %s has incorrectly defined module as %s".formatted(context.cwdPath.relativize(Paths.get(file.toRelativeUri())), module.getFqn()), node);
       }
       if (cache) {
         moduleCache = this.moduleCache.add(FQN, module);

@@ -31,13 +31,13 @@ public class YonaLanguage extends TruffleLanguage<Context> {
   @Override
   protected Context createContext(Env env) {
     String languageHome = getLanguageHome();
-    Path languageHomePath, stdlibHomePath;
+    Path languageHomePath, stdlibHomePath, cwdPath = Paths.get(".").toAbsolutePath();
 
     if (languageHome == null) {
       if (env.getEnvironment().containsKey("JAVA_HOME")) {
         languageHomePath = Paths.get(env.getEnvironment().get("JAVA_HOME"), "languages", ID);
       } else {
-        languageHomePath = Paths.get(".");
+        languageHomePath = cwdPath;
         env.getLogger(getClass()).severe("JAVA_HOME environment variable must be set, otherwise stdlib from current directory is loaded. This is a potential security risk.");
       }
 
@@ -51,7 +51,7 @@ public class YonaLanguage extends TruffleLanguage<Context> {
       stdlibHomePath = Paths.get(languageHome, "lib-yona");
     }
 
-    return new Context(this, env, languageHomePath, stdlibHomePath);
+    return new Context(this, env, languageHomePath, stdlibHomePath, cwdPath);
   }
 
   @Override
