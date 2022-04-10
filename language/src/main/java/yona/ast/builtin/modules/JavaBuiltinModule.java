@@ -2,15 +2,11 @@ package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.Types;
-import yona.YonaException;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.runtime.Context;
 import yona.runtime.NativeObject;
@@ -32,8 +28,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
   abstract static class TypeBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object type(Seq name, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public Object type(Seq name) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       if (!env.isHostLookupAllowed()) {
         throw new PolyglotException("Host lookup is not allowed", this);
       }
@@ -60,8 +56,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
   abstract static class NewBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(klass)"})
     @CompilerDirectives.TruffleBoundary
-    public Object newObject(TruffleObject klass, Seq args, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public Object newObject(TruffleObject klass, Seq args) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
         Object unwrappedArgs = args.unwrapPromises(this);
@@ -139,8 +135,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "instanceof")
   abstract static class InstanceOfBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(object.getValue())", "isForeignObject(klass)"})
-    public boolean check(NativeObject<?> object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public boolean check(NativeObject<?> object, TruffleObject klass) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
         if (hostKlass instanceof Class<?>) {
@@ -155,8 +151,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
     }
 
     @Specialization(guards = {"!isForeignObject(object)", "isForeignObject(klass)"})
-    public boolean check(Object object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public boolean check(Object object, TruffleObject klass) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
         if (hostKlass instanceof Class<?>) {
@@ -171,8 +167,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
     }
 
     @Specialization(guards = {"isForeignObject(object)", "isForeignObject(klass)"})
-    public boolean checkForeign(Object object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public boolean checkForeign(Object object, TruffleObject klass) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       try {
         Object hostObject = env.asHostObject(object);
         Object hostKlass = env.asHostObject(klass);
@@ -191,8 +187,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "cast")
   abstract static class CastBuiltin extends BuiltinNode {
     @Specialization(guards = {"isForeignObject(object.getValue())", "isForeignObject(klass)"})
-    public Object cast(NativeObject<?> object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public Object cast(NativeObject<?> object, TruffleObject klass) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
         if (hostKlass instanceof Class<?>) {
@@ -208,8 +204,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
     }
 
     @Specialization(guards = {"!isForeignObject(object)", "isForeignObject(klass)"})
-    public Object cast(Object object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public Object cast(Object object, TruffleObject klass) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       try {
         Object hostKlass = env.asHostObject(klass);
         if (hostKlass instanceof Class<?>) {
@@ -225,8 +221,8 @@ public final class JavaBuiltinModule implements BuiltinModule {
     }
 
     @Specialization(guards = {"isForeignObject(object)", "isForeignObject(klass)"})
-    public Object castForeign(Object object, TruffleObject klass, @CachedContext(YonaLanguage.class) Context context) {
-      TruffleLanguage.Env env = context.getEnv();
+    public Object castForeign(Object object, TruffleObject klass) {
+      TruffleLanguage.Env env = Context.get(this).getEnv();
       try {
         Object hostObject = env.asHostObject(object);
         Object hostKlass = env.asHostObject(klass);

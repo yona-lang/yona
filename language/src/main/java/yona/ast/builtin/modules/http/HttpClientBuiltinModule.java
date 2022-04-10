@@ -1,8 +1,8 @@
 package yona.ast.builtin.modules.http;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
@@ -10,7 +10,6 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.TypesGen;
 import yona.YonaException;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
@@ -36,10 +35,17 @@ import java.util.Map;
 @BuiltinModuleInfo(packageParts = {"http"}, moduleName = "Client")
 public final class HttpClientBuiltinModule implements BuiltinModule {
   protected static final class HttpSessionTuple extends Tuple {
-    public HttpSessionTuple(HttpClient client, Set additionalOptions) {
+    protected HttpSessionTuple(HttpClient client, Set additionalOptions) {
       this.items = new Object[]{
           new NativeObject<>(client), additionalOptions
       };
+    }
+
+    public static HttpSessionTuple allocate(Context context, HttpClient client, Set additionalOptions) {
+      context.getAllocationReporter().onEnter(null, 0, AllocationReporter.SIZE_UNKNOWN);
+      HttpSessionTuple fileTuple = new HttpSessionTuple(client, additionalOptions);
+      context.getAllocationReporter().onReturnValue(fileTuple, 0, AllocationReporter.SIZE_UNKNOWN);
+      return fileTuple;
     }
 
     public HttpClient httpClient(Node node) {
@@ -69,8 +75,8 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
-      HttpSessionConnectionManager httpClientContextManager = HttpSessionConnectionManager.adapt(contextManager, context, this);
+    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      HttpSessionConnectionManager httpClientContextManager = HttpSessionConnectionManager.adapt(contextManager, Context.get(this), this);
       return InvokeNode.dispatchFunction(function, dispatch, this);
     }
   }
@@ -79,7 +85,8 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   abstract static class SessionBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object session(Dict params, @CachedContext(YonaLanguage.class) Context context) {
+    public Object session(Dict params) {
+      Context context = Context.get(this);
       if (params.size() == 0L) {
         return new HttpSessionConnectionManager(HttpClient.newHttpClient(), Set.empty(), context);
       } else {
@@ -194,7 +201,8 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
 
   abstract static class SendBuiltin extends BuiltinNode {
     @CompilerDirectives.TruffleBoundary
-    protected Promise sendRequest(ContextManager<?> contextManager, RequestType requestType, Seq uri, Dict headers, Seq body, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    protected Promise sendRequest(ContextManager<?> contextManager, RequestType requestType, Seq uri, Dict headers, Seq body, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Context context = Context.get(this);
       HttpSessionConnectionManager httpSessionConnectionManager = HttpSessionConnectionManager.adapt(contextManager, context, this);
       Object requestObj = buildRequest(requestType, uri, headers, body);
       if (requestObj instanceof HttpRequest) {
@@ -238,7 +246,7 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
         }
         headers = headers.add(Seq.fromCharSequence(entry.getKey()), value);
       }
-      return new Tuple((long) response.statusCode(), headers, bodyForHttpSession(sessionTuple, response, context));
+      return Tuple.allocate(this, (long) response.statusCode(), headers, bodyForHttpSession(sessionTuple, response, context));
     }
 
     private Seq bodyForHttpSession(HttpSessionConnectionManager sessionTuple, HttpResponse<?> response, Context context) {
@@ -293,32 +301,32 @@ public final class HttpClientBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "get")
   abstract static class GetBuiltin extends SendBuiltin {
     @Specialization
-    public Promise get(ContextManager<?> contextManager, Seq uri, Dict headers, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(contextManager, RequestType.GET, uri, headers, null, context, dispatch);
+    public Promise get(ContextManager<?> contextManager, Seq uri, Dict headers, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(contextManager, RequestType.GET, uri, headers, null, dispatch);
     }
   }
 
   @NodeInfo(shortName = "delete")
   abstract static class DeleteBuiltin extends SendBuiltin {
     @Specialization
-    public Promise delete(ContextManager<?> contextManager, Seq uri, Dict headers, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(contextManager, RequestType.DELETE, uri, headers, null, context, dispatch);
+    public Promise delete(ContextManager<?> contextManager, Seq uri, Dict headers, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(contextManager, RequestType.DELETE, uri, headers, null, dispatch);
     }
   }
 
   @NodeInfo(shortName = "post")
   abstract static class PostBuiltin extends SendBuiltin {
     @Specialization
-    public Promise post(ContextManager<?> contextManager, Seq uri, Dict headers, Seq body, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(contextManager, RequestType.POST, uri, headers, body, context, dispatch);
+    public Promise post(ContextManager<?> contextManager, Seq uri, Dict headers, Seq body, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(contextManager, RequestType.POST, uri, headers, body, dispatch);
     }
   }
 
   @NodeInfo(shortName = "put")
   abstract static class PutBuiltin extends SendBuiltin {
     @Specialization
-    public Promise put(ContextManager<?> contextManager, Seq uri, Dict headers, Seq body, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
-      return sendRequest(contextManager, RequestType.PUT, uri, headers, body, context, dispatch);
+    public Promise put(ContextManager<?> contextManager, Seq uri, Dict headers, Seq body, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      return sendRequest(contextManager, RequestType.PUT, uri, headers, body, dispatch);
     }
   }
 

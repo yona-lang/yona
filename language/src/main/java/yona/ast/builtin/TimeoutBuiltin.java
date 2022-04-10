@@ -1,10 +1,8 @@
 package yona.ast.builtin;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaLanguage;
 import yona.runtime.Context;
 import yona.runtime.Tuple;
 import yona.runtime.async.Promise;
@@ -16,8 +14,9 @@ import yona.runtime.stdlib.util.TimeUnitUtil;
 public abstract class TimeoutBuiltin extends BuiltinNode {
   @Specialization
   @CompilerDirectives.TruffleBoundary
-  public Object timeout(Tuple timeUnit, Promise promise, @CachedContext(YonaLanguage.class) Context context) {
+  public Object timeout(Tuple timeUnit, Promise promise) {
     Object millisObj = TimeUnitUtil.getMilliseconds(timeUnit, this);
+    Context context = Context.get(this);
 
     if (millisObj instanceof Long) {
       return timeoutForMillis((long) millisObj, promise, context);
@@ -33,7 +32,9 @@ public abstract class TimeoutBuiltin extends BuiltinNode {
   }
 
   @Specialization
-  public Object timeout(Promise timeUnit, Promise value, @CachedContext(YonaLanguage.class) Context context) {
+  public Object timeout(Promise timeUnit, Promise value) {
+    Context context = Context.get(this);
+
     return timeUnit.map((maybeTimeUnit) -> {
       if (maybeTimeUnit instanceof Tuple) {
         Object millisObj = TimeUnitUtil.getMilliseconds((Tuple) maybeTimeUnit, this);

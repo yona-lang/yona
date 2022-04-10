@@ -4,7 +4,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.YonaException;
-import yona.YonaLanguage;
 import yona.ast.AliasNode;
 import yona.ast.ExpressionNode;
 import yona.runtime.*;
@@ -82,7 +81,7 @@ public final class RecordFieldsMatchNode extends MatchNode {
       }
 
       if (recordFields != null) {
-        Context context = lookupContextReference(YonaLanguage.class).get();
+        Context context = Context.get(this);
         Symbol recordTypeSymbol = context.symbol(recordType);
 
         if (tuple.get(0) instanceof Symbol && recordTypeSymbol.equals((tuple.get(0))) && recordFields.length + 1 == tuple.length()) {

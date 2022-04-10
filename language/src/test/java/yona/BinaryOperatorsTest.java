@@ -41,8 +41,8 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder("\"ad\"", "\"am\"", false, Boolean.class),
         new BinaryArgsHolder("\"ad\"", "\"ad\"", true, Boolean.class),
         new BinaryArgsHolder(Unit.INSTANCE, Unit.INSTANCE, true, Boolean.class),
-        new BinaryArgsHolder(new Tuple(1, 2), new Tuple(1, 2, 3), false, Boolean.class),
-        new BinaryArgsHolder(new Tuple(1, 2), new Tuple(1, 2), true, Boolean.class),
+        new BinaryArgsHolder(Tuple.allocate(null, 1, 2), Tuple.allocate(null, 1, 2, 3), false, Boolean.class),
+        new BinaryArgsHolder(Tuple.allocate(null, 1, 2), Tuple.allocate(null, 1, 2), true, Boolean.class),
         new BinaryArgsHolder("[1, 2]", "[1, 2, 3]", false, Boolean.class),
         new BinaryArgsHolder("[1, 2]", "[1, 2, 3]", false, Boolean.class),
         new BinaryArgsHolder(":yes", ":yes", true, Boolean.class),
@@ -242,10 +242,10 @@ public class BinaryOperatorsTest extends CommonTest {
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), 2l, "{1, 2}", String.class),
         new BinaryArgsHolder(Set.set(1l), new PromiseHolder(2l), "{1, 2}", String.class),
         new BinaryArgsHolder(new PromiseHolder(Set.set(1l)), new PromiseHolder(2l), "{1, 2}", String.class),
-        new BinaryArgsHolder(Dict.EMPTY.add(1l, true), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true)), new Tuple(2l, true), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(Dict.EMPTY.add(1l, true), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class),
-        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true)), new PromiseHolder(new Tuple(2l, true)), "{1 = true, 2 = true}", String.class)
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true), Tuple.allocate(null, 2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true)), Tuple.allocate(null, 2l, true), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(Dict.EMPTY.add(1l, true), new PromiseHolder(Tuple.allocate(null, 2l, true)), "{1 = true, 2 = true}", String.class),
+        new BinaryArgsHolder(new PromiseHolder(Dict.EMPTY.add(1l, true)), new PromiseHolder(Tuple.allocate(null, 2l, true)), "{1 = true, 2 = true}", String.class)
         );
   }
 

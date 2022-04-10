@@ -2,6 +2,7 @@ package yona;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.debug.DebuggerTags;
+import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.source.Source;
@@ -37,7 +38,6 @@ public class YonaLanguage extends TruffleLanguage<Context> {
         languageHomePath = Paths.get(env.getEnvironment().get("JAVA_HOME"), "languages", ID);
       } else {
         languageHomePath = Paths.get(".");
-        // TODO this should print some warning probably
         env.getLogger(getClass()).severe("JAVA_HOME environment variable must be set, otherwise stdlib from current directory is loaded. This is a potential security risk.");
       }
 
@@ -60,15 +60,15 @@ public class YonaLanguage extends TruffleLanguage<Context> {
   }
 
   @Override
-  protected void finalizeContext(Context context) {
+  protected void exitContext(Context context, ExitMode exitMode, int exitCode) {
     context.dispose();
   }
 
   @Override
   public CallTarget parse(ParsingRequest request) {
     Source source = request.getSource();
-    RootCallTarget rootCallTarget = parseYona(this, getCurrentContext(), source);
-    return Truffle.getRuntime().createCallTarget(rootCallTarget.getRootNode());
+    RootCallTarget rootCallTarget = parseYona(this, Context.get(null), source);
+    return rootCallTarget.getRootNode().getCallTarget();
   }
 
   private static ExpressionNode parseYonaExpression(YonaLanguage language, Context context, Source source) {
@@ -86,16 +86,12 @@ public class YonaLanguage extends TruffleLanguage<Context> {
   private static RootCallTarget parseYona(YonaLanguage language, Context context, Source source) {
     ExpressionNode rootExpression = parseYonaExpression(language, context, source);
     FunctionRootNode rootNode = new FunctionRootNode(language, context.globalFrameDescriptor, rootExpression, source.createSection(1), null, "root");
-    return Truffle.getRuntime().createCallTarget(rootNode);
+    return rootNode.getRootNode().getCallTarget();
   }
 
   @Override
   protected boolean isVisible(Context context, Object value) {
     return context.isPrintAllResults();
-  }
-
-  public static Context getCurrentContext() {
-    return getCurrentContext(YonaLanguage.class);
   }
 
   @Override

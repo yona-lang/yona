@@ -151,16 +151,14 @@ public final class Threading {
       try {
         threads[i].interrupt();
         threads[i].join();
-      } catch (InterruptedException e) {
-        e.printStackTrace();
+      } catch (InterruptedException ignored) {
       }
     }
     try {
       NIOSelectorThread.close();
       NIOSelectorThread.interrupt();
       NIOSelectorThread.join();
-    } catch (InterruptedException e) {
-      e.printStackTrace();
+    } catch (InterruptedException ignored) {
     }
   }
 }

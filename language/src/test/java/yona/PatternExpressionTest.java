@@ -16,7 +16,7 @@ public class PatternExpressionTest extends CommonTest {
         "(1, 2) -> 3\n"+
         "(2, 3) -> 5\n"+
         "_ -> 9\n" +
-        "end\n").execute(new Tuple(2l, 3l)).asLong();
+        "end\n").execute(Tuple.allocate(null, 2l, 3l)).asLong();
     assertEquals(5l, ret);
   }
 
@@ -27,7 +27,7 @@ public class PatternExpressionTest extends CommonTest {
         "(1, 2) -> 3\n"+
         "(2, 3) -> 5\n"+
         "_ -> 9\n" +
-        "end\n").execute(new Tuple(2l, 3l, 4l)).asLong();
+        "end\n").execute(Tuple.allocate(null, 2l, 3l, 4l)).asLong();
     assertEquals(9l, ret);
   }
 
@@ -38,7 +38,7 @@ public class PatternExpressionTest extends CommonTest {
         "((1, 2), 3) -> 3\n"+
         "(2, 3) -> 5\n"+
         "_ -> 9\n" +
-        "end\n").execute(new Tuple(new Tuple(1l, 2l), 3l)).asLong();
+        "end\n").execute(Tuple.allocate(null, Tuple.allocate(null, 1l, 2l), 3l)).asLong();
     assertEquals(3l, ret);
   }
 
@@ -49,7 +49,7 @@ public class PatternExpressionTest extends CommonTest {
         "(1, _) -> 3\n"+
         "(2, 3) -> 5\n"+
         "_ -> 9\n" +
-        "end\n").execute(new Tuple(1l, 5l)).asLong();
+        "end\n").execute(Tuple.allocate(null, 1l, 5l)).asLong();
     assertEquals(3l, ret);
   }
 
@@ -60,7 +60,7 @@ public class PatternExpressionTest extends CommonTest {
         "(1, bound) -> 1 + bound\n"+
         "(2, 3) -> 5\n"+
         "_ -> 9\n" +
-        "end\n").execute(new Tuple(1l, 5l), 5l).asLong();
+        "end\n").execute(Tuple.allocate(null, 1l, 5l), 5l).asLong();
     assertEquals(6l, ret);
   }
 
@@ -71,7 +71,7 @@ public class PatternExpressionTest extends CommonTest {
         "(1, secondArg) -> 1 + secondArg\n"+
         "(2, 3) -> 5\n"+
         "_ -> 9\n" +
-        "end\n").execute(new Tuple(1l, 5l)).asLong();
+        "end\n").execute(Tuple.allocate(null, 1l, 5l)).asLong();
     assertEquals(6l, ret);
   }
 
@@ -82,7 +82,7 @@ public class PatternExpressionTest extends CommonTest {
         "(1, secondArg, (nestedThird, 5)) -> nestedThird + secondArg\n"+
         "(2, 3) -> 5\n"+
         "_ -> 9\n" +
-        "end\n").execute(new Tuple(1l, 7l, new Tuple(9l, 5l))).asLong();
+        "end\n").execute(Tuple.allocate(null, 1l, 7l, Tuple.allocate(null, 9l, 5l))).asLong();
     assertEquals(16l, ret);
   }
 
@@ -418,7 +418,7 @@ public class PatternExpressionTest extends CommonTest {
         "(aa, bb)\n" +
         "| aa <= bb -> aa\n" +
         "| aa > bb -> bb\n" +
-        "end\n").execute(new Tuple(1l, 2l)).asLong();
+        "end\n").execute(Tuple.allocate(null, 1l, 2l)).asLong();
     assertEquals(1l, ret);
   }
 
@@ -428,7 +428,7 @@ public class PatternExpressionTest extends CommonTest {
         "(aa, bb)\n" +
         "| aa <= bb -> aa\n" +
         "| aa > bb -> bb\n" +
-        "end\n").execute(new Tuple(3l, 2l)).asLong();
+        "end\n").execute(Tuple.allocate(null, 3l, 2l)).asLong();
     assertEquals(2l, ret);
   }
 

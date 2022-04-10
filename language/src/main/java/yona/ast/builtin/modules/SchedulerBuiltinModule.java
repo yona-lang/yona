@@ -2,7 +2,6 @@ package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLogger;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -31,7 +30,7 @@ public final class SchedulerBuiltinModule implements BuiltinModule {
 
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(long initialDelay, Tuple period, Function function, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object run(long initialDelay, Tuple period, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       if (function.getCardinality() > 0) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new BadArgException("run_at_* functions accepts only functions with zero arguments. Function " + function + " expects " + function.getCardinality() + "arguments", this);
@@ -39,6 +38,7 @@ public final class SchedulerBuiltinModule implements BuiltinModule {
 
       Object periodSeconds = TimeUnitUtil.getSeconds(period, this);
       LOGGER.log(Level.FINE, "Scheduling function %s with initial delay: %d and period %s seconds.".formatted(function, initialDelay, periodSeconds));
+      Context context = Context.get(this);
 
       if (periodSeconds instanceof Promise delaySecondsPromise) {
         return delaySecondsPromise.map(periodSecondsUnwrapped -> {
@@ -64,7 +64,7 @@ public final class SchedulerBuiltinModule implements BuiltinModule {
 
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(long initialDelay, Tuple delay, Function function, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object run(long initialDelay, Tuple delay, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       if (function.getCardinality() > 0) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new BadArgException("run_at_* functions accepts only functions with zero arguments. Function " + function + " expects " + function.getCardinality() + "arguments", this);
@@ -72,6 +72,7 @@ public final class SchedulerBuiltinModule implements BuiltinModule {
 
       Object delaySeconds = TimeUnitUtil.getSeconds(delay, this);
       LOGGER.log(Level.FINE, "Scheduling function %s with initial delay: %d and period %s seconds.".formatted(function, initialDelay, delaySeconds));
+      Context context = Context.get(this);
 
       if (delaySeconds instanceof Promise delaySecondsPromise) {
         return delaySecondsPromise.map(delaySecondsUnwrapped -> {

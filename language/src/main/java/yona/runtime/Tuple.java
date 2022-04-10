@@ -1,6 +1,7 @@
 package yona.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -14,8 +15,21 @@ import java.util.Arrays;
 public class Tuple implements TruffleObject {
   protected Object[] items;
 
-  public Tuple(Object... items) {
+  protected Tuple(Object... items) {
     this.items = items;
+  }
+
+  // context may be null when called from unit tests
+  public static Tuple allocate(Node node, Object... items) {
+    if (node != null) {
+      Context context = Context.get(node);
+      context.getAllocationReporter().onEnter(null, 0, AllocationReporter.SIZE_UNKNOWN);
+      Tuple tuple = new Tuple(items);
+      context.getAllocationReporter().onReturnValue(tuple, 0, AllocationReporter.SIZE_UNKNOWN);
+      return tuple;
+    } else {
+      return new Tuple(items);
+    }
   }
 
   @Override

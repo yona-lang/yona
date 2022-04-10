@@ -1,13 +1,11 @@
 package yona.ast.builtin.modules.socket;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
@@ -26,8 +24,8 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
-      ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
+    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, Context.get(this), this);
       boolean shouldClose = true;
       try {
         Object result = InvokeNode.dispatchFunction(function, dispatch, this);
@@ -64,8 +62,8 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "close")
   abstract static class CloseBuiltin extends BuiltinNode {
     @Specialization
-    public Object close(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context) {
-      ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
+    public Object close(ContextManager<?> contextManager) {
+      ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, Context.get(this), this);
       try {
         TCPConnection TCPConnection = connectionContextManager.nativeData(this);
         TCPConnection.selectionKey.channel().close();
@@ -79,7 +77,8 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read_until")
   abstract static class ReadUntilBuiltin extends BuiltinNode {
     @Specialization
-    public Object readUntil(ContextManager<?> contextManager, Function untilCallback, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+    public Object readUntil(ContextManager<?> contextManager, Function untilCallback, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Context context = Context.get(this);
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
       TCPConnection TCPConnection = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);
@@ -92,7 +91,8 @@ public final class SocketConnectionBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "write")
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
-    public Object write(ContextManager<?> contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+    public Object write(ContextManager<?> contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Context context = Context.get(this);
       ConnectionContextManager connectionContextManager = ConnectionContextManager.adapt(contextManager, context, this);
       TCPConnection TCPConnection = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);

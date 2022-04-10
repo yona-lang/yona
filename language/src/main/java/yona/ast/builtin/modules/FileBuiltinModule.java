@@ -6,6 +6,7 @@ import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
@@ -42,14 +43,21 @@ public final class FileBuiltinModule implements BuiltinModule {
   private static final int FILE_READ_BUFFER_SIZE = 4096;
 
   protected static final class FileTuple extends Tuple {
-    public FileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position, Seq additionalOptions, Seq path) {
+    private FileTuple(AsynchronousFileChannel fileHandle, Object readBuffer, long position, Seq additionalOptions, Seq path) {
       this.items = new Object[]{
           new NativeObject<>(fileHandle), readBuffer, position, additionalOptions, path
       };
     }
 
-    public FileTuple seek(long position) {
-      return new FileTuple(fileHandle(), readBuffer(), position, additionalOptions(), path());
+    public static FileTuple allocate(Context context, AsynchronousFileChannel fileHandle, Object readBuffer, long position, Seq additionalOptions, Seq path) {
+      context.getAllocationReporter().onEnter(null, 0, AllocationReporter.SIZE_UNKNOWN);
+      FileTuple fileTuple = new FileTuple(fileHandle, readBuffer, position, additionalOptions, path);
+      context.getAllocationReporter().onReturnValue(fileTuple, 0, AllocationReporter.SIZE_UNKNOWN);
+      return fileTuple;
+    }
+
+    public FileTuple seek(long position, Node node) {
+      return FileTuple.allocate(Context.get(node), fileHandle(), readBuffer(), position, additionalOptions(), path());
     }
 
     public AsynchronousFileChannel fileHandle() {
@@ -83,7 +91,7 @@ public final class FileBuiltinModule implements BuiltinModule {
 
     public FileContextManager copy(Object readBuffer, long position, Node node) {
       final FileTuple fileTuple = getData(FileTuple.class, node);
-      return new FileContextManager(new FileTuple(fileTuple.fileHandle(), readBuffer, position, fileTuple.additionalOptions(), fileTuple.path()), context);
+      return new FileContextManager(FileTuple.allocate(Context.get(node), fileTuple.fileHandle(), readBuffer, position, fileTuple.additionalOptions(), fileTuple.path()), context);
     }
 
     public static FileContextManager adapt(ContextManager<?> contextManager, Context context, Node node) {
@@ -104,7 +112,7 @@ public final class FileBuiltinModule implements BuiltinModule {
     protected Object openFile(Path path, FileOptions fileOptions, Context context) {
       try {
         final AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(path, fileOptions.openOptions, context.ioExecutor);
-        return new FileContextManager(new FileTuple(asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions, Seq.fromCharSequence(path.toString())), context);
+        return new FileContextManager(FileTuple.allocate(context, asynchronousFileChannel, Unit.INSTANCE, 0L, fileOptions.additionalOptions, Seq.fromCharSequence(path.toString())), context);
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, this);
       }
@@ -178,7 +186,8 @@ public final class FileBuiltinModule implements BuiltinModule {
 
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
+    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      final Context context = Context.get(this);
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
       final Object result = InvokeNode.dispatchFunction(function, dispatch, this);
 
@@ -219,7 +228,8 @@ public final class FileBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unchecked")
-    public Object open(Seq uri, yona.runtime.Set modes, @CachedContext(YonaLanguage.class) Context context) {
+    public Object open(Seq uri, yona.runtime.Set modes) {
+      final Context context = Context.get(this);
       final Path path = Paths.get(uri.asJavaString(this).replaceFirst("^~", Matcher.quoteReplacement(System.getProperty("user.home"))));
       LOGGER.log(Level.FINE, "File::open " + path + " with modes: " + modes);
       return openPath(path, modes, context);
@@ -230,7 +240,8 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FilePathNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Seq path(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context) {
+    public Seq path(ContextManager<?> contextManager) {
+      final Context context = Context.get(this);
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
       return fileContextManager.getData(FileTuple.class, this).path();
     }
@@ -240,7 +251,8 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileDeleteNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Unit path(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context) {
+    public Unit path(ContextManager<?> contextManager) {
+      final Context context = Context.get(this);
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
       try {
         Files.deleteIfExists(Paths.get(fileContextManager.getData(FileTuple.class, this).path().asJavaString(this)));
@@ -256,9 +268,10 @@ public final class FileBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unchecked")
-    public FileTuple open(ContextManager<?> contextManager, long position, @CachedContext(YonaLanguage.class) Context context) {
+    public FileTuple open(ContextManager<?> contextManager, long position) {
+      final Context context = Context.get(this);
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
-      return fileContextManager.getData(FileTuple.class, this).seek(position);
+      return fileContextManager.getData(FileTuple.class, this).seek(position, this);
     }
   }
 
@@ -267,7 +280,8 @@ public final class FileBuiltinModule implements BuiltinModule {
     @Specialization
     @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unchecked")
-    public Object open(Seq prefix, Seq suffix, yona.runtime.Set modes, @CachedContext(YonaLanguage.class) Context context) {
+    public Object open(Seq prefix, Seq suffix, yona.runtime.Set modes) {
+      final Context context = Context.get(this);
       try {
         final File tempFile = File.createTempFile(prefix.asJavaString(this), suffix.asJavaString(this));
         return openPath(tempFile.toPath(), modes, context);
@@ -281,7 +295,8 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileListNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Seq path(Seq path, @CachedContext(YonaLanguage.class) Context context) {
+    public Seq path(Seq path) {
+      final Context context = Context.get(this);
       try {
         final Collection<TruffleFile> files = context.getEnv().getPublicTruffleFile(path.asJavaString(this)).list();
         Seq ret = Seq.EMPTY;
@@ -299,7 +314,8 @@ public final class FileBuiltinModule implements BuiltinModule {
   abstract static class FileReadLineNode extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise readline(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+    public Promise readline(ContextManager<?> contextManager, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+      final Context context = Context.get(this);
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
       final FileTuple fileTuple = fileContextManager.getData(FileTuple.class, this);
       final AsynchronousFileChannel asynchronousFileChannel = ((NativeObject<AsynchronousFileChannel>) fileTuple.get(0)).getValue();
@@ -337,7 +353,7 @@ public final class FileBuiltinModule implements BuiltinModule {
               }
               if (b == '\n') {
                 Seq resultSeq = bytesToSeq(output, fileTuple.additionalOptions(), context, thisNode);
-                promise.fulfil(new Tuple(context.symbol("ok"), resultSeq, fileContextManager.copy(null, fileTuple.position() + i + 1, thisNode)), thisNode);
+                promise.fulfil(Tuple.allocate(thisNode, context.symbol("ok"), resultSeq, fileContextManager.copy(null, fileTuple.position() + i + 1, thisNode)), thisNode);
                 fulfilled = true;
                 break;
               } else {
@@ -347,7 +363,7 @@ public final class FileBuiltinModule implements BuiltinModule {
             attachment.clear();
 
             if (!fulfilled) {
-              readline(fileContextManager.copy(output, fileTuple.position() + length, thisNode), context, interopLibrary).map(res -> {
+              readline(fileContextManager.copy(output, fileTuple.position() + length, thisNode), interopLibrary).map(res -> {
                 promise.fulfil(res, thisNode);
                 return res;
               }, thisNode);
@@ -382,7 +398,8 @@ public final class FileBuiltinModule implements BuiltinModule {
 
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise readfile(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+    public Promise readfile(ContextManager<?> contextManager, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+      final Context context = Context.get(this);
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
       final FileTuple fileTuple = fileContextManager.getData(FileTuple.class, this);
       final class CatenateCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
@@ -443,7 +460,8 @@ public final class FileBuiltinModule implements BuiltinModule {
 
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise writefile(ContextManager<?> contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary interopLibrary, @CachedContext(YonaLanguage.class) Context context) {
+    public Promise writefile(ContextManager<?> contextManager, Seq data, @CachedLibrary(limit = "3") InteropLibrary interopLibrary) {
+      final Context context = Context.get(this);
       final FileContextManager fileContextManager = FileContextManager.adapt(contextManager, context, this);
       final FileTuple fileTuple = fileContextManager.getData(FileTuple.class, this);
       final Node thisNode = this;

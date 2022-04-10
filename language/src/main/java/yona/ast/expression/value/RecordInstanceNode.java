@@ -4,12 +4,8 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.YonaException;
-import yona.YonaLanguage;
 import yona.ast.ExpressionNode;
-import yona.runtime.DependencyUtils;
-import yona.runtime.Tuple;
-import yona.runtime.Unit;
-import yona.runtime.YonaModule;
+import yona.runtime.*;
 import yona.runtime.exceptions.NoRecordException;
 import yona.runtime.exceptions.NoRecordFieldException;
 
@@ -94,13 +90,14 @@ public final class RecordInstanceNode extends ExpressionNode {
     } else {
       Object[] resultFields = new Object[recordFields.length + 1];
       Arrays.fill(resultFields, Unit.INSTANCE);
-      resultFields[0] = lookupContextReference(YonaLanguage.class).get().symbol(recordType);
+      Context context = Context.get(this);
+      resultFields[0] = context.symbol(recordType);
       for (RecordFieldValueNode field : fields) {
         Tuple fieldTuple = field.executeTuple(frame);
         setField((String) fieldTuple.get(0), fieldTuple.get(1), recordFields, resultFields);
       }
 
-      return new Tuple(resultFields);
+      return Tuple.allocate(this, resultFields);
     }
   }
 

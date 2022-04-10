@@ -30,8 +30,8 @@ public abstract class EvalBuiltin extends BuiltinNode {
 
   @CompilerDirectives.TruffleBoundary
   @Specialization(replaces = "evalCached")
-  public Object evalUncached(Symbol id, Seq code, @CachedContext(YonaLanguage.class) Context context) {
-    return parse(id, code, context).call();
+  public Object evalUncached(Symbol id, Seq code) {
+    return parse(id, code, Context.get(this)).call();
   }
 
   protected CallTarget parse(Symbol id, Seq code, Context context) {

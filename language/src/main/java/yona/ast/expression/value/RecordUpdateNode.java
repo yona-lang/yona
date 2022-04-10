@@ -127,7 +127,7 @@ public final class RecordUpdateNode extends ExpressionNode {
         setField(recordType, (String) fieldTuple.get(0), fieldTuple.get(1), recordFields, resultFields);
       }
 
-      return new Tuple(resultFields);
+      return Tuple.allocate(this, resultFields);
     }
   }
 

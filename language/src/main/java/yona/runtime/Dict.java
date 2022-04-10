@@ -431,7 +431,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       Object state = reducer[0];
       try {
         for (int i = 0; i < arity(dataBmp); i++) {
-          state = InvokeNode.dispatchFunction(step, dispatch, node, state, new Tuple(keyAt(i), valueAt(i)));
+          state = InvokeNode.dispatchFunction(step, dispatch, node, state, Tuple.allocate(node, keyAt(i), valueAt(i)));
         }
         for (int i = 0; i < arity(nodeBmp); i++) {
           state = nodeAt(i).fold(state, step, dispatch, node);
@@ -445,7 +445,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
       Object result = initial;
       for (int i = 0; i < arity(dataBmp); i++) {
-        result = InvokeNode.dispatchFunction(function, dispatch, node, result, new Tuple(keyAt(i), valueAt(i)));
+        result = InvokeNode.dispatchFunction(function, dispatch, node, result, Tuple.allocate(node, keyAt(i), valueAt(i)));
       }
       for (int i = 0; i < arity(nodeBmp); i++) {
         result = nodeAt(i).fold(result, function, dispatch, node);
@@ -646,7 +646,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
       Object state = reducer[0];
       try {
         for (int i = 0; i < entries.length; i += 2) {
-          state = InvokeNode.dispatchFunction(step, dispatch, node, state, new Tuple(entries[i], entries[i + 1]));
+          state = InvokeNode.dispatchFunction(step, dispatch, node, state, Tuple.allocate(node, entries[i], entries[i + 1]));
         }
       } catch (TransducerDoneException ignored) {
       }
@@ -657,7 +657,7 @@ public abstract class Dict implements TruffleObject, Comparable<Dict> {
     public Object fold(final Object initial, final Function function, final InteropLibrary dispatch, final Node node) {
       Object result = initial;
       for (int i = 0; i < entries.length; i += 2) {
-        result = InvokeNode.dispatchFunction(function, dispatch, node, result, new Tuple(entries[i], entries[2]));
+        result = InvokeNode.dispatchFunction(function, dispatch, node, result, Tuple.allocate(node, entries[i], entries[2]));
       }
       return result;
     }

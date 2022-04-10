@@ -11,10 +11,7 @@ import yona.ast.ExpressionNode;
 import yona.ast.expression.value.AnyValueNode;
 import yona.ast.local.WriteLocalVariableNode;
 import yona.ast.local.WriteLocalVariableNodeGen;
-import yona.runtime.ContextManager;
-import yona.runtime.Function;
-import yona.runtime.Seq;
-import yona.runtime.Tuple;
+import yona.runtime.*;
 import yona.runtime.async.Promise;
 
 import java.util.Objects;
@@ -77,7 +74,7 @@ public class ExtractContextNameNode extends AliasNode {
   }
 
   private Object executeBodyWithIdentifier(final VirtualFrame frame, final Seq nameSeq, final String nameString, final Function wrapFunction, final Object contextManagerData) {
-    final ContextManager<Object> contextManager = new ContextManager<>(nameSeq, wrapFunction, contextManagerData);
+    final ContextManager<Object> contextManager = ContextManager.allocate(Context.get(this), nameSeq, wrapFunction, contextManagerData);
 
     FrameSlot frameSlot = frame.getFrameDescriptor().findOrAddFrameSlot(nameString, FrameSlotKind.Object);
     WriteLocalVariableNode writeLocalVariableNode = WriteLocalVariableNodeGen.create(new AnyValueNode(contextManager), frameSlot);

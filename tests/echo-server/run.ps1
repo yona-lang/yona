@@ -5,11 +5,11 @@ param (
     [Int16] $Repetitions = 5
 )
 
-Start-Job -ScriptBlock {../../yona -f ./server.yona $args[0] $args[1]} -Name YonaServer -ArgumentList $Port,$Repetitions
+Start-Job -ScriptBlock {sh ../../yona -f ./server.yona $args[0] $args[1]} -Name YonaServer -ArgumentList $Port,$Repetitions
 
 Start-Sleep -Seconds 1
 
-1..$Repetitions | ForEach-Object { Start-Job -ScriptBlock {../../yona -f ./client.yona $args[0] } -Name “YonaClient$_” -ArgumentList $Port }
+1..$Repetitions | ForEach-Object { Start-Job -ScriptBlock {sh ../../yona -f ./client.yona $args[0] } -Name “YonaClient$_” -ArgumentList $Port }
 
 Get-Job -Name YonaClient* | Wait-Job | Receive-Job
 Get-Job -Name YonaServer | Wait-Job | Receive-Job

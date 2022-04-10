@@ -44,7 +44,7 @@ public final class RecordFieldValueNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    return new Tuple(fieldName, fieldValue.executeGeneric(frame));
+    return Tuple.allocate(this, fieldName, fieldValue.executeGeneric(frame));
   }
 
   @Override
@@ -54,6 +54,6 @@ public final class RecordFieldValueNode extends ExpressionNode {
 
   @Override
   public Tuple executeTuple(VirtualFrame frame) throws UnexpectedResultException {
-    return new Tuple(fieldName, fieldValue.executeGeneric(frame));
+    return Tuple.allocate(this, fieldName, fieldValue.executeGeneric(frame));
   }
 }

@@ -54,6 +54,11 @@ public final class Context {
   public static final SourceSection JAVA_SOURCE_SECTION = JAVA_BUILTIN_SOURCE.createUnavailableSection();
   private final TruffleLogger LOGGER = YonaLanguage.getLogger(Context.class);
   public static final String YONA_PATH = "YONA_PATH";
+  private static final TruffleLanguage.ContextReference<Context> REFERENCE = TruffleLanguage.ContextReference.create(YonaLanguage.class);
+
+  public static Context get(Node node) {
+    return REFERENCE.get(node);
+  }
 
   /**
    * cached instance of commonly used functions since they are used commonly across the board
@@ -440,7 +445,7 @@ public final class Context {
 
       if (!FQN.equals(module.getFqn())) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        throw new YonaException("Module file " + file.getPath().substring(Paths.get(".").toUri().toURL().getFile().length() - 2) + " has incorrectly defined module as " + module.getFqn(), node);
+        throw new YonaException("Module file " + file.getPath() + " has incorrectly defined module as " + module.getFqn(), node);
       }
       if (cache) {
         moduleCache = this.moduleCache.add(FQN, module);
@@ -489,10 +494,6 @@ public final class Context {
     }
   }
 
-  public static Context getCurrent() {
-    return YonaLanguage.getCurrentContext();
-  }
-
   public Symbol symbol(String name) {
     Object symbol = symbols.lookup(name);
     if (symbol == Unit.INSTANCE) {
@@ -530,30 +531,27 @@ public final class Context {
   @CompilerDirectives.TruffleBoundary
   public void dispose() {
 //    LOGGER.fine("Threading shutting down");
+
     threading.dispose();
     ioExecutor.shutdown();
     assert ioExecutor.shutdownNow().isEmpty();
     assert ioExecutor.isShutdown();
-    while (!ioExecutor.isTerminated()) {
-      try {
-        Thread.sleep(10);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
-    }
+
     schedulerExecutor.shutdown();
     assert schedulerExecutor.shutdownNow().isEmpty();
     assert schedulerExecutor.isShutdown();
-    while (!schedulerExecutor.isTerminated()) {
-      try {
-        Thread.sleep(10);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
-    }
+
+    //    LOGGER.fine("Threading shut down");
+
     output.flush();
     error.flush();
-//    LOGGER.fine("Threading shut down");
+
+    while (!ioExecutor.isTerminated() || !schedulerExecutor.isTerminated()) {
+      try {
+        Thread.sleep(10);
+      } catch (InterruptedException ignored) {
+      }
+    }
   }
 
   @CompilerDirectives.TruffleBoundary
@@ -568,5 +566,9 @@ public final class Context {
 
   public boolean isPrintAllResults() {
     return printAllResults;
+  }
+
+  public AllocationReporter getAllocationReporter() {
+    return allocationReporter;
   }
 }

@@ -1,12 +1,10 @@
 package yona.ast.builtin;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaLanguage;
 import yona.runtime.Context;
 import yona.runtime.Tuple;
 import yona.runtime.Unit;
@@ -17,9 +15,10 @@ import yona.runtime.stdlib.util.TimeUnitUtil;
 public abstract class SleepBuiltin extends BuiltinNode {
   @Specialization
   @CompilerDirectives.TruffleBoundary
-  public Promise sleep(Tuple timeUnit, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+  public Promise sleep(Tuple timeUnit, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
     Promise promise = new Promise(dispatch);
     Object millisObj = TimeUnitUtil.getMilliseconds(timeUnit, this);
+    Context context = Context.get(this);
 
     if (millisObj instanceof Long) {
       sleep(context, promise, (long) millisObj);

@@ -21,7 +21,7 @@ public class YonaSymbolException extends YonaException {
   @Override
   @CompilerDirectives.TruffleBoundary
   public Tuple asTuple() {
-    return new Tuple(symbol, getMessage(), stacktraceToSequence(this));
+    return Tuple.allocate(null, symbol, getMessage(), stacktraceToSequence(this, null));
   }
 
   @Override

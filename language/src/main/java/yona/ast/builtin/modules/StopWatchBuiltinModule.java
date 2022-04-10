@@ -7,10 +7,12 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import yona.YonaException;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.call.InvokeNode;
+import yona.runtime.Context;
 import yona.runtime.Function;
 import yona.runtime.Tuple;
 import yona.runtime.async.Promise;
@@ -31,16 +33,17 @@ public final class StopWatchBuiltinModule implements BuiltinModule {
         throw new BadArgException("Function " + function + " expects " + function.getCardinality() + "arguments", this);
       }
       final long start = System.nanoTime();
+      final Node thisNode = this;
       try {
         Object result = InvokeNode.dispatchFunction(function, dispatch, this);
         if (result instanceof Promise promise) {
           if (!promise.isFulfilled()) {
-            return promise.map(res -> new Tuple(System.nanoTime() - start, res), this);
+            return promise.map(res -> Tuple.allocate(thisNode, System.nanoTime() - start, res), this);
           } else {
-            return new Tuple(System.nanoTime() - start, promise.unwrapOrThrow());
+            return Tuple.allocate(thisNode, System.nanoTime() - start, promise.unwrapOrThrow());
           }
         } else {
-          return new Tuple(System.nanoTime() - start, result);
+          return Tuple.allocate(thisNode, System.nanoTime() - start, result);
         }
       } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
         throw UndefinedNameException.undefinedFunction(this, function);

@@ -111,7 +111,7 @@ public class ErrorsTest extends CommonTest {
             "(1, _, _) -> 1 + secondArg\n" +
             "(2, 3) -> 5\n" +
             "_ -> 9\n" +
-            "end\n").execute(new Tuple(1l, 5l, 6l)).asLong();
+            "end\n").execute(Tuple.allocate(null, 1l, 5l, 6l)).asLong();
       } catch (PolyglotException ex) {
         assertEquals("Identifier 'secondArg' not found in the current scope", ex.getMessage());
         throw ex;

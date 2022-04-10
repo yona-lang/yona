@@ -1,7 +1,6 @@
 package yona.ast.builtin.modules.socket;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -10,7 +9,6 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.TypesGen;
 import yona.YonaException;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
@@ -44,8 +42,8 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
-      ChannelContextManager connectionContextManager = ChannelContextManager.adapt(contextManager, context, this);
+    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      ChannelContextManager connectionContextManager = ChannelContextManager.adapt(contextManager, Context.get(this), this);
       boolean shouldClose = true;
       try {
         Object result = InvokeNode.dispatchFunction(function, dispatch, this);
@@ -82,7 +80,8 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "channel")
   abstract static class ChannelBuiltin extends BuiltinNode {
     @Specialization
-    public Object channel(Tuple args, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object channel(Tuple args, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Context context = Context.get(this);
       Object unwrappedArgs = args.unwrapPromises(this);
       if (unwrappedArgs instanceof Promise unwrappedArgsPromise) {
         return unwrappedArgsPromise.map((resultArgs) -> createSocket((Object[]) resultArgs, context, dispatch), this);
@@ -151,7 +150,8 @@ public final class SocketServerBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "accept")
   abstract static class AcceptBuiltin extends BuiltinNode {
     @Specialization
-    public Object accept(ContextManager<?> contextManager, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object accept(ContextManager<?> contextManager, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Context context = Context.get(this);
       ChannelContextManager connectionContextManager = ChannelContextManager.adapt(contextManager, context, this);
       TCPServerChannel TCPServerChannel = connectionContextManager.nativeData(this);
       Promise promise = new Promise(dispatch);

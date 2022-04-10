@@ -1,12 +1,10 @@
 package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.runtime.Context;
 import yona.runtime.NativeObject;
@@ -25,8 +23,8 @@ public final class IOBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "print")
   abstract static class PrintBuiltin extends BuiltinNode {
     @Specialization
-    public long print(int value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getOutput(), value);
+    public long print(int value) {
+      doPrint(Context.get(this).getOutput(), value);
       return value;
     }
 
@@ -36,8 +34,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public long print(long value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getOutput(), value);
+    public long print(long value) {
+      doPrint(Context.get(this).getOutput(), value);
       return value;
     }
 
@@ -47,8 +45,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public boolean print(boolean value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getOutput(), value);
+    public boolean print(boolean value) {
+      doPrint(Context.get(this).getOutput(), value);
       return value;
     }
 
@@ -58,8 +56,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public String print(String value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getOutput(), value);
+    public String print(String value) {
+      doPrint(Context.get(this).getOutput(), value);
       return value;
     }
 
@@ -69,16 +67,16 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public Object print(Promise value, @CachedContext(YonaLanguage.class) Context context) {
+    public Object print(Promise value) {
       return value.map(val -> {
-        doPrint(context.getOutput(), val);
+        doPrint(Context.get(this).getOutput(), val);
         return val;
       }, this);
     }
 
     @Specialization
-    public Object print(Seq value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getOutput(), value);
+    public Object print(Seq value) {
+      doPrint(Context.get(this).getOutput(), value);
       return value;
     }
 
@@ -92,8 +90,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public Object print(NativeObject<?> value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getOutput(), value);
+    public Object print(NativeObject<?> value) {
+      doPrint(Context.get(this).getOutput(), value);
       return value;
     }
 
@@ -103,8 +101,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public Object print(Object value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getOutput(), value);
+    public Object print(Object value) {
+      doPrint(Context.get(this).getOutput(), value);
       return value;
     }
 
@@ -117,8 +115,8 @@ public final class IOBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "print_err")
   abstract static class PrinterrBuiltin extends BuiltinNode {
     @Specialization
-    public long print(int value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getError(), value);
+    public long print(int value) {
+      doPrint(Context.get(this).getError(), value);
       return value;
     }
 
@@ -128,8 +126,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public long print(long value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getError(), value);
+    public long print(long value) {
+      doPrint(Context.get(this).getError(), value);
       return value;
     }
 
@@ -139,8 +137,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public boolean print(boolean value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getError(), value);
+    public boolean print(boolean value) {
+      doPrint(Context.get(this).getError(), value);
       return value;
     }
 
@@ -150,8 +148,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public String print(String value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getError(), value);
+    public String print(String value) {
+      doPrint(Context.get(this).getError(), value);
       return value;
     }
 
@@ -161,16 +159,16 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public Object print(Promise value, @CachedContext(YonaLanguage.class) Context context) {
+    public Object print(Promise value) {
       return value.map(val -> {
-        doPrint(context.getError(), val);
+        doPrint(Context.get(this).getError(), val);
         return val;
       }, this);
     }
 
     @Specialization
-    public Object print(Seq value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getError(), value);
+    public Object print(Seq value) {
+      doPrint(Context.get(this).getError(), value);
       return value;
     }
 
@@ -184,8 +182,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public Object print(NativeObject<?> value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getError(), value);
+    public Object print(NativeObject<?> value) {
+      doPrint(Context.get(this).getError(), value);
       return value;
     }
 
@@ -195,8 +193,8 @@ public final class IOBuiltinModule implements BuiltinModule {
     }
 
     @Specialization
-    public Object print(Object value, @CachedContext(YonaLanguage.class) Context context) {
-      doPrint(context.getError(), value);
+    public Object print(Object value) {
+      doPrint(Context.get(this).getError(), value);
       return value;
     }
 
@@ -210,7 +208,8 @@ public final class IOBuiltinModule implements BuiltinModule {
   abstract static class ReadBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise read(@CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Promise read(@CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Context context = Context.get(this);
       Promise promise = new Promise(dispatch);
       context.ioExecutor.submit(() -> {
         try {
@@ -227,7 +226,8 @@ public final class IOBuiltinModule implements BuiltinModule {
   abstract static class ReadlnBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise readln(@CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Promise readln(@CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      Context context = Context.get(this);
       Promise promise = new Promise(dispatch);
       context.ioExecutor.submit(() -> {
         try {
@@ -244,8 +244,8 @@ public final class IOBuiltinModule implements BuiltinModule {
   abstract static class FlushBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Unit flush(@CachedContext(YonaLanguage.class) Context context) {
-      context.getOutput().flush();
+    public Unit flush() {
+      Context.get(this).getOutput().flush();
       return Unit.INSTANCE;
     }
   }
@@ -254,8 +254,8 @@ public final class IOBuiltinModule implements BuiltinModule {
   abstract static class FlusherrBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Unit flush(@CachedContext(YonaLanguage.class) Context context) {
-      context.getError().flush();
+    public Unit flush() {
+      Context.get(this).getError().flush();
       return Unit.INSTANCE;
     }
   }

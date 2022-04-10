@@ -1,14 +1,12 @@
 package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaLanguage;
 import yona.ast.ExpressionNode;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.call.InvokeNode;
@@ -68,8 +66,8 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "run")
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
-    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch, @CachedContext(YonaLanguage.class) Context context) {
-      STMContextManager txNative = STMContextManager.adapt(contextManager, context, this);
+    public Object run(ContextManager<?> contextManager, Function function, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+      STMContextManager txNative = STMContextManager.adapt(contextManager, Context.get(this), this);
       Object result;
 
       while (true) {
@@ -136,26 +134,26 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "read_tx")
   abstract static class ReadTxBuiltin extends BuiltinNode {
     @Specialization
-    public Tuple readTx(TransactionalMemory stm, @CachedContext(YonaLanguage.class) Context context) {
-      return new STMContextManager(new TransactionalMemory.ReadOnlyTransaction(stm), context);
+    public Tuple readTx(TransactionalMemory stm) {
+      return new STMContextManager(new TransactionalMemory.ReadOnlyTransaction(stm), Context.get(this));
     }
   }
 
   @NodeInfo(shortName = "write_tx")
   abstract static class WriteTxBuiltin extends BuiltinNode {
     @Specialization
-    public Tuple writeTx(TransactionalMemory stm, @CachedContext(YonaLanguage.class) Context context) {
-      return new STMContextManager(new TransactionalMemory.ReadWriteTransaction(stm), context);
+    public Tuple writeTx(TransactionalMemory stm) {
+      return new STMContextManager(new TransactionalMemory.ReadWriteTransaction(stm), Context.get(this));
     }
   }
 
   @NodeInfo(shortName = "read")
   abstract static class ReadBuiltin extends BuiltinNode {
     @Specialization
-    public Object read(VirtualFrame frame, TransactionalMemory.Var var, @CachedContext(YonaLanguage.class) Context context) {
+    public Object read(VirtualFrame frame, TransactionalMemory.Var var) {
       Object contextManager = LocalContextBuiltinModuleFactory.LookupBuiltinFactory.create(new ExpressionNode[]{new StringNode(TX_CONTEXT_NAME_SEQ)}).executeGeneric(frame);
       if (contextManager != UninitializedFrameSlot.INSTANCE) {
-        STMContextManager stmContextManager = STMContextManager.adapt((ContextManager<?>) contextManager, context, this);
+        STMContextManager stmContextManager = STMContextManager.adapt((ContextManager<?>) contextManager, Context.get(this), this);
         final TransactionalMemory.Transaction tx = stmContextManager.nativeData(this);
         return var.read(tx, this);
       }
@@ -167,8 +165,8 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "write")
   abstract static class WriteBuiltin extends BuiltinNode {
     @Specialization
-    public Unit write(VirtualFrame frame, TransactionalMemory.Var var, Object value, @CachedContext(YonaLanguage.class) Context context) {
-      final TransactionalMemory.Transaction tx = lookupTx(frame, context, this);
+    public Unit write(VirtualFrame frame, TransactionalMemory.Var var, Object value) {
+      final TransactionalMemory.Transaction tx = lookupTx(frame, Context.get(this), this);
       var.write(tx, value, this);
       return Unit.INSTANCE;
     }
@@ -177,8 +175,8 @@ public class STMBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "protect")
   abstract static class ProtectBuiltin extends BuiltinNode {
     @Specialization
-    public Unit protect(VirtualFrame frame, TransactionalMemory.Var var, @CachedContext(YonaLanguage.class) Context context) {
-      final TransactionalMemory.Transaction tx = lookupTx(frame, context, this);
+    public Unit protect(VirtualFrame frame, TransactionalMemory.Var var) {
+      final TransactionalMemory.Transaction tx = lookupTx(frame, Context.get(this), this);
       var.protect(tx, this);
       return Unit.INSTANCE;
     }

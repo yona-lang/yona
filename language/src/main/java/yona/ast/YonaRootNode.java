@@ -5,6 +5,7 @@ import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import yona.runtime.Context;
 import yona.runtime.Seq;
 import yona.runtime.Tuple;
 import yona.runtime.Unit;
@@ -18,14 +19,16 @@ public abstract class YonaRootNode extends RootNode {
     Node location = element.getLocation();
     RootNode rootNode = element.getTarget().getRootNode();
     if (location != null && location.getSourceSection() != null) {
-      return new Tuple(
+      return Tuple.allocate(
+          location,
           Seq.fromCharSequence(location.getSourceSection().getSource().getName()),
           Seq.fromCharSequence(location.getRootNode().getQualifiedName()),
           location.getSourceSection().getStartLine(),
           location.getSourceSection().getStartColumn()
       );
     } else if (rootNode.getSourceSection() != null) {
-      return new Tuple(
+      return Tuple.allocate(
+          location,
           Seq.fromCharSequence(rootNode.getSourceSection().getSource().getName()),
           Seq.fromCharSequence(rootNode.getQualifiedName()),
           Unit.INSTANCE,

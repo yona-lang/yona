@@ -6,7 +6,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.YonaException;
-import yona.YonaLanguage;
 import yona.ast.local.ReadLocalVariableNode;
 import yona.ast.local.ReadLocalVariableNodeGen;
 import yona.runtime.Context;
@@ -55,18 +54,18 @@ public final class FQNNode extends LiteralValueNode {
     try {
       return executeModule(frame);
     } catch (UnexpectedResultException e) {
-      return lookupContextReference(YonaLanguage.class).get().lookupModule(packageParts, moduleName, this);
+      return Context.get(this).lookupModule(packageParts, moduleName, this);
     }
   }
 
   @Override
   public String executeString(VirtualFrame frame) {
-    return lookupContextReference(YonaLanguage.class).get().getFQN(packageParts, moduleName);
+    return Context.get(this).getFQN(packageParts, moduleName);
   }
 
   @Override
   public YonaModule executeModule(VirtualFrame frame) throws UnexpectedResultException {
-    Context context = lookupContextReference(YonaLanguage.class).get();
+    Context context = Context.get(this);
     String fqn = Context.getFQN(packageParts, moduleName);
     Object globalValue = context.globals.lookup(fqn);
     if (!Unit.INSTANCE.equals(globalValue)) {

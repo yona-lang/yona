@@ -2,14 +2,12 @@ package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import yona.TypesGen;
 import yona.YonaException;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.runtime.Context;
 import yona.runtime.Seq;
@@ -33,8 +31,9 @@ public final class SystemBuiltinModule implements BuiltinModule {
   abstract static class RunBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise system(Seq sequence, @CachedContext(YonaLanguage.class) Context context) {
+    public Promise system(Seq sequence) {
       Object processBuilderObj = buildProcess(sequence.unwrapPromises(this), this);
+      Context context = Context.get(this);
 
       if (processBuilderObj instanceof ProcessBuilder processBuilder) {
         return startProcess(processBuilder, context);
@@ -57,11 +56,12 @@ public final class SystemBuiltinModule implements BuiltinModule {
   abstract static class PipelineBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Promise system(Seq processes, @CachedContext(YonaLanguage.class) Context context) {
+    public Promise system(Seq processes) {
       if (processes.length() == 0) {
         throw new BadArgException("Process pipeline must contain at least one process", this);
       }
       Object unwrappedProcesses = processes.unwrapPromises(this);
+      Context context = Context.get(this);
       if (unwrappedProcesses instanceof Seq) {
         return buildProcessPipeline((Seq) unwrappedProcesses, context);
       } else { // Promise
@@ -147,15 +147,15 @@ public final class SystemBuiltinModule implements BuiltinModule {
       Seq stdErr = (Seq) resultsArray[1];
       long exitValue = (int) resultsArray[2];
 
-      return new Tuple(exitValue, stdOut, stdErr);
+      return Tuple.allocate(node, exitValue, stdOut, stdErr);
     }, node);
   }
 
   @NodeInfo(shortName = "get_env")
   abstract static class GetEnvBuiltin extends BuiltinNode {
     @Specialization
-    public Object getEnv(Seq key, @CachedContext(YonaLanguage.class) Context context) {
-      Map<String, String> env = context.getEnv().getEnvironment();
+    public Object getEnv(Seq key) {
+      Map<String, String> env = Context.get(this).getEnv().getEnvironment();
       String keyString = key.asJavaString(this);
       if (env.containsKey(keyString)) {
         return Seq.fromCharSequence(env.get(keyString));
@@ -177,9 +177,9 @@ public final class SystemBuiltinModule implements BuiltinModule {
   @NodeInfo(shortName = "args")
   abstract static class GetArgsBuiltin extends BuiltinNode {
     @Specialization
-    public Seq args(@CachedContext(YonaLanguage.class) Context context) {
+    public Seq args() {
       Seq ret = Seq.EMPTY;
-      for (String arg : context.getEnv().getApplicationArguments()) {
+      for (String arg : Context.get(this).getEnv().getApplicationArguments()) {
         ret = ret.insertLast(Seq.fromCharSequence(arg));
       }
       return ret;
@@ -190,8 +190,8 @@ public final class SystemBuiltinModule implements BuiltinModule {
   abstract static class LanguageHomeBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Seq languageHome(@CachedContext(YonaLanguage.class) Context context) {
-      return context.languageHome();
+    public Seq languageHome() {
+      return Context.get(this).languageHome();
     }
   }
 

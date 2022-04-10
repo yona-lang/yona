@@ -1,17 +1,16 @@
 package yona.ast.builtin.modules.http;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import yona.TypesGen;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.ast.builtin.modules.BuiltinModule;
 import yona.ast.builtin.modules.BuiltinModuleInfo;
@@ -37,7 +36,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
   abstract static class CreateBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public NativeObject<HttpServer> create(Seq host, long port, long backlog, @CachedContext(YonaLanguage.class) Context context) {
+    public NativeObject<HttpServer> create(Seq host, long port, long backlog) {
       try {
         if (port > Integer.MAX_VALUE) {
           throw new BadArgException("Port must be < Integer.MAX_VALUE", this);
@@ -46,7 +45,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
           throw new BadArgException("Backlog must be < Integer.MAX_VALUE", this);
         }
         HttpServer server = HttpServer.create(new InetSocketAddress(host.asJavaString(this), (int) port), (int) backlog);
-        server.setExecutor(context.ioExecutor);
+        server.setExecutor(Context.get(this).ioExecutor);
         return new NativeObject<>(server);
       } catch (IOException e) {
         throw new yona.runtime.exceptions.IOException(e, this);
@@ -106,7 +105,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
   abstract static class HandleBuiltin extends BuiltinNode {
     @Specialization
     @CompilerDirectives.TruffleBoundary
-    public Object handle(Seq path, Symbol bodyEncoding, Function handler, NativeObject<?> server, @CachedContext(YonaLanguage.class) Context context, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
+    public Object handle(Seq path, Symbol bodyEncoding, Function handler, NativeObject<?> server, @CachedLibrary(limit = "3") InteropLibrary dispatch) {
       final HttpServer httpServer = server.getValue(HttpServer.class, this);
       final String bodyEncodingStr = validateBodyEncoding(bodyEncoding);
       httpServer.createContext(path.asJavaString(this), (httpExchange) -> {
@@ -114,7 +113,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
             .add("local_address", Seq.fromCharSequence(httpExchange.getLocalAddress().toString()))
             .add("protocol", Seq.fromCharSequence(httpExchange.getProtocol()))
             .add("remote_address", Seq.fromCharSequence(httpExchange.getRemoteAddress().toString()))
-            .add("method", context.symbol(httpExchange.getRequestMethod()))
+            .add("method", Context.get(this).symbol(httpExchange.getRequestMethod()))
             .add("uri", Seq.fromCharSequence(httpExchange.getRequestURI().toString()));
         final Dict headers = headersToDict(httpExchange.getRequestHeaders());
         final Seq body = bodyToSeq(httpExchange.getRequestBody(), bodyEncodingStr);
@@ -122,16 +121,16 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
           final Object handlerResult = InvokeNode.dispatchFunction(handler, dispatch, this, exchangeParams, headers, body);
           sendResponse(handlerResult, httpExchange);
         } catch (Throwable e) {
-          returnErrorResponse(httpExchange, e, context);
+          returnErrorResponse(httpExchange, e, this);
         }
       });
       return server;
     }
 
-    private void returnErrorResponse(HttpExchange httpExchange, Throwable e, Context context) throws IOException {
+    private void returnErrorResponse(HttpExchange httpExchange, Throwable e, Node node) throws IOException {
       final StringBuilder errorMsg = new StringBuilder();
       errorMsg.append("Internal Server Error: ");
-      appendExceptionStackTrace(ExceptionUtil.throwableToTuple(e, context), errorMsg);
+      appendExceptionStackTrace(ExceptionUtil.throwableToTuple(e, node), errorMsg);
       final String errorMsgStr = errorMsg.toString();
       httpExchange.sendResponseHeaders(500, errorMsgStr.length());
       httpExchange.getResponseBody().write(errorMsgStr.getBytes());
@@ -192,7 +191,7 @@ public final class HttpServerBuiltinModule implements BuiltinModule {
           } else { // Promise
             CompilerDirectives.transferToInterpreterAndInvalidate();
             Promise unwrappedResultTuplePromise = (Promise) unwrappedResultTuple;
-            return unwrappedResultTuplePromise.map(res -> sendResponse(new Tuple(res), httpExchange), this);
+            return unwrappedResultTuplePromise.map(res -> sendResponse(Tuple.allocate(this, res), httpExchange), this);
           }
           return Unit.INSTANCE;
         }

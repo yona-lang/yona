@@ -47,7 +47,7 @@ public final class DictBuiltinModule implements BuiltinModule {
   abstract static class EntriesBuiltin extends BuiltinNode {
     @Specialization
     public Seq reduce(Dict dict) {
-      return dict.fold(Seq.EMPTY, (acc, key, val) -> acc.insertLast(new Tuple(key, val)));
+      return dict.fold(Seq.EMPTY, (acc, key, val) -> acc.insertLast(Tuple.allocate(this, key, val)));
     }
   }
 

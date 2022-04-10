@@ -57,7 +57,7 @@ public final class SeqBuiltinModule implements BuiltinModule {
   abstract static class SplitBuiltin extends BuiltinNode {
     @Specialization
     public Tuple length(long idx, Seq sequence) {
-      return new Tuple((Object[]) sequence.split(idx, this));
+      return Tuple.allocate(this, (Object[]) sequence.split(idx, this));
     }
   }
 

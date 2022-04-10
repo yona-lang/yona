@@ -2,14 +2,12 @@ package yona.ast.builtin.modules;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.js.runtime.util.TRegexUtil;
 import com.oracle.truffle.regex.RegexLanguage;
 import com.oracle.truffle.regex.RegexObject;
-import yona.YonaLanguage;
 import yona.ast.builtin.BuiltinNode;
 import yona.runtime.Context;
 import yona.runtime.Seq;
@@ -31,9 +29,8 @@ public final class RegexpBuiltinModule implements BuiltinModule {
   abstract static class CompileBuiltin extends BuiltinNode {
     @Specialization
     public Object compile(Seq pattern,
-                          Set options,
-                          @CachedContext(YonaLanguage.class) Context context) {
-      return context.getEnv().parseInternal(createRegexSource(pattern.asJavaString(this), optionsToFlags(options))).call();
+                          Set options) {
+      return Context.get(this).getEnv().parseInternal(createRegexSource(pattern.asJavaString(this), optionsToFlags(options))).call();
     }
 
     @CompilerDirectives.TruffleBoundary

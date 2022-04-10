@@ -1,6 +1,5 @@
 package yona.ast.expression;
 
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -37,8 +36,8 @@ public final class IdentifierNode extends ExpressionNode {
 
   @Override
   public Object executeGeneric(VirtualFrame frame) {
-    TruffleLanguage.ContextReference<Context> context = lookupContextReference(YonaLanguage.class);
-    Object globalValue = context.get().globals.lookup(name);
+    Context context = Context.get(this);
+    Object globalValue = context.globals.lookup(name);
     if (!Unit.INSTANCE.equals(globalValue)) {
       if (globalValue instanceof Function && ((Function) globalValue).getCardinality() == 0) {
         InvokeNode invokeNode = new FunctionInvokeNode(language, (Function) globalValue, new ExpressionNode[]{}, moduleStack);
@@ -97,8 +96,8 @@ public final class IdentifierNode extends ExpressionNode {
   }
 
   public boolean isBound(VirtualFrame frame) {
-    TruffleLanguage.ContextReference<Context> context = lookupContextReference(YonaLanguage.class);
-    if (context.get().globals.lookup(name) != Unit.INSTANCE) {
+    Context context = Context.get(this);
+    if (context.globals.lookup(name) != Unit.INSTANCE) {
       return true;
     }
     FrameSlot frameSlot = getFrameSlot(frame);

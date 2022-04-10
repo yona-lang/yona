@@ -54,9 +54,9 @@ public final class TupleNode extends ExpressionNode {
     }
 
     if (containsPromise) {
-      return Promise.all(results, this).map(res -> new Tuple((Object[]) res), this);
+      return Promise.all(results, this).map(res -> Tuple.allocate(this, (Object[]) res), this);
     } else {
-      return new Tuple(results);
+      return Tuple.allocate(this, results);
     }
   }
 

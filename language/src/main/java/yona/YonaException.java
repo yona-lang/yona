@@ -5,7 +5,6 @@ import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
@@ -48,7 +47,7 @@ public class YonaException extends AbstractTruffleException {
 
   @TruffleBoundary
   public Tuple asTuple() {
-    return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), Seq.fromCharSequence(getMessage()), stacktraceToSequence(this));
+    return Tuple.allocate(null, Context.get(null).lookupExceptionSymbol(this.getClass()), Seq.fromCharSequence(getMessage()), stacktraceToSequence(this, null));
   }
 
   @ExportMessage
@@ -84,8 +83,8 @@ public class YonaException extends AbstractTruffleException {
 
   @ExportMessage
   public Object getExceptionStackTrace() {
-//    return new Tuple(Context.getCurrent().lookupExceptionSymbol(this.getClass()), getMessage(), stacktraceToSequence(this).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el))));
-    return stacktraceToSequence(this).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el)));
+//    return Tuple.allocate(Context.getCurrent().lookupExceptionSymbol(this.getClass()), getMessage(), stacktraceToSequence(this).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el))));
+    return stacktraceToSequence(this, null).foldLeft(Seq.EMPTY, (acc, el) -> acc.insertFirst(stackFrameTupleToString((Tuple) el)));
   }
 
   @ExportMessage
@@ -156,7 +155,7 @@ public class YonaException extends AbstractTruffleException {
   }
 
   @TruffleBoundary
-  public static Seq stacktraceToSequence(Throwable throwable) {
+  public static Seq stacktraceToSequence(Throwable throwable, Node node) {
     Seq stackTraceSequence = Seq.EMPTY;
 
     for (TruffleStackTraceElement stackTraceElement : TruffleStackTrace.getStackTrace(throwable)) {
@@ -170,7 +169,8 @@ public class YonaException extends AbstractTruffleException {
 
     if (throwable.getCause() != null) {
       for (StackTraceElement stackFrame : throwable.getCause().getStackTrace()) {
-        stackTraceSequence = stackTraceSequence.insertLast(new Tuple(
+        stackTraceSequence = stackTraceSequence.insertLast(Tuple.allocate(
+            node,
             Seq.fromCharSequence(stackFrame.getClassName()),
             Seq.fromCharSequence(stackFrame.getMethodName()),
             Unit.INSTANCE,

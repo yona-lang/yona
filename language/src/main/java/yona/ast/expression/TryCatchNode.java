@@ -1,15 +1,14 @@
 package yona.ast.expression;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import yona.YonaLanguage;
 import yona.ast.ExpressionNode;
 import yona.ast.pattern.MatchControlFlowException;
 import yona.ast.pattern.PatternMatchable;
+import yona.runtime.Context;
 import yona.runtime.DependencyUtils;
 import yona.runtime.Tuple;
 import yona.runtime.async.Promise;
@@ -37,7 +36,7 @@ public final class TryCatchNode extends ExpressionNode {
     if (o == null || getClass() != o.getClass()) return false;
     TryCatchNode that = (TryCatchNode) o;
     return Objects.equals(tryExpression, that.tryExpression) &&
-           Arrays.equals(catchPatterns, that.catchPatterns);
+        Arrays.equals(catchPatterns, that.catchPatterns);
   }
 
   @Override
@@ -50,9 +49,9 @@ public final class TryCatchNode extends ExpressionNode {
   @Override
   public String toString() {
     return "TryCatchNode{" +
-           "tryExpression=" + tryExpression +
-           ", catchPatterns=" + Arrays.toString(catchPatterns) +
-           '}';
+        "tryExpression=" + tryExpression +
+        ", catchPatterns=" + Arrays.toString(catchPatterns) +
+        '}';
   }
 
   @Override
@@ -77,9 +76,9 @@ public final class TryCatchNode extends ExpressionNode {
         } else {
           MaterializedFrame materializedFrame = frame.materialize();
           return promise.map(
-            (val) -> execute(val, materializedFrame),
-            (val) -> execute(val, materializedFrame),
-            this);
+              (val) -> execute(val, materializedFrame),
+              (val) -> execute(val, materializedFrame),
+              this);
         }
       } else {
         return value;
@@ -102,13 +101,13 @@ public final class TryCatchNode extends ExpressionNode {
       return value;
     }
 
-    Tuple tuple = ExceptionUtil.throwableToTuple(throwable, lookupContextReference(YonaLanguage.class).get());
+    Tuple tuple = ExceptionUtil.throwableToTuple(throwable, this);
 
     for (PatternMatchable catchPattern : catchPatterns) {
       try {
         catchPattern.setValue(tuple);
         return catchPattern.executeGeneric(frame);
-      } catch (MatchControlFlowException ex) {
+      } catch (MatchControlFlowException ignored) {
       }
     }
 

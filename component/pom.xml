@@ -17,7 +17,7 @@
       <plugin>
         <artifactId>exec-maven-plugin</artifactId>
         <groupId>org.codehaus.mojo</groupId>
-        <version>1.6.0</version>
+        <version>3.0.0</version>
         <executions>
           <execution>
             <id>make_component</id>
@@ -26,7 +26,8 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <executable>${basedir}/make_component.sh</executable>
+              <executable>sh</executable>
+              <commandlineArgs>${basedir}/make_component.sh</commandlineArgs>
             </configuration>
           </execution>
           <execution>
@@ -36,7 +37,8 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <executable>${basedir}/clean_component.sh</executable>
+              <executable>sh</executable>
+              <commandlineArgs>${basedir}/clean_component.sh</commandlineArgs>
             </configuration>
           </execution>
         </executions>
