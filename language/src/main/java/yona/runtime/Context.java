@@ -448,7 +448,7 @@ public final class Context {
       if (!FQN.equals(module.getFqn())) {
         Context context = Context.get(node);
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        throw new YonaException("Module file %s has incorrectly defined module as %s".formatted(context.cwdPath.relativize(Paths.get(file.toRelativeUri())), module.getFqn()), node);
+        throw new YonaException("Module file %s has incorrectly defined module as %s".formatted(context.cwdPath.relativize(Paths.get(file.toRelativeUri())).toString().replace('\\', '/'), module.getFqn()), node);
       }
       if (cache) {
         moduleCache = this.moduleCache.add(FQN, module);

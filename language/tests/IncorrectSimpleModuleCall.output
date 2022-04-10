@@ -1,2 +1,2 @@
-Module file tests\IncorrectSimpleModule.yona has incorrectly defined module as incorrect\tests\IncorrectSimpleModule at IncorrectSimpleModuleCall.yona:
+Module file tests/IncorrectSimpleModule.yona has incorrectly defined module as incorrect\tests\IncorrectSimpleModule at IncorrectSimpleModuleCall.yona:
 tests\IncorrectSimpleModule::funone 5
