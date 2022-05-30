@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 
-$version = "0.8.4-SNAPSHOT"
+$version = "0.8.2-SNAPSHOT"
 
 function localDockerBuild() {
     docker build -t akovari/yona:latest -t akovari/yona:$version -f Dockerfile.local .

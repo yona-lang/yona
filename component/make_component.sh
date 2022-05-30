@@ -37,7 +37,7 @@ mkdir -p "$COMPONENT_DIR/META-INF"
   echo "Bundle-Name: yona"
   echo "Bundle-Symbolic-Name: yona"
   echo "Bundle-Version: 0.8.2-$CURRENT_TAG"
-  echo 'Bundle-RequireCapability: org.graalvm; filter:="(&(graalvm_version=22.1.0)(os_arch=amd64))"'
+  echo 'Bundle-RequireCapability: org.graalvm; filter:="(&(graalvm_version=22.0.0)(os_arch=amd64))"'
   echo "x-GraalVM-Polyglot-Part: True"
 } >"$COMPONENT_DIR/META-INF/MANIFEST.MF"
 
