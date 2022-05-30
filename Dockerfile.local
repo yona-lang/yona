@@ -1,4 +1,4 @@
-FROM ghcr.io/graalvm/graalvm-ce:ol8-java17-22
+FROM ghcr.io/graalvm/graalvm-ce:ol7-java17-22.1.0
 
 MAINTAINER Adam Kovari <kovariadam@gmail.com>
 
@@ -9,4 +9,4 @@ RUN gu install -L yona-component.jar
 
 WORKDIR /sources
 
-ENTRYPOINT ["/opt/graalvm-ce-java17-22.0.0.2/bin/yona"]
+ENTRYPOINT ["/opt/graalvm-ce-java17-22.1.0/bin/yona"]

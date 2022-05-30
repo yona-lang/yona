@@ -34,4 +34,4 @@ RUN gu install -L /yona/component/yona-component.jar
 
 WORKDIR /sources
 
-ENTRYPOINT ["/opt/graalvm-ce-java17-22.0.0.2/bin/yona"]
+ENTRYPOINT ["/opt/graalvm-ce-java17-22.1.0/bin/yona"]
