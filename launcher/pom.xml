@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.yona-lang</groupId>
     <artifactId>yona-parent</artifactId>
-    <version>0.8.3-SNAPSHOT</version>
+    <version>0.8.4-SNAPSHOT</version>
   </parent>
   <artifactId>launcher</artifactId>
   <build>
@@ -57,6 +57,8 @@
           <artifactId>maven-compiler-plugin</artifactId>
           <version>3.10.1</version>
           <configuration>
+            <source>17</source>
+            <target>11</target>
             <release>17</release>
           </configuration>
         </plugin>

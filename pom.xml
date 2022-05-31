@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.yona-lang</groupId>
   <artifactId>yona-parent</artifactId>
-  <version>0.8.3-SNAPSHOT</version>
+  <version>0.8.4-SNAPSHOT</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <m2e.apt.activation>jdt_apt</m2e.apt.activation>
