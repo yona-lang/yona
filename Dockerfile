@@ -2,7 +2,7 @@ FROM ghcr.io/graalvm/graalvm-ce:ol8-java17-22
 
 MAINTAINER Adam Kovari <kovariadam@gmail.com>
 
-RUN yum install -y git
+RUN microdnf install -y git
 #RUN gu install native-image
 
 ARG MAVEN_VERSION=3.8.2
