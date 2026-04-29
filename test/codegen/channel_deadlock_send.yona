@@ -1,0 +1,11 @@
+import channel, send from Std\Channel in
+let (sl, rl) = channel 1 in
+case sl of Linear sender ->
+case rl of Linear _ ->
+    let _ = send sender 1 in
+    try
+        let _ = send sender 2 in
+        0
+    catch _ -> 123
+    end
+end end

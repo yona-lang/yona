@@ -93,6 +93,7 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaInProcessLld.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaVulkan.cmake")
 
 # Verify LLVM version is at least 16
 if(${LLVM_VERSION_MAJOR} LESS 16)
@@ -118,6 +119,11 @@ list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/seq\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/hamt\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/exceptions\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/closures\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_device\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_compute\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_ops\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_cpu\\.c$")
 # Platform layer: OS TUs + async/channel sources (#included from compiled_runtime.c only).
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/platform/.*\\.c$")
 set(YONA_PLATFORM_RUNTIME_SOURCES)
@@ -180,6 +186,10 @@ if(PCRE2_FOUND)
     target_include_directories(yona_lib_static PRIVATE ${PCRE2_INCLUDE_DIRS})
 endif()
 target_compile_definitions(yona_lib_static PRIVATE YONA_STATIC_BUILD)
+if(YONA_ENABLE_VULKAN)
+	target_include_directories(yona_lib_static PRIVATE ${YONA_VULKAN_INCLUDE_DIR})
+	target_compile_definitions(yona_lib_static PRIVATE YONA_COMPILE_GPU_VULKAN=1)
+endif()
 
 target_include_directories(yona_lib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(yona_lib PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
@@ -196,6 +206,10 @@ endif()
 if(PCRE2_FOUND)
     target_link_libraries(yona_lib PRIVATE ${PCRE2_LIBRARIES})
     target_include_directories(yona_lib PRIVATE ${PCRE2_INCLUDE_DIRS})
+endif()
+if(YONA_ENABLE_VULKAN)
+	target_include_directories(yona_lib PRIVATE ${YONA_VULKAN_INCLUDE_DIR})
+	target_compile_definitions(yona_lib PRIVATE YONA_COMPILE_GPU_VULKAN=1)
 endif()
 
 # yona_lib is always SHARED; Windows needs explicit export for C++ symbols linked by yonac/yona.
@@ -229,6 +243,11 @@ set(YONA_EMBEDDED_RUNTIME_SOURCES
 	"${PROJECT_SOURCE_DIR}/src/runtime/hamt.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/exceptions.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/closures.c"
+	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan.c"
+	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_device.c"
+	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_compute.c"
+	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_ops.c"
+	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_cpu.c"
 )
 if(WIN32)
 	list(APPEND YONA_EMBEDDED_RUNTIME_SOURCES
@@ -247,11 +266,15 @@ foreach(_pf IN LISTS YONA_PLATFORM_RUNTIME_SOURCES)
 	list(APPEND YONA_RUNTIME_PLATFORM_OBJS "${YONA_RUNTIME_ARTIFACT_DIR}/crt_${_pf_name}.o")
 endforeach()
 
+set(_YONA_CR_CCFLAGS -I${PROJECT_SOURCE_DIR}/src -I${PROJECT_SOURCE_DIR}/include)
+if(YONA_ENABLE_VULKAN)
+	list(APPEND _YONA_CR_CCFLAGS -I${YONA_VULKAN_INCLUDE_DIR} -DYONA_COMPILE_GPU_VULKAN=1)
+endif()
 add_custom_command(
 	OUTPUT "${YONA_RUNTIME_MAIN_OBJ}"
 	COMMAND ${CMAKE_COMMAND} -E make_directory "${YONA_RUNTIME_ARTIFACT_DIR}"
 	COMMAND ${CMAKE_C_COMPILER} -c "${PROJECT_SOURCE_DIR}/src/compiled_runtime.c"
-		-I${PROJECT_SOURCE_DIR}/src -I${PROJECT_SOURCE_DIR}/include
+		${_YONA_CR_CCFLAGS}
 		-o "${YONA_RUNTIME_MAIN_OBJ}"
 	DEPENDS ${YONA_EMBEDDED_RUNTIME_SOURCES}
 	COMMENT "Building packaged runtime object: compiled_runtime.o"
@@ -290,6 +313,13 @@ target_include_directories(yona_runtime_static PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${CMAKE_CURRENT_BINARY_DIR}/include
 )
+# Library path YONA_VULKAN_LIBRARY is set by YonaVulkan.cmake (Option A) but
+# we do not link it into the main executable yet, so yonac-linked programs run
+# without vulkan-1 at load time. P1 will use delay-load, dlopen, or an aux DSO.
+if(YONA_ENABLE_VULKAN)
+	target_include_directories(yona_runtime_static PRIVATE ${YONA_VULKAN_INCLUDE_DIR})
+	target_compile_definitions(yona_runtime_static PRIVATE YONA_COMPILE_GPU_VULKAN=1)
+endif()
 if(WIN32)
 	target_link_libraries(yona_runtime_static PRIVATE ws2_32 dbghelp)
 endif()
@@ -343,6 +373,9 @@ target_link_libraries(tests PRIVATE doctest::doctest yona_lib_static)
 
 # Define YONA_STATIC_BUILD for tests to avoid DLL export/import issues
 target_compile_definitions(tests PRIVATE YONA_STATIC_BUILD)
+if(YONA_ENABLE_VULKAN)
+	target_compile_definitions(tests PRIVATE YONA_COMPILE_GPU_VULKAN=1)
+endif()
 
 # Include CTest
 include(CTest)
@@ -362,19 +395,22 @@ add_test(NAME doctest_tests COMMAND tests)
 
 # Set working directory for the test to the binary directory
 set(_yona_path_env "YONA_PATH=${CMAKE_CURRENT_SOURCE_DIR}/test/code:${CMAKE_CURRENT_SOURCE_DIR}/lib")
-set(_ctest_env "${_yona_path_env}")
+set(_ctest_base_env "${_yona_path_env}")
 if(WIN32)
 	# Shell-out compile/link in tests uses YONAC_CC; CTest often runs without LLVM on PATH.
 	get_filename_component(_cxx_bindir "${CMAKE_CXX_COMPILER}" DIRECTORY)
 	if(EXISTS "${_cxx_bindir}/clang.exe")
-		string(APPEND _ctest_env ";YONAC_CC=${_cxx_bindir}/clang.exe")
+		string(APPEND _ctest_base_env ";YONAC_CC=${_cxx_bindir}/clang.exe")
 	endif()
 endif()
+# Full suite: test harness recompiles `compiled_runtime.c`; do not inherit a user/global
+# YONA_COMPILE_GPU_VULKAN=1 + VULKAN_SDK session (would desync with default objects).
+set(_ctest_env "${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0")
 
 set_tests_properties(doctest_tests PROPERTIES
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    LABELS "unit"
-    ENVIRONMENT "${_ctest_env}"
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	LABELS "unit"
+	ENVIRONMENT "${_ctest_env}"
 )
 
 # Set up test environment
@@ -388,13 +424,30 @@ elseif(UNIX)
 	)
 endif()
 
+# Vulkan-only slice: same binary, no YONA_COMPILE_GPU_VULKAN=0 so local SDK matches the
+# Vulkan-enabled objects; filters to gpu/vulkan doctest cases.
+if(YONA_ENABLE_VULKAN)
+	add_test(NAME doctest_gpu_vulkan COMMAND tests -tc=*gpu?vulkan*)
+	set_tests_properties(doctest_gpu_vulkan PROPERTIES
+		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+		LABELS "vulkan;gpu"
+		ENVIRONMENT "${_ctest_base_env}"
+	)
+	if(APPLE)
+		set_tests_properties(doctest_gpu_vulkan PROPERTIES
+			ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{DYLD_LIBRARY_PATH};${_ctest_base_env}"
+		)
+	elseif(UNIX)
+		set_tests_properties(doctest_gpu_vulkan PROPERTIES
+			ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH};${_ctest_base_env}"
+		)
+	endif()
+endif()
+
 # Enable doctest discovery for Visual Studio Test Explorer
 set_target_properties(tests PROPERTIES
 	VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 	VS_DEBUGGER_COMMAND_ARGUMENTS "--reporters=xml"
 )
-
-# Add labels for better test organization
-set_tests_properties(doctest_tests PROPERTIES LABELS "unit")
 
 # Removed temporary test executables - tests are now using doctest

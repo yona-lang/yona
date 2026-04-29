@@ -822,6 +822,11 @@ int64_t* yona_Std_IntArray__filter(int64_t* fn, int64_t* a) { return yona_rt_int
 int64_t* yona_Std_IntArray__fromSeq(int64_t* s) { return yona_rt_int_array_from_seq(s); }
 int64_t* yona_Std_IntArray__toSeq(int64_t* a) { return yona_rt_int_array_to_seq(a); }
 
+/* Accelerated columnar backends used by Std\GPU. */
+#include "runtime/gpu_vulkan.c"
+#include "runtime/gpu_vulkan_device.c"
+#include "runtime/gpu_cpu.c"
+
 /* ===== FloatArray — contiguous unboxed double[] ===== */
 /* Layout: [count: i64][double0, double1, ...] */
 

@@ -52,7 +52,8 @@ static string ir_function_body(const string& ir, const string& fn_name) {
     return "";
 }
 
-static string compile_and_run(const string& code) {
+static string compile_and_run(const string& code, const char* run_env_key = nullptr,
+                              const char* run_env_val = nullptr) {
     parser::Parser parser;
 
     Codegen codegen("test_module");
@@ -93,6 +94,8 @@ static string compile_and_run(const string& code) {
     fs::path exe_path = yona::test::link::scratch_root() / ("yona_codegen_test" + yona::test::link::exe_suffix());
     if (!yona::test::link::link_objs_to_exe(objs, exe_path, extra_libs)) return "LINK_ERROR";
 
+    if (run_env_key && run_env_val)
+        return yona::test::link::popen_read_all_run_with_env(exe_path, run_env_key, run_env_val);
     return yona::test::link::popen_read_all(exe_path);
 }
 
@@ -287,7 +290,13 @@ TEST_CASE("Fixture-based codegen tests") {
         string test_name = yona_file.stem().string();
 
         SUBCASE(test_name.c_str()) {
-            string actual = compile_and_run(source);
+            const char* env_k = nullptr;
+            const char* env_v = nullptr;
+            if (test_name == "gpu_backend_flags" || test_name == "gpu_vulkan_last_note") {
+                env_k = "YONA_GPU_DISABLE_VULKAN";
+                env_v = "1";
+            }
+            string actual = compile_and_run(source, env_k, env_v);
             CHECK_MESSAGE(actual == expected,
                 "Test '", test_name, "': expected '", expected, "' but got '", actual, "'");
         }

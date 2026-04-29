@@ -16,6 +16,7 @@
 void yona_rt_arena_destroy(void* arena_ptr);
 
 #define YONA_POOL_SIZE 8
+#define YONA_POOL_MAX_THREADS 32
 #define YONA_GROUP_INITIAL_CAP 8
 
 void* yona_rt_try_push(void);
@@ -143,6 +144,137 @@ static CRITICAL_SECTION yona_pool_mutex;
 static CONDITION_VARIABLE yona_pool_cond;
 static INIT_ONCE yona_pool_init_once = INIT_ONCE_STATIC_INIT;
 
+/* Channel liveness tracking and managed blocking. */
+static CRITICAL_SECTION yona_liveness_mutex;
+static INIT_ONCE yona_liveness_init_once = INIT_ONCE_STATIC_INIT;
+static int64_t yona_next_task_id = 1;
+static int yona_worker_threads = 0;
+static int yona_queued_tasks = 0;
+static int yona_running_workers = 0;
+static int yona_blocked_workers = 0;
+static int yona_active_external_tasks = 0;
+static int yona_external_waiters = 0;
+static __declspec(thread) int64_t yona_current_task_id = 0;
+static __declspec(thread) int yona_current_task_is_worker = 0;
+static __declspec(thread) int yona_external_task_registered = 0;
+static __declspec(thread) int yona_channel_wait_kind = 0; /* 1 worker, 2 external */
+static __declspec(thread) int yona_deadlock_candidate_seen = 0;
+
+static DWORD WINAPI yona_pool_worker_win32(void* unused);
+
+static BOOL CALLBACK yona_liveness_init_once_cb(PINIT_ONCE initOnce, PVOID parameter, PVOID* context) {
+	(void)initOnce;
+	(void)parameter;
+	(void)context;
+	InitializeCriticalSection(&yona_liveness_mutex);
+	return TRUE;
+}
+
+static void liveness_init(void) {
+	InitOnceExecuteOnce(&yona_liveness_init_once, yona_liveness_init_once_cb, NULL, NULL);
+}
+
+static void start_pool_worker_unlocked(void) {
+	HANDLE h = CreateThread(NULL, 0, yona_pool_worker_win32, NULL, 0, NULL);
+	if (h) {
+		CloseHandle(h);
+		yona_worker_threads++;
+	}
+}
+
+static void maybe_spawn_compensation_worker_unlocked(void) {
+	if (yona_queued_tasks <= 0) return;
+	if (yona_worker_threads >= YONA_POOL_MAX_THREADS) return;
+	if (yona_running_workers > 0) return;
+	start_pool_worker_unlocked();
+}
+
+static void liveness_register_external_task_unlocked(void) {
+	if (yona_current_task_is_worker || yona_external_task_registered) return;
+	yona_external_task_registered = 1;
+	yona_current_task_id = yona_next_task_id++;
+	yona_active_external_tasks++;
+}
+
+static void liveness_task_queued(void) {
+	liveness_init();
+	EnterCriticalSection(&yona_liveness_mutex);
+	yona_queued_tasks++;
+	LeaveCriticalSection(&yona_liveness_mutex);
+}
+
+static void liveness_worker_begin(void) {
+	liveness_init();
+	EnterCriticalSection(&yona_liveness_mutex);
+	if (yona_queued_tasks > 0) yona_queued_tasks--;
+	yona_running_workers++;
+	yona_current_task_id = yona_next_task_id++;
+	yona_current_task_is_worker = 1;
+	LeaveCriticalSection(&yona_liveness_mutex);
+}
+
+static void liveness_worker_end(void) {
+	liveness_init();
+	EnterCriticalSection(&yona_liveness_mutex);
+	if (yona_channel_wait_kind == 1) {
+		if (yona_blocked_workers > 0) yona_blocked_workers--;
+		yona_channel_wait_kind = 0;
+	} else if (yona_current_task_is_worker && yona_running_workers > 0) {
+		yona_running_workers--;
+	}
+	yona_current_task_id = 0;
+	yona_current_task_is_worker = 0;
+	LeaveCriticalSection(&yona_liveness_mutex);
+}
+
+int yona_rt_channel_wait_begin(void* channel, int op, int64_t count, int64_t cap, int closed,
+			       int opposite_waiters) {
+	(void)channel;
+	(void)op;
+	(void)count;
+	(void)cap;
+	(void)closed;
+	liveness_init();
+	EnterCriticalSection(&yona_liveness_mutex);
+	if (yona_current_task_is_worker) {
+		if (yona_running_workers > 0) yona_running_workers--;
+		yona_blocked_workers++;
+		yona_channel_wait_kind = 1;
+		maybe_spawn_compensation_worker_unlocked();
+	} else {
+		liveness_register_external_task_unlocked();
+		if (yona_active_external_tasks > 0) yona_active_external_tasks--;
+		yona_external_waiters++;
+		yona_channel_wait_kind = 2;
+		maybe_spawn_compensation_worker_unlocked();
+	}
+	int deadlock_candidate = (yona_running_workers == 0 &&
+				  yona_active_external_tasks == 0 &&
+				  yona_queued_tasks == 0 &&
+				  opposite_waiters <= 0);
+	/* A condition-variable signal can make a waiter runnable before it has
+	 * returned from timedwait and restored its liveness state. Confirm the
+	 * quiescent state across one wait cycle before raising :Deadlock. */
+	int deadlocked = deadlock_candidate && yona_deadlock_candidate_seen;
+	yona_deadlock_candidate_seen = deadlock_candidate ? 1 : 0;
+	LeaveCriticalSection(&yona_liveness_mutex);
+	return deadlocked;
+}
+
+void yona_rt_channel_wait_end(void) {
+	liveness_init();
+	EnterCriticalSection(&yona_liveness_mutex);
+	if (yona_channel_wait_kind == 1) {
+		if (yona_blocked_workers > 0) yona_blocked_workers--;
+		yona_running_workers++;
+	} else if (yona_channel_wait_kind == 2) {
+		if (yona_external_waiters > 0) yona_external_waiters--;
+		yona_active_external_tasks++;
+	}
+	yona_channel_wait_kind = 0;
+	LeaveCriticalSection(&yona_liveness_mutex);
+}
+
 static void fulfill_promise(yona_task_t* task, int64_t result, int is_error) {
 	EnterCriticalSection(&task->promise->mutex);
 	task->promise->result = result;
@@ -168,8 +300,11 @@ static DWORD WINAPI yona_pool_worker_win32(void* unused) {
 		if (!yona_task_head) yona_task_tail = NULL;
 		LeaveCriticalSection(&yona_pool_mutex);
 
+		liveness_worker_begin();
+
 		if (task->group && __atomic_load_n(&task->group->cancelled, __ATOMIC_SEQ_CST)) {
 			fulfill_promise(task, 0, 1);
+			liveness_worker_end();
 			free(task);
 			continue;
 		}
@@ -195,6 +330,7 @@ static DWORD WINAPI yona_pool_worker_win32(void* unused) {
 			}
 			fulfill_promise(task, 0, 1);
 		}
+		liveness_worker_end();
 		free(task);
 	}
 }
@@ -205,10 +341,12 @@ static BOOL CALLBACK yona_pool_init_once_cb(PINIT_ONCE initOnce, PVOID parameter
 	(void)context;
 	InitializeCriticalSection(&yona_pool_mutex);
 	InitializeConditionVariable(&yona_pool_cond);
+	liveness_init();
+	EnterCriticalSection(&yona_liveness_mutex);
 	for (int i = 0; i < YONA_POOL_SIZE; i++) {
-		HANDLE h = CreateThread(NULL, 0, yona_pool_worker_win32, NULL, 0, NULL);
-		if (h) CloseHandle(h);
+		start_pool_worker_unlocked();
 	}
+	LeaveCriticalSection(&yona_liveness_mutex);
 	return TRUE;
 }
 
@@ -251,6 +389,13 @@ static yona_promise_t* submit_task(yona_async_fn_t fn, yona_thunk_fn_t thunk, in
 	task->promise = promise;
 	task->group = group;
 	if (group) yona_rt_group_register(group, promise);
+	if (!yona_current_task_is_worker) {
+		liveness_init();
+		EnterCriticalSection(&yona_liveness_mutex);
+		liveness_register_external_task_unlocked();
+		LeaveCriticalSection(&yona_liveness_mutex);
+	}
+	liveness_task_queued();
 	enqueue_task(task);
 	return promise;
 }

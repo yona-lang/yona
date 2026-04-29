@@ -60,6 +60,24 @@ static string q_cmd_path(const filesystem::path& p) {
     return "\"" + p.string() + "\"";
 }
 
+/** Optional GPU Vulkan compile flags for compiled_runtime (matches
+ *  -DYONA_ENABLE_VULKAN in CMake). Uses headers only; does not add vulkan-1 to
+ *  the final link. Set YONA_COMPILE_GPU_VULKAN=1 and VULKAN_SDK. */
+static string yona_runtime_vulkan_cflags() {
+    const char* on = getenv("YONA_COMPILE_GPU_VULKAN");
+    if (!on || string(on) == "0")
+        return "";
+    const char* sdk = getenv("VULKAN_SDK");
+    if (!sdk || !*sdk)
+        return "";
+    std::filesystem::path inc = std::filesystem::path(sdk) / "Include";
+    if (!std::filesystem::exists(inc / "vulkan" / "vulkan.h"))
+        inc = std::filesystem::path(sdk) / "include";
+    if (!std::filesystem::exists(inc / "vulkan" / "vulkan.h"))
+        return "";
+    return string(" -DYONA_COMPILE_GPU_VULKAN=1 -I") + q_cmd_path(inc);
+}
+
 static string llvm_link_executable() {
 #ifdef _WIN32
     const char* tool = "llvm-link.exe";
@@ -88,6 +106,11 @@ static vector<filesystem::path> embedded_runtime_sources(const filesystem::path&
         root / "src" / "runtime" / "hamt.c",
         root / "src" / "runtime" / "exceptions.c",
         root / "src" / "runtime" / "closures.c",
+        root / "src" / "runtime" / "gpu_vulkan.c",
+        root / "src" / "runtime" / "gpu_vulkan_device.c",
+        root / "src" / "runtime" / "gpu_vulkan_compute.c",
+        root / "src" / "runtime" / "gpu_vulkan_ops.c",
+        root / "src" / "runtime" / "gpu_cpu.c",
 #ifdef _WIN32
         root / "src" / "runtime" / "platform" / "async_win32.c",
         root / "src" / "runtime" / "platform" / "channel_win32.c",
@@ -447,7 +470,8 @@ int main(int argc, char* argv[]) {
             if (!filesystem::exists(candidate)) continue;
             filesystem::path src_dir_p = root / "src";
             filesystem::path inc_dir_p = root / "include";
-            string i_flags = " -I" + q_cmd_path(src_dir_p) + " -I" + q_cmd_path(inc_dir_p);
+            string i_flags =
+                " -I" + q_cmd_path(src_dir_p) + " -I" + q_cmd_path(inc_dir_p) + yona_runtime_vulkan_cflags();
 
             vector<string> plat_pf;
             vector<string> plat_obj_paths;

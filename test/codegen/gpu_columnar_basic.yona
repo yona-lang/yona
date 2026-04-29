@@ -1,0 +1,8 @@
+import fromSeq from Std\IntArray in
+import upload, mapAdd, mapMul, filterGreaterThan, reduceSum from Std\GPU in
+let input = fromSeq [1, 2, 3, 4, 5] in
+let buffer = upload input in
+let plus = mapAdd 1 buffer in
+let doubled = mapMul 2 plus in
+let filtered = filterGreaterThan 6 doubled in
+reduceSum filtered

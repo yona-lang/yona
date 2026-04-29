@@ -1,0 +1,529 @@
+/* ===== Vulkan device (compute queue) — runtime-loaded entry points =====
+ *
+ * No link dependency on the Vulkan loader: vulkan-1.dll / libvulkan.so.1 is
+ * opened with LoadLibrary/dlopen and all used symbols are resolved dynamically.
+ * When YONA_GPU_VULKAN_ENABLED is 0, this TU provides no-op stubs so default
+ * packages and CI builds stay free of Khronos headers.
+ */
+
+#include "yona/runtime/gpu_build_config.h"
+#include "yona/runtime/gpu_vulkan_device.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#include <pthread.h>
+#endif
+
+extern int yona_gpu_vulkan_loader_available(void);
+
+#if !YONA_GPU_VULKAN_ENABLED
+
+int yona_gpu_vulkan_device_try_init(void) { return -1; }
+
+int yona_gpu_vulkan_device_ready(void) { return 0; }
+
+void yona_gpu_vulkan_device_shutdown(void) { yona_gpu_vulkan_invalidate_capability_cache(); }
+
+const char* yona_gpu_vulkan_device_status_name(void) { return "vulkan-loader"; }
+
+int yona_gpu_vulkan_device_shader_int64(void) { return 0; }
+
+const char* yona_gpu_vulkan_device_last_note(void) { return ""; }
+
+#else /* YONA_GPU_VULKAN_ENABLED */
+
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan.h>
+
+#if defined(_WIN32)
+static CRITICAL_SECTION yona_vkdev_cs;
+static volatile LONG yona_vkdev_cs_ready;
+
+static void yona_vkdev_cs_ensure(void) {
+    if (InterlockedCompareExchange(&yona_vkdev_cs_ready, 1, 0) == 0)
+        InitializeCriticalSection(&yona_vkdev_cs);
+}
+
+#define YONA_VKDEV_LOCK() \
+    do {                 \
+        yona_vkdev_cs_ensure(); \
+        EnterCriticalSection(&yona_vkdev_cs); \
+    } while (0)
+#define YONA_VKDEV_UNLOCK() LeaveCriticalSection(&yona_vkdev_cs)
+
+#else /* !_WIN32 */
+
+static pthread_mutex_t yona_vkdev_mutex = PTHREAD_MUTEX_INITIALIZER;
+#define YONA_VKDEV_LOCK() pthread_mutex_lock(&yona_vkdev_mutex)
+#define YONA_VKDEV_UNLOCK() pthread_mutex_unlock(&yona_vkdev_mutex)
+
+#endif
+
+enum yona_vkdev_lifecycle {
+    YONA_VKDEV_LIFE_UNTRIED = 0,
+    YONA_VKDEV_LIFE_OK = 1,
+    YONA_VKDEV_LIFE_FAILED = 2,
+};
+
+static enum yona_vkdev_lifecycle yona_vkdev_life = YONA_VKDEV_LIFE_UNTRIED;
+
+#if defined(_WIN32)
+static HMODULE yona_vk_dl;
+#else
+static void* yona_vk_dl;
+#endif
+
+static PFN_vkGetInstanceProcAddr yona_pfn_vkGetInstanceProcAddr;
+static PFN_vkCreateInstance yona_pfn_vkCreateInstance;
+static PFN_vkDestroyInstance yona_pfn_vkDestroyInstance;
+static PFN_vkEnumeratePhysicalDevices yona_pfn_vkEnumeratePhysicalDevices;
+static PFN_vkGetPhysicalDeviceQueueFamilyProperties yona_pfn_vkGetPhysicalDeviceQueueFamilyProperties;
+static PFN_vkCreateDevice yona_pfn_vkCreateDevice;
+static PFN_vkDestroyDevice yona_pfn_vkDestroyDevice;
+static PFN_vkGetDeviceQueue yona_pfn_vkGetDeviceQueue;
+static PFN_vkGetDeviceProcAddr yona_pfn_vkGetDeviceProcAddr;
+static PFN_vkGetPhysicalDeviceFeatures yona_pfn_vkGetPhysicalDeviceFeatures;
+static PFN_vkGetPhysicalDeviceMemoryProperties yona_pfn_vkGetPhysicalDeviceMemoryProperties;
+static PFN_vkGetPhysicalDeviceProperties yona_pfn_vkGetPhysicalDeviceProperties;
+
+static VkInstance yona_vk_instance = VK_NULL_HANDLE;
+static VkPhysicalDevice yona_vk_phys = VK_NULL_HANDLE;
+static VkDevice yona_vk_dev = VK_NULL_HANDLE;
+static VkQueue yona_vk_queue = VK_NULL_HANDLE;
+static uint32_t yona_vk_queue_family = (uint32_t)-1;
+static int yona_vk_shader_int64_enabled;
+
+static char yona_vk_last_note[256];
+
+static void yona_vk_note_clear(void) { yona_vk_last_note[0] = 0; }
+
+static void yona_vk_note_cpy(const char* s) {
+    if (!s || !s[0]) {
+        yona_vk_note_clear();
+        return;
+    }
+    size_t n = strlen(s);
+    if (n >= sizeof(yona_vk_last_note)) n = sizeof(yona_vk_last_note) - 1;
+    memcpy(yona_vk_last_note, s, n);
+    yona_vk_last_note[n] = 0;
+}
+
+static void yona_vk_dl_close(void) {
+#if defined(_WIN32)
+    if (yona_vk_dl) {
+        FreeLibrary(yona_vk_dl);
+        yona_vk_dl = NULL;
+    }
+#else
+    if (yona_vk_dl) {
+        dlclose(yona_vk_dl);
+        yona_vk_dl = NULL;
+    }
+#endif
+}
+
+static int yona_vk_dl_open(void) {
+#if defined(_WIN32)
+    yona_vk_dl = LoadLibraryA("vulkan-1.dll");
+    if (!yona_vk_dl) return -2;
+    yona_pfn_vkGetInstanceProcAddr =
+        (PFN_vkGetInstanceProcAddr)(void*)GetProcAddress(yona_vk_dl, "vkGetInstanceProcAddr");
+#else
+    yona_vk_dl = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (!yona_vk_dl) yona_vk_dl = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+    if (!yona_vk_dl) return -2;
+    yona_pfn_vkGetInstanceProcAddr =
+        (PFN_vkGetInstanceProcAddr)(void*)dlsym(yona_vk_dl, "vkGetInstanceProcAddr");
+#endif
+    if (!yona_pfn_vkGetInstanceProcAddr) return -2;
+    return 0;
+}
+
+static void yona_vk_clear_fn_ptrs(void) {
+    yona_pfn_vkGetInstanceProcAddr = NULL;
+    yona_pfn_vkCreateInstance = NULL;
+    yona_pfn_vkDestroyInstance = NULL;
+    yona_pfn_vkEnumeratePhysicalDevices = NULL;
+    yona_pfn_vkGetPhysicalDeviceQueueFamilyProperties = NULL;
+    yona_pfn_vkCreateDevice = NULL;
+    yona_pfn_vkDestroyDevice = NULL;
+    yona_pfn_vkGetDeviceQueue = NULL;
+    yona_pfn_vkGetDeviceProcAddr = NULL;
+    yona_pfn_vkGetPhysicalDeviceFeatures = NULL;
+    yona_pfn_vkGetPhysicalDeviceMemoryProperties = NULL;
+    yona_pfn_vkGetPhysicalDeviceProperties = NULL;
+}
+
+static int yona_vk_load_loader_symbols(void) {
+    PFN_vkGetInstanceProcAddr gipa = yona_pfn_vkGetInstanceProcAddr;
+    yona_pfn_vkCreateInstance = (PFN_vkCreateInstance)(void*)gipa(NULL, "vkCreateInstance");
+    if (!yona_pfn_vkCreateInstance) return -2;
+    yona_pfn_vkEnumeratePhysicalDevices =
+        (PFN_vkEnumeratePhysicalDevices)(void*)gipa(NULL, "vkEnumeratePhysicalDevices");
+    yona_pfn_vkDestroyInstance = (PFN_vkDestroyInstance)(void*)gipa(NULL, "vkDestroyInstance");
+    if (!yona_pfn_vkEnumeratePhysicalDevices || !yona_pfn_vkDestroyInstance) return -2;
+    return 0;
+}
+
+static int yona_vk_load_instance_symbols(VkInstance inst) {
+    PFN_vkGetInstanceProcAddr gipa = yona_pfn_vkGetInstanceProcAddr;
+    yona_pfn_vkGetPhysicalDeviceQueueFamilyProperties =
+        (PFN_vkGetPhysicalDeviceQueueFamilyProperties)(void*)gipa(
+            inst, "vkGetPhysicalDeviceQueueFamilyProperties");
+    yona_pfn_vkCreateDevice = (PFN_vkCreateDevice)(void*)gipa(inst, "vkCreateDevice");
+    if (!yona_pfn_vkGetPhysicalDeviceQueueFamilyProperties || !yona_pfn_vkCreateDevice) return -3;
+    yona_pfn_vkGetDeviceProcAddr =
+        (PFN_vkGetDeviceProcAddr)(void*)gipa(inst, "vkGetDeviceProcAddr");
+    yona_pfn_vkGetPhysicalDeviceFeatures =
+        (PFN_vkGetPhysicalDeviceFeatures)(void*)gipa(inst, "vkGetPhysicalDeviceFeatures");
+    if (!yona_pfn_vkGetDeviceProcAddr || !yona_pfn_vkGetPhysicalDeviceFeatures) return -3;
+    yona_pfn_vkGetPhysicalDeviceMemoryProperties =
+        (PFN_vkGetPhysicalDeviceMemoryProperties)(void*)gipa(
+            inst, "vkGetPhysicalDeviceMemoryProperties");
+    if (!yona_pfn_vkGetPhysicalDeviceMemoryProperties) return -3;
+    yona_pfn_vkGetPhysicalDeviceProperties =
+        (PFN_vkGetPhysicalDeviceProperties)(void*)gipa(inst, "vkGetPhysicalDeviceProperties");
+    if (!yona_pfn_vkGetPhysicalDeviceProperties) return -3;
+    return 0;
+}
+
+static void yona_vk_compute_destroy_cached_pipelines(void);
+
+static int yona_vk_load_device_symbols(VkInstance inst, VkDevice dev) {
+    PFN_vkGetInstanceProcAddr gipa = yona_pfn_vkGetInstanceProcAddr;
+    (void)inst;
+    yona_pfn_vkDestroyDevice = (PFN_vkDestroyDevice)(void*)gipa(inst, "vkDestroyDevice");
+    yona_pfn_vkGetDeviceQueue = (PFN_vkGetDeviceQueue)(void*)gipa(inst, "vkGetDeviceQueue");
+    if (!yona_pfn_vkDestroyDevice || !yona_pfn_vkGetDeviceQueue) return -3;
+    (void)dev;
+    return 0;
+}
+
+static void yona_vk_destroy_all(void) {
+    yona_vk_compute_destroy_cached_pipelines();
+    if (yona_vk_dev != VK_NULL_HANDLE && yona_pfn_vkDestroyDevice)
+        yona_pfn_vkDestroyDevice(yona_vk_dev, NULL);
+    yona_vk_dev = VK_NULL_HANDLE;
+    yona_vk_queue = VK_NULL_HANDLE;
+    yona_vk_phys = VK_NULL_HANDLE;
+    yona_vk_queue_family = (uint32_t)-1;
+    yona_vk_shader_int64_enabled = 0;
+
+    if (yona_vk_instance != VK_NULL_HANDLE && yona_pfn_vkDestroyInstance)
+        yona_pfn_vkDestroyInstance(yona_vk_instance, NULL);
+    yona_vk_instance = VK_NULL_HANDLE;
+
+    yona_vk_clear_fn_ptrs();
+    yona_vk_dl_close();
+}
+
+static int yona_vk_pick_compute_queue(VkPhysicalDevice phys, uint32_t* out_family) {
+    uint32_t n = 0;
+    yona_pfn_vkGetPhysicalDeviceQueueFamilyProperties(phys, &n, NULL);
+    if (n == 0) return -4;
+    VkQueueFamilyProperties* props =
+        (VkQueueFamilyProperties*)malloc((size_t)n * sizeof(VkQueueFamilyProperties));
+    if (!props) return -5;
+    yona_pfn_vkGetPhysicalDeviceQueueFamilyProperties(phys, &n, props);
+    uint32_t chosen = (uint32_t)-1;
+    for (uint32_t i = 0; i < n; i++) {
+        if (props[i].queueCount > 0 && (props[i].queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+            chosen = i;
+            break;
+        }
+    }
+    free(props);
+    if (chosen == (uint32_t)-1) return -4;
+    *out_family = chosen;
+    return 0;
+}
+
+static int yona_vk_do_try_init_unlocked(void) {
+    yona_vk_note_clear();
+
+    if (!yona_gpu_vulkan_loader_available()) return -2;
+
+    if (yona_vk_dl_open() != 0) return -2;
+    if (yona_vk_load_loader_symbols() != 0) {
+        yona_vk_destroy_all();
+        return -2;
+    }
+
+    VkApplicationInfo app = {0};
+    app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app.pApplicationName = "Yona";
+    app.applicationVersion = 0;
+    app.pEngineName = "Yona";
+    app.engineVersion = 0;
+    app.apiVersion = VK_API_VERSION_1_0;
+
+    VkInstanceCreateInfo ici = {0};
+    ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    ici.pApplicationInfo = &app;
+    ici.enabledLayerCount = 0;
+    ici.enabledExtensionCount = 0;
+
+    VkResult r = yona_pfn_vkCreateInstance(&ici, NULL, &yona_vk_instance);
+    if (r != VK_SUCCESS || yona_vk_instance == VK_NULL_HANDLE) {
+        char b[200];
+        snprintf(b, sizeof b, "vkCreateInstance failed VkResult=%d", (int)r);
+        yona_vk_note_cpy(b);
+        yona_vk_destroy_all();
+        return -3;
+    }
+
+    if (yona_vk_load_instance_symbols(yona_vk_instance) != 0) {
+        yona_vk_note_cpy("vkGetInstanceProcAddr missing required instance symbols");
+        yona_vk_destroy_all();
+        return -3;
+    }
+
+    uint32_t ndev = 0;
+    r = yona_pfn_vkEnumeratePhysicalDevices(yona_vk_instance, &ndev, NULL);
+    if (r != VK_SUCCESS || ndev == 0) {
+        char b[200];
+        snprintf(b, sizeof b, "vkEnumeratePhysicalDevices failed VkResult=%d count=%u", (int)r,
+                 ndev);
+        yona_vk_note_cpy(b);
+        yona_vk_destroy_all();
+        return -4;
+    }
+
+    VkPhysicalDevice* devs = (VkPhysicalDevice*)malloc((size_t)ndev * sizeof(VkPhysicalDevice));
+    if (!devs) {
+        yona_vk_note_cpy("malloc failed for physical device list");
+        yona_vk_destroy_all();
+        return -5;
+    }
+    r = yona_pfn_vkEnumeratePhysicalDevices(yona_vk_instance, &ndev, devs);
+    if (r != VK_SUCCESS) {
+        char b[200];
+        snprintf(b, sizeof b, "vkEnumeratePhysicalDevices (2nd) VkResult=%d", (int)r);
+        yona_vk_note_cpy(b);
+        free(devs);
+        yona_vk_destroy_all();
+        return -3;
+    }
+
+    int used_forced_index = 0;
+    const char* idx_env = getenv("YONA_GPU_VULKAN_PHYSICAL_DEVICE_INDEX");
+    if (idx_env && idx_env[0]) {
+        unsigned long fi = strtoul(idx_env, NULL, 10);
+        if (fi < (unsigned long)ndev) {
+            uint32_t qf = 0;
+            if (yona_vk_pick_compute_queue(devs[fi], &qf) == 0) {
+                yona_vk_phys = devs[fi];
+                yona_vk_queue_family = qf;
+                used_forced_index = 1;
+            } else {
+                yona_vk_note_cpy(
+                    "YONA_GPU_VULKAN_PHYSICAL_DEVICE_INDEX: no compute queue on that device; "
+                    "auto-selecting");
+            }
+        } else {
+            yona_vk_note_cpy(
+                "YONA_GPU_VULKAN_PHYSICAL_DEVICE_INDEX: out of range; auto-selecting");
+        }
+    }
+
+    if (!used_forced_index) {
+        int64_t best_score = (int64_t)-1;
+        VkPhysicalDevice best_phys = VK_NULL_HANDLE;
+        uint32_t best_qf = (uint32_t)-1;
+
+        for (uint32_t di = 0; di < ndev; di++) {
+            uint32_t qf = 0;
+            if (yona_vk_pick_compute_queue(devs[di], &qf) != 0) continue;
+
+            VkPhysicalDeviceProperties props;
+            yona_pfn_vkGetPhysicalDeviceProperties(devs[di], &props);
+            VkPhysicalDeviceFeatures feats;
+            yona_pfn_vkGetPhysicalDeviceFeatures(devs[di], &feats);
+
+            int64_t type_rank;
+            switch (props.deviceType) {
+            case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                type_rank = 5;
+                break;
+            case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+                type_rank = 4;
+                break;
+            case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+                type_rank = 3;
+                break;
+            case VK_PHYSICAL_DEVICE_TYPE_CPU:
+                type_rank = 2;
+                break;
+            default:
+                type_rank = 1;
+                break;
+            }
+            int64_t score = type_rank * (int64_t)10000000 + (feats.shaderInt64 ? (int64_t)5000000 : 0) +
+                            (int64_t)props.apiVersion;
+            if (score > best_score) {
+                best_score = score;
+                best_phys = devs[di];
+                best_qf = qf;
+            }
+        }
+
+        if (best_phys == VK_NULL_HANDLE) {
+            yona_vk_note_cpy("no physical device exposes a compute queue");
+            free(devs);
+            yona_vk_destroy_all();
+            return -4;
+        }
+        yona_vk_phys = best_phys;
+        yona_vk_queue_family = best_qf;
+    }
+
+    free(devs);
+
+    float qp = 1.0f;
+    VkDeviceQueueCreateInfo qci = {0};
+    qci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    qci.queueFamilyIndex = yona_vk_queue_family;
+    qci.queueCount = 1;
+    qci.pQueuePriorities = &qp;
+
+    VkDeviceCreateInfo dci = {0};
+    dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    dci.queueCreateInfoCount = 1;
+    dci.pQueueCreateInfos = &qci;
+    dci.enabledExtensionCount = 0;
+    dci.enabledLayerCount = 0;
+
+    VkPhysicalDeviceFeatures pd_feats = {0};
+    yona_pfn_vkGetPhysicalDeviceFeatures(yona_vk_phys, &pd_feats);
+    VkPhysicalDeviceFeatures enabled_feats = {0};
+    VkPhysicalDeviceFeatures* p_feats_arg = NULL;
+    yona_vk_shader_int64_enabled = 0;
+    if (pd_feats.shaderInt64) {
+        enabled_feats.shaderInt64 = VK_TRUE;
+        p_feats_arg = &enabled_feats;
+        yona_vk_shader_int64_enabled = 1;
+    }
+    dci.pEnabledFeatures = p_feats_arg;
+
+    r = yona_pfn_vkCreateDevice(yona_vk_phys, &dci, NULL, &yona_vk_dev);
+    if (r != VK_SUCCESS || yona_vk_dev == VK_NULL_HANDLE) {
+        if (p_feats_arg != NULL) {
+            yona_vk_shader_int64_enabled = 0;
+            dci.pEnabledFeatures = NULL;
+            r = yona_pfn_vkCreateDevice(yona_vk_phys, &dci, NULL, &yona_vk_dev);
+        }
+        if (r != VK_SUCCESS || yona_vk_dev == VK_NULL_HANDLE) {
+            char b[200];
+            snprintf(b, sizeof b, "vkCreateDevice failed VkResult=%d", (int)r);
+            yona_vk_note_cpy(b);
+            yona_vk_destroy_all();
+            return -3;
+        }
+    }
+
+    if (yona_vk_load_device_symbols(yona_vk_instance, yona_vk_dev) != 0) {
+        yona_vk_note_cpy("vkGetInstanceProcAddr missing required device symbols");
+        yona_vk_destroy_all();
+        return -3;
+    }
+
+    yona_pfn_vkGetDeviceQueue(yona_vk_dev, yona_vk_queue_family, 0, &yona_vk_queue);
+    if (yona_vk_queue == VK_NULL_HANDLE) {
+        yona_vk_note_cpy("vkGetDeviceQueue returned null");
+        yona_vk_destroy_all();
+        return -3;
+    }
+
+    yona_vk_note_clear();
+    return 0;
+}
+
+int yona_gpu_vulkan_device_try_init(void) {
+    const char* disabled = getenv("YONA_GPU_DISABLE_VULKAN");
+    if (disabled && disabled[0] && strcmp(disabled, "0") != 0) return -1;
+
+    int out = 0;
+    YONA_VKDEV_LOCK();
+    if (yona_vkdev_life == YONA_VKDEV_LIFE_OK) {
+        YONA_VKDEV_UNLOCK();
+        return 0;
+    }
+    if (yona_vkdev_life == YONA_VKDEV_LIFE_FAILED) {
+        if (!yona_vk_last_note[0])
+            yona_vk_note_cpy("device: try_init previously failed; call yona_gpu_vulkan_device_shutdown() to reset");
+        YONA_VKDEV_UNLOCK();
+        return -3;
+    }
+    out = yona_vk_do_try_init_unlocked();
+    if (out == -2) {
+        /* Loader probe can differ from dlopen timing; do not latch FAILED. */
+        YONA_VKDEV_UNLOCK();
+        return -2;
+    }
+    yona_vkdev_life = (out == 0) ? YONA_VKDEV_LIFE_OK : YONA_VKDEV_LIFE_FAILED;
+    YONA_VKDEV_UNLOCK();
+    return out;
+}
+
+int yona_gpu_vulkan_device_ready(void) {
+    int r = 0;
+    YONA_VKDEV_LOCK();
+    r = (yona_vk_dev != VK_NULL_HANDLE) ? 1 : 0;
+    YONA_VKDEV_UNLOCK();
+    return r;
+}
+
+void yona_gpu_vulkan_device_shutdown(void) {
+    YONA_VKDEV_LOCK();
+    yona_vk_destroy_all();
+    yona_vkdev_life = YONA_VKDEV_LIFE_UNTRIED;
+    YONA_VKDEV_UNLOCK();
+    yona_gpu_vulkan_invalidate_capability_cache();
+}
+
+const char* yona_gpu_vulkan_device_status_name(void) {
+    const char* disabled = getenv("YONA_GPU_DISABLE_VULKAN");
+    if (disabled && disabled[0] && strcmp(disabled, "0") != 0) return "vulkan-unavailable";
+    if (!yona_gpu_vulkan_loader_available()) return "vulkan-unavailable";
+
+    int rc = yona_gpu_vulkan_device_try_init();
+    if (rc == 0) return "vulkan-device";
+    if (rc == -1 || rc == -2) return "vulkan-unavailable";
+    return "vulkan-loader";
+}
+
+int yona_gpu_vulkan_device_shader_int64(void) {
+    int out = 0;
+    YONA_VKDEV_LOCK();
+    if (yona_vk_dev != VK_NULL_HANDLE) out = yona_vk_shader_int64_enabled;
+    YONA_VKDEV_UNLOCK();
+    return out;
+}
+
+const char* yona_gpu_vulkan_device_last_note(void) {
+    return yona_vk_last_note[0] ? yona_vk_last_note : "";
+}
+
+static int yona_vk_pick_memory_type(uint32_t type_bits, VkMemoryPropertyFlags want,
+                                    uint32_t* out_index) {
+    VkPhysicalDeviceMemoryProperties mp;
+    yona_pfn_vkGetPhysicalDeviceMemoryProperties(yona_vk_phys, &mp);
+    for (uint32_t i = 0; i < mp.memoryTypeCount; i++) {
+        if ((type_bits & (1u << i)) && (mp.memoryTypes[i].propertyFlags & want) == want) {
+            *out_index = i;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+#include "gpu_vulkan_compute.c"
+#include "gpu_vulkan_ops.c"
+
+#endif /* YONA_GPU_VULKAN_ENABLED */

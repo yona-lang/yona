@@ -1,103 +1,192 @@
 # Std.IO
 
-IO -- standard input and output operations.
+Std\IO — non-blocking console and handle-based byte I/O.
 
-Provides printing to stdout/stderr and reading from stdin.
-`readLine` is async (io_uring on Linux).
+Every operation that can block on a slow device submits through
+io_uring (on Linux) or the thread pool (for reads), returns a
+`Promise`, and auto-awaits at the use site. The only synchronous
+calls are pure syscalls that never block — `isTty`, `flush`.
+
+Trivial programs stay trivial: `println "hello"` is still one line.
+The non-blocking machinery is invisible until you put several I/O
+calls in a let block, at which point the structured-concurrency
+grouping runs them concurrently.
+
+```
+import println, readLine from Std\IO in
+let _ = println "What is your name?" in
+case readLine of
+Some name -> println "Hello, {name}"
+None      -> println "Goodbye."
+end
+```
 
 ## Functions
+
+### `stdinFd`
+
+```yona
+stdinFd  = 0
+```
+
+File descriptor numbers, exposed as Int so any Std\File handle call
+that expects `FileHandle` can be wrapped — `FileHandle stdoutFd`
+builds the Linear-compatible handle — and the raw int is also useful
+for passing to `write` without constructing the ADT.
+
+### `stdoutFd`
+
+```yona
+stdoutFd = 1
+```
+
+### `stderrFd`
+
+```yona
+stderrFd = 2
+```
+
+### `extern`
+
+```yona
+extern io    yona_Std_IO__writeStr    : Int -> String -> ()     = "yona_Std_IO__writeStr"
+```
+
+----- Low-level externs ----------------------------------------------------
+
+The Yona names are kept short and friendly; the actual C symbols live
+in `compiled_runtime.c` and submit to `io_uring` via the platform layer.
+All four write primitives are non-blocking (`IO` in .yonai terms) and
+return a Promise that auto-awaits at the call site. `readLineFd` is
+`AFN` — thread-pool async — since line-buffering an io_uring read
+stream is a v2 concern (see `docs/todo-list.md`).
+
+### `extern`
+
+```yona
+extern io    yona_Std_IO__writeLine   : Int -> String -> ()     = "yona_Std_IO__writeLine"
+```
+
+### `extern`
+
+```yona
+extern async yona_Std_IO__readLineFd  : Int -> Option           = "yona_Std_IO__readLineFd"
+```
+
+### `extern`
+
+```yona
+extern       yona_Std_IO__isTty       : Int -> Bool             = "yona_Std_IO__isTty"
+```
+
+### `extern`
+
+```yona
+extern       yona_Std_IO__flushFd     : Int -> Bool             = "yona_Std_IO__flushFd"
+```
 
 ### `print`
 
 ```yona
-print str =
+print s = yona_Std_IO__writeStr stdoutFd s
 ```
 
-Print a string to stdout without a trailing newline.
-
-```yona
-import print from Std\IO in
-print "hello "
-```
+----- Output ---------------------------------------------------------------
+Write `s` to stdout. Returns a Promise that resolves when the kernel
+has accepted the write. Non-blocking.
 
 ### `println`
 
 ```yona
-println str =
+println s = yona_Std_IO__writeLine stdoutFd s
 ```
 
-Print a string to stdout followed by a newline.
-
-```yona
-import println from Std\IO in
-println "hello world"
-```
+Write `s` followed by a newline to stdout. Non-blocking.
 
 ### `eprint`
 
 ```yona
-eprint str =
+eprint s = yona_Std_IO__writeStr stderrFd s
 ```
 
-Print a string to stderr without a trailing newline.
-
-```yona
-import eprint from Std\IO in
-eprint "warning: "
-```
+Write `s` to stderr. Non-blocking.
 
 ### `eprintln`
 
 ```yona
-eprintln str =
+eprintln s = yona_Std_IO__writeLine stderrFd s
 ```
 
-Print a string to stderr followed by a newline.
+Write `s` followed by a newline to stderr. Non-blocking.
+
+### `putStr`
 
 ```yona
-import eprintln from Std\IO in
-eprintln "error: something went wrong"
+putStr fd s = yona_Std_IO__writeStr fd s
 ```
+
+Write `s` to an arbitrary fd. Non-blocking.
+
+### `putStrLn`
+
+```yona
+putStrLn fd s = yona_Std_IO__writeLine fd s
+```
+
+Write `s` followed by a newline to an arbitrary fd. Non-blocking.
+
+### `write`
+
+```yona
+write fd s = yona_Std_IO__writeStr fd s
+```
+
+`write fd s` is an alias for `putStr fd s`. Kept for when you want
+the "I'm emitting bytes, not printing text" shape at the call site.
 
 ### `readLine`
 
 ```yona
-readLine =
+readLine = yona_Std_IO__readLineFd stdinFd
 ```
 
-Read a line from stdin. Async (io_uring). Blocks until input is available.
+----- Input ----------------------------------------------------------------
+Read one line from stdin, stripping trailing '\n' (and any '\r').
+Returns `Some line` or `None` at EOF. Non-blocking — the read runs
+on a thread-pool worker.
+
+### `readLineFrom`
 
 ```yona
-import readLine, println from Std\IO in
-do
-  println "What is your name?"
-  let name = readLine in
-  println ("Hello, " ++ name)
-end
+readLineFrom fd = yona_Std_IO__readLineFd fd
 ```
 
-### `printInt`
+Read one line from an arbitrary fd. Same semantics as `readLine`.
+
+### `isTty`
 
 ```yona
-printInt n =
+isTty fd = yona_Std_IO__isTty fd
 ```
 
-Print an integer to stdout (no trailing newline).
+----- Handle control -------------------------------------------------------
+`True` if `fd` is attached to a terminal (as opposed to a pipe or file).
+Useful for turning off colored output or prompting prefixes.
+
+### `isatty`
 
 ```yona
-import printInt from Std\IO in
-printInt 42
+isatty fd = yona_Std_IO__isTty fd
 ```
 
-### `printFloat`
+Alias for `isTty`, following the libc spelling.
+
+### `flush`
 
 ```yona
-printFloat x =
+flush fd = yona_Std_IO__flushFd fd
 ```
 
-Print a float to stdout (no trailing newline).
+Force pending writes on `fd` to disk / device (`fsync`). Most
+io_uring writes are durable on completion so this is rarely needed.
 
-```yona
-import printFloat from Std\IO in
-printFloat 3.14
-```

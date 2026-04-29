@@ -183,7 +183,7 @@ Round to nearest integer (Float -> Float).
 ### `pi`
 
 ```yona
-pi = 3.14159265358979323846
+pi = 3.141592653589793
 ```
 
 Pi constant.

@@ -1,0 +1,36 @@
+#version 450
+#extension GL_ARB_gpu_shader_int64 : require
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer InBuf {
+    int64_t elems[];
+};
+
+layout(set = 0, binding = 1) buffer BlockSums {
+    int64_t sums[];
+};
+
+layout(push_constant) uniform Push {
+    uint elem_count;
+};
+
+shared int64_t sdata[64];
+
+void main() {
+    uint tid = gl_LocalInvocationID.x;
+    uint wg = gl_WorkGroupID.x;
+    uint base = wg * 64u;
+    uint gid = base + tid;
+    int64_t v = (gid < elem_count) ? elems[gid] : 0L;
+    sdata[tid] = v;
+    memoryBarrierShared();
+    barrier();
+
+    for (uint s = 32u; s > 0u; s >>= 1u) {
+        if (tid < s) sdata[tid] += sdata[tid + s];
+        memoryBarrierShared();
+        barrier();
+    }
+    if (tid == 0u) sums[wg] = sdata[0];
+}

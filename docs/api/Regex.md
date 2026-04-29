@@ -12,98 +12,42 @@ matches re "hello 123"
 ### `extern`
 
 ```yona
-extern yona_regex_compile : String -> Int
+extern compile    : String -> Int                       = "yona_regex_compile"
 ```
 
 ### `extern`
 
 ```yona
-extern yona_regex_matches : Int -> String -> Bool
+extern matches    : Int -> String -> Bool               = "yona_regex_matches"
 ```
 
 ### `extern`
 
 ```yona
-extern yona_regex_find : Int -> String -> Seq
+extern find       : Int -> String -> Seq                = "yona_regex_find"
 ```
 
 ### `extern`
 
 ```yona
-extern yona_regex_findAll : Int -> String -> Seq
+extern findAll    : Int -> String -> Seq                = "yona_regex_findAll"
 ```
 
 ### `extern`
 
 ```yona
-extern yona_regex_replace : Int -> String -> String -> String
+extern replace    : Int -> String -> String -> String   = "yona_regex_replace"
 ```
 
 ### `extern`
 
 ```yona
-extern yona_regex_replaceAll : Int -> String -> String -> String
+extern replaceAll : Int -> String -> String -> String   = "yona_regex_replaceAll"
 ```
 
 ### `extern`
 
 ```yona
-extern yona_regex_split : Int -> String -> Seq
+extern split      : Int -> String -> Seq                = "yona_regex_split"
 ```
-
-### `compile`
-
-```yona
-compile pattern = yona_regex_compile pattern
-```
-
-Compile a regex pattern. Returns a compiled handle (RC-managed, JIT).
-
-### `matches`
-
-```yona
-matches re text = yona_regex_matches re text
-```
-
-Test if the pattern matches anywhere in the text.
-
-### `find`
-
-```yona
-find re text = yona_regex_find re text
-```
-
-Find the first match. Returns [matched, group1, ...] or [].
-
-### `findAll`
-
-```yona
-findAll re text = yona_regex_findAll re text
-```
-
-Find all non-overlapping matches. Returns [[matched, g1, ...], ...].
-
-### `replace`
-
-```yona
-replace re text repl = yona_regex_replace re text repl
-```
-
-Replace the first match. Use $1, $2 for backreferences.
-
-### `replaceAll`
-
-```yona
-replaceAll re text repl = yona_regex_replaceAll re text repl
-```
-
-Replace all matches.
-
-### `split`
-
-```yona
-split re text = yona_regex_split re text
-```
-
-Split the text by pattern matches.
 

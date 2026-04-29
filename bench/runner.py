@@ -48,6 +48,25 @@ STARTUP_CACHE_VERSION = "v2"
 BENCH_TIMEOUT = 30
 
 
+def _default_sysroot():
+    build_root = YONAC.parent
+    if (build_root / "runtime").exists():
+        return build_root
+    return ROOT
+
+
+def _tool_env():
+    env = os.environ.copy()
+    extra_paths = []
+    if os.name == "nt":
+        llvm_bin = Path("C:/local/LLVM/bin")
+        if llvm_bin.exists():
+            extra_paths.append(str(llvm_bin))
+    if extra_paths:
+        env["PATH"] = os.pathsep.join(extra_paths + [env.get("PATH", "")])
+    return env
+
+
 def with_exe_suffix(path):
     if os.name == "nt" and path.suffix.lower() != ".exe":
         return Path(str(path) + ".exe")
@@ -158,9 +177,10 @@ def find_benchmarks(filter_name=None):
 
 def compile_yona(source, opt_level, exe_path):
     lib_path = ROOT / "lib"
-    cmd = [str(YONAC), f"-O{opt_level}", "-I", str(lib_path), "-o", str(exe_path), str(source)]
+    cmd = [str(YONAC), f"-O{opt_level}", "--sysroot", str(_default_sysroot()), "-I", str(lib_path),
+           "-o", str(exe_path), str(source)]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=_tool_env())
         return result.returncode == 0
     except subprocess.TimeoutExpired:
         return False
@@ -177,7 +197,7 @@ def compile_c(c_file, exe_path):
     if os.name != "nt":
         cmd.insert(2, "-lm")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, env=_tool_env())
         return result.returncode == 0
     except subprocess.TimeoutExpired:
         return False

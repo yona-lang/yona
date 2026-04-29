@@ -24,10 +24,24 @@ HTTP response with status code, raw headers string, and body.
 ### `request`
 
 ```yona
-request method path headers body = Request { method = method, path = path, headers = headers, body = body }
+request : Method -> String -> Int -> String -> Request
 ```
 
 Create a request with defaults.
+
+### `request`
+
+```yona
+request method path headers body = Request { method = method, path = path, headers = headers, body = body }
+```
+
+### `methodString`
+
+```yona
+methodString : Method -> String
+```
+
+Format a Method as a string.
 
 ### `methodString`
 
@@ -35,7 +49,13 @@ Create a request with defaults.
 methodString m = case m of
 ```
 
-Format a Method as a string.
+### `formatRequest`
+
+```yona
+formatRequest : String -> Request -> String
+```
+
+Format a Request into an HTTP/1.1 request string.
 
 ### `formatRequest`
 
@@ -43,7 +63,13 @@ Format a Method as a string.
 formatRequest host req =
 ```
 
-Format a Request into an HTTP/1.1 request string.
+### `parseResponse`
+
+```yona
+parseResponse : String -> Response
+```
+
+Parse an HTTP response string into a Response.
 
 ### `parseResponse`
 
@@ -51,12 +77,10 @@ Format a Request into an HTTP/1.1 request string.
 parseResponse raw =
 ```
 
-Parse an HTTP response string into a Response.
-
 ### `send`
 
 ```yona
-send host port req =
+send : String -> Int -> Request -> Response
 ```
 
 Send an HTTP request to host:port and return the Response.
@@ -65,10 +89,16 @@ Send an HTTP request to host:port and return the Response.
 send "example.com" 80 (request GET "/" 0 "")
 ```
 
+### `send`
+
+```yona
+send host port req =
+```
+
 ### `get`
 
 ```yona
-get host port path = send host port (request GET path 0 "")
+get : String -> Int -> String -> Response
 ```
 
 HTTP GET shorthand.
@@ -77,10 +107,16 @@ HTTP GET shorthand.
 get "example.com" 80 "/api"
 ```
 
+### `get`
+
+```yona
+get host port path = send host port (Request { method = GET, path = path, headers = 0, body = "" })
+```
+
 ### `post`
 
 ```yona
-post host port path body = send host port (request POST path 0 body)
+post : String -> Int -> String -> String -> Response
 ```
 
 HTTP POST shorthand.
@@ -89,16 +125,28 @@ HTTP POST shorthand.
 post "example.com" 80 "/submit" "key=value"
 ```
 
+### `post`
+
+```yona
+post host port path body = send host port (Request { method = POST, path = path, headers = 0, body = body })
+```
+
 ### `ok`
 
 ```yona
-ok body = Response { status = 200, rawHeaders = "", body = body }
+ok : String -> Response
 ```
 
 Create a simple 200 OK response.
 
 ```
 ok "Hello, World!"
+```
+
+### `ok`
+
+```yona
+ok body = Response { status = 200, rawHeaders = "", body = body }
 ```
 
 ### `notFound`
@@ -120,10 +168,24 @@ Create a 500 Internal Server Error response.
 ### `formatResponse`
 
 ```yona
-formatResponse resp =
+formatResponse : Response -> String
 ```
 
 Format a Response into an HTTP/1.1 response string.
+
+### `formatResponse`
+
+```yona
+formatResponse resp =
+```
+
+### `response`
+
+```yona
+response : Int -> String -> Response
+```
+
+Create a Response with custom status and body.
 
 ### `response`
 
@@ -131,12 +193,10 @@ Format a Response into an HTTP/1.1 response string.
 response status body = Response { status = status, rawHeaders = "", body = body }
 ```
 
-Create a Response with custom status and body.
-
-### `serve`
+### `serveLoop`
 
 ```yona
-serve host port handler =
+serveLoop : Int -> (Request -> Response) -> Int
 ```
 
 Start an HTTP server. Calls `handler request` for each incoming connection.
@@ -145,5 +205,23 @@ Runs forever (blocking).
 
 ```
 serve "0.0.0.0" 8080 (\req -> ok "Hello!")
+```
+
+### `serveLoop`
+
+```yona
+serveLoop listener handler =
+```
+
+### `serve`
+
+```yona
+serve : String -> Int -> (Request -> Response) -> Int
+```
+
+### `serve`
+
+```yona
+serve host port handler =
 ```
 

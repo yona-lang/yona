@@ -1,0 +1,111 @@
+## Std\GPU — accelerated columnar execution.
+##
+## The initial backend is portable CPU execution over `IntArray` columns. It
+## keeps explicit upload/materialize boundaries so programs are ready for future
+## Vulkan or vendor-backed device storage without changing the high-level API.
+## With `YONA_COMPILE_GPU_VULKAN`, optional Vulkan compute can handle `mapAdd`,
+## `mapMul`, and `reduceSum` (environment variables in `docs/gpu-architecture.md`).
+## `mapAdd`/`mapMul` prefer device-local SSBOs with a staging upload when VRAM allows;
+## set `YONA_GPU_VULKAN_HOST_SSBO=1` to force the legacy host-mapped SSBO path.
+## `filterGreaterThan` remains CPU-only until a GPU compaction path exists.
+module Std\GPU
+
+export type Buffer
+export backendName, vulkanStatus, vulkanLastNote, hasGpu, hasSimd, vulkanAvailable
+export upload, materialize, length
+export mapAdd, mapMul, filterGreaterThan, reduceSum
+
+## Opaque accelerator buffer. The CPU backend stores an owned IntArray copy.
+type Buffer = Buffer IntArray
+
+extern raw_backendName       : Int -> String   = "yona_Std_GPU_raw__backendName"
+extern raw_vulkanStatus      : Int -> String   = "yona_Std_GPU_raw__vulkanStatus"
+extern raw_vulkanLastNote    : Int -> String   = "yona_Std_GPU_raw__vulkanLastNote"
+extern raw_hasGpu            : Int -> Bool     = "yona_Std_GPU_raw__hasGpu"
+extern raw_hasSimd           : Int -> Bool     = "yona_Std_GPU_raw__hasSimd"
+extern raw_vulkanAvailable   : Int -> Bool     = "yona_Std_GPU_raw__vulkanAvailable"
+extern raw_upload            : IntArray -> IntArray = "yona_Std_GPU_raw__upload"
+extern raw_materialize       : IntArray -> IntArray = "yona_Std_GPU_raw__materialize"
+extern raw_length            : IntArray -> Int = "yona_Std_GPU_raw__length"
+extern raw_mapAdd            : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__mapAdd"
+extern raw_mapMul            : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__mapMul"
+extern raw_filterGreaterThan : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__filterGreaterThan"
+extern raw_reduceSum         : IntArray -> Int = "yona_Std_GPU_raw__reduceSum"
+
+## Active backend name. Currently `cpu-simd` or `cpu-scalar`.
+backendName : String
+backendName = raw_backendName 0
+
+## Vulkan status string: `vulkan-unavailable`, `vulkan-loader`, or `vulkan-device`
+## (device only when built with Vulkan headers and init succeeded).
+vulkanStatus : String
+vulkanStatus = raw_vulkanStatus 0
+
+## Short hint from the last failed Vulkan init or opt-in GPU kernel attempt.
+## Empty after success or when Vulkan was not compiled in. Same source as the C
+## `yona_gpu_vulkan_device_last_note()` helper.
+vulkanLastNote : String
+vulkanLastNote = raw_vulkanLastNote 0
+
+## True when Vulkan is enabled at build, not disabled by `YONA_GPU_DISABLE_VULKAN`,
+## device init succeeds, and `shaderInt64` is available (required for int64 SSBO
+## kernels). Result is cached until `yona_gpu_vulkan_device_shutdown()`.
+hasGpu : Bool
+hasGpu = raw_hasGpu 0
+
+## True when the CPU backend was built with a known SIMD baseline.
+hasSimd : Bool
+hasSimd = raw_hasSimd 0
+
+## True when a Vulkan loader is visible to the process.
+vulkanAvailable : Bool
+vulkanAvailable = raw_vulkanAvailable 0
+
+## Copy a host IntArray into accelerator-owned storage.
+upload : IntArray -> Buffer
+upload values = Buffer (raw_upload values)
+
+## Copy accelerator-owned storage back to a host IntArray.
+materialize : Buffer -> IntArray
+materialize buffer =
+    case buffer of
+        Buffer values -> raw_materialize values
+    end
+
+## Number of elements in the buffer.
+length : Buffer -> Int
+length buffer =
+    case buffer of
+        Buffer values -> raw_length values
+    end
+
+## Add a constant to every element. Vulkan path when `YONA_GPU_VULKAN_MAPADD=1`
+## or `YONA_GPU_VULKAN_COMPUTE=1` and length ≥ min (default 4096; see docs).
+mapAdd : Int -> Buffer -> Buffer
+mapAdd delta buffer =
+    case buffer of
+        Buffer values -> Buffer (raw_mapAdd delta values)
+    end
+
+## Multiply every element by a constant. Vulkan when `YONA_GPU_VULKAN_MAPMUL=1`
+## or `YONA_GPU_VULKAN_COMPUTE=1` (min length env vars in docs).
+mapMul : Int -> Buffer -> Buffer
+mapMul factor buffer =
+    case buffer of
+        Buffer values -> Buffer (raw_mapMul factor values)
+    end
+
+## Keep values greater than the threshold. CPU only (no Vulkan path yet).
+filterGreaterThan : Int -> Buffer -> Buffer
+filterGreaterThan threshold buffer =
+    case buffer of
+        Buffer values -> Buffer (raw_filterGreaterThan threshold values)
+    end
+
+## Sum all values. Vulkan when `YONA_GPU_VULKAN_REDUCE=1` or
+## `YONA_GPU_VULKAN_COMPUTE=1` (min length in docs); else SIMD/scalar CPU.
+reduceSum : Buffer -> Int
+reduceSum buffer =
+    case buffer of
+        Buffer values -> raw_reduceSum values
+    end

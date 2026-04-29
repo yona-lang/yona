@@ -37,12 +37,18 @@ Yona's channels are **synchronous** primitives — `send` blocks if the
 buffer is full; `recv` blocks if empty. The blocking happens on the
 calling task's worker thread.
 
-This is fine when producer and consumer are on **different** worker
-threads (different tasks): one blocks, the other runs, both make
-progress. But if you call `recv` in the same task that's supposed to
-send, the worker thread blocks forever and nothing else runs.
+This is fine when producer and consumer are on **different** tasks: one
+blocks, the other runs, both make progress. But if every live task is
+blocked on channels and there is no queued work left that could unblock
+them, no progress is possible.
 
-The runtime detects this after ~5 seconds and raises `:Deadlock`.
+The runtime tracks worker tasks, external tasks, queued async work, and
+channel waiters. When `send` or `recv` would block, it records the wait
+and raises `:Deadlock` once the blocked task confirms that no runnable
+task remains. This is deterministic; it is not based on a fixed timeout.
+If the fixed worker pool is saturated by blocking channel operations but
+runnable work is queued, the runtime starts a compensation worker instead
+of reporting a deadlock.
 
 The canonical pattern is:
 1. Create a channel

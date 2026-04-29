@@ -10,7 +10,7 @@ A compiled functional programming language targeting LLVM, featuring persistent 
 - **Pattern matching** — head-tail, tuples, constructors, or-patterns, guards
 - **Algebraic data types** — with traits, default methods, cross-module dispatch
 - **Module system** — FQN imports, interface files, cross-module generics
-- **37 stdlib modules** — I/O, networking, regex, JSON, crypto, process management, streams, channels
+- **38 stdlib modules** — I/O, networking, regex, JSON, crypto, process management, streams, channels, accelerated columns
 
 ## Quick Start
 

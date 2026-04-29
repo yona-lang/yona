@@ -17,6 +17,8 @@ cmake --build --preset build-debug-linux
 ```
 Replace `linux` with `macos` or omit the suffix for Windows. Replace `debug` with `release` for release builds.
 
+Optional GPU: add `-DYONA_ENABLE_VULKAN=ON` and set `VULKAN_SDK` to the LunarG root so the runtime compiles against `vulkan/vulkan.h` (see `docs/gpu-architecture.md`). Default builds do not require it. To match that optional build when compiling the runtime from source (e.g. `yonac` without a packaged `compiled_runtime.o`), set `YONA_COMPILE_GPU_VULKAN=1` **and** `VULKAN_SDK`; leave both unset for the default CPU-only runtime headers. With Vulkan enabled at configure time, `Std\GPU.vulkanStatus` may return `vulkan-device` after runtime `dlopen`/`LoadLibrary` dispatch creates a compute queue — still **no** import-library link on the main executable.
+
 ### Compiler flags
 - `-O0` to `-O3` — optimization level (default O2)
 - `-g` — emit DWARF debug info
@@ -49,6 +51,24 @@ ctest --preset unit-tests-linux
 # Run a specific test (doctest subcase filter)
 ./out/build/x64-debug-linux/tests -tc="TestName"
 ```
+
+On Windows, set `YONA_PATH=…/test/code;…/lib` and ideally `YONAC_CC` to your LLVM
+`clang.exe` (CTest does this for you). If you have been experimenting with
+optional Vulkan runtime builds, **unset** `YONA_COMPILE_GPU_VULKAN` (or set it
+to `0`) before running `tests.exe` manually so the scratch `compiled_runtime`
+object matches the default non-Vulkan configuration. CTest always injects
+`YONA_COMPILE_GPU_VULKAN=0` for `doctest_tests`.
+
+When CMake is configured with `-DYONA_ENABLE_VULKAN=ON`, CTest also registers
+`doctest_gpu_vulkan`, which runs `tests -tc=*gpu?vulkan*` **without** forcing
+`YONA_COMPILE_GPU_VULKAN=0` (so the filter matches device + optional mapAdd /
+mapMul / reduce doctests against the Vulkan-enabled `yona_lib_static`). Example:
+`ctest --test-dir out/build/x64-debug -R doctest_gpu_vulkan -V` (adjust the
+build directory for your preset).
+
+Vulkan device selection, opt-in env vars, and diagnostics are documented in
+`docs/gpu-architecture.md` and `docs/api/GPU.md` (`YONA_GPU_VULKAN_PHYSICAL_DEVICE_INDEX`,
+`yona_gpu_vulkan_device_last_note()`, `Std\GPU.vulkanLastNote`).
 
 ### Format code
 ```bash

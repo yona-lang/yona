@@ -1,0 +1,7 @@
+import fromSeq, foldl from Std\IntArray in
+import upload, materialize, length, mapAdd from Std\GPU in
+let input = fromSeq [10, 20, 30] in
+let buffer = upload input in
+let shifted = mapAdd 5 buffer in
+let output = materialize shifted in
+length shifted + foldl (\acc x -> acc + x) 0 output

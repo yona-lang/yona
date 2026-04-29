@@ -1,0 +1,10 @@
+import channel, recv from Std\Channel in
+let (sl, rl) = channel 1 in
+case sl of Linear _ ->
+case rl of Linear receiver ->
+    try
+        let _ = recv receiver in
+        0
+    catch _ -> 123
+    end
+end end

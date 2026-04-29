@@ -58,6 +58,9 @@ bench/
   numeric/               # Numeric computation benchmarks
     ackermann.yona       # Ackermann function (deep recursion)
     sum_squares.yona     # Sum of squares (tight loop, TCE)
+  accelerators/           # CPU/GPU-style columnar execution benchmarks
+    gpu_columnar_pipeline.yona  # upload -> map -> filter -> reduce
+    gpu_materialize_sum.yona    # upload -> map -> materialize -> fold
   reference/             # Reference implementations (C, Erlang, Haskell,
     fibonacci.c          # Java, JavaScript, Python). Only .c and .erl are
     fibonacci.erl        # currently wired into the runner's comparison

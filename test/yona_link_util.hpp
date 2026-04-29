@@ -56,6 +56,23 @@ inline std::string include_flags() {
     return o.str();
 }
 
+/** Match CMake yonac when YONA_ENABLE_VULKAN: headers + -D, no vulkan-1 on link. */
+inline std::string vulkan_runtime_cflags() {
+    const char* on = std::getenv("YONA_COMPILE_GPU_VULKAN");
+    if (!on || std::string(on) == "0")
+        return "";
+    const char* sdk = std::getenv("VULKAN_SDK");
+    if (!sdk || !*sdk)
+        return "";
+    namespace fs = std::filesystem;
+    fs::path inc = fs::path(sdk) / "Include";
+    if (!fs::exists(inc / "vulkan" / "vulkan.h"))
+        inc = fs::path(sdk) / "include";
+    if (!fs::exists(inc / "vulkan" / "vulkan.h"))
+        return "";
+    return std::string(" -DYONA_COMPILE_GPU_VULKAN=1 -I") + qpath(inc);
+}
+
 inline std::vector<std::string> platform_sources() {
 #ifdef _WIN32
     return {"file_windows.c", "net_windows.c", "os_windows.c"};
@@ -112,6 +129,11 @@ inline bool ensure_runtime_objects() {
             "runtime/hamt.c",
             "runtime/exceptions.c",
             "runtime/closures.c",
+            "runtime/gpu_vulkan.c",
+            "runtime/gpu_vulkan_device.c",
+            "runtime/gpu_vulkan_compute.c",
+            "runtime/gpu_vulkan_ops.c",
+            "runtime/gpu_cpu.c",
 #ifdef _WIN32
             "runtime/platform/async_win32.c",
             "runtime/platform/channel_win32.c",
@@ -137,7 +159,7 @@ inline bool ensure_runtime_objects() {
     }
     if (!need) return true;
 
-    if (!compile_c_file(cr_src, cr_o)) return false;
+    if (!compile_c_file(cr_src, cr_o, vulkan_runtime_cflags())) return false;
     for (const auto& [ps, po] : plat) {
         if (!compile_c_file(ps, po)) return false;
     }
@@ -255,6 +277,31 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
 
 inline std::string popen_read_all(const std::filesystem::path& exe) {
     std::string cmd = qpath(exe) + err_null();
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return "RUN_ERROR";
+    std::string result;
+    std::array<char, 256> buffer{};
+    while (fgets(buffer.data(), (int)buffer.size(), pipe) != nullptr) result += buffer.data();
+    pclose(pipe);
+    if (!result.empty() && (result.back() == '\n' || result.back() == '\r')) result.pop_back();
+    return result;
+}
+
+/** Run `exe` with one `KEY=VAL` in the child environment (fixture stability / isolation). */
+inline std::string popen_read_all_run_with_env(const std::filesystem::path& exe, const char* key,
+                                               const char* val) {
+    namespace fs = std::filesystem;
+    std::string cmd;
+#ifdef _WIN32
+    fs::path bat = scratch_root() / "yona_codegen_env_run.bat";
+    {
+        std::ofstream out(bat.string(), std::ios::binary);
+        out << "@echo off\r\nset " << key << "=" << val << "\r\n" << qpath(exe) << "\r\n";
+    }
+    cmd = std::string("cmd /c ") + qpath(bat) + err_null();
+#else
+    cmd = std::string(key) + "=" + val + " " + qpath(exe) + err_null();
+#endif
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe) return "RUN_ERROR";
     std::string result;

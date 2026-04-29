@@ -1,0 +1,2 @@
+import hasGpu, vulkanAvailable from Std\GPU in
+if hasGpu then 99 else if vulkanAvailable then 0 else 0

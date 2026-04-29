@@ -2,7 +2,7 @@
 
 ## Module Overview
 
-### Pure Yona modules (12)
+### Pure Yona modules (13)
 
 | Module | Functions | Description |
 |--------|-----------|-------------|
@@ -18,6 +18,7 @@
 | `Std\Collection` | 9 | iterate, unfold, window, chunks, dedup, frequencies |
 | `Std\Function` | 8 | identity, compose, flip, pipe, fix |
 | `Std\Http` | 13 | HTTP client/server — Method/Request/Response ADTs, get, post, serve |
+| `Std\GPU` | 10 | Accelerated columnar buffers with CPU/SIMD fallback |
 
 ### C runtime modules (14)
 

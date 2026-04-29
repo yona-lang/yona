@@ -17,6 +17,9 @@ extern void* rc_alloc(int64_t type_tag, size_t payload_bytes);
 extern void yona_rt_rc_inc(void* p);
 extern void yona_rt_rc_dec(void* p);
 extern void yona_rt_raise(int64_t symbol, const char* message);
+extern int yona_rt_channel_wait_begin(void* channel, int op, int64_t count, int64_t cap,
+				      int closed, int opposite_waiters);
+extern void yona_rt_channel_wait_end(void);
 
 struct yona_task_group;
 typedef struct yona_task_group yona_task_group_t;
@@ -37,6 +40,8 @@ typedef struct yona_channel {
 	CONDITION_VARIABLE not_empty;
 	int closed;
 	int waiters;
+	int send_waiters;
+	int recv_waiters;
 	yona_task_group_t* group;
 } yona_channel_t;
 
@@ -74,28 +79,28 @@ yona_channel_t* yona_rt_channel_new(int64_t cap) {
 	return ch;
 }
 
-static int channel_should_timeout_check(int wait_count) {
-	return wait_count > 50;
-}
-
 void yona_rt_channel_send(yona_channel_t* ch, int64_t value) {
 	EnterCriticalSection(&ch->mutex);
-	int wait_count = 0;
 	while (ch->count == ch->cap && !ch->closed) {
 		if (ch->group && yona_rt_group_is_cancelled(ch->group)) {
 			LeaveCriticalSection(&ch->mutex);
 			yona_rt_raise(SYM_CANCELLED, "task cancelled while waiting on channel send");
 			return;
 		}
-		ch->waiters++;
-		SleepConditionVariableCS(&ch->not_full, &ch->mutex, 100);
-		ch->waiters--;
-		wait_count++;
-		if (channel_should_timeout_check(wait_count)) {
+		if (yona_rt_channel_wait_begin(ch, 1, ch->count, ch->cap, ch->closed,
+					       ch->recv_waiters)) {
+			yona_rt_channel_wait_end();
 			LeaveCriticalSection(&ch->mutex);
-			yona_rt_raise(SYM_DEADLOCK, "channel send blocked >5s — possible deadlock");
+			yona_rt_raise(SYM_DEADLOCK,
+				      "channel deadlock: send waiting on full channel; no runnable tasks remain");
 			return;
 		}
+		ch->waiters++;
+		ch->send_waiters++;
+		SleepConditionVariableCS(&ch->not_full, &ch->mutex, 100);
+		ch->send_waiters--;
+		ch->waiters--;
+		yona_rt_channel_wait_end();
 	}
 	if (ch->closed) {
 		LeaveCriticalSection(&ch->mutex);
@@ -111,22 +116,26 @@ void yona_rt_channel_send(yona_channel_t* ch, int64_t value) {
 
 int64_t yona_rt_channel_recv(yona_channel_t* ch) {
 	EnterCriticalSection(&ch->mutex);
-	int wait_count = 0;
 	while (ch->count == 0 && !ch->closed) {
 		if (ch->group && yona_rt_group_is_cancelled(ch->group)) {
 			LeaveCriticalSection(&ch->mutex);
 			yona_rt_raise(SYM_CANCELLED, "task cancelled while waiting on channel recv");
 			return 0;
 		}
-		ch->waiters++;
-		SleepConditionVariableCS(&ch->not_empty, &ch->mutex, 100);
-		ch->waiters--;
-		wait_count++;
-		if (channel_should_timeout_check(wait_count)) {
+		if (yona_rt_channel_wait_begin(ch, 2, ch->count, ch->cap, ch->closed,
+					       ch->send_waiters)) {
+			yona_rt_channel_wait_end();
 			LeaveCriticalSection(&ch->mutex);
-			yona_rt_raise(SYM_DEADLOCK, "channel recv blocked >5s — possible deadlock");
+			yona_rt_raise(SYM_DEADLOCK,
+				      "channel deadlock: recv waiting on empty open channel; no runnable tasks remain");
 			return 0;
 		}
+		ch->waiters++;
+		ch->recv_waiters++;
+		SleepConditionVariableCS(&ch->not_empty, &ch->mutex, 100);
+		ch->recv_waiters--;
+		ch->waiters--;
+		yona_rt_channel_wait_end();
 	}
 	if (ch->count == 0 && ch->closed) {
 		LeaveCriticalSection(&ch->mutex);

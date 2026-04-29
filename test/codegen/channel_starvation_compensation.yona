@@ -1,0 +1,33 @@
+import channel, send, recv, close from Std\Channel in
+import spawn from Std\Task in
+let (workSl, workRl) = channel 1 in
+case workSl of Linear workSender ->
+case workRl of Linear workReceiver ->
+let (doneSl, doneRl) = channel 16 in
+case doneSl of Linear doneSender ->
+case doneRl of Linear doneReceiver ->
+    let _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() -> case recv workReceiver of Some v -> send doneSender v; None -> send doneSender 0 end),
+        _ = spawn (\() ->
+            let _ = send workSender 1,
+                _ = send workSender 2,
+                _ = send workSender 3,
+                _ = send workSender 4,
+                _ = send workSender 5,
+                _ = send workSender 6,
+                _ = send workSender 7,
+                _ = send workSender 8 in
+            close workSender),
+        collect = \n acc -> if n <= 0 then acc else case recv doneReceiver of
+            Some v -> collect (n - 1) (acc + v)
+            None -> acc
+        end
+    in collect 8 0
+end end
+end end

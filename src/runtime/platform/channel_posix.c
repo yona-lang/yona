@@ -7,8 +7,8 @@
  * recv blocks when the buffer is empty.
  * close wakes all waiters; subsequent recv returns None when drained.
  *
- * Designed for use BETWEEN tasks running on thread pool workers. Single-task
- * use deadlocks (and is detected at runtime by yona_rt_channel_check_deadlock).
+ * Designed for use BETWEEN tasks. The async runtime tracks blocked channel
+ * waiters and raises :Deadlock when no runnable task can make progress.
  */
 
 #include <stdlib.h>
@@ -23,6 +23,10 @@ extern void* rc_alloc(int64_t type_tag, size_t payload_bytes);
 extern void yona_rt_rc_inc(void* p);
 extern void yona_rt_rc_dec(void* p);
 extern void yona_rt_raise(int64_t symbol, const char* message);
+extern int yona_rt_channel_wait_begin(void* channel, int op, int64_t count,
+                                      int64_t cap, int closed,
+                                      int opposite_waiters);
+extern void yona_rt_channel_wait_end(void);
 
 /* Forward declaration of task group from async_posix.c */
 struct yona_task_group;
@@ -51,6 +55,8 @@ typedef struct yona_channel {
     pthread_cond_t not_empty;
     int closed;
     int waiters;             /* number of blocked send/recv */
+    int send_waiters;
+    int recv_waiters;
     yona_task_group_t* group; /* owning task group, for cancellation */
 } yona_channel_t;
 
@@ -86,17 +92,8 @@ yona_channel_t* yona_rt_channel_new(int64_t cap) {
     return ch;
 }
 
-/* Runtime deadlock detection.
- * Heuristic: if a task blocks on a channel cond_wait with timeout repeatedly
- * (5 seconds total) and the buffer state hasn't changed, declare deadlock.
- * Better heuristics require tracking active tasks per group. */
-static int channel_should_timeout_check(int wait_count) {
-    return wait_count > 50;  /* ~5 seconds at 100ms per wait */
-}
-
 void yona_rt_channel_send(yona_channel_t* ch, int64_t value) {
     pthread_mutex_lock(&ch->mutex);
-    int wait_count = 0;
     while (ch->count == ch->cap && !ch->closed) {
         if (ch->group && yona_rt_group_is_cancelled(ch->group)) {
             pthread_mutex_unlock(&ch->mutex);
@@ -104,21 +101,24 @@ void yona_rt_channel_send(yona_channel_t* ch, int64_t value) {
                           "task cancelled while waiting on channel send");
             return;
         }
+        if (yona_rt_channel_wait_begin(ch, 1, ch->count, ch->cap, ch->closed,
+                                       ch->recv_waiters)) {
+            yona_rt_channel_wait_end();
+            pthread_mutex_unlock(&ch->mutex);
+            yona_rt_raise(SYM_DEADLOCK,
+                          "channel deadlock: send waiting on full channel; no runnable tasks remain");
+            return;
+        }
         ch->waiters++;
-        /* Use timed wait to enable deadlock detection */
+        ch->send_waiters++;
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_nsec += 100000000;  /* 100ms */
         if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
         pthread_cond_timedwait(&ch->not_full, &ch->mutex, &ts);
+        ch->send_waiters--;
         ch->waiters--;
-        wait_count++;
-        if (channel_should_timeout_check(wait_count)) {
-            pthread_mutex_unlock(&ch->mutex);
-            yona_rt_raise(SYM_DEADLOCK,
-                          "channel send blocked >5s — possible deadlock");
-            return;
-        }
+        yona_rt_channel_wait_end();
     }
     if (ch->closed) {
         pthread_mutex_unlock(&ch->mutex);
@@ -134,7 +134,6 @@ void yona_rt_channel_send(yona_channel_t* ch, int64_t value) {
 
 int64_t yona_rt_channel_recv(yona_channel_t* ch) {
     pthread_mutex_lock(&ch->mutex);
-    int wait_count = 0;
     while (ch->count == 0 && !ch->closed) {
         if (ch->group && yona_rt_group_is_cancelled(ch->group)) {
             pthread_mutex_unlock(&ch->mutex);
@@ -142,20 +141,24 @@ int64_t yona_rt_channel_recv(yona_channel_t* ch) {
                           "task cancelled while waiting on channel recv");
             return 0;
         }
+        if (yona_rt_channel_wait_begin(ch, 2, ch->count, ch->cap, ch->closed,
+                                       ch->send_waiters)) {
+            yona_rt_channel_wait_end();
+            pthread_mutex_unlock(&ch->mutex);
+            yona_rt_raise(SYM_DEADLOCK,
+                          "channel deadlock: recv waiting on empty open channel; no runnable tasks remain");
+            return 0;
+        }
         ch->waiters++;
+        ch->recv_waiters++;
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_nsec += 100000000;  /* 100ms */
         if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
         pthread_cond_timedwait(&ch->not_empty, &ch->mutex, &ts);
+        ch->recv_waiters--;
         ch->waiters--;
-        wait_count++;
-        if (channel_should_timeout_check(wait_count)) {
-            pthread_mutex_unlock(&ch->mutex);
-            yona_rt_raise(SYM_DEADLOCK,
-                          "channel recv blocked >5s — possible deadlock");
-            return 0;
-        }
+        yona_rt_channel_wait_end();
     }
     if (ch->count == 0 && ch->closed) {
         /* Channel closed and drained */
