@@ -11,7 +11,8 @@ overhead.
 - Keep the baseline compiler, runtime, and packages usable without GPU SDKs.
 - Use CPU scalar/SIMD fallback everywhere, including CI and unsupported hosts.
 - Add Vulkan as the first real GPU backend after the API and ABI are stable.
-- Gate transparent compiler offload on benchmark evidence, not assumptions.
+- Gate transparent compiler offload on benchmark evidence, not assumptions
+  (see **`docs/gpu-transparent-lowering.md`** — *Benchmark corpus* and `bench/run_gpu_compare.py --json-report`).
 
 ## Execution Model
 
@@ -75,10 +76,9 @@ kernels). The result is cached per process and cleared by
 `yona_gpu_vulkan_device_shutdown()`.
 
 **Opt-in Vulkan compute** (`src/runtime/gpu_vulkan_ops.c`, included from
-`gpu_vulkan_device.c`): `mapAdd`, `mapMul`, and `reduceSum` can use a Vulkan path
-when enabled. Set **`YONA_GPU_VULKAN_COMPUTE=1`** to allow all three, or enable
-individually with **`YONA_GPU_VULKAN_MAPADD=1`**, **`YONA_GPU_VULKAN_MAPMUL=1`**, or
-**`YONA_GPU_VULKAN_REDUCE=1`**. Minimum column length defaults to **4096**; override
+`gpu_vulkan_device.c`): `mapAdd`, `mapMul`, `reduceSum`, and `filterGreaterThan`
+can use a Vulkan path when enabled. Set **`YONA_GPU_VULKAN_COMPUTE=1`** to allow
+all four, or enable individually with **`YONA_GPU_VULKAN_MAPADD=1`**, **`YONA_GPU_VULKAN_MAPMUL=1`**, **`YONA_GPU_VULKAN_REDUCE=1`**, or **`YONA_GPU_VULKAN_FILTER=1`**. Minimum column length defaults to **4096**; override
 with **`YONA_GPU_VULKAN_MIN_LEN`** or the per-op `*_MIN_LEN` variables. Pipelines
 are cached; queue submit and fence wait are serialized with a dedicated mutex.
 **`mapAdd` / `mapMul`:** When a **device-local, non-host-visible** memory type is
@@ -88,30 +88,61 @@ readback. Integrated GPUs without a separate VRAM heap keep the prior
 **single host-visible SSBO** path. Force the host path with
 **`YONA_GPU_VULKAN_HOST_SSBO=1`** (debug / regression).
 
-**`reduceSum`:** Still uses **host-visible** SSBOs for both the column and the
-per-block partial sums (smaller footprint than map; full device-local + staging
-for both bindings can follow the same pattern as `mapAdd`).
+**`reduceSum`:** Uses the same rule as `mapAdd` / `mapMul`: when a **device-local,
+non-host-visible** heap exists and **`YONA_GPU_VULKAN_HOST_SSBO`** is not set, the
+input column and block-sum buffers are **device-local** with **staging** copies
+(upload, dispatch, copy partial sums back for the host tail sum). Otherwise both
+bindings stay **host-visible** SSBOs.
 
 | Variable | Effect |
 |----------|--------|
-| `YONA_GPU_VULKAN_COMPUTE=1` | Enable Vulkan `mapAdd`, `mapMul`, and `reduceSum`. |
+| `YONA_GPU_VULKAN_COMPUTE=1` | Enable Vulkan `mapAdd`, `mapMul`, `reduceSum`, and `filterGreaterThan`. |
 | `YONA_GPU_VULKAN_MAPADD=1` | Enable Vulkan `mapAdd` only. |
 | `YONA_GPU_VULKAN_MAPMUL=1` | Enable Vulkan `mapMul` only. |
 | `YONA_GPU_VULKAN_REDUCE=1` | Enable Vulkan `reduceSum` only. |
+| `YONA_GPU_VULKAN_FILTER=1` | Enable Vulkan `filterGreaterThan` only (mark + GPU prefix + scatter). |
+| `YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1` | Force legacy host exclusive-prefix between mark and scatter (debug / regression). |
 | `YONA_GPU_VULKAN_MIN_LEN` | Global minimum `IntArray` length (default 4096). |
 | `YONA_GPU_VULKAN_MAPADD_MIN_LEN` | Override min length for `mapAdd`. |
 | `YONA_GPU_VULKAN_MAPMUL_MIN_LEN` | Override min length for `mapMul`. |
 | `YONA_GPU_VULKAN_REDUCE_MIN_LEN` | Override min length for `reduceSum`. |
+| `YONA_GPU_VULKAN_FILTER_MIN_LEN` | Override min length for `filterGreaterThan`. |
 | `YONA_GPU_DISABLE_VULKAN` | Any value other than `0` disables loader use and GPU paths. |
 | `YONA_GPU_VULKAN_PHYSICAL_DEVICE_INDEX` | Non-negative index into `vkEnumeratePhysicalDevices` order. |
+| `YONA_GPU_VULKAN_HOST_SSBO=1` | Force host-visible SSBOs only (no device-local + staging); for debugging and parity tests. |
 
 Generated API notes for `Std\GPU` also appear in `docs/api/GPU.md` (`python3 scripts/gendocs.py`).
+
+**Vulkan optional tests:** With `YONA_COMPILE_GPU_VULKAN`, `test/gpu_vulkan_mapadd_test.cpp`
+runs doctest cases against `yona_gpu_vulkan_try_*`. They **skip** (with a MESSAGE)
+when no suitable device or init failure—so default CI stays green without a GPU.
+When Vulkan succeeds, cases check roundtrips and **`YONA_GPU_VULKAN_HOST_SSBO=1`**
+parity against the default path (staging vs host-mapped SSBOs must match).
+
+**Wall-clock benchmarks:** `bench/run_gpu_compare.py` times the same accelerator
+`.yona` programs (hot paths plus **10k / 5k crossover-size** variants under
+`bench/accelerators/`) with Vulkan forced off vs `YONA_GPU_VULKAN_COMPUTE=1`,
+then prints a **summary table** (CPU avg ms, GPU avg ms, delta %, verdict). Use
+`--json-report` for archivable metadata; `bench/gpu_bench_meta.py` prints row
+counts from sources. See `bench/README.md`, section **GPU / Vulkan**, and
+`docs/gpu-transparent-lowering.md` (*Benchmark corpus*).
 
 **`Std\GPU.vulkanLastNote`:** short string from the last failed device init or
 opt-in GPU attempt (`yona_gpu_vulkan_device_last_note()`); empty after success or
 when Vulkan was not compiled in.
 
-**`filterGreaterThan`** remains CPU-only (variable output size; no GPU path yet).
+**`filterGreaterThan`:** Optional Vulkan path (same env pattern as above): GPU
+**mark** pass, **GPU** inclusive prefix (doubling scan on int64 flags) plus a small
+compute kernel for **exclusive** indices, then GPU **scatter** into a packed buffer.
+The implementation reads a single int64 (**total match count**) from the end of
+the inclusive scan between submits so the result `IntArray` can be allocated before
+scatter. When a device-local heap exists and **`YONA_GPU_VULKAN_HOST_SSBO`** is not
+set, the main column/flags/prefix/out buffers use **device-local** memory with
+**staging** where needed; two extra **device-local** ping-pong buffers hold the
+prefix scan (plus an 8-byte host staging slice for the count on the staging path).
+Otherwise the same pipeline uses **host-visible** buffers including the scan pair.
+Set **`YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1`** to revert to the older CPU exclusive
+prefix for A/B checks. Order matches the CPU implementation.
 
 Codegen E2E runs `gpu_backend_flags` and `gpu_vulkan_last_note` with
 `YONA_GPU_DISABLE_VULKAN=1` in the child process so expectations stay stable on

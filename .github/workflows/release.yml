@@ -189,14 +189,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\LLVM
-          key: llvm-20-1.7
+          key: llvm-22-1.0-windows-msvc
 
       - name: Install LLVM (Windows)
         if: steps.cache-llvm.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          $llvmVersion = "20"
-          $llvmMinorVersion = "1.7"
+          $llvmVersion = "22"
+          $llvmMinorVersion = "1.0"
           $destDir = "C:\LLVM"
           $llvmBaseUrl = "https://github.com/llvm/llvm-project/releases/download"
           $llvmTag = "llvmorg-$llvmVersion.$llvmMinorVersion"
@@ -220,6 +220,7 @@ jobs:
           echo "LLVM_INSTALL_PREFIX=C:\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "CXX=C:\LLVM\bin\clang++.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "YONAC_CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Install WiX v4 CLI
         shell: pwsh

@@ -52,12 +52,9 @@ ctest --preset unit-tests-linux
 ./out/build/x64-debug-linux/tests -tc="TestName"
 ```
 
-On Windows, set `YONA_PATH=…/test/code;…/lib` and ideally `YONAC_CC` to your LLVM
-`clang.exe` (CTest does this for you). If you have been experimenting with
-optional Vulkan runtime builds, **unset** `YONA_COMPILE_GPU_VULKAN` (or set it
-to `0`) before running `tests.exe` manually so the scratch `compiled_runtime`
-object matches the default non-Vulkan configuration. CTest always injects
-`YONA_COMPILE_GPU_VULKAN=0` for `doctest_tests`.
+On Windows, set `YONA_PATH` to `…/test/code;…/lib` and **`YONAC_CC`** to the full path of **`clang.exe`** from the **same complete** `clang+llvm-*-windows-msvc` tree as **`LLVM_INSTALL_PREFIX`** (or put that `bin` on `PATH`). CI appends `C:\LLVM\bin` to `PATH` and sets `YONAC_CC` for the same reason. See **INSTALL.md** (Windows): *Complete Windows LLVM tree* and *`YONAC_CC` and doctest* — incomplete LLVM installs (`LLVMExports.cmake` missing `LTO.lib`, `llvm-ar.exe`, etc.) break `find_package(LLVM)`; **`LLVM_INSTALL_PREFIX`** must not contain typos.
+
+If you have been experimenting with optional Vulkan runtime builds, **unset** `YONA_COMPILE_GPU_VULKAN` (or set it to `0`) before running `tests.exe` manually so the scratch `compiled_runtime` object matches the default non-Vulkan configuration. CTest always injects `YONA_COMPILE_GPU_VULKAN=0` for `doctest_tests`.
 
 When CMake is configured with `-DYONA_ENABLE_VULKAN=ON`, CTest also registers
 `doctest_gpu_vulkan`, which runs `tests -tc=*gpu?vulkan*` **without** forcing

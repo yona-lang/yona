@@ -29,7 +29,8 @@ inline std::filesystem::path scratch_root() {
 }
 
 inline std::string qpath(const std::filesystem::path& p) {
-    return "\"" + p.string() + "\"";
+    /* Always forward slashes: mixed C:/...\\foo from path.string() breaks cmd.exe system(). */
+    return "\"" + p.lexically_normal().generic_string() + "\"";
 }
 
 inline const char* cc() {
@@ -40,6 +41,16 @@ inline const char* cc() {
 #else
     return "cc";
 #endif
+}
+
+/** Compiler argv0 for `system()` / `cmd.exe`. Quote only if the path contains spaces — a
+ * leading `"` breaks `cmd /c` parsing when MSVC `system()` wraps the whole command. */
+inline std::string cc_quoted() {
+    namespace fs = std::filesystem;
+    std::string g = fs::path(cc()).lexically_normal().generic_string();
+    if (g.find(' ') != std::string::npos)
+        return "\"" + g + "\"";
+    return g;
 }
 
 inline const char* err_null() {
@@ -100,7 +111,7 @@ inline void runtime_object_paths(std::vector<std::filesystem::path>& out) {
 inline bool compile_c_file(const std::filesystem::path& src, const std::filesystem::path& dst_o,
                            const std::string& extra_flags = "") {
     std::ostringstream cmd;
-    cmd << cc() << " -c " << qpath(src) << include_flags();
+    cmd << cc_quoted() << " -c " << qpath(src) << include_flags();
     if (!extra_flags.empty()) cmd << " " << extra_flags;
     cmd << " -o " << qpath(dst_o) << err_null();
     return sh(cmd.str()) == 0;
@@ -190,11 +201,12 @@ inline std::string exe_suffix() {
 inline bool link_objs_to_exe(const std::vector<std::filesystem::path>& objs,
                              const std::filesystem::path& exe_out, const std::string& extra_libs = "") {
     std::ostringstream cmd;
-    cmd << cc();
+    cmd << cc_quoted();
     for (const auto& o : objs) cmd << " " << qpath(o);
     cmd << " -o " << qpath(exe_out);
 #ifdef _WIN32
-    cmd << " -lws2_32 -ldbghelp";
+    /* lld-link (Clang's default Windows linker) requires an explicit subsystem. */
+    cmd << " -lws2_32 -ldbghelp -Xlinker /SUBSYSTEM:CONSOLE";
 #else
     cmd << " -lm -lpthread -rdynamic";
 #endif

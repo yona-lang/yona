@@ -6,10 +6,12 @@ The initial backend is portable CPU execution over `IntArray` columns. It
 keeps explicit upload/materialize boundaries so programs are ready for future
 Vulkan or vendor-backed device storage without changing the high-level API.
 With `YONA_COMPILE_GPU_VULKAN`, optional Vulkan compute can handle `mapAdd`,
-`mapMul`, and `reduceSum` (environment variables in `docs/gpu-architecture.md`).
-`mapAdd`/`mapMul` prefer device-local SSBOs with a staging upload when VRAM allows;
-set `YONA_GPU_VULKAN_HOST_SSBO=1` to force the legacy host-mapped SSBO path.
-`filterGreaterThan` remains CPU-only until a GPU compaction path exists.
+`mapMul`, `reduceSum`, and `filterGreaterThan` (see `docs/gpu-architecture.md`).
+`mapAdd`/`mapMul`/`reduceSum`/`filterGreaterThan` prefer device-local SSBOs with staging
+when VRAM allows; set `YONA_GPU_VULKAN_HOST_SSBO=1` to force the legacy host-mapped SSBO path.
+`filterGreaterThan` uses GPU mark + GPU inclusive prefix + exclusive indices +
+GPU scatter when enabled (`YONA_GPU_VULKAN_FILTER` or `YONA_GPU_VULKAN_COMPUTE`).
+Set `YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1` to force the older host-side prefix (debug only).
 
 ## Types
 

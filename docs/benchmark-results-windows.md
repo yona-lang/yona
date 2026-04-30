@@ -152,6 +152,23 @@ Takeaway:
 - Most other large-file rows are reasonably stable (single-digit CV), so trend claims there are more trustworthy.
 - Across all 35 rows, 15/35 are <=10% CV; short-running microbenches remain the noisiest.
 
+## Std\GPU / Vulkan crossover (procedure)
+
+Crossover timings for transparent lowering are **not** part of the main
+`bench/runner.py` matrix: use `bench/run_gpu_compare.py` on this machine (or CI
+with a GPU worker). Recommended capture:
+
+```text
+set YONAC_CC=C:\local\LLVM\bin\clang.exe
+py -3 bench/gpu_bench_meta.py > gpu-bench-meta.json
+py -3 bench/run_gpu_compare.py -n 10 -O2 --json-report > gpu-compare-report.json
+```
+
+Archive both JSON files next to a short note (GPU model, driver, integrated vs
+discrete). Re-run after runtime or shader changes. Problem sizes are documented
+in `bench/README.md` (hot vs `*_10k` / `*_5k` accelerators). See
+`docs/gpu-transparent-lowering.md` for how this feeds the crossover cost model.
+
 ## Caveats
 
 - Startup-adjusted floor can exaggerate ratios when values clamp to `0.01ms`.

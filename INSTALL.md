@@ -3,7 +3,7 @@
 ## Prerequisites
 
 All platforms require:
-- **LLVM 16+** (for code generation backend)
+- **LLVM** for the codegen backend: **22+** recommended (see `CLAUDE.md`); **16+** may work if `find_package(LLVM)` succeeds with your toolchain. **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle version that matches your dev setup (CI uses **22.1.0** on Windows; Linux/macOS CI currently installs **20** from distro packages).
 - **CMake 3.10+** and **Ninja** (for building from source; on **Windows** use the **Windows** section: Ninja + Clang from a prebuilt LLVM + MSVC toolset)
 - **C++23 capable compiler** (clang recommended; Windows presets use Clang with the MSVC linker)
 - **PCRE2** (optional, for Std\Regex module; on Windows you typically need a manual/vcpkg setup because `pkg-config` is uncommon)
@@ -70,7 +70,19 @@ The MSI flow is defined under `packaging/windows/` (`YonaInstaller.wxs`, `build-
 - **LLVM for Windows**: use a **prebuilt** `clang+llvm-*-x86_64-pc-windows-msvc` archive from the [LLVM project releases](https://github.com/llvm/llvm-project/releases) (search the page for `windows-msvc`). Extract it to a short path such as `C:\LLVM`. This avoids link errors from LLVM builds that were produced on another machine with hard-coded Visual Studio paths (see *Troubleshooting* below).
 - **Optional — PCRE2** for `Std\Regex`: there is no `pkg-config` on a typical Windows dev shell, so CMake usually skips PCRE2 unless you point CMake at a build of PCRE2 yourself (e.g. vcpkg). The rest of the compiler and runtime still build without it.
 
-The CMake toolchain defaults `LLVM_INSTALL_PREFIX` to `C:/local/LLVM` if the variable is unset. Set it explicitly if you extracted LLVM somewhere else (for example `C:\LLVM`).
+The CMake toolchain defaults `LLVM_INSTALL_PREFIX` to `C:/local/LLVM` if the variable is unset. Set it explicitly if you extracted LLVM somewhere else (for example `C:\LLVM`). **Spell the path correctly** in user and machine environment variables (`LLVM_INSTALL_PREFIX`); a typo leaves CMake pointing at a non-existent tree.
+
+#### Complete Windows LLVM tree (CMake + `find_package(LLVM)`)
+
+Use the official **`clang+llvm-*-x86_64-pc-windows-msvc`** archive from the [LLVM releases](https://github.com/llvm/llvm-project/releases) (not a Clang-only installer that omits LLVM libraries, and not a partial extract). `LLVM_INSTALL_PREFIX` must be the **root** of that tree (the folder that contains `bin`, `lib`, `include`).
+
+CMake’s imported targets expect a coherent install, including at minimum under `bin\`: **`clang.exe`**, **`clang++.exe`**, **`llvm-ar.exe`**, and other tools referenced from `LLVMExports.cmake`; under `lib\`: the **`LLVM*.lib`** set plus **`LTO.lib`**; under `bin\` (or next to those libs as shipped): **`LTO.dll`** when the export set references it. If `find_package(LLVM)` fails with “imported target … references the file … but this file does not exist”, the prefix is incomplete—re-download the matching `clang+llvm` archive or repair the install.
+
+If **`LLVM_INSTALL_PREFIX`** points at an LLVM **library** tree **without** Clang in `bin\`, set **`CC`** / **`CXX`** (or CMake **`-D CMAKE_C_COMPILER=…` `-D CMAKE_CXX_COMPILER=…`**) to a separate **`clang.exe` / `clang++.exe`** from another full install, and keep **`LLVM_INSTALL_PREFIX`** on the tree that contains **`lib/cmake/llvm/LLVMConfig.cmake`**.
+
+#### `YONAC_CC` and doctest (`tests.exe`)
+
+The C++ **doctest** harness compiles `src/compiled_runtime.c` and platform sources via `system()` / `cmd`. Set **`YONAC_CC`** to the full path of **`clang.exe`** used for those subprocesses (CTest on Windows should inherit the same env you use for CMake, or set it explicitly). The harness **quotes** `YONAC_CC` when building commands; if you run an **older** `tests.exe` without that fix, use an **8.3 short path** (e.g. `C:\PROGRA~1\LLVM\bin\clang.exe`) or put **`clang.exe`** on **`PATH`** so the default compiler name resolves. Optional Vulkan scratch builds also honor **`YONA_COMPILE_GPU_VULKAN`** and **`VULKAN_SDK`** (see `CLAUDE.md` / `docs/gpu-architecture.md`).
 
 ### 2. Configure and build (PowerShell)
 
@@ -112,6 +124,9 @@ fallback for development/customization scenarios.
 ### 3. Tests (Windows)
 
 ```powershell
+$env:YONA_PATH = "$(Resolve-Path test/code);$(Resolve-Path lib)"
+# Optional but recommended if clang is not already on PATH:
+$env:YONAC_CC = "$env:LLVM_INSTALL_PREFIX\bin\clang.exe"   # e.g. C:\LLVM\bin\clang.exe
 ctest --preset unit-tests-windows
 ```
 
@@ -133,6 +148,9 @@ ctest --preset unit-tests-windows
 
 - **`LLVMConfig.cmake` not found**  
   Set `LLVM_INSTALL_PREFIX` to the **root** of the extracted LLVM tree (the directory that contains `bin`, `lib`, `include`).
+
+- **`find_package(LLVM)` / `LLVMExports.cmake`: imported target references missing `LTO.lib`, `LTO.dll`, `llvm-ar.exe`, etc.**  
+  Your prefix is not a full **`clang+llvm-…-windows-msvc`** tree, or files were deleted. Re-extract the official archive to a clean directory and point **`LLVM_INSTALL_PREFIX`** (and **`CC`/`CXX`**, if separate) at it.
 
 ## Docker
 
@@ -175,7 +193,14 @@ ctest --preset unit-tests-macos
 
 # Directly (Linux / macOS)
 ./out/build/x64-release-linux/tests
+```
 
-# Directly (Windows, after configuring the matching preset)
+Directly on **Windows** (after configuring the matching preset), from PowerShell in the repo root:
+
+```powershell
+$env:YONA_PATH = "$(Resolve-Path test/code);$(Resolve-Path lib)"
+$env:YONAC_CC = "${env:LLVM_INSTALL_PREFIX}\bin\clang.exe"   # or any full path to clang.exe; optional if clang is on PATH
 .\out\build\x64-release\tests.exe
 ```
+
+If **`clang`** is not on **`PATH`**, set **`YONAC_CC`** as above so codegen/link tests can compile the runtime objects (see **Complete Windows LLVM tree** and **`YONAC_CC` and doctest** in the Windows section).

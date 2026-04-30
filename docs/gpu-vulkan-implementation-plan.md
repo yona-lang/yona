@@ -24,7 +24,7 @@ It does **not** implement the work; it constrains how it is done.
 
 - Transparent compiler lowering (see `docs/gpu-transparent-lowering.md` separately).
 - Multi-GPU, presentation/swapchain, or graphics.
-- `filter` with variable output size on GPU without a second pass (can stay CPU until a compaction strategy is defined).
+- `filter` with **zero** host/device synchronization (single submit end-to-end); the current path uses two submits so the host can allocate the output length from the inclusive scan tail.
 
 ---
 
@@ -180,7 +180,7 @@ Update `docs/api/GPU.md` and `docs/gpu-architecture.md` for:
 | **P0** | CMake `find_path`/`find_library`, generated `gpu_build_config.h`, link loader on static runtime + `yonac` link path updated | Config-only PR; `ctest` green; no SPIR-V yet. |
 | **P1** | `vkCreateInstance` … `vkCreateDevice` + compute queue, **no** user kernels | `vulkanStatus` reports success; `hasGpu` still 0 or new internal flag; unit test for init/teardown. |
 | **P2** | Buffers + one compute shader (e.g. `mapAdd` only) + readback | `hasGpu=1` when path used; `gpu_*.yona` pass with same results as CPU; **benchmark** row shows Vulkan when enabled. |
-| **P3** | `reduceSum`, `mapMul` on device; `filter` / variable size or keep CPU. | Full doc update; `docs/todo-list.md` partial tick. |
+| **P3** | `reduceSum`, `mapMul` on device; `filter` compaction on device (prefix on GPU). | Full doc update; `docs/todo-list.md` partial tick. |
 | **P4** | Crossover tuning, optional `WaitIdle` removal, **profiling** | Per `docs/gpu-architecture.md` benchmark policy. |
 
 ---
@@ -221,10 +221,9 @@ This plan is the intended roadmap for a **Option A, find_path + VULKAN_SDK, link
 **Landed (Windows/Linux, no macOS/MoltenVK in this slice):**
 
 - P0–P1 as in §2.4 / §5: runtime `dlopen`/`LoadLibrary` of the loader; no import-library link on the main executable.
-- P2–P3 columnar ops: embedded SPIR-V for **`mapAdd`**, **`mapMul`**, and block **`reduceSum`**; **cached** compute pipelines in `gpu_vulkan_compute.c`; **`gpu_vulkan_ops.c`** for dispatch; submit serialized with a mutex; **`mapAdd`/`mapMul`** use **device-local SSBO + staging** when a discrete-style device-local memory type exists (else host-visible SSBO); **`reduceSum`** still uses host-visible buffers for both bindings.
+- P2–P3 columnar ops: embedded SPIR-V for **`mapAdd`**, **`mapMul`**, block **`reduceSum`**, **`filterGreaterThan`** (mark + prefix + scatter); **cached** compute pipelines in `gpu_vulkan_compute.c`; **`gpu_vulkan_ops.c`** for dispatch; submit serialized with a mutex; **`mapAdd`/`mapMul`/`reduceSum`/`filterGreaterThan`** use **device-local SSBO + staging** when a discrete-style device-local memory type exists (else host-visible SSBO); **`filterGreaterThan`** uses **GPU** inclusive prefix (ping-pong int64 scan), inclusive→exclusive, then scatter (two queue submits; optional **`YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1`** for the legacy CPU prefix).
 - **`hasGpu`** reflects successful init + `shaderInt64`; cached until shutdown (`yona_gpu_vulkan_invalidate_capability_cache`).
 - **`Std\GPU.vulkanLastNote`** mirrors `yona_gpu_vulkan_device_last_note()`.
-- Opt-in env: **`YONA_GPU_VULKAN_COMPUTE`**, **`MAPADD`**, **`MAPMUL`**, **`REDUCE`**, min-length vars (see `docs/api/GPU.md`).
-- **`filterGreaterThan`**: still CPU-only (variable output size).
+- Opt-in env: **`YONA_GPU_VULKAN_COMPUTE`**, **`MAPADD`**, **`MAPMUL`**, **`REDUCE`**, **`FILTER`**, min-length vars (see `docs/api/GPU.md` / `docs/gpu-architecture.md`).
 
-**Still open:** macOS portability; device-local + staging buffers; GPU `filterGreaterThan` if a compaction strategy is chosen; crossover-driven transparent lowering.
+**Still open:** macOS portability; merging filter’s two submits into one where validation allows; crossover-driven transparent lowering.

@@ -12,6 +12,8 @@
 //   yonac -I lib main.yona            # compile with module search path
 //   yonac -Wall -Werror main.yona     # enable warnings, treat as errors
 //   yonac --explain E0100             # explain error code E0100
+//   yonac --emit-accelerator-report f.yona -I lib  # JSON: Std\GPU sites
+//   yonac --emit-accelerator-report --emit-accelerator-report-with-types mod.yona -I lib  # module + types
 
 #include <iostream>
 #include <fstream>
@@ -32,6 +34,7 @@
 #include "typechecker/TypeChecker.h"
 #include "typechecker/RefinementChecker.h"
 #include "typechecker/LinearityChecker.h"
+#include "AcceleratorDiag.h"
 
 using namespace std;
 using namespace yona;
@@ -192,6 +195,8 @@ int main(int argc, char* argv[]) {
     string output_file;
     bool emit_ir = false;
     bool emit_obj = false;
+    bool emit_accelerator_report = false;
+    bool emit_accelerator_report_with_types = false;
     bool flag_wall = false;
     bool flag_wextra = false;
     bool flag_werror = false;
@@ -215,6 +220,12 @@ int main(int argc, char* argv[]) {
        ->check(CLI::Range(0, 3));
     app.add_flag("--emit-ir", emit_ir, "Print LLVM IR instead of compiling");
     app.add_flag("--emit-obj", emit_obj, "Emit object file only (don't link)");
+    app.add_flag("--emit-accelerator-report", emit_accelerator_report,
+                 "Print JSON of Std\\GPU-shaped call sites and exit (no codegen): "
+                 "expression programs after typecheck; modules from AST scan by default");
+    app.add_flag("--emit-accelerator-report-with-types", emit_accelerator_report_with_types,
+                 "With --emit-accelerator-report on a module, run the typechecker first "
+                 "(JSON report_kind \"module\", optional inferred_type per site)");
     app.add_flag("--Wall", flag_wall, "Enable common warnings");
     app.add_flag("--Wextra", flag_wextra, "Enable all warnings");
     app.add_flag("--Werror", flag_werror, "Treat warnings as errors");
@@ -223,6 +234,19 @@ int main(int argc, char* argv[]) {
     app.add_option("--explain", explain_code, "Show detailed explanation for an error code (e.g., E0100)");
 
     CLI11_PARSE(app, argc, argv);
+
+    if (emit_accelerator_report && emit_ir) {
+        cerr << "Error: --emit-accelerator-report cannot be combined with --emit-ir" << endl;
+        return 1;
+    }
+    if (emit_accelerator_report && emit_obj) {
+        cerr << "Error: --emit-accelerator-report cannot be combined with --emit-obj" << endl;
+        return 1;
+    }
+    if (emit_accelerator_report_with_types && !emit_accelerator_report) {
+        cerr << "Error: --emit-accelerator-report-with-types requires --emit-accelerator-report" << endl;
+        return 1;
+    }
 
     // --explain: print explanation and exit
     if (!explain_code.empty()) {
@@ -260,6 +284,10 @@ int main(int argc, char* argv[]) {
     }
 
     bool is_module = is_module_source(source);
+    if (emit_accelerator_report_with_types && !is_module) {
+        cerr << "Error: --emit-accelerator-report-with-types is only for module sources" << endl;
+        return 1;
+    }
 
     // Set default output
     if (output_file.empty()) {
@@ -348,12 +376,31 @@ int main(int argc, char* argv[]) {
 
     if (is_module) {
         parser::Parser parser;
+        if (emit_accelerator_report && emit_accelerator_report_with_types) {
+            typechecker::TypeChecker type_checker(diag);
+            codegen.load_prelude(&parser, &type_checker);
+            auto result = parser.parse_module(source, filename);
+            if (!result.has_value()) {
+                for (auto& e : result.error())
+                    diag.error(e.location, compiler::ErrorCode::E0301, e.message);
+                return 1;
+            }
+            if (!typecheck_module_for_accelerator_report(result.value().get(), type_checker))
+                return 1;
+            emit_accelerator_diagnostic_report_for_module(std::cout, result.value().get(), filename,
+                                                           &type_checker);
+            return 0;
+        }
         codegen.load_prelude(&parser);  // registers constructors in parser
         auto result = parser.parse_module(source, filename);
         if (!result.has_value()) {
             for (auto& e : result.error())
                 diag.error(e.location, compiler::ErrorCode::E0301, e.message);
             return 1;
+        }
+        if (emit_accelerator_report) {
+            emit_accelerator_diagnostic_report_for_module(std::cout, result.value().get(), filename);
+            return 0;
         }
         llvm_mod = codegen.compile_module(result.value().get());
     } else {
@@ -379,6 +426,14 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         codegen.set_type_checker(&type_checker);
+
+        if (emit_accelerator_report) {
+            if (!type_checker.solve_constraints() || type_checker.has_errors())
+                return 1;
+            emit_accelerator_diagnostic_report(std::cout, parse_result.node.get(), &type_checker,
+                                               filename);
+            return 0;
+        }
 
         // Refinement checking (non-blocking)
         typechecker::RefinementChecker refinement_checker(diag, &type_checker);

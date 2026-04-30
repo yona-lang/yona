@@ -1,0 +1,7 @@
+import fromSeq from Std\IntArray in
+import upload, filterGreaterThan, reduceSum from Std\GPU in
+let build n acc = if n <= 0 then acc else build (n - 1) (n :: acc) in
+let input = fromSeq (build 100000 []) in
+let buffer = upload input in
+let filtered = filterGreaterThan 50000 buffer in
+reduceSum filtered

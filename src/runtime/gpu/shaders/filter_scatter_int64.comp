@@ -1,0 +1,33 @@
+#version 450
+#extension GL_ARB_gpu_shader_int64 : require
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer InBuf {
+    int64_t elems[];
+};
+
+layout(set = 0, binding = 1) buffer FlagBuf {
+    int flags[];
+};
+
+layout(set = 0, binding = 2) buffer PrefixBuf {
+    int64_t prefix[];
+};
+
+/* Packed output indices 0..count-1; CPU copies to IntArray [1+idx] and sets [0]=count */
+layout(set = 0, binding = 3) buffer OutBuf {
+    int64_t out_elems[];
+};
+
+layout(push_constant) uniform Push {
+    uint elem_count;
+};
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= elem_count) return;
+    if (flags[int(gid)] == 0) return;
+    int64_t dst = prefix[gid];
+    out_elems[int(dst)] = elems[gid];
+}

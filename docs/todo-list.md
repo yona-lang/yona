@@ -5,16 +5,20 @@
 - Compiler: Yona -> LLVM IR -> native executable via `yonac`
 - REPL: `yona` compile-and-run interactive mode
 - Tests: doctest (`gpu_vulkan_device` + optional `gpu_vulkan_mapadd` / mapMul / reduce); codegen `gpu_backend_flags` + `gpu_vulkan_last_note` (child env `YONA_GPU_DISABLE_VULKAN=1`); with `-DYONA_ENABLE_VULKAN=ON`, run `ctest -R doctest_gpu_vulkan -V` (see `CLAUDE.md`); full `tests.exe` per `CLAUDE.md` (`YONA_PATH`, `YONAC_CC` on Windows)
-- **Local Windows verify (2026-04-26, agent):** `cmake --build out/build/x64-debug --target tests` **fails** because CMake reconfigure cannot find compilers at `C:/local/LLVM/bin/clang.exe` / `clang++.exe` (preset `windows-llvm-toolchain.cmake` default); this shell also had `LLVM_INSTALL_PREFIX=C:/loocal/LLVM` (typo / non-existent). **Stale** `out/build/x64-debug/tests.exe` run without a working `clang` on `PATH` → **207 passed / 29 failed** — `append_runtime_objects` / codegen harness return `RT_COMPILE_ERROR` (no C compiler for runtime `.o` + link). **Action:** install LLVM 22+ at `C:\local\LLVM` or set `LLVM_INSTALL_PREFIX` to the real prefix; ensure `clang` is on `PATH` or set `YONAC_CC` to a full path; then rebuild `tests` and re-run.
+- **Windows dev checklist:** full **`clang+llvm-*-windows-msvc`** tree for **`LLVM_INSTALL_PREFIX`**, correct env spelling, **`CC`/`CXX`** or CMake compiler flags if Clang lives outside that prefix, and **`YONAC_CC`** or **`PATH`** for doctest (`tests.exe`) — see **INSTALL.md** (Windows: *Complete Windows LLVM tree*, *`YONAC_CC` and doctest*).
 - Windows benchmark run (2026-04-26): 35/35 Yona rows passing, report refreshed, perf deltas reviewed
+- **GPU crossover benches:** `bench/run_gpu_compare.py`, `bench/gpu_bench_meta.py`, and `bench/accelerators/*` hot + 10k/5k rows (`.yona` + `.expected`) for map/reduce, filter, columnar pipeline, materialize — see `bench/README.md` and `docs/benchmark-results-windows.md`
+- **Vulkan filter compute path:** multi-stage SPIR-V under `src/runtime/gpu/shaders/filter_*.comp` (embedded `*_spv.inc`), wired through `gpu_vulkan_ops.c` / `gpu_vulkan_compute.c` / `gpu_cpu.c`, API surface in `lib/Std/GPU.yona` + `docs/gpu-architecture.md` / implementation plan
 - Runtime backends: Linux + Windows native paths in place
+- **Accelerator diagnostics (`docs/gpu-transparent-lowering.md`):** `yonac --emit-accelerator-report` → JSON `yona.accelerator_diag.v1`; expression programs use `report_kind":"program"` (post typecheck + `solve_constraints`); modules default to **`report_kind":"module_ast"`**; **`--emit-accelerator-report-with-types`** (with the report flag, module sources only) runs **`typecheck_module_for_accelerator_report`** then emits **`report_kind":"module"`** (optional `inferred_type` when HM pretty-print is informative). API: `include/AcceleratorDiag.h`; tests: `accelerator_diagnostic_report_*` in `test/codegen_test.cpp`. Collector uses a heap-held `std::function` so recursive apply-walk does not dangle.
+- **`bench/runner.py`:** `--verify-reference-outputs` / `--reference-verify-langs` for golden `.expected` checks without `yonac`; clearer Erlang `erlc` failure diagnostics when BEAM exits `0xC0000005` on Windows hosts
 
 ## Active Priorities
 
 ### 1) Benchmarking hardening
 
-- [ ] Add a benchmark reference conformance check (validate expected output per language lane)
-- [ ] Investigate/resolve local Erlang lane toolchain crash (`erl.exe`/`erlc.exe` exit `0xC0000005`) affecting comparison coverage on this host
+- [x] Add a benchmark reference conformance check (validate expected output per language lane) — `python3 bench/runner.py [-- FILTER] --verify-reference-outputs [--reference-verify-langs LANGS]` (`LANGS` comma list or `all`; default `c`; does not require `yonac`); exits 1 on mismatch; see `bench/README.md`
+- [ ] **Next:** Investigate/resolve local Erlang lane toolchain crash (`erl.exe`/`erlc.exe` exit `0xC0000005` / `-1073741819` / `3221225477`) — **Repro (2026):** `erl.exe -noshell -eval "erlang:display(hello), init:stop()."` and `erlc.exe` on a module-wrapped `bench/reference/fibonacci.erl` both crash before emitting stderr; `where erl` → `C:\\Program Files\\Erlang OTP\\bin\\erl.exe`. Not a `runner.py` regression: BEAM fails outside the bench. Next steps: repair/reinstall OTP for Windows, try another OTP patch release, exclude AV interference, or use **WSL/Linux Erlang** for `--compare-erl` / `--reference-verify-langs erl`; document CI matrix skip for broken Windows OTP if needed
 
 ### 2) Platform/runtime closure
 
@@ -51,8 +55,8 @@
 - [ ] Content-addressed code model
 - [ ] Multi-stage programming and compile-time evaluator
 - [ ] User-defined derives and quasiquotes
-- [ ] Vulkan `Std\GPU`: device-local + staging for **`reduceSum`** sums buffer (or full dual-buffer path); GPU **`filterGreaterThan`** / compaction; macOS MoltenVK (P1–P3 mapAdd/mapMul/reduce + map staging landed — `docs/gpu-vulkan-implementation-plan.md` §11)
-- [ ] Transparent accelerator lowering implementation after crossover data justifies it
+- [ ] Vulkan `Std\GPU`: macOS MoltenVK (`docs/gpu-vulkan-implementation-plan.md` §11)
+- [ ] Transparent accelerator lowering: **`yonac --emit-accelerator-report`** (JSON `yona.accelerator_diag.v1`) lists explicit `Std\GPU` sites (`program`, `module_ast`, optional **`--emit-accelerator-report-with-types`** → `module`); extend to future transparent candidates; then implement lowering once archived `--json-report` curves justify it (`docs/gpu-transparent-lowering.md`)
 
 ### Tooling
 
@@ -83,6 +87,9 @@
 - [x] Vulkan P1 scaffold: `gpu_vulkan_device.c` (runtime `vkGetInstanceProcAddr` dispatch, compute queue), `vulkan-device` / refined `vulkanStatus`, `yona_lib*` compile parity when `YONA_ENABLE_VULKAN`, doctest `gpu_vulkan_device_test.cpp`
 - [x] Vulkan P2 slice: embedded `map_add_int64` SPIR-V (`src/runtime/gpu/shaders/map_add_int64.comp` → `map_add_int64_spv.inc`), `shaderInt64` when available, opt-in `YONA_GPU_VULKAN_MAPADD=1` + `YONA_GPU_VULKAN_MAPADD_MIN_LEN` (default 4096) from `gpu_vulkan_ops.c` / `gpu_vulkan_compute.c` included by `gpu_vulkan_device.c`
 - [x] Vulkan P3 extension: `map_mul_int64` + `reduce_block_int64` SPIR-V, `YONA_GPU_VULKAN_MAPMUL` / `REDUCE` / `COMPUTE`, cached pipelines, `hasGpu` + `vulkanLastNote` in `Std\GPU`, codegen env isolation for GPU fixtures
+- [x] Vulkan filter pipeline: SPIR-V stages (`filter_mark_int64`, prefix/flags/inclusive-exclusive/scatter) + `*_spv.inc` embeds, runtime dispatch in `gpu_vulkan_ops.c` / `gpu_vulkan_compute.c`, CPU path alignment in `gpu_cpu.c`, device caps in `gpu_vulkan_device.h`
+- [x] GPU Vulkan crossover tooling: `bench/run_gpu_compare.py` (hot + 10k/5k accelerators), `--json-report`, `bench/gpu_bench_meta.py`; Windows capture procedure in `docs/benchmark-results-windows.md` (*Std\GPU / Vulkan crossover*)
+- [x] `yonac --emit-accelerator-report` — JSON `yona.accelerator_diag.v1` for explicit `Std\GPU` sites (`report_kind`: `program` after typecheck; modules `module_ast` or **`--emit-accelerator-report-with-types`** → `module`); `include/AcceleratorDiag.h`, `typecheck_module_for_accelerator_report`, doctest in `codegen_test.cpp`
 - [x] Linker/distribution milestone: dual modes, prebuilt runtime packaging, in-process LLD scaffold, CI reporting, and CMake modularization
 - [x] Windows installer milestone: WiX scaffold + Windows release CI artifacts (ZIP + MSI)
 

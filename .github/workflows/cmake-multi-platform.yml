@@ -76,15 +76,15 @@ jobs:
             llvm_version: 20
             build_dir: x64-release-macos
 
-          # Windows Debug
+          # Windows Debug (official clang+llvm Windows MSVC bundle; must match INSTALL.md)
           - os: windows-2025
             build_type: Debug
             name: Windows Debug
             configure_preset: x64-debug
             build_preset: build-debug
             test_preset: unit-tests-windows
-            llvm_version: 20
-            llvm_minor_version: 1.7
+            llvm_version: 22
+            llvm_minor_version: 1.0
             build_dir: x64-debug
 
           # Windows Release
@@ -94,8 +94,8 @@ jobs:
             configure_preset: x64-release
             build_preset: build-release
             test_preset: unit-tests-windows
-            llvm_version: 20
-            llvm_minor_version: 1.7
+            llvm_version: 22
+            llvm_minor_version: 1.0
             build_dir: x64-release
 
     name: ${{ matrix.name }}
@@ -148,7 +148,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: C:\LLVM
-        key: llvm-${{ matrix.llvm_version }}-${{ matrix.llvm_minor_version }}
+        key: llvm-windows-${{ matrix.llvm_version }}-${{ matrix.llvm_minor_version }}
 
     # Install LLVM on Windows
     - name: Install LLVM (Windows)
@@ -190,10 +190,12 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        # Set environment variables
+        # Same layout as INSTALL.md / release workflow: full clang+llvm prefix + PATH for doctest subprocesses
+        Add-Content -Path $env:GITHUB_PATH -Value "C:\LLVM\bin"
         echo "LLVM_INSTALL_PREFIX=C:\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append
         echo "CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
         echo "CXX=C:\LLVM\bin\clang++.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+        echo "YONAC_CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
     # Install CMake and Ninja
     - uses: lukka/get-cmake@latest
@@ -302,6 +304,7 @@ jobs:
       run: |
         # Find the test executable
         if [[ "${{ runner.os }}" == "Windows" ]]; then
+          # GITHUB_ENV already sets YONAC_CC / PATH; doctest still needs YONA_PATH for module fixtures
           TEST_EXE=$(find out/build -name "tests.exe" -type f | head -n 1)
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
           # macOS doesn't support -executable, use -perm +111 instead

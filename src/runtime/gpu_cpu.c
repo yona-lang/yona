@@ -154,6 +154,10 @@ int64_t* yona_Std_GPU_raw__mapMul(int64_t factor, int64_t* arr) {
 }
 
 int64_t* yona_Std_GPU_raw__filterGreaterThan(int64_t threshold, int64_t* arr) {
+#if YONA_GPU_VULKAN_ENABLED
+    int64_t* gpu_out = NULL;
+    if (yona_gpu_vulkan_try_filter_greater_than_int64(threshold, arr, &gpu_out)) return gpu_out;
+#endif
     int64_t len = arr[0];
     int64_t count = 0;
     for (int64_t i = 0; i < len; i++)

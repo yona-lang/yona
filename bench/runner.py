@@ -9,6 +9,8 @@ Usage:
     python3 bench/runner.py                      # run all, -O2
     python3 bench/runner.py core/fibonacci        # specific benchmark
     python3 bench/runner.py --compare-c           # compare vs C
+    python3 bench/runner.py --verify-reference-outputs   # C refs vs .expected only, exit 1 on mismatch
+    python3 bench/runner.py --verify-reference-outputs --reference-verify-langs all
     python3 bench/runner.py --all-opt-levels      # compare O0/O1/O2/O3
     python3 bench/runner.py --json                # machine-readable output
 """
@@ -250,6 +252,18 @@ def _prep_erl(stem, build_dir):
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0 or not beam.exists():
+            # On some Windows hosts `erlc`/`erl` exit with 0xC0000005 (access
+            # violation) with no stderr — see docs/todo-list.md (Erlang lane).
+            detail = (result.stderr or result.stdout or "").strip()
+            if detail:
+                print(f"  erlc {mod_name}: {detail}", flush=True)
+            else:
+                print(
+                    f"  erlc {mod_name}: failed (exit {result.returncode}); "
+                    f"no .beam — if exit is -1073741819 / 3221225477, OTP/BEAM "
+                    f"may be crashing on this host",
+                    flush=True,
+                )
             return None
     # Note: Erlang VM startup is ~1s on this box, so these numbers reflect
     # VM boot + computation and will look lopsided on sub-millisecond
@@ -599,6 +613,62 @@ def check_correctness(bench, output):
     return output == expected
 
 
+def verify_reference_outputs(benchmarks, langs: tuple, build_dir: Path) -> int:
+    """Run each reference toolchain once per benchmark that has a `.expected`
+    file; compare stdout to the golden string. Missing toolchain (prep None)
+    is skipped, not a failure. Returns the number of failing lanes."""
+    build_dir.mkdir(parents=True, exist_ok=True)
+    failures = 0
+    skipped_no_golden = 0
+    skipped_no_tool = 0
+    ok_count = 0
+
+    for bench in benchmarks:
+        if bench["expected"] is None:
+            skipped_no_golden += 1
+            continue
+        expected = bench["expected"].read_text().strip()
+        stem = bench["source"].stem
+        for lang in langs:
+            spec = REF_LANGS.get(lang)
+            if not spec:
+                print(f"  skip unknown language key: {lang}", file=sys.stderr)
+                continue
+            cmd = spec["prep"](stem, build_dir)
+            if cmd is None:
+                skipped_no_tool += 1
+                if lang == "erl" and _ref_source(stem, "erl") is not None:
+                    print(
+                        f"  skip {bench['name']:.<40} {spec['label']:<5} "
+                        f"(Erlang prep failed; erlc/erl may crash on this host)",
+                        flush=True,
+                    )
+                continue
+            result = run_once(cmd)
+            if result is None:
+                print(f"  FAIL {bench['name']:.<40} {spec['label']:<5} (run error or timeout)")
+                failures += 1
+                continue
+            out, _, _ = result
+            if out != expected:
+                print(
+                    f"  FAIL {bench['name']:.<40} {spec['label']:<5} "
+                    f"expected {expected!r} got {out!r}"
+                )
+                failures += 1
+            else:
+                ok_count += 1
+                print(f"  ok   {bench['name']:.<40} {spec['label']:<5}")
+
+    print(
+        f"\n  Reference conformance: {ok_count} ok, {failures} failed, "
+        f"{skipped_no_tool} skipped (no toolchain), "
+        f"{skipped_no_golden} benchmarks without .expected",
+        flush=True,
+    )
+    return failures
+
+
 def fmt_time(ms):
     if ms < 1:
         return f"{ms:.3f}ms"
@@ -798,6 +868,21 @@ def main():
                         help="Comma-separated languages to compare against "
                              f"({','.join(REF_LANGS.keys())}). Defaults to 'c' "
                              f"when the flag is present without a value.")
+    parser.add_argument(
+        "--verify-reference-outputs",
+        action="store_true",
+        help="Check reference implementations only: each benchmark with a "
+             ".expected file is run once per language (see "
+             "--reference-verify-langs). Exits 1 on stdout mismatch. Does not "
+             "run the Yona timing suite or require yonac.",
+    )
+    parser.add_argument(
+        "--reference-verify-langs",
+        default="c",
+        metavar="LANGS",
+        help="Comma-separated reference keys (c,erl,java,...) or 'all'. "
+             "Used only with --verify-reference-outputs. Default: c",
+    )
     parser.add_argument("--all-opt-levels", action="store_true", help="Run O0, O1, O2, O3")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--save", action="store_true", help="Save results to bench/history.jsonl")
@@ -825,16 +910,41 @@ def main():
                 compare_langs.append(lang)
     compare_langs = tuple(compare_langs)
 
-    if not YONAC.exists():
-        print(f"Error: yonac not found at {YONAC}")
-        print("Run: cmake --build --preset build-debug-linux")
-        sys.exit(1)
-
     ensure_benchmark_data()
 
     benchmarks = find_benchmarks(args.filter)
     if not benchmarks:
         print("No benchmarks found.")
+        sys.exit(1)
+
+    if args.verify_reference_outputs:
+        raw = args.reference_verify_langs.strip().lower()
+        if raw == "all":
+            verify_langs = tuple(REF_LANGS.keys())
+        else:
+            verify_langs = tuple(
+                x.strip().lower()
+                for x in raw.split(",")
+                if x.strip()
+            )
+        for lang in verify_langs:
+            if lang not in REF_LANGS:
+                print(
+                    f"Error: unknown language '{lang}' in --reference-verify-langs. "
+                    f"Use: {','.join(REF_LANGS.keys())} or all"
+                )
+                sys.exit(1)
+        print(
+            "Reference output conformance "
+            f"(langs={','.join(verify_langs)}, filter={args.filter or '*'})\n"
+            f"{'=' * 60}"
+        )
+        nfail = verify_reference_outputs(benchmarks, verify_langs, BUILD_DIR)
+        sys.exit(1 if nfail > 0 else 0)
+
+    if not YONAC.exists():
+        print(f"Error: yonac not found at {YONAC}")
+        print("Run: cmake --build --preset build-debug-linux")
         sys.exit(1)
 
     all_results = {}

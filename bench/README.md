@@ -29,6 +29,15 @@ python3 bench/runner.py -n 5 -O3
 
 # JSON output for CI/scripting
 python3 bench/runner.py --json
+
+# Std\GPU: CPU vs Vulkan wall times (same correctness checks)
+python3 bench/run_gpu_compare.py
+
+# Reference lanes only: stdout must match each benchmark's .expected (CI-friendly; no yonac)
+python3 bench/runner.py --verify-reference-outputs
+python3 bench/runner.py core/fibonacci --verify-reference-outputs
+python3 bench/runner.py --verify-reference-outputs --reference-verify-langs c,java
+python3 bench/runner.py --verify-reference-outputs --reference-verify-langs all
 ```
 
 ## What It Measures
@@ -36,6 +45,10 @@ python3 bench/runner.py --json
 - **Wall-clock time** (ms) — min/avg/max over N iterations
 - **Peak RSS** (KB) — maximum resident set size via `/usr/bin/time -v`
 - **Correctness** — each benchmark has a `.expected` file verified before timing
+- **Reference conformance** — `bench/runner.py --verify-reference-outputs`
+  (optional `--reference-verify-langs`, default `c`) runs reference programs
+  only (no Yona compile) and exits non-zero if any lane's stdout differs from
+  the golden `.expected` file.
 - **Reference comparison** — optional ratio vs C, Erlang, or both (via
   `--compare-c` / `--compare-erl` / `--compare=c,erl`). Erlang numbers
   include VM startup (~1s), so short benchmarks look lopsided.
@@ -59,8 +72,14 @@ bench/
     ackermann.yona       # Ackermann function (deep recursion)
     sum_squares.yona     # Sum of squares (tight loop, TCE)
   accelerators/           # CPU/GPU-style columnar execution benchmarks
-    gpu_columnar_pipeline.yona  # upload -> map -> filter -> reduce
+    gpu_columnar_pipeline.yona  # upload -> map -> filter -> reduce (20k rows)
+    gpu_columnar_pipeline_5k.yona  # same pipeline at 5k rows (crossover curve)
     gpu_materialize_sum.yona    # upload -> map -> materialize -> fold
+    gpu_materialize_sum_5k.yona # same at 5k rows
+    gpu_map_reduce_hot.yona     # upload -> mapAdd -> reduceSum (100k rows, timing)
+    gpu_map_reduce_10k.yona     # same at 10k rows
+    gpu_filter_hot.yona         # upload -> filterGreaterThan -> reduceSum (100k rows)
+    gpu_filter_10k.yona           # same at 10k rows
   reference/             # Reference implementations (C, Erlang, Haskell,
     fibonacci.c          # Java, JavaScript, Python). Only .c and .erl are
     fibonacci.erl        # currently wired into the runner's comparison
@@ -80,6 +99,39 @@ bench/
 
 The runner discovers all `.yona` files automatically. Each benchmark has a
 10-second timeout to prevent runaway execution.
+
+## GPU / Vulkan (`Std\GPU`)
+
+The accelerators under `bench/accelerators/` use `Std\GPU` (CPU SIMD by default;
+optional Vulkan when the compiler and runtime support it). The main benchmark
+runner does **not** set GPU env vars — each process uses normal capability
+detection.
+
+To compare **CPU-forced** vs **Vulkan opt-in** wall times on the same sources:
+
+```bash
+python3 bench/run_gpu_compare.py
+python3 bench/run_gpu_compare.py -n 5 -O3 --only map_reduce
+python3 bench/gpu_bench_meta.py   # JSON: build N / filter thresholds per gpu_*.yona
+```
+
+The script sets `YONA_GPU_DISABLE_VULKAN=1` for the first pass and
+`YONA_GPU_VULKAN_COMPUTE=1` plus `YONA_GPU_VULKAN_MIN_LEN=1` for the second.
+Output must match the `.expected` file for both passes. It prints a summary
+table: **CPU avg (ms)** vs **GPU avg (ms)** (Vulkan opt-in), **Delta %**, and a
+short verdict (e.g. `GPU faster (1.2x)`). On machines without a usable GPU,
+the GPU column may match CPU time (same kernels).
+
+Use `--json` for a machine-readable list after the table (array of results).
+Use `--json-report` for the same data wrapped with host / yonac / `-O` / iteration
+metadata (`docs/gpu-transparent-lowering.md` — benchmark corpus for crossover work).
+
+See `docs/gpu-architecture.md` for all `YONA_GPU_VULKAN_*` variables (including
+`YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1` to A/B the legacy host prefix for filter).
+
+Compiler **call-site JSON** (no codegen): `yonac bench/accelerators/gpu_map_reduce_10k.yona -I lib
+--emit-accelerator-report` (modules: add `--emit-accelerator-report-with-types` for a typechecked
+`report_kind` of `module`) — see `docs/gpu-transparent-lowering.md` (*Rollout* step 2).
 
 ## Known Limitations
 

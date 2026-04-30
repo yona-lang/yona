@@ -58,6 +58,14 @@ int yona_gpu_vulkan_try_map_mul_int64(int64_t factor, int64_t* arr, int64_t** ou
 
 /** Opt-in GPU reduceSum (block reduce + host tail); YONA_GPU_VULKAN_REDUCE / _COMPUTE. */
 int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum);
+
+/**
+ * Opt-in GPU filterGreaterThan (mark + inclusive GPU prefix + exclusive conversion +
+ * scatter). Set YONA_GPU_VULKAN_FILTER=1 or YONA_GPU_VULKAN_COMPUTE=1. Optional
+ * YONA_GPU_VULKAN_FILTER_MIN_LEN / YONA_GPU_VULKAN_MIN_LEN (same pattern as map/reduce).
+ * Set YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1 to force the legacy host-side exclusive prefix.
+ */
+int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* arr, int64_t** out);
 #endif
 
 #ifdef __cplusplus

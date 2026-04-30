@@ -1,4 +1,4 @@
-/* Cached compute pipelines + submit serialization — included from gpu_vulkan_device.c */
+/* Cached compute pipelines (map/mul/reduce/filter) + submit serialization — included from gpu_vulkan_device.c */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +10,11 @@
 #include "gpu/map_add_int64_spv.inc"
 #include "gpu/map_mul_int64_spv.inc"
 #include "gpu/reduce_block_int64_spv.inc"
+#include "gpu/filter_mark_int64_spv.inc"
+#include "gpu/filter_scatter_int64_spv.inc"
+#include "gpu/filter_flags_to_i64_spv.inc"
+#include "gpu/filter_prefix_inclusive_step_spv.inc"
+#include "gpu/filter_inclusive_to_exclusive_spv.inc"
 
 #if !defined(_WIN32)
 #include <pthread.h>
@@ -59,9 +64,22 @@ typedef struct YonaVkReducePipe {
     int ready;
 } YonaVkReducePipe;
 
+typedef struct YonaVkScatterPipe {
+    VkShaderModule sm;
+    VkDescriptorSetLayout dsl;
+    VkPipelineLayout pl;
+    VkPipeline pipe;
+    int ready;
+} YonaVkScatterPipe;
+
 static YonaVkSimplePipe g_yona_pipe_mapadd;
 static YonaVkSimplePipe g_yona_pipe_mapmul;
 static YonaVkReducePipe g_yona_pipe_reduce;
+static YonaVkReducePipe g_yona_pipe_filter_mark;
+static YonaVkScatterPipe g_yona_pipe_filter_scatter;
+static YonaVkReducePipe g_yona_pipe_filter_flags_to_i64;
+static YonaVkReducePipe g_yona_pipe_filter_prefix;
+static YonaVkScatterPipe g_yona_pipe_filter_inc_to_exc;
 
 static void yona_vk_destroy_simple_pipe(YonaVkSimplePipe* p) {
     PFN_vkDestroyPipeline vkDestroyPipeline = YONA_VK_DPA(vkDestroyPipeline);
@@ -89,11 +107,21 @@ void yona_vk_compute_destroy_cached_pipelines(void) {
         memset(&g_yona_pipe_mapadd, 0, sizeof g_yona_pipe_mapadd);
         memset(&g_yona_pipe_mapmul, 0, sizeof g_yona_pipe_mapmul);
         memset(&g_yona_pipe_reduce, 0, sizeof g_yona_pipe_reduce);
+        memset(&g_yona_pipe_filter_mark, 0, sizeof g_yona_pipe_filter_mark);
+        memset(&g_yona_pipe_filter_scatter, 0, sizeof g_yona_pipe_filter_scatter);
+        memset(&g_yona_pipe_filter_flags_to_i64, 0, sizeof g_yona_pipe_filter_flags_to_i64);
+        memset(&g_yona_pipe_filter_prefix, 0, sizeof g_yona_pipe_filter_prefix);
+        memset(&g_yona_pipe_filter_inc_to_exc, 0, sizeof g_yona_pipe_filter_inc_to_exc);
         return;
     }
     yona_vk_destroy_simple_pipe(&g_yona_pipe_mapadd);
     yona_vk_destroy_simple_pipe(&g_yona_pipe_mapmul);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_reduce);
+    yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_mark);
+    yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_scatter);
+    yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_flags_to_i64);
+    yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_prefix);
+    yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_inc_to_exc);
 }
 
 static VkResult yona_vk_build_simple_compute_pipe(const uint32_t* spirv, uint32_t spirv_words,
@@ -175,8 +203,8 @@ fail_sm: {
     return r;
 }
 
-static VkResult yona_vk_build_reduce_compute_pipe(const uint32_t* spirv, uint32_t spirv_words,
-                                                  YonaVkReducePipe* out) {
+static VkResult yona_vk_build_two_ssbo_compute_pipe(const uint32_t* spirv, uint32_t spirv_words,
+                                                    uint32_t push_bytes, YonaVkReducePipe* out) {
     memset(out, 0, sizeof(*out));
     PFN_vkCreateShaderModule vkCreateShaderModule = YONA_VK_DPA(vkCreateShaderModule);
     PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout =
@@ -214,7 +242,169 @@ static VkResult yona_vk_build_reduce_compute_pipe(const uint32_t* spirv, uint32_
     VkPushConstantRange pcr = {0};
     pcr.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     pcr.offset = 0;
-    pcr.size = 4u;
+    pcr.size = push_bytes;
+
+    VkPipelineLayoutCreateInfo plci = {0};
+    plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    plci.setLayoutCount = 1;
+    plci.pSetLayouts = &out->dsl;
+    plci.pushConstantRangeCount = 1;
+    plci.pPushConstantRanges = &pcr;
+    r = vkCreatePipelineLayout(yona_vk_dev, &plci, NULL, &out->pl);
+    if (r != VK_SUCCESS) goto fail_dsl;
+
+    VkPipelineShaderStageCreateInfo stage = {0};
+    stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    stage.module = out->sm;
+    stage.pName = "main";
+
+    VkComputePipelineCreateInfo cpci = {0};
+    cpci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    cpci.stage = stage;
+    cpci.layout = out->pl;
+    r = vkCreateComputePipelines(yona_vk_dev, VK_NULL_HANDLE, 1, &cpci, NULL, &out->pipe);
+    if (r != VK_SUCCESS) goto fail_pl;
+    return VK_SUCCESS;
+
+fail_pl: {
+    PFN_vkDestroyPipelineLayout vkDestroyPipelineLayout = YONA_VK_DPA(vkDestroyPipelineLayout);
+    if (vkDestroyPipelineLayout) vkDestroyPipelineLayout(yona_vk_dev, out->pl, NULL);
+    out->pl = VK_NULL_HANDLE;
+}
+fail_dsl: {
+    PFN_vkDestroyDescriptorSetLayout vkDestroyDescriptorSetLayout =
+        YONA_VK_DPA(vkDestroyDescriptorSetLayout);
+    if (vkDestroyDescriptorSetLayout) vkDestroyDescriptorSetLayout(yona_vk_dev, out->dsl, NULL);
+    out->dsl = VK_NULL_HANDLE;
+}
+fail_sm: {
+    PFN_vkDestroyShaderModule vkDestroyShaderModule = YONA_VK_DPA(vkDestroyShaderModule);
+    if (vkDestroyShaderModule) vkDestroyShaderModule(yona_vk_dev, out->sm, NULL);
+    out->sm = VK_NULL_HANDLE;
+}
+    return r;
+}
+
+static VkResult yona_vk_build_four_ssbo_compute_pipe(const uint32_t* spirv, uint32_t spirv_words,
+                                                     uint32_t push_bytes, YonaVkScatterPipe* out) {
+    memset(out, 0, sizeof(*out));
+    PFN_vkCreateShaderModule vkCreateShaderModule = YONA_VK_DPA(vkCreateShaderModule);
+    PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout =
+        YONA_VK_DPA(vkCreateDescriptorSetLayout);
+    PFN_vkCreatePipelineLayout vkCreatePipelineLayout = YONA_VK_DPA(vkCreatePipelineLayout);
+    PFN_vkCreateComputePipelines vkCreateComputePipelines = YONA_VK_DPA(vkCreateComputePipelines);
+    if (!vkCreateShaderModule || !vkCreateDescriptorSetLayout || !vkCreatePipelineLayout ||
+        !vkCreateComputePipelines)
+        return VK_ERROR_INITIALIZATION_FAILED;
+
+    VkShaderModuleCreateInfo smci = {0};
+    smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    smci.codeSize = (size_t)spirv_words * sizeof(uint32_t);
+    smci.pCode = spirv;
+    VkResult r = vkCreateShaderModule(yona_vk_dev, &smci, NULL, &out->sm);
+    if (r != VK_SUCCESS) return r;
+
+    VkDescriptorSetLayoutBinding binds[4] = {0};
+    for (uint32_t b = 0; b < 4u; b++) {
+        binds[b].binding = b;
+        binds[b].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binds[b].descriptorCount = 1;
+        binds[b].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+
+    VkDescriptorSetLayoutCreateInfo dslci = {0};
+    dslci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    dslci.bindingCount = 4;
+    dslci.pBindings = binds;
+    r = vkCreateDescriptorSetLayout(yona_vk_dev, &dslci, NULL, &out->dsl);
+    if (r != VK_SUCCESS) goto fail_sm;
+
+    VkPushConstantRange pcr = {0};
+    pcr.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pcr.offset = 0;
+    pcr.size = push_bytes;
+
+    VkPipelineLayoutCreateInfo plci = {0};
+    plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    plci.setLayoutCount = 1;
+    plci.pSetLayouts = &out->dsl;
+    plci.pushConstantRangeCount = 1;
+    plci.pPushConstantRanges = &pcr;
+    r = vkCreatePipelineLayout(yona_vk_dev, &plci, NULL, &out->pl);
+    if (r != VK_SUCCESS) goto fail_dsl;
+
+    VkPipelineShaderStageCreateInfo stage = {0};
+    stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    stage.module = out->sm;
+    stage.pName = "main";
+
+    VkComputePipelineCreateInfo cpci = {0};
+    cpci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    cpci.stage = stage;
+    cpci.layout = out->pl;
+    r = vkCreateComputePipelines(yona_vk_dev, VK_NULL_HANDLE, 1, &cpci, NULL, &out->pipe);
+    if (r != VK_SUCCESS) goto fail_pl;
+    return VK_SUCCESS;
+
+fail_pl: {
+    PFN_vkDestroyPipelineLayout vkDestroyPipelineLayout = YONA_VK_DPA(vkDestroyPipelineLayout);
+    if (vkDestroyPipelineLayout) vkDestroyPipelineLayout(yona_vk_dev, out->pl, NULL);
+    out->pl = VK_NULL_HANDLE;
+}
+fail_dsl: {
+    PFN_vkDestroyDescriptorSetLayout vkDestroyDescriptorSetLayout =
+        YONA_VK_DPA(vkDestroyDescriptorSetLayout);
+    if (vkDestroyDescriptorSetLayout) vkDestroyDescriptorSetLayout(yona_vk_dev, out->dsl, NULL);
+    out->dsl = VK_NULL_HANDLE;
+}
+fail_sm: {
+    PFN_vkDestroyShaderModule vkDestroyShaderModule = YONA_VK_DPA(vkDestroyShaderModule);
+    if (vkDestroyShaderModule) vkDestroyShaderModule(yona_vk_dev, out->sm, NULL);
+    out->sm = VK_NULL_HANDLE;
+}
+    return r;
+}
+
+static VkResult yona_vk_build_three_ssbo_compute_pipe(const uint32_t* spirv, uint32_t spirv_words,
+                                                      uint32_t push_bytes, YonaVkScatterPipe* out) {
+    memset(out, 0, sizeof(*out));
+    PFN_vkCreateShaderModule vkCreateShaderModule = YONA_VK_DPA(vkCreateShaderModule);
+    PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout =
+        YONA_VK_DPA(vkCreateDescriptorSetLayout);
+    PFN_vkCreatePipelineLayout vkCreatePipelineLayout = YONA_VK_DPA(vkCreatePipelineLayout);
+    PFN_vkCreateComputePipelines vkCreateComputePipelines = YONA_VK_DPA(vkCreateComputePipelines);
+    if (!vkCreateShaderModule || !vkCreateDescriptorSetLayout || !vkCreatePipelineLayout ||
+        !vkCreateComputePipelines)
+        return VK_ERROR_INITIALIZATION_FAILED;
+
+    VkShaderModuleCreateInfo smci = {0};
+    smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    smci.codeSize = (size_t)spirv_words * sizeof(uint32_t);
+    smci.pCode = spirv;
+    VkResult r = vkCreateShaderModule(yona_vk_dev, &smci, NULL, &out->sm);
+    if (r != VK_SUCCESS) return r;
+
+    VkDescriptorSetLayoutBinding binds[3] = {0};
+    for (uint32_t b = 0; b < 3u; b++) {
+        binds[b].binding = b;
+        binds[b].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binds[b].descriptorCount = 1;
+        binds[b].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+
+    VkDescriptorSetLayoutCreateInfo dslci = {0};
+    dslci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    dslci.bindingCount = 3;
+    dslci.pBindings = binds;
+    r = vkCreateDescriptorSetLayout(yona_vk_dev, &dslci, NULL, &out->dsl);
+    if (r != VK_SUCCESS) goto fail_sm;
+
+    VkPushConstantRange pcr = {0};
+    pcr.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pcr.offset = 0;
+    pcr.size = push_bytes;
 
     VkPipelineLayoutCreateInfo plci = {0};
     plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -276,9 +466,53 @@ VkResult yona_vk_compute_ensure_mapmul_pipe(void) {
 
 VkResult yona_vk_compute_ensure_reduce_pipe(void) {
     if (g_yona_pipe_reduce.ready) return VK_SUCCESS;
-    VkResult r = yona_vk_build_reduce_compute_pipe(
-        kYonaGpuReduceBlockInt64Spv, kYonaGpuReduceBlockInt64SpvWordCount, &g_yona_pipe_reduce);
+    VkResult r = yona_vk_build_two_ssbo_compute_pipe(
+        kYonaGpuReduceBlockInt64Spv, kYonaGpuReduceBlockInt64SpvWordCount, 4u, &g_yona_pipe_reduce);
     if (r == VK_SUCCESS) g_yona_pipe_reduce.ready = 1;
+    return r;
+}
+
+VkResult yona_vk_compute_ensure_filter_mark_pipe(void) {
+    if (g_yona_pipe_filter_mark.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_two_ssbo_compute_pipe(
+        kYonaGpuFilterMarkInt64Spv, kYonaGpuFilterMarkInt64SpvWordCount, 12u, &g_yona_pipe_filter_mark);
+    if (r == VK_SUCCESS) g_yona_pipe_filter_mark.ready = 1;
+    return r;
+}
+
+VkResult yona_vk_compute_ensure_filter_scatter_pipe(void) {
+    if (g_yona_pipe_filter_scatter.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_four_ssbo_compute_pipe(kYonaGpuFilterScatterInt64Spv,
+                                                      kYonaGpuFilterScatterInt64SpvWordCount, 4u,
+                                                      &g_yona_pipe_filter_scatter);
+    if (r == VK_SUCCESS) g_yona_pipe_filter_scatter.ready = 1;
+    return r;
+}
+
+VkResult yona_vk_compute_ensure_filter_flags_to_i64_pipe(void) {
+    if (g_yona_pipe_filter_flags_to_i64.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_two_ssbo_compute_pipe(
+        kYonaGpuFilterFlagsToI64Spv, kYonaGpuFilterFlagsToI64SpvWordCount, 4u,
+        &g_yona_pipe_filter_flags_to_i64);
+    if (r == VK_SUCCESS) g_yona_pipe_filter_flags_to_i64.ready = 1;
+    return r;
+}
+
+VkResult yona_vk_compute_ensure_filter_prefix_pipe(void) {
+    if (g_yona_pipe_filter_prefix.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_two_ssbo_compute_pipe(
+        kYonaGpuFilterPrefixInclusiveStepSpv, kYonaGpuFilterPrefixInclusiveStepSpvWordCount, 8u,
+        &g_yona_pipe_filter_prefix);
+    if (r == VK_SUCCESS) g_yona_pipe_filter_prefix.ready = 1;
+    return r;
+}
+
+VkResult yona_vk_compute_ensure_filter_inc_to_exc_pipe(void) {
+    if (g_yona_pipe_filter_inc_to_exc.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_three_ssbo_compute_pipe(
+        kYonaGpuFilterInclusiveToExclusiveSpv, kYonaGpuFilterInclusiveToExclusiveSpvWordCount, 4u,
+        &g_yona_pipe_filter_inc_to_exc);
+    if (r == VK_SUCCESS) g_yona_pipe_filter_inc_to_exc.ready = 1;
     return r;
 }
 
@@ -287,3 +521,17 @@ YonaVkSimplePipe* yona_vk_compute_mapadd_pipe(void) { return &g_yona_pipe_mapadd
 YonaVkSimplePipe* yona_vk_compute_mapmul_pipe(void) { return &g_yona_pipe_mapmul; }
 
 YonaVkReducePipe* yona_vk_compute_reduce_pipe(void) { return &g_yona_pipe_reduce; }
+
+YonaVkReducePipe* yona_vk_compute_filter_mark_pipe(void) { return &g_yona_pipe_filter_mark; }
+
+YonaVkScatterPipe* yona_vk_compute_filter_scatter_pipe(void) { return &g_yona_pipe_filter_scatter; }
+
+YonaVkReducePipe* yona_vk_compute_filter_flags_to_i64_pipe(void) {
+    return &g_yona_pipe_filter_flags_to_i64;
+}
+
+YonaVkReducePipe* yona_vk_compute_filter_prefix_pipe(void) { return &g_yona_pipe_filter_prefix; }
+
+YonaVkScatterPipe* yona_vk_compute_filter_inc_to_exc_pipe(void) {
+    return &g_yona_pipe_filter_inc_to_exc;
+}

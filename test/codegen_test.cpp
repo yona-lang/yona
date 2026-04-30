@@ -12,6 +12,7 @@
 #include "typechecker/TypeChecker.h"
 #include "repo_paths.h"
 #include "yona_link_util.hpp"
+#include "AcceleratorDiag.h"
 
 using namespace std;
 using namespace yona;
@@ -507,9 +508,11 @@ negate x = 0 - x
 
     fs::path exe_out = yona::test::link::scratch_root() / ("cross_lang_run" + yona::test::link::exe_suffix());
     ostringstream lnk;
-    lnk << yona::test::link::cc() << " " << yona::test::link::qpath(c_src) << " " << yona::test::link::qpath(obj_path) << " -o "
+    lnk << yona::test::link::cc_quoted() << " " << yona::test::link::qpath(c_src) << " " << yona::test::link::qpath(obj_path) << " -o "
         << yona::test::link::qpath(exe_out);
-#ifndef _WIN32
+#ifdef _WIN32
+    lnk << " -Xlinker /SUBSYSTEM:CONSOLE";
+#else
     lnk << " -lm -lpthread";
 #endif
     lnk << yona::test::link::err_null();
@@ -1081,3 +1084,105 @@ TEST_CASE("Regex module: matches, find, replace, split") {
 }
 
 } // Regex
+
+TEST_CASE("accelerator_diagnostic_report_std_gpu_sites") {
+    parser::Parser parser;
+    DiagnosticEngine diag;
+    typechecker::TypeChecker type_checker(diag);
+    Codegen codegen("yona_program");
+    if (fs::exists(yona::test::lib_dir()))
+        codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    for (const auto& dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
+        if (fs::exists(dir)) codegen.module_paths_.push_back(fs::canonical(dir).string());
+    }
+    codegen.load_prelude(&parser, &type_checker);
+
+    const char* source = R"YT(import fromSeq from Std\IntArray in
+import upload, mapAdd, reduceSum from Std\GPU in
+let build n acc = if n <= 0 then acc else build (n - 1) (n :: acc) in
+let input = fromSeq (build 3 []) in
+let buffer = upload input in
+let shifted = mapAdd 1 buffer in
+reduceSum shifted
+)YT";
+
+    std::istringstream stream(source);
+    auto parse_result = parser.parse_input(stream);
+    REQUIRE(parse_result.node);
+    type_checker.check(parse_result.node.get());
+    REQUIRE_FALSE(type_checker.has_direct_errors());
+    CHECK(type_checker.solve_constraints());
+    REQUIRE_FALSE(type_checker.has_errors());
+
+    std::ostringstream oss;
+    emit_accelerator_diagnostic_report(oss, parse_result.node.get(), &type_checker, "<test>");
+    const std::string json = oss.str();
+    CHECK(json.find(R"("schema":"yona.accelerator_diag.v1")") != std::string::npos);
+    CHECK(json.find(R"("report_kind":"program")") != std::string::npos);
+    CHECK(json.find(R"("file":"<test>")") != std::string::npos);
+    CHECK(json.find(R"("op":"upload")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"IntArray -> Buffer")") != std::string::npos);
+    CHECK(json.find(R"("op":"mapAdd")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"Int -> Buffer -> Buffer")") != std::string::npos);
+    CHECK(json.find(R"("op":"reduceSum")") != std::string::npos);
+    CHECK(json.find(R"("binding":"import")") != std::string::npos);
+}
+
+TEST_CASE("accelerator_diagnostic_report_module_ast_scan") {
+    parser::Parser parser;
+    DiagnosticEngine diag;
+    Codegen codegen("yona_module", &diag);
+    if (fs::exists(yona::test::lib_dir()))
+        codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    for (const auto& dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
+        if (fs::exists(dir)) codegen.module_paths_.push_back(fs::canonical(dir).string());
+    }
+    codegen.load_prelude(&parser);
+
+    const char* source = R"(module Test\AccelReportMod
+
+export f
+
+f xs = import upload from Std\GPU in upload xs
+)";
+    auto mod = parser.parse_module(source, "<module>");
+    REQUIRE(mod.has_value());
+
+    std::ostringstream oss;
+    emit_accelerator_diagnostic_report_for_module(oss, mod.value().get(), "<module>");
+    const std::string json = oss.str();
+    CHECK(json.find(R"("report_kind":"module_ast")") != std::string::npos);
+    CHECK(json.find(R"("op":"upload")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"IntArray -> Buffer")") != std::string::npos);
+    CHECK(json.find(R"("binding":"import")") != std::string::npos);
+}
+
+TEST_CASE("accelerator_diagnostic_report_module_typed_scan") {
+    parser::Parser parser;
+    DiagnosticEngine diag;
+    Codegen codegen("yona_module", &diag);
+    if (fs::exists(yona::test::lib_dir()))
+        codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    for (const auto& dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
+        if (fs::exists(dir)) codegen.module_paths_.push_back(fs::canonical(dir).string());
+    }
+    typechecker::TypeChecker type_checker(diag);
+    codegen.load_prelude(&parser, &type_checker);
+
+    const char* source = R"(module Test\AccelReportModTyped
+
+export f
+
+f xs = import upload from Std\GPU in upload xs
+)";
+    auto mod = parser.parse_module(source, "<module>");
+    REQUIRE(mod.has_value());
+    REQUIRE(typecheck_module_for_accelerator_report(mod.value().get(), type_checker));
+
+    std::ostringstream oss;
+    emit_accelerator_diagnostic_report_for_module(oss, mod.value().get(), "<module>", &type_checker);
+    const std::string json = oss.str();
+    CHECK(json.find(R"("report_kind":"module")") != std::string::npos);
+    CHECK(json.find(R"("op":"upload")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"IntArray -> Buffer")") != std::string::npos);
+}
