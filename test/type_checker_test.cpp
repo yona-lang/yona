@@ -804,6 +804,9 @@ TEST_CASE("Error code: parse_error_code round-trips") {
     auto code = parse_error_code("E0100");
     REQUIRE(code.has_value());
     CHECK(*code == ErrorCode::E0100);
+    auto e0603 = parse_error_code("E0603");
+    REQUIRE(e0603.has_value());
+    CHECK(*e0603 == ErrorCode::E0603);
     CHECK(!parse_error_code("E9999").has_value());
     CHECK(!parse_error_code("INVALID").has_value());
 }
@@ -1288,16 +1291,56 @@ TEST_CASE("LinearityChecker: transfer via alias is OK") {
     CHECK(diag.warning_count() > 0); // warning: conn2 unconsumed
 }
 
-TEST_CASE("Error code: E0600/E0601/E0602 strings") {
+TEST_CASE("Error code: E0600/E0601/E0602/E0603 strings") {
     CHECK(yona::compiler::error_code_str(yona::compiler::ErrorCode::E0600) == "E0600");
     CHECK(yona::compiler::error_code_str(yona::compiler::ErrorCode::E0601) == "E0601");
     CHECK(yona::compiler::error_code_str(yona::compiler::ErrorCode::E0602) == "E0602");
+    CHECK(yona::compiler::error_code_str(yona::compiler::ErrorCode::E0603) == "E0603");
 }
 
 TEST_CASE("Error code: E0600 explanation is non-empty") {
     CHECK(!yona::compiler::error_explanation(yona::compiler::ErrorCode::E0600).empty());
     CHECK(!yona::compiler::error_explanation(yona::compiler::ErrorCode::E0601).empty());
     CHECK(!yona::compiler::error_explanation(yona::compiler::ErrorCode::E0602).empty());
+    CHECK(!yona::compiler::error_explanation(yona::compiler::ErrorCode::E0603).empty());
 }
 
 } // LinearityChecker
+
+TEST_SUITE("BorrowParam") {
+
+TEST_CASE("@borrow rejected when parameter is returned") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    yona::parser::Parser parser;
+    std::istringstream stream("let f @borrow x = x in f 1");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    CHECK(tc.has_direct_errors());
+}
+
+TEST_CASE("@borrow accepted when parameter is only read") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    yona::parser::Parser parser;
+    std::istringstream stream("let f @borrow x = x + 1 in f 2");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    CHECK(!tc.has_direct_errors());
+}
+
+TEST_CASE("@borrow rejected on non-identifier pattern") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        R"(let g = \ @borrow (a, b) -> a + b in g (1, 2))");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    CHECK(tc.has_direct_errors());
+}
+
+} // BorrowParam

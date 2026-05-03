@@ -1,0 +1,19 @@
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_float64 : require
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push {
+    uint n;
+} push;
+
+layout(set = 0, binding = 0) buffer B {
+    double v[];
+} buf;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx < push.n) {
+        buf.v[idx] = buf.v[idx] * 2.0lf;
+    }
+}

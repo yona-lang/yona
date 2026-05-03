@@ -220,6 +220,14 @@ TEST_CASE("Borrowed heap params are excluded from owned cleanup paths") {
     CHECK(ir_contains(raising_ir, "call void @yona_rt_frame_push"));
 }
 
+TEST_CASE("Explicit @borrow on foldl fn param eliminates rc_inc") {
+    auto ir = compile_to_ir(
+        "let foldl @borrow fn acc seq = case seq of [] -> acc; "
+        "[h|t] -> foldl fn (fn acc h) t end in "
+        "foldl (\\a b -> a + b) 0 [1,2,3]");
+    CHECK(!ir_contains(ir, "call void @yona_rt_rc_inc"));
+}
+
 // with expression E2E test is in test/codegen/with_value.yona fixture
 
 TEST_CASE("Function generates internal LLVM function") {

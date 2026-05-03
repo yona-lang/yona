@@ -727,6 +727,8 @@ private:
 public:
   const string name;
   vector<PatternNode *> patterns; // args
+  /// Parallel to `patterns`: true when the parameter was written as `@borrow ...`.
+  vector<bool> param_borrow;
   vector<FunctionBody *> bodies;  // 1 if without guards, or more with guards
   std::optional<compiler::types::Type> type_signature; // optional type annotation
   string source_text; // original source for cross-module monomorphization
@@ -1324,7 +1326,15 @@ public:
   ~ImportExpr() override;
 };
 
-// extern [async] name : Type -> Type in body
+/// How `extern` / `.yonai` FN metadata lowers promise-carrying calls (see design-gpu-async.md).
+enum class ExternPromiseKind : uint8_t {
+  Sync,        ///< plain `extern` — synchronous C ABI
+  ThreadPool,  ///< `extern async` — pool runs C fn; caller gets pool promise
+  IoUring,     ///< `extern io` — C returns i64 id; await via yona_rt_io_await
+  NativePtr,   ///< `extern native` — C returns yona_promise_t*; await via yona_rt_async_await
+};
+
+// extern [async|io|native] name : Type -> Type in body
 class YONA_API ExternDeclExpr final : public ExprNode {
 private:
   void print(std::ostream &os) const override;
@@ -1334,12 +1344,11 @@ public:
   string c_symbol;          // optional explicit C ABI symbol from `= "..."` form
   compiler::types::Type declared_type;  // type annotation
   ExprNode *body;           // expression using the extern
-  bool is_async;            // true for "extern async" — calls via thread pool
-  bool is_io = false;       // true for "extern io" — submits to io_uring, returns id
+  ExternPromiseKind extern_promise = ExternPromiseKind::Sync;
 
   explicit ExternDeclExpr(SourceContext token, string name,
                            compiler::types::Type type, ExprNode *body,
-                           bool is_async = false);
+                           ExternPromiseKind ext_promise = ExternPromiseKind::Sync);
   template<typename ResultType>
   ResultType accept(const AstVisitor<ResultType> &visitor) const {
     return visitor.visit(const_cast<typename std::remove_const<typename std::remove_pointer<decltype(this)>::type>::type*>(this));

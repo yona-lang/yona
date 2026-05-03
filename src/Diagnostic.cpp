@@ -234,6 +234,7 @@ std::string error_code_str(ErrorCode code) {
         case ErrorCode::E0600: return "E0600";
         case ErrorCode::E0601: return "E0601";
         case ErrorCode::E0602: return "E0602";
+        case ErrorCode::E0603: return "E0603";
     }
     return "E????";
 }
@@ -260,6 +261,7 @@ std::optional<ErrorCode> parse_error_code(const std::string& str) {
     if (str == "E0600") return ErrorCode::E0600;
     if (str == "E0601") return ErrorCode::E0601;
     if (str == "E0602") return ErrorCode::E0602;
+    if (str == "E0603") return ErrorCode::E0603;
     return std::nullopt;
 }
 
@@ -596,6 +598,21 @@ std::string error_explanation(ErrorCode code) {
                 "      let data = recv fd 1024 in\n"
                 "      do; close fd; data; end\n"
                 "  end\n";
+
+        case ErrorCode::E0603:
+            return
+                "Invalid borrow parameter [E0603]\n"
+                "\n"
+                "`@borrow` marks a parameter as read-only for the function body: it must not\n"
+                "be returned, stored in a collection literal, captured by a nested lambda, or\n"
+                "used as a case scrutinee (head/tail consumes the seq). It is only supported\n"
+                "on simple identifier parameters.\n"
+                "\n"
+                "Example (invalid — `s` is returned):\n"
+                "\n"
+                "  let f @borrow s = s in ...\n"
+                "\n"
+                "Fix: remove `@borrow`, or change the body so the parameter is only read.\n";
     }
     return "";
 }

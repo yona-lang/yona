@@ -1,0 +1,3 @@
+let build n acc = if n <= 0 then acc else build (n - 1) (n :: acc) in
+let foldl @borrow fn acc seq = case seq of [] -> acc; [h|t] -> foldl fn (fn acc h) t end in
+foldl (\a b -> a + b) 0 (build 10000 [])

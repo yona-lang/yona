@@ -153,3 +153,7 @@ FN yona_Std_GPU__filterGreaterThan 2 INT ADT -> ADT
 FN yona_Std_GPU__upload 1 ADT -> ADT retadt Buffer
 FN yona_Std_GPU__mapAdd 2 INT ADT -> ADT
 FN yona_Std_GPU__reduceSum 1 ADT -> INT
+FN yona_Std_GPU__available 0 -> BOOL
+FN yona_Std_GPU__apiVersion 0 -> INT
+FN yona_Std_GPU__physicalDeviceCount 0 -> INT
+NAT yona_Std_GPU__floatArrayMul2Async 1 FLOAT_ARRAY -> INT

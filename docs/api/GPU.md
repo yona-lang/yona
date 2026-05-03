@@ -188,6 +188,62 @@ True when a Vulkan loader is visible to the process.
 vulkanAvailable = raw_vulkanAvailable 0
 ```
 
+### `extern`
+
+```yona
+extern raw_stdGpuAvailable : Int -> Bool = "yona_Std_GPU__available"
+```
+
+Integer discovery ABI (`yona_Std_GPU__*` in `gpu_cpu.c`; full Vulkan probe in `gpu_stub.c` when linked).
+
+### `extern`
+
+```yona
+extern raw_stdGpuApiVersion : Int -> Int = "yona_Std_GPU__apiVersion"
+```
+
+### `extern`
+
+```yona
+extern raw_stdGpuPhysicalDeviceCount : Int -> Int = "yona_Std_GPU__physicalDeviceCount"
+```
+
+### `available`
+
+```yona
+available : () -> Bool
+```
+
+### `available`
+
+```yona
+available () = raw_stdGpuAvailable 0
+```
+
+### `apiVersion`
+
+```yona
+apiVersion : () -> Int
+```
+
+### `apiVersion`
+
+```yona
+apiVersion () = raw_stdGpuApiVersion 0
+```
+
+### `physicalDeviceCount`
+
+```yona
+physicalDeviceCount : () -> Int
+```
+
+### `physicalDeviceCount`
+
+```yona
+physicalDeviceCount () = raw_stdGpuPhysicalDeviceCount 0
+```
+
 ### `upload`
 
 ```yona
@@ -288,4 +344,12 @@ Sum all values. Vulkan when `YONA_GPU_VULKAN_REDUCE=1` or
 ```yona
 reduceSum buffer =
 ```
+
+### `extern`
+
+```yona
+extern native floatArrayMul2Async : FloatArray -> Int = "yona_Std_GPU__floatArrayMul2Async"
+```
+
+Experimental: in-place ×2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
 

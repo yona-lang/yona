@@ -6,6 +6,7 @@
 //
 
 #include "Codegen.h"
+#include "analysis/BorrowEscapeAnalysis.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Intrinsics.h>
@@ -414,119 +415,10 @@ void Codegen::transfer_scope_exit() {
 }
 
 // ===== Stream fusion: count identifier references in AST =====
+// (shared implementation in analysis/BorrowEscapeAnalysis.cpp)
 
 int Codegen::count_identifier_refs(AstNode* node, const std::string& name) {
-    if (!node) return 0;
-    auto ty = node->get_type();
-
-    if (ty == AST_IDENTIFIER_EXPR)
-        return static_cast<IdentifierExpr*>(node)->name->value == name ? 1 : 0;
-
-    // Binary ops: all inherit from BinaryOpExpr with left/right
-    if (dynamic_cast<BinaryOpExpr*>(static_cast<AstNode*>(node))) {
-        auto* b = static_cast<BinaryOpExpr*>(node);
-        return count_identifier_refs(b->left, name) + count_identifier_refs(b->right, name);
-    }
-
-    if (ty == AST_IF_EXPR) {
-        auto* e = static_cast<IfExpr*>(node);
-        return count_identifier_refs(e->condition, name)
-             + count_identifier_refs(e->thenExpr, name)
-             + count_identifier_refs(e->elseExpr, name);
-    }
-    if (ty == AST_LET_EXPR) {
-        auto* e = static_cast<LetExpr*>(node);
-        int c = 0;
-        for (auto* a : e->aliases) {
-            if (auto* va = dynamic_cast<ValueAlias*>(a)) {
-                c += count_identifier_refs(va->expr, name);
-                if (va->identifier->name->value == name) return c; // shadowed
-            } else if (auto* la = dynamic_cast<LambdaAlias*>(a)) {
-                c += count_identifier_refs(la->lambda, name);
-                if (la->name->value == name) return c;
-            }
-        }
-        return c + count_identifier_refs(e->expr, name);
-    }
-    if (ty == AST_CASE_EXPR) {
-        auto* e = static_cast<CaseExpr*>(node);
-        int c = count_identifier_refs(e->expr, name);
-        for (auto* clause : e->clauses)
-            c += count_identifier_refs(clause->body, name);
-        return c;
-    }
-    if (ty == AST_APPLY_EXPR) {
-        auto* e = static_cast<ApplyExpr*>(node);
-        int c = 0;
-        if (auto* nc = dynamic_cast<NameCall*>(e->call)) {
-            c += (nc->name->value == name) ? 1 : 0;
-        } else if (auto* ec = dynamic_cast<ExprCall*>(e->call)) {
-            // Curried application: `f a b c` parses as `((f a) b) c`,
-            // a chain of ApplyExprs wrapped in ExprCall. Recurse into
-            // the inner expression so identifiers in earlier args (like
-            // `b` in `f a b c`) get counted instead of being silently
-            // dropped — that drop was the root cause of the Perceus
-            // single-use detection mis-counting placed in `safe col
-            // placed 1`.
-            if (ec->expr) c += count_identifier_refs(ec->expr, name);
-        }
-        for (auto& arg : e->args) {
-            if (std::holds_alternative<ExprNode*>(arg))
-                c += count_identifier_refs(std::get<ExprNode*>(arg), name);
-            else
-                c += count_identifier_refs(std::get<ValueExpr*>(arg), name);
-        }
-        return c;
-    }
-    if (ty == AST_TUPLE_EXPR) {
-        auto* e = static_cast<TupleExpr*>(node);
-        int c = 0;
-        for (auto* v : e->values) c += count_identifier_refs(v, name);
-        return c;
-    }
-    if (ty == AST_VALUES_SEQUENCE_EXPR) {
-        auto* e = static_cast<ValuesSequenceExpr*>(node);
-        int c = 0;
-        for (auto* v : e->values) c += count_identifier_refs(v, name);
-        return c;
-    }
-    if (ty == AST_SEQ_GENERATOR_EXPR) {
-        auto* g = static_cast<SeqGeneratorExpr*>(node);
-        auto* ext = static_cast<ValueCollectionExtractorExpr*>(g->collectionExtractor);
-        int c = count_identifier_refs(ext->collection, name);
-        // Binding variable shadows name inside reducer/condition
-        std::string var;
-        if (auto* id = std::get_if<IdentifierExpr*>(&ext->expr))
-            var = (*id)->name->value;
-        if (var != name) {
-            c += count_identifier_refs(g->reducerExpr, name);
-            if (ext->condition) c += count_identifier_refs(ext->condition, name);
-        }
-        return c;
-    }
-    if (ty == AST_FUNCTION_EXPR) {
-        auto* f = static_cast<FunctionExpr*>(node);
-        // Check if name is shadowed by a parameter
-        for (auto& p : f->patterns) {
-            if (p->get_type() == AST_PATTERN_VALUE) {
-                auto* pv = static_cast<PatternValue*>(p);
-                if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
-                    if ((*id)->name->value == name) return 0; // shadowed by param
-            }
-        }
-        int c = 0;
-        for (auto* body : f->bodies)
-            if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body))
-                c += count_identifier_refs(bwg->expr, name);
-        return c;
-    }
-    if (ty == AST_DO_EXPR) {
-        auto* e = static_cast<DoExpr*>(node);
-        int c = 0;
-        for (auto* s : e->steps) c += count_identifier_refs(s, name);
-        return c;
-    }
-    return 0; // literals, symbols, etc.
+    return compiler::analysis::count_identifier_refs(node, name);
 }
 
 // ===== Borrow inference: escape analysis for function params =====
@@ -757,6 +649,10 @@ std::vector<bool> Codegen::infer_borrowed_params(const DeferredFunction& def,
     for (size_t pi = 0; pi < def.param_names.size(); pi++) {
         if (pi >= param_ctypes.size()) continue;
         if (!is_heap_type(param_ctypes[pi])) continue;
+        if (pi < def.ast->param_borrow.size() && def.ast->param_borrow[pi]) {
+            borrowed[pi] = true;
+            continue;
+        }
         if (!has_escaping_use(bwg->expr, def.param_names[pi], true))
             borrowed[pi] = true;
     }
@@ -1239,7 +1135,8 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
             if (cf_it != compiled_functions_.end()) {
                 auto& cf = cf_it->second;
                 size_t user_arity = cf.param_types.size() - cf.capture_names.size();
-                if (user_arity == 0 && !cf.is_io_async && cf.return_type != CType::PROMISE) {
+                if (user_arity == 0 && cf.extern_promise == ast::ExternPromiseKind::Sync &&
+                    cf.return_type != CType::PROMISE) {
                     auto ext_it = imports_.extern_functions.find(node->name->value);
                     if (ext_it != imports_.extern_functions.end()) {
                         auto genfn_it = imports_.imported_sources.find(ext_it->second);
@@ -1325,7 +1222,8 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
     if (fit != compiled_functions_.end()) {
         auto& cf = fit->second;
         size_t user_arity = cf.param_types.size() - cf.capture_names.size();
-        if (user_arity == 0 && !cf.is_io_async && cf.return_type != CType::PROMISE) {
+        if (user_arity == 0 && cf.extern_promise == ast::ExternPromiseKind::Sync &&
+            cf.return_type != CType::PROMISE) {
             auto ext_it = imports_.extern_functions.find(node->name->value);
             if (ext_it != imports_.extern_functions.end()) {
                 auto genfn_it = imports_.imported_sources.find(ext_it->second);

@@ -14,8 +14,10 @@ module Std\GPU
 
 export type Buffer
 export backendName, vulkanStatus, vulkanLastNote, hasGpu, hasSimd, vulkanAvailable
+export available, apiVersion, physicalDeviceCount
 export upload, materialize, length
 export mapAdd, mapMul, filterGreaterThan, reduceSum
+export floatArrayMul2Async
 
 ## Opaque accelerator buffer. The CPU backend stores an owned IntArray copy.
 type Buffer = Buffer IntArray
@@ -62,6 +64,20 @@ hasSimd = raw_hasSimd 0
 ## True when a Vulkan loader is visible to the process.
 vulkanAvailable : Bool
 vulkanAvailable = raw_vulkanAvailable 0
+
+## Integer discovery ABI (`yona_Std_GPU__*` in `gpu_cpu.c`; full Vulkan probe in `gpu_stub.c` when linked).
+extern raw_stdGpuAvailable : Int -> Bool = "yona_Std_GPU__available"
+extern raw_stdGpuApiVersion : Int -> Int = "yona_Std_GPU__apiVersion"
+extern raw_stdGpuPhysicalDeviceCount : Int -> Int = "yona_Std_GPU__physicalDeviceCount"
+
+available : () -> Bool
+available () = raw_stdGpuAvailable 0
+
+apiVersion : () -> Int
+apiVersion () = raw_stdGpuApiVersion 0
+
+physicalDeviceCount : () -> Int
+physicalDeviceCount () = raw_stdGpuPhysicalDeviceCount 0
 
 ## Copy a host IntArray into accelerator-owned storage.
 upload : IntArray -> Buffer
@@ -111,3 +127,6 @@ reduceSum buffer =
     case buffer of
         Buffer values -> raw_reduceSum values
     end
+
+## Experimental: in-place ×2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
+extern native floatArrayMul2Async : FloatArray -> Int = "yona_Std_GPU__floatArrayMul2Async"

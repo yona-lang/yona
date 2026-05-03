@@ -39,6 +39,7 @@
 | `Std\Time` | 6 | Timestamps, elapsed, sleep, format |
 | `Std\Path` | 6 | Path manipulation (join, dirname, basename, extension) |
 | `Std\Format` | 1 | String formatting with `{}` placeholders |
+| `Std\GPU` | 3 | Vulkan capability discovery only (`available`, `apiVersion`, `physicalDeviceCount`); optional CMake Vulkan on Unix — see `docs/design-gpu-async.md` for the planned compute API |
 
 ## Documentation
 

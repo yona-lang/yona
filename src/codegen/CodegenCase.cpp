@@ -865,6 +865,8 @@ CType Codegen::type_name_to_ctype(const std::string& name) {
     if (name == "Set")      return CType::SET;
     if (name == "Dict")     return CType::DICT;
     if (name == "ByteArray")    return CType::BYTE_ARRAY;
+    if (name == "IntArray")     return CType::INT_ARRAY;
+    if (name == "FloatArray")   return CType::FLOAT_ARRAY;
     return CType::INT; // fallback
 }
 

@@ -940,8 +940,19 @@ unique_ptr<AliasExpr> ParserImpl::parse_alias() {
 
     // Check for function-style let binding
     vector<string> params;
-    while (check(TokenType::YIDENTIFIER) || check(TokenType::YUNDERSCORE)) {
+    vector<bool> param_borrow;
+    while (check(TokenType::YAT) || check(TokenType::YIDENTIFIER) || check(TokenType::YUNDERSCORE)) {
+        bool borrow = try_consume_borrow_annotation();
+        if (!check(TokenType::YIDENTIFIER) && !check(TokenType::YUNDERSCORE)) {
+            if (check(TokenType::YAT))
+                error(ParseError::Type::INVALID_SYNTAX,
+                      "Expected keyword `borrow` after `@` in parameter list");
+            else
+                error(ParseError::Type::INVALID_SYNTAX, "Expected parameter name after `@borrow`");
+            return nullptr;
+        }
         params.push_back(string(advance().lexeme));
+        param_borrow.push_back(borrow);
     }
 
     expect(TokenType::YASSIGN, "Expected '=' in let binding");
@@ -970,6 +981,8 @@ unique_ptr<AliasExpr> ParserImpl::parse_alias() {
             ? std::optional<compiler::types::Type>(*type_annotation)
             : std::nullopt;
         auto func_expr = new FunctionExpr(loc, name, patterns, bodies, std::move(type_sig));
+        func_expr->param_borrow = std::move(param_borrow);
+        func_expr->param_borrow.resize(func_expr->patterns.size(), false);
         auto name_expr = new NameExpr(loc, name);
         return make_unique<LambdaAlias>(loc, name_expr, func_expr);
     }
@@ -1274,14 +1287,18 @@ unique_ptr<ExprNode> ParserImpl::parse_lambda_expr(bool stop_at_in) {
     advance(); // consume '\\'
 
     vector<PatternNode*> params;
+    vector<bool> param_borrow;
 
     if (check(TokenType::YLPAREN)) {
         advance();
         if (!check(TokenType::YRPAREN)) {
             do {
+                bool borrow = try_consume_borrow_annotation();
                 auto param = parse_pattern();
-                if (param) params.push_back(param.release());
-                else return nullptr;
+                if (param) {
+                    params.push_back(param.release());
+                    param_borrow.push_back(borrow);
+                } else return nullptr;
             } while (match(TokenType::YCOMMA));
         }
         if (!expect(TokenType::YRPAREN, "Expected ')' after lambda parameters")) {
@@ -1289,9 +1306,12 @@ unique_ptr<ExprNode> ParserImpl::parse_lambda_expr(bool stop_at_in) {
         }
     } else {
         while (!check(TokenType::YARROW) && !is_at_end()) {
+            bool borrow = try_consume_borrow_annotation();
             auto param = parse_pattern();
-            if (param) params.push_back(param.release());
-            else return nullptr;
+            if (param) {
+                params.push_back(param.release());
+                param_borrow.push_back(borrow);
+            } else return nullptr;
             match(TokenType::YCOMMA);
         }
     }
@@ -1311,6 +1331,8 @@ unique_ptr<ExprNode> ParserImpl::parse_lambda_expr(bool stop_at_in) {
     bodies.push_back(new BodyWithoutGuards(loc, body.release()));
 
     auto func_expr = new FunctionExpr(loc, "", params, bodies);
+    func_expr->param_borrow = std::move(param_borrow);
+    func_expr->param_borrow.resize(func_expr->patterns.size(), false);
 
     return unique_ptr<ExprNode>(func_expr);
 }
@@ -1396,9 +1418,17 @@ unique_ptr<ExprNode> ParserImpl::parse_extern_decl() {
     advance(); // consume 'extern'
     skip_newlines();
 
-    bool is_async = false;
-    if (check(TokenType::YIDENTIFIER) && peek().lexeme == "async") {
-        is_async = true;
+    ast::ExternPromiseKind ext_promise = ast::ExternPromiseKind::Sync;
+    if (check(TokenType::YIDENTIFIER) && current().lexeme == "async") {
+        ext_promise = ast::ExternPromiseKind::ThreadPool;
+        advance();
+        skip_newlines();
+    } else if (check(TokenType::YIDENTIFIER) && current().lexeme == "io") {
+        ext_promise = ast::ExternPromiseKind::IoUring;
+        advance();
+        skip_newlines();
+    } else if (check(TokenType::YIDENTIFIER) && current().lexeme == "native") {
+        ext_promise = ast::ExternPromiseKind::NativePtr;
         advance();
         skip_newlines();
     }
@@ -1428,7 +1458,7 @@ unique_ptr<ExprNode> ParserImpl::parse_extern_decl() {
         return nullptr;
     }
 
-    return make_unique<ExternDeclExpr>(loc, name, *type_ann, body.release(), is_async);
+    return make_unique<ExternDeclExpr>(loc, name, *type_ann, body.release(), ext_promise);
 }
 
 unique_ptr<ExprNode> ParserImpl::parse_import_expr() {

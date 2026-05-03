@@ -175,16 +175,26 @@ static vector<filesystem::path> discover_sysroots(const char* argv0, const strin
 }
 
 static bool is_module_source(const string& source) {
-    auto it = source.begin();
-    while (it != source.end()) {
-        while (it != source.end() && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r'))
-            ++it;
-        if (it == source.end() || *it != '#') break;
-        while (it != source.end() && *it != '\n' && *it != '\r')
-            ++it;
+    // Match lexer: `#` starts a line comment through newline (same as `##` docs).
+    // Without this, stdlib modules whose first token is `module` only after
+    // doc lines (e.g. lib/Std/Http.yona) were parsed as expressions and failed.
+    size_t i = 0;
+    const size_t n = source.size();
+    while (i < n) {
+        const unsigned char c = static_cast<unsigned char>(source[i]);
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            ++i;
+            continue;
+        }
+        if (c == '#') {
+            while (i < n && source[i] != '\n' && source[i] != '\r')
+                ++i;
+            continue;
+        }
+        break;
     }
-    string prefix(it, min(it + 6, source.end()));
-    return prefix == "module";
+    if (i + 6 > n) return false;
+    return source.compare(i, 6, "module") == 0;
 }
 
 int main(int argc, char* argv[]) {

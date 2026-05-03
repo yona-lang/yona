@@ -102,6 +102,12 @@ using namespace yona::ast;
 // correct LLVM type to use.
 enum class CType { INT, FLOAT, BOOL, STRING, SEQ, TUPLE, UNIT, FUNCTION, SYMBOL, PROMISE, SET, DICT, ADT, BYTE_ARRAY, SUM, RECORD, INT_ARRAY, FLOAT_ARRAY, CHANNEL };
 
+/// How `auto_await` completes a `PROMISE`-typed LLVM value at the runtime boundary.
+enum class PromiseAwaitPath : uint8_t {
+    AsyncPtr, ///< `yona_rt_async_await` — thread pool or `extern native` pointer
+    IoUring,   ///< `yona_rt_io_await` — io_uring user_data cookie (`extern io`)
+};
+
 // A typed value: LLVM value + its codegen type + optional subtype info
 struct TypedValue {
     llvm::Value* val = nullptr;
@@ -109,7 +115,7 @@ struct TypedValue {
     std::vector<CType> subtypes; // tuple: element types; SEQ/SET: {elem_type}; DICT: {key_type, val_type}
     std::string adt_type_name;   // For CType::ADT: the ADT type name (e.g., "Option")
     std::vector<std::string> record_fields; // For CType::RECORD: sorted field names (index = tuple position)
-    bool is_io_promise = false;  // true: await via yona_rt_io_await, false: yona_rt_async_await
+    PromiseAwaitPath promise_await = PromiseAwaitPath::AsyncPtr;
 
     TypedValue() = default;
     TypedValue(llvm::Value* v, CType t) : val(v), type(t) {}
@@ -199,7 +205,8 @@ private:
         CType return_type;
         std::vector<CType> param_types;
         std::vector<std::string> capture_names;
-        bool is_io_async = false;
+        ast::ExternPromiseKind extern_promise = ast::ExternPromiseKind::Sync;
+        CType promise_inner_type = CType::INT; // awaited value when return_type is PROMISE
         llvm::Value* closure_env = nullptr;
         std::string return_adt_name;
         std::vector<CType> return_subtypes;
@@ -380,9 +387,8 @@ private:
     struct ModuleFunctionMeta {
         std::vector<CType> param_types;
         CType return_type;
-        bool is_async = false;
-        bool is_io_async = false;
-        CType async_inner_type = CType::INT;
+        ast::ExternPromiseKind extern_promise = ast::ExternPromiseKind::Sync;
+        CType promise_inner_type = CType::INT; // inner `B` for `Promise B` / AFN IO NAT rows
         std::string return_adt_name;  // for ADT returns from extern decls: the type name
         // Inferred borrow contract loaded from .yonai. borrowed_params[i]
         // means parameter i is read-only/non-escaping, so call sites can
@@ -687,6 +693,11 @@ private:
     std::unordered_set<std::string> loaded_yona_paths_;
     void register_import(const std::string& mod_fqn, const std::string& func_name, const std::string& import_name);
     void register_all_imports(const std::string& mod_fqn);
+    /// Declare LLVM `Function*` for an imported AFN/IO/NAT symbol (sync FN returns nullptr).
+    llvm::Function* declare_import_extern_fn(const std::string& mangled, const ModuleFunctionMeta& meta);
+    /// Register `compiled_functions_` + `named_values_` for promise-style imports.
+    void bind_imported_promise_cf(const std::string& logical_name, llvm::Function* fn,
+                                   const ModuleFunctionMeta& meta);
     void register_trait_externs();
     llvm::Type* adt_llvm_type(const std::string& type_name);
     std::unique_ptr<ast::ModuleDecl> reparse_genfn(const std::string& local_name, const std::string& source_text);

@@ -12,6 +12,10 @@
 
 #include "typechecker/TypeChecker.h"
 
+#include "analysis/BorrowEscapeAnalysis.h"
+
+#include <variant>
+
 namespace yona::compiler::typechecker {
 using namespace yona::ast;
 
@@ -496,7 +500,51 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr* node,
     for (int i = (int)param_types.size() - 1; i >= 0; i--)
         fn_type = arena_.make_arrow(param_types[i], fn_type);
 
+    check_param_borrow_annotations(node);
     return fn_type;
+}
+
+void TypeChecker::check_param_borrow_annotations(FunctionExpr* node) {
+    if (node->param_borrow.empty()) return;
+
+    for (size_t i = 0; i < node->patterns.size(); ++i) {
+        bool want = i < node->param_borrow.size() && node->param_borrow[i];
+        if (!want) continue;
+
+        auto* pat = node->patterns[i];
+        if (pat->get_type() != AST_PATTERN_VALUE) {
+            diag_.error(pat->source_context, ErrorCode::E0603,
+                        "`@borrow` is only allowed on simple identifier parameters");
+            error_count_++;
+            continue;
+        }
+        auto* pv = static_cast<PatternValue*>(pat);
+        if (!std::holds_alternative<IdentifierExpr*>(pv->expr)) {
+            diag_.error(pat->source_context, ErrorCode::E0603,
+                        "`@borrow` is only allowed on simple identifier parameters");
+            error_count_++;
+            continue;
+        }
+        const std::string& pname = std::get<IdentifierExpr*>(pv->expr)->name->value;
+
+        bool escapes = false;
+        for (auto* body : node->bodies) {
+            if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
+                if (compiler::analysis::heap_param_may_escape(bwg->expr, pname, true))
+                    escapes = true;
+            } else if (auto* g = dynamic_cast<BodyWithGuards*>(body)) {
+                if (compiler::analysis::heap_param_may_escape(g->guard, pname, false)
+                    || compiler::analysis::heap_param_may_escape(g->expr, pname, true))
+                    escapes = true;
+            }
+        }
+        if (escapes) {
+            diag_.error(pat->source_context, ErrorCode::E0603,
+                        "borrowed parameter '" + pname + "' must not escape "
+                        "(return, store in literal, capture in closure, or be a case scrutinee)");
+            error_count_++;
+        }
+    }
 }
 
 // ===== Application =====

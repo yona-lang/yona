@@ -286,6 +286,8 @@ void FunctionExpr::print(std::ostream &os) const {
   os << name << " ";
   size_t i = 0;
   for (const auto p : patterns) {
+    if (i < param_borrow.size() && param_borrow[i])
+      os << "@borrow ";
     os << *p;
     if (++i < patterns.size()) {
       os << ' ';
@@ -631,9 +633,10 @@ void ImportExpr::print(std::ostream &os) const {
 
 ExternDeclExpr::ExternDeclExpr(SourceContext token, string name,
                                  compiler::types::Type type, ExprNode *body,
-                                 bool is_async)
+                                 ExternPromiseKind ext_promise)
     : ExprNode(token), name(std::move(name)), declared_type(std::move(type)),
-      body(body ? body->with_parent<ExprNode>(this) : nullptr), is_async(is_async) {}
+      body(body ? body->with_parent<ExprNode>(this) : nullptr),
+      extern_promise(ext_promise) {}
 
 ExternDeclExpr::~ExternDeclExpr() { delete body; }
 

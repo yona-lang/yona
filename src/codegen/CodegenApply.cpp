@@ -967,8 +967,19 @@ TypedValue Codegen::emit_direct_call(const std::string& fn_name, CompiledFunctio
         if (it != named_values_.end()) call_args.push_back(it->second.val);
     }
 
-    // io-async (AFN): call directly — function submits to io_uring and returns ID
-    if (cf.return_type == CType::PROMISE && cf.is_io_async) {
+    // Native promise (NAT / extern native): C returns yona_promise_t* — call
+    // directly; auto-await uses yona_rt_async_await (same as thread-pool promises).
+    if (cf.return_type == CType::PROMISE && cf.extern_promise == ast::ExternPromiseKind::NativePtr) {
+        CType inner_ret = CType::INT;
+        auto nv_it = named_values_.find(fn_name);
+        if (nv_it != named_values_.end() && !nv_it->second.subtypes.empty())
+            inner_ret = nv_it->second.subtypes[0];
+        auto* result = builder_->CreateCall(cf.fn, call_args, "native_promise");
+        return TypedValue{result, CType::PROMISE, {inner_ret}};
+    }
+
+    // io-async: call directly — function submits to io_uring and returns ID
+    if (cf.return_type == CType::PROMISE && cf.extern_promise == ast::ExternPromiseKind::IoUring) {
         CType inner_ret = CType::INT;
         auto nv_it = named_values_.find(fn_name);
         if (nv_it != named_values_.end() && !nv_it->second.subtypes.empty())
@@ -976,7 +987,7 @@ TypedValue Codegen::emit_direct_call(const std::string& fn_name, CompiledFunctio
         // Call the function directly — it returns the uring ID as i64
         auto* result = builder_->CreateCall(cf.fn, call_args, "io_submit");
         TypedValue tv{result, CType::PROMISE, {inner_ret}};
-        tv.is_io_promise = true;
+        tv.promise_await = PromiseAwaitPath::IoUring;
         return tv;
     }
 
@@ -1342,9 +1353,9 @@ Value* Codegen::wrap_in_closure(Function* fn, CType ret_type) {
 TypedValue Codegen::auto_await(TypedValue tv) {
     if (!tv || tv.type != CType::PROMISE) return tv;
 
-    // Dispatch: io_uring promise vs thread-pool promise
+    // Dispatch: io_uring cookie vs opaque promise pointer (pool or extern native)
     Value* awaited;
-    if (tv.is_io_promise) {
+    if (tv.promise_await == PromiseAwaitPath::IoUring) {
         awaited = builder_->CreateCall(rt_.io_await_, {tv.val}, "io_await");
     } else {
         llvm::Function* await_fn =
@@ -1398,8 +1409,14 @@ static CType yona_type_to_ctype(const types::Type& t) {
         return CType::DICT;
     if (std::holds_alternative<std::shared_ptr<types::ProductType>>(t))
         return CType::TUPLE;
-    if (std::holds_alternative<std::shared_ptr<types::NamedType>>(t))
+    if (std::holds_alternative<std::shared_ptr<types::NamedType>>(t)) {
+        auto& nt = std::get<std::shared_ptr<types::NamedType>>(t);
+        if (nt->name == "Channel") return CType::CHANNEL;
+        if (nt->name == "FloatArray") return CType::FLOAT_ARRAY;
+        if (nt->name == "IntArray") return CType::INT_ARRAY;
+        if (nt->name == "ByteArray") return CType::BYTE_ARRAY;
         return CType::ADT;
+    }
     if (std::holds_alternative<std::shared_ptr<types::PromiseType>>(t))
         return CType::PROMISE;
     if (std::holds_alternative<std::shared_ptr<types::SumType>>(t))

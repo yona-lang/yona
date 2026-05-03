@@ -133,6 +133,19 @@ Compiler **call-site JSON** (no codegen): `yonac bench/accelerators/gpu_map_redu
 --emit-accelerator-report` (modules: add `--emit-accelerator-report-with-types` for a typechecked
 `report_kind` of `module`) — see `docs/gpu-transparent-lowering.md` (*Rollout* step 2).
 
+## `@borrow` vs inference (parity, not speedup)
+
+For parameters where **borrow inference** already applies (no escape in the
+function body), **`@borrow` is redundant for codegen**: the same refcount
+call sites are optimized. Explicit `@borrow` still helps as a checked
+contract and catches future body edits that would break borrow rules.
+
+`collections/list_sum.yona` and `collections/list_sum_explicit_borrow.yona`
+are the same workload; comparing them with `python3 bench/runner.py
+collections/list_sum` is a **parity / regression** check (wall times should
+match within noise). They do **not** demonstrate a speed benefit of explicit
+annotations over inference.
+
 ## Known Limitations
 
 - Sieve uses O(n²) list filtering — expected to be slow

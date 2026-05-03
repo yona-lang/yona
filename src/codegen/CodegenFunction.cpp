@@ -89,8 +89,14 @@ static CType yona_type_to_ctype(const types::Type& t) {
         return CType::DICT;
     if (std::holds_alternative<std::shared_ptr<types::ProductType>>(t))
         return CType::TUPLE;
-    if (std::holds_alternative<std::shared_ptr<types::NamedType>>(t))
+    if (std::holds_alternative<std::shared_ptr<types::NamedType>>(t)) {
+        auto& nt = std::get<std::shared_ptr<types::NamedType>>(t);
+        if (nt->name == "Channel") return CType::CHANNEL;
+        if (nt->name == "FloatArray") return CType::FLOAT_ARRAY;
+        if (nt->name == "IntArray") return CType::INT_ARRAY;
+        if (nt->name == "ByteArray") return CType::BYTE_ARRAY;
         return CType::ADT;
+    }
     if (std::holds_alternative<std::shared_ptr<types::PromiseType>>(t))
         return CType::PROMISE;
     if (std::holds_alternative<std::shared_ptr<types::SumType>>(t))
@@ -1311,8 +1317,8 @@ Codegen::CompiledFunction Codegen::compile_function(
     // an io_uring submit (direct call + yona_rt_io_await) rather than a
     // generic thread-pool Promise (which would double-schedule it on
     // the worker pool and corrupt string refcount on the boundary).
-    if (body_tv && body_tv.is_io_promise)
-        cf.is_io_async = true;
+    if (body_tv && body_tv.promise_await == PromiseAwaitPath::IoUring)
+        cf.extern_promise = ast::ExternPromiseKind::IoUring;
     compiled_functions_[name] = cf;
     named_values_[name] = {fn, CType::FUNCTION};
 

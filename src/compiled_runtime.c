@@ -826,6 +826,7 @@ int64_t* yona_Std_IntArray__toSeq(int64_t* a) { return yona_rt_int_array_to_seq(
 #include "runtime/gpu_vulkan.c"
 #include "runtime/gpu_vulkan_device.c"
 #include "runtime/gpu_cpu.c"
+#include "runtime/gpu_stub.c"
 
 /* ===== FloatArray — contiguous unboxed double[] ===== */
 /* Layout: [count: i64][double0, double1, ...] */

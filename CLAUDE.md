@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - LLVM 22+ (Fedora: `sudo dnf install llvm llvm-devel llvm-libs cmake ninja-build`)
 - CMake 3.10+, Ninja
 - C++23 capable compiler
+- Optional — `Std\GPU` Vulkan **discovery** probe (Linux/macOS): Vulkan SDK / loader so CMake finds `Vulkan::Vulkan` (Fedora: `sudo dnf install vulkan-devel vulkan-loader-devel`). Without it, GPU counts stay at zero. After installing those packages, run **`cmake --preset …` again**; the configure log should show `Found Vulkan — Std\GPU will probe physical devices on this platform`. User-facing compute (`mapGPU`, `Promise`, fences) is specified in `docs/design-gpu-async.md` and is not in the stdlib surface yet.
 
 ### Configure and build (Linux)
 ```bash

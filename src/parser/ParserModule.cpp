@@ -6,6 +6,16 @@
 
 namespace yona::parser {
 
+bool ParserImpl::try_consume_borrow_annotation() {
+    if (!check(TokenType::YAT) || is_at_end()) return false;
+    const Token& t1 = peek(1);
+    if (t1.type != TokenType::YIDENTIFIER || string(t1.lexeme) != "borrow")
+        return false;
+    advance(); // @
+    advance(); // borrow
+    return true;
+}
+
 unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
     SourceLocation start_loc = current_location();
 
@@ -70,17 +80,20 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
                 adt_declarations.push_back(adt.release());
             }
         } else if (match(TokenType::YEXTERN)) {
-            // Module-level extern: extern [async|io] name : Type [= "CSYMBOL"]
+            // Module-level extern: extern [async|io|native] name : Type [= "CSYMBOL"]
             //   `async` — thread-pool async (returns Promise)
             //   `io`    — io_uring submit-and-return (returns Promise)
+            //   `native` — C returns yona_promise_t*; await via yona_rt_async_await (GPU, etc.)
             //   neither — synchronous C call
-            bool is_async = false;
-            bool is_io = false;
+            ast::ExternPromiseKind ext_promise = ast::ExternPromiseKind::Sync;
             if (check(TokenType::YIDENTIFIER) && current().lexeme == "async") {
-                is_async = true;
+                ext_promise = ast::ExternPromiseKind::ThreadPool;
                 advance();
             } else if (check(TokenType::YIDENTIFIER) && current().lexeme == "io") {
-                is_io = true;
+                ext_promise = ast::ExternPromiseKind::IoUring;
+                advance();
+            } else if (check(TokenType::YIDENTIFIER) && current().lexeme == "native") {
+                ext_promise = ast::ExternPromiseKind::NativePtr;
                 advance();
             }
             skip_newlines();
@@ -93,8 +106,7 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
                 skip_newlines();
                 auto etype = parse_type();
                 if (etype) {
-                    auto* decl = new ExternDeclExpr(eloc, ename, *etype, nullptr, is_async);
-                    decl->is_io = is_io;
+                    auto* decl = new ExternDeclExpr(eloc, ename, *etype, nullptr, ext_promise);
                     // Optional `= "C_SYMBOL"` to bind a Yona-friendly name to a
                     // mangled C ABI symbol. Without it, ename IS the C symbol.
                     if (match(TokenType::YASSIGN)) {
@@ -249,22 +261,25 @@ unique_ptr<FunctionExpr> ParserImpl::parse_function() {
     }
 
     vector<PatternNode*> patterns;
+    vector<bool> param_borrow_flags;
     vector<FunctionBody*> function_bodies;
 
     if (type_signature) {
         skip_newlines();
         auto first_clause = parse_function_clause_with_patterns(name);
-        if (first_clause.first.empty() && first_clause.second.empty())
+        if (first_clause.patterns.empty() && first_clause.bodies.empty())
             return nullptr;
-        patterns = std::move(first_clause.first);
-        for (auto& body : first_clause.second)
+        patterns = std::move(first_clause.patterns);
+        param_borrow_flags = std::move(first_clause.param_borrow);
+        for (auto& body : first_clause.bodies)
             function_bodies.push_back(body.release());
     } else {
         auto first_clause = parse_function_clause_patterns_and_body();
-        if (first_clause.first.empty() && first_clause.second.empty())
+        if (first_clause.patterns.empty() && first_clause.bodies.empty())
             return nullptr;
-        patterns = std::move(first_clause.first);
-        for (auto& body : first_clause.second)
+        patterns = std::move(first_clause.patterns);
+        param_borrow_flags = std::move(first_clause.param_borrow);
+        for (auto& body : first_clause.bodies)
             function_bodies.push_back(body.release());
     }
 
@@ -286,6 +301,8 @@ unique_ptr<FunctionExpr> ParserImpl::parse_function() {
         function_bodies,
         type_signature ? std::optional<compiler::types::Type>(*type_signature) : std::nullopt
     );
+    func->param_borrow = std::move(param_borrow_flags);
+    func->param_borrow.resize(func->patterns.size(), false);
 
     // Capture original source text for cross-module monomorphization
     size_t src_end = previous_location().offset + previous_location().length;
@@ -296,22 +313,24 @@ unique_ptr<FunctionExpr> ParserImpl::parse_function() {
     return func;
 }
 
-pair<vector<PatternNode*>, vector<unique_ptr<FunctionBody>>>
-ParserImpl::parse_function_clause_with_patterns(const string& expected_name) {
+ParsedFunctionClause ParserImpl::parse_function_clause_with_patterns(const string& expected_name) {
     SourceLocation start_loc = current_location();
 
     if (!check(TokenType::YIDENTIFIER) || peek().lexeme != expected_name) {
         error(ParseError::Type::INVALID_SYNTAX,
               "Expected function name '" + expected_name + "'");
-        return {{}, {}};
+        return {};
     }
     advance();
 
     vector<PatternNode*> patterns;
+    vector<bool> param_borrow;
     while (!check(TokenType::YASSIGN) && !check(TokenType::YIF) && !is_at_end()) {
+        bool borrow = try_consume_borrow_annotation();
         auto pattern = parse_pattern();
         if (pattern) {
             patterns.push_back(pattern.release());
+            param_borrow.push_back(borrow);
         }
     }
 
@@ -343,18 +362,20 @@ ParserImpl::parse_function_clause_with_patterns(const string& expected_name) {
         }
     }
 
-    return {patterns, std::move(bodies)};
+    return {std::move(patterns), std::move(param_borrow), std::move(bodies)};
 }
 
-pair<vector<PatternNode*>, vector<unique_ptr<FunctionBody>>>
-ParserImpl::parse_function_clause_patterns_and_body() {
+ParsedFunctionClause ParserImpl::parse_function_clause_patterns_and_body() {
     SourceLocation start_loc = current_location();
 
     vector<PatternNode*> patterns;
+    vector<bool> param_borrow;
     while (!check(TokenType::YASSIGN) && !is_at_end()) {
+        bool borrow = try_consume_borrow_annotation();
         auto pattern = parse_pattern();
         if (pattern) {
             patterns.push_back(pattern.release());
+            param_borrow.push_back(borrow);
         } else {
             break;
         }
@@ -404,14 +425,14 @@ ParserImpl::parse_function_clause_patterns_and_body() {
         }
     }
 
-    return {patterns, std::move(bodies)};
+    return {std::move(patterns), std::move(param_borrow), std::move(bodies)};
 }
 
 vector<unique_ptr<FunctionBody>> ParserImpl::parse_function_clause(const string& expected_name) {
     auto result = parse_function_clause_with_patterns(expected_name);
     // Clean up patterns since we don't need them for subsequent clauses
-    for (auto* p : result.first) delete p;
-    return std::move(result.second);
+    for (auto* p : result.patterns) delete p;
+    return std::move(result.bodies);
 }
 
 unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
@@ -755,10 +776,13 @@ unique_ptr<TraitDeclNode> ParserImpl::parse_trait_declaration() {
             // Construct a FunctionExpr for the default implementation
 
             vector<PatternNode*> patterns;
+            vector<bool> param_borrow;
             while (!check(TokenType::YASSIGN) && !is_at_end() && !check(TokenType::YNEWLINE)) {
+                bool borrow = try_consume_borrow_annotation();
                 auto pattern = parse_pattern();
                 if (pattern) {
                     patterns.push_back(pattern.release());
+                    param_borrow.push_back(borrow);
                 } else {
                     break;
                 }
@@ -776,6 +800,8 @@ unique_ptr<TraitDeclNode> ParserImpl::parse_trait_declaration() {
             bodies.push_back(new BodyWithoutGuards(loc, body.release()));
 
             auto default_fn = make_unique<FunctionExpr>(loc, method_name, patterns, bodies, std::nullopt);
+            default_fn->param_borrow = std::move(param_borrow);
+            default_fn->param_borrow.resize(default_fn->patterns.size(), false);
 
             // Find the matching method signature and attach default
             bool found = false;

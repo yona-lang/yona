@@ -78,6 +78,7 @@ private:
     MonoTypePtr infer_identifier(ast::IdentifierExpr* node, std::shared_ptr<TypeEnv> env, int level);
     MonoTypePtr infer_let(ast::LetExpr* node, std::shared_ptr<TypeEnv> env, int level);
     MonoTypePtr infer_function(ast::FunctionExpr* node, std::shared_ptr<TypeEnv> env, int level);
+    void check_param_borrow_annotations(ast::FunctionExpr* node);
     MonoTypePtr infer_apply(ast::ApplyExpr* node, std::shared_ptr<TypeEnv> env, int level);
     MonoTypePtr infer_if(ast::IfExpr* node, std::shared_ptr<TypeEnv> env, int level);
     MonoTypePtr infer_binary(ast::BinaryOpExpr* node, std::shared_ptr<TypeEnv> env, int level);

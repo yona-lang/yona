@@ -1,0 +1,1 @@
+extern native yona_test_native_promise_immediate : Int -> Int in yona_test_native_promise_immediate 6

@@ -25,13 +25,14 @@ void yona_rt_raise(int64_t symbol, const char* message);
 int64_t yona_rt_get_exception_symbol(void);
 const char* yona_rt_get_exception_message(void);
 
-typedef struct {
+struct yona_promise {
     int64_t result;
     int completed;             /* accessed via __atomic builtins */
     int error;                 /* 1 if completed with error */
     pthread_mutex_t mutex;
     pthread_cond_t cond;
-} yona_promise_t;
+};
+typedef struct yona_promise yona_promise_t;
 
 typedef int64_t (*yona_async_fn_t)(int64_t);
 typedef int64_t (*yona_thunk_fn_t)(void);
@@ -279,18 +280,24 @@ void yona_rt_channel_wait_end(void) {
     pthread_mutex_unlock(&yona_liveness_mutex);
 }
 
-static void fulfill_promise(yona_task_t* task, int64_t result, int is_error) {
-    pthread_mutex_lock(&task->promise->mutex);
-    task->promise->result = result;
-    task->promise->error = is_error;
-    task->promise->completed = 1;
-    pthread_cond_signal(&task->promise->cond);
-    pthread_mutex_unlock(&task->promise->mutex);
+void yona_rt_promise_complete(yona_promise_t* p, int64_t result, int is_error,
+                              yona_task_group_t* group) {
+    pthread_mutex_lock(&p->mutex);
+    p->result = result;
+    p->error = is_error ? 1 : 0;
+    p->completed = 1;
+    pthread_cond_signal(&p->cond);
+    pthread_mutex_unlock(&p->mutex);
 
-    if (task->group) {
-        if (__atomic_fetch_sub(&task->group->pending_count, 1, __ATOMIC_SEQ_CST) == 1)
-            pthread_cond_signal(&task->group->done_cond);
+    if (group) {
+        if (__atomic_fetch_sub(&group->pending_count, 1, __ATOMIC_SEQ_CST) == 1) {
+            pthread_cond_signal(&group->done_cond);
+        }
     }
+}
+
+static void fulfill_promise(yona_task_t* task, int64_t result, int is_error) {
+    yona_rt_promise_complete(task->promise, result, is_error, task->group);
 }
 
 static void* yona_pool_worker(void* unused) {
@@ -367,6 +374,10 @@ static yona_promise_t* make_promise(void) {
     pthread_mutex_init(&p->mutex, NULL);
     pthread_cond_init(&p->cond, NULL);
     return p;
+}
+
+yona_promise_t* yona_rt_promise_new(void) {
+    return make_promise();
 }
 
 static void enqueue_task(yona_task_t* task) {
@@ -508,4 +519,13 @@ int64_t yona_test_slow_identity(int64_t ms) {
 int64_t yona_test_slow_add(int64_t a, int64_t b) {
     usleep(10000); /* 10ms */
     return a + b;
+}
+
+/* Returns a runtime promise completed before the caller can await — exercises
+ * `extern native` (C ABI: yona_promise_t*). Result is `x * 7` (e.g. 6 -> 42). */
+yona_promise_t* yona_test_native_promise_immediate(int64_t x) {
+    yona_promise_t* p = yona_rt_promise_new();
+    if (!p) return NULL;
+    yona_rt_promise_complete(p, x * 7, 0, NULL);
+    return p;
 }

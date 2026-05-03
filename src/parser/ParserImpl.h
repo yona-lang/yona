@@ -19,6 +19,13 @@
 
 namespace yona::parser {
 
+/// One function clause: parameter patterns, optional `@borrow` flags, and bodies.
+struct ParsedFunctionClause {
+    vector<PatternNode*> patterns;
+    vector<bool> param_borrow;
+    vector<unique_ptr<FunctionBody>> bodies;
+};
+
 // Binary operator precedence (higher = tighter binding)
 enum class Precedence : int {
     LOWEST = 0,
@@ -105,11 +112,11 @@ public:
     unique_ptr<PackageNameExpr> parse_module_name();
     void parse_export_list(vector<string>& exports, vector<ReExport>& re_exports);
     unique_ptr<FunctionExpr> parse_function();
-    pair<vector<PatternNode*>, vector<unique_ptr<FunctionBody>>>
-        parse_function_clause_with_patterns(const string& expected_name);
-    pair<vector<PatternNode*>, vector<unique_ptr<FunctionBody>>>
-        parse_function_clause_patterns_and_body();
+    ParsedFunctionClause parse_function_clause_with_patterns(const string& expected_name);
+    ParsedFunctionClause parse_function_clause_patterns_and_body();
     vector<unique_ptr<FunctionBody>> parse_function_clause(const string& expected_name);
+    /// Consumes `@borrow` when present (two tokens: `@` and identifier `borrow`).
+    bool try_consume_borrow_annotation();
     unique_ptr<AdtDeclNode> parse_adt_declaration();
     unique_ptr<TraitDeclNode> parse_trait_declaration();
     unique_ptr<InstanceDeclNode> parse_instance_declaration();

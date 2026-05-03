@@ -169,7 +169,8 @@ Codegen::ModuleFunctionMeta Codegen::module_meta_from_compiled(const CompiledFun
     ModuleFunctionMeta meta;
     meta.param_types = cf.param_types;
     meta.return_type = cf.return_type;
-    meta.is_io_async = cf.is_io_async;
+    meta.extern_promise = cf.extern_promise;
+    meta.promise_inner_type = cf.promise_inner_type;
     meta.return_adt_name = cf.return_adt_name;
     meta.borrowed_params = cf.borrowed_params;
     return meta;
@@ -183,7 +184,8 @@ Codegen::CompiledFunction Codegen::compiled_function_from_meta(llvm::Function* f
     cf.return_type = return_type;
     cf.param_types = meta.param_types;
     cf.borrowed_params = meta.borrowed_params;
-    cf.is_io_async = meta.is_io_async;
+    cf.extern_promise = meta.extern_promise;
+    cf.promise_inner_type = meta.promise_inner_type;
     cf.return_adt_name = meta.return_adt_name;
     return cf;
 }
@@ -259,15 +261,22 @@ bool Codegen::emit_interface_file(const std::string& path) {
         }
     }
 
-    // Write function signatures
+    // Write function signatures (FN / AFN / IO / NAT)
     for (auto& [mangled, meta] : imports_.meta) {
         if (!imports_.interface_symbols.empty() &&
             imports_.interface_symbols.find(mangled) == imports_.interface_symbols.end())
             continue;
-        out << "FN " << mangled << " " << meta.param_types.size();
+        const bool is_promise_row = meta.extern_promise != ast::ExternPromiseKind::Sync;
+        switch (meta.extern_promise) {
+        case ast::ExternPromiseKind::IoUring: out << "IO "; break;
+        case ast::ExternPromiseKind::NativePtr: out << "NAT "; break;
+        case ast::ExternPromiseKind::ThreadPool: out << "AFN "; break;
+        default: out << "FN "; break;
+        }
+        out << mangled << " " << meta.param_types.size();
         for (auto ct : meta.param_types) out << " " << ctype_to_string(ct);
-        out << " -> " << ctype_to_string(meta.return_type);
-        if (meta.return_type == CType::ADT && !meta.return_adt_name.empty())
+        out << " -> " << ctype_to_string(is_promise_row ? meta.promise_inner_type : meta.return_type);
+        if (!is_promise_row && meta.return_type == CType::ADT && !meta.return_adt_name.empty())
             out << " retadt " << meta.return_adt_name;
         auto borrow_mask = borrowed_params_to_mask(meta.borrowed_params, meta.param_types.size());
         if (borrow_mask.find('1') != std::string::npos)
@@ -416,9 +425,11 @@ bool Codegen::load_interface_file(const std::string& path) {
                 if (it != types_.trait_instances.end())
                     it->second.method_mangled_names[method_name] = mangled_name;
             }
-        } else if (keyword == "FN" || keyword == "AFN" || keyword == "IO") {
-            bool is_thread_async = (keyword == "AFN");
-            bool is_io_async = (keyword == "IO");
+        } else if (keyword == "FN" || keyword == "AFN" || keyword == "IO" || keyword == "NAT") {
+            ast::ExternPromiseKind ext_kind = ast::ExternPromiseKind::Sync;
+            if (keyword == "AFN") ext_kind = ast::ExternPromiseKind::ThreadPool;
+            else if (keyword == "IO") ext_kind = ast::ExternPromiseKind::IoUring;
+            else if (keyword == "NAT") ext_kind = ast::ExternPromiseKind::NativePtr;
             std::string mangled;
             int param_count;
             iss >> mangled >> param_count;
@@ -433,11 +444,10 @@ bool Codegen::load_interface_file(const std::string& path) {
             iss >> arrow; // "->"
             std::string ret_str;
             iss >> ret_str;
-            bool is_any_async = is_thread_async || is_io_async;
-            meta.return_type = is_any_async ? CType::PROMISE : string_to_ctype(ret_str);
-            meta.is_async = is_thread_async;
-            meta.is_io_async = is_io_async;
-            if (is_any_async) meta.async_inner_type = string_to_ctype(ret_str);
+            const bool is_promise_row = ext_kind != ast::ExternPromiseKind::Sync;
+            meta.return_type = is_promise_row ? CType::PROMISE : string_to_ctype(ret_str);
+            meta.extern_promise = ext_kind;
+            if (is_promise_row) meta.promise_inner_type = string_to_ctype(ret_str);
             meta.borrowed_params.assign((size_t)param_count, false);
             std::string trailing;
             while (iss >> trailing) {
@@ -787,6 +797,46 @@ void Codegen::register_trait_externs() {
     }
 }
 
+llvm::Function* Codegen::declare_import_extern_fn(const std::string& mangled,
+                                                   const ModuleFunctionMeta& meta) {
+    auto i64_ty = LType::getInt64Ty(*context_);
+    auto ptr_ty = PointerType::get(*context_, 0);
+    std::vector<LType*> param_types;
+    for (auto ct : meta.param_types) param_types.push_back(llvm_type(ct));
+
+    llvm::Type* ret_ty = nullptr;
+    switch (meta.extern_promise) {
+    case ast::ExternPromiseKind::Sync:
+        return nullptr;
+    case ast::ExternPromiseKind::IoUring:
+        ret_ty = i64_ty;
+        break;
+    case ast::ExternPromiseKind::NativePtr:
+        ret_ty = ptr_ty;
+        break;
+    case ast::ExternPromiseKind::ThreadPool:
+        ret_ty = llvm_type(meta.promise_inner_type);
+        break;
+    }
+    auto* fn_type = llvm::FunctionType::get(ret_ty, param_types, false);
+    llvm::Function* fn = module_->getFunction(mangled);
+    if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage, mangled, module_.get());
+    return fn;
+}
+
+void Codegen::bind_imported_promise_cf(const std::string& logical_name, llvm::Function* fn,
+                                      const ModuleFunctionMeta& meta) {
+    CompiledFunction cf;
+    cf.fn = fn;
+    cf.return_type = CType::PROMISE;
+    cf.param_types = meta.param_types;
+    cf.borrowed_params = meta.borrowed_params;
+    cf.extern_promise = meta.extern_promise;
+    cf.promise_inner_type = meta.promise_inner_type;
+    compiled_functions_[logical_name] = cf;
+    named_values_[logical_name] = {fn, CType::FUNCTION, {meta.promise_inner_type}};
+}
+
 // Register a single imported function/constructor by name
 void Codegen::register_import(const std::string& mod_fqn,
                                const std::string& func_name,
@@ -817,32 +867,9 @@ void Codegen::register_import(const std::string& mod_fqn,
     // GENFN source (if available) is stored in imports_.imported_sources for
     // on-demand monomorphization when call-site types differ from the module's.
     auto meta_it = imports_.meta.find(mangled);
-    if (meta_it != imports_.meta.end() && meta_it->second.is_io_async) {
-        // IO: C function submits to io_uring and returns i64 (uring ID).
-        // Called directly (no thread pool). Result tagged as PROMISE.
-        // auto_await calls yona_rt_io_await to complete.
-        auto& meta = meta_it->second;
-        auto i64_ty = LType::getInt64Ty(*context_);
-        std::vector<LType*> param_types;
-        for (auto ct : meta.param_types) param_types.push_back(llvm_type(ct));
-        auto* fn_type = llvm::FunctionType::get(i64_ty, param_types, false);
-        auto* fn = module_->getFunction(mangled);
-        if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage, mangled, module_.get());
-        CompiledFunction cf = compiled_function_from_meta(fn, meta, CType::PROMISE);
-        cf.is_io_async = true;
-        compiled_functions_[import_name] = cf;
-        named_values_[import_name] = {fn, CType::FUNCTION, {meta.async_inner_type}};
-    } else if (meta_it != imports_.meta.end() && meta_it->second.is_async) {
-        // AFN: thread-pool async (existing mechanism)
-        auto& meta = meta_it->second;
-        std::vector<LType*> param_types;
-        for (auto ct : meta.param_types) param_types.push_back(llvm_type(ct));
-        auto* fn_type = llvm::FunctionType::get(llvm_type(meta.async_inner_type), param_types, false);
-        auto* fn = module_->getFunction(mangled);
-        if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage, mangled, module_.get());
-        CompiledFunction cf = compiled_function_from_meta(fn, meta, CType::PROMISE);
-        compiled_functions_[import_name] = cf;
-        named_values_[import_name] = {fn, CType::FUNCTION, {meta.async_inner_type}};
+    if (meta_it != imports_.meta.end() && meta_it->second.extern_promise != ast::ExternPromiseKind::Sync) {
+        llvm::Function* fn = declare_import_extern_fn(mangled, meta_it->second);
+        bind_imported_promise_cf(import_name, fn, meta_it->second);
     } else if (meta_it != imports_.meta.end() && meta_it->second.param_types.empty()) {
         // Zero-arity function: create extern declaration so it can be called.
         // Don't set named_values_ — let codegen_identifier find it in compiled_functions_
@@ -879,28 +906,9 @@ void Codegen::register_all_imports(const std::string& mod_fqn) {
                 std::string exported_tail = mangled.substr(expected_prefix.size());
                 if (exported_tail.find("__") != std::string::npos)
                     continue;
-                if (meta.is_io_async) {
-                    // IO: submit-and-return, returns i64 uring ID
-                    auto i64_ty = LType::getInt64Ty(*context_);
-                    std::vector<LType*> param_types;
-                    for (auto ct : meta.param_types) param_types.push_back(llvm_type(ct));
-                    auto* fn_type = llvm::FunctionType::get(i64_ty, param_types, false);
-                    auto* fn = module_->getFunction(mangled);
-                    if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage, mangled, module_.get());
-                    CompiledFunction cf = compiled_function_from_meta(fn, meta, CType::PROMISE);
-                    cf.is_io_async = true;
-                    compiled_functions_[func_name] = cf;
-                    named_values_[func_name] = {fn, CType::FUNCTION, {meta.async_inner_type}};
-                } else if (meta.is_async) {
-                    // AFN: thread-pool async
-                    std::vector<LType*> param_types;
-                    for (auto ct : meta.param_types) param_types.push_back(llvm_type(ct));
-                    auto* fn_type = llvm::FunctionType::get(llvm_type(meta.async_inner_type), param_types, false);
-                    auto* fn = module_->getFunction(mangled);
-                    if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage, mangled, module_.get());
-                    CompiledFunction cf = compiled_function_from_meta(fn, meta, CType::PROMISE);
-                    compiled_functions_[func_name] = cf;
-                    named_values_[func_name] = {fn, CType::FUNCTION, {meta.async_inner_type}};
+                if (meta.extern_promise != ast::ExternPromiseKind::Sync) {
+                    llvm::Function* fn = declare_import_extern_fn(mangled, meta);
+                    bind_imported_promise_cf(func_name, fn, meta);
                 } else {
                     named_values_[func_name] = {nullptr, CType::FUNCTION};
                     imports_.extern_functions[func_name] = mangled;
@@ -966,12 +974,14 @@ TypedValue Codegen::codegen_extern_decl(ExternDeclExpr* node) {
     // heap-allocated ADT pointer (i64 cast). Use ptr in the function signature.
     // For `extern io` (io_uring submit-and-return), the C function returns
     // an i64 uring user_data ID; the codegen sees a Promise and auto-awaits.
+    // For `extern native`, C returns opaque yona_promise_t* (LLVM i8* / ptr).
     auto i64_ty = LType::getInt64Ty(*context_);
-    auto ret_llvm = node->is_io
+    auto ptr_ty = PointerType::get(*context_, 0);
+    auto ret_llvm = node->extern_promise == ast::ExternPromiseKind::IoUring
         ? static_cast<LType*>(i64_ty)
-        : ((ret_ctype == CType::ADT)
-            ? static_cast<LType*>(PointerType::get(*context_, 0))
-            : llvm_type(ret_ctype));
+        : (node->extern_promise == ast::ExternPromiseKind::NativePtr
+                ? static_cast<LType*>(ptr_ty)
+                : ((ret_ctype == CType::ADT) ? static_cast<LType*>(ptr_ty) : llvm_type(ret_ctype)));
 
     // The C ABI symbol may differ from the local Yona name (e.g.
     // `extern channel_new : Int -> Channel = "yona_Std_Channel__channel"`).
@@ -986,20 +996,19 @@ TypedValue Codegen::codegen_extern_decl(ExternDeclExpr* node) {
                                c_sym, module_.get());
     }
 
-    // Register as a compiled function. is_io makes the call site await
-    // via yona_rt_io_await (io_uring); is_async routes through the thread
-    // pool (yona_rt_async_await). Plain externs are synchronous.
+    // Register as a compiled function. `extern_promise` selects call/await lowering.
     CompiledFunction cf;
     cf.fn = fn;
-    cf.return_type = (node->is_async || node->is_io) ? CType::PROMISE : ret_ctype;
+    const bool is_promise_extern = node->extern_promise != ast::ExternPromiseKind::Sync;
+    cf.return_type = is_promise_extern ? CType::PROMISE : ret_ctype;
     cf.param_types = param_ctypes;
     cf.return_adt_name = ret_adt_name;
-    cf.is_io_async = node->is_io;
+    cf.extern_promise = node->extern_promise;
+    if (is_promise_extern) cf.promise_inner_type = ret_ctype;
     compiled_functions_[node->name] = cf;
-    named_values_[node->name] = {fn, CType::FUNCTION,
-                                  (node->is_async || node->is_io)
-                                      ? std::vector<CType>{ret_ctype}
-                                      : std::vector<CType>{}};
+    named_values_[node->name] = {
+        fn, CType::FUNCTION,
+        is_promise_extern ? std::vector<CType>{cf.promise_inner_type} : std::vector<CType>{}};
 
     // Compile the body (nullptr for module-level externs)
     if (node->body) return codegen(node->body);
@@ -1041,6 +1050,9 @@ static CType yona_type_to_ctype(const types::Type& t) {
     if (std::holds_alternative<std::shared_ptr<types::NamedType>>(t)) {
         auto& nt = std::get<std::shared_ptr<types::NamedType>>(t);
         if (nt->name == "Channel") return CType::CHANNEL;
+        if (nt->name == "FloatArray") return CType::FLOAT_ARRAY;
+        if (nt->name == "IntArray") return CType::INT_ARRAY;
+        if (nt->name == "ByteArray") return CType::BYTE_ARRAY;
         return CType::ADT;
     }
     if (std::holds_alternative<std::shared_ptr<types::PromiseType>>(t))

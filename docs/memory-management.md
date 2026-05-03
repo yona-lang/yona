@@ -18,7 +18,11 @@ uses **reference counting** with several optimizations:
   forwarded arguments only remain borrowed when the callee is known to
   borrow that parameter, functions that can directly raise keep owned
   unwind cleanup, and anonymous borrowed temporaries are released by the
-  caller after the call.
+  caller after the call. Eliminates refcount overhead for typical HOF
+  patterns (foldl, map, filter) when params do not escape.
+- **Optional explicit `@borrow`** — same refcount behavior as inference
+  when the body satisfies the same non-escape rules; see
+  [Explicit `@borrow`](#explicit-borrow) below
 - **Per-branch transfer_scope** (if + case arms) — asymmetric
   transfers emit compensating rc_decs only on branches that didn't
   transfer, with SSA dominance preserved by snapshotting pre_blocks
@@ -30,6 +34,31 @@ uses **reference counting** with several optimizations:
 - **Scope-exit RC** for let-bound values
 - **Slab-based pool allocator** for common allocation sizes
 - **Arena allocation** for non-escaping let-bound values
+
+### Explicit `@borrow` {#explicit-borrow}
+
+You can write `@borrow` before a parameter (`let f @borrow x = …`, lambdas,
+module functions). The typechecker (**E0603**) enforces the same rules as
+borrow inference: the parameter must not escape (return, collection literal,
+`::`, nested lambda capture, case scrutinee for head/tail consume, etc.), and
+today only **simple identifier** parameters are supported.
+
+**Why keep it if inference already skips refcount work?** For any body that
+passes the `@borrow` check, inference would already mark that parameter borrowed,
+so **codegen is usually unchanged** — explicit is redundant for performance.
+The feature still makes sense because it:
+
+1. **Documents intent** in the source (readers see a callee-reads-only contract).
+2. **Fails at compile time** if a later edit makes the body escape the parameter
+   (without `@borrow`, the same edit silently adds `rc_inc`/`rc_dec` again).
+3. **Aligns with the roadmap** toward richer borrow / ownership annotations;
+   the syntax and error path are the first slice.
+
+**Benchmarks:** `bench/collections/list_sum.yona` vs
+`list_sum_explicit_borrow.yona` are a **parity** pair (same output, expect
+similar wall time); they detect regressions, not a speedup from the keyword.
+
+**Roadmap:** type-level `&T` — see [design-borrow-types.md](./design-borrow-types.md).
 
 ## RC Header Layout
 

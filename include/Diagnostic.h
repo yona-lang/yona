@@ -60,6 +60,7 @@ enum class ErrorCode {
     E0600,  ///< Use after consume (linear value already consumed)
     E0601,  ///< Branch inconsistency (consumed in one branch but not the other)
     E0602,  ///< Resource leak (linear value not consumed at scope exit)
+    E0603,  ///< Invalid `@borrow` (pattern or escape rules violated)
 };
 
 /// Return the string form of an error code (e.g., "E0100").
