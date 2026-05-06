@@ -224,7 +224,7 @@ omitted here.
 | Topic | Status |
 |-------|--------|
 | **`mapGPU` / `reduceGPU` (user kernels from Yona functions)** | Not implemented — needs closure → SPIR-V or embedded op table, typing, and Perceus/lifetime rules for device buffers. |
-| **Timeline semaphores / `VK_KHR_synchronization2`** | **Partial:** **`Std\GPU.vulkanTimelineSemaphore`** mirrors core (1.2+) feature probe **or** **`VK_KHR_timeline_semaphore`** in the device extension list. Submit still **fences-only** (no **`vkQueueSubmit2`** / synchronization2 graph). |
+| **Timeline semaphores / `VK_KHR_synchronization2`** | **Partial:** device init enables **KHR timeline + synchronization2** when supported (`gpu_vulkan_device.c`, **`gpu_stub.c`**). Async float (`floatArray*Async`) may use **`vkQueueSubmit2`** + timeline wait on the fence thread when **`YONA_GPU_ASYNC_TIMELINE`** is unset or non-`0` (set **`YONA_GPU_ASYNC_TIMELINE=0`** for the legacy **`VkFence`** path). No multi-kernel **synchronization2** barrier graphs yet. |
 | **`vkDeviceWaitIdle` / `vkQueueWaitIdle` on hot paths** | **Avoided** for f64 async (per-fence wait only). **`vkDeviceWaitIdle`** remains on **intentional** `yona_gpu_vulkan_ctx_shutdown` (see `gpu_stub.c`). Int column path: `gpu_vulkan_ops.c` uses **fences**, not queue idle. |
 | **Task-group cancel + GPU promises** | **Partial:** **-887** when the group is cancelled before the fence waiter finishes; if already cancelled before **`vkQueueSubmit`**, async float scale skips submit. In-flight GPU work is not aborted after submit. |
 | **Pinned host buffers + CPU↔GPU channels** | Not implemented. |

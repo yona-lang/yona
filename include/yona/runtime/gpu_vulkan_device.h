@@ -40,8 +40,9 @@ int yona_gpu_vulkan_device_shader_int64(void);
  * reports timelineSemaphore via vkGetPhysicalDeviceFeatures2/KHR with
  * VkPhysicalDeviceVulkan12Features, or the device enumerates extension
  * VK_KHR_timeline_semaphore (covers many 1.0/1.1 stacks where the capability is extension-only).
- * Always 0 without a Vulkan build or before successful try_init. Not yet used for submission
- * (per-fence waits today); exposed for diagnostics and future timeline batching.
+ * When the device is created with **VK_KHR_timeline_semaphore** + **VK_KHR_synchronization2**,
+ * async float work may use **vkQueueSubmit2** + timeline waits (see **`gpu_stub.c`**,
+ * **`YONA_GPU_ASYNC_TIMELINE`**). Otherwise submit paths use **fences**.
  */
 int yona_gpu_vulkan_device_timeline_semaphore(void);
 
@@ -56,6 +57,15 @@ const char* yona_gpu_vulkan_device_last_note(void);
 /** Overwrites last_note (same buffer as failures from try_init / int column paths).
  * Safe to call from the Std\GPU fence waiter thread after vkWaitForFences fails. */
 void yona_gpu_vulkan_device_set_last_note(const char* msg);
+
+/**
+ * 0 = no VkResult classification yet; 1 = out-of-memory class; 2 = device lost;
+ * 3 = other failure. Updated by **yona_gpu_vulkan_device_note_vk** alongside **vulkanLastNote**.
+ */
+int yona_gpu_vulkan_device_last_issue_kind(void);
+
+/** Append a **float:** / device-init style note for a Vulkan error code (updates last_issue_kind). */
+void yona_gpu_vulkan_device_note_vk(const char* ctx, int32_t vk_result);
 
 /** Clears cached Std\GPU.hasGpu probe after device shutdown or reset. */
 void yona_gpu_vulkan_invalidate_capability_cache(void);

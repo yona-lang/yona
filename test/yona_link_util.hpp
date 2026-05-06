@@ -67,7 +67,10 @@ inline std::string include_flags() {
     return o.str();
 }
 
-/** Match CMake yonac when YONA_ENABLE_VULKAN: headers + -D, no vulkan-1 on link. */
+/** Match CMake yonac when YONA_ENABLE_VULKAN: headers + -D, no vulkan-1 on link.
+ * Do **not** add `-DYONA_HAS_VULKAN` here: scratch `compiled_runtime` must stay on the
+ * **`gpu_stub` non-Vulkan TU** so codegen subprocesses link without `vulkan-1` (see
+ * `docs/gpu-architecture.md` / `CLAUDE.md` scratch-compile note). */
 inline std::string vulkan_runtime_cflags() {
     const char* on = std::getenv("YONA_COMPILE_GPU_VULKAN");
     if (!on || std::string(on) == "0")

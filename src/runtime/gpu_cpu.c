@@ -86,6 +86,15 @@ const char* yona_Std_GPU_raw__vulkanLastNote(int64_t unused) {
 #endif
 }
 
+int64_t yona_Std_GPU_raw__vulkanLastIssueKind(int64_t unused) {
+    (void)unused;
+#if YONA_GPU_VULKAN_ENABLED
+    return (int64_t)yona_gpu_vulkan_device_last_issue_kind();
+#else
+    return 0;
+#endif
+}
+
 int64_t yona_Std_GPU_raw__hasGpu(int64_t unused) {
     (void)unused;
 #if YONA_GPU_VULKAN_ENABLED

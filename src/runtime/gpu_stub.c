@@ -121,11 +121,46 @@ static VkDescriptorSetLayout g_f64_desc_layout = VK_NULL_HANDLE;
 static VkPipelineLayout g_f64_pipe_layout = VK_NULL_HANDLE;
 static VkPipeline g_f64_pipeline = VK_NULL_HANDLE;
 
+static PFN_vkQueueSubmit2 g_pfn_vkQueueSubmit2;
+static PFN_vkWaitSemaphores g_pfn_vkWaitSemaphores;
+static int g_stub_modern_sync_ready;
+static uint64_t g_stub_timeline_next;
+
+static int yona_gpu_stub_phys_has_ext(const char* needle) {
+    uint32_t n = 0;
+    if (vkEnumerateDeviceExtensionProperties(g_phys, NULL, &n, NULL) != VK_SUCCESS || n == 0)
+        return 0;
+    VkExtensionProperties* exts = (VkExtensionProperties*)calloc((size_t)n, sizeof(VkExtensionProperties));
+    if (!exts) return 0;
+    VkResult rr = vkEnumerateDeviceExtensionProperties(g_phys, NULL, &n, exts);
+    int found = 0;
+    if (rr == VK_SUCCESS) {
+        for (uint32_t i = 0; i < n; i++) {
+            if (strcmp(exts[i].extensionName, needle) == 0) {
+                found = 1;
+                break;
+            }
+        }
+    }
+    free(exts);
+    return found;
+}
+
+static int yona_gpu_stub_async_use_timeline(void) {
+    if (!g_stub_modern_sync_ready) return 0;
+    const char* e = getenv("YONA_GPU_ASYNC_TIMELINE");
+    if (e && e[0] == '0' && e[1] == 0) return 0;
+    return 1;
+}
+
 /* Dedicated thread waits on GPU fences — not the thread pool (design-gpu-async.md). */
 typedef struct gpu_fence_job {
     struct gpu_fence_job* next;
     VkDevice dev;
     VkFence fence;
+    int async_timeline;
+    VkSemaphore timeline_sem;
+    uint64_t timeline_value;
     yona_promise_t* promise;
     yona_task_group_t* group;
     VkCommandBuffer cmd;
@@ -145,14 +180,9 @@ static gpu_fence_job_t* g_fence_job_tail;
 
 static void yona_gpu_stub_note_vk(const char* ctx, VkResult vr) {
     if (vr == VK_SUCCESS) return;
-    char buf[224];
-    const char* hint = "";
-    if (vr == VK_ERROR_OUT_OF_HOST_MEMORY || vr == VK_ERROR_OUT_OF_DEVICE_MEMORY)
-        hint = " (OOM)";
-    else if (vr == VK_ERROR_DEVICE_LOST)
-        hint = " (device lost)";
-    snprintf(buf, sizeof(buf), "float: %s VkResult %d%s", ctx, (int)vr, hint);
-    yona_gpu_vulkan_device_set_last_note(buf);
+    char prefixed[240];
+    snprintf(prefixed, sizeof prefixed, "float: %s", ctx ? ctx : "");
+    yona_gpu_vulkan_device_note_vk(prefixed, (int32_t)vr);
 }
 
 #define YONA_GPU_STUB_VK_SYNC(stmt, ctx, errn)                                          \
@@ -176,14 +206,33 @@ static void yona_gpu_stub_note_vk(const char* ctx, VkResult vr) {
     } while (0)
 
 static void yona_gpu_fence_worker_do_one(gpu_fence_job_t* j) {
-    VkResult wr = vkWaitForFences(j->dev, 1, &j->fence, VK_TRUE, UINT64_MAX);
-    vkDestroyFence(j->dev, j->fence, NULL);
-    j->fence = VK_NULL_HANDLE;
+    VkResult wr = VK_SUCCESS;
+    if (j->async_timeline) {
+        if (g_pfn_vkWaitSemaphores == NULL) {
+            wr = VK_ERROR_FEATURE_NOT_PRESENT;
+        } else {
+            VkSemaphoreWaitInfo wi = {0};
+            wi.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+            wi.semaphoreCount = 1;
+            wi.pSemaphores = &j->timeline_sem;
+            wi.pValues = &j->timeline_value;
+            wr = g_pfn_vkWaitSemaphores(j->dev, &wi, UINT64_MAX);
+        }
+        if (wr != VK_SUCCESS)
+            yona_gpu_stub_note_vk("vkWaitSemaphores (async fence thread)", wr);
+        if (j->timeline_sem != VK_NULL_HANDLE) {
+            vkDestroySemaphore(j->dev, j->timeline_sem, NULL);
+            j->timeline_sem = VK_NULL_HANDLE;
+        }
+    } else {
+        wr = vkWaitForFences(j->dev, 1, &j->fence, VK_TRUE, UINT64_MAX);
+        vkDestroyFence(j->dev, j->fence, NULL);
+        j->fence = VK_NULL_HANDLE;
+        if (wr != VK_SUCCESS)
+            yona_gpu_stub_note_vk("vkWaitForFences (async fence thread)", wr);
+    }
     vkFreeCommandBuffers(j->dev, j->cmd_pool, 1, &j->cmd);
     j->cmd = VK_NULL_HANDLE;
-
-    if (wr != VK_SUCCESS)
-        yona_gpu_stub_note_vk("vkWaitForFences (async fence thread)", wr);
 
     if (wr == VK_SUCCESS) {
         if ((j->mem_props & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0) {
@@ -515,6 +564,10 @@ void yona_gpu_vulkan_ctx_shutdown(void) {
         g_inst = VK_NULL_HANDLE;
     }
     g_phys = VK_NULL_HANDLE;
+    g_stub_modern_sync_ready = 0;
+    g_pfn_vkQueueSubmit2 = NULL;
+    g_pfn_vkWaitSemaphores = NULL;
+    g_stub_timeline_next = 0;
     gpu_stub_mtx_unlock(&g_mu);
 }
 
@@ -544,12 +597,29 @@ int yona_gpu_vulkan_ctx_init(void) {
         return -2;
     }
 
+    PFN_vkGetPhysicalDeviceFeatures2 pfn_gpdf2 =
+        (PFN_vkGetPhysicalDeviceFeatures2)vkGetInstanceProcAddr(g_inst, "vkGetPhysicalDeviceFeatures2");
+    if (!pfn_gpdf2)
+        pfn_gpdf2 =
+            (PFN_vkGetPhysicalDeviceFeatures2)vkGetInstanceProcAddr(g_inst, "vkGetPhysicalDeviceFeatures2KHR");
+
     VkPhysicalDeviceFeatures pdev_feat = {0};
     vkGetPhysicalDeviceFeatures(g_phys, &pdev_feat);
-    VkPhysicalDeviceFeatures enabled_feat = {0};
     g_device_shader_f64_enabled = pdev_feat.shaderFloat64 ? 1 : 0;
-    if (g_device_shader_f64_enabled) {
-        enabled_feat.shaderFloat64 = VK_TRUE;
+
+    int try_modern = 0;
+    if (pfn_gpdf2 && yona_gpu_stub_phys_has_ext(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) &&
+        yona_gpu_stub_phys_has_ext(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)) {
+        VkPhysicalDeviceTimelineSemaphoreFeatures qts = {0};
+        qts.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+        VkPhysicalDeviceSynchronization2Features qs2 = {0};
+        qs2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+        VkPhysicalDeviceFeatures2 qf2 = {0};
+        qf2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        qf2.pNext = &qts;
+        qts.pNext = &qs2;
+        pfn_gpdf2(g_phys, &qf2);
+        if (qts.timelineSemaphore && qs2.synchronization2) try_modern = 1;
     }
 
     float qp = 1.0f;
@@ -559,25 +629,81 @@ int yona_gpu_vulkan_ctx_init(void) {
     qci.queueCount = 1;
     qci.pQueuePriorities = &qp;
 
+    static VkPhysicalDeviceFeatures2 s_stub_dci_f2;
+    static VkPhysicalDeviceTimelineSemaphoreFeatures s_stub_dci_tf;
+    static VkPhysicalDeviceSynchronization2Features s_stub_dci_s2f;
+    static const char* s_stub_exts[12];
+    uint32_t ext_n = 0;
+#if defined(__APPLE__)
+    s_stub_exts[ext_n++] = "VK_KHR_portability_subset";
+#endif
+
+    VkPhysicalDeviceFeatures enabled_feat = {0};
     VkDeviceCreateInfo dci = {0};
     dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qci;
-    dci.pEnabledFeatures = &enabled_feat;
 
+    if (try_modern) {
+        s_stub_exts[ext_n++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;
+        s_stub_exts[ext_n++] = VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
+        memset(&s_stub_dci_f2, 0, sizeof(s_stub_dci_f2));
+        s_stub_dci_f2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        if (g_device_shader_f64_enabled) s_stub_dci_f2.features.shaderFloat64 = VK_TRUE;
+        memset(&s_stub_dci_tf, 0, sizeof(s_stub_dci_tf));
+        s_stub_dci_tf.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+        s_stub_dci_tf.timelineSemaphore = VK_TRUE;
+        memset(&s_stub_dci_s2f, 0, sizeof(s_stub_dci_s2f));
+        s_stub_dci_s2f.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+        s_stub_dci_s2f.synchronization2 = VK_TRUE;
+        s_stub_dci_f2.pNext = &s_stub_dci_tf;
+        s_stub_dci_tf.pNext = &s_stub_dci_s2f;
+        dci.pNext = &s_stub_dci_f2;
+        dci.pEnabledFeatures = NULL;
+        dci.enabledExtensionCount = ext_n;
+        dci.ppEnabledExtensionNames = s_stub_exts;
+    } else {
+        if (g_device_shader_f64_enabled) enabled_feat.shaderFloat64 = VK_TRUE;
+        dci.pEnabledFeatures = g_device_shader_f64_enabled ? &enabled_feat : NULL;
+        dci.enabledExtensionCount = ext_n;
+        dci.ppEnabledExtensionNames = ext_n ? s_stub_exts : NULL;
+    }
+
+    g_stub_modern_sync_ready = 0;
+    g_pfn_vkQueueSubmit2 = NULL;
+    g_pfn_vkWaitSemaphores = NULL;
+
+    VkResult cr_dev = vkCreateDevice(g_phys, &dci, NULL, &g_dev);
+    if (cr_dev != VK_SUCCESS && try_modern) {
+        memset(&dci, 0, sizeof(dci));
+        dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        dci.queueCreateInfoCount = 1;
+        dci.pQueueCreateInfos = &qci;
+        dci.pNext = NULL;
+        memset(&enabled_feat, 0, sizeof(enabled_feat));
+        if (g_device_shader_f64_enabled) enabled_feat.shaderFloat64 = VK_TRUE;
+        dci.pEnabledFeatures = g_device_shader_f64_enabled ? &enabled_feat : NULL;
+        ext_n = 0;
 #if defined(__APPLE__)
-    static const char* dev_exts[] = {"VK_KHR_portability_subset"};
-    dci.enabledExtensionCount = (uint32_t)(sizeof(dev_exts) / sizeof(dev_exts[0]));
-    dci.ppEnabledExtensionNames = dev_exts;
+        s_stub_exts[ext_n++] = "VK_KHR_portability_subset";
 #endif
+        dci.enabledExtensionCount = ext_n;
+        dci.ppEnabledExtensionNames = ext_n ? s_stub_exts : NULL;
+        cr_dev = vkCreateDevice(g_phys, &dci, NULL, &g_dev);
+    }
 
-    if (vkCreateDevice(g_phys, &dci, NULL, &g_dev) != VK_SUCCESS) {
+    if (cr_dev != VK_SUCCESS) {
         vkDestroyInstance(g_inst, NULL);
         g_inst = VK_NULL_HANDLE;
         g_phys = VK_NULL_HANDLE;
         gpu_stub_mtx_unlock(&g_mu);
         return -4;
     }
+
+    g_pfn_vkQueueSubmit2 = (PFN_vkQueueSubmit2)vkGetDeviceProcAddr(g_dev, "vkQueueSubmit2");
+    g_pfn_vkWaitSemaphores = (PFN_vkWaitSemaphores)vkGetDeviceProcAddr(g_dev, "vkWaitSemaphores");
+    if (try_modern && g_pfn_vkQueueSubmit2 && g_pfn_vkWaitSemaphores)
+        g_stub_modern_sync_ready = 1;
 
     vkGetDeviceQueue(g_dev, g_qfamily, 0, &g_queue);
 
@@ -986,6 +1112,7 @@ yona_promise_t* yona_gpu_vulkan_float64_buffer_scale_async(double* elements, uin
     VkDeviceMemory mem = VK_NULL_HANDLE;
     VkDescriptorPool dpool = VK_NULL_HANDLE;
     VkFence fence = VK_NULL_HANDLE;
+    VkSemaphore timeline_sem = VK_NULL_HANDLE;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     void* mapped = NULL;
     int err = -30;
@@ -1077,10 +1204,6 @@ yona_promise_t* yona_gpu_vulkan_float64_buffer_scale_async(double* elements, uin
     wr.pBufferInfo = &dbi;
     vkUpdateDescriptorSets(g_dev, 1, &wr, 0, NULL);
 
-    VkFenceCreateInfo fi = {0};
-    fi.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    YONA_GPU_STUB_VK_ASYNC(vkCreateFence(g_dev, &fi, NULL, &fence), "vkCreateFence (async f64)", -37);
-
     VkCommandBufferAllocateInfo ai = {0};
     ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     ai.commandPool = g_cmd_pool;
@@ -1117,9 +1240,17 @@ yona_promise_t* yona_gpu_vulkan_float64_buffer_scale_async(double* elements, uin
 
     YONA_GPU_STUB_VK_ASYNC(vkEndCommandBuffer(cmd), "vkEndCommandBuffer (async f64)", -40);
 
+    int use_tl = yona_gpu_stub_async_use_timeline() && g_pfn_vkQueueSubmit2 != NULL &&
+                 g_pfn_vkWaitSemaphores != NULL;
+    if (!use_tl) {
+        VkFenceCreateInfo fi = {0};
+        fi.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        YONA_GPU_STUB_VK_ASYNC(vkCreateFence(g_dev, &fi, NULL, &fence), "vkCreateFence (async f64)", -37);
+    }
+
     if (group != NULL && yona_rt_group_is_cancelled(group)) {
         vkFreeCommandBuffers(g_dev, g_cmd_pool, 1, &cmd);
-        vkDestroyFence(g_dev, fence, NULL);
+        if (fence != VK_NULL_HANDLE) vkDestroyFence(g_dev, fence, NULL);
         vkDestroyDescriptorPool(g_dev, dpool, NULL);
         vkUnmapMemory(g_dev, mem);
         vkFreeMemory(g_dev, mem, NULL);
@@ -1129,29 +1260,99 @@ yona_promise_t* yona_gpu_vulkan_float64_buffer_scale_async(double* elements, uin
         return p;
     }
 
-    VkSubmitInfo si = {0};
-    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    si.commandBufferCount = 1;
-    si.pCommandBuffers = &cmd;
-    YONA_GPU_STUB_VK_ASYNC(vkQueueSubmit(g_queue, 1, &si, fence), "vkQueueSubmit (async f64)", -41);
+    uint64_t tl_val_s = 0;
+    if (use_tl) {
+        VkSemaphoreTypeCreateInfo sti = {0};
+        sti.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+        sti.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+        VkSemaphoreCreateInfo sci = {0};
+        sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        sci.pNext = &sti;
+        YONA_GPU_STUB_VK_ASYNC(vkCreateSemaphore(g_dev, &sci, NULL, &timeline_sem),
+            "vkCreateSemaphore (async f64 timeline)", -43);
+        tl_val_s = ++g_stub_timeline_next;
+        if (tl_val_s == 0) tl_val_s = ++g_stub_timeline_next;
+
+        VkCommandBufferSubmitInfo cbs = {0};
+        cbs.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cbs.commandBuffer = cmd;
+
+        VkSemaphoreSubmitInfo sig = {0};
+        sig.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        sig.semaphore = timeline_sem;
+        sig.value = tl_val_s;
+        sig.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+
+        VkTimelineSemaphoreSubmitInfo tlsi = {0};
+        tlsi.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+        tlsi.signalSemaphoreValueCount = 1;
+        tlsi.pSignalSemaphoreValues = &tl_val_s;
+
+        VkSubmitInfo2 si2 = {0};
+        si2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        si2.pNext = &tlsi;
+        si2.commandBufferInfoCount = 1;
+        si2.pCommandBufferInfos = &cbs;
+        si2.signalSemaphoreInfoCount = 1;
+        si2.pSignalSemaphoreInfos = &sig;
+
+        YONA_GPU_STUB_VK_ASYNC(g_pfn_vkQueueSubmit2(g_queue, 1, &si2, VK_NULL_HANDLE),
+            "vkQueueSubmit2 (async f64)", -44);
+    } else {
+        VkSubmitInfo si = {0};
+        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        si.commandBufferCount = 1;
+        si.pCommandBuffers = &cmd;
+        YONA_GPU_STUB_VK_ASYNC(vkQueueSubmit(g_queue, 1, &si, fence), "vkQueueSubmit (async f64)", -41);
+    }
 
     gpu_fence_job_t* job = (gpu_fence_job_t*)calloc(1, sizeof(gpu_fence_job_t));
     if (job == NULL) {
-        VkResult wr = vkWaitForFences(g_dev, 1, &fence, VK_TRUE, UINT64_MAX);
-        char nbuf[256];
-        if (wr != VK_SUCCESS)
-            snprintf(nbuf, sizeof(nbuf),
-                "float-async: calloc(gpu_fence_job) after submit; drain fence VkResult %d",
-                (int)wr);
-        else
-            snprintf(nbuf, sizeof(nbuf),
-                "float-async: calloc(gpu_fence_job) after submit (fence OK; likely host OOM)");
-        yona_gpu_vulkan_device_set_last_note(nbuf);
+        if (use_tl && timeline_sem != VK_NULL_HANDLE && g_pfn_vkWaitSemaphores != NULL) {
+            VkSemaphoreWaitInfo wi = {0};
+            wi.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+            wi.semaphoreCount = 1;
+            wi.pSemaphores = &timeline_sem;
+            wi.pValues = &tl_val_s;
+            VkResult wr = g_pfn_vkWaitSemaphores(g_dev, &wi, UINT64_MAX);
+            char nbuf[256];
+            if (wr != VK_SUCCESS)
+                snprintf(nbuf, sizeof(nbuf),
+                    "float-async: calloc(gpu_fence_job) after submit; drain timeline VkResult %d",
+                    (int)wr);
+            else
+                snprintf(nbuf, sizeof(nbuf),
+                    "float-async: calloc(gpu_fence_job) after submit (timeline OK; likely host OOM)");
+            yona_gpu_vulkan_device_set_last_note(nbuf);
+            vkDestroySemaphore(g_dev, timeline_sem, NULL);
+        } else {
+            VkResult wr = vkWaitForFences(g_dev, 1, &fence, VK_TRUE, UINT64_MAX);
+            char nbuf[256];
+            if (wr != VK_SUCCESS)
+                snprintf(nbuf, sizeof(nbuf),
+                    "float-async: calloc(gpu_fence_job) after submit; drain fence VkResult %d",
+                    (int)wr);
+            else
+                snprintf(nbuf, sizeof(nbuf),
+                    "float-async: calloc(gpu_fence_job) after submit (fence OK; likely host OOM)");
+            yona_gpu_vulkan_device_set_last_note(nbuf);
+        }
         err = -50;
         goto async_fail;
     }
     job->dev = g_dev;
-    job->fence = fence;
+    job->async_timeline = use_tl ? 1 : 0;
+    if (use_tl) {
+        job->fence = VK_NULL_HANDLE;
+        job->timeline_sem = timeline_sem;
+        job->timeline_value = tl_val_s;
+        timeline_sem = VK_NULL_HANDLE;
+    } else {
+        job->fence = fence;
+        job->timeline_sem = VK_NULL_HANDLE;
+        job->timeline_value = 0;
+        fence = VK_NULL_HANDLE;
+    }
     job->promise = p;
     job->group = group;
     job->cmd = cmd;
@@ -1169,7 +1370,6 @@ yona_promise_t* yona_gpu_vulkan_float64_buffer_scale_async(double* elements, uin
         yona_rt_group_register(group, p);
     }
 
-    fence = VK_NULL_HANDLE;
     cmd = VK_NULL_HANDLE;
     dpool = VK_NULL_HANDLE;
     mapped = NULL;
@@ -1186,6 +1386,9 @@ async_fail:
     }
     if (fence != VK_NULL_HANDLE) {
         vkDestroyFence(g_dev, fence, NULL);
+    }
+    if (timeline_sem != VK_NULL_HANDLE) {
+        vkDestroySemaphore(g_dev, timeline_sem, NULL);
     }
     if (dpool != VK_NULL_HANDLE) {
         vkDestroyDescriptorPool(g_dev, dpool, NULL);
@@ -1261,6 +1464,12 @@ int yona_gpu_vulkan_dispatch_nop_once(void) {
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, g_compute_pipe);
     vkCmdDispatch(cmd, 1, 1, 1);
+    {
+        const char* dde = getenv("YONA_GPU_TEST_DUAL_DISPATCH");
+        if (dde && dde[0] == '1' && dde[1] == 0) {
+            vkCmdDispatch(cmd, 1, 1, 1);
+        }
+    }
 
     {
         VkResult vr = vkEndCommandBuffer(cmd);
