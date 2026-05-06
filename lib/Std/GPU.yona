@@ -13,11 +13,11 @@
 module Std\GPU
 
 export type Buffer
-export backendName, vulkanStatus, vulkanLastNote, hasGpu, hasSimd, vulkanAvailable
+export backendName, vulkanStatus, vulkanLastNote, hasGpu, hasSimd, vulkanAvailable, vulkanTimelineSemaphore
 export available, apiVersion, physicalDeviceCount
 export upload, materialize, length
 export mapAdd, mapMul, filterGreaterThan, reduceSum
-export floatArrayMul2Async
+export floatArrayMul2Async, floatArrayScaleAsync
 
 ## Opaque accelerator buffer. The CPU backend stores an owned IntArray copy.
 type Buffer = Buffer IntArray
@@ -28,6 +28,7 @@ extern raw_vulkanLastNote    : Int -> String   = "yona_Std_GPU_raw__vulkanLastNo
 extern raw_hasGpu            : Int -> Bool     = "yona_Std_GPU_raw__hasGpu"
 extern raw_hasSimd           : Int -> Bool     = "yona_Std_GPU_raw__hasSimd"
 extern raw_vulkanAvailable   : Int -> Bool     = "yona_Std_GPU_raw__vulkanAvailable"
+extern raw_vulkanTimelineSemaphore : Int -> Bool = "yona_Std_GPU_raw__vulkanTimelineSemaphore"
 extern raw_upload            : IntArray -> IntArray = "yona_Std_GPU_raw__upload"
 extern raw_materialize       : IntArray -> IntArray = "yona_Std_GPU_raw__materialize"
 extern raw_length            : IntArray -> Int = "yona_Std_GPU_raw__length"
@@ -45,9 +46,11 @@ backendName = raw_backendName 0
 vulkanStatus : String
 vulkanStatus = raw_vulkanStatus 0
 
-## Short hint from the last failed Vulkan init or opt-in GPU kernel attempt.
-## Empty after success or when Vulkan was not compiled in. Same source as the C
-## `yona_gpu_vulkan_device_last_note()` helper.
+## Short hint from the last failed Vulkan init, opt-in int column GPU attempt,
+## async **`vkWaitForFences`**, or other **`VkResult`** failures on the **`Std\GPU`**
+## float path / test dispatch (`gpu_stub.c`). Empty after success or when Vulkan
+## was not compiled in. Same source as the C **`yona_gpu_vulkan_device_last_note()`**
+## helper.
 vulkanLastNote : String
 vulkanLastNote = raw_vulkanLastNote 0
 
@@ -64,6 +67,15 @@ hasSimd = raw_hasSimd 0
 ## True when a Vulkan loader is visible to the process.
 vulkanAvailable : Bool
 vulkanAvailable = raw_vulkanAvailable 0
+
+## True when device init succeeded (see **`hasGpu`** / **`vulkanStatus`**) and the
+## selected physical device reports Vulkan 1.2 **`timelineSemaphore`** via
+## **`vkGetPhysicalDeviceFeatures2`** (see **`docs/gpu-architecture.md` § Vulkan limitations**:
+## 1.1-only **`VK_KHR_timeline_semaphore`** stacks are not detected yet). The runtime
+## still completes work with per-submit **fences**, not timeline waits; this flag is
+## diagnostics / future batching only.
+vulkanTimelineSemaphore : Bool
+vulkanTimelineSemaphore = raw_vulkanTimelineSemaphore 0
 
 ## Integer discovery ABI (`yona_Std_GPU__*` in `gpu_cpu.c`; full Vulkan probe in `gpu_stub.c` when linked).
 extern raw_stdGpuAvailable : Int -> Bool = "yona_Std_GPU__available"
@@ -113,7 +125,8 @@ mapMul factor buffer =
         Buffer values -> Buffer (raw_mapMul factor values)
     end
 
-## Keep values greater than the threshold. CPU only (no Vulkan path yet).
+## Keep values greater than the threshold. Vulkan when `YONA_GPU_VULKAN_FILTER`
+## or `YONA_GPU_VULKAN_COMPUTE=1` and length thresholds are met (`docs/gpu-architecture.md`).
 filterGreaterThan : Int -> Buffer -> Buffer
 filterGreaterThan threshold buffer =
     case buffer of
@@ -128,5 +141,9 @@ reduceSum buffer =
         Buffer values -> raw_reduceSum values
     end
 
-## Experimental: in-place ×2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
+## Experimental: in-place x2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
+## The C wrapper creates the `VkDevice`/pools on first use (`yona_gpu_vulkan_ctx_init`) when built with Vulkan.
 extern native floatArrayMul2Async : FloatArray -> Int = "yona_Std_GPU__floatArrayMul2Async"
+
+## In-place multiply each element by `scale` (same Vulkan path as `floatArrayMul2Async`).
+extern native floatArrayScaleAsync : Float -> FloatArray -> Int = "yona_Std_GPU__floatArrayScaleAsync"

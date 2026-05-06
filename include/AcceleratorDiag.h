@@ -15,8 +15,10 @@ namespace yona::compiler {
 
 /// After successful typecheck, print a JSON document with schema
 /// `yona.accelerator_diag.v1` listing call sites that match the explicit
-/// `Std\GPU` columnar API (imported names or `Std\GPU::…` module calls).
-/// Each site includes a stable `api_signature` from `Std\GPU` exports.
+/// `Std\GPU` exports: columnar compute, float async natives, and
+/// capability/discovery (`hasGpu`, `available ()`, etc.). Applies use imported
+/// names or `Std\GPU::…` module calls. Each site includes a stable
+/// `api_signature` matching `Std\GPU.yona`.
 /// When the checker has a fully-resolved non-trivial inferred type for the
 /// apply node, `inferred_type` is included.
 /// `input_filename` is emitted as root `file` when non-empty.

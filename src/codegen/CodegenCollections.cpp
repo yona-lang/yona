@@ -33,6 +33,8 @@ static std::string ctype_to_string(CType ct) {
         case CType::INT_ARRAY: return "INT_ARRAY";
         case CType::FLOAT_ARRAY: return "FLOAT_ARRAY";
         case CType::CHANNEL: return "CHANNEL";
+        case CType::SUM: return "SUM";
+        case CType::RECORD: return "RECORD";
     }
     return "INT";
 }

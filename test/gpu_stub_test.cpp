@@ -87,3 +87,36 @@ TEST_CASE("GPU: optional async f64 mul2 when YONA_GPU_TEST_F64_MUL2_ASYNC is set
     CHECK(data[3] == doctest::Approx(8.0));
     yona_gpu_vulkan_ctx_shutdown();
 }
+
+extern "C" {
+yona_task_group_t* yona_rt_group_begin(void);
+void yona_rt_group_cancel(yona_task_group_t* g);
+void yona_rt_group_end(void* g);
+}
+
+/* Set YONA_GPU_TEST_F64_GROUP_CANCEL=1: grouped mul2 promise completes -887 after cancel. */
+TEST_CASE("GPU: optional grouped f64 mul2 cancel") {
+    const char* flag = std::getenv("YONA_GPU_TEST_F64_GROUP_CANCEL");
+    if (flag == nullptr || flag[0] == '\0') {
+        return;
+    }
+    if (yona_Std_GPU__available(0) != 1) {
+        return;
+    }
+    CHECK(yona_gpu_vulkan_ctx_init() == 0);
+    double data[4] = {1.0, 2.0, 3.0, 4.0};
+    yona_task_group_t* g = yona_rt_group_begin();
+    REQUIRE(g != nullptr);
+    yona_promise_t* pr = yona_gpu_vulkan_float64_buffer_mul2_async(data, 4, g);
+    REQUIRE(pr != nullptr);
+    yona_rt_group_cancel(g);
+    const int64_t r = yona_rt_async_await(pr);
+    if (r == -20) {
+        yona_rt_group_end(g);
+        yona_gpu_vulkan_ctx_shutdown();
+        return;
+    }
+    CHECK(r == -887);
+    yona_rt_group_end(g);
+    yona_gpu_vulkan_ctx_shutdown();
+}

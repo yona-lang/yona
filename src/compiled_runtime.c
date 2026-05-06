@@ -824,9 +824,12 @@ int64_t* yona_Std_IntArray__toSeq(int64_t* a) { return yona_rt_int_array_to_seq(
 
 /* Accelerated columnar backends used by Std\GPU. */
 #include "runtime/gpu_vulkan.c"
-#include "runtime/gpu_vulkan_device.c"
 #include "runtime/gpu_cpu.c"
+/* gpu_stub uses linked Vulkan entry points (vk* prototypes). gpu_vulkan_device.c
+ * pulls vulkan.h with VK_NO_PROTOTYPES for dynamic loading; include stub first
+ * so Khronos include guards do not swallow the prototype pass. */
 #include "runtime/gpu_stub.c"
+#include "runtime/gpu_vulkan_device.c"
 
 /* ===== FloatArray — contiguous unboxed double[] ===== */
 /* Layout: [count: i64][double0, double1, ...] */

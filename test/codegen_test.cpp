@@ -54,7 +54,8 @@ static string ir_function_body(const string& ir, const string& fn_name) {
 }
 
 static string compile_and_run(const string& code, const char* run_env_key = nullptr,
-                              const char* run_env_val = nullptr) {
+                              const char* run_env_val = nullptr,
+                              const char* artifact_suffix = nullptr) {
     parser::Parser parser;
 
     Codegen codegen("test_module");
@@ -78,7 +79,11 @@ static string compile_and_run(const string& code, const char* run_env_key = null
     auto module = codegen.compile(parse_result.node.get());
     if (!module) return "CODEGEN_ERROR";
 
-    fs::path obj_path = yona::test::link::scratch_root() / "yona_codegen_test.o";
+    const string stem =
+        artifact_suffix ? string("yona_codegen_") + artifact_suffix + ".o" : "yona_codegen_test.o";
+    const string exe_stem =
+        artifact_suffix ? string("yona_codegen_") + artifact_suffix : "yona_codegen_test";
+    fs::path obj_path = yona::test::link::scratch_root() / stem;
     if (!codegen.emit_object_file(obj_path.string())) return "EMIT_ERROR";
 
     vector<fs::path> objs = {obj_path};
@@ -92,7 +97,8 @@ static string compile_and_run(const string& code, const char* run_env_key = null
         extra_libs = yona::test::link::pcre_link_flags();
     }
 
-    fs::path exe_path = yona::test::link::scratch_root() / ("yona_codegen_test" + yona::test::link::exe_suffix());
+    fs::path exe_path =
+        yona::test::link::scratch_root() / (exe_stem + yona::test::link::exe_suffix());
     if (!yona::test::link::link_objs_to_exe(objs, exe_path, extra_libs)) return "LINK_ERROR";
 
     if (run_env_key && run_env_val)
@@ -305,7 +311,7 @@ TEST_CASE("Fixture-based codegen tests") {
                 env_k = "YONA_GPU_DISABLE_VULKAN";
                 env_v = "1";
             }
-            string actual = compile_and_run(source, env_k, env_v);
+            string actual = compile_and_run(source, env_k, env_v, test_name.c_str());
             CHECK_MESSAGE(actual == expected,
                 "Test '", test_name, "': expected '", expected, "' but got '", actual, "'");
         }
@@ -794,6 +800,33 @@ returnSeq xs = xs
     CHECK(yona::test::link::popen_read_all(exe_path) == "1");
 }
 
+TEST_CASE("Interface NAT rows serialize FloatArray as FLOAT_ARRAY") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_nat_float_arr";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p;
+    string mod_source = R"(
+module Test\NatFloatArr
+
+export nop
+
+extern native nop : FloatArray -> Int = "yona_Test_NatFloatArr__nop"
+)";
+    auto mod_result = p.parse_module(mod_source, "nat_float_arr.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("nat_float_arr_mod");
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+    fs::path iface = yona_lib / "Test" / "NatFloatArr.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("NAT yona_Test_NatFloatArr__nop 1 FLOAT_ARRAY -> INT") != string::npos);
+    CHECK(yonai.find("NAT yona_Test_NatFloatArr__nop 1 INT -> INT") == string::npos);
+}
+
 } // Codegen Modules
 
 // ===== Diagnostic / Error Reporting Tests =====
@@ -1134,6 +1167,77 @@ reduceSum shifted
     CHECK(json.find(R"("api_signature":"Int -> Buffer -> Buffer")") != std::string::npos);
     CHECK(json.find(R"("op":"reduceSum")") != std::string::npos);
     CHECK(json.find(R"("binding":"import")") != std::string::npos);
+}
+
+TEST_CASE("accelerator_diagnostic_report_std_gpu_float_array_async") {
+    parser::Parser parser;
+    DiagnosticEngine diag;
+    typechecker::TypeChecker type_checker(diag);
+    Codegen codegen("yona_program");
+    if (fs::exists(yona::test::lib_dir()))
+        codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    for (const auto& dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
+        if (fs::exists(dir)) codegen.module_paths_.push_back(fs::canonical(dir).string());
+    }
+    codegen.load_prelude(&parser, &type_checker);
+
+    const char* source = R"YT(import fill from Std\FloatArray in
+import floatArrayScaleAsync, floatArrayMul2Async from Std\GPU in
+let xs = fill 4 2.5 in
+let ps = floatArrayScaleAsync 3.0 xs in
+let pm = floatArrayMul2Async xs in
+(pm, ps)
+)YT";
+
+    std::istringstream stream(source);
+    auto parse_result = parser.parse_input(stream);
+    REQUIRE(parse_result.node);
+    type_checker.check(parse_result.node.get());
+    REQUIRE_FALSE(type_checker.has_direct_errors());
+    CHECK(type_checker.solve_constraints());
+    REQUIRE_FALSE(type_checker.has_errors());
+
+    std::ostringstream oss;
+    emit_accelerator_diagnostic_report(oss, parse_result.node.get(), &type_checker, "<test>");
+    const std::string json = oss.str();
+    CHECK(json.find(R"("op":"floatArrayScaleAsync")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"Float -> FloatArray -> Int")") != std::string::npos);
+    CHECK(json.find(R"("op":"floatArrayMul2Async")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"FloatArray -> Int")") != std::string::npos);
+}
+
+TEST_CASE("accelerator_diagnostic_report_std_gpu_discovery_calls") {
+    parser::Parser parser;
+    DiagnosticEngine diag;
+    typechecker::TypeChecker type_checker(diag);
+    Codegen codegen("yona_program");
+    if (fs::exists(yona::test::lib_dir()))
+        codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    for (const auto& dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
+        if (fs::exists(dir)) codegen.module_paths_.push_back(fs::canonical(dir).string());
+    }
+    codegen.load_prelude(&parser, &type_checker);
+
+    const char* source = R"YT(import available, apiVersion, physicalDeviceCount from Std\GPU in
+(available (), apiVersion (), physicalDeviceCount ())
+)YT";
+
+    std::istringstream stream(source);
+    auto parse_result = parser.parse_input(stream);
+    REQUIRE(parse_result.node);
+    type_checker.check(parse_result.node.get());
+    REQUIRE_FALSE(type_checker.has_direct_errors());
+    CHECK(type_checker.solve_constraints());
+    REQUIRE_FALSE(type_checker.has_errors());
+
+    std::ostringstream oss;
+    emit_accelerator_diagnostic_report(oss, parse_result.node.get(), &type_checker, "<test>");
+    const std::string json = oss.str();
+    CHECK(json.find(R"("op":"available")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"() -> Bool")") != std::string::npos);
+    CHECK(json.find(R"("op":"apiVersion")") != std::string::npos);
+    CHECK(json.find(R"("api_signature":"() -> Int")") != std::string::npos);
+    CHECK(json.find(R"("op":"physicalDeviceCount")") != std::string::npos);
 }
 
 TEST_CASE("accelerator_diagnostic_report_module_ast_scan") {

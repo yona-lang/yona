@@ -94,8 +94,9 @@ int64_t yona_Std_Net__tcpAccept(int64_t listener_fd) {
     memset(&sqe, 0, sizeof(sqe));
     sqe.opcode = IORING_OP_ACCEPT;
     sqe.fd = (int)listener_fd;
+    /* Kernel/liburing use addr = sockaddr *, off = socklen_t * (NOT addr2). */
     sqe.addr = (unsigned long)client_addr;
-    sqe.addr2 = (unsigned long)addr_len_ptr;
+    sqe.off = (uint64_t)(unsigned long)addr_len_ptr;
 
     uint64_t id = ring_submit_sqe(&sqe);
     if (id == 0) { free(client_addr); free(ctx); return 0; }

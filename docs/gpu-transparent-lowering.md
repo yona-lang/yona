@@ -80,7 +80,8 @@ shapes the compiler would emit. Today that means:
    checked before timing.
 
 2. **`bench/gpu_bench_meta.py`** — Prints JSON with approximate **`build N`** row
-   counts (and **`filterGreaterThan`** thresholds when present) for each
+   counts (and **`filterGreaterThan`** thresholds when present, plus **`let x = N in`**
+   integer bindings such as **`gpu_float_scale_hot`**) for each
    `bench/accelerators/gpu_*.yona`. Run before or alongside **`--json-report`**
    so crossover spreadsheets include problem size.
 

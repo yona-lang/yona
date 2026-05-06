@@ -140,6 +140,7 @@ inline bool ensure_runtime_objects() {
             "runtime/hamt.c",
             "runtime/exceptions.c",
             "runtime/closures.c",
+            "runtime/gpu_stub.c",
             "runtime/gpu_vulkan.c",
             "runtime/gpu_vulkan_device.c",
             "runtime/gpu_vulkan_compute.c",

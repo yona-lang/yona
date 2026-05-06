@@ -149,6 +149,7 @@ FN Closeable_Int__close 1 INT -> UNIT
 FN yona_Std_GPU__hasGpu 0 -> BOOL
 FN yona_Std_GPU__hasSimd 0 -> BOOL
 FN yona_Std_GPU__vulkanAvailable 0 -> BOOL
+FN yona_Std_GPU__vulkanTimelineSemaphore 0 -> BOOL
 FN yona_Std_GPU__filterGreaterThan 2 INT ADT -> ADT
 FN yona_Std_GPU__upload 1 ADT -> ADT retadt Buffer
 FN yona_Std_GPU__mapAdd 2 INT ADT -> ADT
@@ -157,3 +158,4 @@ FN yona_Std_GPU__available 0 -> BOOL
 FN yona_Std_GPU__apiVersion 0 -> INT
 FN yona_Std_GPU__physicalDeviceCount 0 -> INT
 NAT yona_Std_GPU__floatArrayMul2Async 1 FLOAT_ARRAY -> INT
+NAT yona_Std_GPU__floatArrayScaleAsync 2 FLOAT FLOAT_ARRAY -> INT

@@ -31,6 +31,16 @@ std::string gpu_std_module_fqn() { return std::string("Std") + PACKAGE_DELIMITER
 
 const std::unordered_map<std::string, std::string>& gpu_export_api_signatures() {
     static const std::unordered_map<std::string, std::string> k = {
+        {"backendName", "String"},
+        {"vulkanStatus", "String"},
+        {"vulkanLastNote", "String"},
+        {"hasGpu", "Bool"},
+        {"hasSimd", "Bool"},
+        {"vulkanAvailable", "Bool"},
+        {"vulkanTimelineSemaphore", "Bool"},
+        {"available", "() -> Bool"},
+        {"apiVersion", "() -> Int"},
+        {"physicalDeviceCount", "() -> Int"},
         {"upload", "IntArray -> Buffer"},
         {"materialize", "Buffer -> IntArray"},
         {"length", "Buffer -> Int"},
@@ -38,6 +48,8 @@ const std::unordered_map<std::string, std::string>& gpu_export_api_signatures() 
         {"mapMul", "Int -> Buffer -> Buffer"},
         {"filterGreaterThan", "Int -> Buffer -> Buffer"},
         {"reduceSum", "Buffer -> Int"},
+        {"floatArrayMul2Async", "FloatArray -> Int"},
+        {"floatArrayScaleAsync", "Float -> FloatArray -> Int"},
     };
     return k;
 }
@@ -56,8 +68,25 @@ bool inferred_pretty_informative(const std::string& pp) {
 
 bool is_gpu_kernel_name(const std::string& n) {
     static const std::unordered_set<std::string> kOps = {
-        "upload",         "materialize", "length", "mapAdd", "mapMul",
-        "filterGreaterThan", "reduceSum",
+        "backendName",
+        "vulkanStatus",
+        "vulkanLastNote",
+        "hasGpu",
+        "hasSimd",
+        "vulkanAvailable",
+        "vulkanTimelineSemaphore",
+        "available",
+        "apiVersion",
+        "physicalDeviceCount",
+        "upload",
+        "materialize",
+        "length",
+        "mapAdd",
+        "mapMul",
+        "filterGreaterThan",
+        "reduceSum",
+        "floatArrayMul2Async",
+        "floatArrayScaleAsync",
     };
     return kOps.count(n) > 0;
 }

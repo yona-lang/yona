@@ -60,6 +60,12 @@ extern raw_vulkanAvailable   : Int -> Bool     = "yona_Std_GPU_raw__vulkanAvaila
 ### `extern`
 
 ```yona
+extern raw_vulkanTimelineSemaphore : Int -> Bool = "yona_Std_GPU_raw__vulkanTimelineSemaphore"
+```
+
+### `extern`
+
+```yona
 extern raw_upload            : IntArray -> IntArray = "yona_Std_GPU_raw__upload"
 ```
 
@@ -134,9 +140,11 @@ vulkanStatus = raw_vulkanStatus 0
 vulkanLastNote : String
 ```
 
-Short hint from the last failed Vulkan init or opt-in GPU kernel attempt.
-Empty after success or when Vulkan was not compiled in. Same source as the C
-`yona_gpu_vulkan_device_last_note()` helper.
+Short hint from the last failed Vulkan init, opt-in int column GPU attempt,
+async **`vkWaitForFences`**, or other **`VkResult`** failures on the **`Std\GPU`**
+float path / test dispatch (`gpu_stub.c`). Empty after success or when Vulkan
+was not compiled in. Same source as the C **`yona_gpu_vulkan_device_last_note()`**
+helper.
 
 ### `vulkanLastNote`
 
@@ -186,6 +194,25 @@ True when a Vulkan loader is visible to the process.
 
 ```yona
 vulkanAvailable = raw_vulkanAvailable 0
+```
+
+### `vulkanTimelineSemaphore`
+
+```yona
+vulkanTimelineSemaphore : Bool
+```
+
+True when device init succeeded (see **`hasGpu`** / **`vulkanStatus`**) and the
+selected physical device reports Vulkan 1.2 **`timelineSemaphore`** via
+**`vkGetPhysicalDeviceFeatures2`** (see **`docs/gpu-architecture.md` § Vulkan limitations**:
+1.1-only **`VK_KHR_timeline_semaphore`** stacks are not detected yet). The runtime
+still completes work with per-submit **fences**, not timeline waits; this flag is
+diagnostics / future batching only.
+
+### `vulkanTimelineSemaphore`
+
+```yona
+vulkanTimelineSemaphore = raw_vulkanTimelineSemaphore 0
 ```
 
 ### `extern`
@@ -322,7 +349,8 @@ mapMul factor buffer =
 filterGreaterThan : Int -> Buffer -> Buffer
 ```
 
-Keep values greater than the threshold. CPU only (no Vulkan path yet).
+Keep values greater than the threshold. Vulkan when `YONA_GPU_VULKAN_FILTER`
+or `YONA_GPU_VULKAN_COMPUTE=1` and length thresholds are met (`docs/gpu-architecture.md`).
 
 ### `filterGreaterThan`
 
@@ -351,5 +379,14 @@ reduceSum buffer =
 extern native floatArrayMul2Async : FloatArray -> Int = "yona_Std_GPU__floatArrayMul2Async"
 ```
 
-Experimental: in-place ×2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
+Experimental: in-place x2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
+The C wrapper creates the `VkDevice`/pools on first use (`yona_gpu_vulkan_ctx_init`) when built with Vulkan.
+
+### `extern`
+
+```yona
+extern native floatArrayScaleAsync : Float -> FloatArray -> Int = "yona_Std_GPU__floatArrayScaleAsync"
+```
+
+In-place multiply each element by `scale` (same Vulkan path as `floatArrayMul2Async`).
 

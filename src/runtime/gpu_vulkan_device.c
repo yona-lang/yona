@@ -36,6 +36,10 @@ int yona_gpu_vulkan_device_shader_int64(void) { return 0; }
 
 const char* yona_gpu_vulkan_device_last_note(void) { return ""; }
 
+void yona_gpu_vulkan_device_set_last_note(const char* msg) { (void)msg; }
+
+int yona_gpu_vulkan_device_timeline_semaphore(void) { return 0; }
+
 #else /* YONA_GPU_VULKAN_ENABLED */
 
 #define VK_NO_PROTOTYPES
@@ -98,6 +102,7 @@ static VkDevice yona_vk_dev = VK_NULL_HANDLE;
 static VkQueue yona_vk_queue = VK_NULL_HANDLE;
 static uint32_t yona_vk_queue_family = (uint32_t)-1;
 static int yona_vk_shader_int64_enabled;
+static int yona_vk_timeline_sem_supported;
 
 static char yona_vk_last_note[256];
 
@@ -112,6 +117,12 @@ static void yona_vk_note_cpy(const char* s) {
     if (n >= sizeof(yona_vk_last_note)) n = sizeof(yona_vk_last_note) - 1;
     memcpy(yona_vk_last_note, s, n);
     yona_vk_last_note[n] = 0;
+}
+
+void yona_gpu_vulkan_device_set_last_note(const char* msg) {
+    YONA_VKDEV_LOCK();
+    yona_vk_note_cpy(msg);
+    YONA_VKDEV_UNLOCK();
 }
 
 static void yona_vk_dl_close(void) {
@@ -206,6 +217,11 @@ static int yona_vk_load_device_symbols(VkInstance inst, VkDevice dev) {
 }
 
 static void yona_vk_destroy_all(void) {
+    if (yona_vk_dev != VK_NULL_HANDLE && yona_pfn_vkGetDeviceProcAddr) {
+        PFN_vkDeviceWaitIdle pfn_wait =
+            (PFN_vkDeviceWaitIdle)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, "vkDeviceWaitIdle");
+        if (pfn_wait) pfn_wait(yona_vk_dev);
+    }
     yona_vk_compute_destroy_cached_pipelines();
     if (yona_vk_dev != VK_NULL_HANDLE && yona_pfn_vkDestroyDevice)
         yona_pfn_vkDestroyDevice(yona_vk_dev, NULL);
@@ -214,6 +230,7 @@ static void yona_vk_destroy_all(void) {
     yona_vk_phys = VK_NULL_HANDLE;
     yona_vk_queue_family = (uint32_t)-1;
     yona_vk_shader_int64_enabled = 0;
+    yona_vk_timeline_sem_supported = 0;
 
     if (yona_vk_instance != VK_NULL_HANDLE && yona_pfn_vkDestroyInstance)
         yona_pfn_vkDestroyInstance(yona_vk_instance, NULL);
@@ -242,6 +259,30 @@ static int yona_vk_pick_compute_queue(VkPhysicalDevice phys, uint32_t* out_famil
     if (chosen == (uint32_t)-1) return -4;
     *out_family = chosen;
     return 0;
+}
+
+static void yona_vk_probe_timeline_sem_supported(void) {
+    yona_vk_timeline_sem_supported = 0;
+    if (yona_vk_phys == VK_NULL_HANDLE || yona_vk_instance == VK_NULL_HANDLE) return;
+
+    PFN_vkGetPhysicalDeviceFeatures2 pfn = (PFN_vkGetPhysicalDeviceFeatures2)(void*)
+        yona_pfn_vkGetInstanceProcAddr(yona_vk_instance, "vkGetPhysicalDeviceFeatures2");
+    if (!pfn)
+        pfn = (PFN_vkGetPhysicalDeviceFeatures2)(void*)yona_pfn_vkGetInstanceProcAddr(
+            yona_vk_instance, "vkGetPhysicalDeviceFeatures2KHR");
+    if (!pfn) return;
+
+    VkPhysicalDeviceProperties props;
+    yona_pfn_vkGetPhysicalDeviceProperties(yona_vk_phys, &props);
+    if (props.apiVersion < VK_API_VERSION_1_2) return;
+
+    VkPhysicalDeviceVulkan12Features feats12 = {0};
+    feats12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    VkPhysicalDeviceFeatures2 feats2 = {0};
+    feats2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    feats2.pNext = &feats12;
+    pfn(yona_vk_phys, &feats2);
+    if (feats12.timelineSemaphore == VK_TRUE) yona_vk_timeline_sem_supported = 1;
 }
 
 static int yona_vk_do_try_init_unlocked(void) {
@@ -385,6 +426,8 @@ static int yona_vk_do_try_init_unlocked(void) {
 
     free(devs);
 
+    yona_vk_probe_timeline_sem_supported();
+
     float qp = 1.0f;
     VkDeviceQueueCreateInfo qci = {0};
     qci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -502,6 +545,14 @@ int yona_gpu_vulkan_device_shader_int64(void) {
     int out = 0;
     YONA_VKDEV_LOCK();
     if (yona_vk_dev != VK_NULL_HANDLE) out = yona_vk_shader_int64_enabled;
+    YONA_VKDEV_UNLOCK();
+    return out;
+}
+
+int yona_gpu_vulkan_device_timeline_semaphore(void) {
+    int out = 0;
+    YONA_VKDEV_LOCK();
+    if (yona_vk_dev != VK_NULL_HANDLE) out = yona_vk_timeline_sem_supported;
     YONA_VKDEV_UNLOCK();
     return out;
 }

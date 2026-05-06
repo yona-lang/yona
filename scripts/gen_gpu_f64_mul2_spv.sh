@@ -13,7 +13,7 @@ def main():
     out_path = pathlib.Path(sys.argv[2])
     data = spv_path.read_bytes()
     lines = [
-        "/* SPIR-V: f64 SSBO mul2 — generated; do not edit by hand. */",
+        "/* SPIR-V: f64 SSBO in-place *= scale (push: u32 n, f64 scale; mul2 uses scale=2) — generated; do not edit by hand. */",
         "#ifndef YONA_RUNTIME_GPU_F64_MUL2_SPV_INL",
         "#define YONA_RUNTIME_GPU_F64_MUL2_SPV_INL",
         "",

@@ -119,14 +119,16 @@ to avoid duplicated registration logic.
    `apiVersion`, and `physicalDeviceCount`. Yona calls use a `UNIT` placeholder
    at the LLVM/C boundary. `yonac` detects modules after skipping `#` line
    comments (same as the lexer). **Optional Vulkan:** CMake `find_package(Vulkan)`
-   defines `YONA_HAS_VULKAN` and links `Vulkan::Vulkan` on **Unix** hosts only.
+   defines `YONA_HAS_VULKAN` and links `Vulkan::Vulkan` on **any** host where
+   `find_package(Vulkan)` succeeds (Linux, macOS, Windows with the SDK/loader).
    The runtime then performs a **one-time** `VkInstance` probe (portability
    enumeration on Apple) to set `physicalDeviceCount` and `available` when any
    enumerated device exposes `VK_QUEUE_COMPUTE_BIT`, then destroys the instance
    (discovery only — no long-lived `VkDevice` in this phase). Codegen E2E still
    compiles `gpu_stub.c` without `YONA_HAS_VULKAN`, so fixture output stays
-   deterministic. **`floatArrayMul2Async`** (phase below) is the first shipped
-   user-facing compute hook, via **`extern native`**.
+   deterministic. **`floatArrayMul2Async`** / **`floatArrayScaleAsync`** (phase below)
+   are the shipped user-facing **`extern native`** compute hooks (`scale` chooses the
+   factor; **`mul2`** is `scale = 2`).
 1. **Vulkan init + single queue + fixed nop compute pipeline** in C runtime —
    `yona_gpu_vulkan_ctx_init` / `yona_gpu_vulkan_ctx_shutdown` in `gpu_stub.c`
    (C-only; not `Std\GPU` externs): `VkInstance`, `VkDevice`, compute `VkQueue`,
@@ -134,21 +136,29 @@ to avoid duplicated registration logic.
    `scripts/gen_gpu_nop_spv.sh`). **`yona_gpu_vulkan_dispatch_nop_once`** records
    one `vkCmdDispatch(1,1,1)` and blocks on `vkWaitForFences` — **internal / tests
    only** (set `YONA_GPU_TEST_DISPATCH=1` for doctest); not for Yona worker threads.
-   **`yona_gpu_vulkan_float64_buffer_mul2_inplace`** (C-only) copies a contiguous
-   `double[]` slice to a host-visible SSBO, runs the fixed `shaderFloat64` mul2
-   kernel (`gpu_f64_mul2.comp` → `gpu_f64_mul2_spv.inl`), copies back — same
-   layout as Yona `FloatArray` payload. **`yona_gpu_vulkan_float64_buffer_mul2_async`**
-   returns a **`yona_promise_t`** completed on a **dedicated GPU fence thread**
+   **`yona_gpu_vulkan_float64_buffer_scale_inplace`** / **`mul2_inplace`** (C-only) copy a
+   contiguous `double[]` slice to a host-visible SSBO, run the fixed `shaderFloat64`
+   scale kernel (`gpu_f64_mul2.comp` — push constants: element count + `double scale`;
+   regenerate via `scripts/gen_gpu_f64_mul2_spv.sh`), then copy back — same layout
+   as Yona `FloatArray` payload (`mul2` is `scale = 2.0`). **`scale_async`** /
+   **`mul2_async`** return a **`yona_promise_t`** completed on a **dedicated GPU fence thread**
    (`gpu_stub.c`), not the thread pool — uses `yona_rt_promise_new` /
    `yona_rt_promise_complete` (`async.c`). Doctests: `YONA_GPU_TEST_F64_MUL2=1`,
-   `YONA_GPU_TEST_F64_MUL2_ASYNC=1`. **Next:** timeline semaphores + align with
-   §3–§4 cancellation; then a real `Std\GPU` surface.
-2. **Yona `Std\GPU` surface** — **`floatArrayMul2Async : FloatArray -> Int`**
-   (`extern native`, `Promise Int` at use sites) wraps the fence-thread promise;
+   `YONA_GPU_TEST_F64_MUL2_ASYNC=1`. The **`yona_Std_GPU__floatArray*Async`**
+   wrappers call **`yona_gpu_vulkan_ctx_init()`** before enqueue (idempotent)
+   so benches and programs do not rely on a separate C init call. **Next:** timeline semaphores + align with
+   §3–§4 cancellation; broaden to pinned buffers and **`mapGPU` / `reduceGPU`** per §5–§6.
+2. **Yona `Std\GPU` surface** — **`floatArrayMul2Async : FloatArray -> Int`** and
+   **`floatArrayScaleAsync : Float -> FloatArray -> Int`** (`extern native`,
+   `Promise Int` at use sites) wrap the fence-thread promise;
    synchronous `mapGPU` remains acceptable only behind a **debug** flag until
    higher-level **`mapGPU` / `reduceGPU`** land.
 3. **Fence + promise integration** — §3–§4 (partially satisfied by the fence waiter
    + `yona_rt_promise_complete` path above; extend for cancel / device-lost).
+   When a promise was registered with a **task group** and **`yona_rt_group_cancel`**
+   runs before the fence thread observes completion, **`gpu_stub`** completes the
+   promise with result **`-887`** and `is_error=1` after `vkWaitForFences`
+   succeeds (submission is **not** dropped; buffers may already be updated).
 4. **Pinned / channel pipelines** — §5.
 5. **Graph batching** — §7.
 6. **Transparent lowering** — separate Halide-style “schedule” design.

@@ -11,6 +11,7 @@ Usage:
     python3 bench/runner.py --compare-c           # compare vs C
     python3 bench/runner.py --verify-reference-outputs   # C refs vs .expected only, exit 1 on mismatch
     python3 bench/runner.py --verify-reference-outputs --reference-verify-langs all
+    python3 bench/runner.py --skip-erl   # omit Erlang when Windows OTP crashes
     python3 bench/runner.py --all-opt-levels      # compare O0/O1/O2/O3
     python3 bench/runner.py --json                # machine-readable output
 """
@@ -48,6 +49,17 @@ STARTUP_CACHE_VERSION = "v2"
 # Per-benchmark timeout (seconds) — prevents runaway benchmarks while keeping
 # slower VM startup / process-heavy rows reliable on Windows.
 BENCH_TIMEOUT = 30
+
+# Disable Erlang refs via --skip-erl or env YONA_BENCH_SKIP_ERLANG=1 when OTP/BEAM
+# exits 0xC0000005 on Windows (broken install / AV interaction); see bench/README.md.
+_ERLANG_REFERENCE_ENABLED = True
+
+
+def erlang_reference_enabled():
+    if not _ERLANG_REFERENCE_ENABLED:
+        return False
+    v = os.environ.get("YONA_BENCH_SKIP_ERLANG", "").strip().lower()
+    return v not in ("1", "true", "yes")
 
 
 def _default_sysroot():
@@ -222,6 +234,8 @@ def _prep_erl(stem, build_dir):
     benchmark run measures compiled Erlang, not the escript interpreter.
     The .erl file is expected to define `main/1`; we convert it to a
     regular module, compile with erlc, and invoke via erl -noshell."""
+    if not erlang_reference_enabled():
+        return None
     src = _ref_source(stem, "erl")
     if src is None:
         return None
@@ -427,6 +441,8 @@ def measure_startup(lang, build_dir, iterations=3):
             return 0.0, 0
         cmd = [str(exe)]
     elif lang == "erl":
+        if not erlang_reference_enabled():
+            return 0.0, 0
         if not (which("erl") and which("erlc")):
             return 0.0, 0
         src = probe_dir / "startup_erl.erl"
@@ -859,6 +875,12 @@ def main():
                         help="Compare against C reference impls")
     parser.add_argument("--compare-erl", action="store_true",
                         help="Compare against Erlang reference impls (erlc-compiled)")
+    parser.add_argument(
+        "--skip-erl",
+        action="store_true",
+        help="Skip all Erlang reference usage (prep, startup probe, verify). "
+             "Same as YONA_BENCH_SKIP_ERLANG=1; use when erl/erlc crash on Windows OTP.",
+    )
     # `--compare` without a value means "-c" (backwards compat). With a value,
     # it takes a CSV of language keys: `--compare=c,erl`. The `nargs="?"` +
     # `const` trick gives us both forms from a single flag.
@@ -889,6 +911,10 @@ def main():
     parser.add_argument("--yonac", help="Path to yonac executable")
     args = parser.parse_args()
 
+    global _ERLANG_REFERENCE_ENABLED
+    if args.skip_erl:
+        _ERLANG_REFERENCE_ENABLED = False
+
     global YONAC
     if args.yonac:
         YONAC = Path(args.yonac)
@@ -908,7 +934,9 @@ def main():
                           f"Available: {','.join(REF_LANGS.keys())}")
                     sys.exit(1)
                 compare_langs.append(lang)
-    compare_langs = tuple(compare_langs)
+    compare_langs = tuple(
+        x for x in compare_langs if x != "erl" or erlang_reference_enabled()
+    )
 
     ensure_benchmark_data()
 
@@ -934,6 +962,9 @@ def main():
                     f"Use: {','.join(REF_LANGS.keys())} or all"
                 )
                 sys.exit(1)
+        verify_langs = tuple(
+            x for x in verify_langs if x != "erl" or erlang_reference_enabled()
+        )
         print(
             "Reference output conformance "
             f"(langs={','.join(verify_langs)}, filter={args.filter or '*'})\n"

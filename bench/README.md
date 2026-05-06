@@ -32,13 +32,19 @@ python3 bench/runner.py --json
 
 # Std\GPU: CPU vs Vulkan wall times (same correctness checks)
 python3 bench/run_gpu_compare.py
+python3 bench/run_gpu_compare.py --only float_scale   # FloatArray gpu_stub f64 (golden 0)
 
 # Reference lanes only: stdout must match each benchmark's .expected (CI-friendly; no yonac)
 python3 bench/runner.py --verify-reference-outputs
 python3 bench/runner.py core/fibonacci --verify-reference-outputs
 python3 bench/runner.py --verify-reference-outputs --reference-verify-langs c,java
 python3 bench/runner.py --verify-reference-outputs --reference-verify-langs all
+
+# Windows: some OTP installs crash (`erlc`/`erl` exit -1073741819). Omit Erlang with:
+#   `--skip-erl`  — same as env YONA_BENCH_SKIP_ERLANG=1 (drops erl from --compare-* / verify all)
+python3 bench/runner.py --skip-erl --compare=c,erl,hs
 ```
+Use Linux/WSL Erlang when you need the Erlang reference row unchanged.
 
 ## What It Measures
 
@@ -80,6 +86,7 @@ bench/
     gpu_map_reduce_10k.yona     # same at 10k rows
     gpu_filter_hot.yona         # upload -> filterGreaterThan -> reduceSum (100k rows)
     gpu_filter_10k.yona           # same at 10k rows
+    gpu_float_scale_hot.yona      # FloatArray scale async (gpu_stub); stdout must match .expected
   reference/             # Reference implementations (C, Erlang, Haskell,
     fibonacci.c          # Java, JavaScript, Python). Only .c and .erl are
     fibonacci.erl        # currently wired into the runner's comparison
@@ -112,7 +119,7 @@ To compare **CPU-forced** vs **Vulkan opt-in** wall times on the same sources:
 ```bash
 python3 bench/run_gpu_compare.py
 python3 bench/run_gpu_compare.py -n 5 -O3 --only map_reduce
-python3 bench/gpu_bench_meta.py   # JSON: build N / filter thresholds per gpu_*.yona
+python3 bench/gpu_bench_meta.py   # JSON: build N / filter thresholds / let N bindings per gpu_*.yona
 ```
 
 The script sets `YONA_GPU_DISABLE_VULKAN=1` for the first pass and
@@ -120,7 +127,10 @@ The script sets `YONA_GPU_DISABLE_VULKAN=1` for the first pass and
 Output must match the `.expected` file for both passes. It prints a summary
 table: **CPU avg (ms)** vs **GPU avg (ms)** (Vulkan opt-in), **Delta %**, and a
 short verdict (e.g. `GPU faster (1.2x)`). On machines without a usable GPU,
-the GPU column may match CPU time (same kernels).
+the GPU column may match CPU time (same kernels). Programs using
+**`Std\GPU.floatArray*Async`** (native `Promise` + optional `VkDevice` init)
+are **not** in the fixed `BENCHES` list yet — add them after a deterministic
+bench harness can init Vulkan or asserts a shared error outcome for both env columns.
 
 Use `--json` for a machine-readable list after the table (array of results).
 Use `--json-report` for the same data wrapped with host / yonac / `-O` / iteration

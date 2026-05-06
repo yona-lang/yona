@@ -5,6 +5,8 @@ Time Std\\GPU columnar benches twice: CPU-forced vs Vulkan opt-in.
 Requires a yonac built with Vulkan headers (`YONA_COMPILE_GPU_VULKAN`). If no
 GPU or init fails, the "Vulkan" row still runs but falls back to the same CPU
 implementation — compare wall times on a machine with a discrete GPU + drivers.
+On Windows, **`VULKAN_SDK`** must be set when running yonac so **`Std\GPU` float**
+benchmarks (`float_scale`) can link **`vulkan-1.lib`**.
 
 Usage:
   python3 bench/run_gpu_compare.py
@@ -82,6 +84,9 @@ BENCHES = (
     ("filter_10k", "gpu_filter_10k.yona"),
     ("pipeline_5k", "gpu_columnar_pipeline_5k.yona"),
     ("materialize_5k", "gpu_materialize_sum_5k.yona"),
+    # FloatArray scale via gpu_stub.f64 fence path (.expected 0 = success; fails on hosts
+    # without Vulkan + shaderFloat64 — same deterministic output across CPU/Vulkan env cols).
+    ("float_scale", "gpu_float_scale_hot.yona"),
 )
 
 BENCH_ONLY_CHOICES = [b[0] for b in BENCHES] + ["all"]
@@ -244,7 +249,7 @@ def main() -> int:
         choices=BENCH_ONLY_CHOICES,
         default="all",
         metavar="NAME",
-        help="benchmark key or all (includes crossover-size variants *_10k / *_5k)",
+        help="benchmark key or all (includes crossover variants *_10k / *_5k and float_scale)",
     )
     ap.add_argument(
         "--json",

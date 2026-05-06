@@ -19,3 +19,15 @@ TEST_CASE("gpu vulkan device: try_init when built without Vulkan headers") {
     CHECK(yona_gpu_vulkan_device_ready() == 0);
 #endif
 }
+
+TEST_CASE("gpu vulkan device: timeline_semaphore query after shutdown") {
+    yona_gpu_vulkan_device_shutdown();
+    CHECK(yona_gpu_vulkan_device_timeline_semaphore() == 0);
+#if defined(YONA_COMPILE_GPU_VULKAN) && (YONA_COMPILE_GPU_VULKAN + 0) == 1
+    /* After init, flag is driver-dependent (0 or 1); only check it does not crash. */
+    (void)yona_gpu_vulkan_device_try_init();
+    (void)yona_gpu_vulkan_device_timeline_semaphore();
+    yona_gpu_vulkan_device_shutdown();
+    CHECK(yona_gpu_vulkan_device_timeline_semaphore() == 0);
+#endif
+}

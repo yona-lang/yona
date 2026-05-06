@@ -35,6 +35,7 @@
 #include "typechecker/RefinementChecker.h"
 #include "typechecker/LinearityChecker.h"
 #include "AcceleratorDiag.h"
+#include "yona_vulkan_link_cfg.h"
 
 using namespace std;
 using namespace yona;
@@ -63,9 +64,36 @@ static string q_cmd_path(const filesystem::path& p) {
     return "\"" + p.string() + "\"";
 }
 
-/** Optional GPU Vulkan compile flags for compiled_runtime (matches
- *  -DYONA_ENABLE_VULKAN in CMake). Uses headers only; does not add vulkan-1 to
- *  the final link. Set YONA_COMPILE_GPU_VULKAN=1 and VULKAN_SDK. */
+#ifdef _WIN32
+/** Full path to vulkan-1.lib for packaged yona_runtime (gpu_stub vk* imports).
+ *  Prefer CMake-configured path (same as Vulkan::Vulkan at configure time), else VULKAN_SDK. */
+static string yona_windows_vulkan_import_lib_path() {
+#if YONA_HAVE_CONFIGURED_VULKAN_IMPORT_LIB
+    {
+        filesystem::path p(YONA_CONFIGURED_VULKAN_IMPORT_LIB_PATH);
+        if (filesystem::exists(p))
+            return p.string();
+    }
+#endif
+    const char* sdk = getenv("VULKAN_SDK");
+    if (!sdk || !sdk[0])
+        return {};
+    using std::filesystem::path;
+    const char* cands[] = {"Lib/vulkan-1.lib", "Lib32/vulkan-1.lib", "lib/vulkan-1.lib"};
+    for (const char* rel : cands) {
+        path cand = path(sdk) / rel;
+        if (exists(cand))
+            return cand.string();
+    }
+    return {};
+}
+#endif
+
+/** Optional GPU Vulkan compile flags for scratch compiled_runtime.c (env
+ *  YONA_COMPILE_GPU_VULKAN=1 + VULKAN_SDK — matches test/yona_link_util).
+ *  Packaged sysroot objects are built by CMake with -DYONA_HAS_VULKAN when
+ *  find_package(Vulkan) succeeds; yonac links user exes with -lvulkan (Unix) or
+ *  CMake-resolved / VULKAN_SDK vulkan-1.lib (Windows — see yona_vulkan_link_cfg.h). */
 static string yona_runtime_vulkan_cflags() {
     const char* on = getenv("YONA_COMPILE_GPU_VULKAN");
     if (!on || string(on) == "0")
@@ -687,6 +715,11 @@ int main(int argc, char* argv[]) {
         lld_args.push_back("/OUT:" + filesystem::path(output_file).string());
         lld_args.push_back("ws2_32.lib");
         lld_args.push_back("dbghelp.lib");
+        {
+            string vk_lib = yona_windows_vulkan_import_lib_path();
+            if (!vk_lib.empty())
+                lld_args.push_back(vk_lib);
+        }
 #else
         lld_args.push_back("ld.lld");
         append_link_objects([&](const string& s) { lld_args.push_back(s); });
@@ -698,6 +731,9 @@ int main(int argc, char* argv[]) {
         lld_args.push_back("-lm");
         lld_args.push_back("-lpthread");
         lld_args.push_back("-rdynamic");
+#endif
+#ifdef YONAC_EXE_LINK_POSIX_VULKAN
+        lld_args.push_back("-lvulkan");
 #endif
 #endif
         yona::toolchain::InProcessLldResult lld_res;
@@ -735,8 +771,17 @@ int main(int argc, char* argv[]) {
         if (!prelude_obj.empty()) link_cmd += " " + q_cmd_path(filesystem::path(prelude_obj));
 #ifdef _WIN32
         link_cmd += " -o " + q_cmd_path(filesystem::path(output_file)) + " -lws2_32 -ldbghelp";
+        {
+            string vk_lib = yona_windows_vulkan_import_lib_path();
+            if (!vk_lib.empty())
+                link_cmd += " " + q_cmd_path(filesystem::path(vk_lib));
+        }
 #else
-        link_cmd += " -lm -lpthread -rdynamic -o " + q_cmd_path(filesystem::path(output_file));
+        link_cmd += " -lm -lpthread -rdynamic";
+#ifdef YONAC_EXE_LINK_POSIX_VULKAN
+        link_cmd += " -lvulkan";
+#endif
+        link_cmd += " -o " + q_cmd_path(filesystem::path(output_file));
 #endif
         link_result = system(link_cmd.c_str());
     }

@@ -36,12 +36,24 @@ const char* yona_gpu_vulkan_device_status_name(void);
 int yona_gpu_vulkan_device_shader_int64(void);
 
 /**
- * Short human-readable hint for the last failed device init or mapAdd attempt
- * in this process (empty string if none recorded). Thread-safe only if all
- * callers hold the same external lock as try_init; for tests and CLI this is
- * single-threaded.
+ * 1 if the selected Vulkan 1.2+ physical device reports timelineSemaphore and logical
+ * device creation succeeded. Always 0 without a Vulkan build or before successful
+ * try_init. Not yet used for submission (per-fence waits today); exposed for diagnostics
+ * and future timeline-semaphore batching.
+ */
+int yona_gpu_vulkan_device_timeline_semaphore(void);
+
+/**
+ * Short human-readable hint for the last failed device init, opt-in GPU kernel
+ * attempt, or fence wait on async float compute (empty if none recorded).
+ * Thread-safe only if all callers hold the same external lock as try_init; for
+ * tests and CLI this is single-threaded.
  */
 const char* yona_gpu_vulkan_device_last_note(void);
+
+/** Overwrites last_note (same buffer as failures from try_init / int column paths).
+ * Safe to call from the Std\GPU fence waiter thread after vkWaitForFences fails. */
+void yona_gpu_vulkan_device_set_last_note(const char* msg);
 
 /** Clears cached Std\GPU.hasGpu probe after device shutdown or reset. */
 void yona_gpu_vulkan_invalidate_capability_cache(void);

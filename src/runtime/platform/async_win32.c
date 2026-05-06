@@ -366,6 +366,26 @@ static yona_promise_t* make_promise(void) {
 	return p;
 }
 
+yona_promise_t* yona_rt_promise_new(void) {
+	return make_promise();
+}
+
+void yona_rt_promise_complete(yona_promise_t* p, int64_t result, int is_error,
+			      yona_task_group_t* group) {
+	if (!p) return;
+	EnterCriticalSection(&p->mutex);
+	p->result = result;
+	p->error = is_error ? 1 : 0;
+	p->completed = 1;
+	WakeConditionVariable(&p->cond);
+	LeaveCriticalSection(&p->mutex);
+
+	if (group) {
+		if (__atomic_fetch_sub(&group->pending_count, 1, __ATOMIC_SEQ_CST) == 1)
+			WakeConditionVariable(&group->done_cond);
+	}
+}
+
 static void enqueue_task(yona_task_t* task) {
 	yona_pool_init();
 	EnterCriticalSection(&yona_pool_mutex);
@@ -466,6 +486,14 @@ int64_t yona_rt_group_await_all(yona_task_group_t* g) {
 		yona_rt_raise(sym, msg);
 	}
 	return 0;
+}
+
+/* Test helper: `extern native` returns an already-completed promise (x * 7). */
+yona_promise_t* yona_test_native_promise_immediate(int64_t x) {
+	yona_promise_t* p = yona_rt_promise_new();
+	if (!p) return NULL;
+	yona_rt_promise_complete(p, x * 7, 0, NULL);
+	return p;
 }
 
 int64_t yona_test_slow_identity(int64_t ms) {

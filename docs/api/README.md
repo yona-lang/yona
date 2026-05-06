@@ -1,6 +1,6 @@
 # Yona Standard Library API Reference
 
-**249 functions** across **17 modules**
+**253 functions** across **17 modules**
 
 | Module | Functions | Types | Description |
 |--------|-----------|-------|-------------|
@@ -8,7 +8,7 @@
 | [Std.Channel](Channel.md) | 16 | 2 | Std\Channel — bounded MPMC channels with type-safe sender/receiver split. |
 | [Std.Collection](Collection.md) | 9 | 0 | Higher-order collection operations — functional helpers for sequences, sets, dicts. |
 | [Std.Function](Function.md) | 8 | 0 | Function combinators — identity, composition, application, flipping. |
-| [Std.GPU](GPU.md) | 49 | 1 | Std\GPU — accelerated columnar execution. |
+| [Std.GPU](GPU.md) | 53 | 1 | Std\GPU — accelerated columnar execution. |
 | [Std.Http](Http.md) | 26 | 3 | HTTP client and server — built on Std\Net and Std\String. |
 | [Std.IO](IO.md) | 20 | 0 | Std\IO — non-blocking console and handle-based byte I/O. |
 | [Std.List](List.md) | 29 | 0 | Sequence (list) operations — map, filter, fold, sort, and more. |

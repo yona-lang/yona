@@ -83,6 +83,7 @@ If **`LLVM_INSTALL_PREFIX`** points at an LLVM **library** tree **without** Clan
 #### `YONAC_CC` and doctest (`tests.exe`)
 
 The C++ **doctest** harness compiles `src/compiled_runtime.c` and platform sources via `system()` / `cmd`. Set **`YONAC_CC`** to the full path of **`clang.exe`** used for those subprocesses (CTest on Windows should inherit the same env you use for CMake, or set it explicitly). The harness **quotes** `YONAC_CC` when building commands; if you run an **older** `tests.exe` without that fix, use an **8.3 short path** (e.g. `C:\PROGRA~1\LLVM\bin\clang.exe`) or put **`clang.exe`** on **`PATH`** so the default compiler name resolves. Optional Vulkan scratch builds also honor **`YONA_COMPILE_GPU_VULKAN`** and **`VULKAN_SDK`** (see `CLAUDE.md` / `docs/gpu-architecture.md`).
+When CMake finds Vulkan, **`yonac`**-linked programmes use **`gpu_stub`** Vulkan entry points for **`Std\GPU` float** natives. On Windows, **`yonac`** prefers the **`vulkan-1.lib`** path recorded at CMake configure time (same as the **`Vulkan::Vulkan`** target); if that file is missing at link time, set **`VULKAN_SDK`** to the LunarG root so **`Lib/vulkan-1.lib`** resolves. Unix builds that define **`YONAC_EXE_LINK_POSIX_VULKAN`** pass **`‑lvulkan`**.
 
 ### 2. Configure and build (PowerShell)
 

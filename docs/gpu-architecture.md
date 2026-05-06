@@ -111,6 +111,13 @@ bindings stay **host-visible** SSBOs.
 | `YONA_GPU_VULKAN_PHYSICAL_DEVICE_INDEX` | Non-negative index into `vkEnumeratePhysicalDevices` order. |
 | `YONA_GPU_VULKAN_HOST_SSBO=1` | Force host-visible SSBOs only (no device-local + staging); for debugging and parity tests. |
 
+**`FloatArray` f64 (Vulkan builds, lazy `VkDevice` from `gpu_stub.c`):** **`floatArrayScaleAsync`**
+and **`floatArrayMul2Async`** (`extern native`, `Promise Int` at call sites) share the
+embedded SPIR-V from **`gpu_f64_mul2.comp`** (push constants: element count + `double` scale;
+`mul2` uses `scale = 2.0`; regenerate `include/runtime/gpu_f64_mul2_spv.inl` with
+`scripts/gen_gpu_f64_mul2_spv.sh`). They require `shaderFloat64` + `yona_gpu_vulkan_ctx_init`;
+see **`docs/design-gpu-async.md`** and doctests `YONA_GPU_TEST_F64_MUL2*`.
+
 Generated API notes for `Std\GPU` also appear in `docs/api/GPU.md` (`python3 scripts/gendocs.py`).
 
 **Vulkan optional tests:** With `YONA_COMPILE_GPU_VULKAN`, `test/gpu_vulkan_mapadd_test.cpp`
@@ -124,12 +131,15 @@ parity against the default path (staging vs host-mapped SSBOs must match).
 `bench/accelerators/`) with Vulkan forced off vs `YONA_GPU_VULKAN_COMPUTE=1`,
 then prints a **summary table** (CPU avg ms, GPU avg ms, delta %, verdict). Use
 `--json-report` for archivable metadata; `bench/gpu_bench_meta.py` prints row
-counts from sources. See `bench/README.md`, section **GPU / Vulkan**, and
+counts and `let x = N in` bindings from sources where present. See `bench/README.md`, section **GPU / Vulkan**, and
 `docs/gpu-transparent-lowering.md` (*Benchmark corpus*).
 
-**`Std\GPU.vulkanLastNote`:** short string from the last failed device init or
-opt-in GPU attempt (`yona_gpu_vulkan_device_last_note()`); empty after success or
-when Vulkan was not compiled in.
+**`Std\GPU.vulkanLastNote`:** short string from the last failed device init,
+opt-in int-column GPU attempt, **`vkWaitForFences`** failure on **`floatArray*Async`**,
+or **`VkResult`** / allocation failures on the sync float dispatch / test **nop**
+path (`gpu_stub.c` records the failing entry point name); mapped through
+**`yona_gpu_vulkan_device_last_note()`**; empty after success or when Vulkan was
+not compiled in.
 
 **`filterGreaterThan`:** Optional Vulkan path (same env pattern as above): GPU
 **mark** pass, **GPU** inclusive prefix (doubling scan on int64 flags) plus a small
@@ -159,17 +169,79 @@ enumeration order Vulkan returns). After a failed init or failed opt-in GPU
 path, `yona_gpu_vulkan_device_last_note()` returns a short implementation hint
 (empty after success).
 
-**P0 (optional SDK build):** CMake finds headers and the loader library path
-(Option A); the main Yona program is **not** linked to `vulkan-1` yet so
-machines without a loader DLL can still run CPU-only binaries. `yonac` matches
-CMake when `YONA_COMPILE_GPU_VULKAN=1` and `VULKAN_SDK` are set (see
-`cli/main.cpp` and `docs/gpu-vulkan-implementation-plan.md`).
+**P0 (optional SDK build):** CMake finds Vulkan headers when enabled; **`yona` /
+`tests`** builds keep **runtime-loaded** Vulkan where designed so loader-less
+hosts can still run CPU paths. **`yonac`**-linked executables that import **`vk*`** from
+**`gpu_stub`** resolve **`vulkan-1`** at link time — on **Windows**, prefer the import
+library path recorded at CMake configure (**`INSTALL.md`**), with **`VULKAN_SDK`** as
+fallback (**`cli/main.cpp`**, **`docs/gpu-vulkan-implementation-plan.md`**).
 
 **Testing:** The unit-test harness compiles `compiled_runtime.c` from sources.
 Do **not** leave `YONA_COMPILE_GPU_VULKAN=1` in your shell when running
 `tests.exe` by hand unless you are debugging the Vulkan-enabled runtime path;
 CTest sets `YONA_COMPILE_GPU_VULKAN=0` so `ctest` stays stable even if your
 profile exports Vulkan build variables.
+
+Optional doctests (`test/gpu_stub_test.cpp`): set **`YONA_GPU_TEST_DISPATCH=1`**
+(nop dispatch), **`YONA_GPU_TEST_F64_MUL2=1`** / **`YONA_GPU_TEST_F64_MUL2_ASYNC=1`**
+(f64 scale kernel, sync or promise), or **`YONA_GPU_TEST_F64_GROUP_CANCEL=1`**
+(`yona_rt_group_cancel` → promise result **-887** after the fence; GPU work may
+still finish). All require a successful `yona_gpu_vulkan_ctx_init` and
+`shaderFloat64` where noted; **-20** skips when doubles are unsupported.
+
+## Vulkan limitations (Windows / Linux)
+
+Intentional guardrails and **known gaps** for the baseline Vulkan stack (excluding
+Apple/MoltenVK — see **`docs/gpu-vulkan-implementation-plan.md`** §11).
+
+- **`vulkanTimelineSemaphore`:** Set only when **`apiVersion ≥ Vulkan 1.2`** and
+  **`vkGetPhysicalDeviceFeatures2`** (**or `…KHR`**) reports
+  **`VkPhysicalDeviceVulkan12Features::timelineSemaphore`**. Drivers that expose
+  timeline semaphores **only** through **`VK_KHR_timeline_semaphore`** on Vulkan **1.0 /
+  1.1** (without this 1.2 feature probe succeeding) currently show **`false`** even if
+  the extension exists. **Submission** still uses **`VkFence`** per queue submit
+  (`gpu_vulkan_ops.c`, async float path in `gpu_stub.c`); **`vkQueueSubmit2`** /
+  **`VK_KHR_synchronization2`** are **not** wired yet.
+- **`vulkanLastNote`:** Single shared buffer (**not** a structured log); useful for logs
+  and debugging, **not** a substitute for a typed **`perform Gpu`** / capability effect
+  (see backlog in `docs/todo-list.md`).
+- **Doctest scratch compile** (`test/yona_link_util.hpp`): Vulkan SDK headers plus
+  **`DYONA_COMPILE_GPU_VULKAN=1`** apply to the scratch **`compiled_runtime.c`** object when
+  the env var is set, but **`YONA_HAS_VULKAN` is not defined** there, so **`gpu_stub.c`**
+  stays on its non-Vulkan branch and linked subprocess executables avoid **`vk*`** symbols
+  from that TU. **`ctest`** normally forces **`YONA_COMPILE_GPU_VULKAN=0`** anyway (`CLAUDE.md`).
+- **`yonac` user links (Windows):** prefers **`vulkan-1.lib`** from CMake configure output;
+  **`VULKAN_SDK`** is fallback (`INSTALL.md`).
+
+## Roadmap implementation status
+
+This table tracks *large* remaining items from `docs/design-gpu-async.md` and
+`docs/todo-list.md`. Shipped pieces (columnar `Std\GPU`, optional Vulkan int64
+kernels, `floatArrayMul2Async` / `floatArrayScaleAsync`, accelerator JSON) are
+omitted here.
+
+| Topic | Status |
+|-------|--------|
+| **`mapGPU` / `reduceGPU` (user kernels from Yona functions)** | Not implemented — needs closure → SPIR-V or embedded op table, typing, and Perceus/lifetime rules for device buffers. |
+| **Timeline semaphores / `VK_KHR_synchronization2`** | **Partial:** Vulkan 1.2 **`timelineSemaphore`** probed at device init (**`Std\GPU.vulkanTimelineSemaphore`**). Submit still **fences-only** (no **`vkQueueSubmit2`**). Underserved stacks: **§ Vulkan limitations** (*1.1-only KHR timeline*). |
+| **`vkDeviceWaitIdle` / `vkQueueWaitIdle` on hot paths** | **Avoided** for f64 async (per-fence wait only). **`vkDeviceWaitIdle`** remains on **intentional** `yona_gpu_vulkan_ctx_shutdown` (see `gpu_stub.c`). Int column path: `gpu_vulkan_ops.c` uses **fences**, not queue idle. |
+| **Task-group cancel + GPU promises** | **Partial:** if `yona_rt_group_cancel` ran before the fence thread completes, the promise completes with **-887** (error bit set); submission is not aborted mid-flight. |
+| **Pinned host buffers + CPU↔GPU channels** | Not implemented. |
+| **Multi-stage command-buffer graphs (map→map→reduce)** | Not implemented (single-kernel or staged int filter pipeline only). |
+| **GPU capability / effect for device-lost and OOM** | **Partial:** `vulkanLastNote` records `VkResult` text (OOM / device lost hints), async fence waiter failures, synchronous float dispatch, calloc-after-submit; no typed GPU effect yet. |
+| **Transparent compiler lowering to GPU** | Deferred (needs benchmark gate + schedule story in `docs/gpu-transparent-lowering.md`). |
+| **Windows: full `gpu_stub` Vulkan compute parity with Linux** | **Done** for the lazy `VkDevice` + f64 fence path: same `#if defined(YONA_HAS_VULKAN)` body on all non-Android targets; Windows uses `SRWLOCK` / `CONDITION_VARIABLE` / `InitOnce` / `CreateThread` for the fence waiter. |
+| **macOS: MoltenVK / portability / `shaderInt64` reality** | Open; see `docs/gpu-vulkan-implementation-plan.md` §11 and `docs/todo-list.md`. |
+
+**Float `extern native` benches:** `run_gpu_compare.py` includes **`float_scale`**
+(`gpu_float_scale_hot.yona`): `floatArrayScaleAsync` awaits to **0** when
+`yona_gpu_vulkan_ctx_init` + f64 pipeline succeed (built with `YONA_HAS_VULKAN`, host
+has `shaderFloat64`). On Windows, **`yonac`** links **`vulkan-1.lib`** from the path CMake recorded when **`find_package(Vulkan)`** succeeded, with **`VULKAN_SDK`** as a fallback (see `INSTALL.md`).
+The **`Std\GPU` native wrappers** call **`ctx_init`** before
+submit so Yona programs need not use the C-only API. The CPU vs Vulkan **env**
+columns mainly affect IntArray columnar paths; for this float row both runs use
+`gpu_stub` when the loader is available. Hosts without suitable hardware will
+fail the golden output check (expected `0`).
 
 ## Supported Data
 

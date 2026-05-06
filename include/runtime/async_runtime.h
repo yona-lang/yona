@@ -19,6 +19,10 @@ int64_t yona_rt_async_await(yona_promise_t* promise);
 
 void yona_rt_group_register(yona_task_group_t* g, yona_promise_t* p);
 
+/* Structured concurrency — non-zero means `yona_rt_group_cancel` was called. Used by
+ * channel I/O and (optionally) GPU fence completion to complete with a cancel error. */
+int yona_rt_group_is_cancelled(yona_task_group_t* g);
+
 /* Codegen tests: `extern native` — promise already completed before await. */
 yona_promise_t* yona_test_native_promise_immediate(int64_t x);
 

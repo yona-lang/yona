@@ -112,6 +112,16 @@ int64_t yona_Std_GPU_raw__vulkanAvailable(int64_t unused) {
     return yona_gpu_vulkan_loader_available() ? 1 : 0;
 }
 
+int64_t yona_Std_GPU_raw__vulkanTimelineSemaphore(int64_t unused) {
+    (void)unused;
+#if YONA_GPU_VULKAN_ENABLED
+    if (yona_gpu_vulkan_device_try_init() != 0) return 0;
+    return yona_gpu_vulkan_device_timeline_semaphore() ? 1 : 0;
+#else
+    return 0;
+#endif
+}
+
 int64_t yona_Std_GPU_raw__hasSimd(int64_t unused) {
     (void)unused;
     return yona_gpu_cpu_has_simd() ? 1 : 0;
@@ -225,6 +235,10 @@ int64_t yona_Std_GPU__hasGpu(void) {
 
 int64_t yona_Std_GPU__vulkanAvailable(void) {
     return yona_Std_GPU_raw__vulkanAvailable(0);
+}
+
+int64_t yona_Std_GPU__vulkanTimelineSemaphore(void) {
+    return yona_Std_GPU_raw__vulkanTimelineSemaphore(0);
 }
 
 int64_t yona_Std_GPU__hasSimd(void) {
