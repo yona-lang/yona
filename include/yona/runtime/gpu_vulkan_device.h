@@ -38,7 +38,7 @@ int yona_gpu_vulkan_device_shader_int64(void);
 /**
  * 1 if the selected physical device exposes timeline semaphores: Vulkan 1.2+
  * reports timelineSemaphore via vkGetPhysicalDeviceFeatures2/KHR with
- * VkPhysicalDeviceVulkan12Features, **or** the device enumerates extension
+ * VkPhysicalDeviceVulkan12Features, or the device enumerates extension
  * VK_KHR_timeline_semaphore (covers many 1.0/1.1 stacks where the capability is extension-only).
  * Always 0 without a Vulkan build or before successful try_init. Not yet used for submission
  * (per-fence waits today); exposed for diagnostics and future timeline batching.
