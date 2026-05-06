@@ -185,8 +185,10 @@ profile exports Vulkan build variables.
 Optional doctests (`test/gpu_stub_test.cpp`): set **`YONA_GPU_TEST_DISPATCH=1`**
 (nop dispatch), **`YONA_GPU_TEST_F64_MUL2=1`** / **`YONA_GPU_TEST_F64_MUL2_ASYNC=1`**
 (f64 scale kernel, sync or promise), or **`YONA_GPU_TEST_F64_GROUP_CANCEL=1`**
-(`yona_rt_group_cancel` → promise result **-887** after the fence; GPU work may
-still finish). All require a successful `yona_gpu_vulkan_ctx_init` and
+(`yona_rt_group_cancel` → promise result **-887**: after a successful fence wait
+the buffer may still be updated; if the group is already cancelled before **`vkQueueSubmit`**,
+the path skips submit and completes **-887** without dispatch). All require a successful
+`yona_gpu_vulkan_ctx_init` and
 `shaderFloat64` where noted; **-20** skips when doubles are unsupported.
 
 ## Vulkan limitations (Windows / Linux)
@@ -194,14 +196,13 @@ still finish). All require a successful `yona_gpu_vulkan_ctx_init` and
 Intentional guardrails and **known gaps** for the baseline Vulkan stack (excluding
 Apple/MoltenVK — see **`docs/gpu-vulkan-implementation-plan.md`** §11).
 
-- **`vulkanTimelineSemaphore`:** Set only when **`apiVersion ≥ Vulkan 1.2`** and
-  **`vkGetPhysicalDeviceFeatures2`** (**or `…KHR`**) reports
-  **`VkPhysicalDeviceVulkan12Features::timelineSemaphore`**. Drivers that expose
-  timeline semaphores **only** through **`VK_KHR_timeline_semaphore`** on Vulkan **1.0 /
-  1.1** (without this 1.2 feature probe succeeding) currently show **`false`** even if
-  the extension exists. **Submission** still uses **`VkFence`** per queue submit
-  (`gpu_vulkan_ops.c`, async float path in `gpu_stub.c`); **`vkQueueSubmit2`** /
-  **`VK_KHR_synchronization2`** are **not** wired yet.
+- **`vulkanTimelineSemaphore`:** **`true`** when **`vkGetPhysicalDeviceFeatures2`**
+  (**or `…KHR`**) reports **`VkPhysicalDeviceVulkan12Features::timelineSemaphore`**
+  on a Vulkan **1.2+** physical device, **or** when **`VK_KHR_timeline_semaphore`**
+  appears in **`vkEnumerateDeviceExtensionProperties`** for the chosen device (covers
+  **1.0 / 1.1** stacks that expose timeline semaphores only as an extension). **Submission**
+  still uses **`VkFence`** per queue submit (`gpu_vulkan_ops.c`, async float path in
+  `gpu_stub.c`); **`vkQueueSubmit2`** / **`VK_KHR_synchronization2`** are **not** wired yet.
 - **`vulkanLastNote`:** Single shared buffer (**not** a structured log); useful for logs
   and debugging, **not** a substitute for a typed **`perform Gpu`** / capability effect
   (see backlog in `docs/todo-list.md`).
@@ -223,9 +224,9 @@ omitted here.
 | Topic | Status |
 |-------|--------|
 | **`mapGPU` / `reduceGPU` (user kernels from Yona functions)** | Not implemented — needs closure → SPIR-V or embedded op table, typing, and Perceus/lifetime rules for device buffers. |
-| **Timeline semaphores / `VK_KHR_synchronization2`** | **Partial:** Vulkan 1.2 **`timelineSemaphore`** probed at device init (**`Std\GPU.vulkanTimelineSemaphore`**). Submit still **fences-only** (no **`vkQueueSubmit2`**). Underserved stacks: **§ Vulkan limitations** (*1.1-only KHR timeline*). |
+| **Timeline semaphores / `VK_KHR_synchronization2`** | **Partial:** **`Std\GPU.vulkanTimelineSemaphore`** mirrors core (1.2+) feature probe **or** **`VK_KHR_timeline_semaphore`** in the device extension list. Submit still **fences-only** (no **`vkQueueSubmit2`** / synchronization2 graph). |
 | **`vkDeviceWaitIdle` / `vkQueueWaitIdle` on hot paths** | **Avoided** for f64 async (per-fence wait only). **`vkDeviceWaitIdle`** remains on **intentional** `yona_gpu_vulkan_ctx_shutdown` (see `gpu_stub.c`). Int column path: `gpu_vulkan_ops.c` uses **fences**, not queue idle. |
-| **Task-group cancel + GPU promises** | **Partial:** if `yona_rt_group_cancel` ran before the fence thread completes, the promise completes with **-887** (error bit set); submission is not aborted mid-flight. |
+| **Task-group cancel + GPU promises** | **Partial:** **-887** when the group is cancelled before the fence waiter finishes; if already cancelled before **`vkQueueSubmit`**, async float scale skips submit. In-flight GPU work is not aborted after submit. |
 | **Pinned host buffers + CPU↔GPU channels** | Not implemented. |
 | **Multi-stage command-buffer graphs (map→map→reduce)** | Not implemented (single-kernel or staged int filter pipeline only). |
 | **GPU capability / effect for device-lost and OOM** | **Partial:** `vulkanLastNote` records `VkResult` text (OOM / device lost hints), async fence waiter failures, synchronous float dispatch, calloc-after-submit; no typed GPU effect yet. |

@@ -1117,6 +1117,18 @@ yona_promise_t* yona_gpu_vulkan_float64_buffer_scale_async(double* elements, uin
 
     YONA_GPU_STUB_VK_ASYNC(vkEndCommandBuffer(cmd), "vkEndCommandBuffer (async f64)", -40);
 
+    if (group != NULL && yona_rt_group_is_cancelled(group)) {
+        vkFreeCommandBuffers(g_dev, g_cmd_pool, 1, &cmd);
+        vkDestroyFence(g_dev, fence, NULL);
+        vkDestroyDescriptorPool(g_dev, dpool, NULL);
+        vkUnmapMemory(g_dev, mem);
+        vkFreeMemory(g_dev, mem, NULL);
+        vkDestroyBuffer(g_dev, buf, NULL);
+        gpu_stub_mtx_unlock(&g_mu);
+        yona_rt_promise_complete(p, -887, 1, group);
+        return p;
+    }
+
     VkSubmitInfo si = {0};
     si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     si.commandBufferCount = 1;

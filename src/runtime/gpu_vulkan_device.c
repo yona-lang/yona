@@ -265,24 +265,46 @@ static void yona_vk_probe_timeline_sem_supported(void) {
     yona_vk_timeline_sem_supported = 0;
     if (yona_vk_phys == VK_NULL_HANDLE || yona_vk_instance == VK_NULL_HANDLE) return;
 
-    PFN_vkGetPhysicalDeviceFeatures2 pfn = (PFN_vkGetPhysicalDeviceFeatures2)(void*)
+    PFN_vkGetPhysicalDeviceFeatures2 pfn_gpdf2 = (PFN_vkGetPhysicalDeviceFeatures2)(void*)
         yona_pfn_vkGetInstanceProcAddr(yona_vk_instance, "vkGetPhysicalDeviceFeatures2");
-    if (!pfn)
-        pfn = (PFN_vkGetPhysicalDeviceFeatures2)(void*)yona_pfn_vkGetInstanceProcAddr(
+    if (!pfn_gpdf2)
+        pfn_gpdf2 = (PFN_vkGetPhysicalDeviceFeatures2)(void*)yona_pfn_vkGetInstanceProcAddr(
             yona_vk_instance, "vkGetPhysicalDeviceFeatures2KHR");
-    if (!pfn) return;
-
     VkPhysicalDeviceProperties props;
     yona_pfn_vkGetPhysicalDeviceProperties(yona_vk_phys, &props);
-    if (props.apiVersion < VK_API_VERSION_1_2) return;
+    if (pfn_gpdf2 && props.apiVersion >= VK_API_VERSION_1_2) {
+        VkPhysicalDeviceVulkan12Features feats12 = {0};
+        feats12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        VkPhysicalDeviceFeatures2 feats2 = {0};
+        feats2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        feats2.pNext = &feats12;
+        pfn_gpdf2(yona_vk_phys, &feats2);
+        if (feats12.timelineSemaphore == VK_TRUE) {
+            yona_vk_timeline_sem_supported = 1;
+            return;
+        }
+    }
 
-    VkPhysicalDeviceVulkan12Features feats12 = {0};
-    feats12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    VkPhysicalDeviceFeatures2 feats2 = {0};
-    feats2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    feats2.pNext = &feats12;
-    pfn(yona_vk_phys, &feats2);
-    if (feats12.timelineSemaphore == VK_TRUE) yona_vk_timeline_sem_supported = 1;
+    PFN_vkEnumerateDeviceExtensionProperties pfn_enum =
+        (PFN_vkEnumerateDeviceExtensionProperties)(void*)yona_pfn_vkGetInstanceProcAddr(
+            yona_vk_instance, "vkEnumerateDeviceExtensionProperties");
+    if (!pfn_enum) return;
+
+    uint32_t n = 0;
+    VkResult rr = pfn_enum(yona_vk_phys, NULL, &n, NULL);
+    if (rr != VK_SUCCESS || n == 0) return;
+    VkExtensionProperties* exts = (VkExtensionProperties*)calloc((size_t)n, sizeof(VkExtensionProperties));
+    if (!exts) return;
+    rr = pfn_enum(yona_vk_phys, NULL, &n, exts);
+    if (rr == VK_SUCCESS) {
+        for (uint32_t i = 0; i < n; i++) {
+            if (strcmp(exts[i].extensionName, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) == 0) {
+                yona_vk_timeline_sem_supported = 1;
+                break;
+            }
+        }
+    }
+    free(exts);
 }
 
 static int yona_vk_do_try_init_unlocked(void) {

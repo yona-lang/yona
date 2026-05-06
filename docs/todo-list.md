@@ -45,10 +45,9 @@ smaller than coroutine rewrite), **`&T` / borrow types** — design
 slice (see item below), **LLVM coroutine plan** only after cancellation
 semantics are frozen. **GPU:** [design-gpu-async.md](./design-gpu-async.md);
 **`Std\GPU`** columnar + async float + Vulkan discovery are **shipped**; roadmap /
-limitations: **`docs/gpu-architecture.md`**. **Next (non-macOS):** **`VK_KHR_timeline_semaphore`**
-probe for 1.0/1.1 drivers, **`vkQueueSubmit2`** / **`VK_KHR_synchronization2`**, **`mapGPU` /
+limitations: **`docs/gpu-architecture.md`**. **Next (non-macOS):** **`vkQueueSubmit2`** / **`VK_KHR_synchronization2`**, **`mapGPU` /
 `reduceGPU`**, pinned buffers, multi-stage command graphs, typed GPU capability effect,
-cancellation before submit, then transparent lowering (*benchmark gate —*
+cancellation before submit (skip **`vkQueueSubmit`** when cancelled), then transparent lowering (*benchmark gate —*
 `gpu-transparent-lowering.md`). Product: **LSP** or **package manager** if adoption beats
 runtime research.
 
@@ -137,16 +136,17 @@ eligibility + effect “schedule” story). **Design:**
   `lib/Std/GPU.yonai` — columnar **`Buffer`**, **`mapAdd`** / **`mapMul`** /
   **`reduceSum`** / **`filterGreaterThan`**, discovery (**`backendName`**,
   **`vulkanStatus`**, **`hasGpu`**, **`vulkanAvailable`**, **`vulkanTimelineSemaphore`**
-  (Vulkan 1.2 feature probe only — see **`docs/gpu-architecture.md`** *Vulkan limitations*),
-  **`available`**, **`apiVersion`**, **`physicalDeviceCount`**, …), **`floatArray*Async`**
+  (Vulkan 1.2 feature chain **or** **`VK_KHR_timeline_semaphore`** extension list — **`docs/gpu-architecture.md`**),
+  **`available`**, **`apiVersion`**,   **`physicalDeviceCount`**, …), **`floatArray*Async`**
   (`extern native`, fence-thread completion in **`gpu_stub.c`**), extended **`vulkanLastNote`**
   (float + int failure hints), **`yonac`** Windows Vulkan import-lib path from CMake (**`cmake/yona_vulkan_link_cfg.h.in`**), crossover benches + **`gpu_bench_meta.py`** (**`let`** sizing),
-  **`--emit-accelerator-report`** (discovery ops included). Implementation refs:
+  **`--emit-accelerator-report`** (discovery ops included). Timeline capability: Vulkan 1.2 feature
+  probe **or** **`VK_KHR_timeline_semaphore`** in extension list (**`gpu_vulkan_device.c`**).
+  Implementation refs:
   **`gpu_vulkan_device.c`** / **`gpu_vulkan_ops.c`**, **`gpu_stub.c`**, **`gpu_cpu.c`**.
   **Still open:** **`mapGPU`** / **`reduceGPU`**, **`vkQueueSubmit2`** + timeline semaphore
-  **usage** (not just **`vulkanTimelineSemaphore`** probe); extension-only timeline detection
-  on Vulkan **< 1.2**; **`VK_KHR_synchronization2`**; tighter task-group cancel (skip submit if
-  already cancelled); drop any remaining idle waits from hot paths; pinned host buffers /
+  **usage** (not just **`vulkanTimelineSemaphore`** probe); **`VK_KHR_synchronization2`**;
+  tighter task-group policies (abort in-flight submits where drivers allow — not done); drop any remaining idle waits from hot paths; pinned host buffers /
   channels; multi-stage Vulkan graphs; typed GPU effect for device lost / OOM; transparent lowering
   (*benchmark corpus* gate). Vulkan specifics: regenerate SPIR-V via **`scripts/gen_gpu_*_spv.sh`**.
 - [ ] **Transparent GPU lowering** (future). Compiler automatically
@@ -160,11 +160,11 @@ eligibility + effect “schedule” story). **Design:**
   waiter thread + **`extern native`** + `yona_rt_promise_complete` already avoid
   parking **pool** workers on GPU; **`gpu_stub`** maps **task-group cancel**
   after fence success to promise result **-887** (opt-in doctest
-  **`YONA_GPU_TEST_F64_GROUP_CANCEL=1`**). **Partial:** Vulkan 1.2 **`timelineSemaphore`**
-  capability probe + **`Std\GPU.vulkanTimelineSemaphore`** (**no** submit-path timeline waits yet).
-  Still need **timeline semaphore use** / **`VK_KHR_synchronization2`**, optional **io_uring /
-  reactor** integration, **extension-only** timeline detection on older API versions, and
-  **structured concurrency** policies (e.g. skip submit if cancelled before queue). Task threads
+  **`YONA_GPU_TEST_F64_GROUP_CANCEL=1`**) **and skips `vkQueueSubmit` when already cancelled**.
+  Vulkan **`vulkanTimelineSemaphore`** probes 1.2 core feature **and** **`VK_KHR_timeline_semaphore`**
+  extension (**no** submit-path timeline waits yet). Still need **timeline semaphore use** /
+  **`VK_KHR_synchronization2`**, optional **io_uring /
+  reactor** integration, **structured concurrency** policies for in-flight work. Task threads
   must never block on **`vkDeviceWaitIdle`** / **`vkQueueWaitIdle`** in the common path.
   Prerequisite: stable cancellation story for async (see coroutine item).
 - [ ] **Pinned host buffers + channels (CPU↔GPU pipeline)** — optional
@@ -245,8 +245,9 @@ eligibility + effect “schedule” story). **Design:**
 - [x] GPU Vulkan crossover tooling: `bench/run_gpu_compare.py` (hot + 10k/5k accelerators), `--json-report`, `bench/gpu_bench_meta.py`; Windows capture procedure in `docs/benchmark-results-windows.md` (*Std\GPU / Vulkan crossover*)
 - [x] `yonac --emit-accelerator-report` — JSON `yona.accelerator_diag.v1` for explicit `Std\GPU` sites (`report_kind`: `program` after typecheck; modules `module_ast` or **`--emit-accelerator-report-with-types`** → `module`); `include/AcceleratorDiag.h`, `typecheck_module_for_accelerator_report`, doctest in `codegen_test.cpp`
 - [x] Vulkan / `Std\GPU` ergonomics (recent): **`vulkanTimelineSemaphore`** + C
-  **`yona_gpu_vulkan_device_timeline_semaphore()`** (Vulkan 1.2 feature probe only —
-  limitations in **`docs/gpu-architecture.md`**); richer **`vulkanLastNote`** /
+  **`yona_gpu_vulkan_device_timeline_semaphore()`** (Vulkan 1.2 feature probe **and**
+  **`VK_KHR_timeline_semaphore`** enumeration — **`docs/gpu-architecture.md`** *Vulkan limitations*);
+  richer **`vulkanLastNote`** /
   **`gpu_stub`** **`VkResult`** reporting; **`AcceleratorDiag`** discovery exports;
   Windows **`yonac`** CMake-embedded **`vulkan-1.lib`** path (**`cmake/yona_vulkan_link_cfg.h.in`**);
   **`bench/gpu_bench_meta.py`** **`let x = N`** metadata + path fix

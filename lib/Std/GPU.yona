@@ -69,9 +69,9 @@ vulkanAvailable : Bool
 vulkanAvailable = raw_vulkanAvailable 0
 
 ## True when device init succeeded (see **`hasGpu`** / **`vulkanStatus`**) and the
-## selected physical device reports Vulkan 1.2 **`timelineSemaphore`** via
-## **`vkGetPhysicalDeviceFeatures2`** (see **`docs/gpu-architecture.md` § Vulkan limitations**:
-## 1.1-only **`VK_KHR_timeline_semaphore`** stacks are not detected yet). The runtime
+## probe finds timeline semaphores: Vulkan 1.2+ **`timelineSemaphore`** via **`vkGetPhysicalDeviceFeatures2`**
+## (Vulkan 12 feature chain), or **`VK_KHR_timeline_semaphore`** in the device's extension list
+## (Vulkan 1.0/1.1 stacks that expose the capability only as an extension). The runtime
 ## still completes work with per-submit **fences**, not timeline waits; this flag is
 ## diagnostics / future batching only.
 vulkanTimelineSemaphore : Bool
