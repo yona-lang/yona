@@ -1936,6 +1936,7 @@ const char* yona_Std_Encoding__htmlEscape(const char* s) {
 #include "yona/runtime/platform.h"
 
 /* yona_rt_io_await: platform/file_linux.c (io_uring) on Linux;
+ * platform/file_macos.c (kqueue) on macOS;
  * platform/file_windows.c (direct-result table) on Windows. */
 
 /* Resource cleanup for `with` expression. Closes file descriptors,

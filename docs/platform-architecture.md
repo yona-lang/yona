@@ -3,6 +3,7 @@
 ## Goals
 
 - **Linux**: io_uring–backed async file and network I/O (`file_linux.c`, `net_linux.c`), POSIX process APIs (`os_linux.c`).
+- **macOS**: kqueue–backed async file and network I/O (`kqueue_macos.c`, `file_macos.c`, `net_macos.c`), POSIX process APIs (`os_macos.c`). File submits run on a worker pool and wake `kq_await` through a kqueue pipe; sockets use `EVFILT_READ` / `EVFILT_WRITE`. Same `yona_platform_*` / `yona_rt_io_await` ABI as Linux.
 - **Windows**: Native Win32 and UCRT (`file_windows.c`, `os_windows.c`, `net_windows.c`). Socket and file submit paths integrate with `yona_rt_io_await` via IOCP-backed completion where appropriate, with direct-result IDs retained for ordering-sensitive operations.
 - **No pthread on Windows**: Async and channels live under `src/runtime/platform/` (`async_win32.c` / `channel_win32.c`) and are pulled in via `#include` from `compiled_runtime.c`.
 
@@ -11,6 +12,9 @@
 - `include/yona/runtime/platform.h` — portable `yona_platform_*` / process ABI.
 - `include/yona/runtime/uring.h` — Linux-only io_uring API + shared `io_context_t` layout.
 - `src/runtime/platform/uring_linux.c` — the single ring and `io_ctx` table (must not be header-static; file/net/os are separate TUs).
+- `include/yona/runtime/kqueue.h` — macOS kqueue API + the same `io_context_t` layout.
+- `src/runtime/platform/kqueue_macos.c` — the single kqueue, worker pool, and `io_ctx` table.
+- `include/yona/runtime/sjlj.h` — `yona_sjlj_setjmp` / `yona_sjlj_longjmp` (AArch64 inline asm; `__builtin_*` elsewhere).
 
 ## Frozen platform ABI (v1)
 
@@ -36,7 +40,7 @@ Policy:
 
 ## CMake selection
 
-- All `src/runtime/platform/*.c` are **removed** from the globbed library sources, then the correct platform TUs are **appended** per OS (`WIN32` vs non-Windows; Linux includes `uring_linux.c`).
+- All `src/runtime/platform/*.c` are **removed** from the globbed library sources, then the correct platform TUs are **appended** per OS (`WIN32` vs `APPLE` vs Linux; Linux includes `uring_linux.c`, macOS includes `kqueue_macos.c`).
 - Under `src/runtime/platform/`, the files `async_posix.c`, `async_win32.c`, `channel_posix.c`, and `channel_win32.c` are excluded from the library glob with the other platform `.c` sources because they are **included** from `compiled_runtime.c`, not compiled as separate TUs.
 - Windows links **`ws2_32`** for Winsock.
 

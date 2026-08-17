@@ -573,9 +573,13 @@ Codegen::CompiledFunction Codegen::compile_function(
     // instead of relying on caller's arg types (which may be wrong).
     std::vector<CType> annotated_ctypes;
     std::vector<std::string> annotated_adt_names;
+    CType annotated_ret = CType::INT;
+    bool has_annotated_ret = false;
     if (def.ast->type_signature.has_value()) {
         auto [ann_params, ann_ret] = uncurry_type_signature(*def.ast->type_signature);
         annotated_ctypes = ann_params;
+        annotated_ret = ann_ret;
+        has_annotated_ret = true;
         const types::Type* current_type = &*def.ast->type_signature;
         while (std::holds_alternative<std::shared_ptr<types::FunctionType>>(*current_type)) {
             auto ft = std::get<std::shared_ptr<types::FunctionType>>(*current_type);
@@ -759,6 +763,12 @@ Codegen::CompiledFunction Codegen::compile_function(
             ret_type = lt;
             preliminary_ret = ct;
         }
+    }
+    // Type annotations win over structural inference (e.g. `factor * x`
+    // is AST_MULTIPLY and infer_ret would otherwise leave i64).
+    if (has_annotated_ret) {
+        preliminary_ret = annotated_ret;
+        ret_type = llvm_type(annotated_ret);
     }
 
     auto fn_type = llvm::FunctionType::get(ret_type, param_types, false);
@@ -1100,9 +1110,13 @@ Codegen::CompiledFunction Codegen::compile_function(
             // Remove the function and recreate with correct return type.
             // Phase 3: the frame alloca lives in the old fn's entry block;
             // erasing the fn destroys it. Must nullptr before erase.
+            // Snapshot the LLVM type first: eraseFromParent() deletes the
+            // body instruction, so body_tv.val->getType() is a UAF (null
+            // on Darwin allocators; often still readable on Linux).
+            LType* actual_ret_ty = body_tv.val->getType();
             current_frame_alloca_ = nullptr;
             fn->eraseFromParent();
-            auto new_fn_type = llvm::FunctionType::get(body_tv.val->getType(), param_types, false);
+            auto new_fn_type = llvm::FunctionType::get(actual_ret_ty, param_types, false);
             fn = Function::Create(new_fn_type, Function::InternalLinkage, name, module_.get());
 
             // Re-attach debug info to the recreated function

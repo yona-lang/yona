@@ -90,6 +90,8 @@ inline std::string vulkan_runtime_cflags() {
 inline std::vector<std::string> platform_sources() {
 #ifdef _WIN32
     return {"file_windows.c", "net_windows.c", "os_windows.c"};
+#elif defined(__APPLE__)
+    return {"kqueue_macos.c", "file_macos.c", "net_macos.c", "os_macos.c"};
 #else
     return {"uring_linux.c", "file_linux.c", "net_linux.c", "os_linux.c"};
 #endif
@@ -120,6 +122,23 @@ inline bool compile_c_file(const std::filesystem::path& src, const std::filesyst
     return sh(cmd.str()) == 0;
 }
 
+/* True if any .c/.h under dir is newer than `than` (compiled_runtime.c #includes
+ * seq/hamt/async/…; platform TUs include yona/runtime/*.h). */
+inline bool runtime_tree_newer_than(const std::filesystem::path& dir,
+                                    const std::filesystem::file_time_type& than) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    if (!fs::exists(dir, ec)) return false;
+    for (fs::recursive_directory_iterator it(dir, ec), end; it != end; it.increment(ec)) {
+        if (ec) break;
+        if (!it->is_regular_file(ec)) continue;
+        const auto ext = it->path().extension();
+        if (ext != ".c" && ext != ".h") continue;
+        if (it->last_write_time(ec) > than) return true;
+    }
+    return false;
+}
+
 /* (Re)compile runtime + platform objects when sources are newer than outputs. */
 inline bool ensure_runtime_objects() {
     namespace fs = std::filesystem;
@@ -136,35 +155,11 @@ inline bool ensure_runtime_objects() {
 
     bool need = !fs::exists(cr_o);
     if (!need && fs::last_write_time(cr_src) > fs::last_write_time(cr_o)) need = true;
-    /* compiled_runtime.c #includes async_*.c / channel_*.c / seq.c / … — not only its own mtime. */
-    if (!need && fs::exists(cr_o)) {
-        static const char* embedded[] = {
-            "runtime/seq.c",
-            "runtime/hamt.c",
-            "runtime/exceptions.c",
-            "runtime/closures.c",
-            "runtime/gpu_stub.c",
-            "runtime/gpu_vulkan.c",
-            "runtime/gpu_vulkan_device.c",
-            "runtime/gpu_vulkan_compute.c",
-            "runtime/gpu_vulkan_ops.c",
-            "runtime/gpu_cpu.c",
-#ifdef _WIN32
-            "runtime/platform/async_win32.c",
-            "runtime/platform/channel_win32.c",
-#else
-            "runtime/platform/async_posix.c",
-            "runtime/platform/channel_posix.c",
-#endif
-        };
-        for (const char* rel : embedded) {
-            fs::path p = yona::test::src_dir() / rel;
-            if (!fs::exists(p)) continue;
-            if (fs::last_write_time(p) > fs::last_write_time(cr_o)) {
-                need = true;
-                break;
-            }
-        }
+    if (!need) {
+        const auto cr_t = fs::last_write_time(cr_o);
+        if (runtime_tree_newer_than(yona::test::src_dir() / "runtime", cr_t) ||
+            runtime_tree_newer_than(yona::test::repo_root() / "include" / "yona" / "runtime", cr_t))
+            need = true;
     }
     for (const auto& [ps, po] : plat) {
         if (!fs::exists(po) || fs::last_write_time(ps) > fs::last_write_time(po)) {
@@ -211,6 +206,9 @@ inline bool link_objs_to_exe(const std::vector<std::filesystem::path>& objs,
 #ifdef _WIN32
     /* lld-link (Clang's default Windows linker) requires an explicit subsystem. */
     cmd << " -lws2_32 -ldbghelp -Xlinker /SUBSYSTEM:CONSOLE";
+#elif defined(__APPLE__)
+    /* ELF treats undefined weak symbols as NULL; ld64 needs an explicit allow. */
+    cmd << " -lpthread -Wl,-U,_yona_regex_free_code";
 #else
     cmd << " -lm -lpthread -rdynamic";
 #endif
@@ -221,6 +219,16 @@ inline bool link_objs_to_exe(const std::vector<std::filesystem::path>& objs,
 
 inline std::filesystem::path regex_obj_path() {
     return scratch_root() / "yona_regex_test.o";
+}
+
+inline std::string pcre_cflags() {
+#ifdef __APPLE__
+    if (std::filesystem::exists("/opt/homebrew/include/pcre2.h"))
+        return " -I/opt/homebrew/include";
+    if (std::filesystem::exists("/usr/local/include/pcre2.h"))
+        return " -I/usr/local/include";
+#endif
+    return "";
 }
 
 inline bool ensure_regex_obj(std::filesystem::path& out_path) {
@@ -234,7 +242,7 @@ inline bool ensure_regex_obj(std::filesystem::path& out_path) {
     bool need = !fs::exists(out_path);
     if (!need && fs::last_write_time(regex_src) > fs::last_write_time(out_path)) need = true;
     if (!need) return true;
-    if (!compile_c_file(regex_src, out_path)) {
+    if (!compile_c_file(regex_src, out_path, pcre_cflags())) {
         out_path.clear();
         return false;
     }
@@ -242,6 +250,12 @@ inline bool ensure_regex_obj(std::filesystem::path& out_path) {
 }
 
 inline std::string pcre_link_flags() {
+#ifdef __APPLE__
+    if (std::filesystem::exists("/opt/homebrew/lib/libpcre2-8.dylib"))
+        return "-L/opt/homebrew/lib -lpcre2-8";
+    if (std::filesystem::exists("/usr/local/lib/libpcre2-8.dylib"))
+        return "-L/usr/local/lib -lpcre2-8";
+#endif
     return "-lpcre2-8";
 }
 
@@ -270,7 +284,7 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
             pos += to.size();
         }
     }
-#ifdef _WIN32
+#if !defined(__linux__)
     {
         const char* from = "/etc/os-release";
         const std::string to = path_for_yona_literal(base / "yona_stub_os_release.txt");
@@ -279,6 +293,8 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
             pos += to.size();
         }
     }
+#endif
+#if defined(_WIN32)
     /* cmd.exe: `;` is not a command separator like in sh; use `&&` between echo commands. */
     {
         const char* from = R"(spawn "echo line1; echo line2; echo line3")";

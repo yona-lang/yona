@@ -144,6 +144,8 @@ static string compile_and_run(const string& expr,
         lld_args.push_back(exe.string());
 #ifdef __APPLE__
         lld_args.push_back("-lSystem");
+        lld_args.push_back("-U");
+        lld_args.push_back("_yona_regex_free_code");
 #else
         lld_args.push_back("-lm");
         lld_args.push_back("-lpthread");
@@ -171,10 +173,12 @@ static string compile_and_run(const string& expr,
         }
         for (const auto& ex : rt_extra_objs) link << " " << q(fs::path(ex));
         link << " -o " << q(exe);
-#ifndef _WIN32
-        link << " -lm -lpthread -rdynamic";
-#else
+#ifdef _WIN32
         link << " -lws2_32 -ldbghelp";
+#elif defined(__APPLE__)
+        link << " -lpthread -Wl,-U,_yona_regex_free_code";
+#else
+        link << " -lm -lpthread -rdynamic";
 #endif
         link << err_null();
         if (system(link.str().c_str()) != 0) return "Link error";

@@ -9,6 +9,7 @@
 #include "analysis/BorrowEscapeAnalysis.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InlineAsm.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Type.h>
 #include <llvm/BinaryFormat/Dwarf.h>
@@ -1454,31 +1455,51 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     // SJLJ try-entry. We deliberately bypass the C runtime's setjmp/longjmp:
     // on Windows MSVC, setjmp records SEH unwind state and longjmp walks the
     // SEH chain — fatal when raise() longjmps from a worker frame back into
-    // codegen-emitted main, which has no SEH metadata. llvm.eh.sjlj.setjmp +
-    // __builtin_longjmp save only FP/SP/IP, so they work uniformly across
-    // platforms. The buffer (void*[5]) is owned by the runtime via try_push.
+    // codegen-emitted main, which has no SEH metadata. The buffer (void*[5])
+    // is owned by the runtime via try_push: slot 0 = FP, slot 1 = resume IP,
+    // slot 2 = SP. yona_rt_raise restores those and branches to slot 1.
     //
-    // Per llvm.eh.sjlj.setjmp's contract: store frameaddress in slot 0 and
-    // stacksave in slot 2 before calling the intrinsic; the intrinsic fills
-    // the resume IP in slot 1.
+    // On AArch64, llvm.eh.sjlj.setjmp lowers to a no-op (`mov w0, #0; ret`)
+    // and never writes the resume IP, so we store catch.entry's blockaddress
+    // ourselves. Other targets still use the intrinsic.
     auto jmp_buf_ptr = builder_->CreateCall(rt_.try_begin_, {}, "jmp.buf");
     auto* ptr_ty = llvm::PointerType::get(*context_, 0);
     auto* fa_fn = llvm::Intrinsic::getOrInsertDeclaration(
         module_.get(), llvm::Intrinsic::frameaddress, {ptr_ty});
     auto* ss_fn = llvm::Intrinsic::getOrInsertDeclaration(
         module_.get(), llvm::Intrinsic::stacksave, {ptr_ty});
-    auto* sj_fn = llvm::Intrinsic::getOrInsertDeclaration(
-        module_.get(), llvm::Intrinsic::eh_sjlj_setjmp);
     auto* fa = builder_->CreateCall(fa_fn, {ConstantInt::get(i32_ty, 0)}, "sjlj.fp");
     builder_->CreateStore(fa, jmp_buf_ptr);
     auto* sp = builder_->CreateCall(ss_fn, {}, "sjlj.sp");
     auto* sp_slot = builder_->CreateGEP(ptr_ty, jmp_buf_ptr,
                                         ConstantInt::get(i32_ty, 2), "sjlj.sp.slot");
     builder_->CreateStore(sp, sp_slot);
-    auto try_result = builder_->CreateCall(sj_fn, {jmp_buf_ptr}, "try.setjmp");
-    // The function containing eh.sjlj.setjmp must not be inlined, otherwise
-    // the saved frame/stack pointers would be invalidated on longjmp.
     fn->addFnAttr(llvm::Attribute::NoInline);
+#if defined(__aarch64__)
+    // Match include/yona/runtime/sjlj.h — Clang rejects __builtin_setjmp here
+    // and llvm.eh.sjlj.setjmp is a no-op on AArch64 Darwin.
+    auto* sj_ty = llvm::FunctionType::get(i32_ty, {ptr_ty}, false);
+    auto* sj_asm = llvm::InlineAsm::get(
+        sj_ty,
+        "str x29, [$1]\n\t"
+        "adr x2, 1f\n\t"
+        "str x2, [$1, #8]\n\t"
+        "mov x2, sp\n\t"
+        "str x2, [$1, #16]\n\t"
+        "mov ${0:w}, wzr\n\t"
+        "b 2f\n\t"
+        "1:\n\t"
+        "mov ${0:w}, #1\n\t"
+        "2:",
+        "=&r,r,~{x2},~{memory}",
+        true);
+    auto* try_result = builder_->CreateCall(sj_asm, {jmp_buf_ptr}, "try.setjmp");
+    llvm::cast<llvm::CallInst>(try_result)->setCanReturnTwice();
+#else
+    auto* sj_fn = llvm::Intrinsic::getOrInsertDeclaration(
+        module_.get(), llvm::Intrinsic::eh_sjlj_setjmp);
+    auto try_result = builder_->CreateCall(sj_fn, {jmp_buf_ptr}, "try.setjmp");
+#endif
     auto is_exc = builder_->CreateICmpNE(try_result, ConstantInt::get(i32_ty, 0));
     builder_->CreateCondBr(is_exc, catch_bb, try_bb);
 

@@ -60,7 +60,7 @@ Both reads happen concurrently. The compiler handles the rest.
 |----|------------|---------------------------|-------|
 | Linux | io_uring submit + completion | `src/runtime/platform/file_linux.c` | Native submit-and-return for file/net operations. |
 | Windows | IOCP submit + `io_await` completion (with direct-result fallback where ordering-sensitive) | `src/runtime/platform/file_windows.c` | `Std\Net` data/control paths run on overlapped Winsock + IOCP; file submit APIs preserve Linux-compatible semantics with direct-result IDs where needed. |
-| macOS | Pending (kqueue phase) | N/A (planned) | Target is kqueue/aio parity with Linux/Windows ABI. |
+| macOS | kqueue submit + completion (file workers + socket readiness) | `src/runtime/platform/file_macos.c` | Same submit-and-return IDs as Linux; `kq_await` in `kqueue_macos.c`. |
 
 ### Auto-Await
 

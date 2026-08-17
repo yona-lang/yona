@@ -9,4 +9,6 @@ set(CMAKE_SHARED_LINKER_FLAGS "-L/opt/homebrew/opt/llvm/lib -Wl,-rpath,/opt/home
 
 # Use CommandLineTools SDK instead of Xcode SDK to avoid header conflicts
 set(CMAKE_OSX_SYSROOT "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk" CACHE PATH "")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "")
+# Match the active Command Line Tools SDK (MacOSX.sdk → 26+/27+).
+# A stale 15.0 target made LLD warn on every Homebrew LLVM object (built for 26).
+set(CMAKE_OSX_DEPLOYMENT_TARGET "" CACHE STRING "")

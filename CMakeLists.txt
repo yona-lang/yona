@@ -175,7 +175,8 @@ list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_compute\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_ops\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_cpu\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_stub\\.c$")
-# Platform layer: OS TUs + async/channel sources (#included from compiled_runtime.c only).
+# Platform layer: OS TUs (Linux io_uring / macOS kqueue / Windows IOCP)
+# + async/channel sources (#included from compiled_runtime.c only).
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/platform/.*\\.c$")
 set(YONA_PLATFORM_RUNTIME_SOURCES)
 if(WIN32)
@@ -183,6 +184,13 @@ if(WIN32)
 		"${PROJECT_SOURCE_DIR}/src/runtime/platform/file_windows.c"
 		"${PROJECT_SOURCE_DIR}/src/runtime/platform/os_windows.c"
 		"${PROJECT_SOURCE_DIR}/src/runtime/platform/net_windows.c"
+	)
+elseif(APPLE)
+	list(APPEND YONA_PLATFORM_RUNTIME_SOURCES
+		"${PROJECT_SOURCE_DIR}/src/runtime/platform/kqueue_macos.c"
+		"${PROJECT_SOURCE_DIR}/src/runtime/platform/file_macos.c"
+		"${PROJECT_SOURCE_DIR}/src/runtime/platform/os_macos.c"
+		"${PROJECT_SOURCE_DIR}/src/runtime/platform/net_macos.c"
 	)
 else()
 	list(APPEND YONA_PLATFORM_RUNTIME_SOURCES

@@ -9,6 +9,7 @@
  * IORING_OP_ASYNC_CANCEL). Error propagated to parent via group_await_all.
  */
 
+#include "yona/runtime/sjlj.h"
 #include <pthread.h>
 #include <unistd.h>
 
@@ -322,10 +323,10 @@ static void* yona_pool_worker(void* unused) {
             continue;
         }
 
-        /* Execute with error capture via __builtin_setjmp (matches yona_rt_raise's
-         * __builtin_longjmp; see exceptions.c for the SJLJ buffer rationale). */
+        /* Execute with error capture via yona_sjlj_setjmp (matches yona_rt_raise;
+         * see exceptions.c for the SJLJ buffer rationale). */
         void* jmp = yona_rt_try_push();
-        if (__builtin_setjmp((void**)jmp) == 0) {
+        if (yona_sjlj_setjmp(jmp) == 0) {
             int64_t result = task->thunk ? task->thunk() : task->fn(task->arg);
             yona_rt_try_end();
             fulfill_promise(task, result, 0);
