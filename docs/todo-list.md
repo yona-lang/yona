@@ -49,8 +49,11 @@
 
 Program of record: issues on `yona-lang/yonac-llvm`. Execution plan:
 [2026-08-17-next-plan-of-action.md](./superpowers/plans/2026-08-17-next-plan-of-action.md).
-Do not start CTE (#4) or a full typed-core API (#7) until the audit (#3) and
-effect-row story (#8) are honest about what already works.
+Formal specification (Rocq, parallel research track):
+[2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md)
+— see § Formal specification below. Do not start CTE (#4) or a full typed-core
+API (#7) until the audit (#3) and effect-row story (#8) are honest about what
+already works.
 
 - [ ] **[#3](https://github.com/yona-lang/yonac-llvm/issues/3) Type-system status audit** — deliver `docs/type-system-status.md` (Parser / AST / Typechecker / Codegen / `.yonai` / Tests × `implemented` | `partial` | `design-only` | `missing`) for effects, effect rows, linear types, refinements, row polymorphism, `@borrow` / `&T`, GENFN / borrow metadata, exhaustiveness / `-Wunmatched-adt`. Evidence links required; no feature work in this item. **Do first.**
 - [ ] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference +** `.yonai` **propagation** — after #3. Infer, normalize, write/restore rows, check call sites. Dedicated plan before coding.
@@ -61,6 +64,32 @@ effect-row story (#8) are honest about what already works.
 
 Default series: `#3 → #8 → #5 → #7 → #4`, with **#6** beside #8 after the audit.
 
+### Formal specification (Rocq)
+
+Master plan:
+[2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
+Parallel to §4 compiler work: formalize Yona-Core in Rocq, prove soundness,
+extract a verified checker, differentially test it against `yonac` (via the
+#7 typed-core dump). Phase 4 modules (rows, effects, async, traits,
+refinements, linearity) follow the #3 audit. Phase 6 (Iris / Perceus RC) is
+opt-in research.
+
+- [ ] **Phase 0** — `formal/` dune+opam skeleton, Rocq 9.2 pin, CI job, `docs/formal-spec.md`
+- [ ] **Phase 1** — Yona-Core syntax / semantics / typing; progress + preservation
+- [ ] **Phase 2** — verified unification + Algorithm W; soundness / completeness / principal types
+- [ ] **Phase 3** — extracted checker + `yonac --emit-typed-core` + differential harness (feeds #7)
+- [ ] **Phase 4** — extension modules: Rows, Effects (#8), Async, Traits, Refine, Linear
+- [ ] **Phase 5** — Alectryon docs in `docs/formal/` + status headers on feature docs (feeds #3)
+- [ ] **Phase 6** — Iris Perceus RC runtime proofs ([memory-management.md](./memory-management.md))
+
+Related docs: [type-checker-design.md](./type-checker-design.md),
+[type-system-plan.md](./type-system-plan.md),
+[effects.md](./effects.md),
+[refinement-types.md](./refinement-types.md),
+[linear-types.md](./linear-types.md),
+[row-polymorphism.md](./row-polymorphism.md),
+[design-borrow-types.md](./design-borrow-types.md).
+
 ### Suggested next steps (rolling)
 
 - [x] **yonac module files with** `##` **preamble** — `is_module_source` in
@@ -69,7 +98,8 @@ Default series: `#3 → #8 → #5 → #7 → #4`, with **#6** beside #8 after th
 - [x] **Phase 0 CI bugs** — flaky `binary_seek` / `binary_write_read` and
   `net_runtime_test` TCP SIGSEGV (see Bugs).
 - [ ] **Next language work:** type-system audit (#3), then effect rows (#8).
-  See §4 above.
+  See §4 above. Formal spec track (does not block #3): Phase 0 of
+  [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
 
 High leverage after the audit: `&T` **/ borrow types**
 ([design-borrow-types.md](./design-borrow-types.md)), **supervisors-as-handlers**
@@ -329,6 +359,9 @@ eligibility + effect “schedule” story). **Design:**
 - Distribution assumption: normal `yonac` usage should not require an external C compiler;
 packaged runtime artifacts are the default path. System C compiler use is
 treated as an explicit advanced/fallback mode.
+- Formal specification program of record:
+  [docs/superpowers/plans/2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md)
+  (Rocq theories under `formal/` once Phase 0 lands).
 - Process hygiene: update this todo list after each implementation round.
 - Keep this file focused on actionable open work and short milestone summaries.
 - `ctest` for `doctest_tests` sets `YONA_COMPILE_GPU_VULKAN=0` so unit tests do
