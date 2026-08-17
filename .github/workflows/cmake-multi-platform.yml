@@ -85,49 +85,29 @@ jobs:
 
     - name: Test
       if: success()
-      run: ctest --test-dir "out/build/${{ matrix.build_dir }}" --output-on-failure --output-junit test-results.xml
+      run: ctest --test-dir "out/build/${{ matrix.build_dir }}" --output-on-failure --output-junit "${{ github.workspace }}/test-results.xml"
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ matrix.name }}
-        path: |
-          **/test-results.xml
+        path: test-results.xml
+        if-no-files-found: ignore
 
     - name: Parse test results
       if: always()
       shell: bash
       run: |
-        TEST_FILE="$(find . -name test-results.xml -type f | head -n 1)"
-        if [ ! -f "$TEST_FILE" ]; then
-          echo "⚠️ No test results found for ${{ matrix.name }}" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
-        fi
-        TOTAL="$(grep -o 'tests="[0-9]*"' "$TEST_FILE" | sed 's/tests="//;s/"//g' | head -n 1)"
-        FAILURES="$(grep -o 'failures="[0-9]*"' "$TEST_FILE" | sed 's/failures="//;s/"//g' | head -n 1)"
-        ERRORS="$(grep -o 'errors="[0-9]*"' "$TEST_FILE" | sed 's/errors="//;s/"//g' | head -n 1)"
-        TOTAL="${TOTAL:-0}"
-        FAILURES="${FAILURES:-0}"
-        ERRORS="${ERRORS:-0}"
-        PASSED="$((TOTAL - FAILURES - ERRORS))"
-        {
-          echo "### Test Results for ${{ matrix.name }}"
-          echo ""
-          echo "| Status | Count |"
-          echo "|--------|-------|"
-          echo "| ✅ Passed | $PASSED |"
-          echo "| ❌ Failed | $FAILURES |"
-          echo "| 🔥 Errors | $ERRORS |"
-          echo "| 📊 Total | $TOTAL |"
-        } >> "$GITHUB_STEP_SUMMARY"
+        PY="$(command -v python3 || command -v python)"
+        "$PY" scripts/ci/summarize-junit.py --title "${{ matrix.name }}" test-results.xml
 
     - name: Test report
       uses: dorny/test-reporter@v1
       if: always()
       with:
         name: Tests - ${{ matrix.name }}
-        path: '**/test-results.xml'
+        path: test-results.xml
         reporter: java-junit
         fail-on-error: 'false'
         fail-on-empty: 'false'
@@ -138,6 +118,8 @@ jobs:
     runs-on: ubuntu-26.04
     if: always()
     steps:
+    - uses: actions/checkout@v4
+
     - name: Download all test results
       uses: actions/download-artifact@v4
       with:
@@ -145,38 +127,13 @@ jobs:
 
     - name: Create test summary
       run: |
-        echo "# 📊 Test Results Summary" >> "$GITHUB_STEP_SUMMARY"
-        echo "" >> "$GITHUB_STEP_SUMMARY"
-        echo "| Platform | Total | ✅ Passed | ❌ Failed | 🔥 Errors | Status |" >> "$GITHUB_STEP_SUMMARY"
-        echo "|----------|-------|-----------|-----------|-----------|--------|" >> "$GITHUB_STEP_SUMMARY"
-
-        TOTAL_ALL=0
-        PASSED_ALL=0
-        FAILED_ALL=0
-        ERRORS_ALL=0
-
+        files=()
         for dir in test-results-*; do
-          [ -d "$dir" ] || continue
-          PLATFORM="${dir#test-results-}"
-          file="$(find "$dir" -name test-results.xml -type f | head -n 1)"
-          [ -f "$file" ] || continue
-          TOTAL="$(grep -o 'tests="[0-9]*"' "$file" | sed 's/tests="//;s/"//g' | head -n 1)"
-          FAILURES="$(grep -o 'failures="[0-9]*"' "$file" | sed 's/failures="//;s/"//g' | head -n 1)"
-          ERRORS="$(grep -o 'errors="[0-9]*"' "$file" | sed 's/errors="//;s/"//g' | head -n 1)"
-          TOTAL="${TOTAL:-0}"
-          FAILURES="${FAILURES:-0}"
-          ERRORS="${ERRORS:-0}"
-          PASSED="$((TOTAL - FAILURES - ERRORS))"
-          TOTAL_ALL="$((TOTAL_ALL + TOTAL))"
-          PASSED_ALL="$((PASSED_ALL + PASSED))"
-          FAILED_ALL="$((FAILED_ALL + FAILURES))"
-          ERRORS_ALL="$((ERRORS_ALL + ERRORS))"
-          if [ "$FAILURES" -eq 0 ] && [ "$ERRORS" -eq 0 ]; then STATUS="✅"; else STATUS="❌"; fi
-          echo "| $PLATFORM | $TOTAL | $PASSED | $FAILURES | $ERRORS | $STATUS |" >> "$GITHUB_STEP_SUMMARY"
+          [ -f "$dir/test-results.xml" ] || continue
+          files+=("$dir/test-results.xml")
         done
-
-        echo "| **TOTAL** | **$TOTAL_ALL** | **$PASSED_ALL** | **$FAILED_ALL** | **$ERRORS_ALL** | - |" >> "$GITHUB_STEP_SUMMARY"
-        if [ "$TOTAL_ALL" -gt 0 ]; then
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### 📈 Success Rate: $(( (PASSED_ALL * 100) / TOTAL_ALL ))%" >> "$GITHUB_STEP_SUMMARY"
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "No test-results.xml artifacts" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
         fi
+        python3 scripts/ci/summarize-junit.py --table "${files[@]}"

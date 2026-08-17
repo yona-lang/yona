@@ -248,10 +248,14 @@ int yona_rt_channel_wait_begin(void* channel, int op, int64_t count, int64_t cap
 		yona_channel_wait_kind = 2;
 		maybe_spawn_compensation_worker_unlocked();
 	}
+	/* See async_posix.c: opposite_waiters is this channel only. */
+	int other_blocked = yona_current_task_is_worker ? (yona_blocked_workers > 1)
+							: (yona_blocked_workers > 0);
 	int deadlock_candidate = (yona_running_workers == 0 &&
 				  yona_active_external_tasks == 0 &&
 				  yona_queued_tasks == 0 &&
-				  opposite_waiters <= 0);
+				  opposite_waiters <= 0 &&
+				  !other_blocked);
 	/* A condition-variable signal can make a waiter runnable before it has
 	 * returned from timedwait and restored its liveness state. Confirm the
 	 * quiescent state across one wait cycle before raising :Deadlock. */

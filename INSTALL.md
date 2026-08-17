@@ -158,15 +158,7 @@ ctest --preset unit-tests-windows
 ### Troubleshooting (Windows)
 
 - **`diaguids.lib` / DIA SDK / path under `...\Microsoft Visual Studio\2022\...` missing when linking**
-  Your `lib\LLVM*.lib` files were built expecting a different Visual Studio layout (year, SKU, and edition). **Installing VS 2026 does not replace those 2022 paths** if LLVM was built against **Visual Studio 2022**. You still need the **2022** C++ workload (and usually the **DIA SDK** under that install). Prefer the official **clang+llvm** Windows `.tar.xz` from the LLVM releases page, extracted to a clean prefix (e.g. `C:\LLVM`), with `LLVM_INSTALL_PREFIX` and `CC`/`CXX` set as above.
-
-  **Community vs Enterprise:** the error may mention `...\2022\Enterprise\DIA SDK\...` while you only have **VS 2022 Community** (same tree under `Community` instead of `Enterprise`). The file is usually present as `...\2022\Community\DIA SDK\lib\amd64\diaguids.lib`. Because LLVM’s libs reference the **Enterprise** path literally, create a **directory junction** once (requires **Administrator** Command Prompt or PowerShell, and `Enterprise` must not already exist):
-
-  ```text
-  mklink /J "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" "C:\Program Files\Microsoft Visual Studio\2022\Community"
-  ```
-
-  That makes any `...\2022\Enterprise\...` path resolve to the same files as your Community install. Alternatively install the **Debugging Tools for Windows** / DIA workload for the **exact** edition named in the linker error (still fails if the folder name is wrong, e.g. Enterprise vs Community).
+  Official `clang+llvm` import libraries often hardcode `...\2022\Enterprise\DIA SDK\lib\amd64\diaguids.lib`. CMake remaps that to a `diaguids.lib` discovered with `vswhere` (`cmake/YonaLlvmWindowsDia.cmake`) as long as some Visual Studio install still has the DIA SDK. If configure logs `DIA SDK diaguids.lib not found`, install the **DIA SDK** / C++ debugging components for your VS SKU. A junction from `Enterprise` to `Community` is only needed for tools that bypass CMake.
 
 - **`Policy CMP0167 is not known`**
   Use a newer CMake (3.30+), or use a checkout that guards optional policies for older CMake (supported on 3.29).
