@@ -87,6 +87,17 @@ else()
     message(STATUS "PCRE2 not found — Std\\Regex module will not be available")
 endif()
 
+# Homebrew / LunarG prefixes so find_package(Vulkan) works on macOS without VULKAN_SDK.
+if(APPLE)
+	if(DEFINED ENV{HOMEBREW_PREFIX} AND EXISTS "$ENV{HOMEBREW_PREFIX}/include/vulkan/vulkan.h")
+		list(PREPEND CMAKE_PREFIX_PATH "$ENV{HOMEBREW_PREFIX}")
+	elseif(EXISTS "/opt/homebrew/include/vulkan/vulkan.h")
+		list(PREPEND CMAKE_PREFIX_PATH "/opt/homebrew")
+	elseif(EXISTS "/usr/local/include/vulkan/vulkan.h")
+		list(PREPEND CMAKE_PREFIX_PATH "/usr/local")
+	endif()
+endif()
+
 # Vulkan for Std\GPU — gpu_stub lazy device + f64 fence path (Unix + Windows when found)
 find_package(Vulkan QUIET)
 if(Vulkan_FOUND)

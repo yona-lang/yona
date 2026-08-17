@@ -66,6 +66,12 @@ extern raw_vulkanTimelineSemaphore : Int -> Bool = "yona_Std_GPU_raw__vulkanTime
 ### `extern`
 
 ```yona
+extern raw_vulkanLastIssueKind     : Int -> Int    = "yona_Std_GPU_raw__vulkanLastIssueKind"
+```
+
+### `extern`
+
+```yona
 extern raw_upload            : IntArray -> IntArray = "yona_Std_GPU_raw__upload"
 ```
 
@@ -142,7 +148,9 @@ vulkanLastNote : String
 
 Short hint from the last failed Vulkan init, opt-in int column GPU attempt,
 async **`vkWaitForFences`**, or other **`VkResult`** failures on the **`Std\GPU`**
-float path / test dispatch (`gpu_stub.c`). Empty after success or when Vulkan
+float path / test dispatch (`gpu_stub.c`). After a successful device init
+without **`shaderInt64`** (typical MoltenVK / Metal), records that IntArray
+GPU kernels stay on CPU. Empty after int64-capable success or when Vulkan
 was not compiled in. Same source as the C **`yona_gpu_vulkan_device_last_note()`**
 helper.
 
@@ -188,12 +196,29 @@ hasSimd = raw_hasSimd 0
 vulkanAvailable : Bool
 ```
 
-True when a Vulkan loader is visible to the process.
+True when a Vulkan loader is visible to the process (`vulkan-1.dll`,
+`libvulkan.so.1`, or on macOS `libvulkan.1.dylib` / `libMoltenVK.dylib`
+under `VULKAN_SDK`, Homebrew, `/opt/homebrew`, or `/usr/local`).
 
 ### `vulkanAvailable`
 
 ```yona
 vulkanAvailable = raw_vulkanAvailable 0
+```
+
+### `vulkanLastIssueKind`
+
+```yona
+vulkanLastIssueKind : Int
+```
+
+0 = no classified **VkResult** yet; 1 = out-of-memory; 2 = device lost; 3 = other
+(updated with **`vulkanLastNote`** when the runtime records a **`VkResult`**).
+
+### `vulkanLastIssueKind`
+
+```yona
+vulkanLastIssueKind = raw_vulkanLastIssueKind 0
 ```
 
 ### `vulkanTimelineSemaphore`
@@ -203,11 +228,12 @@ vulkanTimelineSemaphore : Bool
 ```
 
 True when device init succeeded (see **`hasGpu`** / **`vulkanStatus`**) and the
-selected physical device reports Vulkan 1.2 **`timelineSemaphore`** via
-**`vkGetPhysicalDeviceFeatures2`** (see **`docs/gpu-architecture.md` § Vulkan limitations**:
-1.1-only **`VK_KHR_timeline_semaphore`** stacks are not detected yet). The runtime
-still completes work with per-submit **fences**, not timeline waits; this flag is
-diagnostics / future batching only.
+probe finds timeline semaphores: Vulkan 1.2+ **`timelineSemaphore`** via **`vkGetPhysicalDeviceFeatures2`**
+(Vulkan 12 feature chain), or **`VK_KHR_timeline_semaphore`** in the device's extension list
+(Vulkan 1.0/1.1 stacks that expose the capability only as an extension). When
+**`VK_KHR_synchronization2`** is enabled on the lazy **`gpu_stub`** device, async
+float compute may wait on a **timeline semaphore** instead of a fence (**`YONA_GPU_ASYNC_TIMELINE=0`**
+forces the legacy fence path).
 
 ### `vulkanTimelineSemaphore`
 
@@ -389,4 +415,3 @@ extern native floatArrayScaleAsync : Float -> FloatArray -> Int = "yona_Std_GPU_
 ```
 
 In-place multiply each element by `scale` (same Vulkan path as `floatArrayMul2Async`).
-

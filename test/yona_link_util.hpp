@@ -75,16 +75,21 @@ inline std::string vulkan_runtime_cflags() {
     const char* on = std::getenv("YONA_COMPILE_GPU_VULKAN");
     if (!on || std::string(on) == "0")
         return "";
-    const char* sdk = std::getenv("VULKAN_SDK");
-    if (!sdk || !*sdk)
-        return "";
     namespace fs = std::filesystem;
-    fs::path inc = fs::path(sdk) / "Include";
-    if (!fs::exists(inc / "vulkan" / "vulkan.h"))
-        inc = fs::path(sdk) / "include";
-    if (!fs::exists(inc / "vulkan" / "vulkan.h"))
-        return "";
-    return std::string(" -DYONA_COMPILE_GPU_VULKAN=1 -I") + qpath(inc);
+    std::vector<fs::path> candidates;
+    if (const char* sdk = std::getenv("VULKAN_SDK"); sdk && *sdk) {
+        candidates.push_back(fs::path(sdk) / "Include");
+        candidates.push_back(fs::path(sdk) / "include");
+    }
+    if (const char* brew = std::getenv("HOMEBREW_PREFIX"); brew && *brew)
+        candidates.push_back(fs::path(brew) / "include");
+    candidates.push_back("/opt/homebrew/include");
+    candidates.push_back("/usr/local/include");
+    for (const auto& inc : candidates) {
+        if (fs::exists(inc / "vulkan" / "vulkan.h"))
+            return std::string(" -DYONA_COMPILE_GPU_VULKAN=1 -I") + qpath(inc);
+    }
+    return "";
 }
 
 inline std::vector<std::string> platform_sources() {

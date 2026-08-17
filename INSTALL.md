@@ -78,6 +78,8 @@ cmake --build --preset build-release-macos
 brew install yona-lang/tap/yona
 ```
 
+Optional **`Std\GPU` Vulkan** (MoltenVK): `brew install molten-vk vulkan-headers vulkan-loader`, then configure with `-DYONA_ENABLE_VULKAN=ON`. CMake finds `vulkan/vulkan.h` and `libvulkan` / `libMoltenVK` via `VULKAN_SDK`, `HOMEBREW_PREFIX`, `/opt/homebrew`, and `/usr/local` (no extra env required on Apple Silicon Homebrew). Runtime `dlopen` uses the same prefixes and, if unset, hints `VK_ICD_FILENAMES` at `MoltenVK_icd.json`. Metal typically lacks `shaderInt64`, so `hasGpu` stays false and IntArray GPU kernels stay on the CPU; `vulkanStatus` can still be `vulkan-device`. See `docs/gpu-architecture.md` and `docs/gpu-vulkan-implementation-plan.md` §11.
+
 ## Windows
 
 Windows presets (`x64-debug`, `x64-release`) use **Ninja** and expect **Clang** as the compiler (same as CI). **MSVC** with the **Desktop development with C++** workload (or Build Tools + Windows SDK) must be installed so the MSVC linker and libraries are available.
@@ -155,7 +157,7 @@ ctest --preset unit-tests-windows
 
 ### Troubleshooting (Windows)
 
-- **`diaguids.lib` / DIA SDK / path under `...\Microsoft Visual Studio\2022\...` missing when linking**  
+- **`diaguids.lib` / DIA SDK / path under `...\Microsoft Visual Studio\2022\...` missing when linking**
   Your `lib\LLVM*.lib` files were built expecting a different Visual Studio layout (year, SKU, and edition). **Installing VS 2026 does not replace those 2022 paths** if LLVM was built against **Visual Studio 2022**. You still need the **2022** C++ workload (and usually the **DIA SDK** under that install). Prefer the official **clang+llvm** Windows `.tar.xz` from the LLVM releases page, extracted to a clean prefix (e.g. `C:\LLVM`), with `LLVM_INSTALL_PREFIX` and `CC`/`CXX` set as above.
 
   **Community vs Enterprise:** the error may mention `...\2022\Enterprise\DIA SDK\...` while you only have **VS 2022 Community** (same tree under `Community` instead of `Enterprise`). The file is usually present as `...\2022\Community\DIA SDK\lib\amd64\diaguids.lib`. Because LLVM’s libs reference the **Enterprise** path literally, create a **directory junction** once (requires **Administrator** Command Prompt or PowerShell, and `Enterprise` must not already exist):
@@ -166,13 +168,13 @@ ctest --preset unit-tests-windows
 
   That makes any `...\2022\Enterprise\...` path resolve to the same files as your Community install. Alternatively install the **Debugging Tools for Windows** / DIA workload for the **exact** edition named in the linker error (still fails if the folder name is wrong, e.g. Enterprise vs Community).
 
-- **`Policy CMP0167 is not known`**  
+- **`Policy CMP0167 is not known`**
   Use a newer CMake (3.30+), or use a checkout that guards optional policies for older CMake (supported on 3.29).
 
-- **`LLVMConfig.cmake` not found**  
+- **`LLVMConfig.cmake` not found**
   Set `LLVM_INSTALL_PREFIX` to the **root** of the extracted LLVM tree (the directory that contains `bin`, `lib`, `include`).
 
-- **`find_package(LLVM)` / `LLVMExports.cmake`: imported target references missing `LTO.lib`, `LTO.dll`, `llvm-ar.exe`, etc.**  
+- **`find_package(LLVM)` / `LLVMExports.cmake`: imported target references missing `LTO.lib`, `LTO.dll`, `llvm-ar.exe`, etc.**
   Your prefix is not a full **`clang+llvm-…-windows-msvc`** tree, or files were deleted. Re-extract the official archive to a clean directory and point **`LLVM_INSTALL_PREFIX`** (and **`CC`/`CXX`**, if separate) at it.
 
 ## Docker

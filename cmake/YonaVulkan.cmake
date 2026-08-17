@@ -30,36 +30,66 @@ if(YONA_ENABLE_VULKAN)
 			find_library(YONA_VULKAN_LIBRARY NAMES vulkan-1 vulkan)
 		endif()
 	else()
+		set(_yona_vk_inc_hints
+			"$ENV{VULKAN_SDK}/include"
+			"$ENV{VULKAN_SDK}/Include"
+		)
+		set(_yona_vk_lib_hints
+			"$ENV{VULKAN_SDK}/lib"
+			"$ENV{VULKAN_SDK}/lib32"
+		)
+		if(DEFINED ENV{HOMEBREW_PREFIX} AND NOT "$ENV{HOMEBREW_PREFIX}" STREQUAL "")
+			list(APPEND _yona_vk_inc_hints "$ENV{HOMEBREW_PREFIX}/include")
+			list(APPEND _yona_vk_lib_hints "$ENV{HOMEBREW_PREFIX}/lib")
+		endif()
+		if(APPLE)
+			# Default prefixes so configure works without exporting HOMEBREW_PREFIX.
+			list(APPEND _yona_vk_inc_hints "/opt/homebrew/include" "/usr/local/include")
+			list(APPEND _yona_vk_lib_hints "/opt/homebrew/lib" "/usr/local/lib")
+			execute_process(
+				COMMAND brew --prefix
+				OUTPUT_VARIABLE _yona_brew_prefix
+				OUTPUT_STRIP_TRAILING_WHITESPACE
+				ERROR_QUIET
+			)
+			if(_yona_brew_prefix)
+				list(APPEND _yona_vk_inc_hints "${_yona_brew_prefix}/include")
+				list(APPEND _yona_vk_lib_hints "${_yona_brew_prefix}/lib")
+			endif()
+		endif()
 		find_path(
 			YONA_VULKAN_INCLUDE_DIR
 			NAMES vulkan/vulkan.h
-			HINTS
-				"$ENV{VULKAN_SDK}/include"
-				"$ENV{VULKAN_SDK}/Include"
-				/usr/include
+			HINTS ${_yona_vk_inc_hints}
 		)
+		# MoltenVK can be used as the ICD via the Vulkan loader, or linked
+		# directly as libMoltenVK when no libvulkan dylib is installed.
 		find_library(
 			YONA_VULKAN_LIBRARY
-			NAMES vulkan
-			PATHS
-				"$ENV{VULKAN_SDK}/lib"
-				"$ENV{VULKAN_SDK}/lib32"
+			NAMES vulkan MoltenVK
+			HINTS ${_yona_vk_lib_hints}
 		)
 		if(NOT YONA_VULKAN_LIBRARY)
-			find_library(YONA_VULKAN_LIBRARY NAMES vulkan)
+			find_library(YONA_VULKAN_LIBRARY NAMES vulkan MoltenVK)
+		endif()
+		if(NOT YONA_VULKAN_INCLUDE_DIR AND Vulkan_INCLUDE_DIR)
+			set(YONA_VULKAN_INCLUDE_DIR "${Vulkan_INCLUDE_DIR}")
+		endif()
+		if(NOT YONA_VULKAN_LIBRARY AND Vulkan_LIBRARIES)
+			list(GET Vulkan_LIBRARIES 0 YONA_VULKAN_LIBRARY)
 		endif()
 	endif()
 
 	if(NOT YONA_VULKAN_INCLUDE_DIR)
 		message(
 			FATAL_ERROR
-			"YONA_ENABLE_VULKAN is ON but vulkan/vulkan.h was not found. Set VULKAN_SDK to the LunarG SDK root or install system Vulkan headers."
+			"YONA_ENABLE_VULKAN is ON but vulkan/vulkan.h was not found. Set VULKAN_SDK, or on macOS: brew install vulkan-headers molten-vk vulkan-loader (CMake searches /opt/homebrew and /usr/local)."
 		)
 	endif()
 	if(NOT YONA_VULKAN_LIBRARY)
 		message(
 			FATAL_ERROR
-			"YONA_ENABLE_VULKAN is ON but the Vulkan loader library was not found (Windows: vulkan-1; Unix: libvulkan). Check VULKAN_SDK."
+			"YONA_ENABLE_VULKAN is ON but the Vulkan loader library was not found (Windows: vulkan-1; Unix: libvulkan; macOS: libvulkan or libMoltenVK). Check VULKAN_SDK / Homebrew."
 		)
 	endif()
 

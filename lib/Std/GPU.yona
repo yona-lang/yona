@@ -49,7 +49,9 @@ vulkanStatus = raw_vulkanStatus 0
 
 ## Short hint from the last failed Vulkan init, opt-in int column GPU attempt,
 ## async **`vkWaitForFences`**, or other **`VkResult`** failures on the **`Std\GPU`**
-## float path / test dispatch (`gpu_stub.c`). Empty after success or when Vulkan
+## float path / test dispatch (`gpu_stub.c`). After a successful device init
+## without **`shaderInt64`** (typical MoltenVK / Metal), records that IntArray
+## GPU kernels stay on CPU. Empty after int64-capable success or when Vulkan
 ## was not compiled in. Same source as the C **`yona_gpu_vulkan_device_last_note()`**
 ## helper.
 vulkanLastNote : String
@@ -65,7 +67,9 @@ hasGpu = raw_hasGpu 0
 hasSimd : Bool
 hasSimd = raw_hasSimd 0
 
-## True when a Vulkan loader is visible to the process.
+## True when a Vulkan loader is visible to the process (`vulkan-1.dll`,
+## `libvulkan.so.1`, or on macOS `libvulkan.1.dylib` / `libMoltenVK.dylib`
+## under `VULKAN_SDK`, Homebrew, `/opt/homebrew`, or `/usr/local`).
 vulkanAvailable : Bool
 vulkanAvailable = raw_vulkanAvailable 0
 

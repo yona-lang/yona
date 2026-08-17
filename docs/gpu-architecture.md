@@ -61,8 +61,10 @@ Vulkan keep using the CPU backend.
 
 The runtime includes a Vulkan capability scaffold. By default it uses
 `LoadLibrary` / `dlopen` on the loader only and does not require the SDK.
-Optionally, configure with `-DYONA_ENABLE_VULKAN=ON` and `VULKAN_SDK` so
-`gpu_vulkan.c` compiles against `vulkan/vulkan.h` (see `cmake/YonaVulkan.cmake`).
+Optionally, configure with `-DYONA_ENABLE_VULKAN=ON` and `VULKAN_SDK` (or, on
+macOS, Homebrew `vulkan-headers` + `molten-vk` / `vulkan-loader` under
+`/opt/homebrew` or `/usr/local`) so `gpu_vulkan.c` compiles against
+`vulkan/vulkan.h` (see `cmake/YonaVulkan.cmake`).
 When the runtime is built **with** Vulkan headers (`-DYONA_ENABLE_VULKAN=ON` at
 configure), `Std\GPU.vulkanStatus` can also report `vulkan-device` after a
 successful instance/device/compute-queue init; entry points are resolved at
@@ -193,8 +195,9 @@ the path skips submit and completes **-887** without dispatch). All require a su
 
 ## Vulkan limitations (Windows / Linux)
 
-Intentional guardrails and **known gaps** for the baseline Vulkan stack (excluding
-Apple/MoltenVK — see **`docs/gpu-vulkan-implementation-plan.md`** §11).
+Intentional guardrails and **known gaps** for the baseline Vulkan stack.
+Apple/MoltenVK device init is in **`docs/gpu-vulkan-implementation-plan.md`** §11
+(`shaderInt64` is usually unavailable on Metal).
 
 - **`vulkanTimelineSemaphore`:** **`true`** when **`vkGetPhysicalDeviceFeatures2`**
   (**or `…KHR`**) reports **`VkPhysicalDeviceVulkan12Features::timelineSemaphore`**
@@ -232,7 +235,7 @@ omitted here.
 | **GPU capability / effect for device-lost and OOM** | **Partial:** `vulkanLastNote` records `VkResult` text (OOM / device lost hints), async fence waiter failures, synchronous float dispatch, calloc-after-submit; no typed GPU effect yet. |
 | **Transparent compiler lowering to GPU** | Deferred (needs benchmark gate + schedule story in `docs/gpu-transparent-lowering.md`). |
 | **Windows: full `gpu_stub` Vulkan compute parity with Linux** | **Done** for the lazy `VkDevice` + f64 fence path: same `#if defined(YONA_HAS_VULKAN)` body on all non-Android targets; Windows uses `SRWLOCK` / `CONDITION_VARIABLE` / `InitOnce` / `CreateThread` for the fence waiter. |
-| **macOS: MoltenVK / portability / `shaderInt64` reality** | Open; see `docs/gpu-vulkan-implementation-plan.md` §11 and `docs/todo-list.md`. |
+| **macOS: MoltenVK / portability / `shaderInt64` reality** | **Device init done:** runtime `dlopen` searches `VULKAN_SDK` / Homebrew / `/opt/homebrew` / `/usr/local` for `libvulkan.1.dylib` / `libMoltenVK.dylib` (bare names last); if `VK_ICD_FILENAMES` is unset, hints Homebrew/LunarG **`MoltenVK_icd.json`**. Instance enables **`VK_KHR_portability_enumeration`** when present; device enables **`VK_KHR_portability_subset`** when the ICD requires it. Unified memory uses the existing host-visible SSBO fallback (no discrete-only heap). **`shaderInt64` / `shaderFloat64`** are typically **false** on Metal — `hasGpu` stays 0 and IntArray / f64 kernels stay on CPU; `vulkanStatus` can still be `vulkan-device` and `vulkanLastNote` explains the missing int64 feature. |
 
 **Float `extern native` benches:** `run_gpu_compare.py` includes **`float_scale`**
 (`gpu_float_scale_hot.yona`): `floatArrayScaleAsync` awaits to **0** when

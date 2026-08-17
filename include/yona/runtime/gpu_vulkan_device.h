@@ -12,6 +12,19 @@
 extern "C" {
 #endif
 
+/**
+ * Open the platform Vulkan loader (`vulkan-1.dll`, `libvulkan.so.1`,
+ * `libvulkan.1.dylib`, or `libMoltenVK.dylib`). On macOS, searches
+ * `VULKAN_SDK` / `HOMEBREW_PREFIX` / `/opt/homebrew` / `/usr/local` before
+ * bare dylib names, and hints `VK_ICD_FILENAMES` at MoltenVK's ICD json when
+ * unset. Returns a LoadLibrary/dlopen handle, or NULL. Caller must
+ * FreeLibrary/dlclose.
+ */
+void *yona_gpu_vulkan_open_loader(void);
+
+/** 1 if the platform loader is loadable and not disabled by YONA_GPU_DISABLE_VULKAN. */
+int yona_gpu_vulkan_loader_available(void);
+
 /** Negative = not built / disabled / loader error; 0 = device + compute queue ready. */
 int yona_gpu_vulkan_device_try_init(void);
 
@@ -27,7 +40,7 @@ void yona_gpu_vulkan_device_shutdown(void);
  * without, the caller should report vulkan-loader / vulkan-unavailable without
  * probing the device layer.
  */
-const char* yona_gpu_vulkan_device_status_name(void);
+const char *yona_gpu_vulkan_device_status_name(void);
 
 /**
  * 1 if the logical device was created with VkPhysicalDeviceFeatures::shaderInt64
@@ -52,11 +65,11 @@ int yona_gpu_vulkan_device_timeline_semaphore(void);
  * Thread-safe only if all callers hold the same external lock as try_init; for
  * tests and CLI this is single-threaded.
  */
-const char* yona_gpu_vulkan_device_last_note(void);
+const char *yona_gpu_vulkan_device_last_note(void);
 
 /** Overwrites last_note (same buffer as failures from try_init / int column paths).
  * Safe to call from the Std\GPU fence waiter thread after vkWaitForFences fails. */
-void yona_gpu_vulkan_device_set_last_note(const char* msg);
+void yona_gpu_vulkan_device_set_last_note(const char *msg);
 
 /**
  * 0 = no VkResult classification yet; 1 = out-of-memory class; 2 = device lost;
@@ -65,7 +78,7 @@ void yona_gpu_vulkan_device_set_last_note(const char* msg);
 int yona_gpu_vulkan_device_last_issue_kind(void);
 
 /** Append a **float:** / device-init style note for a Vulkan error code (updates last_issue_kind). */
-void yona_gpu_vulkan_device_note_vk(const char* ctx, int32_t vk_result);
+void yona_gpu_vulkan_device_note_vk(const char *ctx, int32_t vk_result);
 
 /** Clears cached Std\GPU.hasGpu probe after device shutdown or reset. */
 void yona_gpu_vulkan_invalidate_capability_cache(void);
@@ -75,13 +88,13 @@ void yona_gpu_vulkan_invalidate_capability_cache(void);
  * Opt-in GPU mapAdd (see YONA_GPU_VULKAN_MAPADD). Returns 1 and sets *out to a
  * new int array on success; otherwise 0 and *out unchanged.
  */
-int yona_gpu_vulkan_try_map_add_int64(int64_t delta, int64_t* arr, int64_t** out);
+int yona_gpu_vulkan_try_map_add_int64(int64_t delta, int64_t *arr, int64_t **out);
 
 /** Opt-in GPU mapMul; same env pattern as mapAdd (YONA_GPU_VULKAN_MAPMUL / _COMPUTE). */
-int yona_gpu_vulkan_try_map_mul_int64(int64_t factor, int64_t* arr, int64_t** out);
+int yona_gpu_vulkan_try_map_mul_int64(int64_t factor, int64_t *arr, int64_t **out);
 
 /** Opt-in GPU reduceSum (block reduce + host tail); YONA_GPU_VULKAN_REDUCE / _COMPUTE. */
-int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum);
+int yona_gpu_vulkan_try_reduce_sum_int64(int64_t *arr, int64_t *out_sum);
 
 /**
  * Opt-in GPU filterGreaterThan (mark + inclusive GPU prefix + exclusive conversion +
@@ -89,7 +102,7 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum);
  * YONA_GPU_VULKAN_FILTER_MIN_LEN / YONA_GPU_VULKAN_MIN_LEN (same pattern as map/reduce).
  * Set YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1 to force the legacy host-side exclusive prefix.
  */
-int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* arr, int64_t** out);
+int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t *arr, int64_t **out);
 #endif
 
 #ifdef __cplusplus

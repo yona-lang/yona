@@ -30,7 +30,7 @@
 ### 2) Platform/runtime closure
 
 - [x] macOS platform layer (kqueue path + per-OS runtime files)
-- [ ] macOS `Std\GPU` Vulkan path: MoltenVK / portability (device init, memory types, shaderInt64 / SPIR-V validation); verify against Windows/Linux before treating GPU compute as cross-desktop
+- [x] macOS `Std\GPU` Vulkan path: MoltenVK / portability (device init, `VK_KHR_portability_enumeration` / `portability_subset`, Darwin loader names, unified-memory host SSBO). **`shaderInt64` is typically absent on Metal** — `hasGpu` stays 0; IntArray GPU kernels remain CPU. See `docs/gpu-vulkan-implementation-plan.md` §11.
 
 
 
@@ -265,7 +265,7 @@ eligibility + effect “schedule” story). **Design:**
 - [ ] Distributed Yona
 - [ ] Serialization system
 - [ ] STM
-- [ ] Vulkan `Std\GPU`: macOS MoltenVK (`docs/gpu-vulkan-implementation-plan.md` §11)
+- [x] Vulkan `Std\GPU`: macOS MoltenVK device init (`docs/gpu-vulkan-implementation-plan.md` §11). Int64/f64 compute still CPU-only on Metal.
 
 
 

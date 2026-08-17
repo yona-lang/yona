@@ -218,7 +218,7 @@ This plan is the intended roadmap for a **Option A, find_path + VULKAN_SDK, link
 
 ## 11. Implementation status (2026-04)
 
-**Landed (Windows/Linux, no macOS/MoltenVK in this slice):**
+**Landed (Windows/Linux + macOS MoltenVK device init):**
 
 - P0–P1 as in §2.4 / §5: runtime `dlopen`/`LoadLibrary` of the loader; no import-library link on the main executable.
 - P2–P3 columnar ops: embedded SPIR-V for **`mapAdd`**, **`mapMul`**, block **`reduceSum`**, **`filterGreaterThan`** (mark + prefix + scatter); **cached** compute pipelines in `gpu_vulkan_compute.c`; **`gpu_vulkan_ops.c`** for dispatch; submit serialized with a mutex; **`mapAdd`/`mapMul`/`reduceSum`/`filterGreaterThan`** use **device-local SSBO + staging** when a discrete-style device-local memory type exists (else host-visible SSBO); **`filterGreaterThan`** uses **GPU** inclusive prefix (ping-pong int64 scan), inclusive→exclusive, then scatter (two queue submits; optional **`YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1`** for the legacy CPU prefix).
@@ -226,4 +226,6 @@ This plan is the intended roadmap for a **Option A, find_path + VULKAN_SDK, link
 - **`Std\GPU.vulkanLastNote`** mirrors `yona_gpu_vulkan_device_last_note()`.
 - Opt-in env: **`YONA_GPU_VULKAN_COMPUTE`**, **`MAPADD`**, **`MAPMUL`**, **`REDUCE`**, **`FILTER`**, min-length vars (see `docs/api/GPU.md` / `docs/gpu-architecture.md`).
 
-**Still open:** macOS portability; merging filter’s two submits into one where validation allows; crossover-driven transparent lowering.
+**macOS / MoltenVK:** `yona_gpu_vulkan_open_loader` searches `VULKAN_SDK/lib`, `HOMEBREW_PREFIX/lib`, `/opt/homebrew/lib`, and `/usr/local/lib` for `libvulkan.1.dylib` / `libMoltenVK.dylib` before bare dylib names (dyld does not search Homebrew by default) and `dlopen`s with **`RTLD_GLOBAL`** so the ICD can resolve loader symbols. When `VK_ICD_FILENAMES` / `VK_DRIVER_FILES` are unset, the runtime points them at Homebrew or SDK **`MoltenVK_icd.json`** so the loader enumerates the portability ICD. If the process already **links** the loader (`YONA_HAS_VULKAN` / `gpu_stub`), device init uses the linked **`vkGetInstanceProcAddr`** and falls back to `dlsym` / `RTLD_DEFAULT` when GIPA returns NULL for `vkCreateInstance` (two loader images). Instance creation opts into **`VK_KHR_portability_enumeration`** so `vkEnumeratePhysicalDevices` sees the Metal ICD. Logical devices enable **`VK_KHR_portability_subset`** when enumerated. Apple unified memory does not expose a discrete-only `DEVICE_LOCAL` heap, so columnar ops use the host-visible SSBO path. Metal typically lacks **`shaderInt64`** and **`shaderFloat64`**: `vulkanStatus` may be `vulkan-device` while `hasGpu` remains 0 and GPU int64/f64 kernels do not dispatch. Doctest `gpu vulkan device: try_init device-ready or loader-only` **requires** `try_init == 0` on Apple when a loader is visible.
+
+**Still open:** merging filter’s two submits into one where validation allows; crossover-driven transparent lowering; Metal-native int32/f32 kernels if Apple GPU compute is required without `shaderInt64`.
