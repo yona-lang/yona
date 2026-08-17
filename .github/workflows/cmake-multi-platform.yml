@@ -87,12 +87,24 @@ jobs:
       if: success()
       run: ctest --test-dir "out/build/${{ matrix.build_dir }}" --output-on-failure --output-junit "${{ github.workspace }}/test-results.xml"
 
+    - name: Collect test results
+      if: always()
+      shell: bash
+      run: |
+        mkdir -p collected-results
+        if [ -f test-results.xml ]; then
+          cp test-results.xml collected-results/
+        fi
+        for f in "out/build/${{ matrix.build_dir }}"/doctest*.xml; do
+          [ -f "$f" ] && cp "$f" collected-results/
+        done
+
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ matrix.name }}
-        path: test-results.xml
+        path: collected-results/*
         if-no-files-found: ignore
 
     - name: Parse test results
@@ -100,14 +112,22 @@ jobs:
       shell: bash
       run: |
         PY="$(command -v python3 || command -v python)"
-        "$PY" scripts/ci/summarize-junit.py --title "${{ matrix.name }}" test-results.xml
+        files=()
+        for f in collected-results/doctest*.xml collected-results/test-results.xml; do
+          [ -f "$f" ] && files+=("$f")
+        done
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "No JUnit XML to summarize" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+        "$PY" scripts/ci/summarize-junit.py --title "${{ matrix.name }}" "${files[@]}"
 
     - name: Test report
       uses: dorny/test-reporter@v1
       if: always()
       with:
         name: Tests - ${{ matrix.name }}
-        path: test-results.xml
+        path: collected-results/doctest*.xml
         reporter: java-junit
         fail-on-error: 'false'
         fail-on-empty: 'false'
@@ -129,8 +149,17 @@ jobs:
       run: |
         files=()
         for dir in test-results-*; do
-          [ -f "$dir/test-results.xml" ] || continue
-          files+=("$dir/test-results.xml")
+          [ -d "$dir" ] || continue
+          found=0
+          for f in "$dir"/doctest*.xml; do
+            if [ -f "$f" ]; then
+              files+=("$f")
+              found=1
+            fi
+          done
+          if [ "$found" -eq 0 ] && [ -f "$dir/test-results.xml" ]; then
+            files+=("$dir/test-results.xml")
+          fi
         done
         if [ "${#files[@]}" -eq 0 ]; then
           echo "No test-results.xml artifacts" >> "$GITHUB_STEP_SUMMARY"

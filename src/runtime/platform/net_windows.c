@@ -63,8 +63,6 @@ typedef enum {
 	NET_IO_RECV_STR = 2,
 	NET_IO_SEND_BYTES = 3,
 	NET_IO_RECV_BYTES = 4,
-	NET_IO_UDP_SEND_STR = 5,
-	NET_IO_UDP_RECV_STR = 6,
 	NET_IO_CONNECT = 7,
 	NET_IO_ACCEPT = 8,
 } net_iocp_kind_t;
@@ -102,14 +100,13 @@ static DWORD WINAPI yona_net_iocp_worker(void* unused) {
 			(yona_win_net_op_t*)((char*)ov - offsetof(yona_win_net_op_t, ov));
 		if (!op || !op->ctx) continue;
 
-		if (op->kind == NET_IO_SEND_STR || op->kind == NET_IO_SEND_BYTES ||
-		    op->kind == NET_IO_UDP_SEND_STR) {
+		if (op->kind == NET_IO_SEND_STR || op->kind == NET_IO_SEND_BYTES) {
 			if (op->pinned_obj) {
 				yona_rt_rc_dec(op->pinned_obj);
 				op->pinned_obj = NULL;
 			}
 			op->ctx->buf = (char*)(intptr_t)(ok ? (int64_t)nbytes : -1);
-		} else if (op->kind == NET_IO_RECV_STR || op->kind == NET_IO_UDP_RECV_STR) {
+		} else if (op->kind == NET_IO_RECV_STR) {
 			char* buf = (char*)op->io_buf;
 			if (buf) {
 				if (ok && nbytes > 0 && nbytes < op->wbuf.len) buf[nbytes] = '\0';
@@ -179,8 +176,7 @@ static void net_iocp_ensure(void) {
 
 static int64_t net_submit_iocp(SOCKET s, net_iocp_kind_t kind,
 			       void* wire_buf, size_t len,
-			       void* pinned_obj, void* io_owner,
-			       const struct sockaddr_in* to_addr) {
+			       void* pinned_obj, void* io_owner) {
 	net_iocp_ensure();
 	if (!net_iocp_port) {
 		if (pinned_obj) yona_rt_rc_dec(pinned_obj);
@@ -215,7 +211,6 @@ static int64_t net_submit_iocp(SOCKET s, net_iocp_kind_t kind,
 	op->wbuf.buf = (CHAR*)wire_buf;
 	op->wbuf.len = (ULONG)len;
 	op->addr_len = sizeof(op->addr);
-	if (to_addr) op->addr = *to_addr;
 
 	ctx->type = 0; /* pending */
 	ctx->fd = -1;
@@ -235,12 +230,6 @@ static int64_t net_submit_iocp(SOCKET s, net_iocp_kind_t kind,
 	int rc;
 	if (kind == NET_IO_SEND_STR || kind == NET_IO_SEND_BYTES)
 		rc = WSASend(s, &op->wbuf, 1, &sent, 0, &op->ov, NULL);
-	else if (kind == NET_IO_UDP_SEND_STR)
-		rc = WSASendTo(s, &op->wbuf, 1, &sent, 0,
-			       (SOCKADDR*)&op->addr, op->addr_len, &op->ov, NULL);
-	else if (kind == NET_IO_UDP_RECV_STR)
-		rc = WSARecvFrom(s, &op->wbuf, 1, &sent, &flags,
-				 (SOCKADDR*)&op->addr, &op->addr_len, &op->ov, NULL);
 	else
 		rc = WSARecv(s, &op->wbuf, 1, &sent, &flags, &op->ov, NULL);
 	if (rc == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING) {
@@ -438,14 +427,14 @@ int64_t yona_Std_Net__send(int64_t fd, const char* data) {
 	size_t len = strlen(data);
 	char* pinned = (char*)yona_rt_rc_alloc_string(len + 1);
 	memcpy(pinned, data, len + 1);
-	return net_submit_iocp(sock_from_i64(fd), NET_IO_SEND_STR, pinned, len, pinned, pinned, NULL);
+	return net_submit_iocp(sock_from_i64(fd), NET_IO_SEND_STR, pinned, len, pinned, pinned);
 }
 
 int64_t yona_Std_Net__recv(int64_t fd, int64_t max_bytes) {
 	net_ensure_wsa();
 	if (max_bytes <= 0) max_bytes = 4096;
 	char* buf = (char*)yona_rt_rc_alloc_string((size_t)max_bytes + 1);
-	return net_submit_iocp(sock_from_i64(fd), NET_IO_RECV_STR, buf, (size_t)max_bytes, NULL, buf, NULL);
+	return net_submit_iocp(sock_from_i64(fd), NET_IO_RECV_STR, buf, (size_t)max_bytes, NULL, buf);
 }
 
 int64_t yona_Std_Net__sendBytes(int64_t fd, void* bytes) {
@@ -455,7 +444,7 @@ int64_t yona_Std_Net__sendBytes(int64_t fd, void* bytes) {
 	int64_t len = b[0] < 0 ? 0 : b[0];
 	yona_rt_rc_inc(bytes);
 	uint8_t* data = (uint8_t*)(b + 1);
-	return net_submit_iocp(sock_from_i64(fd), NET_IO_SEND_BYTES, data, (size_t)len, bytes, bytes, NULL);
+	return net_submit_iocp(sock_from_i64(fd), NET_IO_SEND_BYTES, data, (size_t)len, bytes, bytes);
 }
 
 int64_t yona_Std_Net__recvBytes(int64_t fd, int64_t max_bytes) {
@@ -463,7 +452,7 @@ int64_t yona_Std_Net__recvBytes(int64_t fd, int64_t max_bytes) {
 	if (max_bytes <= 0) max_bytes = 4096;
 	int64_t* buf = (int64_t*)rc_alloc(RC_TYPE_BYTE_ARRAY, sizeof(int64_t) + (size_t)max_bytes);
 	buf[0] = 0;
-	return net_submit_iocp(sock_from_i64(fd), NET_IO_RECV_BYTES, (void*)(buf + 1), (size_t)max_bytes, NULL, buf, NULL);
+	return net_submit_iocp(sock_from_i64(fd), NET_IO_RECV_BYTES, (void*)(buf + 1), (size_t)max_bytes, NULL, buf);
 }
 
 int64_t yona_Std_Net__close(int64_t fd) {
@@ -547,27 +536,37 @@ int64_t yona_Std_Net__udpBind(const char* host, int64_t port) {
 	return (int64_t)(intptr_t)fd;
 }
 
+/* UDP is FN (sync) in Net.yonai — same contract as Linux/macOS. Returning
+ * an IOCP cookie here made the C test (and Yona callers) treat a completion
+ * id as a string pointer and SIGSEGV. */
 int64_t yona_Std_Net__udpSendTo(int64_t fd, const char* host, int64_t port, const char* data) {
 	net_ensure_wsa();
-	if (!host) return yona_io_register_direct_result((void*)(intptr_t)-1);
+	if (!host) return -1;
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons((uint16_t)port);
-	if (InetPtonA(AF_INET, host, &addr.sin_addr) != 1)
-		return yona_io_register_direct_result((void*)(intptr_t)-1);
+	if (InetPtonA(AF_INET, host, &addr.sin_addr) != 1) return -1;
 	const char* payload = data ? data : "";
-	size_t len = strlen(payload);
-	char* pinned = (char*)yona_rt_rc_alloc_string(len + 1);
-	memcpy(pinned, payload, len + 1);
-	return net_submit_iocp(sock_from_i64(fd), NET_IO_UDP_SEND_STR, pinned, len, pinned, pinned, &addr);
+	int n = sendto(sock_from_i64(fd), payload, (int)strlen(payload), 0,
+		       (struct sockaddr*)&addr, sizeof(addr));
+	return (int64_t)n;
 }
 
 int64_t yona_Std_Net__udpRecv(int64_t fd, int64_t max_bytes) {
 	net_ensure_wsa();
 	if (max_bytes <= 0) max_bytes = 4096;
 	char* buf = (char*)yona_rt_rc_alloc_string((size_t)max_bytes + 1);
-	return net_submit_iocp(sock_from_i64(fd), NET_IO_UDP_RECV_STR, buf, (size_t)max_bytes, NULL, buf, NULL);
+	struct sockaddr_in from;
+	int from_len = sizeof(from);
+	int n = recvfrom(sock_from_i64(fd), buf, (int)max_bytes, 0,
+			 (struct sockaddr*)&from, &from_len);
+	if (n <= 0) {
+		buf[0] = '\0';
+		return (int64_t)(intptr_t)buf;
+	}
+	buf[n] = '\0';
+	return (int64_t)(intptr_t)buf;
 }
 
 const char* yona_Std_Net__peerAddress(int64_t fd) {

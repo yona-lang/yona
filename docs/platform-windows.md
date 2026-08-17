@@ -38,8 +38,8 @@ side-effect ordering must match existing semantics.
   and return `io_await` IDs.
 - TCP `connect`/`accept` use `ConnectEx`/`AcceptEx` overlapped completion and
   return `io_await` IDs.
-- UDP send/recv use overlapped Winsock + IOCP completion and return
-  `io_await` IDs.
+- UDP `udpSendTo`/`udpRecv` are synchronous (`FN` in `Net.yonai`), matching
+  Linux/macOS: they return a byte count and a string pointer, not `io_await` IDs.
 - `httpGet` composes async submit/await socket ops on top of the same IOCP
   completion path.
 

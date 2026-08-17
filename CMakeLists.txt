@@ -522,7 +522,8 @@ if(WIN32)
 endif()
 # Full suite: test harness recompiles `compiled_runtime.c`; do not inherit a user/global
 # YONA_COMPILE_GPU_VULKAN=1 + VULKAN_SDK session (would desync with default objects).
-set(_ctest_env "${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0")
+set(_junit_env "YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-results.xml")
+set(_ctest_env "${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0;${_junit_env}")
 
 set_tests_properties(doctest_tests PROPERTIES
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -544,19 +545,20 @@ endif()
 # Vulkan-only slice: same binary, no YONA_COMPILE_GPU_VULKAN=0 so local SDK matches the
 # Vulkan-enabled objects; filters to gpu/vulkan doctest cases.
 if(YONA_ENABLE_VULKAN)
+	set(_junit_gpu_env "YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-gpu-results.xml")
 	add_test(NAME doctest_gpu_vulkan COMMAND tests -tc=*gpu?vulkan*)
 	set_tests_properties(doctest_gpu_vulkan PROPERTIES
 		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 		LABELS "vulkan;gpu"
-		ENVIRONMENT "${_ctest_base_env}"
+		ENVIRONMENT "${_ctest_base_env};${_junit_gpu_env}"
 	)
 	if(APPLE)
 		set_tests_properties(doctest_gpu_vulkan PROPERTIES
-			ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{DYLD_LIBRARY_PATH};${_ctest_base_env}"
+			ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{DYLD_LIBRARY_PATH};${_ctest_base_env};${_junit_gpu_env}"
 		)
 	elseif(UNIX)
 		set_tests_properties(doctest_gpu_vulkan PROPERTIES
-			ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH};${_ctest_base_env}"
+			ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH};${_ctest_base_env};${_junit_gpu_env}"
 		)
 	endif()
 endif()
