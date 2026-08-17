@@ -9,7 +9,8 @@
 ## Public runtime headers
 
 - `include/yona/runtime/platform.h` — portable `yona_platform_*` / process ABI.
-- `include/yona/runtime/uring.h` — Linux-only io_uring helpers + shared `io_context_t` layout for Linux platform `.c` files.
+- `include/yona/runtime/uring.h` — Linux-only io_uring API + shared `io_context_t` layout.
+- `src/runtime/platform/uring_linux.c` — the single ring and `io_ctx` table (must not be header-static; file/net/os are separate TUs).
 
 ## Frozen platform ABI (v1)
 
@@ -35,7 +36,7 @@ Policy:
 
 ## CMake selection
 
-- All `src/runtime/platform/*.c` are **removed** from the globbed library sources, then the correct trio is **appended** per OS (`WIN32` vs non-Windows).
+- All `src/runtime/platform/*.c` are **removed** from the globbed library sources, then the correct platform TUs are **appended** per OS (`WIN32` vs non-Windows; Linux includes `uring_linux.c`).
 - Under `src/runtime/platform/`, the files `async_posix.c`, `async_win32.c`, `channel_posix.c`, and `channel_win32.c` are excluded from the library glob with the other platform `.c` sources because they are **included** from `compiled_runtime.c`, not compiled as separate TUs.
 - Windows links **`ws2_32`** for Winsock.
 

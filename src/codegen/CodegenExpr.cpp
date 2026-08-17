@@ -761,6 +761,26 @@ llvm::Value* Codegen::setup_let_arena(const std::unordered_set<std::string>& non
         {ConstantInt::get(i64_ty, ARENA_DEFAULT_SIZE)}, "arena");
 }
 
+// `spawn` is tagged IO in Task.yonai so use-sites can auto-await, but the
+// C function returns a thread-pool promise pointer — not an io_uring cookie.
+static bool let_apply_is_spawn(AstNode* n) {
+    if (!n || n->get_type() != AST_APPLY_EXPR) return false;
+    auto* cur = static_cast<ApplyExpr*>(n);
+    while (cur) {
+        if (auto* nc = dynamic_cast<NameCall*>(cur->call))
+            return nc->name && nc->name->value == "spawn";
+        if (auto* ec = dynamic_cast<ExprCall*>(cur->call)) {
+            if (auto* inner = dynamic_cast<ApplyExpr*>(ec->expr))
+                cur = inner;
+            else
+                break;
+        } else {
+            break;
+        }
+    }
+    return false;
+}
+
 // Codegen all let aliases: ValueAlias, LambdaAlias, PatternAlias.
 void Codegen::codegen_let_aliases(LetExpr* node, llvm::Value* arena,
                                    const std::unordered_set<std::string>& non_escaping,
@@ -801,6 +821,14 @@ void Codegen::codegen_let_aliases(LetExpr* node, llvm::Value* arena,
 #endif
             if (use_arena) current_arena_ = arena;
             auto tv = codegen(va->expr);
+            // Sequential let + real io_uring: await so a later close cannot
+            // race an in-flight writeBytes/readBytes. Skip spawn (IO-tagged
+            // but thread-pool). Multi-binding lets stay promises until
+            // group_await_all.
+            if (node->aliases.size() <= 1 && tv.type == CType::PROMISE
+                && tv.promise_await == PromiseAwaitPath::IoUring
+                && !let_apply_is_spawn(va->expr))
+                tv = auto_await(tv);
             if (use_arena) current_arena_ = saved_arena;
 
             if (tv) {
@@ -844,6 +872,10 @@ void Codegen::codegen_let_aliases(LetExpr* node, llvm::Value* arena,
             }
         } else if (auto* pa = dynamic_cast<PatternAlias*>(alias)) {
             auto tv = codegen(pa->expr);
+            if (node->aliases.size() <= 1 && tv.type == CType::PROMISE
+                && tv.promise_await == PromiseAwaitPath::IoUring
+                && !let_apply_is_spawn(pa->expr))
+                tv = auto_await(tv);
             if (tv && tv.type == CType::TUPLE) {
                 auto* tp = dynamic_cast<TuplePattern*>(pa->pattern);
                 if (tp) {

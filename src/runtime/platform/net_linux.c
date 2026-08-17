@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 
 extern void yona_rt_rc_inc(void* ptr);
 extern void yona_rt_rc_dec(void* ptr);

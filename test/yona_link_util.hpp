@@ -91,7 +91,7 @@ inline std::vector<std::string> platform_sources() {
 #ifdef _WIN32
     return {"file_windows.c", "net_windows.c", "os_windows.c"};
 #else
-    return {"file_linux.c", "net_linux.c", "os_linux.c"};
+    return {"uring_linux.c", "file_linux.c", "net_linux.c", "os_linux.c"};
 #endif
 }
 

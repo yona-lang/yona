@@ -53,8 +53,8 @@ runtime research.
 
 ### Bugs
 
-- [x] **doctest:** `Codegen E2E` `binary_seek` / `binary_write_read` flakiness (stdout wrong / `0`) — **Fixed:** unique object/exe per fixture suffix; added `binary_write_read.expected`; avoids parallel `tests` sharing one `yona_codegen_test.exe`.
-- [x] **doctest:** `net_runtime_test` TCP loopback **SIGSEGV** (Linux io_uring accept) — **Fixed:** accept SQE passes `socklen_t*` in **`sqe.off`** (kernel/liburing ABI), not `sqe.addr2`.
+- [x] **doctest:** `Codegen E2E` `binary_seek` / `binary_write_read` flakiness (stdout wrong / `0`) — unique object/exe per fixture suffix; plus single-binding `let` `auto_await` for real io_uring File ops (skip `spawn`).
+- [x] **doctest:** `net_runtime_test` TCP loopback **SIGSEGV** (Linux io_uring) — accept SQE `socklen_t*` in **`sqe.off`**; shared ring in `uring_linux.c` (was per-TU `static` in `uring.h`); `ring_await` stashes unmatched CQEs. UDP test matches sync FN API.
 - [x] **Windows `tests`/Vulkan:** undefined **`yona_rt_promise_new` / `yona_rt_promise_complete`** ( **`gpu_stub.c`** vs async runtime) — **Fixed:** same APIs + **`yona_test_native_promise_immediate`** implemented in **`async_win32.c`** (parity with **`async_posix.c`**).
 
 ## Backlog (Open, Not Immediate)

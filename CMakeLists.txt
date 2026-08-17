@@ -186,6 +186,7 @@ if(WIN32)
 	)
 else()
 	list(APPEND YONA_PLATFORM_RUNTIME_SOURCES
+		"${PROJECT_SOURCE_DIR}/src/runtime/platform/uring_linux.c"
 		"${PROJECT_SOURCE_DIR}/src/runtime/platform/file_linux.c"
 		"${PROJECT_SOURCE_DIR}/src/runtime/platform/os_linux.c"
 		"${PROJECT_SOURCE_DIR}/src/runtime/platform/net_linux.c"

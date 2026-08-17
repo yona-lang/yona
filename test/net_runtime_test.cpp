@@ -70,13 +70,13 @@ TEST_CASE("UDP send and recv on loopback") {
 	int64_t send_sock = yona_Std_Net__udpBind("127.0.0.1", 0);
 	REQUIRE(send_sock != -1);
 
-	int64_t recv_id = yona_Std_Net__udpRecv(recv_sock, 64);
-	REQUIRE(recv_id > 0);
-	int64_t send_id = yona_Std_Net__udpSendTo(send_sock, "127.0.0.1", recv_port, "udp_ping");
-	REQUIRE(send_id > 0);
-	CHECK(yona_rt_io_await(send_id) > 0);
+	/* UDP is synchronous (FN in Net.yonai): send first so loopback
+	 * queues the datagram, then recv. Do not treat the return as a
+	 * uring cookie — that deadlocks (recvfrom waits forever). */
+	int64_t sent = yona_Std_Net__udpSendTo(send_sock, "127.0.0.1", recv_port, "udp_ping");
+	REQUIRE(sent > 0);
 
-	char* payload = (char*)(intptr_t)yona_rt_io_await(recv_id);
+	char* payload = (char*)(intptr_t)yona_Std_Net__udpRecv(recv_sock, 64);
 	REQUIRE(payload != nullptr);
 	CHECK(std::string(payload) == "udp_ping");
 	yona_rt_rc_dec(payload);

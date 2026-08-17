@@ -26,7 +26,7 @@ static const char* const platform_runtime_sources[] = {
 #ifdef _WIN32
     "file_windows.c", "net_windows.c", "os_windows.c",
 #else
-    "file_linux.c", "net_linux.c", "os_linux.c",
+    "uring_linux.c", "file_linux.c", "net_linux.c", "os_linux.c",
 #endif
 };
 
