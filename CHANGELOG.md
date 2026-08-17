@@ -3,6 +3,8 @@
 ## v0.1.1 (2026-04-24)
 
 ### Distribution and Packaging
+- Added Fedora Copr, AUR `yona-bin`, and Launchpad PPA publish jobs after GitHub Release.
+- Documented one-time maintainer setup in `dist/RELEASING.md`.
 - Added Windows WiX v4 installer scaffold (`packaging/windows/`) with MSI build script.
 - Extended release workflow with a Windows release job that publishes both ZIP and MSI artifacts.
 - Kept Linux/macOS packaging aligned with precompiled runtime artifact shipping.

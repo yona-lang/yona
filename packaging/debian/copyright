@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: yona
-Upstream-Contact: team@yona-lang.org
+Upstream-Contact: Adam Kovari <adam@kovari.eu>
 Source: https://github.com/yona-lang/yonac-llvm
 
 Files: *

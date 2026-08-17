@@ -15,26 +15,46 @@ A compiled functional programming language targeting LLVM, featuring persistent 
 ## Quick Start
 
 ```bash
-# Install (Fedora/RHEL)
-sudo dnf install llvm llvm-devel llvm-libs clang lld cmake ninja-build pcre2-devel
-
-# Build
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
-cmake --preset x64-release-linux
-cmake --build --preset build-release-linux
-
-# Run
-./out/build/x64-release-linux/yonac -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
+yonac -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
 # => 55
 ```
 
-See [INSTALL.md](INSTALL.md) for macOS, Windows, and Docker instructions.
+### Fedora / RHEL (Copr)
 
-Prebuilt release artifacts now include:
-- Linux/macOS tarballs
-- Windows ZIP bundle
-- Windows MSI installer (WiX v4-based packaging flow)
+```bash
+sudo dnf copr enable kovariadam/yona
+sudo dnf install yona
+```
+
+### Ubuntu / Debian (PPA)
+
+```bash
+sudo add-apt-repository ppa:kovariadam/yona
+sudo apt update
+sudo apt install yona
+```
+
+If the PPA has no build for your series yet, install a binary `.deb` from a GitHub Release tarball:
+
+```bash
+./dist/debian/build-deb-from-release.sh 0.1.1 amd64
+sudo apt install ./dist/debian/yona_0.1.1-1_amd64.deb
+```
+
+### Arch Linux (AUR)
+
+```bash
+yay -S yona-bin
+# or: paru -S yona-bin
+```
+
+### Windows
+
+Download the MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yonac-llvm/releases/latest).
+
+### macOS / source / Docker
+
+See [INSTALL.md](INSTALL.md). Maintainers: one-time Copr / AUR / Launchpad setup is in [dist/RELEASING.md](dist/RELEASING.md).
 
 ## Language Examples
 
@@ -158,6 +178,7 @@ Source → Lexer → Parser → AST → Codegen (LLVM IR) → Native Executable
 ## Documentation
 
 - [Installation Guide](INSTALL.md)
+- [Packaging & release setup](dist/RELEASING.md)
 - [Language Syntax Reference](docs/language-syntax.md)
 
 **Feature Guides:**

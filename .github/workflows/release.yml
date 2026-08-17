@@ -316,3 +316,93 @@ jobs:
           body_path: CHANGELOG.md
           draft: false
           prerelease: false
+
+  aur:
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate PKGBUILD
+        run: bash dist/ci/generate-aur-pkgbuild.sh "${GITHUB_REF_NAME#v}" ./PKGBUILD
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: yona-bin
+          pkgbuild: ./PKGBUILD
+          updpkgsums: true
+          commit_username: akovari
+          commit_email: adam@kovari.eu
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+
+  copr:
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install copr-cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip python3-setuptools
+          pip3 install --user 'copr-cli'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure & build on Copr
+        env:
+          COPR_LOGIN: ${{ secrets.COPR_LOGIN }}
+          COPR_TOKEN: ${{ secrets.COPR_TOKEN }}
+          COPR_USERNAME: ${{ secrets.COPR_USERNAME }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.config
+          {
+            echo '[copr-cli]'
+            echo "login = ${COPR_LOGIN}"
+            echo "username = ${COPR_USERNAME}"
+            echo "token = ${COPR_TOKEN}"
+            echo 'copr_url = https://copr.fedorainfracloud.org'
+          } > ~/.config/copr
+          PROJECT="${COPR_USERNAME}/yona"
+          TAG="${GITHUB_REF_NAME}"
+          echo "Building on Copr project ${PROJECT} from ${TAG}"
+          copr-cli buildscm "$PROJECT" \
+              --clone-url "https://github.com/yona-lang/yonac-llvm.git" \
+              --commit "$TAG" \
+              --spec dist/copr/yona.spec \
+              --enable-net on
+
+  launchpad:
+    needs: [release]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Debian packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            debhelper devscripts dput dpkg-dev
+
+      - name: Import GPG key
+        env:
+          LAUNCHPAD_GPG_PRIVATE_KEY: ${{ secrets.LAUNCHPAD_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$LAUNCHPAD_GPG_PRIVATE_KEY" | gpg --batch --import
+          FPR="${{ secrets.LAUNCHPAD_GPG_FINGERPRINT }}"
+          echo "${FPR}:6:" | gpg --import-ownertrust
+          gpg --list-secret-keys
+
+      - name: Build source package and dput
+        env:
+          LAUNCHPAD_PPA: ${{ secrets.LAUNCHPAD_PPA }}
+          LAUNCHPAD_GPG_KEY_ID: ${{ secrets.LAUNCHPAD_GPG_KEY_ID }}
+          DEBSIGN_KEYID: ${{ secrets.LAUNCHPAD_GPG_KEY_ID }}
+        run: |
+          chmod +x dist/ci/*.sh
+          bash dist/ci/launchpad-upload.sh "${GITHUB_REF_NAME#v}"

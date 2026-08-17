@@ -199,6 +199,11 @@ static vector<filesystem::path> discover_sysroots(const char* argv0, const strin
     }
     push_unique_root(roots, seen, filesystem::current_path());
     push_unique_root(roots, seen, filesystem::current_path().parent_path());
+    // Distro packages install the sysroot under /usr/lib{,64}/yona while
+    // binaries live in /usr/bin (parent is /usr, not the sysroot).
+    push_unique_root(roots, seen, filesystem::path("/usr/lib/yona"));
+    push_unique_root(roots, seen, filesystem::path("/usr/lib64/yona"));
+    push_unique_root(roots, seen, filesystem::path("/usr/local/lib/yona"));
     return roots;
 }
 

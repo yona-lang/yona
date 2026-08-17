@@ -1,6 +1,28 @@
 # Installing Yona
 
-## Prerequisites
+## Packages (recommended)
+
+| Platform | Command |
+|----------|---------|
+| Fedora / RHEL | `sudo dnf copr enable kovariadam/yona && sudo dnf install yona` |
+| Ubuntu / Debian | `sudo add-apt-repository ppa:kovariadam/yona && sudo apt update && sudo apt install yona` |
+| Arch | `yay -S yona-bin` |
+| Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yonac-llvm/releases/latest) |
+
+These install `yonac` and `yona` on `PATH`, with the compiler sysroot under `/usr/lib/yona` or `/usr/lib64/yona`.
+
+Ubuntu PPA builds compile from source on Launchpad (Noble `llvm-dev` is LLVM 18). If a series has no published package yet, build a binary `.deb` from the release tarball:
+
+```bash
+./dist/debian/build-deb-from-release.sh 0.1.1 amd64
+sudo apt install ./dist/debian/yona_0.1.1-1_amd64.deb
+```
+
+**Maintainer one-time setup** (create Copr project, AUR SSH key, Launchpad PPA, GitHub secrets): [dist/RELEASING.md](dist/RELEASING.md).
+
+The rest of this file is for **building from source**.
+
+## Prerequisites (source build)
 
 All platforms require:
 - **LLVM** for the codegen backend: **22+** recommended (see `CLAUDE.md`); **16+** may work if `find_package(LLVM)` succeeds with your toolchain. **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle version that matches your dev setup (CI uses **22.1.0** on Windows; Linux/macOS CI currently installs **20** from distro packages).

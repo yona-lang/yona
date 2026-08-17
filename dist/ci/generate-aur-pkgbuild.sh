@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Write an updated AUR PKGBUILD for yona-bin (GitHub linux-x86_64 tarball).
+set -euo pipefail
+
+VERSION="${1:?version required (no v prefix)}"
+OUT="${2:-PKGBUILD}"
+
+cat >"$OUT" <<EOF
+# Maintainer: Adam Kovari <adam@kovari.eu>
+pkgname=yona-bin
+pkgver=${VERSION}
+pkgrel=1
+pkgdesc="Yona programming language compiler targeting LLVM"
+arch=('x86_64')
+url="https://github.com/yona-lang/yonac-llvm"
+license=('GPL-3.0-only')
+depends=('llvm-libs' 'clang' 'lld' 'pcre2')
+provides=('yona')
+conflicts=('yona')
+options=('!strip')
+source=("\$pkgname-\$pkgver-linux-x86_64.tar.gz::https://github.com/yona-lang/yonac-llvm/releases/download/v\$pkgver/yona-\$pkgver-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "yona-\${pkgver}-linux-x86_64"
+  install -Dm755 bin/yonac "\$pkgdir/usr/bin/yonac"
+  install -Dm755 bin/yona "\$pkgdir/usr/bin/yona"
+  install -d "\$pkgdir/usr/lib/yona"
+  cp -a lib runtime src include "\$pkgdir/usr/lib/yona/"
+}
+EOF
