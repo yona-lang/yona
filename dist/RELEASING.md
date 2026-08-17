@@ -27,12 +27,89 @@ These accounts and secrets are **not** created by CI. Do them once on your machi
 
 ### 1. Fedora Copr project
 
-1. Sign in at https://copr.fedorainfracloud.org/ (FAS account).
-2. Create project **`yona`** under user **`kovariadam`**: https://copr.fedorainfracloud.org/coprs/new/
-3. Enable **network during the build** (CMake/LLVM fetch is not required, but matching winetop avoids surprises).
-4. Enable the chroots you care about (Fedora current + EPEL if you want RHEL).
-5. Confirm the project URL is https://copr.fedorainfracloud.org/coprs/kovariadam/yona/
-6. API token: https://copr.fedorainfracloud.org/api/ — you already have `login` / `token` / `username` for winetop.
+Sign in with your FAS account: https://copr.fedorainfracloud.org/
+
+API token (same as winetop): https://copr.fedorainfracloud.org/api/ — values go in `~/.config/copr` and the GitHub secrets below.
+
+#### Recommended chroots (v1)
+
+Match [kovariadam/winetop](https://copr.fedorainfracloud.org/coprs/kovariadam/winetop/) **but start x86_64-only**. `dist/copr/yona.spec` runs `cmake --preset x64-release-linux`, which is the x86_64 Linux preset. aarch64 will mis-build until the spec picks `arm64-release-linux` on that arch.
+
+| Enable now | Chroot | LLVM on that Fedora (approx.) |
+|------------|--------|-------------------------------|
+| yes | `fedora-43-x86_64` | 21 |
+| yes | `fedora-44-x86_64` | 22 |
+| yes | `fedora-45-x86_64` | 22 |
+| yes | `fedora-rawhide-x86_64` | 22 |
+| later | `fedora-43-aarch64`, `fedora-44-aarch64`, `fedora-45-aarch64`, `fedora-rawhide-aarch64` | same as above, after spec is arch-aware |
+| no | `fedora-42-*` | Copr no longer lists `fedora-42-x86_64` (EOL) |
+| no | EPEL 8/9/10, RHEL, CentOS Stream | older `llvm-devel`; C++23 + current LLVM APIs will likely fail |
+| no | `i386`, `ppc64le`, `s390x`, `riscv64` | no CI, huge LLVM compile, riscv is QEMU-emulated |
+
+#### Create via CLI (preferred)
+
+```bash
+# uses ~/.config/copr (same token as winetop)
+copr-cli whoami   # expect: kovariadam
+
+copr-cli create yona \
+  --chroot fedora-43-x86_64 \
+  --chroot fedora-44-x86_64 \
+  --chroot fedora-45-x86_64 \
+  --chroot fedora-rawhide-x86_64 \
+  --enable-net on \
+  --follow-fedora-branching on \
+  --appstream off \
+  --unlisted-on-hp off \
+  --description "Yona programming language compiler targeting LLVM" \
+  --instructions "sudo dnf copr enable kovariadam/yona && sudo dnf install yona"
+```
+
+`--enable-net on` matches the release workflow (`copr-cli buildscm … --enable-net on`). The spec does not download crates, but GitHub `Source0` / SCM clone is happier with network on.
+
+`--follow-fedora-branching on` auto-adds the next Fedora x86_64 chroot when Rawhide branches (same as winetop growing F45).
+
+Confirm: https://copr.fedorainfracloud.org/coprs/kovariadam/yona/
+
+#### Same settings in the web UI
+
+1. https://copr.fedorainfracloud.org/coprs/new/
+2. **Name:** `yona` (not `yonac`, not `yonac-llvm`)
+3. **Chroots:** tick only the four `fedora-{43,44,45,rawhide}-x86_64` boxes
+4. **Follow Fedora branching:** on
+5. **Enable networking during the build:** on
+6. **Generate AppStream metadata:** off
+7. **Unlisted on homepage:** off
+8. Description / instructions as in the CLI command
+9. Create. Do **not** add a package by hand; the GitHub `copr` job submits `buildscm` on the next `v*` tag.
+
+#### After aarch64 is supported in the spec
+
+```bash
+copr-cli modify yona \
+  --chroot fedora-43-x86_64 \
+  --chroot fedora-44-x86_64 \
+  --chroot fedora-45-x86_64 \
+  --chroot fedora-rawhide-x86_64 \
+  --chroot fedora-43-aarch64 \
+  --chroot fedora-44-aarch64 \
+  --chroot fedora-45-aarch64 \
+  --chroot fedora-rawhide-aarch64
+```
+
+`modify --chroot` **replaces** the chroot set; list every chroot you want to keep.
+
+#### Optional smoke build (before the first tag)
+
+```bash
+copr-cli buildscm kovariadam/yona \
+  --clone-url https://github.com/yona-lang/yonac-llvm.git \
+  --commit master \
+  --spec dist/copr/yona.spec \
+  --enable-net on
+```
+
+This compiles Yona + LLVM in Copr (~tens of minutes per chroot). Skip if you would rather wait for the release tag.
 
 ### 2. AUR (`yona-bin`)
 

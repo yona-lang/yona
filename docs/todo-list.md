@@ -28,28 +28,49 @@
 
 ### 3) Distribution readiness
 
+- [x] Copr / AUR / Launchpad CI jobs + package-first install docs (`dist/RELEASING.md`) — first publish on next `v*` tag after one-time Copr project, AUR key, and PPA + GitHub secrets
 - [ ] Windows installer productionization (upgrade behavior, signing, final UX polish)
 - [ ] Final packaging pass for sysroot-based CLI/REPL distribution layout
 - [ ] Enable embedded LLD backend by default across supported toolchains (resolve remaining dependency gates, e.g. MSVC-compatible LibXml2 on Windows)
 - [ ] Implement true embedded LLD backend for Linux/macOS in-process mode
+
+### 4) Type system (GitHub #3–#8)
+
+Program of record: issues on `yona-lang/yonac-llvm`. Execution plan:
+[2026-08-17-next-plan-of-action.md](./superpowers/plans/2026-08-17-next-plan-of-action.md).
+Do not start CTE (#4) or a full typed-core API (#7) until the audit (#3) and
+effect-row story (#8) are honest about what already works.
+
+- [ ] **[#3](https://github.com/yona-lang/yonac-llvm/issues/3) Type-system status audit** — deliver `docs/type-system-status.md` (Parser / AST / Typechecker / Codegen / `.yonai` / Tests × `implemented` | `partial` | `design-only` | `missing`) for effects, effect rows, linear types, refinements, row polymorphism, `@borrow` / `&T`, GENFN / borrow metadata, exhaustiveness / `-Wunmatched-adt`. Evidence links required; no feature work in this item. **Do first.**
+- [ ] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference + `.yonai` propagation** — after #3. Infer, normalize, write/restore rows, check call sites. Dedicated plan before coding.
+- [ ] **[#6](https://github.com/yona-lang/yonac-llvm/issues/6) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
+- [ ] **[#5](https://github.com/yona-lang/yonac-llvm/issues/5) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
+- [ ] **[#7](https://github.com/yona-lang/yonac-llvm/issues/7) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format.
+- [ ] **[#4](https://github.com/yona-lang/yonac-llvm/issues/4) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
+
+Default series: `#3 → #8 → #5 → #7 → #4`, with **#6** beside #8 after the audit.
 
 ### Suggested next steps (rolling)
 
 - [x] **yonac module files with `##` preamble** — `is_module_source` in
   `cli/main.cpp` skips `#` line comments before detecting `module`, so
   `yonac -o lib/Std/M.yona lib/Std/M.yona` works for Http-style leading docs.
+- [x] **Phase 0 CI bugs** — flaky `binary_seek` / `binary_write_read` and
+  `net_runtime_test` TCP SIGSEGV (see Bugs).
+- [ ] **Next language work:** type-system audit (#3), then effect rows (#8).
+  See §4 above.
 
-High leverage near-term: **channel deadlock detection** (debuggability,
-smaller than coroutine rewrite), **`&T` / borrow types** — design
-[design-borrow-types.md](./design-borrow-types.md) then internal `MonoType`
-slice (see item below), **LLVM coroutine plan** only after cancellation
-semantics are frozen. **GPU:** [design-gpu-async.md](./design-gpu-async.md);
-**`Std\GPU`** columnar + async float + Vulkan discovery are **shipped**; roadmap /
-limitations: **`docs/gpu-architecture.md`**. **Next (non-macOS):** **`vkQueueSubmit2`** / **`VK_KHR_synchronization2`**, **`mapGPU` /
-`reduceGPU`**, pinned buffers, multi-stage command graphs, typed GPU capability effect,
-cancellation before submit (skip **`vkQueueSubmit`** when cancelled), then transparent lowering (*benchmark gate —*
-`gpu-transparent-lowering.md`). Product: **LSP** or **package manager** if adoption beats
-runtime research.
+High leverage after the audit: **`&T` / borrow types**
+([design-borrow-types.md](./design-borrow-types.md)), **supervisors-as-handlers**
+(after cancel story is frozen), **LLVM coroutine plan** only after cancellation
+semantics are frozen. **GPU** (parallel; does not block #3/#8):
+[design-gpu-async.md](./design-gpu-async.md); **`Std\GPU`** columnar + async
+float + Vulkan discovery are **shipped**; **`docs/gpu-architecture.md`**.
+**Next (non-macOS):** **`mapGPU` / `reduceGPU`**, timeline semaphore **use** /
+**`vkQueueSubmit2`**, task-group cancel for in-flight GPU, then pinned buffers /
+graphs / transparent lowering (*benchmark gate —* `gpu-transparent-lowering.md`).
+Product: **LSP** or **package manager** if adoption beats runtime research;
+prefer after typed-core (#7).
 
 ### Bugs
 
@@ -196,6 +217,8 @@ eligibility + effect “schedule” story). **Design:**
 - [ ] **Compile-Time Evaluator** — evaluate pure functions at compile time.
   Enables user-defined derive strategies, constant folding, static assertions.
   Requires: subset interpreter for pure Yona expressions (no I/O, no effects).
+  Tracked as [#4](https://github.com/yona-lang/yonac-llvm/issues/4); blocked on
+  #5 (and ideally #7). See Active Priorities §4.
 - [ ] **User-Defined Derives** — traits declare themselves derivable via
   `derive` block that templates over ADT structure. Requires compile-time
   evaluator or external codegen tool reading enriched `.yonai` metadata.
