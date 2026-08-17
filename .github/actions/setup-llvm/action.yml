@@ -1,0 +1,191 @@
+name: Set up LLVM
+description: Use the runner's LLVM when it is complete; install only what the image lacks.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up LLVM (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Images ship clang-N / lld-N (Ubuntu 26.04: 20, 21, 22). They do not ship llvm-N-dev.
+        major=""
+        for clang_bin in /usr/bin/clang-[0-9]*; do
+          [[ -x "${clang_bin}" ]] || continue
+          n="${clang_bin##*-}"
+          if [[ -z "${major}" || "${n}" -gt "${major}" ]]; then
+            major="${n}"
+          fi
+        done
+        if [[ -z "${major}" ]]; then
+          echo "No preinstalled clang-N; installing newest Ubuntu llvm-*-dev" >&2
+          sudo apt-get update
+          major="$(apt-cache search --names-only '^llvm-[0-9]+-dev$' \
+            | awk '{print $1}' \
+            | sed -n 's/^llvm-\([0-9][0-9]*\)-dev$/\1/p' \
+            | sort -n \
+            | tail -1)"
+          sudo apt-get install -y --no-install-recommends \
+            "llvm-${major}-dev" "clang-${major}" "lld-${major}"
+        fi
+        prefix="$(llvm-config-${major} --prefix 2>/dev/null || true)"
+        if [[ -z "${prefix}" ]]; then
+          prefix="/usr/lib/llvm-${major}"
+        fi
+        if [[ ! -f "${prefix}/lib/cmake/llvm/LLVMConfig.cmake" ]]; then
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "llvm-${major}-dev"
+          prefix="$(llvm-config-${major} --prefix)"
+        fi
+        if [[ -x "${prefix}/bin/clang" ]]; then
+          cc="${prefix}/bin/clang"
+          cxx="${prefix}/bin/clang++"
+        else
+          cc="$(command -v "clang-${major}")"
+          cxx="$(command -v "clang++-${major}")"
+        fi
+        test -x "${cc}"
+        test -x "${cxx}"
+        test -f "${prefix}/lib/cmake/llvm/LLVMConfig.cmake"
+        echo "${prefix}/bin" >> "${GITHUB_PATH}"
+        {
+          echo "LLVM_MAJOR=${major}"
+          echo "LLVM_INSTALL_PREFIX=${prefix}"
+          echo "LLVM_DIR=${prefix}/lib/cmake/llvm"
+          echo "CC=${cc}"
+          echo "CXX=${cxx}"
+          echo "YONAC_CC=${cc}"
+        } >> "${GITHUB_ENV}"
+
+    - name: Set up LLVM (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Image has Apple clang (no LLVMConfig.cmake) and Homebrew llvm@20. Need current `llvm`.
+        # cmake and ninja are already on the image.
+        brew install llvm
+        prefix="$(brew --prefix llvm)"
+        lld_bin="${prefix}/bin"
+        if ! command -v ld.lld >/dev/null && brew info lld >/dev/null 2>&1; then
+          brew install lld
+          lld_bin="$(brew --prefix lld)/bin"
+        fi
+        test -x "${prefix}/bin/clang"
+        test -f "${prefix}/lib/cmake/llvm/LLVMConfig.cmake"
+        major="$("${prefix}/bin/llvm-config" --version | cut -d. -f1)"
+        {
+          echo "${prefix}/bin"
+          echo "${lld_bin}"
+        } >> "${GITHUB_PATH}"
+        {
+          echo "LLVM_MAJOR=${major}"
+          echo "LLVM_INSTALL_PREFIX=${prefix}"
+          echo "LLVM_DIR=${prefix}/lib/cmake/llvm"
+          echo "CC=${prefix}/bin/clang"
+          echo "CXX=${prefix}/bin/clang++"
+          echo "YONAC_CC=${prefix}/bin/clang"
+        } >> "${GITHUB_ENV}"
+
+    - name: Resolve Windows LLVM release
+      if: runner.os == 'Windows'
+      id: win-llvm
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        # Image LLVM is Chocolatey `llvm` (currently 20) — the win64 installer, not a
+        # complete clang+llvm tree (see INSTALL.md). Download the latest official archive.
+        $headers = @{
+          "User-Agent" = "yonac-llvm-ci"
+          "Accept" = "application/vnd.github+json"
+        }
+        if ($env:GH_TOKEN) { $headers["Authorization"] = "Bearer $($env:GH_TOKEN)" }
+        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/llvm/llvm-project/releases?per_page=30" -Headers $headers
+        $chosen = $null
+        foreach ($rel in $releases) {
+          if ($rel.prerelease) { continue }
+          if ($rel.tag_name -notmatch '^llvmorg-\d+\.\d+\.\d+$') { continue }
+          $ver = $rel.tag_name.Substring("llvmorg-".Length)
+          $assetName = "clang+llvm-$ver-x86_64-pc-windows-msvc.tar.xz"
+          $asset = $rel.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+          if ($asset) {
+            $chosen = [pscustomobject]@{ Version = $ver; Url = $asset.browser_download_url }
+            break
+          }
+        }
+        if (-not $chosen) { throw "No stable llvmorg release publishes clang+llvm-*-x86_64-pc-windows-msvc.tar.xz" }
+        Write-Host "Latest official Windows LLVM archive: $($chosen.Version)"
+        "release=$($chosen.Version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "url=$($chosen.Url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+    - name: Cache LLVM (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: C:\LLVM
+        key: llvm-windows-${{ steps.win-llvm.outputs.release }}-x86_64-msvc
+
+    - name: Set up LLVM (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        LLVM_RELEASE: ${{ steps.win-llvm.outputs.release }}
+        LLVM_URL: ${{ steps.win-llvm.outputs.url }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        $destDir = "C:\LLVM"
+        $clangExe = Join-Path $destDir "bin\clang.exe"
+        if (Test-Path $clangExe) {
+          Write-Host "Using cached LLVM at $destDir"
+        } else {
+          $ver = $env:LLVM_RELEASE
+          $url = $env:LLVM_URL
+          $archive = "clang+llvm-$ver-x86_64-pc-windows-msvc.tar.xz"
+          $tempArchive = Join-Path $env:RUNNER_TEMP $archive
+          Write-Host "Downloading $url"
+          & curl.exe -fL --retry 3 --retry-delay 2 -o $tempArchive $url
+          if ($LASTEXITCODE -ne 0) { throw "LLVM download failed: $url" }
+          if ((Get-Item $tempArchive).Length -lt 1MB) { throw "LLVM archive too small; $url is not a tarball" }
+          $extract = Join-Path $env:RUNNER_TEMP "llvm-extract"
+          $final = Join-Path $env:RUNNER_TEMP "llvm-final"
+          New-Item -ItemType Directory -Force -Path $extract, $final | Out-Null
+          & 7z x $tempArchive "-o$extract" | Out-Null
+          $tarFile = Get-ChildItem $extract -Filter *.tar | Select-Object -First 1
+          if (-not $tarFile) { throw "No .tar inside $archive" }
+          & 7z x $tarFile.FullName "-o$final" | Out-Null
+          $extractedDir = Get-ChildItem $final -Directory | Select-Object -First 1
+          if (-not $extractedDir) { throw "LLVM tarball had no top-level directory" }
+          if (Test-Path $destDir) { Remove-Item -Recurse -Force $destDir }
+          Move-Item $extractedDir.FullName $destDir
+        }
+        if (-not (Test-Path $clangExe)) { throw "clang.exe missing under $destDir" }
+        $llvmCmake = Join-Path $destDir "lib\cmake\llvm"
+        if (-not (Test-Path (Join-Path $llvmCmake "LLVMConfig.cmake"))) { throw "incomplete LLVM tree: missing LLVMConfig.cmake" }
+        $major = $env:LLVM_RELEASE.Split(".")[0]
+        Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $destDir "bin")
+        Add-Content -Path $env:GITHUB_ENV -Value "LLVM_MAJOR=$major"
+        Add-Content -Path $env:GITHUB_ENV -Value "LLVM_INSTALL_PREFIX=$destDir"
+        Add-Content -Path $env:GITHUB_ENV -Value "LLVM_DIR=$llvmCmake"
+        Add-Content -Path $env:GITHUB_ENV -Value "CC=$clangExe"
+        Add-Content -Path $env:GITHUB_ENV -Value "CXX=$(Join-Path $destDir 'bin\clang++.exe')"
+        Add-Content -Path $env:GITHUB_ENV -Value "YONAC_CC=$clangExe"
+
+    - name: Report LLVM
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "### LLVM" >> "$GITHUB_STEP_SUMMARY"
+        echo "- install prefix: \`${LLVM_INSTALL_PREFIX:-}\`" >> "$GITHUB_STEP_SUMMARY"
+        if command -v clang >/dev/null; then
+          clang --version | head -n 1 | tee -a "$GITHUB_STEP_SUMMARY"
+        elif command -v clang.exe >/dev/null; then
+          clang.exe --version | head -n 1 | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
+        if command -v llvm-config >/dev/null; then
+          echo "llvm-config $(llvm-config --version)" | tee -a "$GITHUB_STEP_SUMMARY"
+        elif command -v llvm-config.exe >/dev/null; then
+          echo "llvm-config $(llvm-config.exe --version)" | tee -a "$GITHUB_STEP_SUMMARY"
+        fi

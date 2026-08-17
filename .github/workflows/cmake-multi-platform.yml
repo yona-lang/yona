@@ -9,337 +9,84 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
-        build_type: [Debug, Release]
         include:
-          # Linux Debug
-          - os: ubuntu-24.04
-            build_type: Debug
+          - os: ubuntu-26.04
             name: Linux Debug
             configure_preset: x64-debug-linux
             build_preset: build-debug-linux
-            test_preset: unit-tests-linux
-            llvm_version: 20
             build_dir: x64-debug-linux
-
-          # Linux Release
-          - os: ubuntu-24.04
-            build_type: Release
+          - os: ubuntu-26.04
             name: Linux Release
             configure_preset: x64-release-linux
             build_preset: build-release-linux
-            test_preset: unit-tests-linux
-            llvm_version: 20
             build_dir: x64-release-linux
-
-          # Linux arm64 Debug
-          - os: ubuntu-24.04-arm
-            build_type: Debug
+          - os: ubuntu-26.04-arm
             name: Linux arm64 Debug
             configure_preset: arm64-debug-linux
             build_preset: build-debug-linux-arm64
-            test_preset: unit-tests-linux-arm64
-            llvm_version: 20
             build_dir: arm64-debug-linux
-
-          # Linux arm64 Release
-          - os: ubuntu-24.04-arm
-            build_type: Release
+          - os: ubuntu-26.04-arm
             name: Linux arm64 Release
             configure_preset: arm64-release-linux
             build_preset: build-release-linux-arm64
-            test_preset: unit-tests-linux-arm64
-            llvm_version: 20
             build_dir: arm64-release-linux
-
-          # macOS Debug
-          - os: macos-15
-            build_type: Debug
+          - os: macos-26
             name: macOS Debug
             configure_preset: x64-debug-macos
             build_preset: build-debug-macos
-            test_preset: unit-tests-macos
-            llvm_version: 20
             build_dir: x64-debug-macos
-
-          # macOS Release
-          - os: macos-15
-            build_type: Release
+          - os: macos-26
             name: macOS Release
             configure_preset: x64-release-macos
             build_preset: build-release-macos
-            test_preset: unit-tests-macos
-            llvm_version: 20
             build_dir: x64-release-macos
-
-          # Windows Debug (official clang+llvm Windows MSVC bundle; must match INSTALL.md)
           - os: windows-2025
-            build_type: Debug
             name: Windows Debug
             configure_preset: x64-debug
             build_preset: build-debug
-            test_preset: unit-tests-windows
-            llvm_version: 22
-            llvm_minor_version: 1.0
             build_dir: x64-debug
-
-          # Windows Release
           - os: windows-2025
-            build_type: Release
             name: Windows Release
             configure_preset: x64-release
             build_preset: build-release
-            test_preset: unit-tests-windows
-            llvm_version: 22
-            llvm_minor_version: 1.0
             build_dir: x64-release
-
-    name: ${{ matrix.name }}
 
     steps:
     - uses: actions/checkout@v4
 
-    # Install LLVM on Linux
-    - name: Install LLVM (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-        sudo add-apt-repository "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.llvm_version }} main"
-        sudo apt update
-        sudo apt upgrade -y
-        sudo apt install -y \
-          libllvm${{ matrix.llvm_version }} \
-          llvm-${{ matrix.llvm_version }} \
-          llvm-${{ matrix.llvm_version }}-dev \
-          llvm-${{ matrix.llvm_version }}-runtime \
-          clang-${{ matrix.llvm_version }} \
-          clang-tools-${{ matrix.llvm_version }} \
-          libclang-common-${{ matrix.llvm_version }}-dev \
-          libclang-${{ matrix.llvm_version }}-dev \
-          libclang1-${{ matrix.llvm_version }} \
-          clang-format-${{ matrix.llvm_version }} \
-          clangd-${{ matrix.llvm_version }} \
-          lld-${{ matrix.llvm_version }} \
-          libc++-${{ matrix.llvm_version }}-dev \
-          libc++abi-${{ matrix.llvm_version }}-dev
+    - name: Set up LLVM
+      uses: ./.github/actions/setup-llvm
 
-    # Install dependencies on macOS
-    - name: Install dependencies (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        brew install ninja llvm@${{ matrix.llvm_version }} lld@${{ matrix.llvm_version }}
-        # Check LLVM version
-        brew list --versions llvm
-        echo "LLVM_DIR=$(brew --prefix llvm@${{ matrix.llvm_version }})" >> $GITHUB_ENV
-        echo "LDFLAGS=\"-L$(brew --prefix llvm@${{ matrix.llvm_version }})/lib -L$(brew --prefix lld@${{ matrix.llvm_version }})/lib $LDFLAGS\"" >> $GITHUB_ENV
-        echo "CPPFLAGS=\"-I$(brew --prefix llvm@${{ matrix.llvm_version }})/include -I$(brew --prefix lld@${{ matrix.llvm_version }})/include $CPPFLAGS\"" >> $GITHUB_ENV
-        echo "$(brew --prefix llvm@${{ matrix.llvm_version }})/bin:$(brew --prefix lld@${{ matrix.llvm_version }})/bin:$PATH" >> $GITHUB_PATH
-        # Override compiler paths for CI
-        echo "CC=$(brew --prefix llvm@${{ matrix.llvm_version }})/bin/clang" >> $GITHUB_ENV
-        echo "CXX=$(brew --prefix llvm@${{ matrix.llvm_version }})/bin/clang++" >> $GITHUB_ENV
+    - name: Configure
+      run: cmake --preset ${{ matrix.configure_preset }}
 
-    # Cache LLVM (Windows)
-    - name: Cache LLVM (Windows)
-      if: runner.os == 'Windows'
-      uses: actions/cache@v4
-      with:
-        path: C:\LLVM
-        key: llvm-windows-${{ matrix.llvm_version }}-${{ matrix.llvm_minor_version }}
+    - name: Build
+      run: cmake --build --preset ${{ matrix.build_preset }}
 
-    # Install LLVM on Windows
-    - name: Install LLVM (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $llvmVersion = "${{ matrix.llvm_version }}"
-        $llvmMinorVersion = "${{ matrix.llvm_minor_version }}"
-        $destDir = "C:\LLVM"
-        $clangExe = Join-Path $destDir "bin\clang.exe"
-        if (!(Test-Path $clangExe)) {
-          $llvmBaseUrl = "https://github.com/llvm/llvm-project/releases/download"
-          $llvmTag = "llvmorg-$llvmVersion.$llvmMinorVersion"
-          $llvmArchive = "clang+llvm-$llvmVersion.$llvmMinorVersion-x86_64-pc-windows-msvc.tar.xz"
-          $downloadUrl = "$llvmBaseUrl/$llvmTag/$llvmArchive"
-          $tempArchive = "$env:RUNNER_TEMP\$llvmArchive"
-
-          # Create destination directory
-          if (!(Test-Path $destDir)) {
-            New-Item -ItemType Directory -Path $destDir | Out-Null
-          }
-
-          # Download LLVM archive
-          Invoke-WebRequest -Uri $downloadUrl -OutFile $tempArchive
-
-          # Extract .tar.xz (requires 7zip, available on GitHub runners)
-          7z x $tempArchive -o"$env:RUNNER_TEMP\llvm-extract" | Out-Null
-          $tarFile = Get-ChildItem "$env:RUNNER_TEMP\llvm-extract" -Filter *.tar | Select-Object -First 1
-          7z x $tarFile.FullName -o"$env:RUNNER_TEMP\llvm-final" | Out-Null
-
-          # Move the nested directory content to the final destination
-          $extractedDir = Get-ChildItem "$env:RUNNER_TEMP\llvm-final" -Directory | Select-Object -First 1
-          if ($extractedDir) {
-            Get-ChildItem -Path $extractedDir.FullName | Move-Item -Destination $destDir -Force
-          }
-        }
-
-    - name: Set Up LLVM (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        # Same layout as INSTALL.md / release workflow: full clang+llvm prefix + PATH for doctest subprocesses
-        Add-Content -Path $env:GITHUB_PATH -Value "C:\LLVM\bin"
-        echo "LLVM_INSTALL_PREFIX=C:\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "CXX=C:\LLVM\bin\clang++.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "YONAC_CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-    # Install CMake and Ninja
-    - uses: lukka/get-cmake@latest
-
-    # Configure and Build
-    - name: Configure and Build
-      uses: lukka/run-cmake@v10
-      with:
-        configurePreset: ${{ matrix.configure_preset }}
-        buildPreset: ${{ matrix.build_preset }}
-
-    - name: Report embedded LLD status (Linux/macOS)
-      if: success() && runner.os != 'Windows'
-      shell: bash
-      run: |
-        python3 - <<'PY'
-        import os
-        from pathlib import Path
-
-        cache = Path("out/build/${{ matrix.build_dir }}/CMakeCache.txt")
-        text = cache.read_text(encoding="utf-8", errors="ignore")
-        enabled = ""
-        reason = ""
-        for line in text.splitlines():
-            if line.startswith("YONA_INPROCESS_LLD_AVAILABLE:BOOL="):
-                enabled = line.split("=", 1)[1].strip()
-            elif line.startswith("YONA_INPROCESS_LLD_REASON:STRING="):
-                reason = line.split("=", 1)[1].strip()
-        if not enabled:
-            raise SystemExit("Missing YONA_INPROCESS_LLD_AVAILABLE in CMakeCache.txt")
-        if not reason:
-            raise SystemExit("Missing YONA_INPROCESS_LLD_REASON in CMakeCache.txt")
-        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-            f.write(f"### Embedded LLD ({'${{ matrix.name }}'})\n")
-            f.write(f"- active: `{enabled}`\n")
-            f.write(f"- reason: `{reason}`\n\n")
-        print(f"Embedded LLD active={enabled}; reason={reason}")
-        PY
-
-    - name: Report embedded LLD status (Windows)
-      if: success() && runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $cache = "out/build/${{ matrix.build_dir }}/CMakeCache.txt"
-        $enabled = ""
-        $reason = ""
-        foreach ($line in Get-Content $cache) {
-          if ($line -like "YONA_INPROCESS_LLD_AVAILABLE:BOOL=*") {
-            $enabled = $line.Split("=",2)[1]
-          } elseif ($line -like "YONA_INPROCESS_LLD_REASON:STRING=*") {
-            $reason = $line.Split("=",2)[1]
-          }
-        }
-        if (-not $enabled) { throw "Missing YONA_INPROCESS_LLD_AVAILABLE in CMakeCache.txt" }
-        if (-not $reason) { throw "Missing YONA_INPROCESS_LLD_REASON in CMakeCache.txt" }
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Embedded LLD (${{ matrix.name }})"
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- active: \`$enabled\`"
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- reason: \`$reason\`"
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
-        Write-Host "Embedded LLD active=$enabled; reason=$reason"
-
-    - name: Validate runtime artifacts and linker modes (Linux/macOS)
-      if: success() && runner.os != 'Windows'
-      shell: bash
-      run: |
-        BUILD_DIR="out/build/${{ matrix.build_dir }}"
-        YONAC="${BUILD_DIR}/yonac"
-        test -f "${BUILD_DIR}/runtime/compiled_runtime.o"
-        test -f "${BUILD_DIR}/runtime/libyona_runtime.a"
-        INPROC_ACTIVE=$(awk -F= '/^YONA_INPROCESS_LLD_AVAILABLE:BOOL=/{print $2}' "${BUILD_DIR}/CMakeCache.txt" | tr -d '\r')
-
-        YONAC_CC="${CC:-clang}" "${YONAC}" --sysroot "${BUILD_DIR}" --linker-mode system -e "1 + 2" -o "${BUILD_DIR}/ci_link_system"
-        [[ "$("${BUILD_DIR}/ci_link_system")" == "3" ]]
-
-        if [[ "${INPROC_ACTIVE}" == "TRUE" ]]; then
-          YONAC_REQUIRE_INPROCESS_LLD=1 YONAC_CC="${CC:-clang}" "${YONAC}" --sysroot "${BUILD_DIR}" --linker-mode inprocess -e "1 + 2" -o "${BUILD_DIR}/ci_link_inprocess"
-        else
-          YONAC_CC="${CC:-clang}" "${YONAC}" --sysroot "${BUILD_DIR}" --linker-mode inprocess -e "1 + 2" -o "${BUILD_DIR}/ci_link_inprocess"
-        fi
-        [[ "$("${BUILD_DIR}/ci_link_inprocess")" == "3" ]]
-
-    - name: Validate runtime artifacts and linker modes (Windows)
-      if: success() && runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $buildDir = "out/build/${{ matrix.build_dir }}"
-        $yonac = Join-Path $buildDir "yonac.exe"
-        if (-not $env:YONAC_CC) { $env:YONAC_CC = "C:\LLVM\bin\clang.exe" }
-        if (!(Test-Path (Join-Path $buildDir "runtime/compiled_runtime.o"))) { throw "missing runtime/compiled_runtime.o" }
-        if (!(Test-Path (Join-Path $buildDir "runtime/yona_runtime.lib"))) { throw "missing runtime/yona_runtime.lib" }
-        $active = ((Get-Content (Join-Path $buildDir "CMakeCache.txt")) | Where-Object { $_ -like "YONA_INPROCESS_LLD_AVAILABLE:BOOL=*" } | Select-Object -First 1).Split("=",2)[1]
-
-        & $yonac --sysroot $buildDir --linker-mode system -e "1 + 2" -o (Join-Path $buildDir "ci_link_system.exe")
-        $outSystem = & (Join-Path $buildDir "ci_link_system.exe")
-        if ($outSystem -ne "3") { throw "system linker-mode smoke test failed" }
-
-        if ($active -eq "TRUE") { $env:YONAC_REQUIRE_INPROCESS_LLD = "1" } else { Remove-Item Env:YONAC_REQUIRE_INPROCESS_LLD -ErrorAction SilentlyContinue }
-        & $yonac --sysroot $buildDir --linker-mode inprocess -e "1 + 2" -o (Join-Path $buildDir "ci_link_inprocess.exe")
-        $outInprocess = & (Join-Path $buildDir "ci_link_inprocess.exe")
-        if ($outInprocess -ne "3") { throw "inprocess linker-mode smoke test failed" }
-
-    # Run tests directly with doctest JUnit reporter for detailed results
-    - name: Run Tests with Detailed Output
+    - name: Report embedded LLD
       if: success()
       shell: bash
       run: |
-        # Find the test executable
-        if [[ "${{ runner.os }}" == "Windows" ]]; then
-          # GITHUB_ENV already sets YONAC_CC / PATH; doctest still needs YONA_PATH for module fixtures
-          TEST_EXE=$(find out/build -name "tests.exe" -type f | head -n 1)
-        elif [[ "${{ runner.os }}" == "macOS" ]]; then
-          # macOS doesn't support -executable, use -perm +111 instead
-          TEST_EXE=$(find out/build -name "tests" -type f -perm +111 | head -n 1)
-        else
-          # Linux supports -executable
-          TEST_EXE=$(find out/build -name "tests" -type f -executable | head -n 1)
-        fi
+        PY="$(command -v python3 || command -v python)"
+        "$PY" scripts/ci/report-embedded-lld.py "out/build/${{ matrix.build_dir }}/CMakeCache.txt" "${{ matrix.name }}"
 
-        if [ -f "$TEST_EXE" ]; then
-          echo "Running tests: $TEST_EXE"
-          # Set YONA_PATH for module tests
-          export YONA_PATH="${GITHUB_WORKSPACE}/test/code"
+    - name: Validate linker modes
+      if: success() && runner.os != 'Windows'
+      run: bash scripts/ci/validate-linker-modes.sh "out/build/${{ matrix.build_dir }}"
 
-          # Run with JUnit reporter for detailed test results
-          "$TEST_EXE" --reporters=junit --out=doctest-results.xml || true
+    - name: Validate linker modes
+      if: success() && runner.os == 'Windows'
+      shell: pwsh
+      run: ./scripts/ci/validate-linker-modes.ps1 -BuildDir "out/build/${{ matrix.build_dir }}"
 
-          # Also run with console reporter for logs
-          echo ""
-          echo "=== Console Output ==="
-          "$TEST_EXE" --reporters=console || true
-        else
-          echo "Test executable not found!"
-          exit 1
-        fi
-
-    # Run CTest for overall pass/fail status
-    - name: Run CTest
+    - name: Test
       if: success()
-      uses: lukka/run-cmake@v10
-      with:
-        testPreset: ${{ matrix.test_preset }}
-        testPresetAdditionalArgs: "['--output-junit', 'test-results.xml']"
+      run: ctest --test-dir "out/build/${{ matrix.build_dir }}" --output-on-failure --output-junit test-results.xml
 
-    # Upload test results
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
@@ -347,130 +94,89 @@ jobs:
         name: test-results-${{ matrix.name }}
         path: |
           **/test-results.xml
-          **/doctest-results.xml
 
-    # Parse test results and create summary
-    - name: Parse Test Results
+    - name: Parse test results
       if: always()
       shell: bash
       run: |
-        # Find the test results file (prefer doctest-results.xml for detailed info)
-        TEST_FILE=$(find . -name "doctest-results.xml" -type f | head -n 1)
+        TEST_FILE="$(find . -name test-results.xml -type f | head -n 1)"
         if [ ! -f "$TEST_FILE" ]; then
-          TEST_FILE=$(find . -name "test-results.xml" -type f | head -n 1)
+          echo "⚠️ No test results found for ${{ matrix.name }}" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
         fi
-        if [ -f "$TEST_FILE" ]; then
-          # Extract test counts using grep and sed
-          TOTAL=$(grep -o 'tests="[0-9]*"' "$TEST_FILE" | sed 's/tests="//' | sed 's/"//g' | head -n 1)
-          FAILURES=$(grep -o 'failures="[0-9]*"' "$TEST_FILE" | sed 's/failures="//' | sed 's/"//g' | head -n 1)
-          ERRORS=$(grep -o 'errors="[0-9]*"' "$TEST_FILE" | sed 's/errors="//' | sed 's/"//g' | head -n 1)
+        TOTAL="$(grep -o 'tests="[0-9]*"' "$TEST_FILE" | sed 's/tests="//;s/"//g' | head -n 1)"
+        FAILURES="$(grep -o 'failures="[0-9]*"' "$TEST_FILE" | sed 's/failures="//;s/"//g' | head -n 1)"
+        ERRORS="$(grep -o 'errors="[0-9]*"' "$TEST_FILE" | sed 's/errors="//;s/"//g' | head -n 1)"
+        TOTAL="${TOTAL:-0}"
+        FAILURES="${FAILURES:-0}"
+        ERRORS="${ERRORS:-0}"
+        PASSED="$((TOTAL - FAILURES - ERRORS))"
+        {
+          echo "### Test Results for ${{ matrix.name }}"
+          echo ""
+          echo "| Status | Count |"
+          echo "|--------|-------|"
+          echo "| ✅ Passed | $PASSED |"
+          echo "| ❌ Failed | $FAILURES |"
+          echo "| 🔥 Errors | $ERRORS |"
+          echo "| 📊 Total | $TOTAL |"
+        } >> "$GITHUB_STEP_SUMMARY"
 
-          # Default to 0 if not found
-          TOTAL=${TOTAL:-0}
-          FAILURES=${FAILURES:-0}
-          ERRORS=${ERRORS:-0}
-          PASSED=$((TOTAL - FAILURES - ERRORS))
-
-          # Create summary
-          echo "### Test Results for ${{ matrix.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
-          echo "| ❌ Failed | $FAILURES |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔥 Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📊 Total | $TOTAL |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️ No test results found for ${{ matrix.name }}" >> $GITHUB_STEP_SUMMARY
-        fi
-
-    # Test Report
-    - name: Test Report
+    - name: Test report
       uses: dorny/test-reporter@v1
       if: always()
       with:
         name: Tests - ${{ matrix.name }}
-        path: '**/doctest-results.xml'
+        path: '**/test-results.xml'
         reporter: java-junit
         fail-on-error: 'false'
         fail-on-empty: 'false'
 
-  # Summary job to aggregate all test results
   test-summary:
     name: Test Summary
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: always()
-
     steps:
     - name: Download all test results
       uses: actions/download-artifact@v4
       with:
         pattern: test-results-*
 
-    - name: Create Test Summary
+    - name: Create test summary
       run: |
-        echo "# 📊 Test Results Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "## Platform Overview" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Platform | Total | ✅ Passed | ❌ Failed | 🔥 Errors | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|-------|-----------|-----------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "# 📊 Test Results Summary" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Platform | Total | ✅ Passed | ❌ Failed | 🔥 Errors | Status |" >> "$GITHUB_STEP_SUMMARY"
+        echo "|----------|-------|-----------|-----------|-----------|--------|" >> "$GITHUB_STEP_SUMMARY"
 
         TOTAL_ALL=0
         PASSED_ALL=0
         FAILED_ALL=0
         ERRORS_ALL=0
 
-        # Process each test result directory
         for dir in test-results-*; do
-          if [ -d "$dir" ]; then
-            # Extract platform name from directory name
-            PLATFORM=${dir#test-results-}
-
-            # Find test results file in the directory (prefer doctest-results.xml for detailed info)
-            file=$(find "$dir" -name "doctest-results.xml" -type f | head -n 1)
-            if [ ! -f "$file" ]; then
-              file=$(find "$dir" -name "test-results.xml" -type f | head -n 1)
-            fi
-
-            if [ -f "$file" ]; then
-              # Extract test counts
-              TOTAL=$(grep -o 'tests="[0-9]*"' "$file" | sed 's/tests="//' | sed 's/"//g' | head -n 1)
-              FAILURES=$(grep -o 'failures="[0-9]*"' "$file" | sed 's/failures="//' | sed 's/"//g' | head -n 1)
-              ERRORS=$(grep -o 'errors="[0-9]*"' "$file" | sed 's/errors="//' | sed 's/"//g' | head -n 1)
-
-              # Default to 0 if not found
-              TOTAL=${TOTAL:-0}
-              FAILURES=${FAILURES:-0}
-              ERRORS=${ERRORS:-0}
-              PASSED=$((TOTAL - FAILURES - ERRORS))
-
-              # Update totals
-              TOTAL_ALL=$((TOTAL_ALL + TOTAL))
-              PASSED_ALL=$((PASSED_ALL + PASSED))
-              FAILED_ALL=$((FAILED_ALL + FAILURES))
-              ERRORS_ALL=$((ERRORS_ALL + ERRORS))
-
-              # Determine status icon
-              if [ "$FAILURES" -eq 0 ] && [ "$ERRORS" -eq 0 ]; then
-                STATUS="✅"
-              else
-                STATUS="❌"
-              fi
-
-              echo "| $PLATFORM | $TOTAL | $PASSED | $FAILURES | $ERRORS | $STATUS |" >> $GITHUB_STEP_SUMMARY
-            fi
-          fi
+          [ -d "$dir" ] || continue
+          PLATFORM="${dir#test-results-}"
+          file="$(find "$dir" -name test-results.xml -type f | head -n 1)"
+          [ -f "$file" ] || continue
+          TOTAL="$(grep -o 'tests="[0-9]*"' "$file" | sed 's/tests="//;s/"//g' | head -n 1)"
+          FAILURES="$(grep -o 'failures="[0-9]*"' "$file" | sed 's/failures="//;s/"//g' | head -n 1)"
+          ERRORS="$(grep -o 'errors="[0-9]*"' "$file" | sed 's/errors="//;s/"//g' | head -n 1)"
+          TOTAL="${TOTAL:-0}"
+          FAILURES="${FAILURES:-0}"
+          ERRORS="${ERRORS:-0}"
+          PASSED="$((TOTAL - FAILURES - ERRORS))"
+          TOTAL_ALL="$((TOTAL_ALL + TOTAL))"
+          PASSED_ALL="$((PASSED_ALL + PASSED))"
+          FAILED_ALL="$((FAILED_ALL + FAILURES))"
+          ERRORS_ALL="$((ERRORS_ALL + ERRORS))"
+          if [ "$FAILURES" -eq 0 ] && [ "$ERRORS" -eq 0 ]; then STATUS="✅"; else STATUS="❌"; fi
+          echo "| $PLATFORM | $TOTAL | $PASSED | $FAILURES | $ERRORS | $STATUS |" >> "$GITHUB_STEP_SUMMARY"
         done
 
-        # Add totals row
-        echo "| **TOTAL** | **$TOTAL_ALL** | **$PASSED_ALL** | **$FAILED_ALL** | **$ERRORS_ALL** | - |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
-        # Add success rate
+        echo "| **TOTAL** | **$TOTAL_ALL** | **$PASSED_ALL** | **$FAILED_ALL** | **$ERRORS_ALL** | - |" >> "$GITHUB_STEP_SUMMARY"
         if [ "$TOTAL_ALL" -gt 0 ]; then
-          SUCCESS_RATE=$(( (PASSED_ALL * 100) / TOTAL_ALL ))
-          echo "### 📈 Success Rate: ${SUCCESS_RATE}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 📈 Success Rate: $(( (PASSED_ALL * 100) / TOTAL_ALL ))%" >> "$GITHUB_STEP_SUMMARY"
         fi

@@ -1,19 +1,41 @@
 # Toolchain file for building with Homebrew LLVM on macOS.
-# Prefixes come from `brew --prefix` / `xcrun`; do not hardcode /opt/homebrew.
+# Prefixes come from env, then `brew --prefix`; do not hardcode /opt/homebrew.
 
-execute_process(
-	COMMAND brew --prefix llvm
-	OUTPUT_VARIABLE _YONA_BREW_LLVM
-	OUTPUT_STRIP_TRAILING_WHITESPACE
-	ERROR_QUIET
-)
-if(_YONA_BREW_LLVM AND EXISTS "${_YONA_BREW_LLVM}/bin/clang")
-	set(CMAKE_C_COMPILER "${_YONA_BREW_LLVM}/bin/clang" CACHE FILEPATH "")
-	set(CMAKE_CXX_COMPILER "${_YONA_BREW_LLVM}/bin/clang++" CACHE FILEPATH "")
+set(_yona_llvm_prefix "")
+if(DEFINED ENV{LLVM_INSTALL_PREFIX} AND EXISTS "$ENV{LLVM_INSTALL_PREFIX}/bin/clang")
+	set(_yona_llvm_prefix "$ENV{LLVM_INSTALL_PREFIX}")
 endif()
-if(_YONA_BREW_LLVM AND EXISTS "${_YONA_BREW_LLVM}/lib")
-	set(CMAKE_EXE_LINKER_FLAGS "-L${_YONA_BREW_LLVM}/lib -Wl,-rpath,${_YONA_BREW_LLVM}/lib" CACHE STRING "")
-	set(CMAKE_SHARED_LINKER_FLAGS "-L${_YONA_BREW_LLVM}/lib -Wl,-rpath,${_YONA_BREW_LLVM}/lib" CACHE STRING "")
+
+if(NOT _yona_llvm_prefix)
+	set(_yona_llvm_formulas)
+	if(DEFINED ENV{LLVM_MAJOR} AND NOT "$ENV{LLVM_MAJOR}" STREQUAL "")
+		list(APPEND _yona_llvm_formulas "llvm@$ENV{LLVM_MAJOR}")
+	endif()
+	list(APPEND _yona_llvm_formulas llvm)
+	foreach(_yona_formula IN LISTS _yona_llvm_formulas)
+		execute_process(
+			COMMAND brew --prefix "${_yona_formula}"
+			OUTPUT_VARIABLE _yona_brew_llvm
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+			ERROR_QUIET
+		)
+		if(_yona_brew_llvm AND EXISTS "${_yona_brew_llvm}/bin/clang")
+			set(_yona_llvm_prefix "${_yona_brew_llvm}")
+			break()
+		endif()
+	endforeach()
+endif()
+
+if(_yona_llvm_prefix)
+	set(CMAKE_C_COMPILER "${_yona_llvm_prefix}/bin/clang" CACHE FILEPATH "")
+	set(CMAKE_CXX_COMPILER "${_yona_llvm_prefix}/bin/clang++" CACHE FILEPATH "")
+	if(EXISTS "${_yona_llvm_prefix}/lib")
+		set(CMAKE_EXE_LINKER_FLAGS "-L${_yona_llvm_prefix}/lib -Wl,-rpath,${_yona_llvm_prefix}/lib" CACHE STRING "")
+		set(CMAKE_SHARED_LINKER_FLAGS "-L${_yona_llvm_prefix}/lib -Wl,-rpath,${_yona_llvm_prefix}/lib" CACHE STRING "")
+	endif()
+	if(EXISTS "${_yona_llvm_prefix}/lib/cmake/llvm")
+		set(LLVM_DIR "${_yona_llvm_prefix}/lib/cmake/llvm" CACHE PATH "LLVM CMake directory")
+	endif()
 endif()
 
 set(CMAKE_CXX_FLAGS "-stdlib=libc++" CACHE STRING "")

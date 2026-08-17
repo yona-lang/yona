@@ -10,71 +10,32 @@ permissions:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         arch: [x86_64]
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up LLVM
+        uses: ./.github/actions/setup-llvm
+
       - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y llvm-20 llvm-20-dev clang-20 lld-20 \
-            cmake ninja-build libpcre2-dev
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 100
-          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 100
-          sudo update-alternatives --install /usr/bin/lld lld /usr/bin/lld-20 100
-          sudo update-alternatives --install /usr/bin/llvm-config llvm-config /usr/bin/llvm-config-20 100
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpcre2-dev
 
       - name: Build release
         run: |
           cmake --preset x64-release-linux
           cmake --build --preset build-release-linux
 
-      - name: Report embedded LLD status
-        run: |
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          cache = Path("out/build/x64-release-linux/CMakeCache.txt")
-          text = cache.read_text(encoding="utf-8", errors="ignore")
-          enabled = ""
-          reason = ""
-          for line in text.splitlines():
-              if line.startswith("YONA_INPROCESS_LLD_AVAILABLE:BOOL="):
-                  enabled = line.split("=", 1)[1].strip()
-              elif line.startswith("YONA_INPROCESS_LLD_REASON:STRING="):
-                  reason = line.split("=", 1)[1].strip()
-          if not enabled:
-              raise SystemExit("Missing YONA_INPROCESS_LLD_AVAILABLE in CMakeCache.txt")
-          if not reason:
-              raise SystemExit("Missing YONA_INPROCESS_LLD_REASON in CMakeCache.txt")
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-              f.write("### Embedded LLD (Linux release)\n")
-              f.write(f"- active: `{enabled}`\n")
-              f.write(f"- reason: `{reason}`\n\n")
-          print(f"Embedded LLD active={enabled}; reason={reason}")
-          PY
+      - name: Report embedded LLD
+        run: python3 scripts/ci/report-embedded-lld.py out/build/x64-release-linux/CMakeCache.txt "Linux release"
 
       - name: Run tests
-        run: ctest --preset unit-tests-linux
+        run: ctest --test-dir out/build/x64-release-linux --output-on-failure
 
-      - name: Validate packaged runtime and linker modes
-        run: |
-          BUILD_DIR=out/build/x64-release-linux
-          test -f ${BUILD_DIR}/runtime/compiled_runtime.o
-          test -f ${BUILD_DIR}/runtime/libyona_runtime.a
-          INPROC_ACTIVE=$(awk -F= '/^YONA_INPROCESS_LLD_AVAILABLE:BOOL=/{print $2}' "${BUILD_DIR}/CMakeCache.txt" | tr -d '\r')
-          YONAC_CC=clang ${BUILD_DIR}/yonac --sysroot ${BUILD_DIR} --linker-mode system -e "1 + 2" -o ${BUILD_DIR}/release_link_system
-          test "$(${BUILD_DIR}/release_link_system)" = "3"
-          if [[ "${INPROC_ACTIVE}" == "TRUE" ]]; then
-            YONAC_REQUIRE_INPROCESS_LLD=1 YONAC_CC=clang ${BUILD_DIR}/yonac --sysroot ${BUILD_DIR} --linker-mode inprocess -e "1 + 2" -o ${BUILD_DIR}/release_link_inprocess
-          else
-            YONAC_CC=clang ${BUILD_DIR}/yonac --sysroot ${BUILD_DIR} --linker-mode inprocess -e "1 + 2" -o ${BUILD_DIR}/release_link_inprocess
-          fi
-          test "$(${BUILD_DIR}/release_link_inprocess)" = "3"
+      - name: Validate linker modes
+        run: bash scripts/ci/validate-linker-modes.sh out/build/x64-release-linux
 
       - name: Package
         run: |
@@ -100,61 +61,26 @@ jobs:
           path: yona-*-linux-*.tar.gz
 
   build-macos:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up LLVM
+        uses: ./.github/actions/setup-llvm
+
       - name: Install dependencies
-        run: |
-          brew install llvm cmake ninja pcre2
+        run: brew install pcre2
 
       - name: Build release
         run: |
-          export PATH="$(brew --prefix llvm)/bin:$PATH"
           cmake --preset x64-release-macos
           cmake --build --preset build-release-macos
 
-      - name: Report embedded LLD status
-        run: |
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
+      - name: Report embedded LLD
+        run: python3 scripts/ci/report-embedded-lld.py out/build/x64-release-macos/CMakeCache.txt "macOS release"
 
-          cache = Path("out/build/x64-release-macos/CMakeCache.txt")
-          text = cache.read_text(encoding="utf-8", errors="ignore")
-          enabled = ""
-          reason = ""
-          for line in text.splitlines():
-              if line.startswith("YONA_INPROCESS_LLD_AVAILABLE:BOOL="):
-                  enabled = line.split("=", 1)[1].strip()
-              elif line.startswith("YONA_INPROCESS_LLD_REASON:STRING="):
-                  reason = line.split("=", 1)[1].strip()
-          if not enabled:
-              raise SystemExit("Missing YONA_INPROCESS_LLD_AVAILABLE in CMakeCache.txt")
-          if not reason:
-              raise SystemExit("Missing YONA_INPROCESS_LLD_REASON in CMakeCache.txt")
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-              f.write("### Embedded LLD (macOS release)\n")
-              f.write(f"- active: `{enabled}`\n")
-              f.write(f"- reason: `{reason}`\n\n")
-          print(f"Embedded LLD active={enabled}; reason={reason}")
-          PY
-
-      - name: Validate packaged runtime and linker modes
-        run: |
-          export PATH="$(brew --prefix llvm)/bin:$PATH"
-          BUILD_DIR=out/build/x64-release-macos
-          test -f ${BUILD_DIR}/runtime/compiled_runtime.o
-          test -f ${BUILD_DIR}/runtime/libyona_runtime.a
-          INPROC_ACTIVE=$(awk -F= '/^YONA_INPROCESS_LLD_AVAILABLE:BOOL=/{print $2}' "${BUILD_DIR}/CMakeCache.txt" | tr -d '\r')
-          YONAC_CC=clang ${BUILD_DIR}/yonac --sysroot ${BUILD_DIR} --linker-mode system -e "1 + 2" -o ${BUILD_DIR}/release_link_system
-          test "$(${BUILD_DIR}/release_link_system)" = "3"
-          if [[ "${INPROC_ACTIVE}" == "TRUE" ]]; then
-            YONAC_REQUIRE_INPROCESS_LLD=1 YONAC_CC=clang ${BUILD_DIR}/yonac --sysroot ${BUILD_DIR} --linker-mode inprocess -e "1 + 2" -o ${BUILD_DIR}/release_link_inprocess
-          else
-            YONAC_CC=clang ${BUILD_DIR}/yonac --sysroot ${BUILD_DIR} --linker-mode inprocess -e "1 + 2" -o ${BUILD_DIR}/release_link_inprocess
-          fi
-          test "$(${BUILD_DIR}/release_link_inprocess)" = "3"
+      - name: Validate linker modes
+        run: bash scripts/ci/validate-linker-modes.sh out/build/x64-release-macos
 
       - name: Package
         run: |
@@ -184,43 +110,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache LLVM (Windows)
-        id: cache-llvm
-        uses: actions/cache@v4
-        with:
-          path: C:\LLVM
-          key: llvm-22-1.0-windows-msvc
-
-      - name: Install LLVM (Windows)
-        if: steps.cache-llvm.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $llvmVersion = "22"
-          $llvmMinorVersion = "1.0"
-          $destDir = "C:\LLVM"
-          $llvmBaseUrl = "https://github.com/llvm/llvm-project/releases/download"
-          $llvmTag = "llvmorg-$llvmVersion.$llvmMinorVersion"
-          $llvmArchive = "clang+llvm-$llvmVersion.$llvmMinorVersion-x86_64-pc-windows-msvc.tar.xz"
-          $downloadUrl = "$llvmBaseUrl/$llvmTag/$llvmArchive"
-          $tempArchive = "$env:RUNNER_TEMP\$llvmArchive"
-
-          Invoke-WebRequest -Uri $downloadUrl -OutFile $tempArchive
-          7z x $tempArchive -o"$env:RUNNER_TEMP\llvm-extract" | Out-Null
-          $tarFile = Get-ChildItem "$env:RUNNER_TEMP\llvm-extract" -Filter *.tar | Select-Object -First 1
-          7z x $tarFile.FullName -o"$env:RUNNER_TEMP\llvm-final" | Out-Null
-          $extractedDir = Get-ChildItem "$env:RUNNER_TEMP\llvm-final" -Directory | Select-Object -First 1
-
-          if (Test-Path $destDir) { Remove-Item -Recurse -Force $destDir }
-          Move-Item $extractedDir.FullName $destDir
-
-      - name: Set up LLVM (Windows)
-        shell: pwsh
-        run: |
-          echo "C:\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "LLVM_INSTALL_PREFIX=C:\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "CXX=C:\LLVM\bin\clang++.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "YONAC_CC=C:\LLVM\bin\clang.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Set up LLVM
+        uses: ./.github/actions/setup-llvm
 
       - name: Install WiX v4 CLI
         shell: pwsh
@@ -237,43 +128,22 @@ jobs:
       - name: Build release
         shell: pwsh
         run: |
-          cmake --preset x64-release -DLLVM_INSTALL_PREFIX=C:/LLVM
+          cmake --preset x64-release
           cmake --build --preset build-release
 
-      - name: Report embedded LLD status
-        shell: pwsh
+      - name: Report embedded LLD
+        shell: bash
         run: |
-          $cache = "out/build/x64-release/CMakeCache.txt"
-          $enabled = (Select-String -Path $cache -Pattern '^YONA_INPROCESS_LLD_AVAILABLE:BOOL=').Line.Split('=')[1]
-          $reason = (Select-String -Path $cache -Pattern '^YONA_INPROCESS_LLD_REASON:STRING=').Line.Split('=')[1]
-          "### Embedded LLD (Windows release)" >> $env:GITHUB_STEP_SUMMARY
-          "- active: `$enabled`" >> $env:GITHUB_STEP_SUMMARY
-          "- reason: `$reason`" >> $env:GITHUB_STEP_SUMMARY
-          "" >> $env:GITHUB_STEP_SUMMARY
+          PY="$(command -v python3 || command -v python)"
+          "$PY" scripts/ci/report-embedded-lld.py out/build/x64-release/CMakeCache.txt "Windows release"
 
       - name: Run tests
         shell: pwsh
-        run: ctest --preset unit-tests-windows --output-on-failure
+        run: ctest --test-dir out/build/x64-release --output-on-failure
 
-      - name: Validate packaged runtime and linker modes
+      - name: Validate linker modes
         shell: pwsh
-        run: |
-          $buildDir = "out/build/x64-release"
-          if (!(Test-Path (Join-Path $buildDir "runtime/compiled_runtime.o"))) { throw "missing runtime/compiled_runtime.o" }
-          if (!(Test-Path (Join-Path $buildDir "runtime/yona_runtime.lib"))) { throw "missing runtime/yona_runtime.lib" }
-
-          $cache = Join-Path $buildDir "CMakeCache.txt"
-          $inprocActive = (Select-String -Path $cache -Pattern '^YONA_INPROCESS_LLD_AVAILABLE:BOOL=').Line.Split('=')[1]
-          if (-not $env:YONAC_CC) { $env:YONAC_CC = "C:\LLVM\bin\clang.exe" }
-
-          & (Join-Path $buildDir "yonac.exe") --sysroot $buildDir --linker-mode system -e "1 + 2" -o (Join-Path $buildDir "release_link_system.exe")
-          $sysOut = & (Join-Path $buildDir "release_link_system.exe")
-          if ("$sysOut".Trim() -ne "3") { throw "system linker smoke failed: $sysOut" }
-
-          if ($inprocActive -eq "TRUE") { $env:YONAC_REQUIRE_INPROCESS_LLD = "1" } else { Remove-Item Env:YONAC_REQUIRE_INPROCESS_LLD -ErrorAction SilentlyContinue }
-          & (Join-Path $buildDir "yonac.exe") --sysroot $buildDir --linker-mode inprocess -e "1 + 2" -o (Join-Path $buildDir "release_link_inprocess.exe")
-          $inprocOut = & (Join-Path $buildDir "release_link_inprocess.exe")
-          if ("$inprocOut".Trim() -ne "3") { throw "inprocess linker smoke failed: $inprocOut" }
+        run: ./scripts/ci/validate-linker-modes.ps1 -BuildDir "out/build/x64-release"
 
       - name: Package (zip + msi)
         shell: pwsh
@@ -297,7 +167,7 @@ jobs:
 
   release:
     needs: [build-linux, build-macos, build-windows]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -319,7 +189,7 @@ jobs:
 
   aur:
     needs: [release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -340,7 +210,7 @@ jobs:
 
   copr:
     needs: [release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -377,7 +247,7 @@ jobs:
 
   launchpad:
     needs: [release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4

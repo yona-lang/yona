@@ -25,7 +25,7 @@ The rest of this file is for **building from source**.
 ## Prerequisites (source build)
 
 All platforms require:
-- **LLVM** for the codegen backend: **22+** recommended (see `CLAUDE.md`); **16+** may work if `find_package(LLVM)` succeeds with your toolchain. **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle version that matches your dev setup (CI uses **22.1.0** on Windows; Linux/macOS CI currently installs **20** from distro packages).
+- **LLVM** for the codegen backend: **22+** recommended (see `CLAUDE.md`); **16+** may work if `find_package(LLVM)` succeeds with your toolchain. **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle. CI (`.github/actions/setup-llvm`) uses the runner image where it is enough: Ubuntu 26.04 already has Clang 22 and only needs `llvm-22-dev`; macOS needs Homebrew `llvm` (Apple Clang has no `LLVMConfig.cmake`); Windows downloads the latest official archive because the image’s Chocolatey LLVM is not a complete tree.
 - **CMake 3.10+** and **Ninja** (for building from source; on **Windows** use the **Windows** section: Ninja + Clang from a prebuilt LLVM + MSVC toolset)
 - **C++23 capable compiler** (clang recommended; Windows presets use Clang with the MSVC linker)
 - **PCRE2** (optional, for Std\Regex module; on Windows you typically need a manual/vcpkg setup because `pkg-config` is uncommon)
