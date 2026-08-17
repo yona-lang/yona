@@ -109,7 +109,8 @@ int64_t yona_Std_GPU_raw__hasGpu(int64_t unused) {
         yona_gpu_has_gpu_cached = 0;
         return 0;
     }
-    yona_gpu_has_gpu_cached = yona_gpu_vulkan_device_shader_int64() ? 1 : 0;
+    /* Device ready is enough: i64 kernels when shaderInt64, else i32 when values fit. */
+    yona_gpu_has_gpu_cached = 1;
     return (int64_t)yona_gpu_has_gpu_cached;
 #else
     return 0;

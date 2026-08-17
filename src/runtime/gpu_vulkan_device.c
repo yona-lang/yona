@@ -766,7 +766,7 @@ static int yona_vk_do_try_init_unlocked(void) {
   }
 
   if (!yona_vk_shader_int64_enabled)
-    yona_vk_note_cpy("device ready; shaderInt64 unavailable (IntArray GPU kernels stay on CPU)");
+    yona_vk_note_cpy("device ready; shaderInt64 unavailable — IntArray GPU uses i32 when values fit");
   else
     yona_vk_note_clear();
   return 0;

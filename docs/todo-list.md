@@ -7,7 +7,8 @@
 - Tests: doctest (`gpu_vulkan_device` + optional `gpu_vulkan_mapadd` / mapMul / reduce); codegen `gpu_backend_flags` + `gpu_vulkan_last_note` (child env `YONA_GPU_DISABLE_VULKAN=1`); with `-DYONA_ENABLE_VULKAN=ON`, run `ctest -R doctest_gpu_vulkan -V` (see `CLAUDE.md`); full `tests.exe` per `CLAUDE.md` (`YONA_PATH`, `YONAC_CC` on Windows)
 - **Windows dev checklist:** full `clang+llvm-*-windows-msvc` tree for `LLVM_INSTALL_PREFIX`, correct env spelling, `CC`**/*`*CXX` or CMake compiler flags if Clang lives outside that prefix, and `YONAC_CC` or `PATH` for doctest (`tests.exe`) — see **INSTALL.md** (Windows: *Complete Windows LLVM tree*, `YONAC_CC` *and doctest*).
 - Windows benchmark run (2026-04-26): 35/35 Yona rows passing, report refreshed, perf deltas reviewed
-- **GPU crossover benches:** `bench/run_gpu_compare.py`, `bench/gpu_bench_meta.py`, and `bench/accelerators/`* hot + 10k/5k rows (`.yona` + `.expected`) for map/reduce, filter, columnar pipeline, materialize — see `bench/README.md` and `docs/benchmark-results-windows.md`
+- macOS benchmark run (2026-08-17): 45/45 Yona rows passing (`docs/benchmark-results-macos.md`)
+- **GPU crossover benches:** `bench/run_gpu_compare.py`, `bench/gpu_bench_meta.py`, and `bench/accelerators/`* hot + 10k/5k rows (`.yona` + `.expected`) for map/reduce, filter, columnar pipeline, materialize — see `bench/README.md`, `docs/benchmark-results-windows.md`, and `docs/benchmark-results-macos.md`
 - **Vulkan filter compute path:** SPIR-V under `src/runtime/gpu/shaders/filter_*.comp` (embedded `*_spv.inc`), runtime in `gpu_vulkan_ops.c` / `gpu_vulkan_compute.c` / `gpu_cpu.c`; API in `lib/Std/GPU.yona` — see `docs/gpu-architecture.md`
 - **GPU / Vulkan (desktop, non-macOS):** roadmap + **documented limitations** (`docs/gpu-architecture.md`: *Vulkan limitations*, *Roadmap implementation status*); Windows `yonac` links `vulkan-1.lib` from CMake-configured path with `VULKAN_SDK` fallback (`INSTALL.md`, `cmake/yona_vulkan_link_cfg.h.in`)
 - Runtime backends: Linux + Windows native paths in place
@@ -30,7 +31,7 @@
 ### 2) Platform/runtime closure
 
 - [x] macOS platform layer (kqueue path + per-OS runtime files)
-- [x] macOS `Std\GPU` Vulkan path: MoltenVK / portability (device init, `VK_KHR_portability_enumeration` / `portability_subset`, Darwin loader names, unified-memory host SSBO). **`shaderInt64` is typically absent on Metal** — `hasGpu` stays 0; IntArray GPU kernels remain CPU. See `docs/gpu-vulkan-implementation-plan.md` §11.
+- [x] macOS `Std\GPU` Vulkan path: MoltenVK / portability (device init, `VK_KHR_portability_enumeration` / `portability_subset`, Darwin loader names, unified-memory host SSBO). **`shaderInt64` is typically absent on Metal** — `hasGpu` is 1 when the device is ready; IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit; float scale uses f32. See `docs/gpu-vulkan-implementation-plan.md` §11.
 
 
 
@@ -320,6 +321,7 @@ eligibility + effect “schedule” story). **Design:**
 - Benchmark reports:
   - `docs/benchmark-results.md` (Linux baseline)
   - `docs/benchmark-results-windows.md` (Windows reruns)
+  - `docs/benchmark-results-macos.md` (macOS Apple Silicon / MoltenVK)
 - Stream-fusion evidence gate (required before relaxing fusion constraints):
   - run full benchmark matrix on Linux + Windows with 3 reruns (`-n 10`) and compare medians
   - require >=5% median win on the targeted fusion rows and no correctness/test regressions

@@ -1,0 +1,27 @@
+#version 450
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer IncBuf {
+    int inclusive[];
+};
+
+layout(set = 0, binding = 1) buffer FlagBuf {
+    int flags[];
+};
+
+layout(set = 0, binding = 2) buffer PrefixBuf {
+    int prefix[];
+};
+
+layout(push_constant) uniform Push {
+    uint elem_count;
+};
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= elem_count) return;
+    int incv = inclusive[gid];
+    int fi = flags[int(gid)];
+    prefix[gid] = incv - fi;
+}

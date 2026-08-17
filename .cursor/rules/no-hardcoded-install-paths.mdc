@@ -1,0 +1,26 @@
+---
+description: Discover toolchain and dependency paths; never hardcode install prefixes
+alwaysApply: true
+---
+
+# No hardcoded install prefixes
+
+Do not embed machine-local or package-manager prefixes in C, C++, CMake, or test helpers (`/opt/homebrew`, `/usr/local`, `/opt/local`, `C:\LLVM`, …). If you see one, remove it in the same change.
+
+Discover instead:
+
+- Environment: `VULKAN_SDK`, `HOMEBREW_PREFIX`, `LLVM_INSTALL_PREFIX`, `YONA_HOME`, `YONA_PATH`
+- Tools: `brew --prefix`, `brew --prefix <formula>`, `pkg-config`, `xcrun --show-sdk-path`
+- CMake: `find_path` / `find_library` / `find_package`, then generate a header if the runtime needs the result
+
+```c
+/* BAD */
+dirs[n++] = "/opt/homebrew/lib";
+
+/* GOOD — env, then CMake-recorded dir, then bare soname */
+const char* brew = getenv("HOMEBREW_PREFIX");
+```
+
+Docs may mention example prefixes in install instructions. Runtime and build logic must not copy those examples into search lists.
+
+Product FHS roots that packaging actually installs (`/usr/lib/yona`) stay next to the packager, not copied into new features as a catch-all.

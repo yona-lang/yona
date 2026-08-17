@@ -62,8 +62,8 @@ Vulkan keep using the CPU backend.
 The runtime includes a Vulkan capability scaffold. By default it uses
 `LoadLibrary` / `dlopen` on the loader only and does not require the SDK.
 Optionally, configure with `-DYONA_ENABLE_VULKAN=ON` and `VULKAN_SDK` (or, on
-macOS, Homebrew `vulkan-headers` + `molten-vk` / `vulkan-loader` under
-`/opt/homebrew` or `/usr/local`) so `gpu_vulkan.c` compiles against
+macOS, Homebrew `vulkan-headers` + `molten-vk` / `vulkan-loader` via
+`HOMEBREW_PREFIX` or `brew --prefix`) so `gpu_vulkan.c` compiles against
 `vulkan/vulkan.h` (see `cmake/YonaVulkan.cmake`).
 When the runtime is built **with** Vulkan headers (`-DYONA_ENABLE_VULKAN=ON` at
 configure), `Std\GPU.vulkanStatus` can also report `vulkan-device` after a
@@ -71,10 +71,12 @@ successful instance/device/compute-queue init; entry points are resolved at
 runtime from the platform loader (**no** import-library link on the main
 executable).
 
-**`hasGpu`:** `true` only when the runtime was built with Vulkan headers, Vulkan
-is not disabled with `YONA_GPU_DISABLE_VULKAN`, `try_init` succeeds, and the
-logical device exposes `shaderInt64` (required for the embedded int64 SSBO
-kernels). The result is cached per process and cleared by
+**`hasGpu`:** `true` when the runtime was built with Vulkan headers, Vulkan
+is not disabled with `YONA_GPU_DISABLE_VULKAN`, and `try_init` succeeds.
+IntArray kernels use i64 SSBOs when the device exposes `shaderInt64`; otherwise
+they narrow to i32 when every value and the op result fit in `int32_t`, then
+widen back. Values outside that range stay on the CPU. `filterGreaterThan`
+uses the same i32 narrow path when `shaderInt64` is missing. The result is cached per process and cleared by
 `yona_gpu_vulkan_device_shutdown()`.
 
 **Opt-in Vulkan compute** (`src/runtime/gpu_vulkan_ops.c`, included from
@@ -112,13 +114,17 @@ bindings stay **host-visible** SSBOs.
 | `YONA_GPU_DISABLE_VULKAN` | Any value other than `0` disables loader use and GPU paths. |
 | `YONA_GPU_VULKAN_PHYSICAL_DEVICE_INDEX` | Non-negative index into `vkEnumeratePhysicalDevices` order. |
 | `YONA_GPU_VULKAN_HOST_SSBO=1` | Force host-visible SSBOs only (no device-local + staging); for debugging and parity tests. |
+| `YONA_GPU_VULKAN_FORCE_I32=1` | Use i32 kernels even when `shaderInt64` is present (debug / tests). |
 
 **`FloatArray` f64 (Vulkan builds, lazy `VkDevice` from `gpu_stub.c`):** **`floatArrayScaleAsync`**
 and **`floatArrayMul2Async`** (`extern native`, `Promise Int` at call sites) share the
 embedded SPIR-V from **`gpu_f64_mul2.comp`** (push constants: element count + `double` scale;
 `mul2` uses `scale = 2.0`; regenerate `include/runtime/gpu_f64_mul2_spv.inl` with
-`scripts/gen_gpu_f64_mul2_spv.sh`). They require `shaderFloat64` + `yona_gpu_vulkan_ctx_init`;
-see **`docs/design-gpu-async.md`** and doctests `YONA_GPU_TEST_F64_MUL2*`.
+`scripts/gen_gpu_f64_mul2_spv.sh`). They use `shaderFloat64` when present;
+otherwise they narrow host doubles to f32 (`gpu_f32_scale.comp` /
+`scripts/gen_gpu_f32_scale_spv.sh`), run the f32 kernel, and widen back.
+Async scale without `shaderFloat64` completes via that synchronous f32 path.
+See **`docs/design-gpu-async.md`** and doctests `YONA_GPU_TEST_F64_MUL2*`.
 
 Generated API notes for `Std\GPU` also appear in `docs/api/GPU.md` (`python3 scripts/gendocs.py`).
 
@@ -191,13 +197,14 @@ Optional doctests (`test/gpu_stub_test.cpp`): set **`YONA_GPU_TEST_DISPATCH=1`**
 the buffer may still be updated; if the group is already cancelled before **`vkQueueSubmit`**,
 the path skips submit and completes **-887** without dispatch). All require a successful
 `yona_gpu_vulkan_ctx_init` and
-`shaderFloat64` where noted; **-20** skips when doubles are unsupported.
+`shaderFloat64` when present, otherwise the f32 narrow/widen fallback; **-20**
+only if neither float pipeline can be created.
 
 ## Vulkan limitations (Windows / Linux)
 
 Intentional guardrails and **known gaps** for the baseline Vulkan stack.
 Apple/MoltenVK device init is in **`docs/gpu-vulkan-implementation-plan.md`** §11
-(`shaderInt64` is usually unavailable on Metal).
+(`shaderInt64` is usually unavailable on Metal; IntArray GPU then uses i32).
 
 - **`vulkanTimelineSemaphore`:** **`true`** when **`vkGetPhysicalDeviceFeatures2`**
   (**or `…KHR`**) reports **`VkPhysicalDeviceVulkan12Features::timelineSemaphore`**
@@ -235,12 +242,12 @@ omitted here.
 | **GPU capability / effect for device-lost and OOM** | **Partial:** `vulkanLastNote` records `VkResult` text (OOM / device lost hints), async fence waiter failures, synchronous float dispatch, calloc-after-submit; no typed GPU effect yet. |
 | **Transparent compiler lowering to GPU** | Deferred (needs benchmark gate + schedule story in `docs/gpu-transparent-lowering.md`). |
 | **Windows: full `gpu_stub` Vulkan compute parity with Linux** | **Done** for the lazy `VkDevice` + f64 fence path: same `#if defined(YONA_HAS_VULKAN)` body on all non-Android targets; Windows uses `SRWLOCK` / `CONDITION_VARIABLE` / `InitOnce` / `CreateThread` for the fence waiter. |
-| **macOS: MoltenVK / portability / `shaderInt64` reality** | **Device init done:** runtime `dlopen` searches `VULKAN_SDK` / Homebrew / `/opt/homebrew` / `/usr/local` for `libvulkan.1.dylib` / `libMoltenVK.dylib` (bare names last); if `VK_ICD_FILENAMES` is unset, hints Homebrew/LunarG **`MoltenVK_icd.json`**. Instance enables **`VK_KHR_portability_enumeration`** when present; device enables **`VK_KHR_portability_subset`** when the ICD requires it. Unified memory uses the existing host-visible SSBO fallback (no discrete-only heap). **`shaderInt64` / `shaderFloat64`** are typically **false** on Metal — `hasGpu` stays 0 and IntArray / f64 kernels stay on CPU; `vulkanStatus` can still be `vulkan-device` and `vulkanLastNote` explains the missing int64 feature. |
+| **macOS: MoltenVK / portability / `shaderInt64` reality** | **Device init + i32/f32 kernels:** runtime `dlopen` searches `VULKAN_SDK`, `HOMEBREW_PREFIX`, and the lib dir CMake recorded for `libvulkan.1.dylib` / `libMoltenVK.dylib` (bare names last); if `VK_ICD_FILENAMES` is unset, hints a discovered **`MoltenVK_icd.json`**. Instance enables **`VK_KHR_portability_enumeration`** when present; device enables **`VK_KHR_portability_subset`** when the ICD requires it. Unified memory uses the existing host-visible SSBO fallback (no discrete-only heap). **`shaderInt64` / `shaderFloat64`** are typically **false** on Metal — `hasGpu` is still 1 when the device is ready; IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit; `floatArray*Async` uses f32. `vulkanLastNote` mentions the missing int64 feature. |
 
 **Float `extern native` benches:** `run_gpu_compare.py` includes **`float_scale`**
 (`gpu_float_scale_hot.yona`): `floatArrayScaleAsync` awaits to **0** when
-`yona_gpu_vulkan_ctx_init` + f64 pipeline succeed (built with `YONA_HAS_VULKAN`, host
-has `shaderFloat64`). On Windows, **`yonac`** links **`vulkan-1.lib`** from the path CMake recorded when **`find_package(Vulkan)`** succeeded, with **`VULKAN_SDK`** as a fallback (see `INSTALL.md`).
+`yona_gpu_vulkan_ctx_init` succeeds and either the f64 or f32 scale pipeline
+runs (built with `YONA_HAS_VULKAN`). On Windows, **`yonac`** links **`vulkan-1.lib`** from the path CMake recorded when **`find_package(Vulkan)`** succeeded, with **`VULKAN_SDK`** as a fallback (see `INSTALL.md`).
 The **`Std\GPU` native wrappers** call **`ctx_init`** before
 submit so Yona programs need not use the C-only API. The CPU vs Vulkan **env**
 columns mainly affect IntArray columnar paths; for this float row both runs use

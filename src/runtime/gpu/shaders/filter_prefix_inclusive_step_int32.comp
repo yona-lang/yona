@@ -1,0 +1,25 @@
+#version 450
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer InBuf {
+    int in_elems[];
+};
+
+layout(set = 0, binding = 1) buffer OutBuf {
+    int out_elems[];
+};
+
+layout(push_constant) uniform Push {
+    uint stride;
+    uint elem_count;
+};
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= elem_count) return;
+    int v = in_elems[i];
+    if (i >= stride)
+        v += in_elems[i - stride];
+    out_elems[i] = v;
+}

@@ -37,6 +37,7 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
 
 #include <stdio.h>
 #include <stdint.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -52,21 +53,37 @@ extern int64_t* yona_rt_int_array_alloc(int64_t count);
 #define YONA_VK_DPA(name) ((PFN_##name)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, #name))
 
 VkResult yona_vk_compute_ensure_mapadd_pipe(void);
+VkResult yona_vk_compute_ensure_mapadd_i32_pipe(void);
 VkResult yona_vk_compute_ensure_mapmul_pipe(void);
+VkResult yona_vk_compute_ensure_mapmul_i32_pipe(void);
 VkResult yona_vk_compute_ensure_reduce_pipe(void);
+VkResult yona_vk_compute_ensure_reduce_i32_pipe(void);
 VkResult yona_vk_compute_ensure_filter_mark_pipe(void);
 VkResult yona_vk_compute_ensure_filter_scatter_pipe(void);
 VkResult yona_vk_compute_ensure_filter_flags_to_i64_pipe(void);
 VkResult yona_vk_compute_ensure_filter_prefix_pipe(void);
 VkResult yona_vk_compute_ensure_filter_inc_to_exc_pipe(void);
+VkResult yona_vk_compute_ensure_filter_mark_i32_pipe(void);
+VkResult yona_vk_compute_ensure_filter_scatter_i32_pipe(void);
+VkResult yona_vk_compute_ensure_filter_flags_to_i32_pipe(void);
+VkResult yona_vk_compute_ensure_filter_prefix_i32_pipe(void);
+VkResult yona_vk_compute_ensure_filter_inc_to_exc_i32_pipe(void);
 YonaVkSimplePipe* yona_vk_compute_mapadd_pipe(void);
+YonaVkSimplePipe* yona_vk_compute_mapadd_i32_pipe(void);
 YonaVkSimplePipe* yona_vk_compute_mapmul_pipe(void);
+YonaVkSimplePipe* yona_vk_compute_mapmul_i32_pipe(void);
 YonaVkReducePipe* yona_vk_compute_reduce_pipe(void);
+YonaVkReducePipe* yona_vk_compute_reduce_i32_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_mark_pipe(void);
 YonaVkScatterPipe* yona_vk_compute_filter_scatter_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_flags_to_i64_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_prefix_pipe(void);
 YonaVkScatterPipe* yona_vk_compute_filter_inc_to_exc_pipe(void);
+YonaVkReducePipe* yona_vk_compute_filter_mark_i32_pipe(void);
+YonaVkScatterPipe* yona_vk_compute_filter_scatter_i32_pipe(void);
+YonaVkReducePipe* yona_vk_compute_filter_flags_to_i32_pipe(void);
+YonaVkReducePipe* yona_vk_compute_filter_prefix_i32_pipe(void);
+YonaVkScatterPipe* yona_vk_compute_filter_inc_to_exc_i32_pipe(void);
 void yona_vk_compute_submit_lock(void);
 void yona_vk_compute_submit_unlock(void);
 
@@ -142,12 +159,60 @@ static int yona_vk_common_precheck(int64_t* arr, const char* op_tag) {
         yona_vk_note_cpy(b);
         return 0;
     }
-    if (!yona_gpu_vulkan_device_shader_int64()) {
-        yona_vk_note_cpy(
-            "gpu: logical device has no shaderInt64 (physical device may lack it or "
-            "vkCreateDevice retried without it)");
-        return 0;
+    return 1;
+}
+
+static int yona_vk_i32_map_add_fits(const int64_t* arr, int64_t delta) {
+    if (delta < (int64_t)INT32_MIN || delta > (int64_t)INT32_MAX) return 0;
+    int64_t len = arr[0];
+    for (int64_t i = 0; i < len; i++) {
+        int64_t v = arr[1 + i];
+        if (v < (int64_t)INT32_MIN || v > (int64_t)INT32_MAX) return 0;
+        int64_t s = v + delta;
+        if (s < (int64_t)INT32_MIN || s > (int64_t)INT32_MAX) return 0;
     }
+    return 1;
+}
+
+static int yona_vk_i32_map_mul_fits(const int64_t* arr, int64_t factor) {
+    if (factor < (int64_t)INT32_MIN || factor > (int64_t)INT32_MAX) return 0;
+    int64_t len = arr[0];
+    for (int64_t i = 0; i < len; i++) {
+        int64_t v = arr[1 + i];
+        if (v < (int64_t)INT32_MIN || v > (int64_t)INT32_MAX) return 0;
+        int64_t p = v * factor;
+        if (p < (int64_t)INT32_MIN || p > (int64_t)INT32_MAX) return 0;
+    }
+    return 1;
+}
+
+static int yona_vk_prefer_i32(void) {
+    if (!yona_gpu_vulkan_device_shader_int64()) return 1;
+    const char* f = getenv("YONA_GPU_VULKAN_FORCE_I32");
+    return (f && f[0] && strcmp(f, "0") != 0) ? 1 : 0;
+}
+
+static int yona_vk_i32_filter_fits(const int64_t* arr, int64_t threshold) {
+    if (threshold < (int64_t)INT32_MIN || threshold > (int64_t)INT32_MAX) return 0;
+    int64_t len = arr[0];
+    for (int64_t i = 0; i < len; i++) {
+        int64_t v = arr[1 + i];
+        if (v < (int64_t)INT32_MIN || v > (int64_t)INT32_MAX) return 0;
+    }
+    return 1;
+}
+
+static int yona_vk_i32_reduce_fits(const int64_t* arr) {
+    int64_t len = arr[0];
+    int64_t max_abs = 0;
+    for (int64_t i = 0; i < len; i++) {
+        int64_t v = arr[1 + i];
+        if (v < (int64_t)INT32_MIN || v > (int64_t)INT32_MAX) return 0;
+        int64_t a = v < 0 ? -v : v;
+        if (a > max_abs) max_abs = a;
+    }
+    /* Shared-memory tree of 64 ints must stay in int32. */
+    if (max_abs > (int64_t)INT32_MAX / 64) return 0;
     return 1;
 }
 
@@ -352,10 +417,11 @@ static void yona_vk_barrier_buffer(PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier
 
 static int yona_vk_run_simple_map(const char* fail_tag, VkResult (*ensure)(void),
                                   YonaVkSimplePipe* pipe, int64_t scalar, int64_t* arr,
-                                  int64_t** out) {
+                                  int64_t** out, int use_i32) {
     *out = NULL;
     VkResult r = VK_SUCCESS;
     int use_staging = 0;
+    int32_t* packed = NULL;
 
     PFN_vkCreateDescriptorPool vkCreateDescriptorPool;
     PFN_vkDestroyDescriptorPool vkDestroyDescriptorPool;
@@ -410,7 +476,17 @@ static int yona_vk_run_simple_map(const char* fail_tag, VkResult (*ensure)(void)
     }
 
     int64_t len = arr[0];
-    VkDeviceSize nbytes = (VkDeviceSize)((size_t)len * sizeof(int64_t));
+    if (use_i32) {
+        packed = (int32_t*)malloc((size_t)len * sizeof(int32_t));
+        if (!packed) {
+            yona_vk_note_cpy("gpu: malloc failed packing i32 column");
+            return 0;
+        }
+        for (int64_t i = 0; i < len; i++) packed[i] = (int32_t)arr[1 + i];
+    }
+    VkDeviceSize nbytes =
+        (VkDeviceSize)((size_t)len * (use_i32 ? sizeof(int32_t) : sizeof(int64_t)));
+    const void* host_src = use_i32 ? (const void*)packed : (const void*)(arr + 1);
 
     VkDescriptorPool dpool = VK_NULL_HANDLE;
     VkDescriptorSet dset = VK_NULL_HANDLE;
@@ -555,11 +631,11 @@ static int yona_vk_run_simple_map(const char* fail_tag, VkResult (*ensure)(void)
 
         r = vkMapMemory(yona_vk_dev, mem, 0, nbytes, 0, &mapped);
         if (r != VK_SUCCESS) goto fail;
-        memcpy(mapped, arr + 1, (size_t)nbytes);
+        memcpy(mapped, host_src, (size_t)nbytes);
     } else {
         r = vkMapMemory(yona_vk_dev, mem_stg, 0, nbytes, 0, &mapped);
         if (r != VK_SUCCESS) goto fail;
-        memcpy(mapped, arr + 1, (size_t)nbytes);
+        memcpy(mapped, host_src, (size_t)nbytes);
     }
 
     VkDescriptorBufferInfo dbi = {0};
@@ -619,10 +695,19 @@ static int yona_vk_run_simple_map(const char* fail_tag, VkResult (*ensure)(void)
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe->pl, 0, 1, &dset, 0, NULL);
 
     char pc[16];
-    memcpy(pc, &scalar, sizeof(int64_t));
     uint32_t ulen = (uint32_t)len;
-    memcpy(pc + sizeof(int64_t), &ulen, sizeof(uint32_t));
-    vkCmdPushConstants(cmd, pipe->pl, VK_SHADER_STAGE_COMPUTE_BIT, 0, 12, pc);
+    uint32_t push_bytes;
+    if (use_i32) {
+        int32_t s32 = (int32_t)scalar;
+        memcpy(pc, &s32, sizeof(int32_t));
+        memcpy(pc + sizeof(int32_t), &ulen, sizeof(uint32_t));
+        push_bytes = 8;
+    } else {
+        memcpy(pc, &scalar, sizeof(int64_t));
+        memcpy(pc + sizeof(int64_t), &ulen, sizeof(uint32_t));
+        push_bytes = 12;
+    }
+    vkCmdPushConstants(cmd, pipe->pl, VK_SHADER_STAGE_COMPUTE_BIT, 0, push_bytes, pc);
 
     uint32_t groups = ((uint32_t)len + 63u) / 64u;
     vkCmdDispatch(cmd, groups, 1, 1);
@@ -676,7 +761,12 @@ static int yona_vk_run_simple_map(const char* fail_tag, VkResult (*ensure)(void)
         yona_vk_note_cpy("gpu: yona_rt_int_array_alloc failed");
         goto fail;
     }
-    memcpy(result + 1, mapped, (size_t)nbytes);
+    if (use_i32) {
+        const int32_t* out32 = (const int32_t*)mapped;
+        for (int64_t i = 0; i < len; i++) result[1 + i] = (int64_t)out32[i];
+    } else {
+        memcpy(result + 1, mapped, (size_t)nbytes);
+    }
 
     vkUnmapMemory(yona_vk_dev, use_staging ? mem_stg : mem);
     mapped = NULL;
@@ -705,10 +795,12 @@ static int yona_vk_run_simple_map(const char* fail_tag, VkResult (*ensure)(void)
     vkDestroyDescriptorPool(yona_vk_dev, dpool, NULL);
     dpool = VK_NULL_HANDLE;
 
+    free(packed);
     *out = result;
     return 1;
 
 fail:
+    free(packed);
     if (!yona_vk_last_note[0]) {
         char b[120];
         snprintf(b, sizeof b, "%s: Vulkan failure VkResult=%d", fail_tag, (int)r);
@@ -750,10 +842,20 @@ int yona_gpu_vulkan_try_map_add_int64(int64_t delta, int64_t* arr, int64_t** out
         return 0;
     }
 
+    int use_i32 = yona_vk_prefer_i32();
+    if (use_i32 && !yona_vk_i32_map_add_fits(arr, delta)) {
+        yona_vk_note_cpy("mapadd: values exceed int32; GPU i32 path skipped (no shaderInt64)");
+        return 0;
+    }
+
     int ok = 0;
     yona_vk_compute_submit_lock();
-    ok = yona_vk_run_simple_map("mapadd", yona_vk_compute_ensure_mapadd_pipe,
-                               yona_vk_compute_mapadd_pipe(), delta, arr, out);
+    if (use_i32)
+        ok = yona_vk_run_simple_map("mapadd", yona_vk_compute_ensure_mapadd_i32_pipe,
+                                   yona_vk_compute_mapadd_i32_pipe(), delta, arr, out, 1);
+    else
+        ok = yona_vk_run_simple_map("mapadd", yona_vk_compute_ensure_mapadd_pipe,
+                                   yona_vk_compute_mapadd_pipe(), delta, arr, out, 0);
     yona_vk_compute_submit_unlock();
     return ok;
 }
@@ -778,10 +880,20 @@ int yona_gpu_vulkan_try_map_mul_int64(int64_t factor, int64_t* arr, int64_t** ou
         return 0;
     }
 
+    int use_i32 = yona_vk_prefer_i32();
+    if (use_i32 && !yona_vk_i32_map_mul_fits(arr, factor)) {
+        yona_vk_note_cpy("mapmul: values exceed int32; GPU i32 path skipped (no shaderInt64)");
+        return 0;
+    }
+
     int ok = 0;
     yona_vk_compute_submit_lock();
-    ok = yona_vk_run_simple_map("mapmul", yona_vk_compute_ensure_mapmul_pipe,
-                               yona_vk_compute_mapmul_pipe(), factor, arr, out);
+    if (use_i32)
+        ok = yona_vk_run_simple_map("mapmul", yona_vk_compute_ensure_mapmul_i32_pipe,
+                                   yona_vk_compute_mapmul_i32_pipe(), factor, arr, out, 1);
+    else
+        ok = yona_vk_run_simple_map("mapmul", yona_vk_compute_ensure_mapmul_pipe,
+                                   yona_vk_compute_mapmul_pipe(), factor, arr, out, 0);
     yona_vk_compute_submit_unlock();
     return ok;
 }
@@ -803,6 +915,12 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
     }
     if (len > (int64_t)0x7fffffff) {
         yona_vk_note_cpy("reduce: IntArray length exceeds supported range");
+        return 0;
+    }
+
+    int use_i32 = yona_vk_prefer_i32();
+    if (use_i32 && !yona_vk_i32_reduce_fits(arr)) {
+        yona_vk_note_cpy("reduce: values exceed int32; GPU i32 path skipped (no shaderInt64)");
         return 0;
     }
 
@@ -854,8 +972,8 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
     yona_vk_compute_submit_lock();
 
     VkResult r = VK_SUCCESS;
-    YonaVkReducePipe* rp = yona_vk_compute_reduce_pipe();
-    r = yona_vk_compute_ensure_reduce_pipe();
+    YonaVkReducePipe* rp = use_i32 ? yona_vk_compute_reduce_i32_pipe() : yona_vk_compute_reduce_pipe();
+    r = use_i32 ? yona_vk_compute_ensure_reduce_i32_pipe() : yona_vk_compute_ensure_reduce_pipe();
     if (r != VK_SUCCESS) {
         char b[120];
         snprintf(b, sizeof b, "reduce: pipeline ensure VkResult=%d", (int)r);
@@ -866,8 +984,20 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
 
     uint32_t ulen = (uint32_t)len;
     uint32_t groups = (ulen + 63u) / 64u;
-    VkDeviceSize nbytes_in = (VkDeviceSize)((size_t)len * sizeof(int64_t));
-    VkDeviceSize nbytes_sums = (VkDeviceSize)((size_t)groups * sizeof(int64_t));
+    size_t esz = use_i32 ? sizeof(int32_t) : sizeof(int64_t);
+    VkDeviceSize nbytes_in = (VkDeviceSize)((size_t)len * esz);
+    VkDeviceSize nbytes_sums = (VkDeviceSize)((size_t)groups * esz);
+    int32_t* packed_in = NULL;
+    if (use_i32) {
+        packed_in = (int32_t*)malloc((size_t)len * sizeof(int32_t));
+        if (!packed_in) {
+            yona_vk_note_cpy("reduce: malloc failed packing i32 column");
+            yona_vk_compute_submit_unlock();
+            return 0;
+        }
+        for (int64_t i = 0; i < len; i++) packed_in[i] = (int32_t)arr[1 + i];
+    }
+    const void* reduce_src = use_i32 ? (const void*)packed_in : (const void*)(arr + 1);
 
     int use_staging = 0;
     VkDescriptorPool dpool = VK_NULL_HANDLE;
@@ -1008,7 +1138,7 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
         r = vkMapMemory(yona_vk_dev, mem_sums, 0, nbytes_sums, 0, &mapped_sums);
         if (r != VK_SUCCESS) goto reduce_fail;
         mapped_mem_sums = mem_sums;
-        memcpy(mapped_in, arr + 1, (size_t)nbytes_in);
+        memcpy(mapped_in, reduce_src, (size_t)nbytes_in);
         memset(mapped_sums, 0, (size_t)nbytes_sums);
     } else {
         r = vkMapMemory(yona_vk_dev, mem_in_stg, 0, nbytes_in, 0, &mapped_in);
@@ -1017,7 +1147,7 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
         r = vkMapMemory(yona_vk_dev, mem_sums_stg, 0, nbytes_sums, 0, &mapped_sums);
         if (r != VK_SUCCESS) goto reduce_fail;
         mapped_mem_sums = mem_sums_stg;
-        memcpy(mapped_in, arr + 1, (size_t)nbytes_in);
+        memcpy(mapped_in, reduce_src, (size_t)nbytes_in);
         memset(mapped_sums, 0, (size_t)nbytes_sums);
     }
 
@@ -1148,8 +1278,13 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
     }
 
     int64_t total = 0;
-    int64_t* lanes = (int64_t*)mapped_sums;
-    for (uint32_t i = 0; i < groups; i++) total += lanes[i];
+    if (use_i32) {
+        const int32_t* lanes = (const int32_t*)mapped_sums;
+        for (uint32_t i = 0; i < groups; i++) total += (int64_t)lanes[i];
+    } else {
+        const int64_t* lanes = (const int64_t*)mapped_sums;
+        for (uint32_t i = 0; i < groups; i++) total += lanes[i];
+    }
     *out_sum = total;
 
     vkUnmapMemory(yona_vk_dev, mapped_mem_in);
@@ -1193,6 +1328,7 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
     vkDestroyDescriptorPool(yona_vk_dev, dpool, NULL);
     dpool = VK_NULL_HANDLE;
 
+    free(packed_in);
     yona_vk_compute_submit_unlock();
     return 1;
 
@@ -1224,6 +1360,7 @@ reduce_fail:
         if (mem_sums != VK_NULL_HANDLE) vkFreeMemory(yona_vk_dev, mem_sums, NULL);
     }
     if (dpool != VK_NULL_HANDLE) vkDestroyDescriptorPool(yona_vk_dev, dpool, NULL);
+    free(packed_in);
     yona_vk_compute_submit_unlock();
     return 0;
 }
@@ -1247,6 +1384,13 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
         yona_vk_note_cpy("filter: IntArray length exceeds supported range");
         return 0;
     }
+
+    int use_i32 = yona_vk_prefer_i32();
+    if (use_i32 && !yona_vk_i32_filter_fits(arr, threshold)) {
+        yona_vk_note_cpy("filter: values exceed int32; GPU i32 path skipped (no shaderInt64)");
+        return 0;
+    }
+    int32_t* packed_in = NULL;
 
     PFN_vkCreateDescriptorPool vkCreateDescriptorPool;
     PFN_vkDestroyDescriptorPool vkDestroyDescriptorPool;
@@ -1297,12 +1441,15 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
 
     VkResult r = VK_SUCCESS;
     const int gpu_prefix = !yona_vk_filter_use_cpu_prefix();
-    YonaVkReducePipe* mp = yona_vk_compute_filter_mark_pipe();
-    YonaVkScatterPipe* sp = yona_vk_compute_filter_scatter_pipe();
+    YonaVkReducePipe* mp =
+        use_i32 ? yona_vk_compute_filter_mark_i32_pipe() : yona_vk_compute_filter_mark_pipe();
+    YonaVkScatterPipe* sp =
+        use_i32 ? yona_vk_compute_filter_scatter_i32_pipe() : yona_vk_compute_filter_scatter_pipe();
     YonaVkReducePipe* ft = NULL;
     YonaVkReducePipe* pp = NULL;
     YonaVkScatterPipe* ix = NULL;
-    r = yona_vk_compute_ensure_filter_mark_pipe();
+    r = use_i32 ? yona_vk_compute_ensure_filter_mark_i32_pipe()
+                : yona_vk_compute_ensure_filter_mark_pipe();
     if (r != VK_SUCCESS) {
         char b[120];
         snprintf(b, sizeof b, "filter: mark pipeline ensure VkResult=%d", (int)r);
@@ -1310,7 +1457,8 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
         yona_vk_compute_submit_unlock();
         return 0;
     }
-    r = yona_vk_compute_ensure_filter_scatter_pipe();
+    r = use_i32 ? yona_vk_compute_ensure_filter_scatter_i32_pipe()
+                : yona_vk_compute_ensure_filter_scatter_pipe();
     if (r != VK_SUCCESS) {
         char b[120];
         snprintf(b, sizeof b, "filter: scatter pipeline ensure VkResult=%d", (int)r);
@@ -1319,15 +1467,17 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
         return 0;
     }
     if (gpu_prefix) {
-        r = yona_vk_compute_ensure_filter_flags_to_i64_pipe();
+        r = use_i32 ? yona_vk_compute_ensure_filter_flags_to_i32_pipe()
+                    : yona_vk_compute_ensure_filter_flags_to_i64_pipe();
         if (r != VK_SUCCESS) {
             char b[120];
-            snprintf(b, sizeof b, "filter: flags_to_i64 pipeline ensure VkResult=%d", (int)r);
+            snprintf(b, sizeof b, "filter: flags_to_i32/i64 pipeline ensure VkResult=%d", (int)r);
             yona_vk_note_cpy(b);
             yona_vk_compute_submit_unlock();
             return 0;
         }
-        r = yona_vk_compute_ensure_filter_prefix_pipe();
+        r = use_i32 ? yona_vk_compute_ensure_filter_prefix_i32_pipe()
+                    : yona_vk_compute_ensure_filter_prefix_pipe();
         if (r != VK_SUCCESS) {
             char b[120];
             snprintf(b, sizeof b, "filter: prefix pipeline ensure VkResult=%d", (int)r);
@@ -1335,7 +1485,8 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
             yona_vk_compute_submit_unlock();
             return 0;
         }
-        r = yona_vk_compute_ensure_filter_inc_to_exc_pipe();
+        r = use_i32 ? yona_vk_compute_ensure_filter_inc_to_exc_i32_pipe()
+                    : yona_vk_compute_ensure_filter_inc_to_exc_pipe();
         if (r != VK_SUCCESS) {
             char b[120];
             snprintf(b, sizeof b, "filter: inc_to_exc pipeline ensure VkResult=%d", (int)r);
@@ -1343,18 +1494,32 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
             yona_vk_compute_submit_unlock();
             return 0;
         }
-        ft = yona_vk_compute_filter_flags_to_i64_pipe();
-        pp = yona_vk_compute_filter_prefix_pipe();
-        ix = yona_vk_compute_filter_inc_to_exc_pipe();
+        ft = use_i32 ? yona_vk_compute_filter_flags_to_i32_pipe()
+                     : yona_vk_compute_filter_flags_to_i64_pipe();
+        pp = use_i32 ? yona_vk_compute_filter_prefix_i32_pipe()
+                     : yona_vk_compute_filter_prefix_pipe();
+        ix = use_i32 ? yona_vk_compute_filter_inc_to_exc_i32_pipe()
+                     : yona_vk_compute_filter_inc_to_exc_pipe();
     }
 
     PFN_vkCmdCopyBuffer vkCmdCopyBuffer = YONA_VK_DPA(vkCmdCopyBuffer);
 
     uint32_t ulen = (uint32_t)len;
-    VkDeviceSize nbytes_in = (VkDeviceSize)((size_t)len * sizeof(int64_t));
+    size_t esz = use_i32 ? sizeof(int32_t) : sizeof(int64_t);
+    VkDeviceSize nbytes_in = (VkDeviceSize)((size_t)len * esz);
     VkDeviceSize nbytes_flags = (VkDeviceSize)((size_t)ulen * sizeof(int32_t));
     VkDeviceSize nbytes_prefix = nbytes_in;
     VkDeviceSize nbytes_out = nbytes_in;
+    if (use_i32) {
+        packed_in = (int32_t*)malloc((size_t)len * sizeof(int32_t));
+        if (!packed_in) {
+            yona_vk_note_cpy("filter: malloc failed packing i32 column");
+            yona_vk_compute_submit_unlock();
+            return 0;
+        }
+        for (int64_t i = 0; i < len; i++) packed_in[i] = (int32_t)arr[1 + i];
+    }
+    const void* filter_src = use_i32 ? (const void*)packed_in : (const void*)(arr + 1);
 
     int use_staging = 0;
     VkDescriptorPool dpool = VK_NULL_HANDLE;
@@ -1708,7 +1873,7 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
     VkBuffer inc_buf_host = scan1_has_inclusive ? buf_scan1 : buf_scan0;
     VkBuffer inc_buf_dev = scan1_has_inclusive ? buf_scan1_dev : buf_scan0_dev;
 
-    memcpy(p_in, arr + 1, (size_t)nbytes_in);
+    memcpy(p_in, filter_src, (size_t)nbytes_in);
     memset(p_flags, 0, (size_t)nbytes_flags);
     memset(p_prefix, 0, (size_t)nbytes_prefix);
     memset(p_out, 0, (size_t)nbytes_out);
@@ -1874,9 +2039,18 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
     vkCmdBindDescriptorSets(cmds[0], VK_PIPELINE_BIND_POINT_COMPUTE, mp->pl, 0, 1, &dsets[0], 0,
                             NULL);
     char pc_mark[16];
-    memcpy(pc_mark, &threshold, sizeof(int64_t));
-    memcpy(pc_mark + sizeof(int64_t), &ulen, sizeof(uint32_t));
-    vkCmdPushConstants(cmds[0], mp->pl, VK_SHADER_STAGE_COMPUTE_BIT, 0, 12, pc_mark);
+    uint32_t mark_push;
+    if (use_i32) {
+        int32_t t32 = (int32_t)threshold;
+        memcpy(pc_mark, &t32, sizeof(int32_t));
+        memcpy(pc_mark + sizeof(int32_t), &ulen, sizeof(uint32_t));
+        mark_push = 8;
+    } else {
+        memcpy(pc_mark, &threshold, sizeof(int64_t));
+        memcpy(pc_mark + sizeof(int64_t), &ulen, sizeof(uint32_t));
+        mark_push = 12;
+    }
+    vkCmdPushConstants(cmds[0], mp->pl, VK_SHADER_STAGE_COMPUTE_BIT, 0, mark_push, pc_mark);
     vkCmdDispatch(cmds[0], (ulen + 63u) / 64u, 1, 1);
     if (gpu_prefix) {
         yona_vk_barrier_buffer(vkCmdPipelineBarrier, cmds[0],
@@ -1922,8 +2096,8 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
                                            : VK_PIPELINE_STAGE_HOST_BIT);
         if (use_staging) {
             VkBufferCopy cc = {0};
-            cc.srcOffset = (VkDeviceSize)((size_t)(ulen - 1u) * sizeof(int64_t));
-            cc.size = sizeof(int64_t);
+            cc.srcOffset = (VkDeviceSize)((size_t)(ulen - 1u) * esz);
+            cc.size = (VkDeviceSize)esz;
             vkCmdCopyBuffer(cmds[0], incb, buf_count_stg, 1, &cc);
             yona_vk_barrier_buffer(vkCmdPipelineBarrier, cmds[0], buf_count_stg,
                                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT,
@@ -1970,21 +2144,22 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
                 invc.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
                 invc.memory = map_mem_count;
                 invc.offset = 0;
-                invc.size = sizeof(int64_t);
+                invc.size = (VkDeviceSize)esz;
                 vkInvalidateMappedMemoryRanges(yona_vk_dev, 1, &invc);
             }
-            count = *(int64_t*)p_count;
+            count = use_i32 ? (int64_t)(*(int32_t*)p_count) : *(int64_t*)p_count;
         } else {
             void* p_inc = scan1_has_inclusive ? p_scan1 : p_scan0;
             if (vkInvalidateMappedMemoryRanges) {
                 VkMappedMemoryRange invi = {0};
                 invi.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
                 invi.memory = scan1_has_inclusive ? map_mem_scan1 : map_mem_scan0;
-                invi.offset = (VkDeviceSize)((size_t)(ulen - 1u) * sizeof(int64_t));
-                invi.size = sizeof(int64_t);
+                invi.offset = (VkDeviceSize)((size_t)(ulen - 1u) * esz);
+                invi.size = (VkDeviceSize)esz;
                 vkInvalidateMappedMemoryRanges(yona_vk_dev, 1, &invi);
             }
-            count = ((int64_t*)p_inc)[(size_t)ulen - 1u];
+            count = use_i32 ? (int64_t)((int32_t*)p_inc)[(size_t)ulen - 1u]
+                            : ((int64_t*)p_inc)[(size_t)ulen - 1u];
         }
     } else {
         if (vkInvalidateMappedMemoryRanges) {
@@ -1997,11 +2172,19 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
         }
 
         int32_t* flags = (int32_t*)p_flags;
-        int64_t* pref = (int64_t*)p_prefix;
         int64_t run = 0;
-        for (uint32_t i = 0; i < ulen; i++) {
-            pref[i] = run;
-            run += (flags[i] != 0);
+        if (use_i32) {
+            int32_t* pref32 = (int32_t*)p_prefix;
+            for (uint32_t i = 0; i < ulen; i++) {
+                pref32[i] = (int32_t)run;
+                run += (flags[i] != 0);
+            }
+        } else {
+            int64_t* pref = (int64_t*)p_prefix;
+            for (uint32_t i = 0; i < ulen; i++) {
+                pref[i] = run;
+                run += (flags[i] != 0);
+            }
         }
         count = run;
 
@@ -2109,8 +2292,13 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
         yona_vk_note_cpy("filter: yona_rt_int_array_alloc failed");
         goto filt_fail;
     }
-    int64_t* packed = (int64_t*)p_out;
-    for (int64_t i = 0; i < count; i++) result[1 + i] = packed[i];
+    if (use_i32) {
+        const int32_t* packed32 = (const int32_t*)p_out;
+        for (int64_t i = 0; i < count; i++) result[1 + i] = (int64_t)packed32[i];
+    } else {
+        const int64_t* packed = (const int64_t*)p_out;
+        for (int64_t i = 0; i < count; i++) result[1 + i] = packed[i];
+    }
 
     if (map_mem_in != VK_NULL_HANDLE) vkUnmapMemory(yona_vk_dev, map_mem_in);
     if (map_mem_flags != VK_NULL_HANDLE) vkUnmapMemory(yona_vk_dev, map_mem_flags);
@@ -2187,6 +2375,7 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
     dpool = VK_NULL_HANDLE;
 
     *out = result;
+    free(packed_in);
     yona_vk_compute_submit_unlock();
     return 1;
 
@@ -2245,6 +2434,7 @@ filt_fail:
         if (mem_scan1 != VK_NULL_HANDLE) vkFreeMemory(yona_vk_dev, mem_scan1, NULL);
     }
     if (dpool != VK_NULL_HANDLE) vkDestroyDescriptorPool(yona_vk_dev, dpool, NULL);
+    free(packed_in);
     yona_vk_compute_submit_unlock();
     return 0;
 }

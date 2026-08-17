@@ -42,10 +42,11 @@ int yona_gpu_vulkan_dispatch_nop_once(void);
 
 /* Synchronous FloatArray-style payload: `elements` points at `count` contiguous
  * doubles (Yona layout); each element is multiplied by `scale` on the GPU and written
- * back. Requires `shaderFloat64` + `yona_gpu_vulkan_ctx_init`. Returns 0; -1 no
- * Vulkan build; -9 no context; -16 null `elements`; -20 no double shader support;
- * -21 prior f64 pipeline init failed; -22 f64 pipeline setup; -30..-42 resource /
- * dispatch failures (see gpu_stub.c). */
+ * back. Uses `shaderFloat64` when present; otherwise narrows to f32, runs the
+ * embedded f32 scale kernel, and widens back. Requires `yona_gpu_vulkan_ctx_init`.
+ * Returns 0; -1 no Vulkan build; -9 no context; -16 null `elements`; -20 no
+ * float shader support; -21 prior scale pipeline init failed; -22 pipeline
+ * setup; -30..-42 resource / dispatch failures (see gpu_stub.c). */
 int yona_gpu_vulkan_float64_buffer_scale_inplace(double* elements, uint32_t count, double scale);
 
 /* Same as scale with factor 2.0. */

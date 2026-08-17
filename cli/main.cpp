@@ -63,6 +63,34 @@ static string shell_stderr_null() {
 
 static string q_cmd_path(const filesystem::path &p) { return "\"" + p.string() + "\""; }
 
+#ifndef _WIN32
+/** Directory that contains libvulkan for -L / rpath.
+ *  Prefer CMake-configured dir (same as Vulkan::Vulkan at configure time), else
+ *  VULKAN_SDK/lib, else $HOMEBREW_PREFIX/lib. Never hardcode install prefixes. */
+static string yona_posix_vulkan_lib_dir() {
+#if YONA_HAVE_CONFIGURED_VULKAN_LIB_DIR
+  {
+    filesystem::path p(YONA_CONFIGURED_VULKAN_LIB_DIR);
+    if (filesystem::is_directory(p))
+      return p.string();
+  }
+#endif
+  const char *sdk = getenv("VULKAN_SDK");
+  if (sdk && sdk[0]) {
+    filesystem::path lib = filesystem::path(sdk) / "lib";
+    if (filesystem::is_directory(lib))
+      return lib.string();
+  }
+  const char *brew = getenv("HOMEBREW_PREFIX");
+  if (brew && brew[0]) {
+    filesystem::path lib = filesystem::path(brew) / "lib";
+    if (filesystem::is_directory(lib))
+      return lib.string();
+  }
+  return {};
+}
+#endif
+
 #ifdef _WIN32
 /** Full path to vulkan-1.lib for packaged yona_runtime (gpu_stub vk* imports).
  *  Prefer CMake-configured path (same as Vulkan::Vulkan at configure time), else VULKAN_SDK. */
@@ -91,8 +119,9 @@ static string yona_windows_vulkan_import_lib_path() {
 /** Optional GPU Vulkan compile flags for scratch compiled_runtime.c (env
  *  YONA_COMPILE_GPU_VULKAN=1 + VULKAN_SDK — matches test/yona_link_util).
  *  Packaged sysroot objects are built by CMake with -DYONA_HAS_VULKAN when
- *  find_package(Vulkan) succeeds; yonac links user exes with -lvulkan (Unix) or
- *  CMake-resolved / VULKAN_SDK vulkan-1.lib (Windows — see yona_vulkan_link_cfg.h). */
+ *  find_package(Vulkan) succeeds; yonac links user exes with -L (configured
+ *  lib dir) -lvulkan (Unix) or CMake-resolved / VULKAN_SDK vulkan-1.lib
+ *  (Windows — see yona_vulkan_link_cfg.h). */
 static string yona_runtime_vulkan_cflags() {
   const char *on = getenv("YONA_COMPILE_GPU_VULKAN");
   if (!on || string(on) == "0")
@@ -757,6 +786,16 @@ int main(int argc, char *argv[]) {
     lld_args.push_back("-rdynamic");
 #endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
+    {
+      string vk_dir = yona_posix_vulkan_lib_dir();
+      if (!vk_dir.empty()) {
+        lld_args.push_back("-L" + vk_dir);
+#ifdef __APPLE__
+        lld_args.push_back("-rpath");
+        lld_args.push_back(vk_dir);
+#endif
+      }
+    }
     lld_args.push_back("-lvulkan");
 #endif
 #endif
@@ -810,6 +849,15 @@ int main(int argc, char *argv[]) {
     link_cmd += " -lm -lpthread -rdynamic";
 #endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
+    {
+      string vk_dir = yona_posix_vulkan_lib_dir();
+      if (!vk_dir.empty()) {
+        link_cmd += " -L" + q_cmd_path(filesystem::path(vk_dir));
+#ifdef __APPLE__
+        link_cmd += " -Wl,-rpath," + q_cmd_path(filesystem::path(vk_dir));
+#endif
+      }
+    }
     link_cmd += " -lvulkan";
 #endif
     link_cmd += " -o " + q_cmd_path(filesystem::path(output_file));

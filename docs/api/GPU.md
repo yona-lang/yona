@@ -150,8 +150,8 @@ Short hint from the last failed Vulkan init, opt-in int column GPU attempt,
 async **`vkWaitForFences`**, or other **`VkResult`** failures on the **`Std\GPU`**
 float path / test dispatch (`gpu_stub.c`). After a successful device init
 without **`shaderInt64`** (typical MoltenVK / Metal), records that IntArray
-GPU kernels stay on CPU. Empty after int64-capable success or when Vulkan
-was not compiled in. Same source as the C **`yona_gpu_vulkan_device_last_note()`**
+GPU kernels use i32 when values fit. Empty after int64-capable success or when
+Vulkan was not compiled in. Same source as the C **`yona_gpu_vulkan_device_last_note()`**
 helper.
 
 ### `vulkanLastNote`
@@ -167,8 +167,9 @@ hasGpu : Bool
 ```
 
 True when Vulkan is enabled at build, not disabled by `YONA_GPU_DISABLE_VULKAN`,
-device init succeeds, and `shaderInt64` is available (required for int64 SSBO
-kernels). Result is cached until `yona_gpu_vulkan_device_shutdown()`.
+and device init succeeds. IntArray kernels use i64 when `shaderInt64` is
+available, otherwise i32 when values fit. Result is cached until
+`yona_gpu_vulkan_device_shutdown()`.
 
 ### `hasGpu`
 
@@ -198,7 +199,7 @@ vulkanAvailable : Bool
 
 True when a Vulkan loader is visible to the process (`vulkan-1.dll`,
 `libvulkan.so.1`, or on macOS `libvulkan.1.dylib` / `libMoltenVK.dylib`
-under `VULKAN_SDK`, Homebrew, `/opt/homebrew`, or `/usr/local`).
+via `VULKAN_SDK`, `HOMEBREW_PREFIX`, or the lib dir CMake recorded).
 
 ### `vulkanAvailable`
 

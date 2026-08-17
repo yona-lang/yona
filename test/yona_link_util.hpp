@@ -67,6 +67,39 @@ inline std::string include_flags() {
     return o.str();
 }
 
+inline std::string trim_cmd_line(std::string s) {
+    while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' '))
+        s.pop_back();
+    return s;
+}
+
+inline std::string popen_trim(const char* cmd) {
+#if defined(_WIN32)
+    FILE* f = _popen(cmd, "r");
+#else
+    FILE* f = popen(cmd, "r");
+#endif
+    if (!f) return "";
+    char buf[512];
+    std::string out;
+    if (std::fgets(buf, sizeof buf, f)) out = trim_cmd_line(buf);
+#if defined(_WIN32)
+    _pclose(f);
+#else
+    pclose(f);
+#endif
+    return out;
+}
+
+inline std::string discovered_homebrew_prefix() {
+    if (const char* p = std::getenv("HOMEBREW_PREFIX"); p && *p) return p;
+#ifndef _WIN32
+    return popen_trim("brew --prefix 2>/dev/null");
+#else
+    return "";
+#endif
+}
+
 /** Match CMake yonac when YONA_ENABLE_VULKAN: headers + -D, no vulkan-1 on link.
  * Do **not** add `-DYONA_HAS_VULKAN` here: scratch `compiled_runtime` must stay on the
  * **`gpu_stub` non-Vulkan TU** so codegen subprocesses link without `vulkan-1` (see
@@ -81,10 +114,9 @@ inline std::string vulkan_runtime_cflags() {
         candidates.push_back(fs::path(sdk) / "Include");
         candidates.push_back(fs::path(sdk) / "include");
     }
-    if (const char* brew = std::getenv("HOMEBREW_PREFIX"); brew && *brew)
+    const std::string brew = discovered_homebrew_prefix();
+    if (!brew.empty())
         candidates.push_back(fs::path(brew) / "include");
-    candidates.push_back("/opt/homebrew/include");
-    candidates.push_back("/usr/local/include");
     for (const auto& inc : candidates) {
         if (fs::exists(inc / "vulkan" / "vulkan.h"))
             return std::string(" -DYONA_COMPILE_GPU_VULKAN=1 -I") + qpath(inc);
@@ -227,12 +259,14 @@ inline std::filesystem::path regex_obj_path() {
 }
 
 inline std::string pcre_cflags() {
-#ifdef __APPLE__
-    if (std::filesystem::exists("/opt/homebrew/include/pcre2.h"))
-        return " -I/opt/homebrew/include";
-    if (std::filesystem::exists("/usr/local/include/pcre2.h"))
-        return " -I/usr/local/include";
-#endif
+    std::string pc = popen_trim("pkg-config --cflags libpcre2-8 2>/dev/null");
+    if (!pc.empty()) return " " + pc;
+    const std::string brew = discovered_homebrew_prefix();
+    if (!brew.empty()) {
+        auto inc = std::filesystem::path(brew) / "include";
+        if (std::filesystem::exists(inc / "pcre2.h"))
+            return std::string(" -I") + qpath(inc);
+    }
     return "";
 }
 
@@ -255,12 +289,16 @@ inline bool ensure_regex_obj(std::filesystem::path& out_path) {
 }
 
 inline std::string pcre_link_flags() {
-#ifdef __APPLE__
-    if (std::filesystem::exists("/opt/homebrew/lib/libpcre2-8.dylib"))
-        return "-L/opt/homebrew/lib -lpcre2-8";
-    if (std::filesystem::exists("/usr/local/lib/libpcre2-8.dylib"))
-        return "-L/usr/local/lib -lpcre2-8";
-#endif
+    std::string pc = popen_trim("pkg-config --libs libpcre2-8 2>/dev/null");
+    if (!pc.empty()) return pc;
+    const std::string brew = discovered_homebrew_prefix();
+    if (!brew.empty()) {
+        auto lib = std::filesystem::path(brew) / "lib";
+        if (std::filesystem::exists(lib / "libpcre2-8.dylib") ||
+            std::filesystem::exists(lib / "libpcre2-8.so") ||
+            std::filesystem::exists(lib / "libpcre2-8.a"))
+            return std::string("-L") + qpath(lib) + " -lpcre2-8";
+    }
     return "-lpcre2-8";
 }
 

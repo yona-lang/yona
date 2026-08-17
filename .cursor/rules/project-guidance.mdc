@@ -31,3 +31,5 @@ Testing and bug handling:
 Memory/runtime notes:
 - Heap objects use reference counting with recursive destructors
 - Closures, ADTs, tuples, sequences, sets, and dicts may carry heap ownership and require correct transfer/drop behavior
+
+Do not hardcode install prefixes (`/opt/homebrew`, `/usr/local`, …). Discover via env, `brew --prefix`, `pkg-config`, or CMake `find_*`. Remove hardcoded prefixes when you see them (see `no-hardcoded-install-paths`).

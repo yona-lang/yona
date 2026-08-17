@@ -31,6 +31,8 @@ ROOT = Path(__file__).resolve().parent.parent
 BENCH_DIR = ROOT / "bench"
 def _default_yonac():
     candidates = [
+        ROOT / "out" / "build" / "x64-debug-macos" / "yonac",
+        ROOT / "out" / "build" / "x64-release-macos" / "yonac",
         ROOT / "out" / "build" / "x64-debug-linux" / "yonac",
         ROOT / "out" / "build" / "x64-release-linux" / "yonac",
         ROOT / "out" / "build" / "x64-debug" / "yonac.exe",
@@ -194,8 +196,13 @@ def compile_yona(source, opt_level, exe_path):
     cmd = [str(YONAC), f"-O{opt_level}", "--sysroot", str(_default_sysroot()), "-I", str(lib_path),
            "-o", str(exe_path), str(source)]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=_tool_env())
-        return result.returncode == 0
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=_tool_env())
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout or "").strip()
+            if err:
+                print(f"  compile failed: {err[:400]}", file=sys.stderr)
+            return False
+        return True
     except subprocess.TimeoutExpired:
         return False
 
@@ -410,14 +417,14 @@ def measure_startup(lang, build_dir, iterations=3):
                 peak_rss = int(parts[2])
                 # On Windows we now expect startup RSS to be measurable.
                 # If legacy zero-RSS slipped in, force recompute.
-                if os.name == "nt" and peak_rss <= 0:
+                if (os.name == "nt" or sys.platform == "darwin") and peak_rss <= 0:
                     raise ValueError("stale startup RSS cache")
                 return avg_ms, peak_rss
             # Legacy cache support (v1): "<avg_ms> [peak_rss_kb]"
             if len(parts) >= 2:
                 avg_ms = float(parts[0])
                 peak_rss = int(parts[1])
-                if os.name == "nt" and peak_rss <= 0:
+                if (os.name == "nt" or sys.platform == "darwin") and peak_rss <= 0:
                     raise ValueError("stale legacy startup RSS cache")
                 return avg_ms, peak_rss
         except (ValueError, IndexError):
@@ -572,27 +579,76 @@ def _windows_peak_working_set_kb(proc: subprocess.Popen) -> int:
         return 0
 
 
+def _posix_rss_kb_from_rusage(ru) -> int:
+    """Convert wait4 ru_maxrss to kilobytes (Darwin: bytes; Linux: KB)."""
+    rss = int(getattr(ru, "ru_maxrss", 0) or 0)
+    if rss <= 0:
+        return 0
+    if sys.platform == "darwin":
+        return rss // 1024
+    return rss
+
+
+def _posix_communicate_rusage(proc, timeout):
+    """Read stdout/stderr then wait4 so the child's ru_maxrss is available."""
+    import select
+
+    chunks = {proc.stdout.fileno(): [], proc.stderr.fileno(): []}
+    kind = {proc.stdout.fileno(): "out", proc.stderr.fileno(): "err"}
+    pending = set(chunks)
+    deadline = time.monotonic() + timeout
+    while pending:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(proc.args, timeout)
+        readable, _, _ = select.select(list(pending), [], [], remaining)
+        if not readable:
+            raise subprocess.TimeoutExpired(proc.args, timeout)
+        for fd in readable:
+            data = os.read(fd, 65536)
+            if not data:
+                pending.discard(fd)
+                continue
+            chunks[fd].append(data)
+    _, status, ru = os.wait4(proc.pid, 0)
+    proc.returncode = os.waitstatus_to_exitcode(status)
+    stdout = b"".join(chunks[proc.stdout.fileno()]).decode()
+    stderr = b"".join(chunks[proc.stderr.fileno()]).decode()
+    return stdout, stderr, ru
+
+
 def run_once(cmd_or_exe):
     """Run a command once. `cmd_or_exe` is a str (path) or a list of args.
     Returns (output, time_ms, peak_rss_kb) or None on failure."""
+    proc = None
     try:
         cmd = cmd_or_exe if isinstance(cmd_or_exe, list) else [str(cmd_or_exe)]
         start = time.perf_counter_ns()
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        stdout, stderr = proc.communicate(timeout=BENCH_TIMEOUT)
+        if os.name == "nt":
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout, stderr = proc.communicate(timeout=BENCH_TIMEOUT)
+            elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
+            if proc.returncode != 0:
+                return None
+            peak_rss_kb = _windows_peak_working_set_kb(proc)
+            return stdout.strip(), elapsed_ms, peak_rss_kb
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+        stdout, stderr, ru = _posix_communicate_rusage(proc, BENCH_TIMEOUT)
         elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
         if proc.returncode != 0:
             return None
-        output = stdout.strip()
-        # Cross-platform baseline: wall-clock always reported.
-        # Windows uses peak working set via GetProcessMemoryInfo.
-        peak_rss_kb = _windows_peak_working_set_kb(proc)
-        return output, elapsed_ms, peak_rss_kb
+        return stdout.strip(), elapsed_ms, _posix_rss_kb_from_rusage(ru)
     except subprocess.TimeoutExpired:
-        try:
-            proc.kill()
-        except Exception:
-            pass
+        if proc is not None:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            if os.name != "nt":
+                try:
+                    os.wait4(proc.pid, 0)
+                except Exception:
+                    pass
         return None
     except Exception:
         return None

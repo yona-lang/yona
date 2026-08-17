@@ -78,7 +78,7 @@ cmake --build --preset build-release-macos
 brew install yona-lang/tap/yona
 ```
 
-Optional **`Std\GPU` Vulkan** (MoltenVK): `brew install molten-vk vulkan-headers vulkan-loader`, then configure with `-DYONA_ENABLE_VULKAN=ON`. CMake finds `vulkan/vulkan.h` and `libvulkan` / `libMoltenVK` via `VULKAN_SDK`, `HOMEBREW_PREFIX`, `/opt/homebrew`, and `/usr/local` (no extra env required on Apple Silicon Homebrew). Runtime `dlopen` uses the same prefixes and, if unset, hints `VK_ICD_FILENAMES` at `MoltenVK_icd.json`. Metal typically lacks `shaderInt64`, so `hasGpu` stays false and IntArray GPU kernels stay on the CPU; `vulkanStatus` can still be `vulkan-device`. See `docs/gpu-architecture.md` and `docs/gpu-vulkan-implementation-plan.md` §11.
+Optional **`Std\GPU` Vulkan** (MoltenVK): `brew install molten-vk vulkan-headers vulkan-loader`, then configure with `-DYONA_ENABLE_VULKAN=ON`. CMake finds `vulkan/vulkan.h` and `libvulkan` / `libMoltenVK` via `VULKAN_SDK` and `HOMEBREW_PREFIX` or `brew --prefix`. The runtime `dlopen`s those discovered dirs (and bare loader names) and, if unset, hints `VK_ICD_FILENAMES` at a MoltenVK ICD json CMake or the env prefix located. Metal typically lacks `shaderInt64`; `hasGpu` is still true when the device is ready, and IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit. `vulkanStatus` can be `vulkan-device`. See `docs/gpu-architecture.md` and `docs/gpu-vulkan-implementation-plan.md` §11.
 
 ## Windows
 
@@ -107,7 +107,7 @@ If **`LLVM_INSTALL_PREFIX`** points at an LLVM **library** tree **without** Clan
 #### `YONAC_CC` and doctest (`tests.exe`)
 
 The C++ **doctest** harness compiles `src/compiled_runtime.c` and platform sources via `system()` / `cmd`. Set **`YONAC_CC`** to the full path of **`clang.exe`** used for those subprocesses (CTest on Windows should inherit the same env you use for CMake, or set it explicitly). The harness **quotes** `YONAC_CC` when building commands; if you run an **older** `tests.exe` without that fix, use an **8.3 short path** (e.g. `C:\PROGRA~1\LLVM\bin\clang.exe`) or put **`clang.exe`** on **`PATH`** so the default compiler name resolves. Optional Vulkan scratch builds also honor **`YONA_COMPILE_GPU_VULKAN`** and **`VULKAN_SDK`** (see `CLAUDE.md` / `docs/gpu-architecture.md`).
-When CMake finds Vulkan, **`yonac`**-linked programmes use **`gpu_stub`** Vulkan entry points for **`Std\GPU` float** natives. On Windows, **`yonac`** prefers the **`vulkan-1.lib`** path recorded at CMake configure time (same as the **`Vulkan::Vulkan`** target); if that file is missing at link time, set **`VULKAN_SDK`** to the LunarG root so **`Lib/vulkan-1.lib`** resolves. Unix builds that define **`YONAC_EXE_LINK_POSIX_VULKAN`** pass **`‑lvulkan`**.
+When CMake finds Vulkan, **`yonac`**-linked programmes use **`gpu_stub`** Vulkan entry points for **`Std\GPU` float** natives. On Windows, **`yonac`** prefers the **`vulkan-1.lib`** path recorded at CMake configure time (same as the **`Vulkan::Vulkan`** target); if that file is missing at link time, set **`VULKAN_SDK`** to the LunarG root so **`Lib/vulkan-1.lib`** resolves. Unix builds that define **`YONAC_EXE_LINK_POSIX_VULKAN`** pass **`-L`** (CMake-recorded lib dir, else **`VULKAN_SDK/lib`** or **`$HOMEBREW_PREFIX/lib`**) and **`-lvulkan`**. On macOS they also set **`rpath`** to that directory so **`libvulkan`** resolves at launch.
 
 ### 2. Configure and build (PowerShell)
 

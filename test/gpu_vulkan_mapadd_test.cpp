@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
+#include <string>
 
 #include "yona/runtime/gpu_vulkan_device.h"
 
@@ -73,6 +75,16 @@ static void reduce_env_clear(void) {
 #endif
 }
 
+static void apple_require_gpu_ok(int ok) {
+#if defined(__APPLE__)
+    if (yona_gpu_vulkan_loader_available()) {
+        REQUIRE_MESSAGE(ok, std::string(yona_gpu_vulkan_device_last_note()));
+    }
+#else
+    (void)ok;
+#endif
+}
+
 static void filter_env_enable_small_arrays(void) {
 #ifdef _WIN32
     (void)_putenv_s("YONA_GPU_VULKAN_FILTER", "1");
@@ -111,6 +123,22 @@ static void filter_cpu_prefix_clear(void) {
 #endif
 }
 
+static void force_i32_set(void) {
+#ifdef _WIN32
+    (void)_putenv_s("YONA_GPU_VULKAN_FORCE_I32", "1");
+#else
+    (void)setenv("YONA_GPU_VULKAN_FORCE_I32", "1", 1);
+#endif
+}
+
+static void force_i32_clear(void) {
+#ifdef _WIN32
+    (void)_putenv_s("YONA_GPU_VULKAN_FORCE_I32", "");
+#else
+    (void)unsetenv("YONA_GPU_VULKAN_FORCE_I32");
+#endif
+}
+
 /** Force host-mapped SSBOs (disables device-local + staging when unset). */
 static void vulkan_host_ssbo_set(void) {
 #ifdef _WIN32
@@ -144,6 +172,7 @@ TEST_CASE("gpu vulkan mapadd: optional gpu roundtrip") {
     yona_gpu_vulkan_device_shutdown();
 
     if (!ok) {
+        apple_require_gpu_ok(ok);
         MESSAGE("Vulkan mapAdd skipped: ", yona_gpu_vulkan_device_last_note());
         return;
     }
@@ -154,6 +183,41 @@ TEST_CASE("gpu vulkan mapadd: optional gpu roundtrip") {
         CHECK(out[1 + i] == (int64_t)i + 100);
 
     yona_rt_rc_dec((void*)out);
+}
+
+TEST_CASE("gpu vulkan mapadd: i32 path skips values outside int32") {
+    yona_gpu_vulkan_device_shutdown();
+    int init_rc = yona_gpu_vulkan_device_try_init();
+    int has_i64 = yona_gpu_vulkan_device_shader_int64();
+    yona_gpu_vulkan_device_shutdown();
+    if (init_rc != 0) {
+        MESSAGE("Vulkan mapAdd i32-skip probe skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+
+    mapadd_env_enable_small_arrays();
+
+    int64_t buf[1 + 2];
+    buf[0] = 2;
+    buf[1] = (int64_t)std::numeric_limits<int32_t>::max() + 1;
+    buf[2] = 1;
+
+    int64_t* out = nullptr;
+    int ok = yona_gpu_vulkan_try_map_add_int64(1, buf, &out);
+
+    std::string note = yona_gpu_vulkan_device_last_note();
+    mapadd_env_clear();
+    yona_gpu_vulkan_device_shutdown();
+
+    if (has_i64) {
+        REQUIRE(ok);
+        REQUIRE(out != nullptr);
+        CHECK(out[1] == (int64_t)std::numeric_limits<int32_t>::max() + 2);
+        yona_rt_rc_dec((void*)out);
+        return;
+    }
+    CHECK(!ok);
+    CHECK(note.find("int32") != std::string::npos);
 }
 
 TEST_CASE("gpu vulkan mapmul: optional gpu roundtrip") {
@@ -172,6 +236,7 @@ TEST_CASE("gpu vulkan mapmul: optional gpu roundtrip") {
     yona_gpu_vulkan_device_shutdown();
 
     if (!ok) {
+        apple_require_gpu_ok(ok);
         MESSAGE("Vulkan mapMul skipped: ", yona_gpu_vulkan_device_last_note());
         return;
     }
@@ -200,6 +265,7 @@ TEST_CASE("gpu vulkan reduce: optional gpu roundtrip") {
     yona_gpu_vulkan_device_shutdown();
 
     if (!ok) {
+        apple_require_gpu_ok(ok);
         MESSAGE("Vulkan reduceSum skipped: ", yona_gpu_vulkan_device_last_note());
         return;
     }
@@ -298,7 +364,41 @@ TEST_CASE("gpu vulkan filterGreaterThan: optional gpu roundtrip") {
     yona_gpu_vulkan_device_shutdown();
 
     if (!ok) {
+        apple_require_gpu_ok(ok);
         MESSAGE("Vulkan filterGreaterThan skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+
+    REQUIRE(out != nullptr);
+    CHECK(out[0] == 4);
+    CHECK(out[1] == 5);
+    CHECK(out[2] == 6);
+    CHECK(out[3] == 7);
+    CHECK(out[4] == 8);
+
+    yona_rt_rc_dec((void*)out);
+}
+
+TEST_CASE("gpu vulkan filterGreaterThan: forced i32 path") {
+    yona_gpu_vulkan_device_shutdown();
+    force_i32_set();
+    filter_env_enable_small_arrays();
+
+    int64_t buf[1 + 8];
+    buf[0] = 8;
+    for (int i = 0; i < 8; i++)
+        buf[1 + i] = (int64_t)(i + 1);
+
+    int64_t* out = nullptr;
+    int ok = yona_gpu_vulkan_try_filter_greater_than_int64(4, buf, &out);
+
+    filter_env_clear();
+    force_i32_clear();
+    yona_gpu_vulkan_device_shutdown();
+
+    if (!ok) {
+        apple_require_gpu_ok(ok);
+        MESSAGE("Vulkan filterGreaterThan i32 skipped: ", yona_gpu_vulkan_device_last_note());
         return;
     }
 
@@ -327,6 +427,7 @@ TEST_CASE("gpu vulkan filterGreaterThan: gpu prefix matches legacy CPU prefix wh
     yona_gpu_vulkan_device_shutdown();
 
     if (!ok_gpu) {
+        apple_require_gpu_ok(ok_gpu);
         MESSAGE("Vulkan filterGreaterThan skipped: ", yona_gpu_vulkan_device_last_note());
         return;
     }
@@ -411,6 +512,7 @@ TEST_CASE("gpu vulkan filterGreaterThan: empty and full passes when gpu runs") {
     yona_gpu_vulkan_device_shutdown();
 
     if (!ok_none || !ok_all) {
+        apple_require_gpu_ok(ok_none && ok_all);
         MESSAGE("Vulkan filterGreaterThan edge cases skipped: ",
                 yona_gpu_vulkan_device_last_note());
         return;

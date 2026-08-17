@@ -15,10 +15,10 @@ extern "C" {
 /**
  * Open the platform Vulkan loader (`vulkan-1.dll`, `libvulkan.so.1`,
  * `libvulkan.1.dylib`, or `libMoltenVK.dylib`). On macOS, searches
- * `VULKAN_SDK` / `HOMEBREW_PREFIX` / `/opt/homebrew` / `/usr/local` before
- * bare dylib names, and hints `VK_ICD_FILENAMES` at MoltenVK's ICD json when
- * unset. Returns a LoadLibrary/dlopen handle, or NULL. Caller must
- * FreeLibrary/dlclose.
+ * `VULKAN_SDK`, `HOMEBREW_PREFIX`, and CMake-recorded lib/ICD paths before
+ * bare dylib names, and hints `VK_ICD_FILENAMES` at a discovered MoltenVK
+ * ICD json when unset. Returns a LoadLibrary/dlopen handle, or NULL. Caller
+ * must FreeLibrary/dlclose.
  */
 void *yona_gpu_vulkan_open_loader(void);
 
@@ -44,7 +44,8 @@ const char *yona_gpu_vulkan_device_status_name(void);
 
 /**
  * 1 if the logical device was created with VkPhysicalDeviceFeatures::shaderInt64
- * (required for embedded int64 SSBO compute). Always 0 when Vulkan is not compiled in.
+ * (i64 SSBO kernels). When 0, IntArray map/reduce may still run via i32 kernels
+ * if values fit. Always 0 when Vulkan is not compiled in.
  */
 int yona_gpu_vulkan_device_shader_int64(void);
 

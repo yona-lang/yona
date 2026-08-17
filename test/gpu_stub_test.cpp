@@ -38,7 +38,22 @@ TEST_CASE("GPU: optional nop dispatch when YONA_GPU_TEST_DISPATCH is set") {
     yona_gpu_vulkan_ctx_shutdown();
 }
 
-/* Set YONA_GPU_TEST_F64_MUL2=1 to run GPU double×2 on a stack buffer (needs shaderFloat64). */
+TEST_CASE("GPU: float mul2 uses f64 or f32 when compute is available") {
+    if (yona_Std_GPU__available(0) != 1) {
+        return;
+    }
+    CHECK(yona_gpu_vulkan_ctx_init() == 0);
+    double data[4] = {1.0, 2.0, 3.0, 4.0};
+    const int r = yona_gpu_vulkan_float64_buffer_mul2_inplace(data, 4);
+    REQUIRE(r == 0);
+    CHECK(data[0] == doctest::Approx(2.0));
+    CHECK(data[1] == doctest::Approx(4.0));
+    CHECK(data[2] == doctest::Approx(6.0));
+    CHECK(data[3] == doctest::Approx(8.0));
+    yona_gpu_vulkan_ctx_shutdown();
+}
+
+/* Set YONA_GPU_TEST_F64_MUL2=1 to run GPU double×2 on a stack buffer (f64 or f32 fallback). */
 TEST_CASE("GPU: optional f64 mul2 when YONA_GPU_TEST_F64_MUL2 is set") {
     const char* flag = std::getenv("YONA_GPU_TEST_F64_MUL2");
     if (flag == nullptr || flag[0] == '\0') {

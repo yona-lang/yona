@@ -56,11 +56,14 @@ TEST_CASE("gpu vulkan device: try_init device-ready or loader-only") {
     CHECK(yona_gpu_vulkan_device_ready() == 1);
     CHECK(std::string(yona_gpu_vulkan_device_status_name()) == "vulkan-device");
     /* MoltenVK/Metal usually lacks shaderInt64; desktop Vulkan often has it. */
-    if (yona_gpu_vulkan_device_shader_int64() == 0) {
-      std::string note = yona_gpu_vulkan_device_last_note();
-      CHECK(note.find("shaderInt64") != std::string::npos);
-      CHECK(yona_Std_GPU_raw__hasGpu(0) == 0);
-    }
+        if (yona_gpu_vulkan_device_shader_int64() == 0) {
+            std::string note = yona_gpu_vulkan_device_last_note();
+            CHECK(note.find("shaderInt64") != std::string::npos);
+            CHECK(note.find("i32") != std::string::npos);
+            CHECK(yona_Std_GPU_raw__hasGpu(0) == 1);
+        } else {
+            CHECK(yona_Std_GPU_raw__hasGpu(0) == 1);
+        }
   } else {
     CHECK(yona_gpu_vulkan_device_ready() == 0);
   }

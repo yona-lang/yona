@@ -39,6 +39,8 @@ BENCH = ROOT / "bench" / "accelerators"
 
 def _default_yonac() -> Path:
     for rel in (
+        "out/build/x64-debug-macos/yonac",
+        "out/build/x64-release-macos/yonac",
         "out/build/x64-debug-linux/yonac",
         "out/build/x64-release-linux/yonac",
         "out/build/x64-debug/yonac.exe",

@@ -1,0 +1,19 @@
+#version 450
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push {
+    uint n;
+    float scale;
+} push;
+
+layout(set = 0, binding = 0) buffer B {
+    float v[];
+} buf;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx < push.n) {
+        buf.v[idx] = buf.v[idx] * push.scale;
+    }
+}

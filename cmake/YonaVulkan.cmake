@@ -38,24 +38,13 @@ if(YONA_ENABLE_VULKAN)
 			"$ENV{VULKAN_SDK}/lib"
 			"$ENV{VULKAN_SDK}/lib32"
 		)
-		if(DEFINED ENV{HOMEBREW_PREFIX} AND NOT "$ENV{HOMEBREW_PREFIX}" STREQUAL "")
-			list(APPEND _yona_vk_inc_hints "$ENV{HOMEBREW_PREFIX}/include")
-			list(APPEND _yona_vk_lib_hints "$ENV{HOMEBREW_PREFIX}/lib")
+		if(NOT YONA_HOMEBREW_PREFIX)
+			include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaHomebrew.cmake")
+			yona_homebrew_prefix(YONA_HOMEBREW_PREFIX)
 		endif()
-		if(APPLE)
-			# Default prefixes so configure works without exporting HOMEBREW_PREFIX.
-			list(APPEND _yona_vk_inc_hints "/opt/homebrew/include" "/usr/local/include")
-			list(APPEND _yona_vk_lib_hints "/opt/homebrew/lib" "/usr/local/lib")
-			execute_process(
-				COMMAND brew --prefix
-				OUTPUT_VARIABLE _yona_brew_prefix
-				OUTPUT_STRIP_TRAILING_WHITESPACE
-				ERROR_QUIET
-			)
-			if(_yona_brew_prefix)
-				list(APPEND _yona_vk_inc_hints "${_yona_brew_prefix}/include")
-				list(APPEND _yona_vk_lib_hints "${_yona_brew_prefix}/lib")
-			endif()
+		if(YONA_HOMEBREW_PREFIX)
+			list(APPEND _yona_vk_inc_hints "${YONA_HOMEBREW_PREFIX}/include")
+			list(APPEND _yona_vk_lib_hints "${YONA_HOMEBREW_PREFIX}/lib")
 		endif()
 		find_path(
 			YONA_VULKAN_INCLUDE_DIR
@@ -83,7 +72,7 @@ if(YONA_ENABLE_VULKAN)
 	if(NOT YONA_VULKAN_INCLUDE_DIR)
 		message(
 			FATAL_ERROR
-			"YONA_ENABLE_VULKAN is ON but vulkan/vulkan.h was not found. Set VULKAN_SDK, or on macOS: brew install vulkan-headers molten-vk vulkan-loader (CMake searches /opt/homebrew and /usr/local)."
+			"YONA_ENABLE_VULKAN is ON but vulkan/vulkan.h was not found. Set VULKAN_SDK, or on macOS: brew install vulkan-headers molten-vk vulkan-loader (CMake uses HOMEBREW_PREFIX or `brew --prefix`)."
 		)
 	endif()
 	if(NOT YONA_VULKAN_LIBRARY)
