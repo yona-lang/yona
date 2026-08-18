@@ -57,5 +57,11 @@ $msiPath = Join-Path $absOutDir "yona-$Version-windows-x64.msi"
   -arch x64 `
   -out $msiPath `
   $wxsPath
+if ($LASTEXITCODE -ne 0) {
+    throw "wix build failed with exit code $LASTEXITCODE"
+}
+if (-not (Test-Path $msiPath)) {
+    throw "wix build reported success but MSI is missing: $msiPath"
+}
 
 Write-Host "MSI built: $msiPath"

@@ -1,15 +1,15 @@
-# Windows Installer (WiX v4 Draft)
+# Windows Installer (WiX v5)
 
-This directory contains a first-draft MSI installer definition for Yona.
+This directory contains the MSI installer definition for Yona.
 
 ## Layout
 
-- `YonaInstaller.wxs`: WiX v4 package definition.
+- `YonaInstaller.wxs`: WiX v5 package definition (`<Files>` harvest of the staging tree).
 - `build-msi.ps1`: stages files from a build tree and invokes `wix build`.
 
 ## Prerequisites
 
-- WiX Toolset v4 (`wix.exe` on `PATH`)
+- WiX Toolset **v5** (`wix.exe` on `PATH`) — v4 rejects `<Files>` inside `ComponentGroup`
 - A built Yona tree (default: `out/build/x64-release`)
 
 ## Build MSI

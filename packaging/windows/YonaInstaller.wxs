@@ -27,21 +27,20 @@
 
   <Fragment>
     <ComponentGroup Id="YonaFiles" Directory="INSTALLFOLDER">
-      <Files Include="$(var.StagingDir)\bin\**" />
-      <Files Include="$(var.StagingDir)\lib\**" />
-      <Files Include="$(var.StagingDir)\runtime\**" />
-      <Files Include="$(var.StagingDir)\src\**" />
-      <Files Include="$(var.StagingDir)\include\**" />
-      <Files Include="$(var.StagingDir)\LICENSE.txt" />
-      <Files Include="$(var.StagingDir)\README.md" />
-      <Files Include="$(var.StagingDir)\INSTALL.md" />
-      <Files Include="$(var.StagingDir)\CHANGELOG.md" />
+      <Files Include="$(var.StagingDir)\**" />
     </ComponentGroup>
   </Fragment>
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
-      <Component Id="AddYonaBinToPath" Guid="*">
+      <Component Id="AddYonaBinToPath" Guid="8C4E2F91-6A17-4B3D-9E50-2D1A7C8B4F03">
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\Yona"
+          Name="InstallDir"
+          Type="string"
+          Value="[INSTALLFOLDER]"
+          KeyPath="yes" />
         <Environment
           Id="YonaBinPath"
           Name="PATH"

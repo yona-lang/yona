@@ -113,14 +113,14 @@ jobs:
       - name: Set up LLVM
         uses: ./.github/actions/setup-llvm
 
-      - name: Install WiX v4 CLI
+      - name: Install WiX v5 CLI
         shell: pwsh
         run: |
           $installed = dotnet tool list --global | Select-String -Pattern '^\s*wix\s+'
           if ($installed) {
-            dotnet tool update --global wix --version 4.*
+            dotnet tool update --global wix --version 5.*
           } else {
-            dotnet tool install --global wix --version 4.*
+            dotnet tool install --global wix --version 5.*
           }
           echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append
           wix --version
