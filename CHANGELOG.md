@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.3 (2026-08-18)
+
+Packaging-only release so the GitHub Release workflow can finish Homebrew and Copr.
+
+- Homebrew: tap push uses `HOMEBREW_TAP_TOKEN` or `HOMEBREW_TAP_SSH_KEY` (v0.1.2 had neither).
+- Copr/RPM: install `libyona_lib.so` and strip the mock BUILD-dir RUNPATH (Fedora `check-rpaths`).
+- Linux packaging/CI: `-DYONA_LINK_STATIC_CLI=ON -DCMAKE_SKIP_BUILD_RPATH=ON`.
+
 ## v0.1.2 (2026-08-18)
 
 Packaging and in-process LLD so distro and CI builds link without FetchContent

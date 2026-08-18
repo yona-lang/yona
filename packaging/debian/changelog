@@ -1,3 +1,10 @@
+yona (0.1.3-1) noble; urgency=medium
+
+  * New upstream v0.1.3: Copr RUNPATH/check-rpaths fix and Homebrew tap
+    deploy credentials for a complete GitHub Release run.
+
+ -- Adam Kovari <adam@kovari.eu>  Tue, 18 Aug 2026 14:15:00 +0000
+
 yona (0.1.2-2) noble; urgency=medium
 
   * Ship libyona_lib.so when the CLI is dynamically linked and strip

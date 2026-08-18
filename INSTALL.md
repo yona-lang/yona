@@ -15,8 +15,8 @@ These install `yonac` and `yona` on `PATH`. Distro packages put the compiler sys
 Ubuntu PPA builds compile from source on Launchpad (Noble `llvm-dev` is LLVM 18). If a series has no published package yet, build a binary `.deb` from the release tarball:
 
 ```bash
-./dist/debian/build-deb-from-release.sh 0.1.2 amd64
-sudo apt install ./dist/debian/yona_0.1.2-1_amd64.deb
+./dist/debian/build-deb-from-release.sh 0.1.3 amd64
+sudo apt install ./dist/debian/yona_0.1.3-1_amd64.deb
 ```
 
 **Maintainer one-time setup** (create Copr project, AUR SSH key, Launchpad PPA, GitHub secrets): [dist/RELEASING.md](dist/RELEASING.md).
