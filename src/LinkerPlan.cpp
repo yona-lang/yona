@@ -5,7 +5,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -16,6 +18,13 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
+#else
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/Program.h"
 #endif
 
 namespace yona::toolchain {
@@ -184,11 +193,205 @@ static std::string macos_deployment_target() {
 }
 #endif
 
-std::vector<std::string> inprocess_lld_system_args() {
+#if !defined(_WIN32) && !defined(__APPLE__)
+static std::string trim_copy(std::string s) {
+    while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' '))
+        s.pop_back();
+    return s;
+}
+
+static std::string resolve_c_compiler() {
+    std::string cc = "clang";
+    if (const char* e = std::getenv("YONAC_CC"); e && *e)
+        cc = e;
+    else if (const char* e = std::getenv("CC"); e && *e)
+        cc = e;
+    if (llvm::sys::path::is_absolute(cc) && llvm::sys::fs::can_execute(cc))
+        return cc;
+    if (auto found = llvm::sys::findProgramByName(cc))
+        return *found;
+    if (auto found = llvm::sys::findProgramByName("clang"))
+        return *found;
+    if (auto found = llvm::sys::findProgramByName("cc"))
+        return *found;
+    return {};
+}
+
+static std::string run_cc_stdout(const std::vector<std::string>& extra_args) {
+    const std::string cc = resolve_c_compiler();
+    if (cc.empty())
+        return {};
+    llvm::SmallString<256> out_path;
+    if (llvm::sys::fs::createTemporaryFile("yona-cc", "txt", out_path))
+        return {};
+    std::vector<llvm::StringRef> argv;
+    argv.reserve(extra_args.size() + 1);
+    argv.push_back(cc);
+    for (const auto& a : extra_args)
+        argv.push_back(a);
+    llvm::SmallVector<std::optional<llvm::StringRef>, 3> redirects;
+    redirects.push_back(llvm::StringRef(""));
+    redirects.push_back(llvm::StringRef(out_path));
+    redirects.push_back(llvm::StringRef(""));
+    std::string err;
+    const int rc = llvm::sys::ExecuteAndWait(cc, argv, std::nullopt, redirects, 0, 0, &err);
+    std::string out;
+    if (auto mb = llvm::MemoryBuffer::getFile(out_path.str()))
+        out = trim_copy((*mb)->getBuffer().str());
+    llvm::sys::fs::remove(out_path);
+    if (rc != 0)
+        return {};
+    return out;
+}
+
+static std::string cc_print_file_name(const std::string& name) {
+    const std::string out = run_cc_stdout({"-print-file-name=" + name});
+    if (out.empty() || out == name)
+        return {};
+    std::error_code ec;
+    if (!std::filesystem::exists(out, ec))
+        return {};
+    return out;
+}
+
+static void append_colon_dirs(std::vector<std::string>& dirs, std::string_view spec) {
+    if (!spec.empty() && spec.front() == '=')
+        spec.remove_prefix(1);
+    while (!spec.empty()) {
+        const auto colon = spec.find(':');
+        const std::string_view one = spec.substr(0, colon);
+        if (!one.empty()) {
+            std::error_code ec;
+            if (std::filesystem::is_directory(std::filesystem::path(one), ec))
+                dirs.emplace_back(one);
+        }
+        if (colon == std::string_view::npos)
+            break;
+        spec.remove_prefix(colon + 1);
+    }
+}
+
+static std::vector<std::string> cc_library_dirs() {
+    std::vector<std::string> dirs;
+    const std::string printed = run_cc_stdout({"-print-search-dirs"});
+    const auto pos = printed.find("libraries:");
+    if (pos != std::string::npos) {
+        auto line = std::string_view(printed).substr(pos);
+        const auto nl = line.find('\n');
+        if (nl != std::string_view::npos)
+            line = line.substr(0, nl);
+        const auto eq = line.find('=');
+        if (eq != std::string_view::npos)
+            append_colon_dirs(dirs, line.substr(eq + 1));
+    }
+    if (const char* lp = std::getenv("LIBRARY_PATH"); lp && *lp)
+        append_colon_dirs(dirs, lp);
+    return dirs;
+}
+
+static std::string linux_dynamic_linker() {
+#if defined(__aarch64__)
+    const char* soname = "ld-linux-aarch64.so.1";
+    const char* fallback = "/lib/ld-linux-aarch64.so.1";
+#elif defined(__x86_64__)
+    const char* soname = "ld-linux-x86-64.so.2";
+    const char* fallback = "/lib64/ld-linux-x86-64.so.2";
+#elif defined(__riscv) && defined(__riscv_xlen) && __riscv_xlen == 64
+    const char* soname = "ld-linux-riscv64-lp64d.so.1";
+    const char* fallback = "/lib/ld-linux-riscv64-lp64d.so.1";
+#else
+    const char* soname = nullptr;
+    const char* fallback = nullptr;
+#endif
+    if (soname) {
+        std::string p = cc_print_file_name(soname);
+        if (!p.empty())
+            return p;
+    }
+    if (fallback) {
+        std::error_code ec;
+        if (std::filesystem::exists(fallback, ec))
+            return fallback;
+    }
+    return {};
+}
+
+struct ElfLldArgs {
+    std::vector<std::string> before;
+    std::vector<std::string> after;
+};
+
+static ElfLldArgs make_elf_lld_args() {
+    ElfLldArgs out;
+    out.before.push_back("--eh-frame-hdr");
+    const std::string interp = linux_dynamic_linker();
+    if (!interp.empty()) {
+        out.before.push_back("-dynamic-linker");
+        out.before.push_back(interp);
+    }
+    const std::string scrt1 = cc_print_file_name("Scrt1.o");
+    const std::string crt1 = cc_print_file_name("crt1.o");
+    const std::string crti = cc_print_file_name("crti.o");
+    const std::string crtbeginS = cc_print_file_name("crtbeginS.o");
+    const std::string crtbegin = cc_print_file_name("crtbegin.o");
+    const std::string crtendS = cc_print_file_name("crtendS.o");
+    const std::string crtend = cc_print_file_name("crtend.o");
+    const std::string crtn = cc_print_file_name("crtn.o");
+    std::vector<std::string> crt_end;
+    if (!scrt1.empty()) {
+        out.before.push_back("-pie");
+        out.before.push_back(scrt1);
+        if (!crti.empty())
+            out.before.push_back(crti);
+        if (!crtbeginS.empty())
+            out.before.push_back(crtbeginS);
+        else if (!crtbegin.empty())
+            out.before.push_back(crtbegin);
+        if (!crtendS.empty())
+            crt_end.push_back(crtendS);
+        else if (!crtend.empty())
+            crt_end.push_back(crtend);
+        if (!crtn.empty())
+            crt_end.push_back(crtn);
+    } else if (!crt1.empty()) {
+        out.before.push_back(crt1);
+        if (!crti.empty())
+            out.before.push_back(crti);
+        if (!crtbegin.empty())
+            out.before.push_back(crtbegin);
+        if (!crtend.empty())
+            crt_end.push_back(crtend);
+        if (!crtn.empty())
+            crt_end.push_back(crtn);
+    }
+    for (const auto& d : cc_library_dirs())
+        out.after.push_back("-L" + d);
+    out.after.push_back("--export-dynamic");
+    out.after.push_back("-lm");
+    out.after.push_back("-lpthread");
+    const std::string libgcc = trim_copy(run_cc_stdout({"-print-libgcc-file-name"}));
+    if (!libgcc.empty()) {
+        std::error_code ec;
+        if (std::filesystem::exists(libgcc, ec))
+            out.after.push_back(libgcc);
+    }
+    const std::string gcc_s = cc_print_file_name("libgcc_s.so.1");
+    if (!gcc_s.empty())
+        out.after.push_back(gcc_s);
+    out.after.push_back("-lc");
+    out.after.insert(out.after.end(), crt_end.begin(), crt_end.end());
+    return out;
+}
+
+static const ElfLldArgs& elf_lld_args() {
+    static const ElfLldArgs cached = make_elf_lld_args();
+    return cached;
+}
+#endif
+
+std::vector<std::string> inprocess_lld_before_input_args() {
 #ifdef _WIN32
-    // Clang-as-linker adds oldnames.lib (POSIX open/read/write/close/isatty ->
-    // _open/_read/...). Raw lld-link does not, so in-process COFF links fail.
-    return {"/SUBSYSTEM:CONSOLE", "oldnames.lib", "ws2_32.lib", "dbghelp.lib"};
+    return {};
 #elif defined(__APPLE__)
     std::vector<std::string> args;
 #if defined(__aarch64__)
@@ -207,12 +410,32 @@ std::vector<std::string> inprocess_lld_system_args() {
         args.push_back("-syslibroot");
         args.push_back(sdk);
     }
-    args.push_back("-lSystem");
-    args.push_back("-U");
-    args.push_back("_yona_regex_free_code");
     return args;
 #else
-    return {"-lm", "-lpthread", "-rdynamic"};
+    return elf_lld_args().before;
+#endif
+}
+
+std::vector<std::string> inprocess_lld_after_input_args() {
+#ifdef _WIN32
+    return {"/SUBSYSTEM:CONSOLE", "oldnames.lib", "ws2_32.lib", "dbghelp.lib"};
+#elif defined(__APPLE__)
+    return {"-lSystem", "-U", "_yona_regex_free_code"};
+#else
+    return elf_lld_args().after;
+#endif
+}
+
+std::vector<std::string> inprocess_lld_system_args() {
+#ifdef _WIN32
+    // Clang-as-linker adds oldnames.lib (POSIX open/read/write/close/isatty ->
+    // _open/_read/...). Raw lld-link does not, so in-process COFF links fail.
+    return inprocess_lld_after_input_args();
+#else
+    auto args = inprocess_lld_before_input_args();
+    const auto after = inprocess_lld_after_input_args();
+    args.insert(args.end(), after.begin(), after.end());
+    return args;
 #endif
 }
 

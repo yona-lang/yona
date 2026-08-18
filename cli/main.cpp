@@ -739,27 +739,25 @@ int main(int argc, char *argv[]) {
     lld_args.push_back("/NOLOGO");
     append_link_objects([&](const string &s) { lld_args.push_back(s); });
     lld_args.push_back("/OUT:" + filesystem::path(output_file).string());
-    for (const auto &a : yona::toolchain::inprocess_lld_system_args())
+    for (const auto &a : yona::toolchain::inprocess_lld_after_input_args())
       lld_args.push_back(a);
     {
       string vk_lib = yona_windows_vulkan_import_lib_path();
       if (!vk_lib.empty())
         lld_args.push_back(vk_lib);
     }
-#elif defined(__APPLE__)
+#else
+#ifdef __APPLE__
     lld_args.push_back("ld64.lld");
-    // ld64.lld requires -arch / -platform_version / -syslibroot before inputs.
-    for (const auto &a : yona::toolchain::inprocess_lld_system_args())
+#else
+    lld_args.push_back("ld.lld");
+#endif
+    for (const auto &a : yona::toolchain::inprocess_lld_before_input_args())
       lld_args.push_back(a);
     append_link_objects([&](const string &s) { lld_args.push_back(s); });
     lld_args.push_back("-o");
     lld_args.push_back(filesystem::path(output_file).string());
-#else
-    lld_args.push_back("ld.lld");
-    append_link_objects([&](const string &s) { lld_args.push_back(s); });
-    lld_args.push_back("-o");
-    lld_args.push_back(filesystem::path(output_file).string());
-    for (const auto &a : yona::toolchain::inprocess_lld_system_args())
+    for (const auto &a : yona::toolchain::inprocess_lld_after_input_args())
       lld_args.push_back(a);
 #endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN

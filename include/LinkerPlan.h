@@ -35,8 +35,11 @@ bool inprocess_lld_available();
 std::string inprocess_lld_unavailable_reason();
 bool require_inprocess_lld_from_env();
 
-// Extra args the clang/MSVC driver would inject that raw in-process LLD does not:
-// Windows oldnames.lib (POSIX CRT aliases), macOS syslibroot, Unix libm/pthread.
+// Extra args the clang/MSVC driver would inject that raw in-process LLD does not.
+// Split so Darwin/ELF options that must precede inputs (arch, CRT start files)
+// are not appended after object files.
+std::vector<std::string> inprocess_lld_before_input_args();
+std::vector<std::string> inprocess_lld_after_input_args();
 std::vector<std::string> inprocess_lld_system_args();
 
 // Prefixes that contain lib/, runtime/, src/, include/ (packaged sysroot).

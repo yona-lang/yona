@@ -235,6 +235,30 @@ TEST_CASE("inprocess system args include Windows POSIX CRT aliases") {
 #endif
 }
 
+#ifdef __linux__
+TEST_CASE("inprocess system args use lld flags not clang-driver -rdynamic") {
+    const auto args = yona::toolchain::inprocess_lld_system_args();
+    bool saw_rdynamic = false;
+    bool saw_export = false;
+    bool saw_lm = false;
+    bool saw_L = false;
+    for (const auto& a : args) {
+        if (a == "-rdynamic")
+            saw_rdynamic = true;
+        if (a == "--export-dynamic" || a == "-export-dynamic")
+            saw_export = true;
+        if (a == "-lm")
+            saw_lm = true;
+        if (a.rfind("-L", 0) == 0 && a.size() > 2)
+            saw_L = true;
+    }
+    CHECK(saw_export);
+    CHECK_FALSE(saw_rdynamic);
+    CHECK(saw_lm);
+    CHECK(saw_L);
+}
+#endif
+
 TEST_CASE("inprocess LLD diagnostics include stdout when stderr is empty") {
     yona::toolchain::InProcessLldResult res;
     res.stdout_text = "lld stdout";
