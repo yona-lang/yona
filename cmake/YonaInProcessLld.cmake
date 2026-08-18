@@ -107,15 +107,11 @@ if(YONA_ENABLE_INPROCESS_LLD)
 endif()
 
 if(YONA_INPROCESS_LLD_AVAILABLE)
-	# lld drivers reference target init symbols beyond the host arch.
+	# Distro lld*.a is built with every LLVM_TARGETS_TO_BUILD backend; the
+	# ELF/MachO/COFF drivers call LLVMInitialize* for each of them (not just
+	# the host). A short AArch64/X86/… list leaves AMDGPU/AVR/Hexagon/… undefined.
 	llvm_map_components_to_libnames(YONA_INPROCESS_LLD_LLVM_LIBS
-		AArch64Info AArch64Desc AArch64CodeGen AArch64AsmParser
-		ARMInfo ARMDesc ARMCodeGen ARMAsmParser
-		BPFInfo BPFDesc BPFCodeGen BPFAsmParser
-		WebAssemblyInfo WebAssemblyDesc WebAssemblyCodeGen WebAssemblyAsmParser
-		RISCVInfo RISCVDesc RISCVCodeGen RISCVAsmParser
-		NVPTXInfo NVPTXDesc NVPTXCodeGen
-		X86Info X86Desc X86CodeGen X86AsmParser
+		${LLVM_TARGETS_TO_BUILD}
 		TargetParser MC MCParser AsmParser
 		Option LibDriver WindowsDriver WindowsManifest LTO DTLTO
 	)
