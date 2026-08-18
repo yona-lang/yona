@@ -56,7 +56,13 @@ static inline void yona_sjlj_longjmp(void** buf) {
 
 #define yona_sjlj_setjmp(buf) __builtin_setjmp((void**)(buf))
 
+/* GCC errors on always_inline + __builtin_longjmp ("can never be inlined
+ * because it uses setjmp-longjmp exception handling"). Clang still inlines. */
+#if defined(__clang__)
 __attribute__((noreturn, always_inline))
+#else
+__attribute__((noreturn))
+#endif
 static inline void yona_sjlj_longjmp(void** buf) {
 	__builtin_longjmp(buf, 1);
 }
