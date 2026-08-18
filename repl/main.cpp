@@ -115,12 +115,17 @@ static string compile_and_run(const string& expr,
         lld_args.push_back("/OUT:" + exe.string());
         for (const auto& a : yona::toolchain::inprocess_lld_system_args())
             lld_args.push_back(a);
-#else
-#ifdef __APPLE__
+#elif defined(__APPLE__)
         lld_args.push_back("ld64.lld");
+        for (const auto& a : yona::toolchain::inprocess_lld_system_args())
+            lld_args.push_back(a);
+        lld_args.push_back(obj.string());
+        lld_args.push_back(fs::path(rt_obj).string());
+        for (const auto& ex : rt_extra_objs) lld_args.push_back(fs::path(ex).string());
+        lld_args.push_back("-o");
+        lld_args.push_back(exe.string());
 #else
         lld_args.push_back("ld.lld");
-#endif
         lld_args.push_back(obj.string());
         lld_args.push_back(fs::path(rt_obj).string());
         for (const auto& ex : rt_extra_objs) lld_args.push_back(fs::path(ex).string());

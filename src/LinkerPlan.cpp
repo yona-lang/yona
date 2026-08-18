@@ -148,12 +148,8 @@ bool require_inprocess_lld_from_env() {
 }
 
 #ifdef __APPLE__
-static std::string macos_sdkroot() {
-    if (const char* e = std::getenv("SDKROOT")) {
-        if (*e)
-            return std::string(e);
-    }
-    FILE* pipe = popen("xcrun --show-sdk-path 2>/dev/null", "r");
+static std::string macos_popen_trim(const char* cmd) {
+    FILE* pipe = popen(cmd, "r");
     if (!pipe)
         return {};
     char buf[1024];
@@ -165,6 +161,27 @@ static std::string macos_sdkroot() {
         out.pop_back();
     return out;
 }
+
+static std::string macos_sdkroot() {
+    if (const char* e = std::getenv("SDKROOT")) {
+        if (*e)
+            return std::string(e);
+    }
+    return macos_popen_trim("xcrun --show-sdk-path 2>/dev/null");
+}
+
+static std::string macos_sdk_version() {
+    std::string v = macos_popen_trim("xcrun --show-sdk-version 2>/dev/null");
+    return v.empty() ? "11.0" : v;
+}
+
+static std::string macos_deployment_target() {
+    if (const char* e = std::getenv("MACOSX_DEPLOYMENT_TARGET")) {
+        if (*e)
+            return std::string(e);
+    }
+    return "11.0";
+}
 #endif
 
 std::vector<std::string> inprocess_lld_system_args() {
@@ -174,11 +191,6 @@ std::vector<std::string> inprocess_lld_system_args() {
     return {"/SUBSYSTEM:CONSOLE", "oldnames.lib", "ws2_32.lib", "dbghelp.lib"};
 #elif defined(__APPLE__)
     std::vector<std::string> args;
-    const std::string sdk = macos_sdkroot();
-    if (!sdk.empty()) {
-        args.push_back("-syslibroot");
-        args.push_back(sdk);
-    }
 #if defined(__aarch64__)
     args.push_back("-arch");
     args.push_back("arm64");
@@ -186,6 +198,15 @@ std::vector<std::string> inprocess_lld_system_args() {
     args.push_back("-arch");
     args.push_back("x86_64");
 #endif
+    args.push_back("-platform_version");
+    args.push_back("macos");
+    args.push_back(macos_deployment_target());
+    args.push_back(macos_sdk_version());
+    const std::string sdk = macos_sdkroot();
+    if (!sdk.empty()) {
+        args.push_back("-syslibroot");
+        args.push_back(sdk);
+    }
     args.push_back("-lSystem");
     args.push_back("-U");
     args.push_back("_yona_regex_free_code");

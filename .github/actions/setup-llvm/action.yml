@@ -40,7 +40,8 @@ runs:
         fi
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
-          "liblld-${major}-dev" libcli11-dev doctest-dev libpcre2-dev libxml2-dev pkg-config
+          "liblld-${major}-dev" "libpolly-${major}-dev" \
+          libcli11-dev doctest-dev libpcre2-dev libxml2-dev pkg-config
         if [[ -x "${prefix}/bin/clang" ]]; then
           cc="${prefix}/bin/clang"
           cxx="${prefix}/bin/clang++"

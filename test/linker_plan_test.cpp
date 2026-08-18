@@ -246,15 +246,37 @@ TEST_CASE("inprocess LLD diagnostics include stdout when stderr is empty") {
 
 #ifdef __APPLE__
 TEST_CASE("inprocess system args pass syslibroot when SDKROOT is set") {
+    const char* old_sdk = std::getenv("SDKROOT");
+    const std::string saved_sdk = old_sdk ? old_sdk : "";
+    const char* old_dt = std::getenv("MACOSX_DEPLOYMENT_TARGET");
+    const std::string saved_dt = old_dt ? old_dt : "";
     setenv("SDKROOT", "/tmp/yona-fake-sdk", 1);
+    setenv("MACOSX_DEPLOYMENT_TARGET", "12.0", 1);
     const auto args = yona::toolchain::inprocess_lld_system_args();
     bool saw_syslibroot = false;
+    bool saw_platform = false;
+    bool saw_arch = false;
     for (size_t i = 0; i < args.size(); ++i) {
         if (args[i] == "-syslibroot" && i + 1 < args.size() && args[i + 1] == "/tmp/yona-fake-sdk")
             saw_syslibroot = true;
+        if (args[i] == "-platform_version" && i + 3 < args.size() && args[i + 1] == "macos" &&
+            args[i + 2] == "12.0")
+            saw_platform = true;
+        if (args[i] == "-arch" && i + 1 < args.size() &&
+            (args[i + 1] == "arm64" || args[i + 1] == "x86_64"))
+            saw_arch = true;
     }
     CHECK(saw_syslibroot);
-    unsetenv("SDKROOT");
+    CHECK(saw_platform);
+    CHECK(saw_arch);
+    if (saved_sdk.empty())
+        unsetenv("SDKROOT");
+    else
+        setenv("SDKROOT", saved_sdk.c_str(), 1);
+    if (saved_dt.empty())
+        unsetenv("MACOSX_DEPLOYMENT_TARGET");
+    else
+        setenv("MACOSX_DEPLOYMENT_TARGET", saved_dt.c_str(), 1);
 }
 #endif
 

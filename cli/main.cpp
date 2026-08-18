@@ -746,17 +746,22 @@ int main(int argc, char *argv[]) {
       if (!vk_lib.empty())
         lld_args.push_back(vk_lib);
     }
-#else
-#ifdef __APPLE__
+#elif defined(__APPLE__)
     lld_args.push_back("ld64.lld");
+    // ld64.lld requires -arch / -platform_version / -syslibroot before inputs.
+    for (const auto &a : yona::toolchain::inprocess_lld_system_args())
+      lld_args.push_back(a);
+    append_link_objects([&](const string &s) { lld_args.push_back(s); });
+    lld_args.push_back("-o");
+    lld_args.push_back(filesystem::path(output_file).string());
 #else
     lld_args.push_back("ld.lld");
-#endif
     append_link_objects([&](const string &s) { lld_args.push_back(s); });
     lld_args.push_back("-o");
     lld_args.push_back(filesystem::path(output_file).string());
     for (const auto &a : yona::toolchain::inprocess_lld_system_args())
       lld_args.push_back(a);
+#endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {
       string vk_dir = yona_posix_vulkan_lib_dir();
@@ -769,7 +774,6 @@ int main(int argc, char *argv[]) {
       }
     }
     lld_args.push_back("-lvulkan");
-#endif
 #endif
     yona::toolchain::InProcessLldResult lld_res;
     used_inprocess = true;

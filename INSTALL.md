@@ -55,7 +55,7 @@ sudo cp -r lib/Std /usr/local/lib/yona/lib/
 
 ```bash
 # Install dependencies
-sudo apt install llvm-dev clang lld liblld-dev cmake ninja-build \
+sudo apt install llvm-dev clang lld liblld-dev libpolly-dev cmake ninja-build \
     libpcre2-dev libcli11-dev libxml2-dev doctest-dev pkg-config
 
 # Build
