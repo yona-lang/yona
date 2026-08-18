@@ -15,6 +15,7 @@ The tag must already exist on the commit you want; CI uses `GITHUB_REF_NAME` fro
 | Channel | Job | Secrets used |
 |---------|-----|----------------|
 | GitHub Release (Linux/macOS tarballs, Windows zip/MSI) | `release` | `GITHUB_TOKEN` (automatic) |
+| Homebrew tap `akovari/homebrew-tap` | `homebrew` | `HOMEBREW_TAP_SSH_KEY`, `HOMEBREW_TAP_REPO` |
 | AUR `yona-bin` | `aur` | `AUR_SSH_PRIVATE_KEY` |
 | Fedora Copr `$COPR_USERNAME/yona` | `copr` | `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAME` |
 | Launchpad `ppa:kovariadam/yona` | `launchpad` | `LAUNCHPAD_*` (`continue-on-error`) |
@@ -65,7 +66,9 @@ copr-cli create yona \
   --instructions "sudo dnf copr enable kovariadam/yona && sudo dnf install yona"
 ```
 
-`--enable-net on` matches the release workflow (`copr-cli buildscm … --enable-net on`). The spec does not download crates, but GitHub `Source0` / SCM clone is happier with network on.
+`--enable-net on` matches the release workflow (`copr-cli buildscm … --enable-net on`). Packaging uses **system** CLI11 (`cli11-devel`), libxml2 (`libxml2-devel`), and LLD headers (`lld-devel`); `%build` passes `-DYONA_FETCH_DEPS=OFF -DYONA_FETCH_LIBXML2=OFF -DBUILD_TESTING=OFF` so CMake never git-clones. `CMakeLists.txt` `find_package`s those deps first; FetchContent is only a developer fallback.
+
+`buildscm --commit` uses the spec from that git commit, but `%prep` still unpacks GitHub `Source0` for `Version:` (the `v*` tarball). Rebuilding `v0.1.1` against an updated spec on `master` still compiles the tagged CMakeLists (which always cloned CLI11). Native `cli11-devel` + `-DYONA_FETCH_DEPS=OFF` apply once a newer tag includes the CMake changes.
 
 `--follow-fedora-branching on` auto-adds the next Fedora x86_64 chroot when Rawhide branches (same as winetop growing F45).
 
@@ -133,11 +136,29 @@ This compiles Yona + LLVM in Copr (~tens of minutes per chroot). Skip if you wou
    gpg --send-keys --keyserver keyserver.ubuntu.com A527AE5A9746F3D954CA8F4C9C7E01C15210C325
    ```
 
-5. Noble builders use distro `llvm-dev` (~18). If the source package fails to configure, the job is allowed to fail; users can still install from Copr, AUR, or the GitHub tarball / `dist/debian/build-deb-from-release.sh`.
+5. Noble builders use distro `llvm-dev` (~18) and **have no outbound network**. `debian/control` `Build-Depends` `libcli11-dev` ([universe](https://packages.ubuntu.com/noble/libcli11-dev)), `libxml2-dev`, and `liblld-dev`; `debian/rules` passes `-DYONA_FETCH_DEPS=OFF -DBUILD_TESTING=OFF`. Adding `git` is not enough. Re-uploads need a new Debian revision (`0.1.1-2`, not a second `0.1.1-1`).
+6. If the source package still fails to configure, the job is allowed to fail (`continue-on-error`); users can still install from Copr, AUR, Homebrew, or the GitHub tarball / `dist/debian/build-deb-from-release.sh`.
 
 Full secret table: [launchpad/README.md](launchpad/README.md).
 
-### 4. GitHub Actions secrets on `yona-lang/yonac-llvm`
+### 4. Homebrew tap (`akovari/homebrew-tap`)
+
+The formula is a **source** build (Yona links LLVM; Ubuntu/macOS CI tarballs are not bottles). CI writes `Formula/yona.rb` into [akovari/homebrew-tap](https://github.com/akovari/homebrew-tap) after the GitHub Release exists (so the tag tarball sha256 is stable).
+
+1. Tap repo already exists (winetop publishes `Formula/winetop.rb` there).
+2. Copy the **same** deploy key winetop uses onto this repo:
+
+```bash
+REPO=yona-lang/yonac-llvm
+gh secret set HOMEBREW_TAP_REPO --repo "$REPO" --body "akovari/homebrew-tap"
+# HOMEBREW_TAP_SSH_KEY cannot be read back from winetop; paste the same OpenSSH
+# private key you stored as HOMEBREW_TAP_SSH_KEY on akovari/winetop:
+gh secret set HOMEBREW_TAP_SSH_KEY --repo "$REPO"   # paste, real newlines
+```
+
+Users install with `brew install akovari/tap/yona` (optional `--with-vulkan`, `--HEAD`).
+
+### 5. GitHub Actions secrets on `yona-lang/yonac-llvm`
 
 You need **admin** on `yona-lang/yonac-llvm`. Reuse the winetop values:
 
@@ -161,6 +182,10 @@ gh secret set LAUNCHPAD_GPG_KEY_ID --repo "$REPO" --body "9C7E01C15210C325"
 gpg --armor --export-secret-keys "$FPR" | gh secret set LAUNCHPAD_GPG_PRIVATE_KEY --repo "$REPO"
 # empty if the key has no passphrase:
 printf '' | gh secret set LAUNCHPAD_GPG_PASSPHRASE --repo "$REPO"
+
+# Homebrew tap (same deploy key as winetop → akovari/homebrew-tap)
+gh secret set HOMEBREW_TAP_REPO --repo "$REPO" --body "akovari/homebrew-tap"
+gh secret set HOMEBREW_TAP_SSH_KEY --repo "$REPO"   # paste winetop HOMEBREW_TAP_SSH_KEY
 ```
 
 To copy from winetop without re-typing Copr fields (if `gh` can read the other repo’s secrets — it cannot; you must paste from `~/.config/copr` or the Copr API page).
@@ -171,13 +196,13 @@ Confirm secrets exist:
 gh secret list --repo yona-lang/yonac-llvm
 ```
 
-Expected names: `AUR_SSH_PRIVATE_KEY`, `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAME`, `LAUNCHPAD_PPA`, `LAUNCHPAD_USER`, `LAUNCHPAD_GPG_FINGERPRINT`, `LAUNCHPAD_GPG_KEY_ID`, `LAUNCHPAD_GPG_PRIVATE_KEY`, `LAUNCHPAD_GPG_PASSPHRASE`.
+Expected names: `AUR_SSH_PRIVATE_KEY`, `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAME`, `HOMEBREW_TAP_REPO`, `HOMEBREW_TAP_SSH_KEY`, `LAUNCHPAD_PPA`, `LAUNCHPAD_USER`, `LAUNCHPAD_GPG_FINGERPRINT`, `LAUNCHPAD_GPG_KEY_ID`, `LAUNCHPAD_GPG_PRIVATE_KEY`, `LAUNCHPAD_GPG_PASSPHRASE`.
 
 ## Version bump checklist (each release)
 
 1. `VERSION` file
 2. `dist/copr/yona.spec` and `packaging/yona.spec` `Version:`
-3. `packaging/debian/changelog` (Launchpad CI overwrites this on upload)
+3. `packaging/debian/changelog` (Launchpad CI keeps this when the upstream version matches the tag; otherwise it writes `${VERSION}-1`)
 4. `CHANGELOG.md`
 5. Tag `vX.Y.Z` and push
 
@@ -189,4 +214,5 @@ End-user matrix: [../README.md](../README.md#quick-start).
 sudo dnf copr enable kovariadam/yona && sudo dnf install yona
 yay -S yona-bin
 sudo add-apt-repository ppa:kovariadam/yona && sudo apt install yona
+brew install akovari/tap/yona
 ```

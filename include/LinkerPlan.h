@@ -35,4 +35,14 @@ bool inprocess_lld_available();
 std::string inprocess_lld_unavailable_reason();
 bool require_inprocess_lld_from_env();
 
+// Extra args the clang/MSVC driver would inject that raw in-process LLD does not:
+// Windows oldnames.lib (POSIX CRT aliases), macOS syslibroot, Unix libm/pthread.
+std::vector<std::string> inprocess_lld_system_args();
+
+// Prefixes that contain lib/, runtime/, src/, include/ (packaged sysroot).
+// `sysroot_opt` is `--sysroot`; empty means unset. Also honors YONA_HOME and
+// Homebrew / distro layouts next to the executable.
+std::vector<std::filesystem::path> discover_sysroots(const char* argv0,
+                                                     const std::string& sysroot_opt = {});
+
 } // namespace yona::toolchain

@@ -1,20 +1,31 @@
+#!/usr/bin/env bash
+# Generate a Homebrew source formula for the akovari/homebrew-tap tap.
+# Yona links LLVM, so this is a source build (not the GitHub CI tarball).
+set -euo pipefail
+
+VERSION="${1:?version required (no v prefix)}"
+SHA256="${2:?sha256 of github.com/yona-lang/yonac-llvm/archive/refs/tags/vVERSION.tar.gz}"
+OUT="${3:-Formula/yona.rb}"
+
+mkdir -p "$(dirname "$OUT")"
+cat >"$OUT" <<EOF
 # frozen_string_literal: true
 
 class Yona < Formula
   desc "Yona programming language compiler targeting LLVM"
   homepage "https://github.com/yona-lang/yonac-llvm"
-  version "0.1.1"
+  version "${VERSION}"
   url "https://github.com/yona-lang/yonac-llvm/archive/refs/tags/v#{version}.tar.gz"
-  sha256 "012a0629f0fcbed3f94b87cae9b303bb25492310b6e068042a70ac86cefec740"
+  sha256 "${SHA256}"
   license "GPL-3.0-only"
   head "https://github.com/yona-lang/yonac-llvm.git", branch: "master"
 
   livecheck do
     url :stable
-    regex(/^v?(\d+(?:\.\d+)+)$/i)
+    regex(/^v?(\\d+(?:\\.\\d+)+)\$/i)
   end
 
-  option "with-vulkan", "Enable Std\\GPU Vulkan support (MoltenVK on macOS)"
+  option "with-vulkan", "Enable Std\\\\GPU Vulkan support (MoltenVK on macOS)"
 
   depends_on "cmake" => :build
   depends_on "ninja" => :build
@@ -77,7 +88,7 @@ class Yona < Formula
     (sysroot/"runtime").install Dir["build/runtime/*"]
 
     env = {
-      PATH:       "#{llvm.opt_bin}:#{lld.opt_bin}:\$PATH",
+      PATH:       "#{llvm.opt_bin}:#{lld.opt_bin}:\\\$PATH",
       YONA_HOME:  opt_lib/"yona",
       YONAC_CC:   llvm.opt_bin/"clang",
     }
@@ -87,7 +98,7 @@ class Yona < Formula
 
   def caveats
     <<~EOS
-      LLVM is keg-only. The `yonac` and `yona` wrappers add Homebrew LLVM and LLD
+      LLVM is keg-only. The \`yonac\` and \`yona\` wrappers add Homebrew LLVM and LLD
       to PATH and set YONA_HOME / YONAC_CC so compiling programs works out of the box.
 
       Optional Vulkan GPU runtime:
@@ -96,7 +107,8 @@ class Yona < Formula
   end
 
   test do
-    assert_match(/\d+\.\d+\.\d+/, shell_output("#{bin}/yonac --version"))
-    assert_equal "42\n", shell_output("#{bin}/yonac -e '42'")
+    assert_match(/\\d+\\.\\d+\\.\\d+/, shell_output("#{bin}/yonac --version"))
+    assert_equal "42\\n", shell_output("#{bin}/yonac -e '42'")
   end
 end
+EOF

@@ -1,3 +1,11 @@
+yona (0.1.1-2) noble; urgency=medium
+
+  * Build-Depends libcli11-dev, libxml2-dev, and liblld-dev; configure with
+    -DBUILD_TESTING=OFF -DYONA_FETCH_DEPS=OFF so Launchpad uses distro
+    packages instead of CMake FetchContent.
+
+ -- Adam Kovari <adam@kovari.eu>  Tue, 18 Aug 2026 10:15:00 +0000
+
 yona (0.1.1-1) noble; urgency=medium
 
   * Packaging for Copr, AUR, and Launchpad PPA.

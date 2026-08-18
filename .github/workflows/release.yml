@@ -21,7 +21,7 @@ jobs:
         uses: ./.github/actions/setup-llvm
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpcre2-dev
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpcre2-dev libcli11-dev doctest-dev libxml2-dev pkg-config
 
       - name: Build release
         run: |
@@ -69,7 +69,7 @@ jobs:
         uses: ./.github/actions/setup-llvm
 
       - name: Install dependencies
-        run: brew install pcre2
+        run: brew install pcre2 cli11 doctest pkgconf
 
       - name: Build release
         run: |
@@ -186,6 +186,46 @@ jobs:
           body_path: CHANGELOG.md
           draft: false
           prerelease: false
+
+  homebrew:
+    needs: [release]
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: yonac-llvm
+
+      - name: Publish formula to tap
+        env:
+          TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
+          TAP_REPO: ${{ secrets.HOMEBREW_TAP_REPO }}
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME#v}"
+          TAP_REPO="${TAP_REPO:-akovari/homebrew-tap}"
+          ARCHIVE="https://github.com/yona-lang/yonac-llvm/archive/refs/tags/v${VER}.tar.gz"
+          curl -fsSL "$ARCHIVE" -o /tmp/yona-src.tar.gz
+          SHA256="$(sha256sum /tmp/yona-src.tar.gz | awk '{print $1}')"
+
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$TAP_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -t ed25519,rsa github.com >> "$HOME/.ssh/known_hosts"
+
+          git clone "git@github.com:${TAP_REPO}.git" tap
+          cd tap
+          mkdir -p Formula
+          bash ../yonac-llvm/dist/ci/generate-homebrew-formula.sh \
+            "$VER" "$SHA256" Formula/yona.rb
+          git config user.name "yona-ci"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/yona.rb
+          if git diff --cached --quiet; then
+            echo "formula unchanged"
+          else
+            git commit -m "yona ${VER}"
+            git push origin HEAD
+          fi
 
   aur:
     needs: [release]

@@ -1,6 +1,6 @@
 Name:           yona
 Version:        0.1.1
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Yona programming language compiler targeting LLVM
 License:        GPL-3.0-only
 URL:            https://github.com/yona-lang/yonac-llvm
@@ -10,9 +10,14 @@ BuildRequires:  cmake >= 3.10
 BuildRequires:  ninja-build
 BuildRequires:  clang
 BuildRequires:  lld
+BuildRequires:  lld-devel
 BuildRequires:  llvm-devel >= 16
 BuildRequires:  gcc-c++
 BuildRequires:  pcre2-devel
+BuildRequires:  pkgconf
+BuildRequires:  libxml2-devel
+# cmake(CLI11) — do not FetchContent in mock.
+BuildRequires:  cli11-devel
 
 Requires:       llvm-libs >= 16
 Requires:       clang
@@ -29,7 +34,7 @@ standard library.
 %autosetup -n yonac-llvm-%{version}
 
 %build
-cmake --preset x64-release-linux
+cmake --preset x64-release-linux -DBUILD_TESTING=OFF -DYONA_FETCH_DEPS=OFF -DYONA_FETCH_LIBXML2=OFF
 cmake --build --preset build-release-linux
 
 %install
@@ -57,6 +62,10 @@ cp -a include/yona/runtime/. %{buildroot}%{_libdir}/yona/include/yona/runtime/
 %{_libdir}/yona/
 
 %changelog
+* Tue Aug 18 2026 Adam Kovari <adam@kovari.eu> - 0.1.1-2
+- BuildRequires cli11-devel, libxml2-devel, and lld-devel; configure with -DYONA_FETCH_DEPS=OFF
+- Pass -DBUILD_TESTING=OFF so doctest is not required
+
 * Mon Aug 17 2026 Adam Kovari <adam@kovari.eu> - 0.1.1-1
 - Copr/AUR/PPA packaging; sysroot under %%{_libdir}/yona
 

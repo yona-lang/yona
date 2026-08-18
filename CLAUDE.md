@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Prerequisites
 
-- LLVM 22+ (Fedora: `sudo dnf install llvm llvm-devel llvm-libs cmake ninja-build`)
+- LLVM 22+ (Fedora: `sudo dnf install llvm llvm-devel llvm-libs cmake ninja-build cli11-devel doctest-devel pcre2-devel lld-devel`)
 - CMake 3.10+, Ninja
 - C++23 capable compiler
 - Optional — `Std\GPU` Vulkan **discovery** probe (Linux/macOS): Vulkan SDK / loader so CMake finds `Vulkan::Vulkan` (Fedora: `sudo dnf install vulkan-devel vulkan-loader-devel`; macOS: `brew install molten-vk vulkan-headers vulkan-loader`). Without it, GPU counts stay at zero. After installing those packages, run **`cmake --preset …` again**; the configure log should show `Found Vulkan — Std\GPU gpu_stub will link the loader on this platform`. On macOS the runtime `dlopen`s Homebrew/SDK `libvulkan.1.dylib` or `libMoltenVK.dylib` and enables portability instance/device extensions. Metal usually has no `shaderInt64`; `hasGpu` is still 1 when the device is ready, and IntArray GPU kernels use i32 when values fit. User-facing compute (`mapGPU`, `Promise`, fences) is specified in `docs/design-gpu-async.md` and is not in the stdlib surface yet.
@@ -116,8 +116,8 @@ Yona language compiler using LLVM. Pipeline: Lexer → Parser → AST → Codege
 ### Dependencies
 
 - **LLVM 22+**: Code generation backend
-- **CLI11**: Command-line argument parsing (fetched via FetchContent)
-- **doctest**: Testing framework (fetched via FetchContent)
+- **CLI11**: Command-line parsing — system package (`cli11-devel` / `libcli11-dev` / Homebrew `cli11`); FetchContent only if `-DYONA_FETCH_DEPS=ON` (default) and no package is found
+- **doctest**: Test framework — system package (`doctest-devel` / `doctest-dev` / Homebrew `doctest`); same FetchContent fallback. Distro/Homebrew builds pass `-DYONA_FETCH_DEPS=OFF` and `-DBUILD_TESTING=OFF`.
 
 ### Yona Idioms (IMPORTANT — follow these when writing Yona code)
 

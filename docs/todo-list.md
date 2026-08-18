@@ -38,6 +38,7 @@
 ### 3) Distribution readiness
 
 - [x] Copr / AUR / Launchpad CI jobs + package-first install docs (`dist/RELEASING.md`) — first publish on next `v*` tag after one-time Copr project, AUR key, and PPA + GitHub secrets
+- [x] Homebrew tap `akovari/homebrew-tap` (`dist/ci/generate-homebrew-formula.sh`, `homebrew` release job) — source formula; first publish on next `v*` tag after `HOMEBREW_TAP_SSH_KEY`
 - [ ] Windows installer productionization (upgrade behavior, signing, final UX polish)
 - [ ] Final packaging pass for sysroot-based CLI/REPL distribution layout
 - [ ] Enable embedded LLD backend by default across supported toolchains (resolve remaining dependency gates, e.g. MSVC-compatible LibXml2 on Windows)

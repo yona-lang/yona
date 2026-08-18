@@ -2,7 +2,21 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace yona::toolchain {
 
@@ -131,6 +145,132 @@ bool require_inprocess_lld_from_env() {
     if (!e || !*e) return false;
     std::string v = lowercase_copy(std::string(e));
     return v == "1" || v == "true" || v == "yes" || v == "on";
+}
+
+#ifdef __APPLE__
+static std::string macos_sdkroot() {
+    if (const char* e = std::getenv("SDKROOT")) {
+        if (*e)
+            return std::string(e);
+    }
+    FILE* pipe = popen("xcrun --show-sdk-path 2>/dev/null", "r");
+    if (!pipe)
+        return {};
+    char buf[1024];
+    std::string out;
+    while (fgets(buf, sizeof(buf), pipe))
+        out += buf;
+    pclose(pipe);
+    while (!out.empty() && (out.back() == '\n' || out.back() == '\r' || out.back() == ' '))
+        out.pop_back();
+    return out;
+}
+#endif
+
+std::vector<std::string> inprocess_lld_system_args() {
+#ifdef _WIN32
+    // Clang-as-linker adds oldnames.lib (POSIX open/read/write/close/isatty ->
+    // _open/_read/...). Raw lld-link does not, so in-process COFF links fail.
+    return {"/SUBSYSTEM:CONSOLE", "oldnames.lib", "ws2_32.lib", "dbghelp.lib"};
+#elif defined(__APPLE__)
+    std::vector<std::string> args;
+    const std::string sdk = macos_sdkroot();
+    if (!sdk.empty()) {
+        args.push_back("-syslibroot");
+        args.push_back(sdk);
+    }
+#if defined(__aarch64__)
+    args.push_back("-arch");
+    args.push_back("arm64");
+#else
+    args.push_back("-arch");
+    args.push_back("x86_64");
+#endif
+    args.push_back("-lSystem");
+    args.push_back("-U");
+    args.push_back("_yona_regex_free_code");
+    return args;
+#else
+    return {"-lm", "-lpthread", "-rdynamic"};
+#endif
+}
+
+static std::filesystem::path discover_executable_dir(const char* argv0) {
+#ifdef _WIN32
+    wchar_t wbuf[MAX_PATH];
+    DWORD n = GetModuleFileNameW(nullptr, wbuf, MAX_PATH);
+    if (n > 0 && n < MAX_PATH) {
+        auto c = canonical_if_exists(std::filesystem::path(wbuf).parent_path());
+        if (!c.empty())
+            return c;
+    }
+#elif defined(__APPLE__)
+    uint32_t size = 1024;
+    std::vector<char> buf(size);
+    if (_NSGetExecutablePath(buf.data(), &size) != 0) {
+        buf.assign(size, '\0');
+        if (_NSGetExecutablePath(buf.data(), &size) != 0)
+            buf.clear();
+    }
+    if (!buf.empty()) {
+        auto c = canonical_if_exists(std::filesystem::path(buf.data()).parent_path());
+        if (!c.empty())
+            return c;
+    }
+#else
+    auto exe_file = canonical_if_exists(std::filesystem::path("/proc/self/exe"));
+    if (!exe_file.empty()) {
+        auto c = canonical_if_exists(exe_file.parent_path());
+        if (!c.empty())
+            return c;
+    }
+#endif
+    if (argv0 && *argv0) {
+        std::filesystem::path p(argv0);
+        if (p.has_parent_path()) {
+            auto c = canonical_if_exists(p.parent_path());
+            if (!c.empty())
+                return c;
+        }
+    }
+    return {};
+}
+
+std::vector<std::filesystem::path> discover_sysroots(const char* argv0,
+                                                     const std::string& sysroot_opt) {
+    std::vector<std::filesystem::path> roots;
+    std::unordered_set<std::string> seen;
+
+    auto push_unique = [&](const std::filesystem::path& p) {
+        auto c = canonical_if_exists(p);
+        if (c.empty())
+            return;
+        if (seen.insert(c.string()).second)
+            roots.push_back(c);
+    };
+
+    if (!sysroot_opt.empty())
+        push_unique(std::filesystem::path(sysroot_opt));
+    if (const char* h = std::getenv("YONA_HOME")) {
+        if (*h)
+            push_unique(std::filesystem::path(h));
+    }
+    const auto exe = discover_executable_dir(argv0);
+    if (!exe.empty()) {
+        push_unique(exe);
+        auto prefix = exe.parent_path();
+        push_unique(prefix);
+        // Homebrew / FHS: binaries in PREFIX/bin, sysroot in PREFIX/lib/yona
+        push_unique(prefix / "lib" / "yona");
+        push_unique(prefix / "lib64" / "yona");
+    }
+    push_unique(std::filesystem::current_path());
+    push_unique(std::filesystem::current_path().parent_path());
+    if (const char* bp = std::getenv("HOMEBREW_PREFIX")) {
+        if (*bp)
+            push_unique(std::filesystem::path(bp) / "lib" / "yona");
+    }
+    return roots;
 }
 
 } // namespace yona::toolchain

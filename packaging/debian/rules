@@ -4,7 +4,7 @@
 	dh $@
 
 override_dh_auto_configure:
-	cmake --preset x64-release-linux
+	cmake --preset x64-release-linux -DBUILD_TESTING=OFF -DYONA_FETCH_DEPS=OFF -DYONA_FETCH_LIBXML2=OFF
 
 override_dh_auto_build:
 	cmake --build --preset build-release-linux
@@ -25,4 +25,4 @@ override_dh_auto_install:
 	cp -a include/yona/runtime/. $(CURDIR)/debian/yona/usr/lib/yona/include/yona/runtime/
 
 override_dh_auto_test:
-	cd out/build/x64-release-linux && ctest --output-on-failure || true
+	# BUILD_TESTING=OFF; no doctest binary in the package build.

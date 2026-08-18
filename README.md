@@ -52,9 +52,19 @@ yay -S yona-bin
 
 Download the MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yonac-llvm/releases/latest).
 
+### macOS / Linux (Homebrew)
+
+```bash
+brew install akovari/tap/yona
+# optional Vulkan GPU runtime:
+# brew install akovari/tap/yona --with-vulkan
+# current git master:
+# brew install --HEAD akovari/tap/yona
+```
+
 ### macOS / source / Docker
 
-See [INSTALL.md](INSTALL.md). Maintainers: one-time Copr / AUR / Launchpad setup is in [dist/RELEASING.md](dist/RELEASING.md).
+See [INSTALL.md](INSTALL.md). Maintainers: one-time Copr / AUR / Launchpad / Homebrew setup is in [dist/RELEASING.md](dist/RELEASING.md).
 
 ## Language Examples
 

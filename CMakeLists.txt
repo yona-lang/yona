@@ -65,16 +65,45 @@ configure_file(
 
 include(FetchContent)
 
-FetchContent_Declare(
-	cli11
-	QUIET
-	GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-	GIT_TAG v2.6.2
-)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaHomebrew.cmake")
+yona_homebrew_prefix(YONA_HOMEBREW_PREFIX)
+if(YONA_HOMEBREW_PREFIX)
+	list(PREPEND CMAKE_PREFIX_PATH "${YONA_HOMEBREW_PREFIX}")
+endif()
 
-FetchContent_MakeAvailable(cli11)
+# Prefer distro / Homebrew packages. FetchContent is a last resort (Windows CI,
+# machines without cli11/doctest). Packaging passes -DYONA_FETCH_DEPS=OFF.
+option(YONA_FETCH_DEPS "Git-clone CLI11/doctest when no system CMake package is found" ON)
+if(WIN32)
+	option(YONA_FETCH_LIBXML2 "Fetch/build libxml2 when system LibXml2 is not MSVC-compatible" ON)
+else()
+	option(YONA_FETCH_LIBXML2 "Fetch/build libxml2 when system LibXml2 is missing" OFF)
+endif()
 
-option(YONA_FETCH_LIBXML2 "Fetch/build libxml2 when system package is incompatible for embedded LLD" ON)
+find_package(CLI11 2.0 CONFIG QUIET)
+if(CLI11_FOUND)
+	message(STATUS "Using system CLI11")
+elseif(YONA_FETCH_DEPS)
+	find_package(Git QUIET)
+	if(NOT Git_FOUND)
+		message(FATAL_ERROR
+			"CLI11 not found and git is unavailable for FetchContent. "
+			"Install libcli11-dev (Debian/Ubuntu), cli11-devel (Fedora), "
+			"Homebrew cli11, or the CLI11 CMake package.")
+	endif()
+	message(STATUS "CLI11 not found; fetching v2.6.2")
+	FetchContent_Declare(
+		cli11
+		QUIET
+		GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+		GIT_TAG v2.6.2
+	)
+	FetchContent_MakeAvailable(cli11)
+else()
+	message(FATAL_ERROR
+		"CLI11 not found. Install libcli11-dev, cli11-devel, or Homebrew cli11 "
+		"(or pass -DYONA_FETCH_DEPS=ON to clone it).")
+endif()
 
 # PCRE2 for regex module (optional)
 find_package(PkgConfig)
@@ -85,12 +114,6 @@ if(PCRE2_FOUND)
     message(STATUS "Found PCRE2: ${PCRE2_LIBRARIES}")
 else()
     message(STATUS "PCRE2 not found — Std\\Regex module will not be available")
-endif()
-
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaHomebrew.cmake")
-yona_homebrew_prefix(YONA_HOMEBREW_PREFIX)
-if(YONA_HOMEBREW_PREFIX)
-	list(PREPEND CMAKE_PREFIX_PATH "${YONA_HOMEBREW_PREFIX}")
 endif()
 
 # Vulkan for Std\GPU — gpu_stub lazy device + f64 fence path (Unix + Windows when found)
@@ -455,27 +478,45 @@ else()
 endif()
 add_dependencies(yona yona_runtime_objects yona_runtime_static)
 
+# Absolute repo path for tests (fixtures, lib/, src/) regardless of process CWD (e.g. CTest).
+# Generated even when BUILD_TESTING=OFF: the Windows REPL force-includes this header.
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/test/yona_test_config.h.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/test_config/yona_test_config.h"
+	@ONLY)
+
 if(WIN32)
 	# repl uses popen; map to _popen on UCRT (same header as tests).
 	target_compile_options(yona PRIVATE
 		"-include" "${CMAKE_CURRENT_BINARY_DIR}/test_config/yona_test_config.h")
 endif()
 
-enable_testing()
+include(CTest)
 
-FetchContent_Declare(
-	doctest
-	GIT_REPOSITORY https://github.com/doctest/doctest.git
-	GIT_TAG        v2.4.12
-)
-
-FetchContent_MakeAvailable(doctest)
-
-# Absolute repo path for tests (fixtures, lib/, src/) regardless of process CWD (e.g. CTest).
-configure_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/test/yona_test_config.h.in"
-	"${CMAKE_CURRENT_BINARY_DIR}/test_config/yona_test_config.h"
-	@ONLY)
+if(BUILD_TESTING)
+find_package(doctest 2.4 CONFIG QUIET)
+if(doctest_FOUND)
+	message(STATUS "Using system doctest")
+elseif(YONA_FETCH_DEPS)
+	find_package(Git QUIET)
+	if(NOT Git_FOUND)
+		message(FATAL_ERROR
+			"doctest not found and git is unavailable for FetchContent. "
+			"Install doctest-dev (Debian/Ubuntu), doctest-devel (Fedora), "
+			"or Homebrew doctest.")
+	endif()
+	message(STATUS "doctest not found; fetching v2.4.12")
+	FetchContent_Declare(
+		doctest
+		GIT_REPOSITORY https://github.com/doctest/doctest.git
+		GIT_TAG        v2.4.12
+	)
+	FetchContent_MakeAvailable(doctest)
+else()
+	message(FATAL_ERROR
+		"doctest not found. Install doctest-dev, doctest-devel, or Homebrew doctest "
+		"(or pass -DYONA_FETCH_DEPS=ON to clone it).")
+endif()
 
 add_executable(
 	tests
@@ -494,8 +535,6 @@ if(YONA_ENABLE_VULKAN)
 	target_compile_definitions(tests PRIVATE YONA_COMPILE_GPU_VULKAN=1)
 endif()
 
-# Include CTest
-include(CTest)
 target_include_directories(tests PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${CMAKE_CURRENT_SOURCE_DIR}/test
@@ -568,5 +607,6 @@ set_target_properties(tests PROPERTIES
 	VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 	VS_DEBUGGER_COMMAND_ARGUMENTS "--reporters=xml"
 )
+endif() # BUILD_TESTING
 
 # Removed temporary test executables - tests are now using doctest

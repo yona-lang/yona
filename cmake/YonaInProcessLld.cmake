@@ -63,7 +63,7 @@ if(YONA_ENABLE_INPROCESS_LLD)
 			find_library(YONA_LLD_COFF_LIB lldCOFF HINTS ${LLVM_LIBRARY_DIRS} "${LLVM_INSTALL_PREFIX}/lib")
 			# Fallback for Windows LLVM bundles where find_library misses import libs.
 			if((NOT YONA_LLD_COMMON_LIB OR NOT YONA_LLD_COFF_LIB))
-				set(_yona_lld_lib_dirs ${LLVM_LIBRARY_DIRS} "${LLVM_INSTALL_PREFIX}/lib" "C:/local/LLVM/lib")
+				set(_yona_lld_lib_dirs ${LLVM_LIBRARY_DIRS} "${LLVM_INSTALL_PREFIX}/lib")
 				foreach(_lib_dir IN LISTS _yona_lld_lib_dirs)
 					if((NOT YONA_LLD_COMMON_LIB) AND EXISTS "${_lib_dir}/lldCommon.lib")
 						set(YONA_LLD_COMMON_LIB "${_lib_dir}/lldCommon.lib")

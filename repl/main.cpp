@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <array>
 #include <vector>
-#include <unordered_set>
 
 #include "Parser.h"
 #include "Codegen.h"
@@ -25,6 +24,8 @@ namespace fs = std::filesystem;
 static const char* const platform_runtime_sources[] = {
 #ifdef _WIN32
     "file_windows.c", "net_windows.c", "os_windows.c",
+#elif defined(__APPLE__)
+    "kqueue_macos.c", "file_macos.c", "net_macos.c", "os_macos.c",
 #else
     "uring_linux.c", "file_linux.c", "net_linux.c", "os_linux.c",
 #endif
@@ -77,29 +78,8 @@ static fs::path canonical_if_exists(const fs::path& p) {
     return ec ? p : c;
 }
 
-static void push_unique_root(vector<fs::path>& roots, unordered_set<string>& seen, const fs::path& p) {
-    auto c = canonical_if_exists(p);
-    if (c.empty()) return;
-    string k = c.string();
-    if (seen.insert(k).second) roots.push_back(c);
-}
-
 static vector<fs::path> discover_sysroots(const char* argv0) {
-    vector<fs::path> roots;
-    unordered_set<string> seen;
-    if (const char* h = getenv("YONA_HOME")) {
-        if (*h) push_unique_root(roots, seen, fs::path(h));
-    }
-    if (argv0 && *argv0) {
-        auto exe = canonical_if_exists(fs::path(argv0).parent_path());
-        if (!exe.empty()) {
-            push_unique_root(roots, seen, exe);
-            push_unique_root(roots, seen, exe.parent_path());
-        }
-    }
-    push_unique_root(roots, seen, fs::current_path());
-    push_unique_root(roots, seen, fs::current_path().parent_path());
-    return roots;
+    return yona::toolchain::discover_sysroots(argv0);
 }
 
 static string compile_and_run(const string& expr,
@@ -133,24 +113,21 @@ static string compile_and_run(const string& expr,
         lld_args.push_back(fs::path(rt_obj).string());
         for (const auto& ex : rt_extra_objs) lld_args.push_back(fs::path(ex).string());
         lld_args.push_back("/OUT:" + exe.string());
-        lld_args.push_back("ws2_32.lib");
-        lld_args.push_back("dbghelp.lib");
+        for (const auto& a : yona::toolchain::inprocess_lld_system_args())
+            lld_args.push_back(a);
+#else
+#ifdef __APPLE__
+        lld_args.push_back("ld64.lld");
 #else
         lld_args.push_back("ld.lld");
+#endif
         lld_args.push_back(obj.string());
         lld_args.push_back(fs::path(rt_obj).string());
         for (const auto& ex : rt_extra_objs) lld_args.push_back(fs::path(ex).string());
         lld_args.push_back("-o");
         lld_args.push_back(exe.string());
-#ifdef __APPLE__
-        lld_args.push_back("-lSystem");
-        lld_args.push_back("-U");
-        lld_args.push_back("_yona_regex_free_code");
-#else
-        lld_args.push_back("-lm");
-        lld_args.push_back("-lpthread");
-        lld_args.push_back("-rdynamic");
-#endif
+        for (const auto& a : yona::toolchain::inprocess_lld_system_args())
+            lld_args.push_back(a);
 #endif
         yona::toolchain::InProcessLldResult lld_res;
         used_inprocess = true;
@@ -158,11 +135,11 @@ static string compile_and_run(const string& expr,
             link_result = 0;
         } else {
             if (require_inprocess) {
-                if (!lld_res.stderr_text.empty()) cerr << lld_res.stderr_text << endl;
+                if (!lld_res.diagnostic_text().empty()) cerr << lld_res.diagnostic_text() << endl;
                 return "Link error";
             }
             cerr << "Warning: in-process LLD link failed in REPL, falling back to external linker path.";
-            if (!lld_res.stderr_text.empty()) cerr << " details: " << lld_res.stderr_text;
+            if (!lld_res.diagnostic_text().empty()) cerr << " details: " << lld_res.diagnostic_text();
             cerr << endl;
         }
     }

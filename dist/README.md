@@ -9,7 +9,7 @@ Install instructions for end users are in the root [README.md](../README.md). Th
 - [debian/build-deb-from-release.sh](debian/build-deb-from-release.sh) — build a `.deb` from a GitHub Release tarball (no compiler needed)
 - Signing key fingerprint: `A527 AE5A 9746 F3D9 54CA  8F4C 9C7E 01C1 5210 C325`
 
-Launchpad builders compile from source against Ubuntu’s `llvm-dev`. Noble ships LLVM 18; Yona prefers 16+ and recommends 22. The Launchpad job is `continue-on-error` until a builder image with a new enough LLVM is available. Use the binary `.deb` script or GitHub tarball if the PPA build fails.
+Launchpad builders compile from source against Ubuntu’s `llvm-dev` (Noble: LLVM 18; Yona requires 16+). They have **no network**, so the package uses distro `libcli11-dev` / `libxml2-dev` with `-DYONA_FETCH_DEPS=OFF`. The Launchpad job is `continue-on-error`. Use the binary `.deb` script or GitHub tarball if the PPA build fails.
 
 ## Fedora Copr
 
@@ -22,7 +22,10 @@ Launchpad builders compile from source against Ubuntu’s `llvm-dev`. Noble ship
 
 ## Homebrew
 
-- Formula: [../Formula/yona.rb](../Formula/yona.rb) — source build; not auto-published to a tap yet
+- Tap: [`akovari/homebrew-tap`](https://github.com/akovari/homebrew-tap) (`brew install akovari/tap/yona`)
+- Generator: [ci/generate-homebrew-formula.sh](ci/generate-homebrew-formula.sh) — **source** formula (Homebrew `llvm` / `lld` / `pcre2` / `cli11`), not GitHub CI tarballs
+- Options: `--with-vulkan`, `--HEAD`; macOS (Intel + Apple Silicon) and Linuxbrew
+- Published by the `homebrew` job on each `v*` tag (`HOMEBREW_TAP_SSH_KEY`)
 
 ## Releases
 

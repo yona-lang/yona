@@ -38,6 +38,9 @@ runs:
           sudo apt-get install -y --no-install-recommends "llvm-${major}-dev"
           prefix="$(llvm-config-${major} --prefix)"
         fi
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          "liblld-${major}-dev" libcli11-dev doctest-dev libpcre2-dev libxml2-dev pkg-config
         if [[ -x "${prefix}/bin/clang" ]]; then
           cc="${prefix}/bin/clang"
           cxx="${prefix}/bin/clang++"
@@ -65,7 +68,7 @@ runs:
         set -euo pipefail
         # Image has Apple clang (no LLVMConfig.cmake) and Homebrew llvm@20. Need current `llvm`.
         # cmake and ninja are already on the image.
-        brew install llvm
+        brew install llvm cli11 doctest pcre2 pkgconf
         prefix="$(brew --prefix llvm)"
         lld_bin="${prefix}/bin"
         if ! command -v ld.lld >/dev/null && brew info lld >/dev/null 2>&1; then

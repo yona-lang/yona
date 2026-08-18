@@ -7,9 +7,10 @@
 | Fedora / RHEL | `sudo dnf copr enable kovariadam/yona && sudo dnf install yona` |
 | Ubuntu / Debian | `sudo add-apt-repository ppa:kovariadam/yona && sudo apt update && sudo apt install yona` |
 | Arch | `yay -S yona-bin` |
+| macOS / Linuxbrew | `brew install akovari/tap/yona` |
 | Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yonac-llvm/releases/latest) |
 
-These install `yonac` and `yona` on `PATH`, with the compiler sysroot under `/usr/lib/yona` or `/usr/lib64/yona`.
+These install `yonac` and `yona` on `PATH`. Distro packages put the compiler sysroot under `/usr/lib/yona` or `/usr/lib64/yona`; Homebrew uses `$(brew --prefix)/lib/yona`.
 
 Ubuntu PPA builds compile from source on Launchpad (Noble `llvm-dev` is LLVM 18). If a series has no published package yet, build a binary `.deb` from the release tarball:
 
@@ -35,7 +36,8 @@ All platforms require:
 ```bash
 # Install dependencies
 sudo dnf install llvm llvm-devel llvm-libs llvm-static \
-    clang lld cmake ninja-build pcre2-devel
+    clang lld lld-devel cmake ninja-build pcre2-devel cli11-devel \
+    libxml2-devel doctest-devel pkgconf
 
 # Build
 git clone https://github.com/yona-lang/yonac-llvm.git
@@ -53,7 +55,8 @@ sudo cp -r lib/Std /usr/local/lib/yona/lib/
 
 ```bash
 # Install dependencies
-sudo apt install llvm-dev clang lld cmake ninja-build libpcre2-dev
+sudo apt install llvm-dev clang lld liblld-dev cmake ninja-build \
+    libpcre2-dev libcli11-dev libxml2-dev doctest-dev pkg-config
 
 # Build
 git clone https://github.com/yona-lang/yonac-llvm.git
@@ -65,17 +68,31 @@ cmake --build --preset build-release-linux
 ## macOS (Homebrew)
 
 ```bash
-# Install dependencies
-brew install llvm cmake ninja pcre2
+brew install akovari/tap/yona
+```
 
-# Option A: Build from source
+This is a **source** formula: it compiles against Homebrew `llvm`, `lld`, `pcre2`, and `cli11` (Apple Silicon and Intel; Linuxbrew too). Wrappers on `PATH` set `YONA_HOME` and `YONAC_CC` so keg-only LLVM is used when compiling Yona programs.
+
+```bash
+# Optional Std\GPU Vulkan (MoltenVK on macOS)
+brew install akovari/tap/yona --with-vulkan
+
+# Build the git master branch
+brew install --HEAD akovari/tap/yona
+```
+
+The tap is updated from GitHub Releases (`dist/ci/generate-homebrew-formula.sh`). First formula publish is the next `v*` tag after `HOMEBREW_TAP_SSH_KEY` is set on `yona-lang/yonac-llvm` (same deploy key as [akovari/winetop](https://github.com/akovari/winetop)).
+
+### Build from a source checkout
+
+```bash
+# Install dependencies
+brew install llvm lld cmake ninja pcre2 cli11 doctest pkgconf
+
 git clone https://github.com/yona-lang/yonac-llvm.git
 cd yonac-llvm
 cmake --preset x64-release-macos
 cmake --build --preset build-release-macos
-
-# Option B: Install via Homebrew (when available)
-brew install yona-lang/tap/yona
 ```
 
 Optional **`Std\GPU` Vulkan** (MoltenVK): `brew install molten-vk vulkan-headers vulkan-loader`, then configure with `-DYONA_ENABLE_VULKAN=ON`. CMake finds `vulkan/vulkan.h` and `libvulkan` / `libMoltenVK` via `VULKAN_SDK` and `HOMEBREW_PREFIX` or `brew --prefix`. The runtime `dlopen`s those discovered dirs (and bare loader names) and, if unset, hints `VK_ICD_FILENAMES` at a MoltenVK ICD json CMake or the env prefix located. Metal typically lacks `shaderInt64`; `hasGpu` is still true when the device is ready, and IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit. `vulkanStatus` can be `vulkan-device`. See `docs/gpu-architecture.md` and `docs/gpu-vulkan-implementation-plan.md` §11.
@@ -94,7 +111,7 @@ The MSI flow is defined under `packaging/windows/` (`YonaInstaller.wxs`, `build-
 - **LLVM for Windows**: use a **prebuilt** `clang+llvm-*-x86_64-pc-windows-msvc` archive from the [LLVM project releases](https://github.com/llvm/llvm-project/releases) (search the page for `windows-msvc`). Extract it to a short path such as `C:\LLVM`. This avoids link errors from LLVM builds that were produced on another machine with hard-coded Visual Studio paths (see *Troubleshooting* below).
 - **Optional — PCRE2** for `Std\Regex`: there is no `pkg-config` on a typical Windows dev shell, so CMake usually skips PCRE2 unless you point CMake at a build of PCRE2 yourself (e.g. vcpkg). The rest of the compiler and runtime still build without it.
 
-The CMake toolchain defaults `LLVM_INSTALL_PREFIX` to `C:/local/LLVM` if the variable is unset. Set it explicitly if you extracted LLVM somewhere else (for example `C:\LLVM`). **Spell the path correctly** in user and machine environment variables (`LLVM_INSTALL_PREFIX`); a typo leaves CMake pointing at a non-existent tree.
+The CMake toolchain reads `LLVM_INSTALL_PREFIX` from CMake cache or the environment (CI sets both). Do **not** rely on a guessed install path. Set `LLVM_INSTALL_PREFIX` to the extracted tree (for example `C:\LLVM`). **Spell the path correctly** in user and machine environment variables; a typo leaves `find_package(LLVM)` searching an empty prefix.
 
 #### Complete Windows LLVM tree (CMake + `find_package(LLVM)`)
 

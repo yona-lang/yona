@@ -7,8 +7,12 @@ Build-Depends: debhelper-compat (= 13),
                ninja-build,
                clang,
                lld,
+               liblld-dev,
                llvm-dev (>= 16),
-               libpcre2-dev
+               libpcre2-dev,
+               libcli11-dev,
+               libxml2-dev,
+               pkg-config
 Standards-Version: 4.6.2
 Homepage: https://github.com/yona-lang/yonac-llvm
 Vcs-Git: https://github.com/yona-lang/yonac-llvm.git

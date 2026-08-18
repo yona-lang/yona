@@ -144,9 +144,120 @@ TEST_CASE("inprocess mode keeps bundled fallback when bundled lld exists") {
     fs::remove_all(tmp_base);
 }
 
+TEST_CASE("discover_sysroots prefers explicit sysroot then YONA_HOME") {
+    auto tmp_sys = fs::temp_directory_path() / "yona_sysroot_opt";
+    auto tmp_home = fs::temp_directory_path() / "yona_sysroot_home";
+    fs::remove_all(tmp_sys);
+    fs::remove_all(tmp_home);
+    fs::create_directories(tmp_sys);
+    fs::create_directories(tmp_home);
+
+    const char* old_home = std::getenv("YONA_HOME");
+    const std::string saved_home = old_home ? old_home : "";
+#ifdef _WIN32
+    _putenv_s("YONA_HOME", tmp_home.string().c_str());
+#else
+    setenv("YONA_HOME", tmp_home.string().c_str(), 1);
+#endif
+    const auto roots = yona::toolchain::discover_sysroots(nullptr, tmp_sys.string());
+#ifdef _WIN32
+    _putenv_s("YONA_HOME", saved_home.c_str());
+#else
+    if (saved_home.empty())
+        unsetenv("YONA_HOME");
+    else
+        setenv("YONA_HOME", saved_home.c_str(), 1);
+#endif
+
+    REQUIRE(roots.size() >= 2);
+    CHECK(roots[0] == fs::weakly_canonical(tmp_sys));
+    CHECK(roots[1] == fs::weakly_canonical(tmp_home));
+    fs::remove_all(tmp_sys);
+    fs::remove_all(tmp_home);
+}
+
+TEST_CASE("discover_sysroots uses HOMEBREW_PREFIX when set") {
+    auto tmp_brew = fs::temp_directory_path() / "yona_sysroot_brew";
+    auto yona_root = tmp_brew / "lib" / "yona";
+    fs::remove_all(tmp_brew);
+    fs::create_directories(yona_root);
+
+    const char* old_brew = std::getenv("HOMEBREW_PREFIX");
+    const std::string saved_brew = old_brew ? old_brew : "";
+#ifdef _WIN32
+    _putenv_s("HOMEBREW_PREFIX", tmp_brew.string().c_str());
+#else
+    setenv("HOMEBREW_PREFIX", tmp_brew.string().c_str(), 1);
+#endif
+    const auto roots = yona::toolchain::discover_sysroots(nullptr, {});
+#ifdef _WIN32
+    _putenv_s("HOMEBREW_PREFIX", saved_brew.c_str());
+#else
+    if (saved_brew.empty())
+        unsetenv("HOMEBREW_PREFIX");
+    else
+        setenv("HOMEBREW_PREFIX", saved_brew.c_str(), 1);
+#endif
+
+    bool found = false;
+    const auto want = fs::weakly_canonical(yona_root);
+    for (const auto& r : roots) {
+        if (r == want)
+            found = true;
+    }
+    CHECK(found);
+    fs::remove_all(tmp_brew);
+}
+
 } // TEST_SUITE("LinkerPlan")
 
 TEST_SUITE("InProcessLld") {
+
+TEST_CASE("inprocess system args include Windows POSIX CRT aliases") {
+#ifdef _WIN32
+    const auto args = yona::toolchain::inprocess_lld_system_args();
+    bool has_oldnames = false;
+    bool has_ws2 = false;
+    bool has_dbghelp = false;
+    for (const auto& a : args) {
+        if (a.find("oldnames") != std::string::npos)
+            has_oldnames = true;
+        if (a.find("ws2_32") != std::string::npos)
+            has_ws2 = true;
+        if (a.find("dbghelp") != std::string::npos)
+            has_dbghelp = true;
+    }
+    CHECK(has_oldnames);
+    CHECK(has_ws2);
+    CHECK(has_dbghelp);
+#else
+    CHECK_FALSE(yona::toolchain::inprocess_lld_system_args().empty());
+#endif
+}
+
+TEST_CASE("inprocess LLD diagnostics include stdout when stderr is empty") {
+    yona::toolchain::InProcessLldResult res;
+    res.stdout_text = "lld stdout";
+    CHECK(res.diagnostic_text() == "lld stdout");
+    res.stderr_text = "lld stderr";
+    CHECK(res.diagnostic_text().find("lld stderr") != std::string::npos);
+    CHECK(res.diagnostic_text().find("lld stdout") != std::string::npos);
+}
+
+#ifdef __APPLE__
+TEST_CASE("inprocess system args pass syslibroot when SDKROOT is set") {
+    setenv("SDKROOT", "/tmp/yona-fake-sdk", 1);
+    const auto args = yona::toolchain::inprocess_lld_system_args();
+    bool saw_syslibroot = false;
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "-syslibroot" && i + 1 < args.size() && args[i + 1] == "/tmp/yona-fake-sdk")
+            saw_syslibroot = true;
+    }
+    CHECK(saw_syslibroot);
+    unsetenv("SDKROOT");
+}
+#endif
+
 
 TEST_CASE("inprocess availability API is self-consistent") {
     if (yona::toolchain::inprocess_lld_available()) {

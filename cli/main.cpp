@@ -34,6 +34,7 @@
 #include "typechecker/LinearityChecker.h"
 #include "typechecker/RefinementChecker.h"
 #include "typechecker/TypeChecker.h"
+#include "version.h"
 #include "yona_vulkan_link_cfg.h"
 #include <CLI/CLI.hpp>
 
@@ -157,6 +158,11 @@ static const char *const platform_runtime_sources[] = {
     "file_windows.c",
     "net_windows.c",
     "os_windows.c",
+#elif defined(__APPLE__)
+    "kqueue_macos.c",
+    "file_macos.c",
+    "net_macos.c",
+    "os_macos.c",
 #else
     "uring_linux.c",
     "file_linux.c",
@@ -209,40 +215,8 @@ static filesystem::path canonical_if_exists(const filesystem::path &p) {
   return ec ? p : c;
 }
 
-static void push_unique_root(vector<filesystem::path> &roots, unordered_set<string> &seen, const filesystem::path &p) {
-  auto c = canonical_if_exists(p);
-  if (c.empty())
-    return;
-  string k = c.string();
-  if (seen.insert(k).second)
-    roots.push_back(c);
-}
-
 static vector<filesystem::path> discover_sysroots(const char *argv0, const string &sysroot_opt) {
-  vector<filesystem::path> roots;
-  unordered_set<string> seen;
-
-  if (!sysroot_opt.empty())
-    push_unique_root(roots, seen, filesystem::path(sysroot_opt));
-  if (const char *h = getenv("YONA_HOME")) {
-    if (*h)
-      push_unique_root(roots, seen, filesystem::path(h));
-  }
-  if (argv0 && *argv0) {
-    auto exe = canonical_if_exists(filesystem::path(argv0).parent_path());
-    if (!exe.empty()) {
-      push_unique_root(roots, seen, exe);
-      push_unique_root(roots, seen, exe.parent_path());
-    }
-  }
-  push_unique_root(roots, seen, filesystem::current_path());
-  push_unique_root(roots, seen, filesystem::current_path().parent_path());
-  // Distro packages install the sysroot under /usr/lib{,64}/yona while
-  // binaries live in /usr/bin (parent is /usr, not the sysroot).
-  push_unique_root(roots, seen, filesystem::path("/usr/lib/yona"));
-  push_unique_root(roots, seen, filesystem::path("/usr/lib64/yona"));
-  push_unique_root(roots, seen, filesystem::path("/usr/local/lib/yona"));
-  return roots;
+  return yona::toolchain::discover_sysroots(argv0, sysroot_opt);
 }
 
 static bool is_module_source(const string &source) {
@@ -290,6 +264,7 @@ int main(int argc, char *argv[]) {
   string explain_code;
   string linker_mode_opt;
 
+  app.set_version_flag("--version", YONA_VERSION_STRING);
   app.add_option("input", input_file, "Input .yona file");
   app.add_option("-e,--expression", expression, "Compile expression");
   app.add_option("-o,--output", output_file, "Output file");
@@ -764,27 +739,24 @@ int main(int argc, char *argv[]) {
     lld_args.push_back("/NOLOGO");
     append_link_objects([&](const string &s) { lld_args.push_back(s); });
     lld_args.push_back("/OUT:" + filesystem::path(output_file).string());
-    lld_args.push_back("ws2_32.lib");
-    lld_args.push_back("dbghelp.lib");
+    for (const auto &a : yona::toolchain::inprocess_lld_system_args())
+      lld_args.push_back(a);
     {
       string vk_lib = yona_windows_vulkan_import_lib_path();
       if (!vk_lib.empty())
         lld_args.push_back(vk_lib);
     }
 #else
+#ifdef __APPLE__
+    lld_args.push_back("ld64.lld");
+#else
     lld_args.push_back("ld.lld");
+#endif
     append_link_objects([&](const string &s) { lld_args.push_back(s); });
     lld_args.push_back("-o");
     lld_args.push_back(filesystem::path(output_file).string());
-#ifdef __APPLE__
-    lld_args.push_back("-lSystem");
-    lld_args.push_back("-U");
-    lld_args.push_back("_yona_regex_free_code");
-#else
-    lld_args.push_back("-lm");
-    lld_args.push_back("-lpthread");
-    lld_args.push_back("-rdynamic");
-#endif
+    for (const auto &a : yona::toolchain::inprocess_lld_system_args())
+      lld_args.push_back(a);
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {
       string vk_dir = yona_posix_vulkan_lib_dir();
@@ -806,13 +778,13 @@ int main(int argc, char *argv[]) {
     } else {
       if (require_inprocess) {
         diag.error(SourceLocation::unknown(), compiler::ErrorCode::E0401, "in-process LLD link failed and fallback is disabled");
-        if (!lld_res.stderr_text.empty())
-          cerr << lld_res.stderr_text << endl;
+        if (!lld_res.diagnostic_text().empty())
+          cerr << lld_res.diagnostic_text() << endl;
         return 1;
       }
       cerr << "Warning: in-process LLD link failed, falling back to external linker path.";
-      if (!lld_res.stderr_text.empty())
-        cerr << " details: " << lld_res.stderr_text;
+      if (!lld_res.diagnostic_text().empty())
+        cerr << " details: " << lld_res.diagnostic_text();
       cerr << endl;
       link_result = 1;
     }
