@@ -1,6 +1,6 @@
 Name:           yona
-Version:        0.1.1
-Release:        2%{?dist}
+Version:        0.1.2
+Release:        1%{?dist}
 Summary:        Yona programming language compiler targeting LLVM
 License:        GPL-3.0-only
 URL:            https://github.com/yona-lang/yonac-llvm
@@ -62,6 +62,9 @@ cp -a include/yona/runtime/. %{buildroot}%{_libdir}/yona/include/yona/runtime/
 %{_libdir}/yona/
 
 %changelog
+* Tue Aug 18 2026 Adam Kovari <adam@kovari.eu> - 0.1.2-1
+- Version 0.1.2; native CLI11/LLD packaging and in-process LLD ELF/Darwin fixes
+
 * Tue Aug 18 2026 Adam Kovari <adam@kovari.eu> - 0.1.1-2
 - BuildRequires cli11-devel, libxml2-devel, and lld-devel; configure with -DYONA_FETCH_DEPS=OFF
 - Pass -DBUILD_TESTING=OFF so doctest is not required

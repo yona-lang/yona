@@ -3,10 +3,10 @@
 # Usage:
 #   ./dist/debian/build-deb-from-release.sh [version] [arch]
 # Example:
-#   ./dist/debian/build-deb-from-release.sh 0.1.1 amd64
+#   ./dist/debian/build-deb-from-release.sh 0.1.2 amd64
 set -euo pipefail
 
-VERSION="${1:-0.1.1}"
+VERSION="${1:-0.1.2}"
 ARCH="${2:-amd64}"
 
 case "$ARCH" in

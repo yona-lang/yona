@@ -3,7 +3,7 @@
 class Yona < Formula
   desc "Yona programming language compiler targeting LLVM"
   homepage "https://github.com/yona-lang/yonac-llvm"
-  version "0.1.1"
+  version "0.1.2"
   url "https://github.com/yona-lang/yonac-llvm/archive/refs/tags/v#{version}.tar.gz"
   sha256 "012a0629f0fcbed3f94b87cae9b303bb25492310b6e068042a70ac86cefec740"
   license "GPL-3.0-only"

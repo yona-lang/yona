@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.2 (2026-08-18)
+
+Packaging and in-process LLD so distro and CI builds link without FetchContent
+or clang-driver flags passed to raw `ld.lld`.
+
+### Distribution
+- Prefer system CLI11, doctest, libxml2, and LLD headers (`-DYONA_FETCH_DEPS=OFF` in packaging).
+- Debian: `libcli11-dev`, `liblld-dev`, `libpolly-dev`.
+- Homebrew source formula in `akovari/homebrew-tap`.
+
+### Linker
+- Ubuntu: Polly package plus every `LLVM_TARGETS_TO_BUILD` for embedded LLD.
+- macOS: `ld64.lld` `-arch` / `-platform_version` / `-syslibroot` before inputs.
+- Linux: ELF in-process args from the C compiler (CRT, `-L`, `--export-dynamic`).
+
 ## v0.1.1 (2026-08-18)
 
 First tagged release of the current tree (`VERSION` 0.1.1). Includes work

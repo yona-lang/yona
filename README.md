@@ -37,8 +37,8 @@ sudo apt install yona
 If the PPA has no build for your series yet, install a binary `.deb` from a GitHub Release tarball:
 
 ```bash
-./dist/debian/build-deb-from-release.sh 0.1.1 amd64
-sudo apt install ./dist/debian/yona_0.1.1-1_amd64.deb
+./dist/debian/build-deb-from-release.sh 0.1.2 amd64
+sudo apt install ./dist/debian/yona_0.1.2-1_amd64.deb
 ```
 
 ### Arch Linux (AUR)

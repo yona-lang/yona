@@ -4,8 +4,8 @@ Push a version tag to trigger [.github/workflows/release.yml](../.github/workflo
 
 ```bash
 # VERSION file and dist/copr/yona.spec Version: must match the tag
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 The tag must already exist on the commit you want; CI uses `GITHUB_REF_NAME` from the tag push.
