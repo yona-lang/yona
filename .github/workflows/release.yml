@@ -198,6 +198,7 @@ jobs:
       - name: Publish formula to tap
         env:
           TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAP_REPO: ${{ secrets.HOMEBREW_TAP_REPO }}
         run: |
           set -euo pipefail
@@ -207,12 +208,23 @@ jobs:
           curl -fsSL "$ARCHIVE" -o /tmp/yona-src.tar.gz
           SHA256="$(sha256sum /tmp/yona-src.tar.gz | awk '{print $1}')"
 
-          mkdir -p "$HOME/.ssh"
-          printf '%s\n' "$TAP_SSH_KEY" > "$HOME/.ssh/id_ed25519"
-          chmod 600 "$HOME/.ssh/id_ed25519"
-          ssh-keyscan -t ed25519,rsa github.com >> "$HOME/.ssh/known_hosts"
-
-          git clone "git@github.com:${TAP_REPO}.git" tap
+          if [[ -n "${TAP_TOKEN:-}" ]]; then
+            git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+          elif [[ -n "${TAP_SSH_KEY:-}" ]]; then
+            TAP_SSH_KEY="${TAP_SSH_KEY//$'\r'/}"
+            if [[ "$TAP_SSH_KEY" != *$'\n'* ]]; then
+              TAP_SSH_KEY="${TAP_SSH_KEY//\\n/$'\n'}"
+            fi
+            mkdir -p "$HOME/.ssh"
+            umask 077
+            printf '%s\n' "$TAP_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+            ssh-keyscan -t ed25519,rsa github.com >> "$HOME/.ssh/known_hosts"
+            git clone "git@github.com:${TAP_REPO}.git" tap
+          else
+            echo "Set HOMEBREW_TAP_SSH_KEY (deploy key) or HOMEBREW_TAP_TOKEN (PAT with tap push)." >&2
+            echo "See dist/RELEASING.md section 4." >&2
+            exit 1
+          fi
           cd tap
           mkdir -p Formula
           bash ../yonac-llvm/dist/ci/generate-homebrew-formula.sh \

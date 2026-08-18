@@ -146,14 +146,18 @@ Full secret table: [launchpad/README.md](launchpad/README.md).
 The formula is a **source** build (Yona links LLVM; Ubuntu/macOS CI tarballs are not bottles). CI writes `Formula/yona.rb` into [akovari/homebrew-tap](https://github.com/akovari/homebrew-tap) after the GitHub Release exists (so the tag tarball sha256 is stable).
 
 1. Tap repo already exists (winetop publishes `Formula/winetop.rb` there).
-2. Copy the **same** deploy key winetop uses onto this repo:
+2. Copy credentials onto this repo. Prefer a PAT that can push to the tap
+   (`HOMEBREW_TAP_TOKEN`); otherwise a deploy key (`HOMEBREW_TAP_SSH_KEY`).
+   `v0.1.2` CI failed with `error in libcrypto` because `HOMEBREW_TAP_SSH_KEY`
+   was not set (empty key file).
 
 ```bash
 REPO=yona-lang/yonac-llvm
 gh secret set HOMEBREW_TAP_REPO --repo "$REPO" --body "akovari/homebrew-tap"
-# HOMEBREW_TAP_SSH_KEY cannot be read back from winetop; paste the same OpenSSH
-# private key you stored as HOMEBREW_TAP_SSH_KEY on akovari/winetop:
-gh secret set HOMEBREW_TAP_SSH_KEY --repo "$REPO"   # paste, real newlines
+# PAT with contents:write on akovari/homebrew-tap (classic `repo` or fine-grained):
+gh secret set HOMEBREW_TAP_TOKEN --repo "$REPO"
+# Or the same OpenSSH deploy-key private key as winetop (real newlines, not \n):
+gh secret set HOMEBREW_TAP_SSH_KEY --repo "$REPO"
 ```
 
 Users install with `brew install akovari/tap/yona` (optional `--with-vulkan`, `--HEAD`).
@@ -183,9 +187,10 @@ gpg --armor --export-secret-keys "$FPR" | gh secret set LAUNCHPAD_GPG_PRIVATE_KE
 # empty if the key has no passphrase:
 printf '' | gh secret set LAUNCHPAD_GPG_PASSPHRASE --repo "$REPO"
 
-# Homebrew tap (same deploy key as winetop → akovari/homebrew-tap)
+# Homebrew tap (PAT preferred; else same deploy key as winetop → akovari/homebrew-tap)
 gh secret set HOMEBREW_TAP_REPO --repo "$REPO" --body "akovari/homebrew-tap"
-gh secret set HOMEBREW_TAP_SSH_KEY --repo "$REPO"   # paste winetop HOMEBREW_TAP_SSH_KEY
+gh secret set HOMEBREW_TAP_TOKEN --repo "$REPO"     # PAT with tap push
+# or: gh secret set HOMEBREW_TAP_SSH_KEY --repo "$REPO"   # paste, real newlines
 ```
 
 To copy from winetop without re-typing Copr fields (if `gh` can read the other repo’s secrets — it cannot; you must paste from `~/.config/copr` or the Copr API page).
@@ -196,7 +201,7 @@ Confirm secrets exist:
 gh secret list --repo yona-lang/yonac-llvm
 ```
 
-Expected names: `AUR_SSH_PRIVATE_KEY`, `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAME`, `HOMEBREW_TAP_REPO`, `HOMEBREW_TAP_SSH_KEY`, `LAUNCHPAD_PPA`, `LAUNCHPAD_USER`, `LAUNCHPAD_GPG_FINGERPRINT`, `LAUNCHPAD_GPG_KEY_ID`, `LAUNCHPAD_GPG_PRIVATE_KEY`, `LAUNCHPAD_GPG_PASSPHRASE`.
+Expected names: `AUR_SSH_PRIVATE_KEY`, `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAME`, `HOMEBREW_TAP_REPO`, `HOMEBREW_TAP_TOKEN` or `HOMEBREW_TAP_SSH_KEY`, `LAUNCHPAD_PPA`, `LAUNCHPAD_USER`, `LAUNCHPAD_GPG_FINGERPRINT`, `LAUNCHPAD_GPG_KEY_ID`, `LAUNCHPAD_GPG_PRIVATE_KEY`, `LAUNCHPAD_GPG_PASSPHRASE`.
 
 ## Version bump checklist (each release)
 

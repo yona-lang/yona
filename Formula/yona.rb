@@ -5,7 +5,7 @@ class Yona < Formula
   homepage "https://github.com/yona-lang/yonac-llvm"
   version "0.1.2"
   url "https://github.com/yona-lang/yonac-llvm/archive/refs/tags/v#{version}.tar.gz"
-  sha256 "012a0629f0fcbed3f94b87cae9b303bb25492310b6e068042a70ac86cefec740"
+  sha256 "95fbb828fea7b6913487792f53eeb79e810f8d6e90f7d93ead38fd04c8946bc6"
   license "GPL-3.0-only"
   head "https://github.com/yona-lang/yonac-llvm.git", branch: "master"
 
