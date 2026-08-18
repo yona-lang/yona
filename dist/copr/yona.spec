@@ -1,6 +1,6 @@
 Name:           yona
 Version:        0.1.2
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Yona programming language compiler targeting LLVM
 License:        GPL-3.0-only
 URL:            https://github.com/yona-lang/yonac-llvm
@@ -18,6 +18,8 @@ BuildRequires:  pkgconf
 BuildRequires:  libxml2-devel
 # cmake(CLI11) — do not FetchContent in mock.
 BuildRequires:  cli11-devel
+# Strip leftover DT_RUNPATH from the v0.1.2 tarball's shared CLI.
+BuildRequires:  patchelf
 
 Requires:       llvm-libs >= 16
 Requires:       clang
@@ -34,12 +36,26 @@ standard library.
 %autosetup -n yonac-llvm-%{version}
 
 %build
-cmake --preset x64-release-linux -DBUILD_TESTING=OFF -DYONA_FETCH_DEPS=OFF -DYONA_FETCH_LIBXML2=OFF
+# SKIP_BUILD_RPATH: v0.1.2 CMake links yonac to in-tree libyona_lib.so and
+# embeds the mock BUILD dir as DT_RUNPATH (Fedora check-rpaths 0x0002).
+# YONA_LINK_STATIC_CLI is used from v0.1.3; ignored as unused on v0.1.2.
+cmake --preset x64-release-linux \
+    -DBUILD_TESTING=OFF \
+    -DYONA_FETCH_DEPS=OFF \
+    -DYONA_FETCH_LIBXML2=OFF \
+    -DYONA_LINK_STATIC_CLI=ON \
+    -DCMAKE_SKIP_BUILD_RPATH=ON
 cmake --build --preset build-release-linux
 
 %install
 install -Dm755 out/build/x64-release-linux/yonac %{buildroot}%{_bindir}/yonac
 install -Dm755 out/build/x64-release-linux/yona %{buildroot}%{_bindir}/yona
+# v0.1.2 Source0 links the CLI to in-tree libyona_lib.so; ship it in %%{_libdir}
+# so ld.so finds it after RUNPATH is stripped.
+install -Dm755 out/build/x64-release-linux/libyona_lib.so \
+    %{buildroot}%{_libdir}/libyona_lib.so
+patchelf --remove-rpath %{buildroot}%{_bindir}/yonac
+patchelf --remove-rpath %{buildroot}%{_bindir}/yona
 
 install -d %{buildroot}%{_libdir}/yona/lib/Std
 cp -a lib/Std/. %{buildroot}%{_libdir}/yona/lib/Std/
@@ -59,9 +75,13 @@ cp -a include/yona/runtime/. %{buildroot}%{_libdir}/yona/include/yona/runtime/
 %doc README.md
 %{_bindir}/yonac
 %{_bindir}/yona
+%{_libdir}/libyona_lib.so
 %{_libdir}/yona/
 
 %changelog
+* Tue Aug 18 2026 Adam Kovari <adam@kovari.eu> - 0.1.2-2
+- Install libyona_lib.so when the CLI is dynamically linked; strip build-dir RUNPATH (Copr check-rpaths)
+
 * Tue Aug 18 2026 Adam Kovari <adam@kovari.eu> - 0.1.2-1
 - Version 0.1.2; native CLI11/LLD packaging and in-process LLD ELF/Darwin fixes
 

@@ -1,10 +1,12 @@
 #!/usr/bin/make -f
 
+export DEB_HOST_MULTIARCH := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
 %:
 	dh $@
 
 override_dh_auto_configure:
-	cmake --preset x64-release-linux -DBUILD_TESTING=OFF -DYONA_FETCH_DEPS=OFF -DYONA_FETCH_LIBXML2=OFF
+	cmake --preset x64-release-linux -DBUILD_TESTING=OFF -DYONA_FETCH_DEPS=OFF -DYONA_FETCH_LIBXML2=OFF -DYONA_LINK_STATIC_CLI=ON -DCMAKE_SKIP_BUILD_RPATH=ON
 
 override_dh_auto_build:
 	cmake --build --preset build-release-linux
@@ -12,6 +14,12 @@ override_dh_auto_build:
 override_dh_auto_install:
 	install -Dm755 out/build/x64-release-linux/yonac $(CURDIR)/debian/yona/usr/bin/yonac
 	install -Dm755 out/build/x64-release-linux/yona $(CURDIR)/debian/yona/usr/bin/yona
+	if [ -e out/build/x64-release-linux/libyona_lib.so ]; then \
+		install -Dm755 out/build/x64-release-linux/libyona_lib.so \
+			$(CURDIR)/debian/yona/usr/lib/$(DEB_HOST_MULTIARCH)/libyona_lib.so; \
+	fi
+	patchelf --remove-rpath $(CURDIR)/debian/yona/usr/bin/yonac
+	patchelf --remove-rpath $(CURDIR)/debian/yona/usr/bin/yona
 	install -d $(CURDIR)/debian/yona/usr/lib/yona/lib/Std
 	cp -a lib/Std/. $(CURDIR)/debian/yona/usr/lib/yona/lib/Std/
 	install -d $(CURDIR)/debian/yona/usr/lib/yona/src/runtime/platform

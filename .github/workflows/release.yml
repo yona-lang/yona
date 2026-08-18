@@ -25,7 +25,7 @@ jobs:
 
       - name: Build release
         run: |
-          cmake --preset x64-release-linux
+          cmake --preset x64-release-linux -DYONA_LINK_STATIC_CLI=ON -DCMAKE_SKIP_BUILD_RPATH=ON
           cmake --build --preset build-release-linux
 
       - name: Report embedded LLD

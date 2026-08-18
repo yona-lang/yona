@@ -74,6 +74,14 @@ endif()
 # Prefer distro / Homebrew packages. FetchContent is a last resort (Windows CI,
 # machines without cli11/doctest). Packaging passes -DYONA_FETCH_DEPS=OFF.
 option(YONA_FETCH_DEPS "Git-clone CLI11/doctest when no system CMake package is found" ON)
+# Distro packages copy binaries from the build tree (no cmake --install). Linking
+# the shared in-tree DSO embeds that directory as DT_RUNPATH; Fedora check-rpaths
+# rejects it and the RPM would not ship libyona_lib.so. Packaging passes ON.
+option(YONA_LINK_STATIC_CLI "Link yonac/yona against yona_lib_static" OFF)
+if(WIN32)
+	# Avoid STL/DLL boundary ownership issues on MSVC/UCRT.
+	set(YONA_LINK_STATIC_CLI ON)
+endif()
 if(WIN32)
 	option(YONA_FETCH_LIBXML2 "Fetch/build libxml2 when system LibXml2 is not MSVC-compatible" ON)
 else()
@@ -291,7 +299,7 @@ llvm_map_components_to_libnames(llvm_libs Support Core IRReader Passes Target na
 # Add source to this project's executable.
 add_library(yona_lib SHARED ${all_lib_SRCS})
 
-# Create a static version of the library for tests only
+# Static library for tests and for packaged CLI/REPL (YONA_LINK_STATIC_CLI).
 add_library(yona_lib_static STATIC ${all_lib_SRCS})
 target_include_directories(yona_lib_static PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(yona_lib_static PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
@@ -356,9 +364,7 @@ endif ()
 add_executable(yonac ${all_yonac_SRCS})
 target_include_directories(yonac PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(yonac PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
-if(WIN32)
-	# Avoid STL/DLL boundary ownership issues on MSVC/UCRT by linking the
-	# compiler driver against the static runtime library.
+if(YONA_LINK_STATIC_CLI)
 	target_link_libraries(yonac PRIVATE yona_lib_static CLI11::CLI11)
 	target_compile_definitions(yonac PRIVATE YONA_STATIC_BUILD)
 else()
@@ -470,7 +476,7 @@ add_dependencies(yonac yona_runtime_objects yona_runtime_static)
 add_executable(yona ${all_repl_SRCS})
 target_include_directories(yona PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(yona PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
-if(WIN32)
+if(YONA_LINK_STATIC_CLI)
 	target_link_libraries(yona PRIVATE yona_lib_static)
 	target_compile_definitions(yona PRIVATE YONA_STATIC_BUILD)
 else()

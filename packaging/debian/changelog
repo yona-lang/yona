@@ -1,3 +1,10 @@
+yona (0.1.2-2) noble; urgency=medium
+
+  * Ship libyona_lib.so when the CLI is dynamically linked and strip
+    build-directory RPATH (same fix as Fedora Copr 0.1.2-2).
+
+ -- Adam Kovari <adam@kovari.eu>  Tue, 18 Aug 2026 14:00:00 +0000
+
 yona (0.1.2-1) noble; urgency=medium
 
   * New upstream v0.1.2: native CLI11/LLD, libpolly-dev, in-process LLD

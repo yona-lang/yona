@@ -70,6 +70,16 @@ copr-cli create yona \
 
 `buildscm --commit` uses the spec from that git commit, but `%prep` still unpacks GitHub `Source0` for `Version:` (the `v*` tarball). Rebuilding `v0.1.1` against an updated spec on `master` still compiles the tagged CMakeLists (which always cloned CLI11). Native `cli11-devel` + `-DYONA_FETCH_DEPS=OFF` apply once a newer tag includes the CMake changes.
 
+v0.1.2 Copr (`10875811`) failed Fedora `check-rpaths` because `yonac`/`yona` had a DT_RUNPATH into the mock BUILD dir (CMake's rpath for in-tree `libyona_lib.so`). `dist/copr/yona.spec` `Release: 2` installs that DSO into `%{_libdir}` when needed, passes `-DCMAKE_SKIP_BUILD_RPATH=ON`, and `patchelf --remove-rpath`. From v0.1.3, packaging also passes `-DYONA_LINK_STATIC_CLI=ON` so the CLI does not need the DSO. Rebuild 0.1.2 from master with:
+
+```bash
+copr-cli buildscm kovariadam/yona \
+  --clone-url https://github.com/yona-lang/yonac-llvm.git \
+  --commit master \
+  --spec dist/copr/yona.spec \
+  --enable-net on
+```
+
 `--follow-fedora-branching on` auto-adds the next Fedora x86_64 chroot when Rawhide branches (same as winetop growing F45).
 
 Confirm: https://copr.fedorainfracloud.org/coprs/kovariadam/yona/

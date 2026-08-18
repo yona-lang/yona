@@ -35,4 +35,6 @@ set(CMAKE_EXE_LINKER_FLAGS "-fuse-ld=lld" CACHE STRING "")
 set(CMAKE_SHARED_LINKER_FLAGS "-fuse-ld=lld" CACHE STRING "")
 set(CMAKE_MODULE_LINKER_FLAGS "-fuse-ld=lld" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+# Do not copy linker search dirs (including the build tree) into DT_RUNPATH.
+# Fedora check-rpaths rejects that; Homebrew sets CMAKE_INSTALL_RPATH itself.
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
