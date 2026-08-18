@@ -1,9 +1,13 @@
 # Design: Type-level borrows (`&T`)
 
-**Status:** design note for implementation (see [todo-list.md](./todo-list.md)
-— *Type-level borrows (`&T`) and signature carry-over*).  
-**Related:** [memory-management.md](./memory-management.md#explicit-borrow)
-(`@borrow` first slice), `include/analysis/BorrowEscapeAnalysis.h`.
+**Status (2026-08-18):** `&T` / lifetimes / borrowed ADT fields remain
+**design-only**. `@borrow` is **implemented** (E0603). Inferred borrow
+**bitmasks are written to `.yonai`** (`FN … borrow 01…`) — the claim below
+that nothing appears in `.yonai` is stale for masks, still true for `&` in
+printed types. Evidence: [type-system-status.md](type-system-status.md) §6–7.
+See [todo-list.md](./todo-list.md) — *Type-level borrows (`&T`)*.
+**Related:** [memory-management.md](./memory-management.md#explicit-borrow),
+`include/analysis/BorrowEscapeAnalysis.h`.
 
 ## 1. Motivation
 

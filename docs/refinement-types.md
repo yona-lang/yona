@@ -1,5 +1,11 @@
 # Refinement Types
 
+**Status (2026-08-18):** **partial.** `{ n : Int | pred }` parses. **E0500**
+covers `head`/`tail` nonempty and `/` nonzero in `RefinementChecker`
+(non-blocking; skipped on modules). Signature aliases (`NonEmpty`, `Port`,
+`NonZero`) are **syntax only** — not enforced. No `.yonai` predicates.
+Evidence: [type-system-status.md](type-system-status.md) §5.
+
 ## Overview
 
 Refinement types extend a base type with a compile-time predicate that constrains its values. A value of type `{ n : Int | n > 0 }` is an `Int` that is guaranteed to be positive. The compiler verifies the predicate at call sites — no runtime check is needed.

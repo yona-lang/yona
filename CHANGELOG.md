@@ -1,8 +1,27 @@
 # Changelog
 
-## v0.1.1 (2026-04-24)
+## v0.1.1 (2026-08-18)
 
-### Distribution and Packaging
+First tagged release of the current tree (`VERSION` 0.1.1). Includes work
+landed after the April changelog draft.
+
+### Type system
+- Added `docs/type-system-status.md` (GitHub #3 audit): effects, rows,
+  linear/refinement checkers, `@borrow`, GENFN borrow masks, exhaustiveness.
+
+### Runtime / platforms
+- Linux: shared io_uring, File `auto_await`, GCC-safe SJLJ `longjmp` attributes.
+- macOS: kqueue runtime, MoltenVK, Metal i32/f32 GPU kernels.
+- Windows: UDP ABI and CI/DIA fixes (see recent `master` history).
+
+### Distribution
+- Fedora Copr, AUR `yona-bin`, and Launchpad PPA publish jobs after GitHub Release.
+- Maintainer setup: `dist/RELEASING.md`.
+- Windows WiX MSI + ZIP on release.
+
+## v0.1.1-draft (2026-04-24)
+
+Kept for history of the April packaging/linker notes.
 - Added Fedora Copr, AUR `yona-bin`, and Launchpad PPA publish jobs after GitHub Release.
 - Documented one-time maintainer setup in `dist/RELEASING.md`.
 - Added Windows WiX v4 installer scaffold (`packaging/windows/`) with MSI build script.

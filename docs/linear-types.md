@@ -1,5 +1,11 @@
 # Linear Types
 
+**Status (2026-08-18):** **partial.** `Linear` is a Prelude ADT. Use-after-consume
+is **E0600** via `LinearityChecker` (non-blocking; skipped on modules).
+**E0602** is documented but never emitted (leaks use `-Wunhandled-effect`).
+Not an HM type; no `.yonai` obligation metadata.
+Evidence: [type-system-status.md](type-system-status.md) §4.
+
 ## Overview
 
 Linear types ensure resource handles (files, sockets, processes) are consumed exactly once — preventing use-after-close and resource leaks at compile time.

@@ -1,5 +1,10 @@
 # Row Polymorphism for Records
 
+**Status (2026-08-18):** **implemented** for **record** field rows
+(`MRecord` / `row_rest`). This document is **not** the effect-row spec
+(GitHub [#8](https://github.com/yona-lang/yonac-llvm/issues/8)).
+Evidence: [type-system-status.md](type-system-status.md) §3.
+
 ## Overview
 
 Yona supports anonymous structural records with row-polymorphic types. Records are created with `{ field = value, ... }` syntax and fields are accessed with dot notation.

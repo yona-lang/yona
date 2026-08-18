@@ -1,5 +1,11 @@
 # Type Checker Design
 
+**Status (2026-08-18):** HM + ADTs + traits + **record** rows are in
+`MonoType`. Algebraic `perform`/`handle` typechecking exists; **effect rows
+are design-only**. Linear/refinement/`@borrow` live in separate checkers or
+codegen — see [type-system-status.md](type-system-status.md). Phase 7
+`[done]` below means handler-scope warnings, not rows or `effect` decls.
+
 ## Overview
 
 Yona's type checker implements Hindley-Milner type inference with extensions

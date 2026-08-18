@@ -55,7 +55,7 @@ Formal specification (Rocq, parallel research track):
 API (#7) until the audit (#3) and effect-row story (#8) are honest about what
 already works.
 
-- [ ] **[#3](https://github.com/yona-lang/yonac-llvm/issues/3) Type-system status audit** — deliver `docs/type-system-status.md` (Parser / AST / Typechecker / Codegen / `.yonai` / Tests × `implemented` | `partial` | `design-only` | `missing`) for effects, effect rows, linear types, refinements, row polymorphism, `@borrow` / `&T`, GENFN / borrow metadata, exhaustiveness / `-Wunmatched-adt`. Evidence links required; no feature work in this item. **Do first.**
+- [x] **[#3](https://github.com/yona-lang/yonac-llvm/issues/3) Type-system status audit** — `docs/type-system-status.md` (2026-08-18). Next: #8. Follow-ups from the audit: [#9](https://github.com/yona-lang/yonac-llvm/issues/9) effect decls, [#10](https://github.com/yona-lang/yonac-llvm/issues/10) blocking E0500/E0600, [#11](https://github.com/yona-lang/yonac-llvm/issues/11) `-Wincomplete-patterns`.
 - [ ] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference +** `.yonai` **propagation** — after #3. Infer, normalize, write/restore rows, check call sites. Dedicated plan before coding.
 - [ ] **[#6](https://github.com/yona-lang/yonac-llvm/issues/6) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
 - [ ] **[#5](https://github.com/yona-lang/yonac-llvm/issues/5) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
@@ -97,8 +97,9 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
   `yonac -o lib/Std/M.yona lib/Std/M.yona` works for Http-style leading docs.
 - [x] **Phase 0 CI bugs** — flaky `binary_seek` / `binary_write_read` and
   `net_runtime_test` TCP SIGSEGV (see Bugs).
-- [ ] **Next language work:** type-system audit (#3), then effect rows (#8).
-  See §4 above. Formal spec track (does not block #3): Phase 0 of
+- [x] **Type-system audit (#3)** — `docs/type-system-status.md`.
+- [ ] **Next language work:** effect-row inference (#8). Formal spec track
+  (does not block #8): Phase 0 of
   [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
 
 High leverage after the audit: `&T` **/ borrow types**

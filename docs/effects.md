@@ -1,5 +1,11 @@
 # Algebraic Effects in Yona
 
+**Status (2026-08-18):** **partial.** `perform` / `handle` parse, typecheck, and
+compile as in-scope handler dispatch. `effect` declarations, CPS resume,
+module export, and **effect rows** are **not implemented**.
+Evidence: [type-system-status.md](type-system-status.md) §1–2.
+Rows: GitHub [#8](https://github.com/yona-lang/yonac-llvm/issues/8).
+
 ## The Problem
 
 In most languages, side effects are invisible. A function `processOrder(order)` might read from a database, write to a log, send an email, throw an exception, or modify global state — and you can't tell from its signature.
