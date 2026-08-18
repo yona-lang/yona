@@ -15,7 +15,7 @@ The tag must already exist on the commit you want; CI uses `GITHUB_REF_NAME` fro
 | Channel | Job | Secrets used |
 |---------|-----|----------------|
 | GitHub Release (Linux/macOS tarballs, Windows zip/MSI) | `release` | `GITHUB_TOKEN` (automatic) |
-| Homebrew tap `akovari/homebrew-tap` | `homebrew` | `HOMEBREW_TAP_SSH_KEY`, `HOMEBREW_TAP_REPO` |
+| Homebrew tap `akovari/homebrew-tap` | `homebrew` | `HOMEBREW_TAP_TOKEN` or `HOMEBREW_TAP_SSH_KEY`, `HOMEBREW_TAP_REPO` |
 | AUR `yona-bin` | `aur` | `AUR_SSH_PRIVATE_KEY` |
 | Fedora Copr `$COPR_USERNAME/yona` | `copr` | `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAME` |
 | Launchpad `ppa:kovariadam/yona` | `launchpad` | `LAUNCHPAD_*` (`continue-on-error`) |
