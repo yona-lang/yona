@@ -66,7 +66,8 @@ jobs:
   deploy:
     name: Deploy Cloudflare Pages
     needs: build
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && (vars.CLOUDFLARE_ACCOUNT_ID != '' || secrets.CLOUDFLARE_ACCOUNT_ID != '') }}
+    # Do not reference `secrets` here — GitHub rejects the workflow at parse time.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
