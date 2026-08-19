@@ -82,21 +82,21 @@ Three things to notice:
 ## Pattern matching in ten lines
 
 ```yona
-type Shape = Circle Float | Rect Float Float
-
-area shape = case shape of
-    Circle r -> 3.141592653589793 * r * r
-    Rect w h -> w * h
+let maybeValue = Some 42 in
+case maybeValue of
+    Some x -> x * 2
+    None -> 0
 end
-
-area (Rect 3.0 4.0)   # => 12.0
+# => 84
 ```
 
-`type` declares an **algebraic data type** with two constructors. `case`
-matches on the constructors and binds their fields. The compiler knows every
-constructor of `Shape`, so it can warn when a `case` does not cover all of
-them. More in [Pattern matching](/learn/pattern-matching/) and
-[Types and data](/learn/types/).
+`case` matches on the constructors of a value and binds their fields.
+`Some` and `None` are the constructors of `Option`, available in every
+program without an import. The compiler knows every constructor of a type,
+so it can warn when a `case` does not cover all of them. Your own algebraic
+data types are declared with `type` inside a module — see
+[Modules](/learn/modules/). More in [Pattern matching](/learn/pattern-matching/)
+and [Types and data](/learn/types/).
 
 ## The REPL
 
