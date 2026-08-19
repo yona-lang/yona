@@ -15,8 +15,14 @@ MonoTypePtr TypeArena::make_con(TyCon con) {
     return alloc(MonoType::make_con(con));
 }
 
-MonoTypePtr TypeArena::make_arrow(MonoTypePtr param, MonoTypePtr ret) {
-    return alloc(MonoType::make_arrow(param, ret));
+MonoTypePtr TypeArena::make_arrow(MonoTypePtr param, MonoTypePtr ret,
+                                   std::vector<LatentEffect> effects,
+                                   MonoTypePtr rest) {
+    return alloc(MonoType::make_arrow(param, ret, std::move(effects), rest));
+}
+
+MonoTypePtr TypeArena::make_erow(std::vector<LatentEffect> effects, MonoTypePtr rest) {
+    return alloc(MonoType::make_erow(std::move(effects), rest));
 }
 
 MonoTypePtr TypeArena::make_app(const std::string& name, std::vector<MonoTypePtr> args) {

@@ -20,6 +20,7 @@
 #include "Diagnostic.h"
 #include "ast.h"
 #include <unordered_map>
+#include <vector>
 
 namespace yona::compiler::typechecker {
 
@@ -64,6 +65,24 @@ public:
 
     /// Solve deferred trait constraints. Returns false on unsatisfied constraints.
     bool solve_constraints();
+
+    /// Search path for `.yonai` FN effect rows on `import` (same dirs as codegen).
+    void add_module_path(std::string path);
+
+    /// Type-check a module as a unit so sibling functions see each other.
+    /// Does not fail the caller — inspect `has_direct_errors()` if needed.
+    void check_module(ast::ModuleDecl* mod);
+
+    /// Closed latent op keys on a function type (`Fs.read`). Empty if none.
+    std::vector<std::string> closed_effect_ops(MonoTypePtr type);
+
+    /// Closed ops plus whether the row is open and the first param is an arrow (HOF).
+    struct EffectRowInfo {
+        std::vector<std::string> ops;
+        bool open_rest = false;
+        bool hof = false;
+    };
+    EffectRowInfo effect_row_info(MonoTypePtr type);
 
 private:
     /// Main recursive inference. Returns inferred monotype.
@@ -113,6 +132,15 @@ private:
 
     // --- Helpers ---
 
+    /// Collect known labels and open rest from an Arrow / ERow (chasing rest).
+    void flatten_callee_effects(MonoTypePtr callee, std::vector<LatentEffect>& known,
+                                MonoTypePtr& rest);
+
+    /// Union uncovered callee effects into the enclosing lambda, or E0202 at top level.
+    void apply_callee_effects(MonoTypePtr callee, const SourceLocation& apply_loc);
+
+    bool is_effect_handled(const std::string& op_key) const;
+
     /// Record the inferred type for an AST node.
     void record(ast::AstNode* node, MonoTypePtr type);
 
@@ -161,6 +189,15 @@ private:
 
     /// Handler scope stack: each entry lists the effect operations handled at that level.
     std::vector<std::vector<std::string>> handler_scope_stack_;
+
+    /// Collectors for latent effects while inferring function bodies.
+    struct CollectedRow {
+        std::vector<LatentEffect> known;
+        MonoTypePtr rest = nullptr;
+    };
+    std::vector<CollectedRow> latent_effect_stack_;
+
+    std::vector<std::string> module_paths_;
 };
 
 } // namespace yona::compiler::typechecker

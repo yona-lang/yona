@@ -1,0 +1,4 @@
+handle perform Echo.say "x" with
+    Echo.say path resume -> if path == "x" then resume 1 else resume 0
+    return val -> val
+end

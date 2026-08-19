@@ -20,7 +20,13 @@ public:
     MonoTypePtr make_con(TyCon con);
 
     /// Create a function type.
-    MonoTypePtr make_arrow(MonoTypePtr param, MonoTypePtr ret);
+    MonoTypePtr make_arrow(MonoTypePtr param, MonoTypePtr ret,
+                           std::vector<LatentEffect> effects = {},
+                           MonoTypePtr rest = nullptr);
+
+    /// Create an effect-row payload (known labels + optional rest).
+    MonoTypePtr make_erow(std::vector<LatentEffect> effects,
+                          MonoTypePtr rest = nullptr);
 
     /// Create a named type application (e.g., Option Int).
     MonoTypePtr make_app(const std::string& name, std::vector<MonoTypePtr> args);

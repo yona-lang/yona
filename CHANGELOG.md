@@ -5,8 +5,19 @@
 ### Added
 - Applying a function whose body performs an effect with no covering `handle`
   is a compile error **E0202** (points at the introducing `perform`, note at
-  the call). Direct unhandled `perform` is still `-Wunhandled-effect`. Closed
-  latent sets on arrows only — not open rows or `.yonai` effect metadata.
+  the call). Direct unhandled `perform` is still `-Wunhandled-effect`.
+- Function arrows unify effect rows (closed sets + open rest). Higher-order
+  `apply f x = f x` propagates the argument's effects; wrapping
+  `let g = \() -> f ()` unions into `g`; a `handle` subtracts covered ops
+  from the enclosing row. Types pretty-print as `(a -> !{Fs.read} b)`.
+  Exported functions write closed rows on `.yonai` `FN` lines
+  (`effects Fs.read` or `effects Fs.read,Net.post`); importers restore
+  them so unhandled apply is **E0202** and a covering `handle` is not.
+  FN lines without `effects` stay fresh type vars (stdlib unchanged).
+  Open HOF rows write `effects | hof` so `apply f x = f x` still
+  propagates the argument's effects after import. Module compile
+  typechecks siblings as a unit so `wrap = \() -> readSecret ()`
+  records `readSecret`'s row on `wrap`.
 
 ### Documentation
 - Public Yona 2.0 docs live in-repo at `site/` (Astro Starlight) and deploy

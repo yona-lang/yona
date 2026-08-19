@@ -222,6 +222,7 @@ std::string error_code_str(ErrorCode code) {
         case ErrorCode::E0106: return "E0106";
         case ErrorCode::E0200: return "E0200";
         case ErrorCode::E0201: return "E0201";
+        case ErrorCode::E0202: return "E0202";
         case ErrorCode::E0300: return "E0300";
         case ErrorCode::E0301: return "E0301";
         case ErrorCode::E0302: return "E0302";
@@ -249,6 +250,7 @@ std::optional<ErrorCode> parse_error_code(const std::string& str) {
     if (str == "E0106") return ErrorCode::E0106;
     if (str == "E0200") return ErrorCode::E0200;
     if (str == "E0201") return ErrorCode::E0201;
+    if (str == "E0202") return ErrorCode::E0202;
     if (str == "E0300") return ErrorCode::E0300;
     if (str == "E0301") return ErrorCode::E0301;
     if (str == "E0302") return ErrorCode::E0302;
@@ -415,6 +417,27 @@ std::string error_explanation(ErrorCode code) {
                 "\n"
                 "  -- Fix: pass the required argument\n"
                 "  perform State.put 42\n";
+
+        case ErrorCode::E0202:
+            return
+                "Unhandled effect at application [E0202]\n"
+                "\n"
+                "A function that performs an effect is applied, but no `handle...with`\n"
+                "block in scope covers that operation. The primary location is the\n"
+                "introducing `perform`; a note points at the call that escaped.\n"
+                "\n"
+                "Example:\n"
+                "\n"
+                "  -- Error: plan's latent Fs.read is applied with no handler\n"
+                "  let plan = \\() -> perform Fs.read \"/etc/shadow\" in\n"
+                "  plan ()\n"
+                "\n"
+                "  -- Fix: handle the apply site\n"
+                "  let plan = \\() -> perform Fs.read path in\n"
+                "  handle plan \"/tmp/x\" with\n"
+                "      Fs.read p resume -> resume p\n"
+                "      return val -> val\n"
+                "  end\n";
 
         case ErrorCode::E0300:
             return

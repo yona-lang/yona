@@ -235,7 +235,26 @@ TypedValue Codegen::codegen_comparison(AstNode* left_node, AstNode* right_node, 
         else if (op == ">") result = builder_->CreateFCmpOGT(left.val, right.val);
         else if (op == "<=") result = builder_->CreateFCmpOLE(left.val, right.val);
         else if (op == ">=") result = builder_->CreateFCmpOGE(left.val, right.val);
+    } else if ((left.type == CType::STRING || right.type == CType::STRING) &&
+               (op == "==" || op == "!=")) {
+        // Handler args (and other i64-boxed strings) compare by content.
+        auto as_str = [&](const TypedValue& tv) -> Value* {
+            if (tv.val->getType()->isPointerTy()) return tv.val;
+            return builder_->CreateIntToPtr(tv.val, PointerType::get(*context_, 0));
+        };
+        auto* eq = builder_->CreateCall(rt_.string_eq_, {as_str(left), as_str(right)});
+        auto* zero = ConstantInt::get(LType::getInt64Ty(*context_), 0);
+        result = (op == "==") ? builder_->CreateICmpNE(eq, zero)
+                              : builder_->CreateICmpEQ(eq, zero);
     } else {
+        if (left.val->getType() != right.val->getType()) {
+            if (right.val->getType()->isPointerTy() && left.val->getType()->isIntegerTy())
+                left.val = builder_->CreateIntToPtr(left.val, right.val->getType());
+            else if (left.val->getType()->isPointerTy() && right.val->getType()->isIntegerTy())
+                right.val = builder_->CreateIntToPtr(right.val, left.val->getType());
+            else if (left.val->getType()->isIntegerTy() && right.val->getType()->isIntegerTy())
+                left.val = builder_->CreateZExtOrTrunc(left.val, right.val->getType());
+        }
         if (op == "==") result = builder_->CreateICmpEQ(left.val, right.val);
         else if (op == "!=") result = builder_->CreateICmpNE(left.val, right.val);
         else if (op == "<") result = builder_->CreateICmpSLT(left.val, right.val);

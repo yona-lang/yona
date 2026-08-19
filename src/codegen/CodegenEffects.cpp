@@ -125,11 +125,13 @@ TypedValue Codegen::codegen_handle(HandleExpr* node) {
         effect_resume_names_.insert(clause->resume_name);
 
         auto result = codegen(clause->body);
-        Value* rv = result ? result.val : ConstantInt::get(i64_ty, 0);
-        if (rv->getType()->isPointerTy()) rv = builder_->CreatePtrToInt(rv, i64_ty);
-        else if (rv->getType() != i64_ty && rv->getType()->isIntegerTy())
-            rv = builder_->CreateZExtOrTrunc(rv, i64_ty);
-        builder_->CreateRet(rv);
+        if (!builder_->GetInsertBlock()->getTerminator()) {
+            Value* rv = result ? result.val : ConstantInt::get(i64_ty, 0);
+            if (rv->getType()->isPointerTy()) rv = builder_->CreatePtrToInt(rv, i64_ty);
+            else if (rv->getType() != i64_ty && rv->getType()->isIntegerTy())
+                rv = builder_->CreateZExtOrTrunc(rv, i64_ty);
+            builder_->CreateRet(rv);
+        }
 
         named_values_ = saved;
         effect_resume_names_.erase(clause->resume_name);

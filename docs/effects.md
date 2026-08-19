@@ -1,9 +1,12 @@
 # Algebraic Effects in Yona
 
-**Status (2026-08-18):** **partial.** `perform` / `handle` parse, typecheck, and
-compile as in-scope handler dispatch. `effect` declarations, CPS resume,
-module export, and **effect rows** are **not implemented**.
-Evidence: [type-system-status.md](type-system-status.md) §1–2.
+**Status (2026-08-19):** **partial.** `perform` / `handle` parse, typecheck, and
+compile as in-scope handler dispatch. Effect rows unify (closed + open rest);
+HOF and wrapping propagate; `handle` subtracts; unhandled apply is **E0202**.
+Closed `.yonai` `FN … effects` rows and open `effects | hof` are written
+and restored on import. Sibling exports inherit applied helpers' rows.
+`effect` declarations and CPS resume are **not**. Evidence:
+[type-system-status.md](type-system-status.md) §1–2.
 Rows: GitHub [#8](https://github.com/yona-lang/yonac-llvm/issues/8).
 
 ## The Problem

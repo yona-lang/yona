@@ -1,0 +1,7 @@
+handle
+    let manifest = perform Echo.say "x" in
+    "got: {manifest}"
+with
+    Echo.say path resume -> resume "lit"
+    return val -> val
+end

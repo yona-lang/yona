@@ -18,8 +18,8 @@ Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 
 | Feature | Parser | AST | Typechecker | Codegen | `.yonai` | Tests | Overall |
 |---------|--------|-----|-------------|---------|----------|-------|---------|
-| Algebraic effects (`perform` / `handle`) | partial | partial | partial | partial | missing | partial | **partial** |
-| Effect rows (inference, union, `.yonai`) | missing | missing | missing | missing | missing | missing | **design-only** |
+| Algebraic effects (`perform` / `handle`) | partial | partial | partial | partial | partial | partial | **partial** |
+| Effect rows (inference, union, `.yonai`) | missing | missing | partial | missing | partial | partial | **partial** |
 | Record row polymorphism | implemented | implemented | implemented | implemented | partial | implemented | **implemented** |
 | Linear types (`Linear a`) | implemented | implemented | partial | implemented | missing | partial | **partial** |
 | Refinement types / E0500 | implemented | implemented | partial | implemented | missing | partial | **partial** |
@@ -29,25 +29,28 @@ Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 | `-Wunmatched-adt` | n/a | n/a | implemented | n/a | n/a | implemented | **implemented** |
 | Case exhaustiveness (`-Wincomplete-patterns`) | n/a | n/a | missing | partial | missing | missing | **partial** |
 
-`MonoType` tags are `Var | Con | App | Arrow | MTuple | MRecord`
+`MonoType` tags are `Var | Con | App | Arrow | MTuple | MRecord | ERow`
 ([`include/typechecker/InferType.h`](../include/typechecker/InferType.h)).
-There is **no** effect-row or borrow type constructor. `Arrow` is
-`param_type` + `return_type` only. `MRecord.row_rest` is **record** rows,
-not effect rows.
+`Arrow` carries `arrow_effects` plus `effect_rest` (Var / `ERow` / closed).
+Rows unify and pretty-print as `!{…}`. Closed sets write to `.yonai`
+`FN … effects Fs.read` (comma-separated for several ops). Missing
+`effects` means unknown, not pure. `MRecord.row_rest` is **record**
+rows, not effect rows.
 
 ---
 
 ## 1. Algebraic effects + handlers — **partial**
 
-Shallow in-scope handler dispatch. Not CPS. Not on function types.
+Shallow in-scope handler dispatch. Not CPS. Function arrows carry an effect
+row (known labels + optional open rest).
 
 | Layer | Status | Evidence |
 |-------|--------|----------|
 | Parser | partial | `YPERFORM` / `YHANDLE` ([`src/Lexer.cpp`](../src/Lexer.cpp)); `parse_perform_expr` / `parse_handle_expr` ([`src/parser/ParserExpr.cpp`](../src/parser/ParserExpr.cpp)). Token `YEFFECT` is **never consumed**. No `effect Name … end` / `export effect`. |
 | AST | partial | `PerformExpr`, `HandleExpr`, `HandlerClause`, unused `EffectDeclNode` ([`include/ast.h`](../include/ast.h)). Parser never builds `EffectDeclNode`. |
-| Typechecker | partial | `register_effect` / `infer_perform` / `infer_handle` ([`src/typechecker/TypeChecker.cpp`](../src/typechecker/TypeChecker.cpp)). Unhandled `perform` → warning `-Wunhandled-effect`, not an error. Unknown ops → fresh type var, **no error**. `register_effect` is called from **tests**, not from a parsed `effect` decl. Function types have no effect component. |
+| Typechecker | partial | `register_effect` / `infer_perform` / `infer_handle` ([`src/typechecker/TypeChecker.cpp`](../src/typechecker/TypeChecker.cpp)). Direct unhandled `perform` → `-Wunhandled-effect`. Applying a lambda that collected a latent op with no covering handler → **E0202**. Unknown ops → fresh type var, **no error**. `register_effect` is called from **tests**, not from a parsed `effect` decl. Function arrows carry a closed `arrow_effects` set (not unified / not open). |
 | Codegen | partial | [`src/codegen/CodegenEffects.cpp`](../src/codegen/CodegenEffects.cpp): lookup `handler_stack_`; resume is identity `i64(i64)`, not a captured continuation. Unhandled `perform` is a string error, not `E0200`. Result typed `CType::INT`. |
-| `.yonai` | missing | `emit_interface_file` writes `ADT`/`FN`/`GENFN`/`TRAIT` only ([`src/codegen/CodegenModule.cpp`](../src/codegen/CodegenModule.cpp)). No `EFFECT` keyword. |
+| `.yonai` | partial | `FN` / `AFN` / `IO` / `NAT` may append `effects Op,…` ([`src/codegen/CodegenModule.cpp`](../src/codegen/CodegenModule.cpp)). No `EFFECT` keyword / `effect` decl. |
 | Tests | partial | Typechecker cases below; fixtures `test/codegen/effect_*.yona`. |
 
 **Positive:** `test/codegen/effect_simple_get.yona` → `42`
@@ -66,31 +69,50 @@ Unhandled perform: `TEST_CASE("Effect: unhandled perform produces warning")`.
 
 **Typechecker tests:** `Effect: perform with registered effect returns correct type`;
 `unhandled perform produces warning`; `perform arg type mismatch is an error`;
-`handle with return clause transforms result`; `no error for handled perform`.
+`handle with return clause transforms result`; `no error for handled perform`;
+`applying unhandled perform lambda is E0202`;
+`handle covers apply of perform lambda`;
+`handle covers apply of lambda defined outside handle`;
+`HOF apply of perform lambda is E0202`; `handle covers HOF apply of perform lambda`;
+`wrapping perform lambda apply is E0202`; `handle covers wrapped perform lambda`;
+`handle subtracts covered op from enclosing row`;
+`imported FN effects from .yonai are E0202`;
+`handle covers imported FN from .yonai`;
+`imported HOF open rest from .yonai is E0202`;
+`handle covers imported HOF from .yonai`.
 
 **Codegen fixtures:** `effect_simple_get`, `effect_let_perform`, `effect_nested`,
-`effect_with_arg`, `effect_return_handler`.
+`effect_with_arg`, `effect_return_handler`, `effect_lambda_handle`.
 
 **Stale docs:** [`docs/effects.md`](effects.md) claims compile-time CPS and
 `export effect` / `import effect`. Neither exists. Effect type parameters are
 discarded (`(void)type_param` in `register_effect`).
 
-**Follow-up:** parse `effect` decls ([#9](https://github.com/yona-lang/yonac-llvm/issues/9)); real rows → [#8](https://github.com/yona-lang/yonac-llvm/issues/8).
+**Follow-up:** parse `effect` decls ([#9](https://github.com/yona-lang/yonac-llvm/issues/9)).
 
 ---
 
-## 2. Effect rows — **design-only**
+## 2. Effect rows — **partial** (unify + HOF + E0202 + `.yonai`)
 
-Planned as [#8](https://github.com/yona-lang/yonac-llvm/issues/8): infer,
-normalize, sequential union, handler subtraction, open rows on HOFs,
-deterministic display, `.yonai` round-trip, call-site check.
+[#8](https://github.com/yona-lang/yonac-llvm/issues/8) (2026-08-19):
+`Arrow.arrow_effects` + `effect_rest` (Var / `ERow` / closed). Unifier merges
+rows like record rows. Lambdas collect uncovered `perform`s and **uncovered
+apply**s (handler subtraction). `\() ->` thunks are `Unit -> ret`.
+`infer_apply` uses an open expected rest so HOF `apply f x = f x` shares `r`.
+Top-level uncovered apply is **E0202**. Pretty-print: `(a -> !{Fs.read} b)`.
+`generalize` zonks so rest vars quantify.
+`check_module` infers siblings as a unit (two passes). Export rows are
+written as `FN … effects Fs.read` and/or `effects | hof`. Import restores
+a nonempty / open field into `Arrow.arrow_effects`; otherwise the name
+stays a fresh var. HOF restore is the first-param-is-function shape.
 
-**Empty effect row is not a typechecker fact.** Totality [#5](https://github.com/yona-lang/yonac-llvm/issues/5)
-is blocked until that is real.
+**Still missing:** `effect` decls ([#9](https://github.com/yona-lang/yonac-llvm/issues/9));
+serializing `\x f -> f x` (function not first). Module compile still does
+not *fail* on type errors — rows are collected non-blocking.
 
-No tokens, AST, unify, pretty-print (`(T -> U)` only in
-[`src/typechecker/Unification.cpp`](../src/typechecker/Unification.cpp)),
-`.yonai` field, or tests.
+**Empty effect row is not a totality fact.** Open rest still means "unknown",
+not "pure". Totality [#5](https://github.com/yona-lang/yonac-llvm/issues/5)
+stays blocked.
 
 [`docs/row-polymorphism.md`](row-polymorphism.md) is **record** field rows
 (`{ name : t | r }`), not effect rows. Do not cite it as #8 evidence.
@@ -239,7 +261,7 @@ missing constructors.
 | Doc | Claim | Reality |
 |-----|--------|---------|
 | [effects.md](effects.md) | CPS transformation; `export effect` | Identity resume; no `effect` parse |
-| [type-checker-design.md](type-checker-design.md) | Effects `[done]` | No rows; no `effect` decl in grammar |
+| [type-checker-design.md](type-checker-design.md) | Effects `[done]` | Closed latent sets + E0202 only; no `effect` decl in grammar |
 | [row-polymorphism.md](row-polymorphism.md) | (if read as effect rows) | Record rows only |
 | [linear-types.md](linear-types.md) | E0602; no linear closures | E0602 unused; capture fixture exists |
 | [refinement-types.md](refinement-types.md) | Signature aliases checked | Syntax only |
@@ -277,7 +299,7 @@ flowchart TD
 
 | Work | Issue / note | Independent? |
 |------|----------------|--------------|
-| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yonac-llvm/issues/8) | After this audit |
+| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yonac-llvm/issues/8) | Done 2026-08-19 (closed FN rows, `effects | hof`, sibling-aware `check_module`) |
 | Opaque exported types | [#6](https://github.com/yona-lang/yonac-llvm/issues/6) | After audit; parallel with #8 |
 | Totality / empty row | [#5](https://github.com/yona-lang/yonac-llvm/issues/5) | After #8 |
 | Typed-core | [#7](https://github.com/yona-lang/yonac-llvm/issues/7) | Arch after audit; API after #8 |

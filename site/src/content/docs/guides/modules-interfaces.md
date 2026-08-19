@@ -114,8 +114,11 @@ Line kinds and what they carry:
   base signature:
   - `LINEAR` in a type position marks a linearity overlay — the value must be
     consumed exactly once (channel endpoints, file handles).
-  - `effects Label,...` records the function's effect row so a caller's
-    `handle` blocks type-check across the module boundary.
+  - `effects Label,...` records a closed effect row so a caller's
+    `handle` type-checks across the module boundary. `effects | hof`
+    marks an open rest whose first parameter is a function
+    (`apply f x = f x`); the importer reconstructs that shape so the
+    argument's effects still propagate.
   - `borrow MASK` is a bitmask of parameters the compiler proved are read-only
     and non-escaping; importers skip the caller-side reference-count increment
     for those positions.
@@ -172,9 +175,10 @@ When resolving `import Acme\Geometry`, the compiler looks for
 pure-Yona modules) in this order:
 
 1. Each `-I` path, in the order given on the command line.
-2. The directory containing the input file.
-3. The current working directory.
-4. `lib/` and `share/yona/lib/` under each discovered **sysroot**.
+2. Each directory in `YONA_PATH` (`:`-separated on Unix, `;`-separated on Windows).
+3. The directory containing the input file.
+4. The current working directory.
+5. `lib/` and `share/yona/lib/` under each discovered **sysroot**.
 
 A sysroot is a Yona distribution root. Sysroots are discovered from the
 `--sysroot` flag, the `YONA_HOME` environment variable, and the directory

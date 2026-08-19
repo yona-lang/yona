@@ -40,6 +40,7 @@ enum class ErrorCode {
     // Effect errors (E02xx)
     E0200,  ///< Unhandled effect operation (codegen)
     E0201,  ///< Effect argument count mismatch
+    E0202,  ///< Unhandled latent effect at application
 
     // Parse errors (E03xx)
     E0300,  ///< Unexpected token

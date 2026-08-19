@@ -8,7 +8,9 @@
 ///  5. Error otherwise
 
 #include "typechecker/Unification.h"
+#include <algorithm>
 #include <sstream>
+#include <unordered_map>
 
 namespace yona::compiler::typechecker {
 
@@ -81,7 +83,13 @@ bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceLocation& lo
 
         case MonoType::Arrow:
             return unify(a->param_type, b->param_type, loc, context) &&
-                   unify(a->return_type, b->return_type, loc, context);
+                   unify(a->return_type, b->return_type, loc, context) &&
+                   unify_effect_rows(a->arrow_effects, a->effect_rest,
+                                     b->arrow_effects, b->effect_rest, loc, context);
+
+        case MonoType::ERow:
+            return unify_effect_rows(a->arrow_effects, a->effect_rest,
+                                     b->arrow_effects, b->effect_rest, loc, context);
 
         case MonoType::App:
             if (a->type_name != b->type_name || a->args.size() != b->args.size()) {
@@ -161,12 +169,74 @@ bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceLocation& lo
     }
 }
 
+void Unifier::flatten_effect_row(MonoTypePtr rest, std::vector<LatentEffect>& labs,
+                                  MonoTypePtr& out_rest) {
+    rest = resolve(rest);
+    int guard = 0;
+    while (rest && rest->tag == MonoType::ERow && guard++ < 64) {
+        for (auto& e : rest->arrow_effects) {
+            bool seen = false;
+            for (auto& l : labs)
+                if (l.op_key == e.op_key) { seen = true; break; }
+            if (!seen) labs.push_back(e);
+        }
+        rest = resolve(rest->effect_rest);
+    }
+    out_rest = (rest && rest->tag == MonoType::Var) ? rest : nullptr;
+}
+
+bool Unifier::unify_effect_rows(const std::vector<LatentEffect>& a_labs_in, MonoTypePtr a_rest,
+                                 const std::vector<LatentEffect>& b_labs_in, MonoTypePtr b_rest,
+                                 const SourceLocation& loc, const std::string& context) {
+    std::vector<LatentEffect> a_labs = a_labs_in;
+    std::vector<LatentEffect> b_labs = b_labs_in;
+    flatten_effect_row(a_rest, a_labs, a_rest);
+    flatten_effect_row(b_rest, b_labs, b_rest);
+
+    std::unordered_map<std::string, LatentEffect> a_map, b_map;
+    for (auto& e : a_labs) a_map[e.op_key] = e;
+    for (auto& e : b_labs) b_map[e.op_key] = e;
+
+    std::vector<LatentEffect> a_extras, b_extras;
+    for (auto& [k, e] : a_map)
+        if (b_map.find(k) == b_map.end()) a_extras.push_back(e);
+    for (auto& [k, e] : b_map)
+        if (a_map.find(k) == a_map.end()) b_extras.push_back(e);
+
+    if (!a_extras.empty()) {
+        if (b_rest) {
+            if (!unify(b_rest, arena_.make_erow(a_extras, a_rest), loc, context))
+                return false;
+        } else {
+            diag_.error(loc, ErrorCode::E0100,
+                        "incompatible effect rows" + (context.empty() ? "" : " " + context));
+            return false;
+        }
+    }
+    if (!b_extras.empty()) {
+        if (a_rest) {
+            if (!unify(a_rest, arena_.make_erow(b_extras, b_rest), loc, context))
+                return false;
+        } else {
+            diag_.error(loc, ErrorCode::E0100,
+                        "incompatible effect rows" + (context.empty() ? "" : " " + context));
+            return false;
+        }
+    }
+    if (a_extras.empty() && b_extras.empty() && a_rest && b_rest)
+        return unify(a_rest, b_rest, loc, context);
+    return true;
+}
+
 bool Unifier::occurs_in(TypeId var_id, MonoTypePtr type) {
     type = resolve(type);
     if (!type) return false;
     if (type->tag == MonoType::Var) return type->var_id == var_id;
     if (type->tag == MonoType::Arrow)
-        return occurs_in(var_id, type->param_type) || occurs_in(var_id, type->return_type);
+        return occurs_in(var_id, type->param_type) || occurs_in(var_id, type->return_type)
+            || occurs_in(var_id, type->effect_rest);
+    if (type->tag == MonoType::ERow)
+        return occurs_in(var_id, type->effect_rest);
     if (type->tag == MonoType::App) {
         for (auto* a : type->args) if (occurs_in(var_id, a)) return true;
         return false;
@@ -194,7 +264,10 @@ void Unifier::adjust_levels(MonoTypePtr type, int level) {
     if (type->tag == MonoType::Arrow) {
         adjust_levels(type->param_type, level);
         adjust_levels(type->return_type, level);
+        adjust_levels(type->effect_rest, level);
     }
+    if (type->tag == MonoType::ERow)
+        adjust_levels(type->effect_rest, level);
     if (type->tag == MonoType::App)
         for (auto* a : type->args) adjust_levels(a, level);
     if (type->tag == MonoType::MTuple)
@@ -249,9 +322,46 @@ std::string pretty_print_rec(MonoTypePtr type, PrintCtx& ctx) {
             }
             return "?";
         }
-        case MonoType::Arrow:
-            return "(" + pretty_print_rec(type->param_type, ctx) + " -> " +
+        case MonoType::Arrow: {
+            std::vector<std::string> labels;
+            for (auto& e : type->arrow_effects) labels.push_back(e.op_key);
+            MonoTypePtr rest = type->effect_rest;
+            int guard = 0;
+            while (rest && rest->tag == MonoType::ERow && guard++ < 64) {
+                for (auto& e : rest->arrow_effects) labels.push_back(e.op_key);
+                rest = rest->effect_rest;
+            }
+            std::sort(labels.begin(), labels.end());
+            labels.erase(std::unique(labels.begin(), labels.end()), labels.end());
+            std::string row;
+            if (!labels.empty() || (rest && rest->tag == MonoType::Var)) {
+                row = "!{";
+                for (size_t i = 0; i < labels.size(); i++) {
+                    if (i) row += ",";
+                    row += labels[i];
+                }
+                if (rest && rest->tag == MonoType::Var) {
+                    if (!labels.empty()) row += " | ";
+                    else row += "|";
+                    row += pretty_print_rec(rest, ctx);
+                }
+                row += "} ";
+            }
+            return "(" + pretty_print_rec(type->param_type, ctx) + " -> " + row +
                    pretty_print_rec(type->return_type, ctx) + ")";
+        }
+        case MonoType::ERow: {
+            std::string s = "!{";
+            for (size_t i = 0; i < type->arrow_effects.size(); i++) {
+                if (i) s += ",";
+                s += type->arrow_effects[i].op_key;
+            }
+            if (type->effect_rest) {
+                if (!type->arrow_effects.empty()) s += " | ";
+                s += pretty_print_rec(type->effect_rest, ctx);
+            }
+            return s + "}";
+        }
         case MonoType::App: {
             std::string s = type->type_name;
             for (auto* a : type->args) s += " " + pretty_print_rec(a, ctx);

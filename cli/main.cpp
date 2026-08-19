@@ -415,6 +415,26 @@ int main(int argc, char *argv[]) {
   };
   for (const auto &inc : include_paths)
     add_module_path(inc);
+#ifdef _WIN32
+  const char yona_path_sep = ';';
+#else
+  const char yona_path_sep = ':';
+#endif
+  if (const char *yp = getenv("YONA_PATH"); yp && *yp) {
+    string cur;
+    auto flush_yp = [&]() {
+      if (!cur.empty())
+        add_module_path(cur);
+      cur.clear();
+    };
+    for (const char *c = yp; *c; ++c) {
+      if (*c == yona_path_sep)
+        flush_yp();
+      else
+        cur.push_back(*c);
+    }
+    flush_yp();
+  }
   if (!input_file.empty()) {
     auto parent = filesystem::path(input_file).parent_path();
     if (!parent.empty())
@@ -468,6 +488,8 @@ int main(int argc, char *argv[]) {
     parser::Parser parser;
     typechecker::TypeChecker type_checker(diag);
     codegen.load_prelude(&parser, &type_checker); // registers everything
+    for (auto& p : codegen.module_paths_)
+      type_checker.add_module_path(p);
 
     istringstream stream(source);
     auto parse_result = parser.parse_input(stream);

@@ -68,6 +68,8 @@ static string compile_and_run(const string &code, const char *run_env_key = null
   DiagnosticEngine tc_diag;
   typechecker::TypeChecker type_checker(tc_diag);
   codegen.load_prelude(&parser, &type_checker);
+  for (auto& p : codegen.module_paths_)
+    type_checker.add_module_path(p);
 
   istringstream stream(code);
   auto parse_result = parser.parse_input(stream);
@@ -245,6 +247,18 @@ TEST_SUITE("Codegen IR") {
   TEST_CASE("Multi-arg function generates correct signature") {
     auto ir = compile_to_ir("let add x y = x + y in add 3 4");
     CHECK(ir_contains(ir, "define internal fastcc i64 @add(i64 %x, i64 %y)"));
+  }
+
+  TEST_CASE("unhandled perform lambda apply is TYPE_ERROR") {
+    CHECK(compile_and_run(
+              R"(let plan = \() -> perform Fs.read "/etc/shadow" in plan ())")
+          == "TYPE_ERROR");
+  }
+
+  TEST_CASE("HOF apply of unhandled perform lambda is TYPE_ERROR") {
+    CHECK(compile_and_run(
+              R"(let apply = \f x -> f x in apply (\() -> perform Fs.read "/etc/shadow") ())")
+          == "TYPE_ERROR");
   }
 
 } // Codegen IR
@@ -832,6 +846,182 @@ extern native nop : FloatArray -> Int = "yona_Test_NatFloatArr__nop"
     CHECK(yonai.find("NAT yona_Test_NatFloatArr__nop 1 INT -> INT") == string::npos);
   }
 
+  TEST_CASE("Interface files preserve exported FN effect rows") {
+    namespace fs = std::filesystem;
+    REQUIRE(yona::test::link::ensure_runtime_objects());
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_fx_effects";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p1;
+    string mod_source = R"(
+module Test\Fx
+
+export fetch
+
+fetch path = perform Fs.read path
+)";
+    auto mod_result = p1.parse_module(mod_source, "fx.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("fx_effects_mod");
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+    fs::path iface = yona_lib / "Test" / "Fx.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("effects Fs.read") != string::npos);
+
+    parser::Parser p2;
+    string expr = R"(import fetch from Test\Fx in fetch "/etc/shadow")";
+    istringstream stream(expr);
+    auto parsed = p2.parse_input(stream);
+    REQUIRE(parsed.node);
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.add_module_path(yona_lib.string());
+    checker.check(parsed.node.get());
+    CHECK(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Interface files preserve exported HOF open rest") {
+    namespace fs = std::filesystem;
+    REQUIRE(yona::test::link::ensure_runtime_objects());
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_hof_effects";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p1;
+    string mod_source = R"(
+module Test\Hof
+
+export apply
+
+apply f x = f x
+)";
+    auto mod_result = p1.parse_module(mod_source, "hof.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("hof_effects_mod");
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+    fs::path iface = yona_lib / "Test" / "Hof.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("effects |") != string::npos);
+    CHECK(yonai.find("hof") != string::npos);
+
+    parser::Parser p2;
+    string expr = R"(import apply from Test\Hof in apply (\() -> perform Fs.read "/etc/shadow") ())";
+    istringstream stream(expr);
+    auto parsed = p2.parse_input(stream);
+    REQUIRE(parsed.node);
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.add_module_path(yona_lib.string());
+    checker.check(parsed.node.get());
+    CHECK(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Interface files preserve sibling-wrapped FN effect rows") {
+    namespace fs = std::filesystem;
+    REQUIRE(yona::test::link::ensure_runtime_objects());
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_wrap_effects";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p1;
+    string mod_source = R"(
+module Test\Wrap
+
+export wrap
+
+readSecret = \() -> perform Fs.read "/etc/shadow"
+wrap = \() -> readSecret ()
+)";
+    auto mod_result = p1.parse_module(mod_source, "wrap.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("wrap_effects_mod");
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+    fs::path iface = yona_lib / "Test" / "Wrap.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("effects Fs.read") != string::npos);
+
+    parser::Parser p2;
+    string expr = R"(import wrap from Test\Wrap in wrap ())";
+    istringstream stream(expr);
+    auto parsed = p2.parse_input(stream);
+    REQUIRE(parsed.node);
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.add_module_path(yona_lib.string());
+    checker.check(parsed.node.get());
+    CHECK(checker.has_direct_errors());
+
+    parser::Parser p3;
+    string handled = R"(
+import wrap from Test\Wrap in
+handle wrap () with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)";
+    istringstream stream2(handled);
+    auto parsed2 = p3.parse_input(stream2);
+    REQUIRE(parsed2.node);
+    DiagnosticEngine diag2;
+    typechecker::TypeChecker checker2(diag2);
+    checker2.add_module_path(yona_lib.string());
+    checker2.check(parsed2.node.get());
+    CHECK_FALSE(checker2.has_direct_errors());
+  }
+
+  TEST_CASE("Interface files preserve wrap-before-sibling FN effect rows") {
+    namespace fs = std::filesystem;
+    REQUIRE(yona::test::link::ensure_runtime_objects());
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_wrap_first_effects";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p1;
+    string mod_source = R"(
+module Test\WrapFirst
+
+export wrap
+
+wrap = \() -> readSecret ()
+readSecret = \() -> perform Fs.read "/etc/shadow"
+)";
+    auto mod_result = p1.parse_module(mod_source, "wrap_first.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("wrap_first_effects_mod");
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+    fs::path iface = yona_lib / "Test" / "WrapFirst.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("effects Fs.read") != string::npos);
+
+    parser::Parser p2;
+    string expr = R"(import wrap from Test\WrapFirst in wrap ())";
+    istringstream stream(expr);
+    auto parsed = p2.parse_input(stream);
+    REQUIRE(parsed.node);
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.add_module_path(yona_lib.string());
+    checker.check(parsed.node.get());
+    CHECK(checker.has_direct_errors());
+  }
+
 } // Codegen Modules
 
 // ===== Diagnostic / Error Reporting Tests =====
@@ -942,6 +1132,66 @@ TEST_SUITE("Diagnostics") {
     }
 
     CHECK(diag.has_errors());
+  }
+
+  TEST_CASE("Parser: perform as multi-binding let RHS") {
+    parser::Parser parser;
+    string source = R"(let a = perform Fs.read "x", b = perform Net.post "y" in a)";
+    auto result = parser.parse_expression(source, "<test>");
+    REQUIRE(result.has_value());
+    auto *let = dynamic_cast<LetExpr *>(result.value().get());
+    REQUIRE(let != nullptr);
+    REQUIRE(let->aliases.size() == 2);
+    auto *a = dynamic_cast<ValueAlias *>(let->aliases[0]);
+    auto *b = dynamic_cast<ValueAlias *>(let->aliases[1]);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    auto *pa = dynamic_cast<PerformExpr *>(a->expr);
+    auto *pb = dynamic_cast<PerformExpr *>(b->expr);
+    REQUIRE(pa != nullptr);
+    REQUIRE(pb != nullptr);
+    CHECK(pa->effect_name == "Fs");
+    CHECK(pa->operation_name == "read");
+    REQUIRE(pa->args.size() == 1);
+    CHECK(pb->effect_name == "Net");
+    CHECK(pb->operation_name == "post");
+    REQUIRE(pb->args.size() == 1);
+  }
+
+  TEST_CASE("Prelude constructors load via YONA_PATH") {
+    REQUIRE(fs::exists(yona::test::lib_dir() / "Prelude.yonai"));
+
+    const char *old = std::getenv("YONA_PATH");
+    const string saved = old ? old : "";
+#ifdef _WIN32
+    _putenv_s("YONA_PATH", yona::test::lib_dir().string().c_str());
+#else
+    setenv("YONA_PATH", yona::test::lib_dir().string().c_str(), 1);
+#endif
+
+    parser::Parser parser;
+    DiagnosticEngine diag;
+    Codegen codegen("prelude_yona_path", &diag);
+    // No cwd-relative lib/ on module_paths_ — only YONA_PATH.
+    codegen.load_prelude(&parser);
+
+    string source = "case None of Some x -> x; None -> 0 end";
+    istringstream stream(source);
+    auto parse_result = parser.parse_input(stream);
+
+#ifdef _WIN32
+    _putenv_s("YONA_PATH", saved.c_str());
+#else
+    if (saved.empty())
+      unsetenv("YONA_PATH");
+    else
+      setenv("YONA_PATH", saved.c_str(), 1);
+#endif
+
+    REQUIRE(parse_result.node != nullptr);
+    auto *mod = codegen.compile(parse_result.node.get());
+    CHECK(mod != nullptr);
+    CHECK_FALSE(diag.has_errors());
   }
 
   TEST_CASE("Debug info: compilation succeeds with -g") {

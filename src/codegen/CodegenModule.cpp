@@ -287,6 +287,15 @@ bool Codegen::emit_interface_file(const std::string& path) {
         auto borrow_mask = borrowed_params_to_mask(meta.borrowed_params, meta.param_types.size());
         if (borrow_mask.find('1') != std::string::npos)
             out << " borrow " << borrow_mask;
+        if (!meta.effect_ops.empty() || meta.effect_open_rest) {
+            out << " effects ";
+            for (size_t i = 0; i < meta.effect_ops.size(); i++) {
+                if (i) out << ",";
+                out << meta.effect_ops[i];
+            }
+            if (meta.effect_open_rest) out << "|";
+            if (meta.effect_hof) out << " hof";
+        }
         out << "\n";
     }
 
@@ -463,6 +472,31 @@ bool Codegen::load_interface_file(const std::string& path) {
                         meta.borrowed_params = borrowed_mask_to_params(mask, (size_t)param_count);
                 } else if (trailing == "retadt") {
                     iss >> meta.return_adt_name;
+                } else if (trailing == "effects") {
+                    std::string ops;
+                    if (iss >> ops) {
+                        if (ops == "|") {
+                            meta.effect_open_rest = true;
+                        } else {
+                            if (!ops.empty() && ops.back() == '|') {
+                                meta.effect_open_rest = true;
+                                ops.pop_back();
+                            }
+                            std::string cur;
+                            for (char c : ops) {
+                                if (c == ',') {
+                                    if (!cur.empty()) meta.effect_ops.push_back(cur);
+                                    cur.clear();
+                                } else {
+                                    cur += c;
+                                }
+                            }
+                            if (!cur.empty()) meta.effect_ops.push_back(cur);
+                        }
+                        std::string extra;
+                        if (iss >> extra && extra == "hof")
+                            meta.effect_hof = true;
+                    }
                 }
             }
 

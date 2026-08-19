@@ -115,19 +115,28 @@ so head-tail recursion has no hidden copying cost — see
 
 Constructor patterns match a specific variant of an
 [algebraic data type](/learn/types/) and bind its fields positionally.
-Patterns nest arbitrarily:
+Patterns nest arbitrarily. Prelude constructors such as `Some`/`None` work
+in an expression program; your own `type` declarations belong in a
+`module` (see [Modules](/learn/modules/)):
 
 ```yona
+let maybeValue = Some 42 in
+case maybeValue of
+    Some x -> x * 2
+    None   -> 0
+end
+```
+
+```yona
+module Demo\Tree
+
+export depth
+
 type Tree a = Node (Tree a) a (Tree a) | Leaf
 
 depth t = case t of
     Leaf -> 0
     Node l _ r -> 1 + (if depth l > depth r then depth l else depth r)
-end
-
-case maybeValue of
-    Some x -> x * 2
-    None   -> 0
 end
 ```
 
@@ -137,13 +146,17 @@ ADTs with named fields match with `Constructor { field = pattern, … }`.
 You only name the fields you care about:
 
 ```yona
+module Demo\People
+
+export greet, ageOf
+
 type Person = Person { name : String, age : Int }
 
-case person of
+greet person = case person of
     Person { name = n, age = a } -> "{n} is {a}"
 end
 
-case person of
+ageOf person = case person of
     Person { age = a } -> a       # other fields ignored
 end
 ```

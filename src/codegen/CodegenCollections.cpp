@@ -283,8 +283,14 @@ TypedValue Codegen::codegen_join(JoinExpr* node) {
     auto right = codegen(node->right);
     if (!left || !right) return {};
 
-    if (left.type == CType::STRING || right.type == CType::STRING)
-        return {builder_->CreateCall(rt_.string_concat_, {left.val, right.val}), CType::STRING};
+    if (left.type == CType::STRING || right.type == CType::STRING) {
+        auto as_str = [&](const TypedValue& tv) -> Value* {
+            if (tv.val->getType()->isPointerTy()) return tv.val;
+            return builder_->CreateIntToPtr(tv.val, PointerType::get(*context_, 0));
+        };
+        return {builder_->CreateCall(rt_.string_concat_, {as_str(left), as_str(right)}),
+                CType::STRING};
+    }
     // Join (++) always produces a sequence. Both operands must be sequences.
     // If an operand is typed as INT (element type not propagated from sequence
     // destructuring), the i64 value is actually a pointer to a sequence —

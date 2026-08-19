@@ -394,6 +394,12 @@ private:
         // means parameter i is read-only/non-escaping, so call sites can
         // avoid defensive ownership bumps across module boundaries.
         std::vector<bool> borrowed_params;
+        /// Closed latent effect ops from the exporter (`Fs.read`). Empty if none.
+        std::vector<std::string> effect_ops;
+        /// Open rest var (`effects |` / `effects Fs.read|`). Distinct from a missing field.
+        bool effect_open_rest = false;
+        /// First parameter is a function that shares this row (`effects … hof`).
+        bool effect_hof = false;
     };
     ModuleFunctionMeta module_meta_from_compiled(const CompiledFunction& cf) const;
     CompiledFunction compiled_function_from_meta(llvm::Function* fn,
@@ -456,6 +462,7 @@ private:
             *print_int_array_ = nullptr, *print_float_array_ = nullptr;
         // Strings
         llvm::Function* string_concat_ = nullptr;
+        llvm::Function* string_eq_ = nullptr;
         // Sequences
         llvm::Function *seq_alloc_ = nullptr, *seq_set_ = nullptr, *seq_get_ = nullptr,
             *seq_set_heap_ = nullptr,
