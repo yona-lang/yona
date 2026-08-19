@@ -9,7 +9,7 @@ and microseconds, sleep, and formatted time output.
 
 ### now
 
-`now`
+`now : Int`
 
 Returns the current wall-clock time in milliseconds since the Unix epoch.
 
@@ -20,7 +20,7 @@ now   # => 1712678400000
 
 ### nowMicros
 
-`nowMicros`
+`nowMicros : Int`
 
 Returns the current time in microseconds since the Unix epoch.
 
@@ -31,7 +31,7 @@ nowMicros   # => 1712678400000000
 
 ### epoch
 
-`epoch`
+`epoch : Int`
 
 Returns the Unix epoch (0) as a timestamp. Useful as a base for relative calculations.
 
@@ -42,7 +42,7 @@ epoch   # => 0
 
 ### sleep
 
-`sleep millis`
+`sleep : Int -> ()`
 
 Sleep for the given number of milliseconds.
 
@@ -53,7 +53,7 @@ sleep 1000   # sleep for 1 second
 
 ### format
 
-`format timestamp`
+`format : Int -> String`
 
 Format a millisecond timestamp as a human-readable date-time string.
 
@@ -64,7 +64,7 @@ format (now)   # => "2025-04-09 12:00:00"
 
 ### elapsed
 
-`elapsed start end`
+`elapsed : Int -> Int -> Int`
 
 Compute the elapsed time in milliseconds between two timestamps.
 

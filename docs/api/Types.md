@@ -9,7 +9,7 @@ Int, Float, Bool, and String.
 
 ### toInt
 
-`toInt str`
+`toInt : String -> Int`
 
 Parse a string as an integer.
 
@@ -20,7 +20,7 @@ toInt "42"   # => 42
 
 ### toFloat
 
-`toFloat str`
+`toFloat : String -> Float`
 
 Parse a string as a float.
 
@@ -31,7 +31,7 @@ toFloat "3.14"   # => 3.14
 
 ### intToString
 
-`intToString n`
+`intToString : Int -> String`
 
 Convert an integer to its string representation.
 
@@ -42,7 +42,7 @@ intToString 42   # => "42"
 
 ### floatToString
 
-`floatToString x`
+`floatToString : Float -> String`
 
 Convert a float to its string representation.
 
@@ -53,7 +53,7 @@ floatToString 3.14   # => "3.14"
 
 ### boolToString
 
-`boolToString b`
+`boolToString : Bool -> String`
 
 Convert a boolean to `"true"` or `"false"`.
 

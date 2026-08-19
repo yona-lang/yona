@@ -8,7 +8,7 @@ These are the fundamental higher-order function building blocks.
 
 ### identity
 
-`identity x = x`
+`identity : Int -> Int`
 
 Returns its argument unchanged.
 
@@ -18,7 +18,7 @@ identity 42   # => 42
 
 ### const
 
-`const value _ = value`
+`const : Int -> Int -> Int`
 
 Creates a function that always returns `value`, ignoring its argument.
 
@@ -28,7 +28,7 @@ let always5 = const 5 in always5 99   # => 5
 
 ### compose
 
-`compose f g x = f (g x)`
+`compose : (a -> b) -> (c -> d) -> Int -> Int`
 
 Composes two functions: `(compose f g) x = f (g x)`.
 
@@ -40,7 +40,7 @@ compose double inc 3   # => 8  (double(inc(3)) = double(4) = 8)
 
 ### flip
 
-`flip f a b = f b a`
+`flip : (a -> b) -> Int -> Int -> Int`
 
 Swaps the arguments of a two-argument function.
 
@@ -51,7 +51,7 @@ flip sub 3 10   # => 7  (sub 10 3)
 
 ### on
 
-`on cmp f a b = cmp (f a) (f b)`
+`on : (a -> b) -> (c -> d) -> Int -> Int -> Int`
 
 Applies a function to both arguments before combining.
 `(on cmp f) a b = cmp (f a) (f b)`
@@ -63,7 +63,7 @@ compareLength [1,2,3] [1,2]   # => 1
 
 ### apply
 
-`apply x f = f x`
+`apply : Int -> (a -> b) -> Int`
 
 Applies a function to a value (flip of function application).
 
@@ -73,7 +73,7 @@ apply 42 (\x -> x + 1)   # => 43
 
 ### pipe
 
-`pipe x fns`
+`pipe : Int -> [a] -> Int`
 
 Pipes a value through a chain of functions (left to right).
 `pipe x [f, g, h] = h (g (f x))`
@@ -85,7 +85,7 @@ pipe 5 fns   # => 9  ((5+1)*2-3 = 9)
 
 ### fix
 
-`fix f = f (fix f)`
+`fix : (a -> b) -> Int`
 
 Fixed-point combinator for anonymous recursion.
 `fix f = f (fix f)` — enables recursion without naming.

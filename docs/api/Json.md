@@ -10,7 +10,7 @@ parsing simple JSON values.
 
 ### stringify
 
-`stringify n`
+`stringify : Int -> String`
 
 Convert an integer to its JSON string representation.
 
@@ -21,7 +21,7 @@ stringify 42   # => "42"
 
 ### stringifyString
 
-`stringifyString str`
+`stringifyString : String -> String`
 
 Convert a string to a JSON-quoted string with proper escaping.
 
@@ -32,7 +32,7 @@ stringifyString "hello \"world\""   # => "\"hello \\\"world\\\"\""
 
 ### stringifyBool
 
-`stringifyBool b`
+`stringifyBool : Bool -> String`
 
 Convert a boolean to `"true"` or `"false"`.
 
@@ -43,7 +43,7 @@ stringifyBool true   # => "true"
 
 ### stringifyFloat
 
-`stringifyFloat x`
+`stringifyFloat : Float -> String`
 
 Convert a float to its JSON string representation.
 
@@ -54,7 +54,7 @@ stringifyFloat 3.14   # => "3.14"
 
 ### null
 
-`null`
+`null : String`
 
 Returns the JSON null literal string `"null"`.
 
@@ -65,7 +65,7 @@ null   # => "null"
 
 ### parseInt
 
-`parseInt str`
+`parseInt : String -> Int`
 
 Parse a JSON integer string to an Int.
 
@@ -76,7 +76,7 @@ parseInt "42"   # => 42
 
 ### parseFloat
 
-`parseFloat str`
+`parseFloat : String -> Float`
 
 Parse a JSON float string to a Float.
 

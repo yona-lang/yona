@@ -9,7 +9,7 @@ level filter. Messages below the current level are suppressed.
 
 ### debug
 
-`debug msg`
+`debug : String -> ()`
 
 Log a message at DEBUG level.
 
@@ -20,7 +20,7 @@ debug "entering function foo"
 
 ### info
 
-`info msg`
+`info : String -> ()`
 
 Log a message at INFO level.
 
@@ -31,7 +31,7 @@ info "server started on port 8080"
 
 ### warn
 
-`warn msg`
+`warn : String -> ()`
 
 Log a message at WARN level.
 
@@ -42,7 +42,7 @@ warn "disk usage above 90%"
 
 ### error
 
-`error msg`
+`error : String -> ()`
 
 Log a message at ERROR level.
 
@@ -53,7 +53,7 @@ error "failed to connect to database"
 
 ### setLevel
 
-`setLevel level`
+`setLevel : Int -> ()`
 
 Set the global log level. Use 0 = DEBUG, 1 = INFO, 2 = WARN, 3 = ERROR.
 
@@ -64,7 +64,7 @@ setLevel 2   # only WARN and ERROR messages will appear
 
 ### getLevel
 
-`getLevel`
+`getLevel : Int`
 
 Returns the current global log level as an integer.
 

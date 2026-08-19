@@ -41,7 +41,7 @@ Numeric trait — polymorphic over Int and Float.
 
 ### clamp
 
-`clamp lo hi x`
+`clamp : Int -> Int -> Int -> Int`
 
 Restricts a value to the range `[lo, hi]`.
 
@@ -51,7 +51,7 @@ clamp 0 10 15   # => 10
 
 ### sign
 
-`sign x`
+`sign : Int -> Int`
 
 Returns 1 for positive, -1 for negative, 0 for zero.
 
@@ -61,19 +61,19 @@ sign 42   # => 1
 
 ### isEven
 
-`isEven x = x % 2 == 0`
+`isEven : Int -> Bool`
 
 Returns `true` if the integer is even.
 
 ### isOdd
 
-`isOdd x = x % 2 != 0`
+`isOdd : Int -> Bool`
 
 Returns `true` if the integer is odd.
 
 ### gcd
 
-`gcd a b`
+`gcd : Int -> Int -> Int`
 
 Greatest common divisor (Euclidean algorithm).
 
@@ -83,7 +83,7 @@ gcd 12 8   # => 4
 
 ### pow
 
-`pow base exp`
+`pow : Int -> Int -> Int`
 
 Integer exponentiation. Uses fast squaring.
 
@@ -93,7 +93,7 @@ pow 2 10   # => 1024
 
 ### factorial
 
-`factorial n`
+`factorial : Int -> Int`
 
 Factorial: `n! = 1 * 2 * ... * n`.
 
@@ -157,7 +157,7 @@ Round to nearest integer (Float -> Float).
 
 ### pi
 
-`pi = 3.141592653589793`
+`pi : Float = 3.141592653589793`
 
 Pi constant.
 

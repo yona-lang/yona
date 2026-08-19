@@ -17,7 +17,7 @@ A result type: either `Ok value` (success) or `Err error` (failure).
 
 ### isOk
 
-`isOk r`
+`isOk : Result a b -> Bool`
 
 Returns `true` if the result is `Ok`.
 
@@ -28,7 +28,7 @@ isOk (Err "fail")  # => false
 
 ### isErr
 
-`isErr r`
+`isErr : Result a b -> Bool`
 
 Returns `true` if the result is `Err`.
 
@@ -39,7 +39,7 @@ isErr (Ok 42)       # => false
 
 ### unwrapOr
 
-`unwrapOr default r`
+`unwrapOr : a -> Result b c -> d`
 
 Extracts the value from `Ok`, or returns `default` if `Err`.
 
@@ -50,7 +50,7 @@ unwrapOr 0 (Err "fail")  # => 0
 
 ### map
 
-`map fn r`
+`map : (a -> b) -> Result c d -> Result e f`
 
 Transforms the success value, leaving errors unchanged.
 
@@ -61,7 +61,7 @@ map (\x -> x * 2) (Err "fail")  # => Err "fail"
 
 ### mapErr
 
-`mapErr fn r`
+`mapErr : (a -> b) -> Result c d -> Result e f`
 
 Transforms the error value, leaving successes unchanged.
 
@@ -72,7 +72,7 @@ mapErr (\e -> e + "!") (Ok 42)       # => Ok 42
 
 ### flatMap
 
-`flatMap fn r`
+`flatMap : (a -> b) -> Result c d -> e`
 
 Applies `fn` which returns a Result, flattening the nested result.
 
@@ -83,7 +83,7 @@ flatMap (\x -> Ok (x * 2)) (Err "fail")                                # => Err 
 
 ### flatten
 
-`flatten r`
+`flatten : Result a b -> Result c d`
 
 Flattens a nested `Result (Result a e) e` into `Result a e`.
 
@@ -95,7 +95,7 @@ flatten (Err "outer")      # => Err "outer"
 
 ### toOption
 
-`toOption r`
+`toOption : Result a b -> (c, d)`
 
 Converts to a symbol-tagged option: `Ok v` → `(:some, v)`, `Err _` → `:none`.
 
@@ -106,7 +106,7 @@ toOption (Err "fail")  # => :none
 
 ### andThen
 
-`andThen fn r`
+`andThen : (a -> b) -> Result c d -> e`
 
 Alias for `flatMap` — chains a computation that may fail.
 
@@ -116,7 +116,7 @@ andThen (\x -> Ok (x + 1)) (Ok 41)  # => Ok 42
 
 ### orElse
 
-`orElse fn r`
+`orElse : (a -> b) -> Result c d -> Result e f`
 
 Recovers from an error by applying `fn` to the error value.
 
@@ -127,7 +127,7 @@ orElse (\e -> Ok 0) (Ok 42)       # => Ok 42
 
 ### fold
 
-`fold onErr onOk r`
+`fold : (a -> b) -> (c -> d) -> Result e f -> g`
 
 Eliminates a result: applies `onErr` to errors, `onOk` to successes.
 

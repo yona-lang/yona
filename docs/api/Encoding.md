@@ -8,7 +8,7 @@ Provides Base64, hex, URL percent-encoding, and HTML entity escaping.
 
 ### base64Encode
 
-`base64Encode str`
+`base64Encode : String -> String`
 
 Encode a string to Base64.
 
@@ -19,7 +19,7 @@ base64Encode "hello"   # => "aGVsbG8="
 
 ### base64Decode
 
-`base64Decode str`
+`base64Decode : String -> String`
 
 Decode a Base64-encoded string back to its original form.
 
@@ -30,7 +30,7 @@ base64Decode "aGVsbG8="   # => "hello"
 
 ### hexEncode
 
-`hexEncode str`
+`hexEncode : String -> String`
 
 Encode each byte of a string as two hex characters.
 
@@ -41,7 +41,7 @@ hexEncode "AB"   # => "4142"
 
 ### hexDecode
 
-`hexDecode str`
+`hexDecode : String -> String`
 
 Decode a hex-encoded string back to bytes.
 
@@ -52,7 +52,7 @@ hexDecode "4142"   # => "AB"
 
 ### urlEncode
 
-`urlEncode str`
+`urlEncode : String -> String`
 
 Percent-encode a string for use in URLs.
 
@@ -63,7 +63,7 @@ urlEncode "hello world"   # => "hello%20world"
 
 ### urlDecode
 
-`urlDecode str`
+`urlDecode : String -> String`
 
 Decode a percent-encoded URL string.
 
@@ -74,7 +74,7 @@ urlDecode "hello%20world"   # => "hello world"
 
 ### htmlEscape
 
-`htmlEscape str`
+`htmlEscape : String -> String`
 
 Escape HTML special characters (`<`, `>`, `&`, `"`, `'`) to their entity equivalents.
 

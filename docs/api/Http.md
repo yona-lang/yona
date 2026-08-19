@@ -118,12 +118,12 @@ ok "Hello, World!"
 
 ### notFound
 
-`notFound = Response { status = 404, rawHeaders = "", body = "Not Found" }`
+`notFound : Response`
 
 Create a 404 Not Found response.
 
 ### serverError
 
-`serverError = Response { status = 500, rawHeaders = "", body = "Internal Server Error" }`
+`serverError : Response`
 
 Create a 500 Internal Server Error response.

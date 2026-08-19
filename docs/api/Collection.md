@@ -9,7 +9,7 @@ that complement the core List module.
 
 ### iterate
 
-`iterate n fn seed`
+`iterate : Int -> (a -> b) -> Int -> [b]`
 
 Generates a sequence by repeatedly applying `fn` to a seed value.
 Returns the first `n` values: `[seed, fn(seed), fn(fn(seed)), ...]`.
@@ -20,7 +20,7 @@ iterate 5 (\x -> x * 2) 1   # => [1, 2, 4, 8, 16]
 
 ### unfold
 
-`unfold fn seed`
+`unfold : (a -> b) -> Int -> [b]`
 
 Generates a sequence from a seed using a producer function.
 `fn seed` returns `(:some, (value, next_seed))` to continue, `:none` to stop.
@@ -32,7 +32,7 @@ unfold (\n -> if n > 0 then (:some, (n, n - 1)) else :none) 5
 
 ### replicate
 
-`replicate n value`
+`replicate : Int -> Int -> [a]`
 
 Creates a sequence of `n` copies of `value`.
 
@@ -42,7 +42,7 @@ replicate 3 42   # => [42, 42, 42]
 
 ### tabulate
 
-`tabulate n fn`
+`tabulate : Int -> (a -> b) -> [b]`
 
 Creates a sequence by applying `fn` to indices `0..n-1`.
 
@@ -52,7 +52,7 @@ tabulate 4 (\i -> i * i)   # => [0, 1, 4, 9]
 
 ### window
 
-`window size seq`
+`window : Int -> [a] -> [b]`
 
 Sliding window of size `size` over a sequence.
 Returns a sequence of sub-sequences (represented as sequences).
@@ -63,7 +63,7 @@ window 2 [1, 2, 3, 4]   # => [[1, 2], [2, 3], [3, 4]]
 
 ### chunks
 
-`chunks size seq`
+`chunks : Int -> [a] -> [b]`
 
 Splits a sequence into chunks of size `size`.
 
@@ -73,7 +73,7 @@ chunks 2 [1, 2, 3, 4, 5]   # => [[1, 2], [3, 4], [5]]
 
 ### pairwise
 
-`pairwise seq`
+`pairwise : [a] -> [b]`
 
 Returns consecutive pairs from a sequence.
 
@@ -83,7 +83,7 @@ pairwise [1, 2, 3, 4]   # => [(1, 2), (2, 3), (3, 4)]
 
 ### dedup
 
-`dedup seq`
+`dedup : [a] -> [b]`
 
 Removes consecutive duplicates.
 
@@ -93,7 +93,7 @@ dedup [1, 1, 2, 2, 3, 1, 1]   # => [1, 2, 3, 1]
 
 ### frequencies
 
-`frequencies seq`
+`frequencies : [a] -> [b]`
 
 Counts occurrences of each element. Returns sequence of `(element, count)` pairs.
 

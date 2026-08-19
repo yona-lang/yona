@@ -9,7 +9,7 @@ and interop with C libraries. Implements the `Array` trait.
 
 ### alloc
 
-`alloc size`
+`alloc : Int -> ByteArray`
 
 Allocate a zero-filled byte buffer of `size` bytes.
 
@@ -21,7 +21,7 @@ length buf   # => 1024
 
 ### length
 
-`length bytes`
+`length : ByteArray -> Int`
 
 Returns the number of bytes in the buffer.
 
@@ -32,7 +32,7 @@ length (fromString "hello")   # => 5
 
 ### get
 
-`get bytes index`
+`get : ByteArray -> Int -> Int`
 
 Returns the byte value (0-255) at the given index.
 
@@ -44,7 +44,7 @@ get buf 0   # => 65
 
 ### set
 
-`set bytes index value`
+`set : ByteArray -> Int -> Int -> ()`
 
 Sets the byte at `index` to `value` (0-255). Mutates the buffer in place.
 
@@ -59,7 +59,7 @@ end
 
 ### concat
 
-`concat a b`
+`concat : ByteArray -> ByteArray -> ByteArray`
 
 Concatenate two byte buffers into a new buffer.
 
@@ -71,7 +71,7 @@ toString buf   # => "hello world"
 
 ### slice
 
-`slice bytes start end`
+`slice : ByteArray -> Int -> Int -> ByteArray`
 
 Extract a sub-buffer from index `start` (inclusive) to `end` (exclusive).
 
@@ -82,7 +82,7 @@ toString (slice (fromString "hello") 1 4)   # => "ell"
 
 ### fromString
 
-`fromString str`
+`fromString : String -> ByteArray`
 
 Convert a UTF-8 string to a byte buffer.
 
@@ -94,7 +94,7 @@ length buf   # => 2
 
 ### toString
 
-`toString bytes`
+`toString : ByteArray -> String`
 
 Convert a byte buffer back to a UTF-8 string.
 
@@ -105,7 +105,7 @@ toString (fromString "hello")   # => "hello"
 
 ### fromSeq
 
-`fromSeq seq`
+`fromSeq : [a] -> ByteArray`
 
 Create a byte buffer from a sequence of integers (0-255).
 
@@ -117,7 +117,7 @@ get buf 0   # => 72
 
 ### toSeq
 
-`toSeq bytes`
+`toSeq : ByteArray -> [a]`
 
 Convert a byte buffer to a sequence of integers.
 
@@ -146,7 +146,7 @@ Concatenate two byte arrays (alias for `concat`).
 
 ### foldl
 
-`foldl : (Int -> Int -> Int) -> Int -> ByteArray -> Int`
+`foldl : (a -> b) -> Int -> ByteArray -> Int`
 
 Left fold over all bytes. Single-pass, cache-friendly.
 
@@ -157,6 +157,6 @@ foldl (\acc b -> acc + b) 0 (fromString "ABC")   -- 65+66+67 = 198
 
 ### map
 
-`map : (Int -> Int) -> ByteArray -> ByteArray`
+`map : (a -> b) -> ByteArray -> ByteArray`
 
 Apply a function to each byte, returning a new array.

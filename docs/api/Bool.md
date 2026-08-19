@@ -9,7 +9,7 @@ plus conditional execution helpers.
 
 ### not
 
-`not x`
+`not : Int -> Bool`
 
 Logical negation.
 
@@ -20,7 +20,7 @@ not false   # => true
 
 ### and
 
-`and a b`
+`and : Int -> Int -> Int`
 
 Logical AND (short-circuiting).
 
@@ -31,7 +31,7 @@ and true false   # => false
 
 ### or
 
-`or a b`
+`or : Int -> Int -> Bool`
 
 Logical OR (short-circuiting).
 
@@ -42,7 +42,7 @@ or false false   # => false
 
 ### xor
 
-`xor a b`
+`xor : Int -> Int -> Bool`
 
 Exclusive OR — true when exactly one argument is true.
 
@@ -53,7 +53,7 @@ xor true true    # => false
 
 ### implies
 
-`implies a b`
+`implies : Int -> Int -> Int`
 
 Logical implication: `a → b`. False only when `a` is true and `b` is false.
 
@@ -65,7 +65,7 @@ implies false true   # => true
 
 ### when
 
-`when cond fn`
+`when : Int -> (a -> b) -> Int`
 
 Executes `fn ()` if `cond` is true, otherwise returns `:ok`.
 
@@ -76,7 +76,7 @@ when false (\-> 42)   # => :ok
 
 ### unless
 
-`unless cond fn`
+`unless : Int -> (a -> b) -> Symbol`
 
 Executes `fn ()` if `cond` is false, otherwise returns `:ok`.
 

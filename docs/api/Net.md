@@ -10,7 +10,7 @@ use io_uring on Linux for non-blocking I/O.
 
 ### tcpConnect
 
-`tcpConnect host port`
+`tcpConnect : String -> Int -> Int`
 
 Connect to a TCP server. Async (io_uring). Returns a socket descriptor.
 
@@ -27,7 +27,7 @@ end
 
 ### tcpListen
 
-`tcpListen host port`
+`tcpListen : String -> Int -> Int`
 
 Create a TCP server socket bound to `host:port`. Returns a listener descriptor.
 
@@ -40,43 +40,43 @@ close client
 
 ### tcpAccept
 
-`tcpAccept listener`
+`tcpAccept : Int -> Int`
 
 Accept an incoming TCP connection. Async (io_uring). Returns a client socket descriptor.
 
 ### send
 
-`send sock data`
+`send : Int -> String -> Int`
 
 Send a string over a socket. Async (io_uring). Returns the number of bytes sent.
 
 ### recv
 
-`recv sock maxBytes`
+`recv : Int -> Int -> String`
 
 Receive up to `maxBytes` bytes from a socket as a string. Async (io_uring).
 
 ### sendBytes
 
-`sendBytes sock bytes`
+`sendBytes : Int -> ByteArray -> Int`
 
 Send a byte buffer over a socket. Async (io_uring). Returns the number of bytes sent.
 
 ### recvBytes
 
-`recvBytes sock maxBytes`
+`recvBytes : Int -> Int -> ByteArray`
 
 Receive up to `maxBytes` from a socket as a byte buffer. Async (io_uring).
 
 ### close
 
-`close sock`
+`close : Int -> Int`
 
 Close a socket descriptor. Returns 0 on success.
 
 ### udpBind
 
-`udpBind host port`
+`udpBind : String -> Int -> Int`
 
 Create a UDP socket bound to `host:port`. Returns a socket descriptor.
 
@@ -89,7 +89,7 @@ close sock
 
 ### udpSendTo
 
-`udpSendTo sock host port data`
+`udpSendTo : Int -> String -> Int -> String -> Int`
 
 Send a UDP datagram to `host:port`. Returns the number of bytes sent.
 
@@ -101,13 +101,13 @@ udpSendTo sock "127.0.0.1" 9000 "hello"
 
 ### udpRecv
 
-`udpRecv sock maxBytes`
+`udpRecv : Int -> Int -> String`
 
 Receive a UDP datagram of up to `maxBytes`. Returns the data as a string.
 
 ### peerAddress
 
-`peerAddress sock`
+`peerAddress : Int -> String`
 
 Returns the remote address of a connected socket as a string.
 

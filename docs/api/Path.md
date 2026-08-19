@@ -9,7 +9,7 @@ inspecting file paths. No filesystem access is performed.
 
 ### join
 
-`join a b`
+`join : String -> String -> String`
 
 Join two path components with the platform separator.
 
@@ -20,7 +20,7 @@ join "/home/user" "docs"   # => "/home/user/docs"
 
 ### dirname
 
-`dirname path`
+`dirname : String -> String`
 
 Return the directory portion of a path.
 
@@ -31,7 +31,7 @@ dirname "/home/user/file.txt"   # => "/home/user"
 
 ### basename
 
-`basename path`
+`basename : String -> String`
 
 Return the filename portion of a path.
 
@@ -42,7 +42,7 @@ basename "/home/user/file.txt"   # => "file.txt"
 
 ### extension
 
-`extension path`
+`extension : String -> String`
 
 Return the file extension including the dot.
 
@@ -53,7 +53,7 @@ extension "photo.jpg"   # => ".jpg"
 
 ### withExtension
 
-`withExtension path ext`
+`withExtension : String -> String -> String`
 
 Replace the file extension with a new one.
 
@@ -64,7 +64,7 @@ withExtension "data.csv" ".json"   # => "data.json"
 
 ### isAbsolute
 
-`isAbsolute path`
+`isAbsolute : String -> Bool`
 
 Returns `true` if the path is absolute.
 

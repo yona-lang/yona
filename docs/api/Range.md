@@ -9,7 +9,7 @@ They don't allocate a sequence until `toList` is called.
 
 ### range
 
-`range start stop = (:range, start, stop, 1)`
+`range : Int -> Int -> (a, b)`
 
 Creates a range from `start` to `stop` (inclusive) with step 1.
 
@@ -19,7 +19,7 @@ toList (range 1 5)   # => [1, 2, 3, 4, 5]
 
 ### rangeStep
 
-`rangeStep start stop step = (:range, start, stop, step)`
+`rangeStep : Int -> Int -> Int -> (a, b)`
 
 Creates a range from `start` to `stop` with a custom `step`.
 
@@ -30,7 +30,7 @@ toList (rangeStep 10 0 (0 - 2))   # => [10, 8, 6, 4, 2, 0]
 
 ### toList
 
-`toList r`
+`toList : (a, b) -> [c]`
 
 Materializes the range into a sequence.
 
@@ -40,7 +40,7 @@ toList (range 1 3)   # => [1, 2, 3]
 
 ### contains
 
-`contains value r`
+`contains : Int -> (a, b) -> Bool`
 
 Returns `true` if `value` falls within the range and aligns with the step.
 
@@ -51,7 +51,7 @@ contains 3 (rangeStep 0 10 2)  # => false  (0, 2, 4, 6, 8, 10)
 
 ### length
 
-`length r`
+`length : (a, b) -> Int`
 
 Returns the number of elements in the range.
 
@@ -61,7 +61,7 @@ length (range 1 10)   # => 10
 
 ### take
 
-`take n r`
+`take : Int -> (a, b) -> (c, d)`
 
 Returns a range containing only the first `n` elements.
 
@@ -71,7 +71,7 @@ toList (take 3 (range 1 10))   # => [1, 2, 3]
 
 ### drop
 
-`drop n r`
+`drop : Int -> (a, b) -> (c, d)`
 
 Returns a range with the first `n` elements removed.
 
@@ -81,7 +81,7 @@ toList (drop 3 (range 1 5))   # => [4, 5]
 
 ### map
 
-`map fn r`
+`map : (a -> b) -> (c, d) -> [b]`
 
 Applies `fn` to each element, returning a sequence (not a range).
 
@@ -91,7 +91,7 @@ map (\x -> x * x) (range 1 4)   # => [1, 4, 9, 16]
 
 ### filter
 
-`filter pred r`
+`filter : (a -> Bool) -> (b, c) -> [a]`
 
 Keeps only elements satisfying `pred`, returning a sequence.
 
@@ -101,7 +101,7 @@ filter (\x -> x % 2 == 0) (range 1 6)   # => [2, 4, 6]
 
 ### fold
 
-`fold fn acc r`
+`fold : (a -> b) -> Int -> (c, d) -> Int`
 
 Left fold over the range.
 
@@ -111,7 +111,7 @@ fold (\acc x -> acc + x) 0 (range 1 5)   # => 15
 
 ### forEach
 
-`forEach fn r`
+`forEach : (a -> b) -> (c, d) -> Symbol`
 
 Applies `fn` to each element for side effects.
 

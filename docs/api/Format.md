@@ -9,7 +9,7 @@ filled from a sequence of values.
 
 ### format
 
-`format template args`
+`format : String -> [a] -> String`
 
 Format a template string by replacing `{}` placeholders with values
 from the `args` sequence, in order.

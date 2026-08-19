@@ -10,7 +10,7 @@ per element.
 
 ### put
 
-`put dict key value`
+`put : Dict a b -> Int -> Int -> Dict c d`
 
 Insert or update a key-value pair. Returns a new dictionary with the
 mapping added. The original dictionary is unchanged.
@@ -23,7 +23,7 @@ get d2 1 0   # => 100
 
 ### get
 
-`get dict key default`
+`get : Dict a b -> Int -> Int -> Int`
 
 Look up the value for `key`. Returns `default` if the key is not present.
 
@@ -35,7 +35,7 @@ get d 99 0    # => 0
 
 ### contains
 
-`contains dict key`
+`contains : Dict a b -> Int -> Bool`
 
 Check whether `key` exists in the dictionary. Returns `true` or `false`.
 
@@ -47,7 +47,7 @@ contains d 2   # => false
 
 ### size
 
-`size dict`
+`size : Dict a b -> Int`
 
 Returns the number of entries in the dictionary.
 
@@ -58,7 +58,7 @@ size d   # => 2
 
 ### keys
 
-`keys dict`
+`keys : Dict a b -> [c]`
 
 Eagerly collects all keys into a sequence.
 
@@ -69,7 +69,7 @@ keys d   # => [1, 2]  (order may vary)
 
 ### entries
 
-`entries dict`
+`entries : Dict a b -> Iterator c`
 
 Returns a streaming `Iterator (Int, Int)` over `(key, value)` tuples.
 Uses stack-based trie traversal — O(1) memory per element.
@@ -81,7 +81,7 @@ forEach (\k v -> println (show k ++ " => " ++ show v)) d
 
 ### keysIter
 
-`keysIter dict`
+`keysIter : Dict a b -> Iterator c`
 
 Returns a streaming `Iterator Int` over keys. O(1) memory per element.
 
@@ -94,7 +94,7 @@ let iter = keysIter d in
 
 ### values
 
-`values dict`
+`values : Dict a b -> Iterator c`
 
 Returns a streaming `Iterator Int` over values. O(1) memory per element.
 
@@ -107,7 +107,7 @@ let iter = values d in
 
 ### forEach
 
-`forEach callback dict`
+`forEach : (a -> b) -> Dict c d -> ()`
 
 Apply `callback` to each `(key, value)` entry for side effects.
 The callback receives two arguments: the key and the value.

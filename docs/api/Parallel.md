@@ -4,7 +4,7 @@
 
 ### pmap
 
-`pmap f xs = [| f x for x = xs ]`
+`pmap : (a -> b) -> [c] -> [b]`
 
 Parallel map — applies f to each element concurrently.
 All invocations of f run in parallel. If any fails, the
@@ -16,7 +16,7 @@ pmap (\x -> x * 2) [1, 2, 3]   -- [2, 4, 6]
 
 ### pfor
 
-`pfor f xs`
+`pfor : (a -> b) -> [c] -> Int`
 
 Parallel for-each — applies f to each element concurrently
 for side effects. Returns the number of elements processed.

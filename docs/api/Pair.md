@@ -17,7 +17,7 @@ A pair with named fields.
 
 ### pair
 
-`pair a b = Pair { fst = a, snd = b }`
+`pair : a -> b -> Pair c d`
 
 Creates a pair from two values.
 
@@ -27,7 +27,7 @@ pair 1 2   # => Pair { fst = 1, snd = 2 }
 
 ### first
 
-`first p`
+`first : Pair a b -> c`
 
 Extracts the first element.
 
@@ -37,7 +37,7 @@ first (pair 1 2)   # => 1
 
 ### second
 
-`second p`
+`second : Pair a b -> c`
 
 Extracts the second element.
 
@@ -47,7 +47,7 @@ second (pair 1 2)   # => 2
 
 ### mapFirst
 
-`mapFirst fn p`
+`mapFirst : (a -> b) -> Pair c d -> Pair e f`
 
 Transforms the first element.
 
@@ -57,7 +57,7 @@ mapFirst (\x -> x * 10) (pair 3 5)   # => Pair { fst = 30, snd = 5 }
 
 ### mapSecond
 
-`mapSecond fn p`
+`mapSecond : (a -> b) -> Pair c d -> Pair e f`
 
 Transforms the second element.
 
@@ -67,7 +67,7 @@ mapSecond (\x -> x * 10) (pair 3 5)   # => Pair { fst = 3, snd = 50 }
 
 ### mapPair
 
-`mapPair fn gn p`
+`mapPair : (a -> b) -> (c -> d) -> Pair e f -> Pair g h`
 
 Transforms both elements with two functions.
 
@@ -77,7 +77,7 @@ mapPair (\x -> x + 1) (\x -> x * 2) (pair 3 5)   # => Pair { fst = 4, snd = 10 }
 
 ### swap
 
-`swap p`
+`swap : Pair a b -> Pair c d`
 
 Swaps the two elements.
 
@@ -87,7 +87,7 @@ swap (pair 1 2)   # => Pair { fst = 2, snd = 1 }
 
 ### toTuple
 
-`toTuple p`
+`toTuple : Pair a b -> (c, d)`
 
 Converts to a tuple `(a, b)`.
 
@@ -97,7 +97,7 @@ toTuple (pair 1 2)   # => (1, 2)
 
 ### fromTuple
 
-`fromTuple (a, b) = Pair { fst = a, snd = b }`
+`fromTuple : (a, b) -> Pair c d`
 
 Creates a pair from a tuple.
 

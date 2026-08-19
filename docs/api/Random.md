@@ -10,7 +10,7 @@ randomness, use `Std.Crypto`.
 
 ### int
 
-`int lo hi`
+`int : Int -> Int -> Int`
 
 Generate a random integer in the range `[lo, hi]` (inclusive).
 
@@ -21,7 +21,7 @@ int 1 100   # => 42 (random)
 
 ### float
 
-`float`
+`float : Float`
 
 Generate a random float in the range `[0.0, 1.0)`.
 
@@ -32,7 +32,7 @@ float   # => 0.7312... (random)
 
 ### choice
 
-`choice seq`
+`choice : [a] -> Int`
 
 Pick a random element from a sequence. Returns the element.
 
@@ -43,7 +43,7 @@ choice [10, 20, 30]   # => 20 (random)
 
 ### shuffle
 
-`shuffle seq`
+`shuffle : [a] -> [b]`
 
 Return a new sequence with elements in random order.
 

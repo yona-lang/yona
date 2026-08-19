@@ -9,7 +9,7 @@ and work with pattern matching on head|tail (`[h|t]`).
 
 ### map
 
-`map fn seq`
+`map : (a -> b) -> [a] -> [b]`
 
 Applies `fn` to every element, returning a new sequence.
 
@@ -20,7 +20,7 @@ map (\x -> x + 1) []           # => []
 
 ### filter
 
-`filter fn seq`
+`filter : (a -> Bool) -> [a] -> [a]`
 
 Keeps only elements where `fn` returns true.
 
@@ -30,7 +30,7 @@ filter (\x -> x > 2) [1, 2, 3, 4]   # => [3, 4]
 
 ### fold
 
-`fold fn acc seq`
+`fold : (b -> a -> b) -> b -> [a] -> b`
 
 Left fold — reduces a sequence to a single value, left to right.
 
@@ -40,13 +40,13 @@ fold (\acc x -> acc + x) 0 [1, 2, 3]   # => 6
 
 ### foldl
 
-`foldl fn acc seq`
+`foldl : (b -> a -> b) -> b -> [a] -> b`
 
 Alias for `fold`.
 
 ### foldr
 
-`foldr fn acc seq`
+`foldr : (a -> b -> b) -> b -> [a] -> b`
 
 Right fold — reduces a sequence right to left.
 
@@ -56,7 +56,7 @@ foldr (\x acc -> x :: acc) [] [1, 2, 3]   # => [1, 2, 3]
 
 ### length
 
-`length seq`
+`length : [a] -> Int`
 
 Returns the number of elements.
 
@@ -67,7 +67,7 @@ length []           # => 0
 
 ### head
 
-`head seq`
+`head : [a] -> Int`
 
 Returns the first element. Crashes on empty sequence.
 
@@ -77,7 +77,7 @@ head [1, 2, 3]   # => 1
 
 ### tail
 
-`tail seq`
+`tail : [a] -> [b]`
 
 Returns all elements except the first. Crashes on empty sequence.
 
@@ -87,7 +87,7 @@ tail [1, 2, 3]   # => [2, 3]
 
 ### reverse
 
-`reverse seq = foldl (\acc x -> x :: acc) [] seq`
+`reverse : [a] -> Int`
 
 Reverses the sequence.
 
@@ -97,7 +97,7 @@ reverse [1, 2, 3]   # => [3, 2, 1]
 
 ### take
 
-`take n seq`
+`take : Int -> [a] -> [b]`
 
 Returns the first `n` elements.
 
@@ -107,7 +107,7 @@ take 2 [1, 2, 3, 4]   # => [1, 2]
 
 ### drop
 
-`drop n seq`
+`drop : Int -> [a] -> [b]`
 
 Drops the first `n` elements.
 
@@ -117,7 +117,7 @@ drop 2 [1, 2, 3, 4]   # => [3, 4]
 
 ### flatten
 
-`flatten seq`
+`flatten : [a] -> [b]`
 
 Flattens a sequence of sequences into a single sequence.
 
@@ -127,7 +127,7 @@ flatten [[1, 2], [3], [4, 5]]   # => [1, 2, 3, 4, 5]
 
 ### any
 
-`any fn seq`
+`any : (a -> Bool) -> [a] -> Bool`
 
 Returns `true` if any element satisfies `fn`.
 
@@ -138,7 +138,7 @@ any (\x -> x > 5) [1, 2, 3]      # => false
 
 ### all
 
-`all fn seq`
+`all : (a -> Bool) -> [a] -> Bool`
 
 Returns `true` if all elements satisfy `fn`.
 
@@ -149,7 +149,7 @@ all (\x -> x > 2) [1, 2, 3]   # => false
 
 ### contains
 
-`contains elem seq`
+`contains : Int -> [a] -> Bool`
 
 Returns `true` if `elem` is in the sequence.
 
@@ -160,7 +160,7 @@ contains 5 [1, 2, 3]   # => false
 
 ### isEmpty
 
-`isEmpty seq`
+`isEmpty : [a] -> Bool`
 
 Returns `true` if the sequence is empty.
 
@@ -171,7 +171,7 @@ isEmpty [1, 2]    # => false
 
 ### nth
 
-`nth idx seq`
+`nth : Int -> [a] -> Int`
 
 Returns the element at index `idx` (0-based). Crashes if out of bounds.
 
@@ -182,7 +182,7 @@ nth 2 [10, 20, 30]   # => 30
 
 ### zip
 
-`zip seqA seqB`
+`zip : [a] -> [b] -> [c]`
 
 Pairs elements from two sequences. Stops at the shorter one.
 
@@ -193,7 +193,7 @@ zip [1, 2] [10]              # => [(1, 10)]
 
 ### zipWith
 
-`zipWith fn seqA seqB`
+`zipWith : (a -> b) -> [a] -> [c] -> [b]`
 
 Combines elements from two sequences using `fn`.
 
@@ -203,7 +203,7 @@ zipWith (\a b -> a + b) [1, 2, 3] [10, 20, 30]   # => [11, 22, 33]
 
 ### enumerate
 
-`enumerate seq`
+`enumerate : [a] -> [b]`
 
 Pairs each element with its 0-based index.
 
@@ -213,7 +213,7 @@ enumerate [10, 20, 30]   # => [(0, 10), (1, 20), (2, 30)]
 
 ### partition
 
-`partition pred seq`
+`partition : (a -> b) -> [c] -> Int`
 
 Splits into two sequences: elements satisfying `pred` and those that don't.
 
@@ -223,7 +223,7 @@ partition (\x -> x > 2) [1, 2, 3, 4]   # => ([3, 4], [1, 2])
 
 ### intersperse
 
-`intersperse sep seq`
+`intersperse : Int -> [a] -> [b]`
 
 Inserts `sep` between every pair of elements.
 
@@ -234,7 +234,7 @@ intersperse 0 [1]          # => [1]
 
 ### scanl
 
-`scanl fn acc seq`
+`scanl : (b -> a -> b) -> b -> [a] -> [b]`
 
 Like `foldl` but returns all intermediate accumulator values.
 
@@ -244,7 +244,7 @@ scanl (\a b -> a + b) 0 [1, 2, 3]   # => [0, 1, 3, 6]
 
 ### flatMap
 
-`flatMap fn seq = flatten (map fn seq)`
+`flatMap : (a -> b) -> [c] -> [d]`
 
 Maps then flattens — applies `fn` which returns a sequence, then concatenates all results.
 
@@ -254,7 +254,7 @@ flatMap (\x -> [x, x * 10]) [1, 2, 3]   # => [1, 10, 2, 20, 3, 30]
 
 ### find
 
-`find pred seq`
+`find : (a -> Bool) -> [a] -> Symbol`
 
 Returns `(:some, value)` for the first element satisfying `pred`, or `:none`.
 
@@ -265,7 +265,7 @@ find (\x -> x > 9) [1, 2, 3]      # => :none
 
 ### sortBy
 
-`sortBy cmp seq`
+`sortBy : (a -> b) -> [a] -> [b]`
 
 Sorts using a comparison function. `cmp a b` should return negative if a < b,
 zero if equal, positive if a > b. Uses quicksort.
@@ -276,7 +276,7 @@ sortBy (\a b -> a - b) [3, 1, 4, 1, 5]   # => [1, 1, 3, 4, 5]
 
 ### groupBy
 
-`groupBy fn seq`
+`groupBy : (a -> b) -> [c] -> Int`
 
 Groups elements by a key function. Returns a sequence of `(key, [values])` pairs.
 
@@ -286,7 +286,7 @@ groupBy (\x -> x % 2) [1, 2, 3, 4]   # => [(1, [1, 3]), (0, [2, 4])]
 
 ### sum
 
-`sum seq = foldl (\a b -> a + b) 0 seq`
+`sum : [a] -> Int`
 
 Sums all elements (integers).
 
@@ -296,7 +296,7 @@ sum [1, 2, 3, 4, 5]   # => 15
 
 ### product
 
-`product seq = foldl (\a b -> a * b) 1 seq`
+`product : [a] -> Int`
 
 Multiplies all elements (integers).
 

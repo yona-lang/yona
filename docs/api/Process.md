@@ -11,7 +11,7 @@ current fiber without blocking the OS thread.
 
 ### getenv
 
-`getenv name`
+`getenv : String -> String`
 
 Get the value of an environment variable. Returns an empty string if not set.
 
@@ -22,7 +22,7 @@ getenv "HOME"   # => "/home/user"
 
 ### getcwd
 
-`getcwd`
+`getcwd : String`
 
 Returns the current working directory.
 
@@ -33,7 +33,7 @@ getcwd   # => "/home/user/project"
 
 ### exit
 
-`exit code`
+`exit : Int -> Int`
 
 Terminate the process with the given exit code.
 
@@ -44,7 +44,7 @@ exit 0
 
 ### exec
 
-`exec command`
+`exec : String -> String`
 
 Execute a shell command and return its stdout as a string. Async.
 
@@ -56,7 +56,7 @@ println output
 
 ### execStatus
 
-`execStatus command`
+`execStatus : String -> Int`
 
 Execute a shell command and return its exit status code. Async.
 
@@ -68,7 +68,7 @@ println (show code)
 
 ### setenv
 
-`setenv name value`
+`setenv : String -> String -> Int`
 
 Set an environment variable. Returns 0 on success.
 
@@ -79,7 +79,7 @@ setenv "MY_VAR" "hello"
 
 ### hostname
 
-`hostname`
+`hostname : String`
 
 Returns the system hostname.
 
@@ -90,7 +90,7 @@ hostname   # => "myhost"
 
 ### spawn
 
-`spawn command`
+`spawn : String -> Int`
 
 Spawn a subprocess without waiting for it to finish. Returns a process handle (Int).
 
@@ -103,7 +103,7 @@ println (show status)
 
 ### readLine
 
-`readLine proc`
+`readLine : Int -> String`
 
 Read a single line from the subprocess stdout.
 
@@ -115,19 +115,19 @@ readLine proc   # => "hello"
 
 ### readAll
 
-`readAll proc`
+`readAll : Int -> String`
 
 Read all remaining stdout from a subprocess as a string. Async.
 
 ### wait
 
-`wait proc`
+`wait : Int -> Int`
 
 Wait for a subprocess to exit and return its exit status. Async.
 
 ### kill
 
-`kill proc signal`
+`kill : Int -> Int -> Int`
 
 Send a signal to a subprocess. Returns 0 on success.
 
@@ -139,19 +139,19 @@ kill proc 15   # SIGTERM
 
 ### writeStdin
 
-`writeStdin proc data`
+`writeStdin : Int -> String -> Int`
 
 Write a string to the subprocess stdin. Returns the number of bytes written.
 
 ### closeStdin
 
-`closeStdin proc`
+`closeStdin : Int -> Int`
 
 Close the stdin pipe of a subprocess. Returns 0 on success.
 
 ### pid
 
-`pid proc`
+`pid : Int -> Int`
 
 Returns the OS process ID of a subprocess.
 

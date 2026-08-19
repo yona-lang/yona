@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- Applying a function whose body performs an effect with no covering `handle`
+  is a compile error **E0202** (points at the introducing `perform`, note at
+  the call). Direct unhandled `perform` is still `-Wunhandled-effect`. Closed
+  latent sets on arrows only — not open rows or `.yonai` effect metadata.
+
 ### Documentation
 - Public Yona 2.0 docs live in-repo at `site/` (Astro Starlight) and deploy
   to Cloudflare Pages via `.github/workflows/docs-site.yml`. Preview locally
@@ -15,8 +21,8 @@
   idiomatic when you need both. The anti-pattern is `let _ = effect`.
 - Stdlib reference no longer shows the “generated, do not edit” maintainer
   note on the public pages.
-- Stdlib API pages use compact signatures (name + type or parameter list)
-  instead of a heading plus an implementation code block.
+- Stdlib API pages show each export as `name : T1 -> T2 -> R` (from source
+  annotations or `.yonai` types), not a parameter list or the implementation.
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
 

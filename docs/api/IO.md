@@ -27,7 +27,7 @@ end
 
 ### stdinFd
 
-`stdinFd = 0`
+`stdinFd : Int = 0`
 
 File descriptor numbers, exposed as Int so any Std\File handle call
 that expects `FileHandle` can be wrapped — `FileHandle stdoutFd`
@@ -36,59 +36,59 @@ for passing to `write` without constructing the ADT.
 
 ### stdoutFd
 
-`stdoutFd = 1`
+`stdoutFd : Int = 1`
 
 ### stderrFd
 
-`stderrFd = 2`
+`stderrFd : Int = 2`
 
 ### print
 
-`print s`
+`print : String -> ()`
 
 Write `s` to stdout. Returns a Promise that resolves when the kernel
 has accepted the write. Non-blocking.
 
 ### println
 
-`println s`
+`println : String -> ()`
 
 Write `s` followed by a newline to stdout. Non-blocking.
 
 ### eprint
 
-`eprint s`
+`eprint : String -> ()`
 
 Write `s` to stderr. Non-blocking.
 
 ### eprintln
 
-`eprintln s`
+`eprintln : String -> ()`
 
 Write `s` followed by a newline to stderr. Non-blocking.
 
 ### putStr
 
-`putStr fd s`
+`putStr : Int -> String -> ()`
 
 Write `s` to an arbitrary fd. Non-blocking.
 
 ### putStrLn
 
-`putStrLn fd s`
+`putStrLn : Int -> String -> ()`
 
 Write `s` followed by a newline to an arbitrary fd. Non-blocking.
 
 ### write
 
-`write fd s`
+`write : Int -> String -> ()`
 
 `write fd s` is an alias for `putStr fd s`. Kept for when you want
 the "I'm emitting bytes, not printing text" shape at the call site.
 
 ### readLine
 
-`readLine`
+`readLine : Option String`
 
 Read one line from stdin, stripping trailing '\n' (and any '\r').
 Returns `Some line` or `None` at EOF. Non-blocking — the read runs
@@ -96,26 +96,26 @@ on a thread-pool worker.
 
 ### readLineFrom
 
-`readLineFrom fd`
+`readLineFrom : Int -> Option String`
 
 Read one line from an arbitrary fd. Same semantics as `readLine`.
 
 ### flush
 
-`flush fd`
+`flush : Int -> Bool`
 
 Force pending writes on `fd` to disk / device (`fsync`). Most
 io_uring writes are durable on completion so this is rarely needed.
 
 ### isTty
 
-`isTty fd`
+`isTty : Int -> Bool`
 
 `True` if `fd` is attached to a terminal (as opposed to a pipe or file).
 Useful for turning off colored output or prompting prefixes.
 
 ### isatty
 
-`isatty fd`
+`isatty : Int -> Bool`
 
 Alias for `isTty`, following the libc spelling.

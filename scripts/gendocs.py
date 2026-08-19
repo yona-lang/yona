@@ -31,6 +31,71 @@ LEGACY_TYPE = re.compile(
     r"^### `type ([A-Z][a-zA-Z0-9_]*)([^`]*)`\n",
     re.MULTILINE,
 )
+YONAI_FN = re.compile(r"^(?:FN|IO|AFN|NAT)\s+(\S+)\s+(\d+)\s*(.*)$")
+
+SIMPLE_RHS = re.compile(r"^(?:0|[1-9][0-9]*|[0-9]+\.[0-9]+|true|false|\(\)|\"[^\"]*\")$")
+
+STRING_PARAM_NAMES = {
+    "s",
+    "str",
+    "string",
+    "msg",
+    "message",
+    "path",
+    "host",
+    "url",
+    "name",
+    "body",
+    "text",
+    "contents",
+    "raw",
+    "sql",
+}
+INT_PARAM_NAMES = {
+    "n",
+    "i",
+    "k",
+    "fd",
+    "port",
+    "status",
+    "len",
+    "count",
+    "cap",
+    "capacity",
+    "offset",
+    "size",
+    "lo",
+    "hi",
+    "exp",
+    "base",
+    "code",
+}
+SEQ_PARAM_NAMES = {"seq", "xs", "ys", "zs", "list", "files", "urls"}
+FN_PARAM_NAMES = {"fn", "f", "g", "pred", "handler"}
+OPT_PARAM_NAMES = {"opt", "maybe", "option"}
+ITER_FNS = {"split", "lines", "chars", "readLines", "readChunks"}
+FILTER_FNS = {"filter", "any", "all", "takeWhile", "dropWhile", "find"}
+FOLD_FNS = {"fold", "foldl", "foldr", "scanl", "scan"}
+KNOWN_POLY = {
+    "Option": 1,
+    "Result": 2,
+    "Iterator": 1,
+    "Linear": 1,
+    "Sender": 1,
+    "Receiver": 1,
+    "Stream": 1,
+}
+CONCRETE_CTYPES = {
+    "INT": "Int",
+    "FLOAT": "Float",
+    "BOOL": "Bool",
+    "STRING": "String",
+    "SYMBOL": "Symbol",
+    "UNIT": "()",
+    "BYTE_ARRAY": "ByteArray",
+    "INT_ARRAY": "IntArray",
+    "FLOAT_ARRAY": "FloatArray",
+}
 
 
 def is_internal(name: str) -> bool:
@@ -39,15 +104,198 @@ def is_internal(name: str) -> bool:
 
 def compact_rhs(rhs: str) -> str | None:
     rhs = rhs.strip()
-    if not rhs or len(rhs) > 120:
-        return None
-    if rhs.startswith("yona_") or rhs.startswith("raw_") or " raw_" in f" {rhs}":
-        return None
-    lowered = f" {rhs} "
-    for kw in (" case ", " if ", " do ", " let ", " import ", " handle ", " perform "):
-        if kw in lowered:
-            return None
-    return rhs
+    return rhs if SIMPLE_RHS.fullmatch(rhs) else None
+
+
+def parse_yonai(path: Path) -> dict[str, dict]:
+    """Map exported function name -> {params, ret, retadt} from a .yonai file."""
+    if not path.exists():
+        return {}
+    out: dict[str, dict] = {}
+    for line in path.read_text().splitlines():
+        m = YONAI_FN.match(line)
+        if not m:
+            continue
+        symbol, arity_s, rest = m.group(1), m.group(2), m.group(3).strip()
+        name = symbol.split("__")[-1]
+        arity = int(arity_s)
+        if "->" not in rest:
+            continue
+        left, right = rest.split("->", 1)
+        params = left.split()
+        if arity == 0:
+            params = []
+        elif len(params) > arity:
+            params = params[:arity]
+        rtoks = right.split()
+        retadt = None
+        ret: list[str] = []
+        i = 0
+        while i < len(rtoks):
+            tok = rtoks[i]
+            if tok in ("borrow", "effects"):
+                break
+            if tok == "retadt":
+                i += 1
+                if i < len(rtoks):
+                    retadt = rtoks[i]
+                i += 1
+                continue
+            ret.append(tok)
+            i += 1
+        out[name] = {"params": params, "ret": ret, "retadt": retadt}
+    return out
+
+
+def type_arities_from_defs(types: list[dict]) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for t in types:
+        m = re.match(r"^type\s+([A-Z][a-zA-Z0-9_]*)((?:\s+[a-z])*)", t["definition"])
+        if m:
+            out[m.group(1)] = m.group(2).split()
+    return out
+
+
+def pretty_arrow(
+    params: list[str],
+    ret: list[str],
+    retadt: str | None,
+    type_arities: dict[str, list[str]] | None,
+    *,
+    fn_name: str = "",
+    param_names: list[str] | None = None,
+) -> str:
+    """Render CType tokens as a Yona arrow signature: `String -> Int -> Response`."""
+    type_arities = type_arities or {}
+    param_names = param_names or []
+    n = 0
+
+    def fresh() -> str:
+        nonlocal n
+        ch = chr(ord("a") + min(n, 25))
+        n += 1
+        return ch
+
+    fn_dom: str | None = None
+    fn_rng: str | None = None
+    seq_from_dom_used = False
+    primary = next(iter(type_arities), None) if len(type_arities) == 1 else None
+    payload: str | None = None
+
+    def poly_arity(name: str) -> int:
+        if name in type_arities:
+            return len(type_arities[name])
+        return KNOWN_POLY.get(name, 0)
+
+    def option_payload() -> str:
+        nonlocal payload
+        if payload is None:
+            payload = fresh()
+        return payload
+
+    def named_adt(name: str, prefer: str | None) -> str:
+        arity = poly_arity(name)
+        if arity <= 0:
+            return name
+        if prefer and arity == 1:
+            return f"{name} {prefer}"
+        return name + " " + " ".join(fresh() for _ in range(arity))
+
+    if fn_name == "channel" and ret and ret[0] == "TUPLE":
+        return "Int -> (Linear (Sender a), Linear (Receiver a))"
+
+    if fn_name in FOLD_FNS and params[:3] == ["FUNCTION", "INT", "SEQ"]:
+        a, b = fresh(), fresh()
+        if fn_name == "foldr":
+            return f"({a} -> {b} -> {b}) -> {b} -> [{a}] -> {b}"
+        if fn_name in ("scanl", "scan"):
+            return f"({b} -> {a} -> {b}) -> {b} -> [{a}] -> [{b}]"
+        return f"({b} -> {a} -> {b}) -> {b} -> [{a}] -> {b}"
+
+    def one(tok: str, *, is_ret: bool = False, pname: str = "") -> str:
+        nonlocal fn_dom, fn_rng, seq_from_dom_used
+        if tok == "FUNCTION":
+            if fn_name in FILTER_FNS:
+                fn_dom = fresh()
+                fn_rng = fn_dom
+                return f"({fn_dom} -> Bool)"
+            fn_dom, fn_rng = fresh(), fresh()
+            return f"({fn_dom} -> {fn_rng})"
+        if tok == "SEQ":
+            if is_ret:
+                v = fn_rng or fresh()
+            elif fn_dom and not seq_from_dom_used:
+                v = fn_dom
+                seq_from_dom_used = True
+            else:
+                v = fresh()
+            return f"[{v}]"
+        if tok == "SET":
+            return f"Set {fresh()}"
+        if tok == "DICT":
+            return f"Dict {fresh()} {fresh()}"
+        if tok == "TUPLE":
+            return f"({fresh()}, {fresh()})"
+        if tok == "LINEAR":
+            return f"Linear {fresh()}"
+        if tok == "PROMISE":
+            if fn_name in ("readLine", "readLineFrom"):
+                return "Option String"
+            return "()"
+        if tok == "INT":
+            if fn_name in ("send", "close", "isClosed", "length", "capacity") and "Sender" in type_arities and not is_ret:
+                if pname in ("v", "x", "val", "value"):
+                    return option_payload()
+                return named_adt("Sender", option_payload())
+            if fn_name in ("recv", "tryRecv") and "Receiver" in type_arities and not is_ret:
+                return named_adt("Receiver", option_payload())
+            if fn_name == "openFile" and is_ret:
+                return "FileHandle"
+            if pname in STRING_PARAM_NAMES:
+                return "String"
+            if pname in INT_PARAM_NAMES:
+                return "Int"
+            if pname in SEQ_PARAM_NAMES:
+                return f"[{fresh()}]"
+            if pname in FN_PARAM_NAMES:
+                d, r = fresh(), fresh()
+                return f"({d} -> {r})"
+            if pname in OPT_PARAM_NAMES:
+                return named_adt("Option", option_payload())
+            if primary == "Option":
+                return option_payload()
+            if primary and poly_arity(primary) > 0:
+                return fresh()
+            return "Int"
+        if tok == "ADT":
+            if fn_name == "openFile" and not is_ret:
+                return "FileMode"
+            if is_ret and not retadt and fn_name in ITER_FNS:
+                return f"Iterator {fresh()}"
+            name = retadt if (is_ret and retadt) else primary
+            if not name and pname in OPT_PARAM_NAMES:
+                name = "Option"
+            if name == "Option" or (is_ret and retadt == "Option"):
+                prefer = (fn_rng if is_ret else fn_dom) or option_payload()
+                return named_adt("Option", prefer)
+            if name:
+                prefer = fn_rng if is_ret else fn_dom
+                return named_adt(name, prefer)
+            return fresh()
+        if tok in CONCRETE_CTYPES:
+            return CONCRETE_CTYPES[tok]
+        return "".join(p.title() for p in tok.split("_"))
+
+    parts = [one(t, pname=param_names[i] if i < len(param_names) else "") for i, t in enumerate(params)]
+    if not ret:
+        ret_s = fresh()
+    elif ret[0] == "TUPLE" and len(ret) > 1:
+        ret_s = "(" + ", ".join(one(t, is_ret=True) for t in ret[1:]) + ")"
+    else:
+        ret_s = one(ret[0], is_ret=True)
+    if not parts:
+        return ret_s
+    return " -> ".join(parts + [ret_s])
 
 
 def parse_export_names(line: str) -> tuple[str, list[str]]:
@@ -95,14 +343,48 @@ def trait_name(definition: str) -> str:
     return m.group(1) if m else definition.split()[1]
 
 
-def signature_of(fn: dict) -> str:
+def signature_of(fn: dict, yonai: dict[str, dict] | None = None, type_arities: dict[str, list[str]] | None = None) -> str:
+    """Always `name : T1 -> T2 -> R`, never a parameter list."""
+    name = fn["name"]
+    nparams = 0
+    pnames: list[str] = []
+    if fn.get("lhs"):
+        bits = fn["lhs"].split()
+        pnames = bits[1:]
+        nparams = len(pnames)
+
+    def with_const(sig: str) -> str:
+        if fn.get("simple_rhs") is not None and nparams == 0 and "=" not in sig:
+            return f"{sig} = {fn['simple_rhs']}"
+        return sig
+
     if fn.get("type_sig"):
-        return fn["type_sig"]
-    lhs = fn.get("lhs") or fn["name"]
-    rhs = fn.get("simple_rhs")
-    if rhs is not None:
-        return f"{lhs} = {rhs}"
-    return lhs
+        sig = fn["type_sig"]
+        if ":" not in sig:
+            sig = f"{name} : {sig}"
+        elif not sig.startswith(name):
+            sig = f"{name} : {sig}"
+        return with_const(sig)
+
+    y = (yonai or {}).get(name)
+    if y:
+        body = pretty_arrow(
+            y["params"],
+            y["ret"],
+            y.get("retadt"),
+            type_arities,
+            fn_name=name,
+            param_names=pnames,
+        )
+        return with_const(f"{name} : {body}")
+
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    if nparams == 0:
+        body = "a"
+    else:
+        args = [letters[i] for i in range(nparams)]
+        body = " -> ".join(args) + f" -> {letters[nparams]}"
+    return with_const(f"{name} : {body}")
 
 
 def upsert_function(functions: list[dict], by_name: dict[str, dict], entry: dict) -> None:
@@ -133,6 +415,7 @@ def parse_module(path: Path) -> dict:
         "exported_fns": [],
         "exported_types": [],
         "exported_traits": [],
+        "yonai": parse_yonai(path.with_suffix(".yonai")),
     }
 
     i = 0
@@ -346,6 +629,7 @@ def render_module(module: dict) -> str:
     name = module["name"].replace("\\", ".")
     out.append(f"# {name}")
     out.append("")
+    arities = type_arities_from_defs(module["types"])
 
     if module["module_doc"]:
         out.append(render_doc(module["module_doc"]))
@@ -369,7 +653,7 @@ def render_module(module: dict) -> str:
         for f in module["functions"]:
             out.append(f"### {f['name']}")
             out.append("")
-            out.append(f"`{signature_of(f)}`")
+            out.append(f"`{signature_of(f, module.get('yonai'), arities)}`")
             out.append("")
             if f["doc"]:
                 out.append(render_doc(f["doc"]))
@@ -390,6 +674,39 @@ def compact_legacy(text: str) -> str:
     text = LEGACY_FN.sub(fn_sub, text)
     text = LEGACY_TYPE.sub(r"### \1\n\n`type \1\2`\n", text)
     return re.sub(r"\n{3,}", "\n\n", text)
+
+
+HEADING_SIG = re.compile(r"^### ([a-z][a-zA-Z0-9_]*)\n\n`([^`]+)`\n", re.MULTILINE)
+
+
+def apply_yonai_sigs(text: str, yonai: dict[str, dict], type_arities: dict[str, list[str]] | None = None) -> str:
+    """Replace parameter-list signatures with `name : T1 -> T2 -> R` from .yonai."""
+
+    def repl(m: re.Match) -> str:
+        name, old = m.group(1), m.group(2)
+        if name in yonai:
+            y = yonai[name]
+            pretty = pretty_arrow(
+                y["params"],
+                y["ret"],
+                y.get("retadt"),
+                type_arities,
+                fn_name=name,
+            )
+            return f"### {name}\n\n`{name} : {pretty}`\n"
+        if ":" in old:
+            return m.group(0)
+        bits = old.split()
+        nparams = max(0, len(bits) - 1)
+        letters = "abcdefghijklmnopqrstuvwxyz"
+        if nparams == 0:
+            body = "a"
+        else:
+            args = [letters[i] for i in range(nparams)]
+            body = " -> ".join(args) + f" -> {letters[nparams]}"
+        return f"### {name}\n\n`{name} : {body}`\n"
+
+    return HEADING_SIG.sub(repl, text)
 
 
 def first_sentence(module_doc: list[str]) -> str:
@@ -455,6 +772,8 @@ def main() -> None:
         if md.name in written or md.name == "README.md":
             continue
         compacted = compact_legacy(md.read_text())
+        yonai = parse_yonai(LIB_DIR / (md.stem + ".yonai"))
+        compacted = apply_yonai_sigs(compacted, yonai)
         if compacted != md.read_text():
             md.write_text(compacted)
         row = parse_legacy_index_row(md)

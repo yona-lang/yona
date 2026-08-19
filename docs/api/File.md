@@ -10,7 +10,7 @@ file handle operations. Async functions (`readFile`, `readFileBytes`,
 
 ### readFile
 
-`readFile path`
+`readFile : String -> String`
 
 Read the entire contents of a file as a string. Async (io_uring).
 
@@ -22,7 +22,7 @@ println contents
 
 ### writeFile
 
-`writeFile path contents`
+`writeFile : String -> String -> Bool`
 
 Write a string to a file, creating or overwriting it. Async (io_uring).
 Returns `true` on success.
@@ -34,7 +34,7 @@ writeFile "out.txt" "hello world"   # => true
 
 ### appendFile
 
-`appendFile path contents`
+`appendFile : String -> String -> Bool`
 
 Append a string to a file. Returns `true` on success.
 
@@ -45,7 +45,7 @@ appendFile "log.txt" "new line\n"   # => true
 
 ### exists
 
-`exists path`
+`exists : String -> Bool`
 
 Check whether a file or directory exists at the given path.
 
@@ -56,7 +56,7 @@ exists "/tmp"   # => true
 
 ### remove
 
-`remove path`
+`remove : String -> Bool`
 
 Delete a file. Returns `true` on success.
 
@@ -67,7 +67,7 @@ remove "temp.txt"   # => true
 
 ### size
 
-`size path`
+`size : String -> Int`
 
 Returns the size of a file in bytes.
 
@@ -78,7 +78,7 @@ size "data.bin"   # => 4096
 
 ### listDir
 
-`listDir path`
+`listDir : String -> [a]`
 
 List directory contents. Returns a sequence of filenames.
 
@@ -89,7 +89,7 @@ listDir "/tmp"   # => ["file1.txt", "file2.txt", ...]
 
 ### readLines
 
-`readLines path`
+`readLines : String -> Iterator a`
 
 Returns an `Iterator String` that yields lines from the file lazily.
 Uses O(1) memory per element.
@@ -102,7 +102,7 @@ let iter = readLines "big.csv" in
 
 ### readFileBytes
 
-`readFileBytes path`
+`readFileBytes : String -> ByteArray`
 
 Read the entire file as a byte buffer. Async (io_uring).
 
@@ -114,7 +114,7 @@ Bytes::length buf
 
 ### writeFileBytes
 
-`writeFileBytes path bytes`
+`writeFileBytes : String -> ByteArray -> Bool`
 
 Write a byte buffer to a file. Returns `true` on success.
 
@@ -126,7 +126,7 @@ writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 
 ### openFile
 
-`openFile path mode`
+`openFile : String -> FileMode -> FileHandle`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
 Returns a file descriptor (Int).
@@ -141,27 +141,27 @@ The mode is a `FileMode` ADT (Prelude): `Read`, `Write`, `ReadWrite`, `Append`.
 
 ### closeFileHandle
 
-`closeFileHandle fd`
+`closeFileHandle : Int -> ()`
 
 Close a file descriptor.
 
 ### readBytes
 
-`readBytes fd count`
+`readBytes : Int -> Int -> ByteArray`
 
 Read up to `count` bytes from a file descriptor. Async (io_uring).
 Returns a byte buffer.
 
 ### writeBytes
 
-`writeBytes fd count`
+`writeBytes : Int -> Int -> Int`
 
 Write bytes to a file descriptor. Async (io_uring).
 Returns the number of bytes written.
 
 ### seek
 
-`seek fd offset whence`
+`seek : Int -> Int -> a -> Int`
 
 Seek to a position in a file. `whence` is a `Whence` ADT (Prelude):
 `SeekSet` (absolute), `SeekCur` (relative to current), `SeekEnd` (relative to end).
@@ -175,25 +175,25 @@ seek fd 100 "set"
 
 ### tell
 
-`tell fd`
+`tell : Int -> Int`
 
 Returns the current position in a file descriptor.
 
 ### flush
 
-`flush fd`
+`flush : Int -> Bool`
 
 Flush buffered writes for a file descriptor. Returns `true` on success.
 
 ### truncate
 
-`truncate fd length`
+`truncate : Int -> Int -> Bool`
 
 Truncate a file to the given length. Returns `true` on success.
 
 ### readChunks
 
-`readChunks fd chunkSize`
+`readChunks : Int -> Int -> Iterator a`
 
 Read data from a file descriptor in chunks of `chunkSize` bytes.
 Returns a handle for chunked reading.

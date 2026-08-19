@@ -10,7 +10,7 @@ converting strings. Iterator-returning functions (`split`, `lines`,
 
 ### length
 
-`length str`
+`length : String -> Int`
 
 Returns the length of the string in bytes.
 
@@ -21,7 +21,7 @@ length "hello"   # => 5
 
 ### isEmpty
 
-`isEmpty str`
+`isEmpty : String -> Bool`
 
 Returns `true` if the string has zero length.
 
@@ -33,7 +33,7 @@ isEmpty "hi"    # => false
 
 ### toUpperCase
 
-`toUpperCase str`
+`toUpperCase : String -> String`
 
 Convert all characters to uppercase.
 
@@ -44,7 +44,7 @@ toUpperCase "hello"   # => "HELLO"
 
 ### toLowerCase
 
-`toLowerCase str`
+`toLowerCase : String -> String`
 
 Convert all characters to lowercase.
 
@@ -55,7 +55,7 @@ toLowerCase "HELLO"   # => "hello"
 
 ### trim
 
-`trim str`
+`trim : String -> String`
 
 Remove leading and trailing whitespace.
 
@@ -66,7 +66,7 @@ trim "  hello  "   # => "hello"
 
 ### indexOf
 
-`indexOf str needle`
+`indexOf : String -> String -> Int`
 
 Return the index of the first occurrence of `needle`, or -1 if not found.
 
@@ -77,7 +77,7 @@ indexOf "hello world" "world"   # => 6
 
 ### contains
 
-`contains str needle`
+`contains : String -> String -> Bool`
 
 Returns `true` if `str` contains `needle`.
 
@@ -88,7 +88,7 @@ contains "hello world" "world"   # => true
 
 ### startsWith
 
-`startsWith str prefix`
+`startsWith : String -> String -> Bool`
 
 Returns `true` if `str` starts with `prefix`.
 
@@ -99,7 +99,7 @@ startsWith "hello" "hel"   # => true
 
 ### endsWith
 
-`endsWith str suffix`
+`endsWith : String -> String -> Bool`
 
 Returns `true` if `str` ends with `suffix`.
 
@@ -110,7 +110,7 @@ endsWith "hello.txt" ".txt"   # => true
 
 ### substring
 
-`substring str start end`
+`substring : String -> Int -> Int -> String`
 
 Extract a substring from index `start` (inclusive) to `end` (exclusive).
 
@@ -121,7 +121,7 @@ substring "hello" 1 4   # => "ell"
 
 ### replace
 
-`replace str old new`
+`replace : String -> String -> String -> String`
 
 Replace all occurrences of `old` with `new`.
 
@@ -132,7 +132,7 @@ replace "aabaa" "a" "x"   # => "xxbxx"
 
 ### split
 
-`split str delimiter`
+`split : String -> String -> Iterator a`
 
 Split a string by a delimiter. Returns an `Iterator String`.
 
@@ -144,7 +144,7 @@ let iter = split "a,b,c" "," in
 
 ### join
 
-`join separator seq`
+`join : String -> [a] -> String`
 
 Join a sequence of strings with a separator.
 
@@ -155,7 +155,7 @@ join ", " ["a", "b", "c"]   # => "a, b, c"
 
 ### charAt
 
-`charAt str index`
+`charAt : String -> Int -> Int`
 
 Returns the character code (Int) at the given index.
 
@@ -166,7 +166,7 @@ charAt "ABC" 0   # => 65
 
 ### padLeft
 
-`padLeft width pad str`
+`padLeft : Int -> String -> String -> String`
 
 Pad `str` on the left with `pad` until it reaches `width`.
 
@@ -177,7 +177,7 @@ padLeft 5 "0" "42"   # => "00042"
 
 ### padRight
 
-`padRight width pad str`
+`padRight : Int -> String -> String -> String`
 
 Pad `str` on the right with `pad` until it reaches `width`.
 
@@ -188,7 +188,7 @@ padRight 5 "." "hi"   # => "hi..."
 
 ### reverse
 
-`reverse str`
+`reverse : String -> String`
 
 Reverse a string.
 
@@ -199,7 +199,7 @@ reverse "hello"   # => "olleh"
 
 ### repeat
 
-`repeat n str`
+`repeat : Int -> String -> String`
 
 Repeat a string `n` times.
 
@@ -210,7 +210,7 @@ repeat 3 "ab"   # => "ababab"
 
 ### take
 
-`take n str`
+`take : Int -> String -> String`
 
 Take the first `n` characters of a string.
 
@@ -221,7 +221,7 @@ take 3 "hello"   # => "hel"
 
 ### drop
 
-`drop n str`
+`drop : Int -> String -> String`
 
 Drop the first `n` characters of a string.
 
@@ -232,7 +232,7 @@ drop 3 "hello"   # => "lo"
 
 ### count
 
-`count str needle`
+`count : String -> String -> Int`
 
 Count the number of non-overlapping occurrences of `needle` in `str`.
 
@@ -243,7 +243,7 @@ count "ababa" "ab"   # => 2
 
 ### lines
 
-`lines str`
+`lines : String -> Iterator a`
 
 Split a string into lines. Returns an `Iterator String`.
 
@@ -255,7 +255,7 @@ let iter = lines "a\nb\nc" in
 
 ### unlines
 
-`unlines seq`
+`unlines : [a] -> String`
 
 Join a sequence of strings with newline separators.
 
@@ -266,7 +266,7 @@ unlines ["a", "b", "c"]   # => "a\nb\nc"
 
 ### chars
 
-`chars str`
+`chars : String -> Iterator a`
 
 Returns an `Iterator` over individual characters of the string.
 
@@ -278,7 +278,7 @@ let iter = chars "hello" in
 
 ### fromChars
 
-`fromChars seq`
+`fromChars : [a] -> String`
 
 Build a string from a sequence of character codes.
 
@@ -289,7 +289,7 @@ fromChars [72, 105]   # => "Hi"
 
 ### toInt
 
-`toInt str`
+`toInt : String -> Int`
 
 Parse a string as an integer.
 
@@ -300,7 +300,7 @@ toInt "42"   # => 42
 
 ### toFloat
 
-`toFloat str`
+`toFloat : String -> Float`
 
 Parse a string as a float.
 

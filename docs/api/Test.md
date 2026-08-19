@@ -9,7 +9,7 @@ collect results programmatically.
 
 ### assertEqual
 
-`assertEqual expected actual`
+`assertEqual : Int -> Int -> (a, b)`
 
 Asserts that `expected` equals `actual`.
 
@@ -20,7 +20,7 @@ assertEqual 1 2     # => (:fail, "assertEqual: expected equal values")
 
 ### assertNotEqual
 
-`assertNotEqual expected actual`
+`assertNotEqual : Int -> Int -> (a, b)`
 
 Asserts that `expected` does not equal `actual`.
 
@@ -30,7 +30,7 @@ assertNotEqual 1 2   # => (:pass, "assertNotEqual")
 
 ### assertTrue
 
-`assertTrue value`
+`assertTrue : Int -> (a, b)`
 
 Asserts that `value` is true.
 
@@ -40,7 +40,7 @@ assertTrue (1 > 0)   # => (:pass, "assertTrue")
 
 ### assertFalse
 
-`assertFalse value`
+`assertFalse : Int -> (a, b)`
 
 Asserts that `value` is false.
 
@@ -50,7 +50,7 @@ assertFalse (1 > 2)   # => (:pass, "assertFalse")
 
 ### assertGreater
 
-`assertGreater a b`
+`assertGreater : Int -> Int -> (a, b)`
 
 Asserts that `a > b`.
 
@@ -60,7 +60,7 @@ assertGreater 5 3   # => (:pass, "assertGreater")
 
 ### assertLess
 
-`assertLess a b`
+`assertLess : Int -> Int -> (a, b)`
 
 Asserts that `a < b`.
 
