@@ -3,7 +3,7 @@
 ## Current Snapshot
 
 - Compiler: Yona -> LLVM IR -> native executable via `yonac`
-- REPL: `yona` compile-and-run interactive mode
+- REPL: `yona` compile-and-run interactive mode. Script mode (`#!/usr/bin/env yona` + `Std\Process.getArgs`) is planned: [2026-08-19-yona-script-shebang.md](./superpowers/plans/2026-08-19-yona-script-shebang.md)
 - Tests: doctest (`gpu_vulkan_device` + optional `gpu_vulkan_mapadd` / mapMul / reduce); codegen `gpu_backend_flags` + `gpu_vulkan_last_note` (child env `YONA_GPU_DISABLE_VULKAN=1`); with `-DYONA_ENABLE_VULKAN=ON`, run `ctest -R doctest_gpu_vulkan -V` (see `CLAUDE.md`); full `tests.exe` per `CLAUDE.md` (`YONA_PATH`, `YONAC_CC` on Windows)
 - **Windows dev checklist:** full `clang+llvm-*-windows-msvc` tree for `LLVM_INSTALL_PREFIX`, correct env spelling, `CC`**/*`*CXX` or CMake compiler flags if Clang lives outside that prefix, and `YONAC_CC` or `PATH` for doctest (`tests.exe`) — see **INSTALL.md** (Windows: *Complete Windows LLVM tree*, `YONAC_CC` *and doctest*).
 - Windows benchmark run (2026-04-26): 35/35 Yona rows passing, report refreshed, perf deltas reviewed
@@ -40,6 +40,7 @@
 - [x] Copr / AUR / Launchpad CI jobs + package-first install docs (`dist/RELEASING.md`) — first publish on next `v*` tag after one-time Copr project, AUR key, and PPA + GitHub secrets
 - [x] Homebrew tap `akovari/homebrew-tap` (`dist/ci/generate-homebrew-formula.sh`, `homebrew` release job) — source formula; first publish on next `v*` tag after `HOMEBREW_TAP_SSH_KEY`
 - [ ] Windows installer productionization (upgrade behavior, signing, final UX polish)
+- [ ] `#!/usr/bin/env yona` script mode + `Std\Process.getArgs` after package install — [2026-08-19-yona-script-shebang.md](./superpowers/plans/2026-08-19-yona-script-shebang.md)
 - [ ] Final packaging pass for sysroot-based CLI/REPL distribution layout
 - [ ] Enable embedded LLD backend by default across supported toolchains (resolve remaining dependency gates, e.g. MSVC-compatible LibXml2 on Windows)
 - [ ] Implement true embedded LLD backend for Linux/macOS in-process mode
