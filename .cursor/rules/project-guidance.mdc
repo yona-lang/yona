@@ -22,11 +22,12 @@ Yona conventions:
 - Do not wrap `do` in `let`
 - Use comma-separated imports and `with` for resources
 - Prefer pure Yona over C whenever the feature does not require syscalls, layout control, foreign bindings, or measured hot-path optimization
-- Prelude types/functions are always available: `Some`, `None`, `Ok`, `Err`, `Linear`, `Iterator`, `foldl`, `foldr`, `identity`, `const`, `flip`, `compose`
+- Prelude types/functions are always available: `Some`, `None`, `Ok`, `Err`, `Linear`, `Iterator`, `identity`, `const`, `flip`, `compose`. Collection folds (`foldl`, `foldr`, `map`, `filter`) are **not** prelude — `import … from Std\List`
 
 Testing and bug handling:
 - Add focused tests when language/runtime behavior changes and follow nearby test patterns
 - If you discover a compiler/runtime bug, append it to `docs/todo-list.md` with a one-line repro and stop to ask which bug to fix next
+- When finishing a feature or bugfix, update the matching plan, `docs/todo-list.md`, `CHANGELOG.md`, and the public site (`site/src/content/docs/`) in the same change. Do not leave stale checkboxes (see `keep-docs-up-to-date`)
 
 Memory/runtime notes:
 - Heap objects use reference counting with recursive destructors

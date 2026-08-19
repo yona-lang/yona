@@ -34,7 +34,9 @@ Available in all programs without imports (from `lib/Prelude.yona`):
 
 **Types:** `Linear a`, `Option a` (Some/None), `Result a e` (Ok/Err), `Iterator a`
 
-**Functions:** `identity`, `const`, `flip`, `compose`, `foldl`, `foldr`
+**Functions:** `identity`, `const`, `flip`, `compose`
+
+`foldl`, `foldr`, `map`, and `filter` are **not** prelude — import them from `Std\List`.
 
 **Adding to the prelude** (unified — one source of truth):
 - For C functions: add implementation in `compiled_runtime.c`, add `FN` line to `lib/Prelude.yonai`
@@ -124,11 +126,11 @@ Yona language compiler using LLVM. Pipeline: Lexer → Parser → AST → Codege
 - **Don't nest let expressions.** Use multi-binding: `let x = 1, y = 2 in x + y`
 - **Don't wrap `do` in `let`.** Use `do ... end` directly for side effects
 - **Use comma-separated imports:** `import a from X, b from Y in ...`
-- **Use `with` for resources:** `with open "f" as h in ... end`
+- **Use `with` for resources:** `with h = openFile "f" Read in ... end`
 - **Use parallel comprehensions:** `[| f x for x = xs ]` for concurrent processing
-- **Use `foldl` for aggregation:** `foldl (\a b -> a + b) 0 xs` (prelude, loop-based, no stack overflow)
+- **Use `Std\List.foldl` for aggregation:** `import foldl from Std\List in foldl (\a b -> a + b) 0 xs` (tail-recursive, compiled to a loop)
 - **Use iterators for streaming:** `readLines`, `chars`, `split` return `Iterator` (O(1) memory)
-- **Prelude needs no import:** `Some`, `None`, `Ok`, `Err`, `Linear`, `Iterator`, `foldl`, `foldr`, `identity`, `const`, `flip`, `compose`
+- **Prelude needs no import:** `Some`, `None`, `Ok`, `Err`, `Linear`, `Iterator`, `identity`, `const`, `flip`, `compose`
 - See `docs/style-guide.md` for the full guide
 
 ### Stdlib implementation rule (IMPORTANT)
@@ -153,6 +155,22 @@ ask which bug(s) to fix.** Working around a bug silently buries the
 information; a bug list with reproductions accumulates the data we need to
 prioritize compiler work. Don't keep coding past a fresh bug discovery
 without first noting it and checking which one to attack next.
+
+### Keep docs up to date
+
+When finishing a feature or bugfix, update the matching plan under
+`docs/superpowers/plans/`, `docs/todo-list.md`, and `CHANGELOG.md` in the
+**same change**. Use `Unreleased` in the changelog if `VERSION` is unchanged.
+Fix feature docs (`docs/*.md`) when they would otherwise contradict the code.
+Also update the **public site** (`site/src/content/docs/`) whenever
+user-facing language, CLI, prelude, or stdlib behavior changes. Learn /
+Guides / Reference pages there are handwritten and are the published source
+of truth — do not leave them stale because an internal doc already exists.
+After `lib/Std/*.yona` API comment changes, run `python3 scripts/gendocs.py`.
+Preview with `cd site && pnpm dev`. Legacy Yona 1.x remains on GitHub
+Pages at https://yona-lang.github.io/ — do not overwrite that repository.
+Verify examples against `yonac`, not folklore.
+Do not silently leave stale checkboxes.
 
 ### Development Workflow
 

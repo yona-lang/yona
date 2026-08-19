@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Yona mark: an ember-copper tile with a cons cell — head and tail. -->
+  <rect width="64" height="64" rx="14" fill="#a5512b"/>
+  <circle cx="22" cy="26" r="9" fill="#faf6ee"/>
+  <path d="M35 17 h12 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-12 a4 4 0 0 1 -4 -4 v-10 a4 4 0 0 1 4 -4 z" fill="none" stroke="#faf6ee" stroke-width="4"/>
+  <path d="M18 42 q14 12 28 0" fill="none" stroke="#faf6ee" stroke-width="4" stroke-linecap="round"/>
+</svg>

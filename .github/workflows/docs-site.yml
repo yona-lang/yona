@@ -1,0 +1,86 @@
+name: Docs site
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'site/**'
+      - 'docs/api/**'
+      - 'lib/Std/**'
+      - 'scripts/gendocs.py'
+      - '.github/workflows/docs-site.yml'
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'site/**'
+      - 'docs/api/**'
+      - 'lib/Std/**'
+      - 'scripts/gendocs.py'
+      - '.github/workflows/docs-site.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-site-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Generate stdlib API markdown
+        run: python3 scripts/gendocs.py
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 10.15.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Install and build
+        working-directory: site
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: site/dist
+          retention-days: 7
+
+  deploy:
+    name: Deploy Cloudflare Pages
+    needs: build
+    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && (vars.CLOUDFLARE_ACCOUNT_ID != '' || secrets.CLOUDFLARE_ACCOUNT_ID != '') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: dist
+
+      - name: Publish
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT || 'yona-lang' }} --branch=${{ github.head_ref || github.ref_name }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

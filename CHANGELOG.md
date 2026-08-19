@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+- Public Yona 2.0 docs live in-repo at `site/` (Astro Starlight) and deploy
+  to Cloudflare Pages via `.github/workflows/docs-site.yml`. Preview locally
+  with `cd site && pnpm dev`. The legacy GraalVM-era site stays on
+  GitHub Pages at https://yona-lang.github.io/.
+- Docs site traffic is measured with cookieless Plausible at
+  `plausible.kiket.dev` (`data-domain` `yona-lang.org`).
+
 ## v0.1.3 (2026-08-18)
 
 Packaging-only release so the GitHub Release workflow can finish Homebrew and Copr.

@@ -1,0 +1,15 @@
+---
+/**
+ * Feature-status badge. Usage in MDX:
+ *   <Status level="stable" />   — implemented, tested, documented behavior
+ *   <Status level="partial" />  — implemented subset; limitations listed on the page
+ *   <Status level="planned" />  — specified here, not yet in the compiler
+ */
+interface Props {
+	level: 'stable' | 'partial' | 'planned';
+}
+const { level } = Astro.props;
+const label = { stable: 'Stable', partial: 'Partial', planned: 'Planned' }[level];
+---
+
+<span class={`yona-status yona-status--${level}`}>{label}</span>

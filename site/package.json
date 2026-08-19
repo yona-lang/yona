@@ -1,0 +1,25 @@
+{
+  "name": "yona-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "sync": "node scripts/sync-stdlib.mjs && node scripts/generate-llms.mjs",
+    "dev": "pnpm run sync && astro dev",
+    "start": "pnpm run dev",
+    "build": "pnpm run sync && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.41.7",
+    "@fontsource/fraunces": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/source-sans-3": "^5.3.0",
+    "astro": "^7.1.6",
+    "sharp": "^0.35.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp"]
+  }
+}

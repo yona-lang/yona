@@ -1,0 +1,111 @@
+---
+title: Yona
+description: A statically typed functional language for the AI era — easy to generate, possible to verify, compiled to run within reach of C.
+template: splash
+hero:
+  title: Code that is easy to write, possible to verify, and fast to run.
+  tagline: >-
+    Yona is a statically typed functional programming language compiled to
+    native executables via LLVM. Concurrency without async/await, effects
+    visible in types, resources tracked linearly — in a syntax small enough
+    to hold in your head.
+  actions:
+    - text: Quick start
+      link: /learn/quick-start/
+      icon: right-arrow
+      variant: primary
+    - text: Why Yona 2.0
+      link: /why-yona-2/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+```yona
+# Two file reads, one network call — all three run concurrently.
+# No async, no await, no futures in your code: independent `let`
+# bindings are parallelized by the compiler and awaited at use.
+import readFile from Std\File, get from Std\Http in
+let
+    keys   = readFile "keys.txt",
+    values = readFile "values.txt",
+    remote = get "https://example.org/manifest"
+in (zip (lines keys) (lines values), remote)
+```
+
+## Four reasons Yona exists
+
+<CardGrid>
+	<Card title="Built for the AI era" icon="seti:crystal">
+		A small ML-style grammar with few expression forms is easy for humans
+		*and* language models to produce correctly. Static types, exhaustive
+		pattern checks, and effect rows mean generated code is **checkable, not
+		just plausible** — the compiler is the reviewer. The docs you are
+		reading are agent-consumable too: see the [agent guide](/agents/).
+	</Card>
+	<Card title="Functional concurrency" icon="random">
+		No colored functions. Independent `let` bindings run in parallel over
+		io_uring and a work-stealing thread pool; `do` sequences; `with` scopes
+		resources. Structured concurrency and typed channels when you need
+		explicit pipelines. [Learn more](/learn/concurrency/).
+	</Card>
+	<Card title="Safety in the types" icon="approve-check">
+		Hindley–Milner inference — programs are typed without annotations.
+		Algebraic data types, traits, effect rows on function arrows, and
+		linear types for files, sockets, and channel endpoints: forgetting to
+		close a resource is a compile error. [The type
+		system](/guides/type-system/).
+	</Card>
+	<Card title="Native performance" icon="rocket">
+		Compiled ahead of time: source → LLVM IR → machine code. Stream-fused
+		collection pipelines and Perceus-style reference counting put common
+		benchmarks within 1–2× of C, and array pipelines can lower
+		transparently to the GPU. [Performance](/guides/performance/).
+	</Card>
+</CardGrid>
+
+## Install in one line
+
+```bash
+# Fedora / RHEL
+sudo dnf copr enable kovariadam/yona && sudo dnf install yona
+
+# Ubuntu / Debian
+sudo add-apt-repository ppa:kovariadam/yona && sudo apt install yona
+
+# macOS / Linuxbrew
+brew install akovari/tap/yona
+
+# Arch
+yay -S yona-bin
+```
+
+Windows MSI and source builds: see [Installation](/install/).
+
+```bash
+yonac -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
+# => 55
+```
+
+## The shape of the language
+
+```yona
+# Algebraic data types with exhaustive pattern matching
+type Shape = Circle Float | Rect Float Float
+
+area shape = case shape of
+    Circle r -> 3.141592653589793 * r * r
+    Rect w h -> w * h
+end
+
+# Persistent collections and pipelines
+import foldl from Std\List in
+[area s for s = shapes, if area s > 10.0] |> foldl (\a b -> a + b) 0.0
+```
+
+Yona is free software, licensed under the
+[GPLv3](https://github.com/yona-lang/yonac-llvm/blob/master/LICENSE.txt).
+Development happens on
+[GitHub](https://github.com/yona-lang/yonac-llvm).
+Documentation for the legacy GraalVM-era Yona 1.x remains available at
+[yona-lang.github.io](https://yona-lang.github.io/).

@@ -1,0 +1,152 @@
+/* ---------------------------------------------------------------------------
+ * Yona — "Vellum & Ember" theme
+ *
+ * Light: warm paper, warm ink, copper accent.
+ * Dark:  deep umber, parchment text, ember accent.
+ * Display: Fraunces. Body: Source Sans 3. Code: IBM Plex Mono.
+ * ------------------------------------------------------------------------- */
+
+:root {
+	--sl-font: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+	--sl-font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+	--yona-display: 'Fraunces', Georgia, serif;
+
+	/* type scale: slightly larger measure, calmer headings */
+	--sl-text-h1: 2.4rem;
+	--sl-text-h2: 1.6rem;
+	--sl-text-h3: 1.25rem;
+	--sl-line-height: 1.65;
+}
+
+/* ----------------------------- dark (default) --------------------------- */
+:root {
+	/* ember accent on deep umber */
+	--sl-color-accent-low: #3a2417;
+	--sl-color-accent: #c96f3b;
+	--sl-color-accent-high: #f0b98e;
+
+	--sl-color-white: #f0e9dd;
+	--sl-color-gray-1: #e6ddce;
+	--sl-color-gray-2: #c8bfae;
+	--sl-color-gray-3: #a09684;
+	--sl-color-gray-4: #6b6255;
+	--sl-color-gray-5: #453e35;
+	--sl-color-gray-6: #2a241e;
+	--sl-color-gray-7: #1f1a15;
+	--sl-color-black: #171310;
+
+	--sl-color-bg-nav: #1b1611;
+	--sl-color-bg-sidebar: #1b1611;
+	--sl-color-hairline: #322a22;
+	--sl-color-hairline-light: #2a241e;
+}
+
+/* ------------------------------- light ---------------------------------- */
+:root[data-theme='light'] {
+	/* copper accent on warm paper */
+	--sl-color-accent-low: #f3ddcd;
+	--sl-color-accent: #a5512b;
+	--sl-color-accent-high: #7c3a1d;
+
+	--sl-color-white: #221c15;
+	--sl-color-gray-1: #33291f;
+	--sl-color-gray-2: #4c4136;
+	--sl-color-gray-3: #6f6355;
+	--sl-color-gray-4: #9c9082;
+	--sl-color-gray-5: #cdc3b4;
+	--sl-color-gray-6: #ece4d6;
+	--sl-color-gray-7: #f5efe4;
+	--sl-color-black: #faf6ee;
+
+	--sl-color-bg-nav: #f7f1e6;
+	--sl-color-bg-sidebar: #f7f1e6;
+	--sl-color-hairline: #ddd2c0;
+	--sl-color-hairline-light: #e8dfd0;
+}
+
+/* --------------------------- editorial details --------------------------- */
+
+/* Display face for headings and the site title */
+h1,
+h2,
+h3,
+.site-title span,
+.hero h1 {
+	font-family: var(--yona-display);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+h1 {
+	font-weight: 700;
+}
+
+/* Generous reading measure */
+.sl-markdown-content {
+	max-width: 46rem;
+	font-size: 1.0625rem;
+}
+
+/* Quiet sidebar: no boxes, just type */
+.sidebar-content summary .group-label span {
+	font-family: var(--yona-display);
+	font-size: var(--sl-text-sm);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--sl-color-gray-3);
+}
+
+/* Inline code: subtle warm chip */
+.sl-markdown-content code:not(:is(pre code)) {
+	background: color-mix(in srgb, var(--sl-color-accent) 9%, transparent);
+	border-radius: 0.25rem;
+	padding: 0.1em 0.3em;
+}
+
+/* Hero */
+.hero {
+	padding-block: 3rem;
+}
+.hero .tagline {
+	font-size: 1.2rem;
+	color: var(--sl-color-gray-2);
+	max-width: 38rem;
+}
+.hero h1 {
+	font-size: clamp(2.6rem, 6vw, 4rem);
+	line-height: 1.08;
+}
+
+/* Status badges used across feature pages */
+.yona-status {
+	display: inline-block;
+	font-family: var(--sl-font-mono);
+	font-size: 0.72rem;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	border-radius: 999px;
+	padding: 0.15em 0.7em;
+	border: 1px solid var(--sl-color-hairline);
+	vertical-align: middle;
+}
+.yona-status--stable {
+	color: #3c7a3f;
+	border-color: color-mix(in srgb, #3c7a3f 40%, transparent);
+	background: color-mix(in srgb, #3c7a3f 8%, transparent);
+}
+.yona-status--partial {
+	color: var(--sl-color-accent);
+	border-color: color-mix(in srgb, var(--sl-color-accent) 40%, transparent);
+	background: color-mix(in srgb, var(--sl-color-accent) 8%, transparent);
+}
+.yona-status--planned {
+	color: var(--sl-color-gray-3);
+	background: color-mix(in srgb, var(--sl-color-gray-3) 8%, transparent);
+}
+
+/* Footer hairline */
+footer.sl-flex {
+	border-top: 1px solid var(--sl-color-hairline-light);
+	padding-top: 1rem;
+}

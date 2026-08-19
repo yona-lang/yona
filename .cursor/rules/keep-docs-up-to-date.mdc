@@ -1,0 +1,24 @@
+---
+description: Keep plans, todo-list, and changelog current when work finishes
+alwaysApply: true
+---
+
+# Keep docs up to date
+
+When finishing a feature or bugfix, update the matching docs in the **same change**. Do not silently leave stale checkboxes.
+
+- `docs/todo-list.md` — mark done, refine the repro, or add a new bug before continuing
+- Active plan under `docs/superpowers/plans/` — checkboxes and a short status/date note
+- `CHANGELOG.md` — user-visible compiler, runtime, or packaging changes (`Unreleased` if `VERSION` is unchanged)
+- Feature docs (`docs/*.md`, type-system status) — if they would otherwise contradict the code
+- Public site (`site/src/content/docs/`) — Learn, Guides, Reference, and agent pages whenever user-facing language, CLI, prelude, or stdlib behavior changes. Those pages are handwritten and are the published source of truth; do not leave them stale because an internal doc already exists. Preview: `cd site && pnpm dev`. Deploy: Cloudflare Pages via `.github/workflows/docs-site.yml`. Legacy Yona 1.x stays at https://yona-lang.github.io/ — do not overwrite that repo.
+- Stdlib `##` comments + `python3 scripts/gendocs.py` — when changing `lib/Std/*.yona` public API
+
+Verify claims against the compiler (`yonac -e`, parser/codegen, `lib/Prelude.yona`, `lib/Std/`) — not against folklore in this file or old comments. Prelude functions are only `identity`, `const`, `flip`, `compose`. `foldl`/`map`/`filter` live in `Std\List`.
+
+Do not write a new README. Skip docs-only churn for typos and formatting.
+
+```markdown
+# ❌ BAD — merge the code, leave the plan at `[ ]`
+# ✅ GOOD — same commit/patch: `[x]` on the plan/todo, changelog if user-visible
+```

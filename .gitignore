@@ -61,6 +61,13 @@ __pycache__/
 *.swp
 debug_*
 
+# Public docs site (Astro Starlight)
+site/dist/
+site/.astro/
+site/.cache/
+site/src/content/docs/stdlib/
+site/generated/llms/
+
 # Test outputs
 test/_scratch/
 
