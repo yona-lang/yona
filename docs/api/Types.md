@@ -7,9 +7,7 @@ Int, Float, Bool, and String.
 
 ## Functions
 
-### toInt
-
-`toInt : String -> Int`
+### `toInt : String -> Int`
 
 Parse a string as an integer.
 
@@ -18,9 +16,7 @@ import toInt from Std\Types in
 toInt "42"   # => 42
 ```
 
-### toFloat
-
-`toFloat : String -> Float`
+### `toFloat : String -> Float`
 
 Parse a string as a float.
 
@@ -29,9 +25,7 @@ import toFloat from Std\Types in
 toFloat "3.14"   # => 3.14
 ```
 
-### intToString
-
-`intToString : Int -> String`
+### `intToString : Int -> String`
 
 Convert an integer to its string representation.
 
@@ -40,9 +34,7 @@ import intToString from Std\Types in
 intToString 42   # => "42"
 ```
 
-### floatToString
-
-`floatToString : Float -> String`
+### `floatToString : Float -> String`
 
 Convert a float to its string representation.
 
@@ -51,9 +43,7 @@ import floatToString from Std\Types in
 floatToString 3.14   # => "3.14"
 ```
 
-### boolToString
-
-`boolToString : Bool -> String`
+### `boolToString : Bool -> String`
 
 Convert a boolean to `"true"` or `"false"`.
 

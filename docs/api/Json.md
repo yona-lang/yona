@@ -8,9 +8,7 @@ parsing simple JSON values.
 
 ## Functions
 
-### stringify
-
-`stringify : Int -> String`
+### `stringify : Int -> String`
 
 Convert an integer to its JSON string representation.
 
@@ -19,9 +17,7 @@ import stringify from Std\Json in
 stringify 42   # => "42"
 ```
 
-### stringifyString
-
-`stringifyString : String -> String`
+### `stringifyString : String -> String`
 
 Convert a string to a JSON-quoted string with proper escaping.
 
@@ -30,9 +26,7 @@ import stringifyString from Std\Json in
 stringifyString "hello \"world\""   # => "\"hello \\\"world\\\"\""
 ```
 
-### stringifyBool
-
-`stringifyBool : Bool -> String`
+### `stringifyBool : Bool -> String`
 
 Convert a boolean to `"true"` or `"false"`.
 
@@ -41,9 +35,7 @@ import stringifyBool from Std\Json in
 stringifyBool true   # => "true"
 ```
 
-### stringifyFloat
-
-`stringifyFloat : Float -> String`
+### `stringifyFloat : Float -> String`
 
 Convert a float to its JSON string representation.
 
@@ -52,9 +44,7 @@ import stringifyFloat from Std\Json in
 stringifyFloat 3.14   # => "3.14"
 ```
 
-### null
-
-`null : String`
+### `null : String`
 
 Returns the JSON null literal string `"null"`.
 
@@ -63,9 +53,7 @@ import null from Std\Json in
 null   # => "null"
 ```
 
-### parseInt
-
-`parseInt : String -> Int`
+### `parseInt : String -> Int`
 
 Parse a JSON integer string to an Int.
 
@@ -74,9 +62,7 @@ import parseInt from Std\Json in
 parseInt "42"   # => 42
 ```
 
-### parseFloat
-
-`parseFloat : String -> Float`
+### `parseFloat : String -> Float`
 
 Parse a JSON float string to a Float.
 

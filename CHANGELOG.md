@@ -21,8 +21,9 @@
   idiomatic when you need both. The anti-pattern is `let _ = effect`.
 - Stdlib reference no longer shows the “generated, do not edit” maintainer
   note on the public pages.
-- Stdlib API pages show each export as `name : T1 -> T2 -> R` (from source
-  annotations or `.yonai` types), not a parameter list or the implementation.
+- Stdlib API pages put the full `name : T1 -> T2 -> R` signature in the
+  heading (from source annotations or `.yonai` types), not a bare name or
+  a parameter list.
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
 

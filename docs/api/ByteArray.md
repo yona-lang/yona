@@ -7,9 +7,7 @@ and interop with C libraries. Implements the `Array` trait.
 
 ## Functions
 
-### alloc
-
-`alloc : Int -> ByteArray`
+### `alloc : Int -> ByteArray`
 
 Allocate a zero-filled byte buffer of `size` bytes.
 
@@ -19,9 +17,7 @@ let buf = alloc 1024 in
 length buf   # => 1024
 ```
 
-### length
-
-`length : ByteArray -> Int`
+### `length : ByteArray -> Int`
 
 Returns the number of bytes in the buffer.
 
@@ -30,9 +26,7 @@ import length from Std\ByteArray in
 length (fromString "hello")   # => 5
 ```
 
-### get
-
-`get : ByteArray -> Int -> Int`
+### `get : ByteArray -> Int -> Int`
 
 Returns the byte value (0-255) at the given index.
 
@@ -42,9 +36,7 @@ let buf = fromString "ABC" in
 get buf 0   # => 65
 ```
 
-### set
-
-`set : ByteArray -> Int -> Int -> ()`
+### `set : ByteArray -> Int -> Int -> ()`
 
 Sets the byte at `index` to `value` (0-255). Mutates the buffer in place.
 
@@ -57,9 +49,7 @@ do
 end
 ```
 
-### concat
-
-`concat : ByteArray -> ByteArray -> ByteArray`
+### `concat : ByteArray -> ByteArray -> ByteArray`
 
 Concatenate two byte buffers into a new buffer.
 
@@ -69,9 +59,7 @@ let buf = concat (fromString "hello ") (fromString "world") in
 toString buf   # => "hello world"
 ```
 
-### slice
-
-`slice : ByteArray -> Int -> Int -> ByteArray`
+### `slice : ByteArray -> Int -> Int -> ByteArray`
 
 Extract a sub-buffer from index `start` (inclusive) to `end` (exclusive).
 
@@ -80,9 +68,7 @@ import slice, fromString, toString from Std\ByteArray in
 toString (slice (fromString "hello") 1 4)   # => "ell"
 ```
 
-### fromString
-
-`fromString : String -> ByteArray`
+### `fromString : String -> ByteArray`
 
 Convert a UTF-8 string to a byte buffer.
 
@@ -92,9 +78,7 @@ let buf = fromString "hi" in
 length buf   # => 2
 ```
 
-### toString
-
-`toString : ByteArray -> String`
+### `toString : ByteArray -> String`
 
 Convert a byte buffer back to a UTF-8 string.
 
@@ -103,9 +87,7 @@ import fromString, toString from Std\ByteArray in
 toString (fromString "hello")   # => "hello"
 ```
 
-### fromSeq
-
-`fromSeq : [a] -> ByteArray`
+### `fromSeq : [a] -> ByteArray`
 
 Create a byte buffer from a sequence of integers (0-255).
 
@@ -115,9 +97,7 @@ let buf = fromSeq [72, 105] in
 get buf 0   # => 72
 ```
 
-### toSeq
-
-`toSeq : ByteArray -> [a]`
+### `toSeq : ByteArray -> [a]`
 
 Convert a byte buffer to a sequence of integers.
 
@@ -126,27 +106,19 @@ import fromString, toSeq from Std\ByteArray in
 toSeq (fromString "Hi")   # => [72, 105]
 ```
 
-### head
-
-`head : ByteArray -> Int`
+### `head : ByteArray -> Int`
 
 First byte value. O(1).
 
-### tail
-
-`tail : ByteArray -> ByteArray`
+### `tail : ByteArray -> ByteArray`
 
 All bytes except the first. Returns a new array.
 
-### join
-
-`join : ByteArray -> ByteArray -> ByteArray`
+### `join : ByteArray -> ByteArray -> ByteArray`
 
 Concatenate two byte arrays (alias for `concat`).
 
-### foldl
-
-`foldl : (a -> b) -> Int -> ByteArray -> Int`
+### `foldl : (a -> b) -> Int -> ByteArray -> Int`
 
 Left fold over all bytes. Single-pass, cache-friendly.
 
@@ -155,8 +127,6 @@ import fromString, foldl from Std\ByteArray in
 foldl (\acc b -> acc + b) 0 (fromString "ABC")   -- 65+66+67 = 198
 ```
 
-### map
-
-`map : (a -> b) -> ByteArray -> ByteArray`
+### `map : (a -> b) -> ByteArray -> ByteArray`
 
 Apply a function to each byte, returning a new array.

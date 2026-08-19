@@ -9,30 +9,16 @@ matches re "hello 123"
 
 ## Functions
 
-### compile
+### `compile : String -> Int`
 
-`compile : String -> Int`
+### `matches : Int -> String -> Bool`
 
-### matches
+### `find : Int -> String -> Seq`
 
-`matches : Int -> String -> Bool`
+### `findAll : Int -> String -> Seq`
 
-### find
+### `replace : Int -> String -> String -> String`
 
-`find : Int -> String -> Seq`
+### `replaceAll : Int -> String -> String -> String`
 
-### findAll
-
-`findAll : Int -> String -> Seq`
-
-### replace
-
-`replace : Int -> String -> String -> String`
-
-### replaceAll
-
-`replaceAll : Int -> String -> String -> String`
-
-### split
-
-`split : Int -> String -> Seq`
+### `split : Int -> String -> Seq`

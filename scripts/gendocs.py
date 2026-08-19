@@ -179,6 +179,10 @@ def pretty_arrow(
     fn_dom: str | None = None
     fn_rng: str | None = None
     seq_from_dom_used = False
+    set_elem: str | None = None
+    dict_k: str | None = None
+    dict_v: str | None = None
+    dict_int_n = 0
     primary = next(iter(type_arities), None) if len(type_arities) == 1 else None
     payload: str | None = None
 
@@ -212,8 +216,15 @@ def pretty_arrow(
             return f"({b} -> {a} -> {b}) -> {b} -> [{a}] -> [{b}]"
         return f"({b} -> {a} -> {b}) -> {b} -> [{a}] -> {b}"
 
+    if fn_name == "forEach" and params == ["FUNCTION", "DICT"]:
+        k, v, r = fresh(), fresh(), fresh()
+        return f"({k} -> {v} -> {r}) -> Dict {k} {v} -> ()"
+    if fn_name == "forEach" and params == ["FUNCTION", "SET"]:
+        a, r = fresh(), fresh()
+        return f"({a} -> {r}) -> Set {a} -> ()"
+
     def one(tok: str, *, is_ret: bool = False, pname: str = "") -> str:
-        nonlocal fn_dom, fn_rng, seq_from_dom_used
+        nonlocal fn_dom, fn_rng, seq_from_dom_used, set_elem, dict_k, dict_v, dict_int_n
         if tok == "FUNCTION":
             if fn_name in FILTER_FNS:
                 fn_dom = fresh()
@@ -221,7 +232,19 @@ def pretty_arrow(
                 return f"({fn_dom} -> Bool)"
             fn_dom, fn_rng = fresh(), fresh()
             return f"({fn_dom} -> {fn_rng})"
+        if tok == "SET":
+            if set_elem is None:
+                set_elem = fn_dom or fresh()
+            return f"Set {set_elem}"
+        if tok == "DICT":
+            if dict_k is None:
+                dict_k, dict_v = fresh(), fresh()
+            return f"Dict {dict_k} {dict_v}"
         if tok == "SEQ":
+            if set_elem and (is_ret or not fn_dom):
+                return f"[{set_elem}]"
+            if dict_k and is_ret:
+                return f"[{dict_k}]"
             if is_ret:
                 v = fn_rng or fresh()
             elif fn_dom and not seq_from_dom_used:
@@ -230,10 +253,6 @@ def pretty_arrow(
             else:
                 v = fresh()
             return f"[{v}]"
-        if tok == "SET":
-            return f"Set {fresh()}"
-        if tok == "DICT":
-            return f"Dict {fresh()} {fresh()}"
         if tok == "TUPLE":
             return f"({fresh()}, {fresh()})"
         if tok == "LINEAR":
@@ -243,6 +262,14 @@ def pretty_arrow(
                 return "Option String"
             return "()"
         if tok == "INT":
+            if set_elem and not is_ret:
+                return set_elem
+            if dict_k and not is_ret:
+                slot = dict_k if dict_int_n == 0 else dict_v
+                dict_int_n += 1
+                return slot
+            if dict_k and is_ret and fn_name == "get":
+                return dict_v
             if fn_name in ("send", "close", "isClosed", "length", "capacity") and "Sender" in type_arities and not is_ret:
                 if pname in ("v", "x", "val", "value"):
                     return option_payload()
@@ -270,6 +297,14 @@ def pretty_arrow(
         if tok == "ADT":
             if fn_name == "openFile" and not is_ret:
                 return "FileMode"
+            if is_ret and retadt == "Iterator" and set_elem:
+                return f"Iterator {set_elem}"
+            if is_ret and retadt == "Iterator" and dict_k:
+                if fn_name == "values":
+                    return f"Iterator {dict_v}"
+                if fn_name in ("entries", "iterator"):
+                    return f"Iterator ({dict_k}, {dict_v})"
+                return f"Iterator {dict_k}"
             if is_ret and not retadt and fn_name in ITER_FNS:
                 return f"Iterator {fresh()}"
             name = retadt if (is_ret and retadt) else primary
@@ -651,9 +686,8 @@ def render_module(module: dict) -> str:
         out.append("## Functions")
         out.append("")
         for f in module["functions"]:
-            out.append(f"### {f['name']}")
-            out.append("")
-            out.append(f"`{signature_of(f, module.get('yonai'), arities)}`")
+            sig = signature_of(f, module.get("yonai"), arities)
+            out.append(f"### `{sig}`")
             out.append("")
             if f["doc"]:
                 out.append(render_doc(f["doc"]))
@@ -677,25 +711,33 @@ def compact_legacy(text: str) -> str:
 
 
 HEADING_SIG = re.compile(r"^### ([a-z][a-zA-Z0-9_]*)\n\n`([^`]+)`\n", re.MULTILINE)
+HEADING_TYPED = re.compile(r"^### `([a-z][a-zA-Z0-9_]*) : [^`]+`\n", re.MULTILINE)
 
 
 def apply_yonai_sigs(text: str, yonai: dict[str, dict], type_arities: dict[str, list[str]] | None = None) -> str:
     """Replace parameter-list signatures with `name : T1 -> T2 -> R` from .yonai."""
 
+    def pretty_of(name: str) -> str | None:
+        if name not in yonai:
+            return None
+        y = yonai[name]
+        return pretty_arrow(
+            y["params"],
+            y["ret"],
+            y.get("retadt"),
+            type_arities,
+            fn_name=name,
+        )
+
     def repl(m: re.Match) -> str:
         name, old = m.group(1), m.group(2)
-        if name in yonai:
-            y = yonai[name]
-            pretty = pretty_arrow(
-                y["params"],
-                y["ret"],
-                y.get("retadt"),
-                type_arities,
-                fn_name=name,
-            )
-            return f"### {name}\n\n`{name} : {pretty}`\n"
+        pretty = pretty_of(name)
+        if pretty:
+            return f"### `{name} : {pretty}`\n"
         if ":" in old:
-            return m.group(0)
+            # Already a type signature on the following line — lift it into the heading.
+            sig = old if old.startswith(name) else f"{name} : {old}"
+            return f"### `{sig}`\n"
         bits = old.split()
         nparams = max(0, len(bits) - 1)
         letters = "abcdefghijklmnopqrstuvwxyz"
@@ -704,9 +746,16 @@ def apply_yonai_sigs(text: str, yonai: dict[str, dict], type_arities: dict[str, 
         else:
             args = [letters[i] for i in range(nparams)]
             body = " -> ".join(args) + f" -> {letters[nparams]}"
-        return f"### {name}\n\n`{name} : {body}`\n"
+        return f"### `{name} : {body}`\n"
 
-    return HEADING_SIG.sub(repl, text)
+    def repl_typed(m: re.Match) -> str:
+        name = m.group(1)
+        pretty = pretty_of(name)
+        if not pretty:
+            return m.group(0)
+        return f"### `{name} : {pretty}`\n"
+
+    return HEADING_TYPED.sub(repl_typed, HEADING_SIG.sub(repl, text))
 
 
 def first_sentence(module_doc: list[str]) -> str:

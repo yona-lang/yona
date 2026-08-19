@@ -7,9 +7,7 @@ and microseconds, sleep, and formatted time output.
 
 ## Functions
 
-### now
-
-`now : Int`
+### `now : Int`
 
 Returns the current wall-clock time in milliseconds since the Unix epoch.
 
@@ -18,9 +16,7 @@ import now from Std\Time in
 now   # => 1712678400000
 ```
 
-### nowMicros
-
-`nowMicros : Int`
+### `nowMicros : Int`
 
 Returns the current time in microseconds since the Unix epoch.
 
@@ -29,9 +25,7 @@ import nowMicros from Std\Time in
 nowMicros   # => 1712678400000000
 ```
 
-### epoch
-
-`epoch : Int`
+### `epoch : Int`
 
 Returns the Unix epoch (0) as a timestamp. Useful as a base for relative calculations.
 
@@ -40,9 +34,7 @@ import epoch from Std\Time in
 epoch   # => 0
 ```
 
-### sleep
-
-`sleep : Int -> ()`
+### `sleep : Int -> ()`
 
 Sleep for the given number of milliseconds.
 
@@ -51,9 +43,7 @@ import sleep from Std\Time in
 sleep 1000   # sleep for 1 second
 ```
 
-### format
-
-`format : Int -> String`
+### `format : Int -> String`
 
 Format a millisecond timestamp as a human-readable date-time string.
 
@@ -62,9 +52,7 @@ import now, format from Std\Time in
 format (now)   # => "2025-04-09 12:00:00"
 ```
 
-### elapsed
-
-`elapsed : Int -> Int -> Int`
+### `elapsed : Int -> Int -> Int`
 
 Compute the elapsed time in milliseconds between two timestamps.
 

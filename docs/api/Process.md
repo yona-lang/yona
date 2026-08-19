@@ -9,9 +9,7 @@ current fiber without blocking the OS thread.
 
 ## Functions
 
-### getenv
-
-`getenv : String -> String`
+### `getenv : String -> String`
 
 Get the value of an environment variable. Returns an empty string if not set.
 
@@ -20,9 +18,7 @@ import getenv from Std\Process in
 getenv "HOME"   # => "/home/user"
 ```
 
-### getcwd
-
-`getcwd : String`
+### `getcwd : String`
 
 Returns the current working directory.
 
@@ -31,9 +27,7 @@ import getcwd from Std\Process in
 getcwd   # => "/home/user/project"
 ```
 
-### exit
-
-`exit : Int -> Int`
+### `exit : Int -> Int`
 
 Terminate the process with the given exit code.
 
@@ -42,9 +36,7 @@ import exit from Std\Process in
 exit 0
 ```
 
-### exec
-
-`exec : String -> String`
+### `exec : String -> String`
 
 Execute a shell command and return its stdout as a string. Async.
 
@@ -54,9 +46,7 @@ let output = exec "ls -la" in
 println output
 ```
 
-### execStatus
-
-`execStatus : String -> Int`
+### `execStatus : String -> Int`
 
 Execute a shell command and return its exit status code. Async.
 
@@ -66,9 +56,7 @@ let code = execStatus "make build" in
 println (show code)
 ```
 
-### setenv
-
-`setenv : String -> String -> Int`
+### `setenv : String -> String -> Int`
 
 Set an environment variable. Returns 0 on success.
 
@@ -77,9 +65,7 @@ import setenv from Std\Process in
 setenv "MY_VAR" "hello"
 ```
 
-### hostname
-
-`hostname : String`
+### `hostname : String`
 
 Returns the system hostname.
 
@@ -88,9 +74,7 @@ import hostname from Std\Process in
 hostname   # => "myhost"
 ```
 
-### spawn
-
-`spawn : String -> Int`
+### `spawn : String -> Int`
 
 Spawn a subprocess without waiting for it to finish. Returns a process handle (Int).
 
@@ -101,9 +85,7 @@ let status = wait proc in
 println (show status)
 ```
 
-### readLine
-
-`readLine : Int -> String`
+### `readLine : Int -> String`
 
 Read a single line from the subprocess stdout.
 
@@ -113,21 +95,15 @@ let proc = spawn "echo hello" in
 readLine proc   # => "hello"
 ```
 
-### readAll
-
-`readAll : Int -> String`
+### `readAll : Int -> String`
 
 Read all remaining stdout from a subprocess as a string. Async.
 
-### wait
-
-`wait : Int -> Int`
+### `wait : Int -> Int`
 
 Wait for a subprocess to exit and return its exit status. Async.
 
-### kill
-
-`kill : Int -> Int -> Int`
+### `kill : Int -> Int -> Int`
 
 Send a signal to a subprocess. Returns 0 on success.
 
@@ -137,21 +113,15 @@ let proc = spawn "sleep 100" in
 kill proc 15   # SIGTERM
 ```
 
-### writeStdin
-
-`writeStdin : Int -> String -> Int`
+### `writeStdin : Int -> String -> Int`
 
 Write a string to the subprocess stdin. Returns the number of bytes written.
 
-### closeStdin
-
-`closeStdin : Int -> Int`
+### `closeStdin : Int -> Int`
 
 Close the stdin pipe of a subprocess. Returns 0 on success.
 
-### pid
-
-`pid : Int -> Int`
+### `pid : Int -> Int`
 
 Returns the OS process ID of a subprocess.
 

@@ -15,9 +15,7 @@ A pair with named fields.
 
 ## Functions
 
-### pair
-
-`pair : a -> b -> Pair c d`
+### `pair : a -> b -> Pair c d`
 
 Creates a pair from two values.
 
@@ -25,9 +23,7 @@ Creates a pair from two values.
 pair 1 2   # => Pair { fst = 1, snd = 2 }
 ```
 
-### first
-
-`first : Pair a b -> c`
+### `first : Pair a b -> c`
 
 Extracts the first element.
 
@@ -35,9 +31,7 @@ Extracts the first element.
 first (pair 1 2)   # => 1
 ```
 
-### second
-
-`second : Pair a b -> c`
+### `second : Pair a b -> c`
 
 Extracts the second element.
 
@@ -45,9 +39,7 @@ Extracts the second element.
 second (pair 1 2)   # => 2
 ```
 
-### mapFirst
-
-`mapFirst : (a -> b) -> Pair c d -> Pair e f`
+### `mapFirst : (a -> b) -> Pair c d -> Pair e f`
 
 Transforms the first element.
 
@@ -55,9 +47,7 @@ Transforms the first element.
 mapFirst (\x -> x * 10) (pair 3 5)   # => Pair { fst = 30, snd = 5 }
 ```
 
-### mapSecond
-
-`mapSecond : (a -> b) -> Pair c d -> Pair e f`
+### `mapSecond : (a -> b) -> Pair c d -> Pair e f`
 
 Transforms the second element.
 
@@ -65,9 +55,7 @@ Transforms the second element.
 mapSecond (\x -> x * 10) (pair 3 5)   # => Pair { fst = 3, snd = 50 }
 ```
 
-### mapPair
-
-`mapPair : (a -> b) -> (c -> d) -> Pair e f -> Pair g h`
+### `mapPair : (a -> b) -> (c -> d) -> Pair e f -> Pair g h`
 
 Transforms both elements with two functions.
 
@@ -75,9 +63,7 @@ Transforms both elements with two functions.
 mapPair (\x -> x + 1) (\x -> x * 2) (pair 3 5)   # => Pair { fst = 4, snd = 10 }
 ```
 
-### swap
-
-`swap : Pair a b -> Pair c d`
+### `swap : Pair a b -> Pair c d`
 
 Swaps the two elements.
 
@@ -85,9 +71,7 @@ Swaps the two elements.
 swap (pair 1 2)   # => Pair { fst = 2, snd = 1 }
 ```
 
-### toTuple
-
-`toTuple : Pair a b -> (c, d)`
+### `toTuple : Pair a b -> (c, d)`
 
 Converts to a tuple `(a, b)`.
 
@@ -95,9 +79,7 @@ Converts to a tuple `(a, b)`.
 toTuple (pair 1 2)   # => (1, 2)
 ```
 
-### fromTuple
-
-`fromTuple : (a, b) -> Pair c d`
+### `fromTuple : (a, b) -> Pair c d`
 
 Creates a pair from a tuple.
 

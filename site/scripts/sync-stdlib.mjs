@@ -35,13 +35,22 @@ function rewriteLinks(text) {
 function compactSignatures(text) {
 	let next = text.replace(
 		/^### `([^`]+)`\n\n```(?:yona)?\n([\s\S]*?)\n```\n/gm,
-		(_, name, body) => {
+		(m, name, body) => {
+			if (name.includes(':')) return m;
 			const first = body.trim().split('\n')[0].replace(/\s*=\s*$/, '');
 			return `### ${name}\n\n\`${first}\`\n\n`;
 		},
 	);
 	next = next.replace(/^### `type ([A-Z][a-zA-Z0-9_]*)([^`]*)`\n/gm, '### $1\n\n`type $1$2`\n');
 	return next.replace(/\n{3,}/g, '\n\n');
+}
+
+function liftSignatures(text) {
+	return text.replace(/^### ([a-z][a-zA-Z0-9_]*)\n\n`([^`]+)`\n/gm, (m, name, sig) => {
+		if (!sig.includes(':')) return m;
+		const full = sig.startsWith(name) ? sig : `${name} : ${sig}`;
+		return `### \`${full}\`\n`;
+	});
 }
 
 function tagBareFences(text) {
@@ -75,7 +84,7 @@ function transform(raw, { isIndex }) {
 
 	const title = isIndex ? 'Standard library' : heading.replace('Std.', 'Std\\');
 
-	text = tagBareFences(rewriteLinks(compactSignatures(text)));
+	text = liftSignatures(tagBareFences(rewriteLinks(compactSignatures(text))));
 
 	return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(description)}\n---\n\n<div class="stdlib-api">\n\n${text}\n\n</div>\n`;
 }

@@ -26,9 +26,7 @@ Receive-only handle wrapping a Channel.
 
 ## Functions
 
-### channel
-
-`channel : Int -> (Linear (Sender a), Linear (Receiver a))`
+### `channel : Int -> (Linear (Sender a), Linear (Receiver a))`
 
 Create a bounded channel with the given buffer capacity. Returns a tuple
 of `Linear`-wrapped sender and receiver handles. The linearity checker
@@ -42,45 +40,31 @@ case rl of Linear receiver ->
 end end
 ```
 
-### send
-
-`send : Sender a -> a -> ()`
+### `send : Sender a -> a -> ()`
 
 Send a value through a sender. Blocks if the buffer is full.
 
-### recv
-
-`recv : Receiver a -> Option a`
+### `recv : Receiver a -> Option a`
 
 Receive a value. Blocks if the buffer is empty. Returns `Some v` for a
 delivered value or `None` once the channel is closed and drained.
 
-### tryRecv
-
-`tryRecv : Receiver a -> Option a`
+### `tryRecv : Receiver a -> Option a`
 
 Non-blocking receive — returns immediately even if empty.
 
-### close
-
-`close : Sender a -> ()`
+### `close : Sender a -> ()`
 
 Close the sender side. Wakes all blocked sends and recvs.
 
-### isClosed
-
-`isClosed : Sender a -> Bool`
+### `isClosed : Sender a -> Bool`
 
 Returns true if the channel has been closed.
 
-### length
-
-`length : Sender a -> Int`
+### `length : Sender a -> Int`
 
 Current number of buffered elements.
 
-### capacity
-
-`capacity : Sender a -> Int`
+### `capacity : Sender a -> Int`
 
 Maximum buffer size (set at creation).

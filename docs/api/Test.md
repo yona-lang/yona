@@ -7,9 +7,7 @@ collect results programmatically.
 
 ## Functions
 
-### assertEqual
-
-`assertEqual : Int -> Int -> (a, b)`
+### `assertEqual : Int -> Int -> (a, b)`
 
 Asserts that `expected` equals `actual`.
 
@@ -18,9 +16,7 @@ assertEqual 42 42   # => (:pass, "assertEqual")
 assertEqual 1 2     # => (:fail, "assertEqual: expected equal values")
 ```
 
-### assertNotEqual
-
-`assertNotEqual : Int -> Int -> (a, b)`
+### `assertNotEqual : Int -> Int -> (a, b)`
 
 Asserts that `expected` does not equal `actual`.
 
@@ -28,9 +24,7 @@ Asserts that `expected` does not equal `actual`.
 assertNotEqual 1 2   # => (:pass, "assertNotEqual")
 ```
 
-### assertTrue
-
-`assertTrue : Int -> (a, b)`
+### `assertTrue : Int -> (a, b)`
 
 Asserts that `value` is true.
 
@@ -38,9 +32,7 @@ Asserts that `value` is true.
 assertTrue (1 > 0)   # => (:pass, "assertTrue")
 ```
 
-### assertFalse
-
-`assertFalse : Int -> (a, b)`
+### `assertFalse : Int -> (a, b)`
 
 Asserts that `value` is false.
 
@@ -48,9 +40,7 @@ Asserts that `value` is false.
 assertFalse (1 > 2)   # => (:pass, "assertFalse")
 ```
 
-### assertGreater
-
-`assertGreater : Int -> Int -> (a, b)`
+### `assertGreater : Int -> Int -> (a, b)`
 
 Asserts that `a > b`.
 
@@ -58,9 +48,7 @@ Asserts that `a > b`.
 assertGreater 5 3   # => (:pass, "assertGreater")
 ```
 
-### assertLess
-
-`assertLess : Int -> Int -> (a, b)`
+### `assertLess : Int -> Int -> (a, b)`
 
 Asserts that `a < b`.
 

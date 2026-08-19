@@ -7,9 +7,7 @@ and work with pattern matching on head|tail (`[h|t]`).
 
 ## Functions
 
-### map
-
-`map : (a -> b) -> [a] -> [b]`
+### `map : (a -> b) -> [a] -> [b]`
 
 Applies `fn` to every element, returning a new sequence.
 
@@ -18,9 +16,7 @@ map (\x -> x * 2) [1, 2, 3]   # => [2, 4, 6]
 map (\x -> x + 1) []           # => []
 ```
 
-### filter
-
-`filter : (a -> Bool) -> [a] -> [a]`
+### `filter : (a -> Bool) -> [a] -> [a]`
 
 Keeps only elements where `fn` returns true.
 
@@ -28,9 +24,7 @@ Keeps only elements where `fn` returns true.
 filter (\x -> x > 2) [1, 2, 3, 4]   # => [3, 4]
 ```
 
-### fold
-
-`fold : (b -> a -> b) -> b -> [a] -> b`
+### `fold : (b -> a -> b) -> b -> [a] -> b`
 
 Left fold — reduces a sequence to a single value, left to right.
 
@@ -38,15 +32,11 @@ Left fold — reduces a sequence to a single value, left to right.
 fold (\acc x -> acc + x) 0 [1, 2, 3]   # => 6
 ```
 
-### foldl
-
-`foldl : (b -> a -> b) -> b -> [a] -> b`
+### `foldl : (b -> a -> b) -> b -> [a] -> b`
 
 Alias for `fold`.
 
-### foldr
-
-`foldr : (a -> b -> b) -> b -> [a] -> b`
+### `foldr : (a -> b -> b) -> b -> [a] -> b`
 
 Right fold — reduces a sequence right to left.
 
@@ -54,9 +44,7 @@ Right fold — reduces a sequence right to left.
 foldr (\x acc -> x :: acc) [] [1, 2, 3]   # => [1, 2, 3]
 ```
 
-### length
-
-`length : [a] -> Int`
+### `length : [a] -> Int`
 
 Returns the number of elements.
 
@@ -65,9 +53,7 @@ length [1, 2, 3]   # => 3
 length []           # => 0
 ```
 
-### head
-
-`head : [a] -> Int`
+### `head : [a] -> Int`
 
 Returns the first element. Crashes on empty sequence.
 
@@ -75,9 +61,7 @@ Returns the first element. Crashes on empty sequence.
 head [1, 2, 3]   # => 1
 ```
 
-### tail
-
-`tail : [a] -> [b]`
+### `tail : [a] -> [b]`
 
 Returns all elements except the first. Crashes on empty sequence.
 
@@ -85,9 +69,7 @@ Returns all elements except the first. Crashes on empty sequence.
 tail [1, 2, 3]   # => [2, 3]
 ```
 
-### reverse
-
-`reverse : [a] -> Int`
+### `reverse : [a] -> Int`
 
 Reverses the sequence.
 
@@ -95,9 +77,7 @@ Reverses the sequence.
 reverse [1, 2, 3]   # => [3, 2, 1]
 ```
 
-### take
-
-`take : Int -> [a] -> [b]`
+### `take : Int -> [a] -> [b]`
 
 Returns the first `n` elements.
 
@@ -105,9 +85,7 @@ Returns the first `n` elements.
 take 2 [1, 2, 3, 4]   # => [1, 2]
 ```
 
-### drop
-
-`drop : Int -> [a] -> [b]`
+### `drop : Int -> [a] -> [b]`
 
 Drops the first `n` elements.
 
@@ -115,9 +93,7 @@ Drops the first `n` elements.
 drop 2 [1, 2, 3, 4]   # => [3, 4]
 ```
 
-### flatten
-
-`flatten : [a] -> [b]`
+### `flatten : [a] -> [b]`
 
 Flattens a sequence of sequences into a single sequence.
 
@@ -125,9 +101,7 @@ Flattens a sequence of sequences into a single sequence.
 flatten [[1, 2], [3], [4, 5]]   # => [1, 2, 3, 4, 5]
 ```
 
-### any
-
-`any : (a -> Bool) -> [a] -> Bool`
+### `any : (a -> Bool) -> [a] -> Bool`
 
 Returns `true` if any element satisfies `fn`.
 
@@ -136,9 +110,7 @@ any (\x -> x > 3) [1, 2, 3, 4]   # => true
 any (\x -> x > 5) [1, 2, 3]      # => false
 ```
 
-### all
-
-`all : (a -> Bool) -> [a] -> Bool`
+### `all : (a -> Bool) -> [a] -> Bool`
 
 Returns `true` if all elements satisfy `fn`.
 
@@ -147,9 +119,7 @@ all (\x -> x > 0) [1, 2, 3]   # => true
 all (\x -> x > 2) [1, 2, 3]   # => false
 ```
 
-### contains
-
-`contains : Int -> [a] -> Bool`
+### `contains : Int -> [a] -> Bool`
 
 Returns `true` if `elem` is in the sequence.
 
@@ -158,9 +128,7 @@ contains 3 [1, 2, 3]   # => true
 contains 5 [1, 2, 3]   # => false
 ```
 
-### isEmpty
-
-`isEmpty : [a] -> Bool`
+### `isEmpty : [a] -> Bool`
 
 Returns `true` if the sequence is empty.
 
@@ -169,9 +137,7 @@ isEmpty []        # => true
 isEmpty [1, 2]    # => false
 ```
 
-### nth
-
-`nth : Int -> [a] -> Int`
+### `nth : Int -> [a] -> Int`
 
 Returns the element at index `idx` (0-based). Crashes if out of bounds.
 
@@ -180,9 +146,7 @@ nth 0 [10, 20, 30]   # => 10
 nth 2 [10, 20, 30]   # => 30
 ```
 
-### zip
-
-`zip : [a] -> [b] -> [c]`
+### `zip : [a] -> [b] -> [c]`
 
 Pairs elements from two sequences. Stops at the shorter one.
 
@@ -191,9 +155,7 @@ zip [1, 2, 3] [10, 20, 30]   # => [(1, 10), (2, 20), (3, 30)]
 zip [1, 2] [10]              # => [(1, 10)]
 ```
 
-### zipWith
-
-`zipWith : (a -> b) -> [a] -> [c] -> [b]`
+### `zipWith : (a -> b) -> [a] -> [c] -> [b]`
 
 Combines elements from two sequences using `fn`.
 
@@ -201,9 +163,7 @@ Combines elements from two sequences using `fn`.
 zipWith (\a b -> a + b) [1, 2, 3] [10, 20, 30]   # => [11, 22, 33]
 ```
 
-### enumerate
-
-`enumerate : [a] -> [b]`
+### `enumerate : [a] -> [b]`
 
 Pairs each element with its 0-based index.
 
@@ -211,9 +171,7 @@ Pairs each element with its 0-based index.
 enumerate [10, 20, 30]   # => [(0, 10), (1, 20), (2, 30)]
 ```
 
-### partition
-
-`partition : (a -> b) -> [c] -> Int`
+### `partition : (a -> b) -> [c] -> Int`
 
 Splits into two sequences: elements satisfying `pred` and those that don't.
 
@@ -221,9 +179,7 @@ Splits into two sequences: elements satisfying `pred` and those that don't.
 partition (\x -> x > 2) [1, 2, 3, 4]   # => ([3, 4], [1, 2])
 ```
 
-### intersperse
-
-`intersperse : Int -> [a] -> [b]`
+### `intersperse : Int -> [a] -> [b]`
 
 Inserts `sep` between every pair of elements.
 
@@ -232,9 +188,7 @@ intersperse 0 [1, 2, 3]   # => [1, 0, 2, 0, 3]
 intersperse 0 [1]          # => [1]
 ```
 
-### scanl
-
-`scanl : (b -> a -> b) -> b -> [a] -> [b]`
+### `scanl : (b -> a -> b) -> b -> [a] -> [b]`
 
 Like `foldl` but returns all intermediate accumulator values.
 
@@ -242,9 +196,7 @@ Like `foldl` but returns all intermediate accumulator values.
 scanl (\a b -> a + b) 0 [1, 2, 3]   # => [0, 1, 3, 6]
 ```
 
-### flatMap
-
-`flatMap : (a -> b) -> [c] -> [d]`
+### `flatMap : (a -> b) -> [c] -> [d]`
 
 Maps then flattens — applies `fn` which returns a sequence, then concatenates all results.
 
@@ -252,9 +204,7 @@ Maps then flattens — applies `fn` which returns a sequence, then concatenates 
 flatMap (\x -> [x, x * 10]) [1, 2, 3]   # => [1, 10, 2, 20, 3, 30]
 ```
 
-### find
-
-`find : (a -> Bool) -> [a] -> Symbol`
+### `find : (a -> Bool) -> [a] -> Symbol`
 
 Returns `(:some, value)` for the first element satisfying `pred`, or `:none`.
 
@@ -263,9 +213,7 @@ find (\x -> x > 3) [1, 2, 5, 4]   # => (:some, 5)
 find (\x -> x > 9) [1, 2, 3]      # => :none
 ```
 
-### sortBy
-
-`sortBy : (a -> b) -> [a] -> [b]`
+### `sortBy : (a -> b) -> [a] -> [b]`
 
 Sorts using a comparison function. `cmp a b` should return negative if a < b,
 zero if equal, positive if a > b. Uses quicksort.
@@ -274,9 +222,7 @@ zero if equal, positive if a > b. Uses quicksort.
 sortBy (\a b -> a - b) [3, 1, 4, 1, 5]   # => [1, 1, 3, 4, 5]
 ```
 
-### groupBy
-
-`groupBy : (a -> b) -> [c] -> Int`
+### `groupBy : (a -> b) -> [c] -> Int`
 
 Groups elements by a key function. Returns a sequence of `(key, [values])` pairs.
 
@@ -284,9 +230,7 @@ Groups elements by a key function. Returns a sequence of `(key, [values])` pairs
 groupBy (\x -> x % 2) [1, 2, 3, 4]   # => [(1, [1, 3]), (0, [2, 4])]
 ```
 
-### sum
-
-`sum : [a] -> Int`
+### `sum : [a] -> Int`
 
 Sums all elements (integers).
 
@@ -294,9 +238,7 @@ Sums all elements (integers).
 sum [1, 2, 3, 4, 5]   # => 15
 ```
 
-### product
-
-`product : [a] -> Int`
+### `product : [a] -> Int`
 
 Multiplies all elements (integers).
 

@@ -8,9 +8,7 @@ randomness, use `Std.Crypto`.
 
 ## Functions
 
-### int
-
-`int : Int -> Int -> Int`
+### `int : Int -> Int -> Int`
 
 Generate a random integer in the range `[lo, hi]` (inclusive).
 
@@ -19,9 +17,7 @@ import int from Std\Random in
 int 1 100   # => 42 (random)
 ```
 
-### float
-
-`float : Float`
+### `float : Float`
 
 Generate a random float in the range `[0.0, 1.0)`.
 
@@ -30,9 +26,7 @@ import float from Std\Random in
 float   # => 0.7312... (random)
 ```
 
-### choice
-
-`choice : [a] -> Int`
+### `choice : [a] -> Int`
 
 Pick a random element from a sequence. Returns the element.
 
@@ -41,9 +35,7 @@ import choice from Std\Random in
 choice [10, 20, 30]   # => 20 (random)
 ```
 
-### shuffle
-
-`shuffle : [a] -> [b]`
+### `shuffle : [a] -> [b]`
 
 Return a new sequence with elements in random order.
 

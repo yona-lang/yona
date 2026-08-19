@@ -7,9 +7,7 @@ accessors, transformers, and conversion functions.
 
 ## Functions
 
-### fst
-
-`fst : (a, b) -> Int`
+### `fst : (a, b) -> Int`
 
 Returns the first element of a pair.
 
@@ -17,9 +15,7 @@ Returns the first element of a pair.
 fst (1, 2)   # => 1
 ```
 
-### snd
-
-`snd : (a, b) -> Int`
+### `snd : (a, b) -> Int`
 
 Returns the second element of a pair.
 
@@ -27,9 +23,7 @@ Returns the second element of a pair.
 snd (1, 2)   # => 2
 ```
 
-### swap
-
-`swap : (a, b) -> (c, d)`
+### `swap : (a, b) -> (c, d)`
 
 Swaps the elements of a pair.
 
@@ -37,9 +31,7 @@ Swaps the elements of a pair.
 swap (1, 2)   # => (2, 1)
 ```
 
-### mapBoth
-
-`mapBoth : (a -> b) -> (c -> d) -> (e, f) -> (g, h)`
+### `mapBoth : (a -> b) -> (c -> d) -> (e, f) -> (g, h)`
 
 Applies two functions to the respective elements.
 
@@ -47,9 +39,7 @@ Applies two functions to the respective elements.
 mapBoth (\x -> x + 1) (\x -> x * 2) (3, 5)   # => (4, 10)
 ```
 
-### mapFst
-
-`mapFst : (a -> b) -> (c, d) -> (e, f)`
+### `mapFst : (a -> b) -> (c, d) -> (e, f)`
 
 Transforms the first element, keeping the second unchanged.
 
@@ -57,9 +47,7 @@ Transforms the first element, keeping the second unchanged.
 mapFst (\x -> x * 10) (3, 5)   # => (30, 5)
 ```
 
-### mapSnd
-
-`mapSnd : (a -> b) -> (c, d) -> (e, f)`
+### `mapSnd : (a -> b) -> (c, d) -> (e, f)`
 
 Transforms the second element, keeping the first unchanged.
 
@@ -67,9 +55,7 @@ Transforms the second element, keeping the first unchanged.
 mapSnd (\x -> x * 10) (3, 5)   # => (3, 50)
 ```
 
-### toList
-
-`toList : (a, b) -> [c]`
+### `toList : (a, b) -> [c]`
 
 Converts a pair to a two-element sequence.
 
@@ -77,9 +63,7 @@ Converts a pair to a two-element sequence.
 toList (1, 2)   # => [1, 2]
 ```
 
-### curry
-
-`curry : (a -> b) -> Int -> Int -> (c, d)`
+### `curry : (a -> b) -> Int -> Int -> (c, d)`
 
 Converts a function taking a pair into one taking two arguments.
 
@@ -87,9 +71,7 @@ Converts a function taking a pair into one taking two arguments.
 let add = \(a, b) -> a + b in curry add 3 4   # => 7
 ```
 
-### uncurry
-
-`uncurry : (a -> b) -> (c, d) -> Int`
+### `uncurry : (a -> b) -> (c, d) -> Int`
 
 Converts a function taking two arguments into one taking a pair.
 

@@ -8,9 +8,7 @@ file handle operations. Async functions (`readFile`, `readFileBytes`,
 
 ## Functions
 
-### readFile
-
-`readFile : String -> String`
+### `readFile : String -> String`
 
 Read the entire contents of a file as a string. Async (io_uring).
 
@@ -20,9 +18,7 @@ let contents = readFile "data.txt" in
 println contents
 ```
 
-### writeFile
-
-`writeFile : String -> String -> Bool`
+### `writeFile : String -> String -> Bool`
 
 Write a string to a file, creating or overwriting it. Async (io_uring).
 Returns `true` on success.
@@ -32,9 +28,7 @@ import writeFile from Std\File in
 writeFile "out.txt" "hello world"   # => true
 ```
 
-### appendFile
-
-`appendFile : String -> String -> Bool`
+### `appendFile : String -> String -> Bool`
 
 Append a string to a file. Returns `true` on success.
 
@@ -43,9 +37,7 @@ import appendFile from Std\File in
 appendFile "log.txt" "new line\n"   # => true
 ```
 
-### exists
-
-`exists : String -> Bool`
+### `exists : String -> Bool`
 
 Check whether a file or directory exists at the given path.
 
@@ -54,9 +46,7 @@ import exists from Std\File in
 exists "/tmp"   # => true
 ```
 
-### remove
-
-`remove : String -> Bool`
+### `remove : String -> Bool`
 
 Delete a file. Returns `true` on success.
 
@@ -65,9 +55,7 @@ import remove from Std\File in
 remove "temp.txt"   # => true
 ```
 
-### size
-
-`size : String -> Int`
+### `size : String -> Int`
 
 Returns the size of a file in bytes.
 
@@ -76,9 +64,7 @@ import size from Std\File in
 size "data.bin"   # => 4096
 ```
 
-### listDir
-
-`listDir : String -> [a]`
+### `listDir : String -> [a]`
 
 List directory contents. Returns a sequence of filenames.
 
@@ -87,9 +73,7 @@ import listDir from Std\File in
 listDir "/tmp"   # => ["file1.txt", "file2.txt", ...]
 ```
 
-### readLines
-
-`readLines : String -> Iterator a`
+### `readLines : String -> Iterator a`
 
 Returns an `Iterator String` that yields lines from the file lazily.
 Uses O(1) memory per element.
@@ -100,9 +84,7 @@ let iter = readLines "big.csv" in
 # consume with iterator protocol
 ```
 
-### readFileBytes
-
-`readFileBytes : String -> ByteArray`
+### `readFileBytes : String -> ByteArray`
 
 Read the entire file as a byte buffer. Async (io_uring).
 
@@ -112,9 +94,7 @@ let buf = readFileBytes "image.png" in
 Bytes::length buf
 ```
 
-### writeFileBytes
-
-`writeFileBytes : String -> ByteArray -> Bool`
+### `writeFileBytes : String -> ByteArray -> Bool`
 
 Write a byte buffer to a file. Returns `true` on success.
 
@@ -124,9 +104,7 @@ import fromSeq from Std\ByteArray in
 writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 ```
 
-### openFile
-
-`openFile : String -> FileMode -> FileHandle`
+### `openFile : String -> FileMode -> FileHandle`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
 Returns a file descriptor (Int).
@@ -139,29 +117,21 @@ closeFileHandle fd
 
 The mode is a `FileMode` ADT (Prelude): `Read`, `Write`, `ReadWrite`, `Append`.
 
-### closeFileHandle
-
-`closeFileHandle : Int -> ()`
+### `closeFileHandle : Int -> ()`
 
 Close a file descriptor.
 
-### readBytes
-
-`readBytes : Int -> Int -> ByteArray`
+### `readBytes : Int -> Int -> ByteArray`
 
 Read up to `count` bytes from a file descriptor. Async (io_uring).
 Returns a byte buffer.
 
-### writeBytes
-
-`writeBytes : Int -> Int -> Int`
+### `writeBytes : Int -> Int -> Int`
 
 Write bytes to a file descriptor. Async (io_uring).
 Returns the number of bytes written.
 
-### seek
-
-`seek : Int -> Int -> a -> Int`
+### `seek : Int -> Int -> a -> Int`
 
 Seek to a position in a file. `whence` is a `Whence` ADT (Prelude):
 `SeekSet` (absolute), `SeekCur` (relative to current), `SeekEnd` (relative to end).
@@ -173,27 +143,19 @@ let fd = openFile "data.bin" "r" in
 seek fd 100 "set"
 ```
 
-### tell
-
-`tell : Int -> Int`
+### `tell : Int -> Int`
 
 Returns the current position in a file descriptor.
 
-### flush
-
-`flush : Int -> Bool`
+### `flush : Int -> Bool`
 
 Flush buffered writes for a file descriptor. Returns `true` on success.
 
-### truncate
-
-`truncate : Int -> Int -> Bool`
+### `truncate : Int -> Int -> Bool`
 
 Truncate a file to the given length. Returns `true` on success.
 
-### readChunks
-
-`readChunks : Int -> Int -> Iterator a`
+### `readChunks : Int -> Int -> Iterator a`
 
 Read data from a file descriptor in chunks of `chunkSize` bytes.
 Returns a handle for chunked reading.
