@@ -9,8 +9,10 @@
   GitHub Pages at https://yona-lang.github.io/.
 - Docs site traffic is measured with cookieless Plausible at
   `plausible.kiket.dev` (`data-domain` `yona-lang.org`).
-- Docs examples drop dummy trailing `0`, `let … in do`, and single-expression
-  `do` wrappers.
+- Docs examples drop dummy trailing `0` and single-expression `do` wrappers.
+  `let … in do` is valid: `let` binds (and may parallelize), `do` sequences.
+- Style page: `let` and `do` have different semantics; combining them is
+  idiomatic when you need both. The anti-pattern is `let _ = effect`.
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
 

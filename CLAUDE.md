@@ -124,7 +124,11 @@ Yona language compiler using LLVM. Pipeline: Lexer → Parser → AST → Codege
 ### Yona Idioms (IMPORTANT — follow these when writing Yona code)
 
 - **Don't nest let expressions.** Use multi-binding: `let x = 1, y = 2 in x + y`
-- **Don't wrap `do` in `let`.** Use `do ... end` directly for side effects
+- **`let` and `do` have different semantics.** `let` binds values
+  (independent RHSs may parallelize); `do` sequences effects. Combining
+  them is valid when you need both (`let a = …, b = … in do … end`). Do
+  not use `let _ = effect` to sequence, and do not wrap a single
+  expression in `do`. Use `do ... end` for ordered side effects
 - **Use comma-separated imports:** `import a from X, b from Y in ...`
 - **Use `with` for resources:** `with h = openFile "f" Read in ... end`
 - **Use parallel comprehensions:** `[| f x for x = xs ]` for concurrent processing
