@@ -4,13 +4,14 @@
 
 ### `pmap : (a -> b) -> [c] -> [b]`
 
-Parallel map — applies f to each element concurrently.
-All invocations of f run in parallel. If any fails, the
+Parallel map — applies `f` to each element concurrently.
+All invocations of `f` run in parallel. If any fails, the
 rest are cancelled and the error is propagated.
 
-Example:
+```
 import pmap from Std\Parallel in
-pmap (\x -> x * 2) [1, 2, 3]   -- [2, 4, 6]
+pmap (\x -> x * 2) [1, 2, 3]   # => [2, 4, 6]
+```
 
 ### `pfor : (a -> b) -> [c] -> Int`
 

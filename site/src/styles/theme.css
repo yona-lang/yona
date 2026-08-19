@@ -157,7 +157,11 @@ footer.sl-flex {
 	max-width: 52rem;
 }
 
-.sl-markdown-content .stdlib-api h2 {
+.sl-markdown-content .stdlib-api .sl-heading-wrapper {
+	--sl-anchor-icon-gap: 0.55em;
+}
+
+.sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h2 {
 	font-family: var(--sl-font);
 	font-size: 0.72rem;
 	font-weight: 600;
@@ -170,8 +174,20 @@ footer.sl-flex {
 	margin-bottom: 0.4rem;
 }
 
+.sl-markdown-content .stdlib-api h2 {
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+	color: inherit;
+	margin: 0;
+	padding-block: 0;
+	padding-inline-start: 0;
+	border: none;
+}
+
 .sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h3 {
-	--sl-anchor-icon-gap: 0.55em;
 	font-family: var(--sl-font-mono);
 	font-size: 0.92rem;
 	font-weight: 500;

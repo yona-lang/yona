@@ -26,6 +26,7 @@
   a parameter list.
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
+- `Std\Parallel.pmap` example is a fenced code block on the stdlib page.
 
 ## v0.1.3 (2026-08-18)
 
