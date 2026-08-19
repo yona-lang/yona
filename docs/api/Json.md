@@ -8,11 +8,9 @@ parsing simple JSON values.
 
 ## Functions
 
-### `stringify`
+### stringify
 
-```yona
-stringify n =
-```
+`stringify n`
 
 Convert an integer to its JSON string representation.
 
@@ -21,11 +19,9 @@ import stringify from Std\Json in
 stringify 42   # => "42"
 ```
 
-### `stringifyString`
+### stringifyString
 
-```yona
-stringifyString str =
-```
+`stringifyString str`
 
 Convert a string to a JSON-quoted string with proper escaping.
 
@@ -34,11 +30,9 @@ import stringifyString from Std\Json in
 stringifyString "hello \"world\""   # => "\"hello \\\"world\\\"\""
 ```
 
-### `stringifyBool`
+### stringifyBool
 
-```yona
-stringifyBool b =
-```
+`stringifyBool b`
 
 Convert a boolean to `"true"` or `"false"`.
 
@@ -47,11 +41,9 @@ import stringifyBool from Std\Json in
 stringifyBool true   # => "true"
 ```
 
-### `stringifyFloat`
+### stringifyFloat
 
-```yona
-stringifyFloat x =
-```
+`stringifyFloat x`
 
 Convert a float to its JSON string representation.
 
@@ -60,11 +52,9 @@ import stringifyFloat from Std\Json in
 stringifyFloat 3.14   # => "3.14"
 ```
 
-### `null`
+### null
 
-```yona
-null =
-```
+`null`
 
 Returns the JSON null literal string `"null"`.
 
@@ -73,11 +63,9 @@ import null from Std\Json in
 null   # => "null"
 ```
 
-### `parseInt`
+### parseInt
 
-```yona
-parseInt str =
-```
+`parseInt str`
 
 Parse a JSON integer string to an Int.
 
@@ -86,11 +74,9 @@ import parseInt from Std\Json in
 parseInt "42"   # => 42
 ```
 
-### `parseFloat`
+### parseFloat
 
-```yona
-parseFloat str =
-```
+`parseFloat str`
 
 Parse a JSON float string to a Float.
 

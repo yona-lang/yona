@@ -7,11 +7,9 @@ plus conditional execution helpers.
 
 ## Functions
 
-### `not`
+### not
 
-```yona
-not x = if x then false else true
-```
+`not x`
 
 Logical negation.
 
@@ -20,11 +18,9 @@ not true    # => false
 not false   # => true
 ```
 
-### `and`
+### and
 
-```yona
-and a b = if a then b else false
-```
+`and a b`
 
 Logical AND (short-circuiting).
 
@@ -33,11 +29,9 @@ and true true    # => true
 and true false   # => false
 ```
 
-### `or`
+### or
 
-```yona
-or a b = if a then true else b
-```
+`or a b`
 
 Logical OR (short-circuiting).
 
@@ -46,11 +40,9 @@ or false true    # => true
 or false false   # => false
 ```
 
-### `xor`
+### xor
 
-```yona
-xor a b = if a then not b else b
-```
+`xor a b`
 
 Exclusive OR — true when exactly one argument is true.
 
@@ -59,11 +51,9 @@ xor true false   # => true
 xor true true    # => false
 ```
 
-### `implies`
+### implies
 
-```yona
-implies a b = if a then b else true
-```
+`implies a b`
 
 Logical implication: `a → b`. False only when `a` is true and `b` is false.
 
@@ -73,11 +63,9 @@ implies true false   # => false
 implies false true   # => true
 ```
 
-### `when`
+### when
 
-```yona
-when cond fn = if cond then fn () else :ok
-```
+`when cond fn`
 
 Executes `fn ()` if `cond` is true, otherwise returns `:ok`.
 
@@ -86,11 +74,9 @@ when true (\-> 42)    # => 42
 when false (\-> 42)   # => :ok
 ```
 
-### `unless`
+### unless
 
-```yona
-unless cond fn = if cond then :ok else fn ()
-```
+`unless cond fn`
 
 Executes `fn ()` if `cond` is false, otherwise returns `:ok`.
 
@@ -98,4 +84,3 @@ Executes `fn ()` if `cond` is false, otherwise returns `:ok`.
 unless false (\-> 42)   # => 42
 unless true (\-> 42)    # => :ok
 ```
-

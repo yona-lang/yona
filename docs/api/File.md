@@ -8,11 +8,9 @@ file handle operations. Async functions (`readFile`, `readFileBytes`,
 
 ## Functions
 
-### `readFile`
+### readFile
 
-```yona
-readFile path =
-```
+`readFile path`
 
 Read the entire contents of a file as a string. Async (io_uring).
 
@@ -22,11 +20,9 @@ let contents = readFile "data.txt" in
 println contents
 ```
 
-### `writeFile`
+### writeFile
 
-```yona
-writeFile path contents =
-```
+`writeFile path contents`
 
 Write a string to a file, creating or overwriting it. Async (io_uring).
 Returns `true` on success.
@@ -36,11 +32,9 @@ import writeFile from Std\File in
 writeFile "out.txt" "hello world"   # => true
 ```
 
-### `appendFile`
+### appendFile
 
-```yona
-appendFile path contents =
-```
+`appendFile path contents`
 
 Append a string to a file. Returns `true` on success.
 
@@ -49,11 +43,9 @@ import appendFile from Std\File in
 appendFile "log.txt" "new line\n"   # => true
 ```
 
-### `exists`
+### exists
 
-```yona
-exists path =
-```
+`exists path`
 
 Check whether a file or directory exists at the given path.
 
@@ -62,11 +54,9 @@ import exists from Std\File in
 exists "/tmp"   # => true
 ```
 
-### `remove`
+### remove
 
-```yona
-remove path =
-```
+`remove path`
 
 Delete a file. Returns `true` on success.
 
@@ -75,11 +65,9 @@ import remove from Std\File in
 remove "temp.txt"   # => true
 ```
 
-### `size`
+### size
 
-```yona
-size path =
-```
+`size path`
 
 Returns the size of a file in bytes.
 
@@ -88,11 +76,9 @@ import size from Std\File in
 size "data.bin"   # => 4096
 ```
 
-### `listDir`
+### listDir
 
-```yona
-listDir path =
-```
+`listDir path`
 
 List directory contents. Returns a sequence of filenames.
 
@@ -101,11 +87,9 @@ import listDir from Std\File in
 listDir "/tmp"   # => ["file1.txt", "file2.txt", ...]
 ```
 
-### `readLines`
+### readLines
 
-```yona
-readLines path =
-```
+`readLines path`
 
 Returns an `Iterator String` that yields lines from the file lazily.
 Uses O(1) memory per element.
@@ -116,11 +100,9 @@ let iter = readLines "big.csv" in
 # consume with iterator protocol
 ```
 
-### `readFileBytes`
+### readFileBytes
 
-```yona
-readFileBytes path =
-```
+`readFileBytes path`
 
 Read the entire file as a byte buffer. Async (io_uring).
 
@@ -130,11 +112,9 @@ let buf = readFileBytes "image.png" in
 Bytes::length buf
 ```
 
-### `writeFileBytes`
+### writeFileBytes
 
-```yona
-writeFileBytes path bytes =
-```
+`writeFileBytes path bytes`
 
 Write a byte buffer to a file. Returns `true` on success.
 
@@ -144,11 +124,9 @@ import fromSeq from Std\ByteArray in
 writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 ```
 
-### `openFile`
+### openFile
 
-```yona
-openFile path mode =
-```
+`openFile path mode`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
 Returns a file descriptor (Int).
@@ -161,37 +139,29 @@ closeFileHandle fd
 
 The mode is a `FileMode` ADT (Prelude): `Read`, `Write`, `ReadWrite`, `Append`.
 
-### `closeFileHandle`
+### closeFileHandle
 
-```yona
-closeFileHandle fd =
-```
+`closeFileHandle fd`
 
 Close a file descriptor.
 
-### `readBytes`
+### readBytes
 
-```yona
-readBytes fd count =
-```
+`readBytes fd count`
 
 Read up to `count` bytes from a file descriptor. Async (io_uring).
 Returns a byte buffer.
 
-### `writeBytes`
+### writeBytes
 
-```yona
-writeBytes fd count =
-```
+`writeBytes fd count`
 
 Write bytes to a file descriptor. Async (io_uring).
 Returns the number of bytes written.
 
-### `seek`
+### seek
 
-```yona
-seek fd offset whence =
-```
+`seek fd offset whence`
 
 Seek to a position in a file. `whence` is a `Whence` ADT (Prelude):
 `SeekSet` (absolute), `SeekCur` (relative to current), `SeekEnd` (relative to end).
@@ -203,35 +173,27 @@ let fd = openFile "data.bin" "r" in
 seek fd 100 "set"
 ```
 
-### `tell`
+### tell
 
-```yona
-tell fd =
-```
+`tell fd`
 
 Returns the current position in a file descriptor.
 
-### `flush`
+### flush
 
-```yona
-flush fd =
-```
+`flush fd`
 
 Flush buffered writes for a file descriptor. Returns `true` on success.
 
-### `truncate`
+### truncate
 
-```yona
-truncate fd length =
-```
+`truncate fd length`
 
 Truncate a file to the given length. Returns `true` on success.
 
-### `readChunks`
+### readChunks
 
-```yona
-readChunks fd chunkSize =
-```
+`readChunks fd chunkSize`
 
 Read data from a file descriptor in chunks of `chunkSize` bytes.
 Returns a handle for chunked reading.

@@ -7,11 +7,9 @@ filled from a sequence of values.
 
 ## Functions
 
-### `format`
+### format
 
-```yona
-format template args =
-```
+`format template args`
 
 Format a template string by replacing `{}` placeholders with values
 from the `args` sequence, in order.

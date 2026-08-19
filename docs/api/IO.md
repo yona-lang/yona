@@ -25,170 +25,97 @@ end
 
 ## Functions
 
-### `stdinFd`
+### stdinFd
 
-```yona
-stdinFd  = 0
-```
+`stdinFd = 0`
 
 File descriptor numbers, exposed as Int so any Std\File handle call
 that expects `FileHandle` can be wrapped — `FileHandle stdoutFd`
 builds the Linear-compatible handle — and the raw int is also useful
 for passing to `write` without constructing the ADT.
 
-### `stdoutFd`
+### stdoutFd
 
-```yona
-stdoutFd = 1
-```
+`stdoutFd = 1`
 
-### `stderrFd`
+### stderrFd
 
-```yona
-stderrFd = 2
-```
+`stderrFd = 2`
 
-### `extern`
+### print
 
-```yona
-extern io    yona_Std_IO__writeStr    : Int -> String -> ()     = "yona_Std_IO__writeStr"
-```
+`print s`
 
------ Low-level externs ----------------------------------------------------
-
-The Yona names are kept short and friendly; the actual C symbols live
-in `compiled_runtime.c` and submit to `io_uring` via the platform layer.
-All four write primitives are non-blocking (`IO` in .yonai terms) and
-return a Promise that auto-awaits at the call site. `readLineFd` is
-`AFN` — thread-pool async — since line-buffering an io_uring read
-stream is a v2 concern (see `docs/todo-list.md`).
-
-### `extern`
-
-```yona
-extern io    yona_Std_IO__writeLine   : Int -> String -> ()     = "yona_Std_IO__writeLine"
-```
-
-### `extern`
-
-```yona
-extern async yona_Std_IO__readLineFd  : Int -> Option           = "yona_Std_IO__readLineFd"
-```
-
-### `extern`
-
-```yona
-extern       yona_Std_IO__isTty       : Int -> Bool             = "yona_Std_IO__isTty"
-```
-
-### `extern`
-
-```yona
-extern       yona_Std_IO__flushFd     : Int -> Bool             = "yona_Std_IO__flushFd"
-```
-
-### `print`
-
-```yona
-print s = yona_Std_IO__writeStr stdoutFd s
-```
-
------ Output ---------------------------------------------------------------
 Write `s` to stdout. Returns a Promise that resolves when the kernel
 has accepted the write. Non-blocking.
 
-### `println`
+### println
 
-```yona
-println s = yona_Std_IO__writeLine stdoutFd s
-```
+`println s`
 
 Write `s` followed by a newline to stdout. Non-blocking.
 
-### `eprint`
+### eprint
 
-```yona
-eprint s = yona_Std_IO__writeStr stderrFd s
-```
+`eprint s`
 
 Write `s` to stderr. Non-blocking.
 
-### `eprintln`
+### eprintln
 
-```yona
-eprintln s = yona_Std_IO__writeLine stderrFd s
-```
+`eprintln s`
 
 Write `s` followed by a newline to stderr. Non-blocking.
 
-### `putStr`
+### putStr
 
-```yona
-putStr fd s = yona_Std_IO__writeStr fd s
-```
+`putStr fd s`
 
 Write `s` to an arbitrary fd. Non-blocking.
 
-### `putStrLn`
+### putStrLn
 
-```yona
-putStrLn fd s = yona_Std_IO__writeLine fd s
-```
+`putStrLn fd s`
 
 Write `s` followed by a newline to an arbitrary fd. Non-blocking.
 
-### `write`
+### write
 
-```yona
-write fd s = yona_Std_IO__writeStr fd s
-```
+`write fd s`
 
 `write fd s` is an alias for `putStr fd s`. Kept for when you want
 the "I'm emitting bytes, not printing text" shape at the call site.
 
-### `readLine`
+### readLine
 
-```yona
-readLine = yona_Std_IO__readLineFd stdinFd
-```
+`readLine`
 
------ Input ----------------------------------------------------------------
 Read one line from stdin, stripping trailing '\n' (and any '\r').
 Returns `Some line` or `None` at EOF. Non-blocking — the read runs
 on a thread-pool worker.
 
-### `readLineFrom`
+### readLineFrom
 
-```yona
-readLineFrom fd = yona_Std_IO__readLineFd fd
-```
+`readLineFrom fd`
 
 Read one line from an arbitrary fd. Same semantics as `readLine`.
 
-### `isTty`
+### flush
 
-```yona
-isTty fd = yona_Std_IO__isTty fd
-```
-
------ Handle control -------------------------------------------------------
-`True` if `fd` is attached to a terminal (as opposed to a pipe or file).
-Useful for turning off colored output or prompting prefixes.
-
-### `isatty`
-
-```yona
-isatty fd = yona_Std_IO__isTty fd
-```
-
-Alias for `isTty`, following the libc spelling.
-
-### `flush`
-
-```yona
-flush fd = yona_Std_IO__flushFd fd
-```
+`flush fd`
 
 Force pending writes on `fd` to disk / device (`fsync`). Most
 io_uring writes are durable on completion so this is rarely needed.
 
+### isTty
+
+`isTty fd`
+
+`True` if `fd` is attached to a terminal (as opposed to a pipe or file).
+Useful for turning off colored output or prompting prefixes.
+
+### isatty
+
+`isatty fd`
+
+Alias for `isTty`, following the libc spelling.

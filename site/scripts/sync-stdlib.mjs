@@ -32,6 +32,18 @@ function rewriteLinks(text) {
 	});
 }
 
+function compactSignatures(text) {
+	let next = text.replace(
+		/^### `([^`]+)`\n\n```(?:yona)?\n([\s\S]*?)\n```\n/gm,
+		(_, name, body) => {
+			const first = body.trim().split('\n')[0].replace(/\s*=\s*$/, '');
+			return `### ${name}\n\n\`${first}\`\n\n`;
+		},
+	);
+	next = next.replace(/^### `type ([A-Z][a-zA-Z0-9_]*)([^`]*)`\n/gm, '### $1\n\n`type $1$2`\n');
+	return next.replace(/\n{3,}/g, '\n\n');
+}
+
 function tagBareFences(text) {
 	const lines = text.split('\n');
 	let inFence = false;
@@ -63,9 +75,9 @@ function transform(raw, { isIndex }) {
 
 	const title = isIndex ? 'Standard library' : heading.replace('Std.', 'Std\\');
 
-	text = tagBareFences(rewriteLinks(text));
+	text = tagBareFences(rewriteLinks(compactSignatures(text)));
 
-	return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(description)}\n---\n\n${text}`;
+	return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(description)}\n---\n\n<div class="stdlib-api">\n\n${text}\n\n</div>\n`;
 }
 
 rmSync(OUT_DIR, { recursive: true, force: true });

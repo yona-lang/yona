@@ -7,11 +7,9 @@ collect results programmatically.
 
 ## Functions
 
-### `assertEqual`
+### assertEqual
 
-```yona
-assertEqual expected actual =
-```
+`assertEqual expected actual`
 
 Asserts that `expected` equals `actual`.
 
@@ -20,11 +18,9 @@ assertEqual 42 42   # => (:pass, "assertEqual")
 assertEqual 1 2     # => (:fail, "assertEqual: expected equal values")
 ```
 
-### `assertNotEqual`
+### assertNotEqual
 
-```yona
-assertNotEqual expected actual =
-```
+`assertNotEqual expected actual`
 
 Asserts that `expected` does not equal `actual`.
 
@@ -32,11 +28,9 @@ Asserts that `expected` does not equal `actual`.
 assertNotEqual 1 2   # => (:pass, "assertNotEqual")
 ```
 
-### `assertTrue`
+### assertTrue
 
-```yona
-assertTrue value =
-```
+`assertTrue value`
 
 Asserts that `value` is true.
 
@@ -44,11 +38,9 @@ Asserts that `value` is true.
 assertTrue (1 > 0)   # => (:pass, "assertTrue")
 ```
 
-### `assertFalse`
+### assertFalse
 
-```yona
-assertFalse value =
-```
+`assertFalse value`
 
 Asserts that `value` is false.
 
@@ -56,11 +48,9 @@ Asserts that `value` is false.
 assertFalse (1 > 2)   # => (:pass, "assertFalse")
 ```
 
-### `assertGreater`
+### assertGreater
 
-```yona
-assertGreater a b =
-```
+`assertGreater a b`
 
 Asserts that `a > b`.
 
@@ -68,15 +58,12 @@ Asserts that `a > b`.
 assertGreater 5 3   # => (:pass, "assertGreater")
 ```
 
-### `assertLess`
+### assertLess
 
-```yona
-assertLess a b =
-```
+`assertLess a b`
 
 Asserts that `a < b`.
 
 ```
 assertLess 3 5   # => (:pass, "assertLess")
 ```
-

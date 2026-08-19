@@ -7,11 +7,9 @@ and work with pattern matching on head|tail (`[h|t]`).
 
 ## Functions
 
-### `map`
+### map
 
-```yona
-map fn seq = case seq of [] -> []; [h|t] -> (fn h) :: (map fn t) end
-```
+`map fn seq`
 
 Applies `fn` to every element, returning a new sequence.
 
@@ -20,11 +18,9 @@ map (\x -> x * 2) [1, 2, 3]   # => [2, 4, 6]
 map (\x -> x + 1) []           # => []
 ```
 
-### `filter`
+### filter
 
-```yona
-filter fn seq = case seq of [] -> []; [h|t] -> if fn h then h :: (filter fn t) else filter fn t end
-```
+`filter fn seq`
 
 Keeps only elements where `fn` returns true.
 
@@ -32,11 +28,9 @@ Keeps only elements where `fn` returns true.
 filter (\x -> x > 2) [1, 2, 3, 4]   # => [3, 4]
 ```
 
-### `fold`
+### fold
 
-```yona
-fold fn acc seq = case seq of [] -> acc; [h|t] -> fold fn (fn acc h) t end
-```
+`fold fn acc seq`
 
 Left fold — reduces a sequence to a single value, left to right.
 
@@ -44,19 +38,15 @@ Left fold — reduces a sequence to a single value, left to right.
 fold (\acc x -> acc + x) 0 [1, 2, 3]   # => 6
 ```
 
-### `foldl`
+### foldl
 
-```yona
-foldl fn acc seq = case seq of [] -> acc; [h|t] -> foldl fn (fn acc h) t end
-```
+`foldl fn acc seq`
 
 Alias for `fold`.
 
-### `foldr`
+### foldr
 
-```yona
-foldr fn acc seq = case seq of [] -> acc; [h|t] -> fn h (foldr fn acc t) end
-```
+`foldr fn acc seq`
 
 Right fold — reduces a sequence right to left.
 
@@ -64,11 +54,9 @@ Right fold — reduces a sequence right to left.
 foldr (\x acc -> x :: acc) [] [1, 2, 3]   # => [1, 2, 3]
 ```
 
-### `length`
+### length
 
-```yona
-length seq = case seq of [] -> 0; [_|t] -> 1 + (length t) end
-```
+`length seq`
 
 Returns the number of elements.
 
@@ -77,11 +65,9 @@ length [1, 2, 3]   # => 3
 length []           # => 0
 ```
 
-### `head`
+### head
 
-```yona
-head seq = case seq of [h|_] -> h end
-```
+`head seq`
 
 Returns the first element. Crashes on empty sequence.
 
@@ -89,11 +75,9 @@ Returns the first element. Crashes on empty sequence.
 head [1, 2, 3]   # => 1
 ```
 
-### `tail`
+### tail
 
-```yona
-tail seq = case seq of [_|t] -> t end
-```
+`tail seq`
 
 Returns all elements except the first. Crashes on empty sequence.
 
@@ -101,11 +85,9 @@ Returns all elements except the first. Crashes on empty sequence.
 tail [1, 2, 3]   # => [2, 3]
 ```
 
-### `reverse`
+### reverse
 
-```yona
-reverse seq = foldl (\acc x -> x :: acc) [] seq
-```
+`reverse seq = foldl (\acc x -> x :: acc) [] seq`
 
 Reverses the sequence.
 
@@ -113,11 +95,9 @@ Reverses the sequence.
 reverse [1, 2, 3]   # => [3, 2, 1]
 ```
 
-### `take`
+### take
 
-```yona
-take n seq = if n <= 0 then [] else case seq of [] -> []; [h|t] -> h :: (take (n - 1) t) end
-```
+`take n seq`
 
 Returns the first `n` elements.
 
@@ -125,11 +105,9 @@ Returns the first `n` elements.
 take 2 [1, 2, 3, 4]   # => [1, 2]
 ```
 
-### `drop`
+### drop
 
-```yona
-drop n seq = if n <= 0 then seq else case seq of [] -> []; [_|t] -> drop (n - 1) t end
-```
+`drop n seq`
 
 Drops the first `n` elements.
 
@@ -137,11 +115,9 @@ Drops the first `n` elements.
 drop 2 [1, 2, 3, 4]   # => [3, 4]
 ```
 
-### `flatten`
+### flatten
 
-```yona
-flatten seq = case seq of [] -> []; [h|t] -> h ++ (flatten t) end
-```
+`flatten seq`
 
 Flattens a sequence of sequences into a single sequence.
 
@@ -149,11 +125,9 @@ Flattens a sequence of sequences into a single sequence.
 flatten [[1, 2], [3], [4, 5]]   # => [1, 2, 3, 4, 5]
 ```
 
-### `any`
+### any
 
-```yona
-any fn seq = case seq of [] -> false; [h|t] -> if fn h then true else any fn t end
-```
+`any fn seq`
 
 Returns `true` if any element satisfies `fn`.
 
@@ -162,11 +136,9 @@ any (\x -> x > 3) [1, 2, 3, 4]   # => true
 any (\x -> x > 5) [1, 2, 3]      # => false
 ```
 
-### `all`
+### all
 
-```yona
-all fn seq = case seq of [] -> true; [h|t] -> if fn h then all fn t else false end
-```
+`all fn seq`
 
 Returns `true` if all elements satisfy `fn`.
 
@@ -175,11 +147,9 @@ all (\x -> x > 0) [1, 2, 3]   # => true
 all (\x -> x > 2) [1, 2, 3]   # => false
 ```
 
-### `contains`
+### contains
 
-```yona
-contains elem seq = case seq of [] -> false; [h|t] -> if h == elem then true else contains elem t end
-```
+`contains elem seq`
 
 Returns `true` if `elem` is in the sequence.
 
@@ -188,11 +158,9 @@ contains 3 [1, 2, 3]   # => true
 contains 5 [1, 2, 3]   # => false
 ```
 
-### `isEmpty`
+### isEmpty
 
-```yona
-isEmpty seq = case seq of [] -> true; _ -> false end
-```
+`isEmpty seq`
 
 Returns `true` if the sequence is empty.
 
@@ -201,11 +169,9 @@ isEmpty []        # => true
 isEmpty [1, 2]    # => false
 ```
 
-### `nth`
+### nth
 
-```yona
-nth idx seq =
-```
+`nth idx seq`
 
 Returns the element at index `idx` (0-based). Crashes if out of bounds.
 
@@ -214,36 +180,9 @@ nth 0 [10, 20, 30]   # => 10
 nth 2 [10, 20, 30]   # => 30
 ```
 
-### `flatMap`
+### zip
 
-```yona
-flatMap fn seq = flatten (map fn seq)
-```
-
-Maps then flattens — applies `fn` which returns a sequence, then concatenates all results.
-
-```
-flatMap (\x -> [x, x * 10]) [1, 2, 3]   # => [1, 10, 2, 20, 3, 30]
-```
-
-### `find`
-
-```yona
-find pred seq =
-```
-
-Returns `(:some, value)` for the first element satisfying `pred`, or `:none`.
-
-```
-find (\x -> x > 3) [1, 2, 5, 4]   # => (:some, 5)
-find (\x -> x > 9) [1, 2, 3]      # => :none
-```
-
-### `zip`
-
-```yona
-zip seqA seqB =
-```
+`zip seqA seqB`
 
 Pairs elements from two sequences. Stops at the shorter one.
 
@@ -252,11 +191,9 @@ zip [1, 2, 3] [10, 20, 30]   # => [(1, 10), (2, 20), (3, 30)]
 zip [1, 2] [10]              # => [(1, 10)]
 ```
 
-### `zipWith`
+### zipWith
 
-```yona
-zipWith fn seqA seqB =
-```
+`zipWith fn seqA seqB`
 
 Combines elements from two sequences using `fn`.
 
@@ -264,11 +201,9 @@ Combines elements from two sequences using `fn`.
 zipWith (\a b -> a + b) [1, 2, 3] [10, 20, 30]   # => [11, 22, 33]
 ```
 
-### `enumerate`
+### enumerate
 
-```yona
-enumerate seq =
-```
+`enumerate seq`
 
 Pairs each element with its 0-based index.
 
@@ -276,11 +211,9 @@ Pairs each element with its 0-based index.
 enumerate [10, 20, 30]   # => [(0, 10), (1, 20), (2, 30)]
 ```
 
-### `partition`
+### partition
 
-```yona
-partition pred seq =
-```
+`partition pred seq`
 
 Splits into two sequences: elements satisfying `pred` and those that don't.
 
@@ -288,11 +221,9 @@ Splits into two sequences: elements satisfying `pred` and those that don't.
 partition (\x -> x > 2) [1, 2, 3, 4]   # => ([3, 4], [1, 2])
 ```
 
-### `intersperse`
+### intersperse
 
-```yona
-intersperse sep seq =
-```
+`intersperse sep seq`
 
 Inserts `sep` between every pair of elements.
 
@@ -301,11 +232,9 @@ intersperse 0 [1, 2, 3]   # => [1, 0, 2, 0, 3]
 intersperse 0 [1]          # => [1]
 ```
 
-### `scanl`
+### scanl
 
-```yona
-scanl fn acc seq =
-```
+`scanl fn acc seq`
 
 Like `foldl` but returns all intermediate accumulator values.
 
@@ -313,11 +242,30 @@ Like `foldl` but returns all intermediate accumulator values.
 scanl (\a b -> a + b) 0 [1, 2, 3]   # => [0, 1, 3, 6]
 ```
 
-### `sortBy`
+### flatMap
 
-```yona
-sortBy cmp seq =
+`flatMap fn seq = flatten (map fn seq)`
+
+Maps then flattens — applies `fn` which returns a sequence, then concatenates all results.
+
 ```
+flatMap (\x -> [x, x * 10]) [1, 2, 3]   # => [1, 10, 2, 20, 3, 30]
+```
+
+### find
+
+`find pred seq`
+
+Returns `(:some, value)` for the first element satisfying `pred`, or `:none`.
+
+```
+find (\x -> x > 3) [1, 2, 5, 4]   # => (:some, 5)
+find (\x -> x > 9) [1, 2, 3]      # => :none
+```
+
+### sortBy
+
+`sortBy cmp seq`
 
 Sorts using a comparison function. `cmp a b` should return negative if a < b,
 zero if equal, positive if a > b. Uses quicksort.
@@ -326,11 +274,9 @@ zero if equal, positive if a > b. Uses quicksort.
 sortBy (\a b -> a - b) [3, 1, 4, 1, 5]   # => [1, 1, 3, 4, 5]
 ```
 
-### `groupBy`
+### groupBy
 
-```yona
-groupBy fn seq =
-```
+`groupBy fn seq`
 
 Groups elements by a key function. Returns a sequence of `(key, [values])` pairs.
 
@@ -338,11 +284,9 @@ Groups elements by a key function. Returns a sequence of `(key, [values])` pairs
 groupBy (\x -> x % 2) [1, 2, 3, 4]   # => [(1, [1, 3]), (0, [2, 4])]
 ```
 
-### `sum`
+### sum
 
-```yona
-sum seq = foldl (\a b -> a + b) 0 seq
-```
+`sum seq = foldl (\a b -> a + b) 0 seq`
 
 Sums all elements (integers).
 
@@ -350,15 +294,12 @@ Sums all elements (integers).
 sum [1, 2, 3, 4, 5]   # => 15
 ```
 
-### `product`
+### product
 
-```yona
-product seq = foldl (\a b -> a * b) 1 seq
-```
+`product seq = foldl (\a b -> a * b) 1 seq`
 
 Multiplies all elements (integers).
 
 ```
 product [1, 2, 3, 4, 5]   # => 120
 ```
-

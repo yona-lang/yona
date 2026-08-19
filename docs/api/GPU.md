@@ -15,136 +15,30 @@ Set `YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1` to force the older host-side prefix (d
 
 ## Types
 
-### `type Buffer = Buffer IntArray`
+### Buffer
+
+`type Buffer = Buffer IntArray`
 
 Opaque accelerator buffer. The CPU backend stores an owned IntArray copy.
 
 ## Functions
 
-### `extern`
+### backendName
 
-```yona
-extern raw_backendName       : Int -> String   = "yona_Std_GPU_raw__backendName"
-```
-
-### `extern`
-
-```yona
-extern raw_vulkanStatus      : Int -> String   = "yona_Std_GPU_raw__vulkanStatus"
-```
-
-### `extern`
-
-```yona
-extern raw_vulkanLastNote    : Int -> String   = "yona_Std_GPU_raw__vulkanLastNote"
-```
-
-### `extern`
-
-```yona
-extern raw_hasGpu            : Int -> Bool     = "yona_Std_GPU_raw__hasGpu"
-```
-
-### `extern`
-
-```yona
-extern raw_hasSimd           : Int -> Bool     = "yona_Std_GPU_raw__hasSimd"
-```
-
-### `extern`
-
-```yona
-extern raw_vulkanAvailable   : Int -> Bool     = "yona_Std_GPU_raw__vulkanAvailable"
-```
-
-### `extern`
-
-```yona
-extern raw_vulkanTimelineSemaphore : Int -> Bool = "yona_Std_GPU_raw__vulkanTimelineSemaphore"
-```
-
-### `extern`
-
-```yona
-extern raw_vulkanLastIssueKind     : Int -> Int    = "yona_Std_GPU_raw__vulkanLastIssueKind"
-```
-
-### `extern`
-
-```yona
-extern raw_upload            : IntArray -> IntArray = "yona_Std_GPU_raw__upload"
-```
-
-### `extern`
-
-```yona
-extern raw_materialize       : IntArray -> IntArray = "yona_Std_GPU_raw__materialize"
-```
-
-### `extern`
-
-```yona
-extern raw_length            : IntArray -> Int = "yona_Std_GPU_raw__length"
-```
-
-### `extern`
-
-```yona
-extern raw_mapAdd            : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__mapAdd"
-```
-
-### `extern`
-
-```yona
-extern raw_mapMul            : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__mapMul"
-```
-
-### `extern`
-
-```yona
-extern raw_filterGreaterThan : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__filterGreaterThan"
-```
-
-### `extern`
-
-```yona
-extern raw_reduceSum         : IntArray -> Int = "yona_Std_GPU_raw__reduceSum"
-```
-
-### `backendName`
-
-```yona
-backendName : String
-```
+`backendName : String`
 
 Active backend name. Currently `cpu-simd` or `cpu-scalar`.
 
-### `backendName`
+### vulkanStatus
 
-```yona
-backendName = raw_backendName 0
-```
-
-### `vulkanStatus`
-
-```yona
-vulkanStatus : String
-```
+`vulkanStatus : String`
 
 Vulkan status string: `vulkan-unavailable`, `vulkan-loader`, or `vulkan-device`
 (device only when built with Vulkan headers and init succeeded).
 
-### `vulkanStatus`
+### vulkanLastNote
 
-```yona
-vulkanStatus = raw_vulkanStatus 0
-```
-
-### `vulkanLastNote`
-
-```yona
-vulkanLastNote : String
-```
+`vulkanLastNote : String`
 
 Short hint from the last failed Vulkan init, opt-in int column GPU attempt,
 async **`vkWaitForFences`**, or other **`VkResult`** failures on the **`Std\GPU`**
@@ -154,79 +48,39 @@ GPU kernels use i32 when values fit. Empty after int64-capable success or when
 Vulkan was not compiled in. Same source as the C **`yona_gpu_vulkan_device_last_note()`**
 helper.
 
-### `vulkanLastNote`
+### vulkanLastIssueKind
 
-```yona
-vulkanLastNote = raw_vulkanLastNote 0
-```
+`vulkanLastIssueKind : Int`
 
-### `hasGpu`
+0 = no classified **VkResult** yet; 1 = out-of-memory; 2 = device lost; 3 = other
+(updated with **`vulkanLastNote`** when the runtime records a **`VkResult`**).
 
-```yona
-hasGpu : Bool
-```
+### hasGpu
+
+`hasGpu : Bool`
 
 True when Vulkan is enabled at build, not disabled by `YONA_GPU_DISABLE_VULKAN`,
 and device init succeeds. IntArray kernels use i64 when `shaderInt64` is
 available, otherwise i32 when values fit. Result is cached until
 `yona_gpu_vulkan_device_shutdown()`.
 
-### `hasGpu`
+### hasSimd
 
-```yona
-hasGpu = raw_hasGpu 0
-```
-
-### `hasSimd`
-
-```yona
-hasSimd : Bool
-```
+`hasSimd : Bool`
 
 True when the CPU backend was built with a known SIMD baseline.
 
-### `hasSimd`
+### vulkanAvailable
 
-```yona
-hasSimd = raw_hasSimd 0
-```
-
-### `vulkanAvailable`
-
-```yona
-vulkanAvailable : Bool
-```
+`vulkanAvailable : Bool`
 
 True when a Vulkan loader is visible to the process (`vulkan-1.dll`,
 `libvulkan.so.1`, or on macOS `libvulkan.1.dylib` / `libMoltenVK.dylib`
 via `VULKAN_SDK`, `HOMEBREW_PREFIX`, or the lib dir CMake recorded).
 
-### `vulkanAvailable`
+### vulkanTimelineSemaphore
 
-```yona
-vulkanAvailable = raw_vulkanAvailable 0
-```
-
-### `vulkanLastIssueKind`
-
-```yona
-vulkanLastIssueKind : Int
-```
-
-0 = no classified **VkResult** yet; 1 = out-of-memory; 2 = device lost; 3 = other
-(updated with **`vulkanLastNote`** when the runtime records a **`VkResult`**).
-
-### `vulkanLastIssueKind`
-
-```yona
-vulkanLastIssueKind = raw_vulkanLastIssueKind 0
-```
-
-### `vulkanTimelineSemaphore`
-
-```yona
-vulkanTimelineSemaphore : Bool
-```
+`vulkanTimelineSemaphore : Bool`
 
 True when device init succeeded (see **`hasGpu`** / **`vulkanStatus`**) and the
 probe finds timeline semaphores: Vulkan 1.2+ **`timelineSemaphore`** via **`vkGetPhysicalDeviceFeatures2`**
@@ -236,183 +90,73 @@ probe finds timeline semaphores: Vulkan 1.2+ **`timelineSemaphore`** via **`vkGe
 float compute may wait on a **timeline semaphore** instead of a fence (**`YONA_GPU_ASYNC_TIMELINE=0`**
 forces the legacy fence path).
 
-### `vulkanTimelineSemaphore`
+### available
 
-```yona
-vulkanTimelineSemaphore = raw_vulkanTimelineSemaphore 0
-```
+`available : () -> Bool`
 
-### `extern`
+### apiVersion
 
-```yona
-extern raw_stdGpuAvailable : Int -> Bool = "yona_Std_GPU__available"
-```
+`apiVersion : () -> Int`
 
-Integer discovery ABI (`yona_Std_GPU__*` in `gpu_cpu.c`; full Vulkan probe in `gpu_stub.c` when linked).
+### physicalDeviceCount
 
-### `extern`
+`physicalDeviceCount : () -> Int`
 
-```yona
-extern raw_stdGpuApiVersion : Int -> Int = "yona_Std_GPU__apiVersion"
-```
+### upload
 
-### `extern`
-
-```yona
-extern raw_stdGpuPhysicalDeviceCount : Int -> Int = "yona_Std_GPU__physicalDeviceCount"
-```
-
-### `available`
-
-```yona
-available : () -> Bool
-```
-
-### `available`
-
-```yona
-available () = raw_stdGpuAvailable 0
-```
-
-### `apiVersion`
-
-```yona
-apiVersion : () -> Int
-```
-
-### `apiVersion`
-
-```yona
-apiVersion () = raw_stdGpuApiVersion 0
-```
-
-### `physicalDeviceCount`
-
-```yona
-physicalDeviceCount : () -> Int
-```
-
-### `physicalDeviceCount`
-
-```yona
-physicalDeviceCount () = raw_stdGpuPhysicalDeviceCount 0
-```
-
-### `upload`
-
-```yona
-upload : IntArray -> Buffer
-```
+`upload : IntArray -> Buffer`
 
 Copy a host IntArray into accelerator-owned storage.
 
-### `upload`
+### materialize
 
-```yona
-upload values = Buffer (raw_upload values)
-```
-
-### `materialize`
-
-```yona
-materialize : Buffer -> IntArray
-```
+`materialize : Buffer -> IntArray`
 
 Copy accelerator-owned storage back to a host IntArray.
 
-### `materialize`
+### length
 
-```yona
-materialize buffer =
-```
-
-### `length`
-
-```yona
-length : Buffer -> Int
-```
+`length : Buffer -> Int`
 
 Number of elements in the buffer.
 
-### `length`
+### mapAdd
 
-```yona
-length buffer =
-```
-
-### `mapAdd`
-
-```yona
-mapAdd : Int -> Buffer -> Buffer
-```
+`mapAdd : Int -> Buffer -> Buffer`
 
 Add a constant to every element. Vulkan path when `YONA_GPU_VULKAN_MAPADD=1`
 or `YONA_GPU_VULKAN_COMPUTE=1` and length ≥ min (default 4096; see docs).
 
-### `mapAdd`
+### mapMul
 
-```yona
-mapAdd delta buffer =
-```
-
-### `mapMul`
-
-```yona
-mapMul : Int -> Buffer -> Buffer
-```
+`mapMul : Int -> Buffer -> Buffer`
 
 Multiply every element by a constant. Vulkan when `YONA_GPU_VULKAN_MAPMUL=1`
 or `YONA_GPU_VULKAN_COMPUTE=1` (min length env vars in docs).
 
-### `mapMul`
+### filterGreaterThan
 
-```yona
-mapMul factor buffer =
-```
-
-### `filterGreaterThan`
-
-```yona
-filterGreaterThan : Int -> Buffer -> Buffer
-```
+`filterGreaterThan : Int -> Buffer -> Buffer`
 
 Keep values greater than the threshold. Vulkan when `YONA_GPU_VULKAN_FILTER`
 or `YONA_GPU_VULKAN_COMPUTE=1` and length thresholds are met (`docs/gpu-architecture.md`).
 
-### `filterGreaterThan`
+### reduceSum
 
-```yona
-filterGreaterThan threshold buffer =
-```
-
-### `reduceSum`
-
-```yona
-reduceSum : Buffer -> Int
-```
+`reduceSum : Buffer -> Int`
 
 Sum all values. Vulkan when `YONA_GPU_VULKAN_REDUCE=1` or
 `YONA_GPU_VULKAN_COMPUTE=1` (min length in docs); else SIMD/scalar CPU.
 
-### `reduceSum`
+### floatArrayMul2Async
 
-```yona
-reduceSum buffer =
-```
-
-### `extern`
-
-```yona
-extern native floatArrayMul2Async : FloatArray -> Int = "yona_Std_GPU__floatArrayMul2Async"
-```
+`floatArrayMul2Async : FloatArray -> Int`
 
 Experimental: in-place x2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
 The C wrapper creates the `VkDevice`/pools on first use (`yona_gpu_vulkan_ctx_init`) when built with Vulkan.
 
-### `extern`
+### floatArrayScaleAsync
 
-```yona
-extern native floatArrayScaleAsync : Float -> FloatArray -> Int = "yona_Std_GPU__floatArrayScaleAsync"
-```
+`floatArrayScaleAsync : Float -> FloatArray -> Int`
 
 In-place multiply each element by `scale` (same Vulkan path as `floatArrayMul2Async`).

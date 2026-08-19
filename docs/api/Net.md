@@ -8,11 +8,9 @@ use io_uring on Linux for non-blocking I/O.
 
 ## Functions
 
-### `tcpConnect`
+### tcpConnect
 
-```yona
-tcpConnect host port =
-```
+`tcpConnect host port`
 
 Connect to a TCP server. Async (io_uring). Returns a socket descriptor.
 
@@ -27,11 +25,9 @@ do
 end
 ```
 
-### `tcpListen`
+### tcpListen
 
-```yona
-tcpListen host port =
-```
+`tcpListen host port`
 
 Create a TCP server socket bound to `host:port`. Returns a listener descriptor.
 
@@ -42,59 +38,45 @@ let client = tcpAccept server in
 close client
 ```
 
-### `tcpAccept`
+### tcpAccept
 
-```yona
-tcpAccept listener =
-```
+`tcpAccept listener`
 
 Accept an incoming TCP connection. Async (io_uring). Returns a client socket descriptor.
 
-### `send`
+### send
 
-```yona
-send sock data =
-```
+`send sock data`
 
 Send a string over a socket. Async (io_uring). Returns the number of bytes sent.
 
-### `recv`
+### recv
 
-```yona
-recv sock maxBytes =
-```
+`recv sock maxBytes`
 
 Receive up to `maxBytes` bytes from a socket as a string. Async (io_uring).
 
-### `sendBytes`
+### sendBytes
 
-```yona
-sendBytes sock bytes =
-```
+`sendBytes sock bytes`
 
 Send a byte buffer over a socket. Async (io_uring). Returns the number of bytes sent.
 
-### `recvBytes`
+### recvBytes
 
-```yona
-recvBytes sock maxBytes =
-```
+`recvBytes sock maxBytes`
 
 Receive up to `maxBytes` from a socket as a byte buffer. Async (io_uring).
 
-### `close`
+### close
 
-```yona
-close sock =
-```
+`close sock`
 
 Close a socket descriptor. Returns 0 on success.
 
-### `udpBind`
+### udpBind
 
-```yona
-udpBind host port =
-```
+`udpBind host port`
 
 Create a UDP socket bound to `host:port`. Returns a socket descriptor.
 
@@ -105,11 +87,9 @@ let msg = udpRecv sock 1024 in
 close sock
 ```
 
-### `udpSendTo`
+### udpSendTo
 
-```yona
-udpSendTo sock host port data =
-```
+`udpSendTo sock host port data`
 
 Send a UDP datagram to `host:port`. Returns the number of bytes sent.
 
@@ -119,19 +99,15 @@ let sock = udpBind "0.0.0.0" 0 in
 udpSendTo sock "127.0.0.1" 9000 "hello"
 ```
 
-### `udpRecv`
+### udpRecv
 
-```yona
-udpRecv sock maxBytes =
-```
+`udpRecv sock maxBytes`
 
 Receive a UDP datagram of up to `maxBytes`. Returns the data as a string.
 
-### `peerAddress`
+### peerAddress
 
-```yona
-peerAddress sock =
-```
+`peerAddress sock`
 
 Returns the remote address of a connected socket as a string.
 

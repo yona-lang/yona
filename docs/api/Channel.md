@@ -12,73 +12,23 @@ See `docs/api/Channel.md` for the full API.
 
 ## Types
 
-### `type Sender a = Sender Channel`
+### Sender
+
+`type Sender a = Sender Channel`
 
 Send-only handle wrapping a Channel.
 
-### `type Receiver a = Receiver Channel`
+### Receiver
+
+`type Receiver a = Receiver Channel`
 
 Receive-only handle wrapping a Channel.
 
 ## Functions
 
-### `extern`
+### channel
 
-```yona
-extern raw_new      : Int -> Channel        = "yona_Std_Channel__raw_new"
-```
-
-Low-level externs to the C runtime wrappers. The `= "..."` form binds
-a Yona-friendly local name to the mangled C ABI symbol so the wrapper
-bodies below stay readable.
-
-### `extern`
-
-```yona
-extern raw_send     : Channel -> Int -> ()  = "yona_Std_Channel__raw_send"
-```
-
-### `extern`
-
-```yona
-extern raw_recv     : Channel -> Option     = "yona_Std_Channel__raw_recv"
-```
-
-### `extern`
-
-```yona
-extern raw_try_recv : Channel -> Option     = "yona_Std_Channel__raw_tryRecv"
-```
-
-### `extern`
-
-```yona
-extern raw_close    : Channel -> ()         = "yona_Std_Channel__raw_close"
-```
-
-### `extern`
-
-```yona
-extern raw_closed   : Channel -> Bool       = "yona_Std_Channel__raw_isClosed"
-```
-
-### `extern`
-
-```yona
-extern raw_length   : Channel -> Int        = "yona_Std_Channel__raw_length"
-```
-
-### `extern`
-
-```yona
-extern raw_capacity : Channel -> Int        = "yona_Std_Channel__raw_capacity"
-```
-
-### `channel`
-
-```yona
-channel n =
-```
+`channel n`
 
 Create a bounded channel with the given buffer capacity. Returns a tuple
 of `Linear`-wrapped sender and receiver handles. The linearity checker
@@ -92,60 +42,45 @@ case rl of Linear receiver ->
 end end
 ```
 
-### `send`
+### send
 
-```yona
-send s v = raw_send s v
-```
+`send s v`
 
 Send a value through a sender. Blocks if the buffer is full.
 
-### `recv`
+### recv
 
-```yona
-recv r = raw_recv r
-```
+`recv r`
 
 Receive a value. Blocks if the buffer is empty. Returns `Some v` for a
 delivered value or `None` once the channel is closed and drained.
 
-### `tryRecv`
+### tryRecv
 
-```yona
-tryRecv r = raw_try_recv r
-```
+`tryRecv r`
 
 Non-blocking receive — returns immediately even if empty.
 
-### `close`
+### close
 
-```yona
-close s = raw_close s
-```
+`close s`
 
 Close the sender side. Wakes all blocked sends and recvs.
 
-### `isClosed`
+### isClosed
 
-```yona
-isClosed s = raw_closed s
-```
+`isClosed s`
 
 Returns true if the channel has been closed.
 
-### `length`
+### length
 
-```yona
-length s = raw_length s
-```
+`length s`
 
 Current number of buffered elements.
 
-### `capacity`
+### capacity
 
-```yona
-capacity s = raw_capacity s
-```
+`capacity s`
 
 Maximum buffer size (set at creation).
-

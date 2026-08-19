@@ -15,6 +15,8 @@
   idiomatic when you need both. The anti-pattern is `let _ = effect`.
 - Stdlib reference no longer shows the “generated, do not edit” maintainer
   note on the public pages.
+- Stdlib API pages use compact signatures (name + type or parameter list)
+  instead of a heading plus an implementation code block.
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
 

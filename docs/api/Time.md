@@ -7,11 +7,9 @@ and microseconds, sleep, and formatted time output.
 
 ## Functions
 
-### `now`
+### now
 
-```yona
-now =
-```
+`now`
 
 Returns the current wall-clock time in milliseconds since the Unix epoch.
 
@@ -20,11 +18,9 @@ import now from Std\Time in
 now   # => 1712678400000
 ```
 
-### `nowMicros`
+### nowMicros
 
-```yona
-nowMicros =
-```
+`nowMicros`
 
 Returns the current time in microseconds since the Unix epoch.
 
@@ -33,11 +29,9 @@ import nowMicros from Std\Time in
 nowMicros   # => 1712678400000000
 ```
 
-### `epoch`
+### epoch
 
-```yona
-epoch =
-```
+`epoch`
 
 Returns the Unix epoch (0) as a timestamp. Useful as a base for relative calculations.
 
@@ -46,11 +40,9 @@ import epoch from Std\Time in
 epoch   # => 0
 ```
 
-### `sleep`
+### sleep
 
-```yona
-sleep millis =
-```
+`sleep millis`
 
 Sleep for the given number of milliseconds.
 
@@ -59,11 +51,9 @@ import sleep from Std\Time in
 sleep 1000   # sleep for 1 second
 ```
 
-### `format`
+### format
 
-```yona
-format timestamp =
-```
+`format timestamp`
 
 Format a millisecond timestamp as a human-readable date-time string.
 
@@ -72,11 +62,9 @@ import now, format from Std\Time in
 format (now)   # => "2025-04-09 12:00:00"
 ```
 
-### `elapsed`
+### elapsed
 
-```yona
-elapsed start end =
-```
+`elapsed start end`
 
 Compute the elapsed time in milliseconds between two timestamps.
 

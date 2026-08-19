@@ -7,11 +7,9 @@ inspecting file paths. No filesystem access is performed.
 
 ## Functions
 
-### `join`
+### join
 
-```yona
-join a b =
-```
+`join a b`
 
 Join two path components with the platform separator.
 
@@ -20,11 +18,9 @@ import join from Std\Path in
 join "/home/user" "docs"   # => "/home/user/docs"
 ```
 
-### `dirname`
+### dirname
 
-```yona
-dirname path =
-```
+`dirname path`
 
 Return the directory portion of a path.
 
@@ -33,11 +29,9 @@ import dirname from Std\Path in
 dirname "/home/user/file.txt"   # => "/home/user"
 ```
 
-### `basename`
+### basename
 
-```yona
-basename path =
-```
+`basename path`
 
 Return the filename portion of a path.
 
@@ -46,11 +40,9 @@ import basename from Std\Path in
 basename "/home/user/file.txt"   # => "file.txt"
 ```
 
-### `extension`
+### extension
 
-```yona
-extension path =
-```
+`extension path`
 
 Return the file extension including the dot.
 
@@ -59,11 +51,9 @@ import extension from Std\Path in
 extension "photo.jpg"   # => ".jpg"
 ```
 
-### `withExtension`
+### withExtension
 
-```yona
-withExtension path ext =
-```
+`withExtension path ext`
 
 Replace the file extension with a new one.
 
@@ -72,11 +62,9 @@ import withExtension from Std\Path in
 withExtension "data.csv" ".json"   # => "data.json"
 ```
 
-### `isAbsolute`
+### isAbsolute
 
-```yona
-isAbsolute path =
-```
+`isAbsolute path`
 
 Returns `true` if the path is absolute.
 

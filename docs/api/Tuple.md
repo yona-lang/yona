@@ -7,11 +7,9 @@ accessors, transformers, and conversion functions.
 
 ## Functions
 
-### `fst`
+### fst
 
-```yona
-fst (a, _) = a
-```
+`fst (a, _) = a`
 
 Returns the first element of a pair.
 
@@ -19,11 +17,9 @@ Returns the first element of a pair.
 fst (1, 2)   # => 1
 ```
 
-### `snd`
+### snd
 
-```yona
-snd (_, b) = b
-```
+`snd (_, b) = b`
 
 Returns the second element of a pair.
 
@@ -31,11 +27,9 @@ Returns the second element of a pair.
 snd (1, 2)   # => 2
 ```
 
-### `swap`
+### swap
 
-```yona
-swap (a, b) = (b, a)
-```
+`swap (a, b) = (b, a)`
 
 Swaps the elements of a pair.
 
@@ -43,11 +37,9 @@ Swaps the elements of a pair.
 swap (1, 2)   # => (2, 1)
 ```
 
-### `mapBoth`
+### mapBoth
 
-```yona
-mapBoth f g (a, b) = (f a, g b)
-```
+`mapBoth f g (a, b) = (f a, g b)`
 
 Applies two functions to the respective elements.
 
@@ -55,11 +47,9 @@ Applies two functions to the respective elements.
 mapBoth (\x -> x + 1) (\x -> x * 2) (3, 5)   # => (4, 10)
 ```
 
-### `mapFst`
+### mapFst
 
-```yona
-mapFst f (a, b) = (f a, b)
-```
+`mapFst f (a, b) = (f a, b)`
 
 Transforms the first element, keeping the second unchanged.
 
@@ -67,11 +57,9 @@ Transforms the first element, keeping the second unchanged.
 mapFst (\x -> x * 10) (3, 5)   # => (30, 5)
 ```
 
-### `mapSnd`
+### mapSnd
 
-```yona
-mapSnd f (a, b) = (a, f b)
-```
+`mapSnd f (a, b) = (a, f b)`
 
 Transforms the second element, keeping the first unchanged.
 
@@ -79,11 +67,9 @@ Transforms the second element, keeping the first unchanged.
 mapSnd (\x -> x * 10) (3, 5)   # => (3, 50)
 ```
 
-### `toList`
+### toList
 
-```yona
-toList (a, b) = [a, b]
-```
+`toList (a, b) = [a, b]`
 
 Converts a pair to a two-element sequence.
 
@@ -91,11 +77,9 @@ Converts a pair to a two-element sequence.
 toList (1, 2)   # => [1, 2]
 ```
 
-### `curry`
+### curry
 
-```yona
-curry f a b = f (a, b)
-```
+`curry f a b = f (a, b)`
 
 Converts a function taking a pair into one taking two arguments.
 
@@ -103,15 +87,12 @@ Converts a function taking a pair into one taking two arguments.
 let add = \(a, b) -> a + b in curry add 3 4   # => 7
 ```
 
-### `uncurry`
+### uncurry
 
-```yona
-uncurry f (a, b) = f a b
-```
+`uncurry f (a, b) = f a b`
 
 Converts a function taking two arguments into one taking a pair.
 
 ```
 let add = \a b -> a + b in uncurry add (3, 4)   # => 7
 ```
-
