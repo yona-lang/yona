@@ -263,7 +263,7 @@ A linear value is consumed in one branch of an if/case expression but not the ot
 if ready then
     case conn of Linear fd -> close fd end
 else
-    0   # conn still live here
+    ()   # conn still live here
 ```
 
 **Fix:** consume the value in every branch (e.g. close it in the else branch too).

@@ -202,11 +202,13 @@ type.
 ### 3.5 Functions and lambdas
 
 ```yona
-add(x, y) -> x + y             # definition, parenthesized parameters
-factorial(0) -> 1              # clauses selected by pattern
-factorial(n) -> n * factorial(n - 1)
+add x y = x + y                # space-separated parameter patterns
+factorial n = case n of
+    0 -> 1
+    _ -> n * factorial (n - 1)
+end
 
-abs x if x >= 0 = x            # equation form with guard
+abs x if x >= 0 = x            # guard; next clause if false
 abs x if x < 0  = -x
 
 scale : Float -> Float -> Float    # optional annotation
@@ -216,6 +218,9 @@ scale factor x = factor * x
 \(x, y) -> x + y               # lambda with tuple pattern
 \-> expensive ()               # zero-argument lambda (thunk)
 ```
+
+There is no `name(x, y) -> body` definition form. `name (x, y) = body` is a
+single tuple pattern, not two parameters.
 
 A function of several clauses is matched top to bottom; the first clause
 whose patterns (and guard, if present) match is selected. Functions are
@@ -230,8 +235,9 @@ strict). To pass one as a value, wrap it in a thunk: `\-> f`.
 
 ### 3.6 Application
 
-Application is by **juxtaposition** — `f x y` — or parenthesized —
-`f(x, y)`. Juxtaposition binds tighter than every binary operator:
+Application is by **juxtaposition** — `f x y`. `f(x)` is the same as
+`f x`. `f(x, y)` applies `f` to the tuple `(x, y)`; it is not a
+two-argument call. Juxtaposition binds tighter than every binary operator:
 `f x + g y` parses as `(f x) + (g y)`.
 
 Pipes reverse application order for pipeline style:

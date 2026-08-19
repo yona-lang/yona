@@ -111,18 +111,17 @@ without any scope syntax.
 
 Expressions in a `do` block execute strictly top to bottom; the last
 expression is the block's value. Use `do` when *ordering itself* is the
-point — writes, protocol steps, anything where interleaving would be wrong:
+point — two or more writes, protocol steps, anything where interleaving
+would be wrong. A single call does not need `do`.
 
 ```yona
 import println from Std\IO in
 do
     println "first"
     println "second"
-    42
 end
 # first
 # second
-# => 42
 ```
 
 `do` blocks support intermediate bindings with `name = expr`, which also

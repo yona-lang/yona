@@ -27,19 +27,15 @@ Create `hello.yona`:
 ```yona
 # hello.yona — a program is a single expression.
 import println from Std\IO in
-do
-    println "Hello from Yona"
-    0
-end
+println "Hello from Yona"
 ```
 
 What this does, precisely:
 
 - `import println from Std\IO in …` brings one function from the standard
   library's `Std\IO` module into scope for the expression that follows.
-- `do … end` evaluates its expressions **in order** — this matters for side
-  effects like printing. Its last expression (`0`) is the block's value, which
-  becomes the program's exit code.
+- That expression *is* the program. `println` writes the line; there is no
+  dummy return value and no `do` wrapper around a single call.
 
 Compile and run:
 
@@ -66,10 +62,7 @@ import readFile from Std\File,
 let
     a = readFile "hello.yona",   # both reads are submitted
     b = readFile "sizes.yona"    # before either result is needed
-in do
-    println "combined bytes: {(length a + length b)}"
-    0
-end
+in println "combined bytes: {(length a + length b)}"
 ```
 
 Three things to notice:

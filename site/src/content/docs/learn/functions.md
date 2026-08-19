@@ -9,30 +9,37 @@ partially.
 
 ## Definitions
 
-The parenthesized form defines a function with a comma-separated parameter
-list and an arrow before the body:
+A function is a name, space-separated parameter patterns, `=`, and a body.
+This is the form the standard library uses (`map fn seq = …`):
 
 ```yona
-add(x, y) -> x + y
+add x y = x + y
 
-add(1, 2)   # => 3
+add 1 2   # => 3
 ```
 
-Parameters are *patterns*, so a definition can have multiple clauses.
-Clauses are tried top to bottom, and the first whose patterns match is used:
+There is no `name(x, y) -> body` definition syntax. Parentheses around
+parameters are a *pattern*: `add (x, y) = x + y` is a one-argument function
+that matches a tuple, not a two-argument function.
+
+Parameters are patterns, so a definition can have several clauses. Clauses
+are tried top to bottom; the first whose patterns match is used. Recursion
+is often clearer as a `case` in one clause — the same shape as `Std\List`:
 
 ```yona
-factorial(0) -> 1
-factorial(n) -> n * factorial(n - 1)
+factorial n = case n of
+    0 -> 1
+    _ -> n * factorial (n - 1)
+end
 
-factorial(5)   # => 120
+factorial 5   # => 120
 ```
 
-### Equation form and guards
+### Guards
 
-The equation form uses space-separated parameters and `=`. An optional
-`if` guard after the parameters restricts when a clause applies; if the
-guard evaluates to `false`, matching falls through to the next clause:
+An optional `if` guard after the parameters restricts when a clause
+applies; if the guard is `false`, matching falls through to the next
+clause:
 
 ```yona
 abs x if x >= 0 = x
@@ -41,9 +48,7 @@ abs x if x < 0  = -x
 abs (-3)   # => 3
 ```
 
-Both forms are equivalent; use the one that reads better. Clause order
-matters — put more specific clauses first, since matching is strictly
-top-to-bottom.
+Put more specific clauses first; matching is strictly top-to-bottom.
 
 ### Type annotations
 
@@ -106,8 +111,11 @@ map (\x -> x * 2) [1, 2, 3]   # => [2, 4, 6]
 
 Application binds tighter than every binary operator, so `f x + g y` is
 `(f x) + (g y)`. Parenthesize an argument when it is itself an application
-or contains operators: `f (g x)`, `add (1 + 2) 3`. The parenthesized call
-syntax `add(1, 2)` also works and means the same thing.
+or contains operators: `f (g x)`, `add (1 + 2) 3`.
+
+`f(x)` is the same as `f x`. `f(x, y)` is **not** a two-argument call — it
+applies `f` to the tuple `(x, y)`. For `add x y = x + y`, `add 1 2` is `3`
+and `add(1, 2)` is a leftover function.
 
 ### Partial application and currying
 
@@ -190,7 +198,7 @@ long sequence.
 Writing your own higher-order function is nothing special:
 
 ```yona
-twice(f, x) -> f (f x)
+twice f x = f (f x)
 
 twice (\x -> x * 3) 2   # => 18
 ```
@@ -203,23 +211,25 @@ Multiple clauses plus guards make recursive definitions read like their
 mathematical specification:
 
 ```yona
-fib(0) -> 0
-fib(1) -> 1
-fib(n) -> fib(n - 1) + fib(n - 2)
+fib n = case n of
+    0 -> 0
+    1 -> 1
+    _ -> fib (n - 1) + fib (n - 2)
+end
 
-fib(10)   # => 55
+fib 10   # => 55
 ```
 
 For sequence recursion, pattern-match on head and tail — see
 [Pattern matching](/learn/pattern-matching/):
 
 ```yona
-sum(xs) -> case xs of
+sum xs = case xs of
     []    -> 0
-    [h|t] -> h + sum(t)
+    [h|t] -> h + sum t
 end
 
-sum([1, 2, 3, 4, 5])   # => 15
+sum [1, 2, 3, 4, 5]   # => 15
 ```
 
 ## Where to next

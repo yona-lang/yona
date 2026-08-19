@@ -149,10 +149,7 @@ a `perform Gpu.*`, designed to be answered by a handler at your call site:
 ```yona
 import raiseGpu, GpuOom from Std\GPU in
 handle
-    do
-        raiseGpu GpuOom       # performs Gpu.oom ()
-        0
-    end
+    raiseGpu GpuOom       # performs Gpu.oom ()
 with
     Gpu.oom () resume -> resume ()          # e.g. log and fall back to CPU
     Gpu.deviceLost () resume -> resume ()
@@ -163,9 +160,9 @@ end
 ```
 
 Step by step: `raiseGpu GpuOom` performs `Gpu.oom ()`; the handler resumes
-with `()`, so the `do` block continues and yields `0`; the `return` clause
-maps that to `1`. A different caller could resume differently — retry,
-abort, or switch backends — without touching the kernel code.
+with `()`, so the handled expression yields `()`; the `return` clause maps
+that to `1`. A different caller could resume differently — retry, abort, or
+switch backends — without touching the kernel code.
 `withGpuFallback action` wraps this pattern: it runs `action`, then performs
 the matching `Gpu.*` operation for the last classified issue (no-op on
 success).

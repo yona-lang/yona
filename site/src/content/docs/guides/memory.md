@@ -169,9 +169,11 @@ the payload is pattern matching, which is also the **consumption point**:
 ```yona
 let conn = Linear (tcpConnect "localhost" 8080) in
 case conn of
-    Linear fd ->
-        let reply = recv fd 1024 in  # borrowing use — no consume
-        do; close fd; reply; end     # fd released exactly once
+    Linear fd -> do
+        reply = recv fd 1024   # borrowing use — no consume
+        close fd               # fd released exactly once
+        reply
+    end
 end
 ```
 

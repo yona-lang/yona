@@ -94,12 +94,12 @@ requires at least two elements. This is the primary way to recurse over
 sequences:
 
 ```yona
-sum(xs) -> case xs of
+sum xs = case xs of
     []    -> 0
-    [h|t] -> h + sum(t)
+    [h|t] -> h + sum t
 end
 
-sum([1, 2, 3, 4, 5])   # => 15
+sum [1, 2, 3, 4, 5]   # => 15
 
 case list of
     [x, y | rest] -> "starts with {x} then {y}"
@@ -120,9 +120,9 @@ Patterns nest arbitrarily:
 ```yona
 type Tree a = Node (Tree a) a (Tree a) | Leaf
 
-depth(t) -> case t of
+depth t = case t of
     Leaf -> 0
-    Node l _ r -> 1 + (if depth(l) > depth(r) then depth(l) else depth(r))
+    Node l _ r -> 1 + (if depth l > depth r then depth l else depth r)
 end
 
 case maybeValue of
@@ -229,11 +229,16 @@ Every function parameter is a pattern, and multiple clauses give
 per-constructor definitions (see [Functions](/learn/functions/)):
 
 ```yona
-first((a, _)) -> a
-first((1, 2))   # => 1
+first pair = case pair of
+    (a, _) -> a
+end
 
-unwrap(Some x) -> x
-unwrap(None)   -> 0
+first (1, 2)   # => 1
+
+unwrap x = case x of
+    Some v -> v
+    None   -> 0
+end
 ```
 
 ### In `catch` clauses

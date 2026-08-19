@@ -29,7 +29,7 @@ export default defineConfig({
 				{
 					tag: 'script',
 					content:
-						'window.plausible=window.plausible||function(){(window.plausible.q=window.plausible.q||[]).push(arguments)};document.addEventListener("astro:after-swap",()=>{window.plausible&&window.plausible("pageview")});',
+						'window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }',
 				},
 			],
 			customCss: [

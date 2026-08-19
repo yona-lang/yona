@@ -60,7 +60,9 @@ Useful introspection flags:
 Follow the [style guide](/learn/style/); the high-signal rules:
 
 - Never nest `let`; use one multi-binding `let x = 1, y = 2 in …`.
-- Never wrap `do` in `let`; use `do … end` directly for effects.
+- Never wrap `do` in `let`; use `do … end` directly for effects. Do not
+  write `let … in do`, wrap a single expression in `do`, or pad a body
+  with a dummy trailing `0`.
 - Use comma-separated imports: `import a from X, b from Y in …`.
 - Use `with` for resources, not manual open/close.
 - Comments are `#` (line) and `/* */` (block) — **not** `--`.

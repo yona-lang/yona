@@ -11,8 +11,8 @@ literals look like, and how they evaluate.
 ## Everything is an expression
 
 Every construct — `if`, `case`, `let`, `do`, function bodies — is an
-expression with a value. There is no `return` keyword; a function's value is
-the value of its body, and a block's value is its last expression.
+expression with a value. There is no `return` keyword and no reason to pad
+a body with a dummy `0`: a function's value *is* the value of its body.
 
 ```yona
 let status = if ready then :ok else :waiting in
@@ -32,10 +32,10 @@ asynchronous bindings may even run in parallel); when side-effect order
 matters, use a `do` block, whose expressions always run top to bottom.
 
 ```yona
+import print from Std\IO in
 do
-    print "first"    # guaranteed to run before the next line
+    print "first"     # guaranteed to run before the next line
     print "second"
-    42               # => 42 — the block's value is its last expression
 end
 ```
 

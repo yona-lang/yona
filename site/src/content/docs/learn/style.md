@@ -75,7 +75,11 @@ do
 end
 ```
 
-Rule of thumb: `let` for values, `do` for effects.
+Rule of thumb: `let` for values, `do` for effects. Do not combine them
+(`let … in do … end` is just a `do` with bindings, or a `let` whose body
+is the last call). Do not wrap a single expression in `do`. Do not pad a
+function or program with a dummy last value such as `0` — the last real
+expression *is* the result (`println` already yields `()`).
 
 ## Comma-separate imports
 
@@ -103,8 +107,8 @@ releases the resource deterministically when the scope exits.
 
 ```yona
 # Bad — close is skipped if send raises
-let fd = tcpConnect "localhost" 8080 in
 do
+    fd = tcpConnect "localhost" 8080
     send fd "hello"
     close fd
 end
@@ -268,7 +272,8 @@ Prefer `Result a e` (`Ok`/`Err`) for fallible operations and `Option a`
 ## Quick checklist
 
 - Flat `let`, one binding list — independent bindings parallelize.
-- `do … end` for effects; never `let _ = …`.
+- `do … end` for effects; never `let _ = …`, never `let … in do`, never a
+  one-line `do`, never a dummy trailing `0`.
 - One `import`, comma-separated clauses.
 - `with` for anything `Closeable`.
 - `[| … ]` when the body is worth a task; `[ … ]` otherwise.

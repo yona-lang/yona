@@ -14,10 +14,12 @@ grouping runs them concurrently.
 
 ```
 import println, readLine from Std\IO in
-let _ = println "What is your name?" in
+do
+println "What is your name?"
 case readLine of
 Some name -> println "Hello, {name}"
 None      -> println "Goodbye."
+end
 end
 ```
 

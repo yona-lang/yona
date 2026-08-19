@@ -9,6 +9,10 @@
   GitHub Pages at https://yona-lang.github.io/.
 - Docs site traffic is measured with cookieless Plausible at
   `plausible.kiket.dev` (`data-domain` `yona-lang.org`).
+- Docs examples drop dummy trailing `0`, `let … in do`, and single-expression
+  `do` wrappers.
+- Function docs use `name pats = body` and juxtaposition application; the
+  invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
 
 ## v0.1.3 (2026-08-18)
 

@@ -57,9 +57,9 @@ A constructor field may mention the type being defined:
 ```yona
 type List a = Cons a (List a) | Nil
 
-len(l) -> case l of
+len l = case l of
     Nil -> 0
-    Cons _ t -> 1 + len(t)
+    Cons _ t -> 1 + len t
 end
 
 len (Cons 1 (Cons 2 Nil))   # => 2
@@ -78,9 +78,9 @@ how lazy structures like streams are built — the tail is a thunk:
 type Lazy a = Cons a (() -> Lazy a) | Empty
 type Reducer a b = MkReducer (a -> b -> a)
 
-ones() -> Cons 1 (\-> ones())
+ones = Cons 1 (\-> ones)
 
-case ones() of
+case ones of
     Cons x _ -> x    # => 1
     Empty -> 0
 end
