@@ -13,6 +13,8 @@
   `let … in do` is valid: `let` binds (and may parallelize), `do` sequences.
 - Style page: `let` and `do` have different semantics; combining them is
   idiomatic when you need both. The anti-pattern is `let _ = effect`.
+- Stdlib reference no longer shows the “generated, do not edit” maintainer
+  note on the public pages.
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
 

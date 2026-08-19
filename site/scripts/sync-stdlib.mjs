@@ -2,7 +2,9 @@
 /**
  * Import the generated stdlib API reference from this repository's
  * docs/api/ (produced by scripts/gendocs.py) into src/content/docs/stdlib/
- * with Starlight frontmatter.
+ * with Starlight frontmatter. Maintainers: do not edit those pages by
+ * hand — they are overwritten by this script. That note is not shown
+ * on the published pages.
  *
  * Usage: node scripts/sync-stdlib.mjs
  *        (run from site/, or npm run sync)
@@ -63,11 +65,7 @@ function transform(raw, { isIndex }) {
 
 	text = tagBareFences(rewriteLinks(text));
 
-	const note = isIndex
-		? '\n:::note\nThis reference is generated from `##` comments in `lib/Std/` by `scripts/gendocs.py`.\nDo not edit these pages by hand.\n:::\n'
-		: '';
-
-	return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(description)}\n---\n${note}\n${text}`;
+	return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(description)}\n---\n\n${text}`;
 }
 
 rmSync(OUT_DIR, { recursive: true, force: true });
