@@ -1055,7 +1055,7 @@ TEST_CASE("Effect row: function with unhandled perform has latent row") {
     REQUIRE(t != nullptr);
     auto printed = pretty_print(checker.zonk(t));
     CHECK(printed.find("!{State.get}") != std::string::npos);
-    CHECK(checker.last_escaping_effects().empty()); // captured on the arrow, not top-level
+    CHECK(!checker.has_direct_errors()); // captured on the arrow, not top-level
 }
 
 TEST_CASE("Effect row: handle subtracts covered ops from latent row") {
@@ -1293,7 +1293,7 @@ TEST_CASE("Effect row: HOF that returns an effectful function keeps effects on t
     auto outer_end = printed.find("->");
     REQUIRE(outer_end != std::string::npos);
     CHECK(printed.substr(0, outer_end).find("!{") == std::string::npos);
-    CHECK(checker.last_escaping_effects().empty());
+    CHECK(!checker.has_direct_errors());
 }
 
 TEST_CASE("Effect row: applying a returned effectful function is E0202") {

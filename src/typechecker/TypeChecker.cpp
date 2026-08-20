@@ -396,13 +396,12 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
         }
 
         case AST_EXTERN_DECL: {
-            // extern name : Type in body — type is body type
+            // extern name : Type in body — bind the declared type (so Linear
+            // returns are visible to LinearityChecker) and infer the body.
             auto* ext = static_cast<ExternDeclExpr*>(node);
             auto child_env = env->child();
-            // Bind the extern name as a fresh polymorphic var
-            auto* extern_var = arena_.fresh_var(level);
-            uf_.add_var(extern_var->var_id, level);
-            child_env->bind(ext->name, extern_var);
+            auto* declared = from_ast_type(ext->declared_type, level);
+            child_env->bind_scheme(ext->name, generalize(declared, -1));
             result = infer(ext->body, child_env, level);
             break;
         }
@@ -1703,6 +1702,92 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
         fn = arena_.make_arrow(is_lin ? linear() : fresh(), fn);
     }
     return fn;
+}
+
+MonoTypePtr TypeChecker::from_ast_type(const yona::compiler::types::Type& t, int level) {
+    using yona::compiler::types::BuiltinType;
+    using yona::compiler::types::FunctionType;
+    using yona::compiler::types::NamedType;
+    using yona::compiler::types::ProductType;
+    using yona::compiler::types::PromiseType;
+    using yona::compiler::types::RefinedType;
+    using yona::compiler::types::SingleItemCollectionType;
+
+    if (std::holds_alternative<std::nullptr_t>(t)) {
+        auto* v = arena_.fresh_var(level);
+        uf_.add_var(v->var_id, level);
+        return v;
+    }
+    if (std::holds_alternative<BuiltinType>(t)) {
+        switch (std::get<BuiltinType>(t)) {
+            case BuiltinType::Bool: return arena_.make_con(TyCon::Bool);
+            case BuiltinType::String: return arena_.make_con(TyCon::String);
+            case BuiltinType::Symbol: return arena_.make_con(TyCon::Symbol);
+            case BuiltinType::Unit: return arena_.make_con(TyCon::Unit);
+            case BuiltinType::Float32:
+            case BuiltinType::Float64:
+            case BuiltinType::Float128:
+                return arena_.make_con(TyCon::Float);
+            case BuiltinType::Seq:
+                return arena_.make_app("Seq", {[&]() {
+                    auto* v = arena_.fresh_var(level);
+                    uf_.add_var(v->var_id, level);
+                    return v;
+                }()});
+            case BuiltinType::Set:
+                return arena_.make_app("Set", {[&]() {
+                    auto* v = arena_.fresh_var(level);
+                    uf_.add_var(v->var_id, level);
+                    return v;
+                }()});
+            default:
+                return arena_.make_con(TyCon::Int);
+        }
+    }
+    if (std::holds_alternative<std::shared_ptr<FunctionType>>(t)) {
+        auto& ft = std::get<std::shared_ptr<FunctionType>>(t);
+        return arena_.make_arrow(from_ast_type(ft->argumentType, level),
+                                 from_ast_type(ft->returnType, level));
+    }
+    if (std::holds_alternative<std::shared_ptr<ProductType>>(t)) {
+        auto& pt = std::get<std::shared_ptr<ProductType>>(t);
+        std::vector<MonoTypePtr> elems;
+        elems.reserve(pt->types.size());
+        for (auto& e : pt->types)
+            elems.push_back(from_ast_type(e, level));
+        return arena_.make_tuple(elems);
+    }
+    if (std::holds_alternative<std::shared_ptr<NamedType>>(t)) {
+        auto& nt = std::get<std::shared_ptr<NamedType>>(t);
+        if (nt->name == "Linear") {
+            MonoTypePtr inner;
+            if (!std::holds_alternative<std::nullptr_t>(nt->type))
+                inner = from_ast_type(nt->type, level);
+            else {
+                inner = arena_.fresh_var(level);
+                uf_.add_var(inner->var_id, level);
+            }
+            return arena_.make_app("Linear", {inner});
+        }
+        return arena_.make_app(nt->name, {});
+    }
+    if (std::holds_alternative<std::shared_ptr<PromiseType>>(t)) {
+        auto& pr = std::get<std::shared_ptr<PromiseType>>(t);
+        return from_ast_type(pr->valueType, level); // auto-await: Promise T ~ T
+    }
+    if (std::holds_alternative<std::shared_ptr<RefinedType>>(t)) {
+        auto& rt = std::get<std::shared_ptr<RefinedType>>(t);
+        return from_ast_type(rt->base_type, level);
+    }
+    if (std::holds_alternative<std::shared_ptr<SingleItemCollectionType>>(t)) {
+        auto& col = std::get<std::shared_ptr<SingleItemCollectionType>>(t);
+        auto* elem = from_ast_type(col->valueType, level);
+        const char* name = (col->kind == SingleItemCollectionType::Seq) ? "Seq" : "Set";
+        return arena_.make_app(name, {elem});
+    }
+    auto* v = arena_.fresh_var(level);
+    uf_.add_var(v->var_id, level);
+    return v;
 }
 
 } // namespace yona::compiler::typechecker

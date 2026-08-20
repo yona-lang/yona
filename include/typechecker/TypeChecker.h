@@ -19,6 +19,7 @@
 #include "TypeEnv.h"
 #include "Diagnostic.h"
 #include "ast.h"
+#include "types.h"
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -227,6 +228,7 @@ private:
                           const std::string& func_name, const std::string& bind_name,
                           int level);
     MonoTypePtr mono_from_import_sig(const ImportedFnSig& sig, int level);
+    MonoTypePtr from_ast_type(const yona::compiler::types::Type& t, int level);
 };
 
 } // namespace yona::compiler::typechecker
