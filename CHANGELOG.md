@@ -11,6 +11,22 @@
   `tempFile`, `run`, and `execArgs`. `Std\IO.readStdin` reads stdin to EOF.
 - CMake `yona_add_executable` (`cmake/YonaTools.cmake`) compiles Yona tools
   during the build; `tools/yona` is the first consumer.
+- **`yls` language server** and a VS Code / Cursor extension at
+  `editors/vscode`. `yls --stdio` publishes parse/type/refinement/linearity
+  diagnostics, hover, definition, references, completion, symbols, semantic
+  tokens, rename, signature help, inlay hints, call hierarchy, and explain
+  code actions. The TextMate grammar is shared with the site
+  (`site/grammars/yona.tmLanguage.json`). Query types live in
+  `include/typed_core/Query.h` (no LLVM headers). `yls` treats `#`/`##`
+  headers like `yonac` (`check_module`), indexes function parameters and
+  other patterns for rename/hover, decodes JSON `\uXXXX` (including
+  surrogate pairs), looks behind a space for juxtaposition signature help,
+  uses `initialize` workspace roots in module search, and re-analyzes open
+  buffers on `workspace/didChangeWatchedFiles`. Hover and related queries
+  treat LSP ranges as end-exclusive. `yonac` and `yls` share
+  `is_module_source` in `include/ModuleSource.h`. Windows stdio is binary so
+  `Content-Length` stays in sync. The extension setting is
+  `yona.trace.server` (vscode-languageclient).
 
 ### Fixed
 - Nested `let`, `perform`/`raise` as a let-binding RHS, and `with` bodies

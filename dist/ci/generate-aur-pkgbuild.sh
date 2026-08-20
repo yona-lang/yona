@@ -26,6 +26,7 @@ package() {
   install -Dm755 bin/yonac "\$pkgdir/usr/bin/yonac"
   install -Dm755 bin/yona "\$pkgdir/usr/bin/yona"
   install -Dm755 bin/yona-repl "\$pkgdir/usr/bin/yona-repl"
+  install -Dm755 bin/yls "\$pkgdir/usr/bin/yls"
   install -d "\$pkgdir/usr/lib/yona"
   cp -a lib runtime src include "\$pkgdir/usr/lib/yona/"
 }

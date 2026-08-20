@@ -28,6 +28,7 @@
 
 #include "AcceleratorDiag.h"
 #include "Codegen.h"
+#include "ModuleSource.h"
 #include "Diagnostic.h"
 #include "InProcessLld.h"
 #include "LinkerPlan.h"
@@ -218,30 +219,6 @@ static filesystem::path canonical_if_exists(const filesystem::path &p) {
 
 static vector<filesystem::path> discover_sysroots(const char *argv0, const string &sysroot_opt) {
   return yona::toolchain::discover_sysroots(argv0, sysroot_opt);
-}
-
-static bool is_module_source(const string &source) {
-  // Match lexer: `#` starts a line comment through newline (same as `##` docs).
-  // Without this, stdlib modules whose first token is `module` only after
-  // doc lines (e.g. lib/Std/Http.yona) were parsed as expressions and failed.
-  size_t i = 0;
-  const size_t n = source.size();
-  while (i < n) {
-    const unsigned char c = static_cast<unsigned char>(source[i]);
-    if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
-      ++i;
-      continue;
-    }
-    if (c == '#') {
-      while (i < n && source[i] != '\n' && source[i] != '\r')
-        ++i;
-      continue;
-    }
-    break;
-  }
-  if (i + 6 > n)
-    return false;
-  return source.compare(i, 6, "module") == 0;
 }
 
 int main(int argc, char *argv[]) {

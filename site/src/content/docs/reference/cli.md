@@ -4,8 +4,9 @@ description: Complete reference for the yonac compiler and the yona REPL, includ
 ---
 
 Yona ships `yonac` (ahead-of-time compiler), `yona` (compile-and-run runner
-and shebang target), and `yona-repl` (interactive REPL, started by `yona`
-when stdin is a TTY).
+and shebang target), `yona-repl` (interactive REPL, started by `yona`
+when stdin is a TTY), and `yls` (language server). Editor setup is
+documented in [Editor and language server](/guides/editor/).
 
 ## yonac
 
@@ -219,3 +220,14 @@ Audit GPU-acceleratable call sites in a module, with inferred types:
 ```bash
 yonac --emit-accelerator-report --emit-accelerator-report-with-types Stats.yona -I lib
 ```
+
+## yls
+
+```bash
+yls [--stdio] [-I path]
+```
+
+`yls` is the Yona language server. Editors speak LSP 3.17 over stdin/stdout
+with `Content-Length` framing. `-I path` adds a module search directory,
+matching `yonac -I`. Discovery from the VS Code extension uses `PATH`,
+`YONA_HOME/bin/yls`, then the directory that contains `yonac`.

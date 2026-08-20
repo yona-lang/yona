@@ -10,7 +10,7 @@
 | macOS / Linuxbrew | `brew install akovari/tap/yona` |
 | Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest) |
 
-These install `yonac` and `yona` on `PATH`. Distro packages put the compiler sysroot under `/usr/lib/yona` or `/usr/lib64/yona`; Homebrew uses `$(brew --prefix)/lib/yona`.
+These install `yonac`, `yona`, `yona-repl`, and `yls` on `PATH`. Distro packages put the compiler sysroot under `/usr/lib/yona` or `/usr/lib64/yona`; Homebrew uses `$(brew --prefix)/lib/yona`.
 
 Ubuntu PPA builds compile from source on Launchpad (Noble `llvm-dev` is LLVM 18). If a series has no published package yet, build a binary `.deb` from the release tarball:
 
@@ -48,6 +48,8 @@ cmake --build --preset build-release-linux
 # Install (optional)
 sudo install -m755 out/build/x64-release-linux/yonac /usr/local/bin/
 sudo install -m755 out/build/x64-release-linux/yona /usr/local/bin/
+sudo install -m755 out/build/x64-release-linux/yona-repl /usr/local/bin/
+sudo install -m755 out/build/x64-release-linux/yls /usr/local/bin/
 sudo cp -r lib/Std /usr/local/lib/yona/lib/
 ```
 

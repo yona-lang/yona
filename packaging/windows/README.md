@@ -28,7 +28,7 @@ The script creates:
 - The draft currently installs into `ProgramFiles64Folder\Yona`.
 - `bin` is appended to system `PATH` via MSI environment table.
 - The file payload is taken from the staged layout:
-  - `bin/` (`yonac.exe`, `yona.exe`, `yona-repl.exe`)
+  - `bin/` (`yonac.exe`, `yona.exe`, `yona-repl.exe`, `yls.exe`)
   - `lib/Std/`
   - `runtime/`
   - `src/runtime/` (for advanced fallback workflows)

@@ -38,6 +38,7 @@ RUN microdnf install -y \
 COPY --from=builder /build/out/build/x64-release-linux/yonac /usr/local/bin/yonac
 COPY --from=builder /build/out/build/x64-release-linux/yona /usr/local/bin/yona
 COPY --from=builder /build/out/build/x64-release-linux/yona-repl /usr/local/bin/yona-repl
+COPY --from=builder /build/out/build/x64-release-linux/yls /usr/local/bin/yls
 
 # Copy standard library
 COPY --from=builder /build/lib /usr/local/lib/yona/lib

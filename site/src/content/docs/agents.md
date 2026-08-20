@@ -74,6 +74,7 @@ Follow the [style guide](/learn/style/); the high-signal rules:
 
 ## Syntax highlighting and grammars
 
-The TextMate grammar used by this site is published at
-[`/grammars/yona.tmLanguage.json`](https://github.com/yona-lang/yona-lang.github.io/blob/master/grammars/yona.tmLanguage.json)
-and can be reused in editors and rendering pipelines.
+The TextMate grammar used by this site is
+[`site/grammars/yona.tmLanguage.json`](https://github.com/yona-lang/yona/blob/master/site/grammars/yona.tmLanguage.json).
+The VS Code extension copies the same file into `editors/vscode/syntaxes/`.
+See [Editor and language server](/guides/editor/).

@@ -1,0 +1,70 @@
+{
+  "name": "yona",
+  "displayName": "Yona",
+  "description": "Yona language support: syntax highlighting and the yls language server.",
+  "version": "0.1.4",
+  "publisher": "yona-lang",
+  "license": "GPL-3.0-only",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Programming Languages"],
+  "activationEvents": [
+    "onLanguage:yona"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "yona",
+        "aliases": ["Yona", "yona"],
+        "extensions": [".yona", ".yonai"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "yona",
+        "scopeName": "source.yona",
+        "path": "./syntaxes/yona.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "yona.explain",
+        "title": "Yona: Explain error code"
+      }
+    ],
+    "configuration": {
+      "title": "Yona",
+      "properties": {
+        "yona.languageServer.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the yls language server. Empty uses PATH, YONA_HOME, then the directory containing yonac."
+        },
+        "yona.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace communication between VS Code and yls (vscode-languageclient)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "tsc --noEmit -p ./",
+    "test": "node ./out/test/run.js",
+    "package": "npm run compile"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.8.3"
+  }
+}

@@ -51,6 +51,7 @@ cmake --build --preset build-release-linux
 install -Dm755 out/build/x64-release-linux/yonac %{buildroot}%{_bindir}/yonac
 install -Dm755 out/build/x64-release-linux/yona %{buildroot}%{_bindir}/yona
 install -Dm755 out/build/x64-release-linux/yona-repl %{buildroot}%{_bindir}/yona-repl
+install -Dm755 out/build/x64-release-linux/yls %{buildroot}%{_bindir}/yls
 # v0.1.2 Source0 links the CLI to in-tree libyona_lib.so; ship it in %%{_libdir}
 # so ld.so finds it after RUNPATH is stripped.
 install -Dm755 out/build/x64-release-linux/libyona_lib.so \
@@ -58,6 +59,7 @@ install -Dm755 out/build/x64-release-linux/libyona_lib.so \
 patchelf --remove-rpath %{buildroot}%{_bindir}/yonac
 patchelf --remove-rpath %{buildroot}%{_bindir}/yona
 patchelf --remove-rpath %{buildroot}%{_bindir}/yona-repl
+patchelf --remove-rpath %{buildroot}%{_bindir}/yls
 
 install -d %{buildroot}%{_libdir}/yona/lib/Std
 cp -a lib/Std/. %{buildroot}%{_libdir}/yona/lib/Std/
@@ -78,6 +80,7 @@ cp -a include/yona/runtime/. %{buildroot}%{_libdir}/yona/include/yona/runtime/
 %{_bindir}/yonac
 %{_bindir}/yona
 %{_bindir}/yona-repl
+%{_bindir}/yls
 %{_libdir}/libyona_lib.so
 %{_libdir}/yona/
 

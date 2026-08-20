@@ -58,6 +58,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Check TextMate grammar sync
+      if: runner.os == 'Linux'
+      run: ./scripts/check-yona-grammar.sh
+
     - name: Set up LLVM
       uses: ./.github/actions/setup-llvm
 
@@ -66,6 +70,17 @@ jobs:
 
     - name: Build
       run: cmake --build --preset ${{ matrix.build_preset }}
+
+    - name: Smoke yls
+      if: success()
+      shell: bash
+      run: |
+        PY="$(command -v python3 || command -v python)"
+        YLS="out/build/${{ matrix.build_dir }}/yls"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          YLS="${YLS}.exe"
+        fi
+        "$PY" scripts/ci/smoke-yls.py "$YLS"
 
     - name: Report embedded LLD
       if: success()
