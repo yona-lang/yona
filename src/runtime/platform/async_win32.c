@@ -378,6 +378,10 @@ void yona_rt_promise_complete(yona_promise_t* p, int64_t result, int is_error,
 			      yona_task_group_t* group) {
 	if (!p) return;
 	EnterCriticalSection(&p->mutex);
+	if (p->completed) {
+		LeaveCriticalSection(&p->mutex);
+		return;
+	}
 	p->result = result;
 	p->error = is_error ? 1 : 0;
 	p->completed = 1;

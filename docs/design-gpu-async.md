@@ -17,11 +17,15 @@ submit/wait must **not** park worker threads on `vkDeviceWaitIdle` /
 
 ## 2. Non-goals (first ship)
 
-- **Transparent GPU lowering** in the compiler (deferred until explicit path
-  + async story are stable).
+- **Full SPIR-V from arbitrary Yona lambdas** — the compiler rewrites only the
+  **fixed kernel library** (inline IntArray/FloatArray map/filter/foldl)
+  to the Std\GPU ABI (`docs/gpu-transparent-lowering.md`). Arbitrary
+  closures stay on the host path by default (`\x -> x + x * x` and similar);
+  **`yonac --strict-accelerator`** rejects them with **E0700** (honest typed
+  rejection; no silent wrong answers). `\x -> x * x` is in the kernel library.
 - **Multi-GPU / MGPU** selection UI.
-- **SPIR-V from arbitrary Yona lambdas** in v1 — acceptable to start with a
-  **fixed kernel library** + numeric hooks, then widen codegen.
+- **Effect-row inference for `Gpu`** — `perform Gpu.*` / handlers ship now;
+  full effect rows remain GitHub #8.
 
 ## 3. Submit / completion model
 
@@ -69,27 +73,29 @@ Document **exact** semantics (lossy cancel vs drain) in the stdlib API.
 
 ## 5. Memory: pinned buffers and channels
 
-- **Pinned host memory** (optional v2): `GpuBuffer` / `PinnedBytes` with
-  **Linear** or explicit close — refcount tied to GPU completion.
-- **Channels:** producer sends chunks into a bounded pipeline consumed by GPU
-  submits — same lifetime rules as “borrowed until send completes” for
-  async I/O buffers today; align with **io_uring buffer pinning** lessons in
-  `compiled_runtime.c`.
+- **Pinned host memory:** `PinnedFloats` with explicit close — prefers Vulkan
+  **host-visible** mapped memory when `yona_gpu_vulkan_ctx_init` succeeds;
+  malloc fallback otherwise (`YONA_GPU_PINNED_HOST_MALLOC=1` forces malloc).
+  `pinnedBackend` reports `"vulkan-mapped"` / `"host-malloc"`.
+  `mapFloatPinnedGPU` scales in place on the mapped/host pointer.
+- **Channels:** `gpuFloatChannel` / `drainMapFloatGPU` reuse `Std\Channel` for
+  bounded `FloatArray` chunk pipelines into GPU map kernels — same lifetime
+  rules as other channel payloads.
 
 ## 6. Effects and failures
 
-- Introduce a **`Gpu` effect** (or a small set of `perform` ops) for
-  **device lost**, **OOM**, **shader compile failure** — lets library code
-  `handle` and fall back to CPU `map`/`foldl` without claiming pure `mapGPU`
-  cannot fail.
-- Alternatively: `Result`-returning C API only in v1; add effect when
-  `handle` integration is ready.
+- **`Gpu` effect ops** (`perform Gpu.oom` / `Gpu.deviceLost` / `Gpu.fail code`)
+  are registered at prelude load. `Std\GPU` kernels return `GpuIssue` /
+  `Result` (`checkGpu` / `withGpuIssue`). `raiseGpu` / `withGpuFallback`
+  `perform` those ops; GENFN remonomorphization inside a user `handle` binds
+  the caller's clauses (effect rows on `.yonai`). Direct use-site `perform`
+  still works. There is no runtime handler stack across precompiled objects.
 
-## 7. Multi-stage graphs (later)
+## 7. Multi-stage graphs
 
-- Batch `mapGPU ∘ mapGPU ∘ reduceGPU` into one command buffer + **barriers**
-  between passes — reduces host↔device chatter; mirrors **parallel
-  comprehensions** at a coarser grain. **Depends:** stable single-submit path.
+- **Shipped:** `mapReduceGraphGPU` batches map→…→reduce into one command buffer
+  with sync2 barriers (`docs/gpu-architecture.md`). Further graph shapes
+  (arbitrary DAG, multi-queue) remain future work.
 
 ## 8. Implementation phases (execution order)
 
@@ -146,8 +152,9 @@ to avoid duplicated registration logic.
    `yona_rt_promise_complete` (`async.c`). Doctests: `YONA_GPU_TEST_F64_MUL2=1`,
    `YONA_GPU_TEST_F64_MUL2_ASYNC=1`. The **`yona_Std_GPU__floatArray*Async`**
    wrappers call **`yona_gpu_vulkan_ctx_init()`** before enqueue (idempotent)
-   so benches and programs do not rely on a separate C init call. **Next:** timeline semaphores + align with
-   §3–§4 cancellation; broaden to pinned buffers and **`mapGPU` / `reduceGPU`** per §5–§6.
+   so benches and programs do not rely on a separate C init call. **Shipped next:**
+   `mapGPU` / `reduceGPU` / `mapFloatGPU` / `mapReduceGraphGPU`, sync2 graphs,
+   early cancel, `PinnedFloats` — see `docs/gpu-architecture.md`.
 2. **Yona `Std\GPU` surface** — **`floatArrayMul2Async : FloatArray -> Int`** and
    **`floatArrayScaleAsync : Float -> FloatArray -> Int`** (`extern native`,
    `Promise Int` at use sites) wrap the fence-thread promise;
@@ -159,9 +166,12 @@ to avoid duplicated registration logic.
    runs before the fence thread observes completion, **`gpu_stub`** completes the
    promise with result **`-887`** and `is_error=1` after `vkWaitForFences`
    succeeds (submission is **not** dropped; buffers may already be updated).
-4. **Pinned / channel pipelines** — §5.
+4. **Pinned / channel pipelines** — §5 (**shipped:** Vulkan-mapped `PinnedFloats`,
+   `gpuFloatChannel` / `drainMapFloatGPU`).
 5. **Graph batching** — §7.
-6. **Transparent lowering** — separate Halide-style “schedule” design.
+6. **Transparent lowering** — shipped for the fixed kernel library
+   (`docs/gpu-transparent-lowering.md`). Arbitrary-lambda SPIR-V remains later;
+   `--strict-accelerator` / E0700 is the honest rejection path.
 
 ## 9. References (implementation)
 

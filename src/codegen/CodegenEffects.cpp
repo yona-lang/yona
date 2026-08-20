@@ -10,6 +10,7 @@
 ///
 
 #include "Codegen.h"
+#include <string>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
@@ -55,6 +56,18 @@ TypedValue Codegen::codegen_perform(PerformExpr* node) {
         }
     }
     if (!handler_fn) {
+        // Module-export compile of effectful GENFN (effect rows on the
+        // arrow / `.yonai`) has no lexical `handle`. Emit a runtime raise
+        // so the precompiled object is well-formed; importers remonomorphize
+        // the GENFN body inside a user `handle`, where handler_stack_ binds.
+        if (compiling_unhandled_perform_ok_ && rt_.raise_) {
+            int64_t sym_id = intern_symbol("UnhandledEffect");
+            std::string msg_str = "unhandled effect operation: " + op_key;
+            auto* msg = builder_->CreateGlobalStringPtr(msg_str, "unhandled_effect_msg");
+            builder_->CreateCall(rt_.raise_, {ConstantInt::get(i64_ty, sym_id), msg});
+            /* raise is noreturn; keep a dummy value so case/PHI CFGs stay valid. */
+            return {ConstantInt::get(i64_ty, 0), CType::UNIT};
+        }
         report_error(node->source_context, "unhandled effect operation: " + op_key);
         return {};
     }

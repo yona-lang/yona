@@ -40,6 +40,7 @@ enum class ErrorCode {
     // Effect errors (E02xx)
     E0200,  ///< Unhandled effect operation (codegen)
     E0201,  ///< Effect argument count mismatch
+    E0202,  ///< Effect escapes at call site without a covering handler
 
     // Parse errors (E03xx)
     E0300,  ///< Unexpected token
@@ -61,6 +62,9 @@ enum class ErrorCode {
     E0601,  ///< Branch inconsistency (consumed in one branch but not the other)
     E0602,  ///< Resource leak (linear value not consumed at scope exit)
     E0603,  ///< Invalid `@borrow` (pattern or escape rules violated)
+
+    // Accelerator errors (E07xx)
+    E0700,  ///< Columnar map/filter/foldl lambda not in the fixed GPU kernel library
 };
 
 /// Return the string form of an error code (e.g., "E0100").
@@ -94,6 +98,15 @@ public:
     void warning(const SourceLocation& loc, const std::string& message, WarningFlag flag);
     void note(const SourceLocation& loc, const std::string& message);
 
+    /// One emitted diagnostic (errors, warnings, notes) for tests and tooling.
+    struct Record {
+        DiagLevel level = DiagLevel::Error;
+        SourceLocation loc;
+        std::optional<ErrorCode> code;
+        std::string message;
+    };
+    const std::vector<Record>& records() const { return records_; }
+
     // Counters
     int error_count() const { return error_count_; }
     int warning_count() const { return warning_count_; }
@@ -116,6 +129,7 @@ private:
     std::string source_;
     std::string filename_;
     std::vector<size_t> line_offsets_; // byte offset of each line start
+    std::vector<Record> records_;
 };
 
 } // namespace yona::compiler

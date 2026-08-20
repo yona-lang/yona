@@ -10,12 +10,19 @@
 //
 
 #include "Codegen.h"
+#include "AcceleratorLowering.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
 #include <iostream>
 
 namespace yona::compiler::codegen {
+
+using yona::compiler::AccelKernel;
+using yona::compiler::AccelMatch;
+using yona::compiler::ErrorCode;
+using yona::compiler::match_transparent_apply;
+using yona::compiler::is_unlowerable_column_apply;
 
 // Closure layout constants — must match CodegenFunction.cpp / compiled_runtime.c
 static constexpr int CLOSURE_FIELD_FN = 0;      // fn_ptr
@@ -24,6 +31,129 @@ static constexpr int CLOSURE_HDR_SIZE = 5;       // fn_ptr, ret_type, arity, num
 
 using namespace llvm;
 using LType = llvm::Type;
+
+Value* coerce_to_type(IRBuilder<>& builder, Value* v, LType* expected) {
+    if (!v || v->getType() == expected)
+        return v;
+    if (v->getType()->isIntegerTy() && expected->isPointerTy())
+        return builder.CreateIntToPtr(v, expected);
+    if (v->getType()->isPointerTy() && expected->isIntegerTy())
+        return builder.CreatePtrToInt(v, expected);
+    if (v->getType()->isIntegerTy() && expected->isIntegerTy())
+        return builder.CreateZExtOrTrunc(v, expected);
+    if (v->getType()->isDoubleTy() && expected->isIntegerTy(64))
+        return builder.CreateBitCast(v, expected);
+    if (v->getType()->isIntegerTy(64) && expected->isDoubleTy())
+        return builder.CreateBitCast(v, expected);
+    return v;
+}
+
+TypedValue Codegen::emit_accelerator_kernel(const AccelMatch& match) {
+    if (match.site)
+        set_debug_loc(match.site->source_context);
+
+    std::vector<TypedValue> args;
+    CType ret = CType::INT;
+    switch (match.kernel) {
+    case AccelKernel::IntMapSquare: {
+        TypedValue arr_tv = codegen(match.array);
+        if (!arr_tv.val)
+            return {};
+        if (arr_tv.type == CType::PROMISE)
+            arr_tv = auto_await(arr_tv);
+        args.push_back(arr_tv);
+        ret = CType::INT_ARRAY;
+        break;
+    }
+    case AccelKernel::IntMapAdd:
+    case AccelKernel::IntMapMul:
+    case AccelKernel::IntFilterGt:
+    case AccelKernel::IntFilterLt: {
+        TypedValue scalar_tv;
+        if (match.scalar_is_literal)
+            scalar_tv = {ConstantInt::get(LType::getInt64Ty(*context_), match.lit_i64), CType::INT};
+        else {
+            scalar_tv = codegen(match.scalar);
+            if (!scalar_tv.val)
+                return {};
+            if (scalar_tv.type == CType::PROMISE)
+                scalar_tv = auto_await(scalar_tv);
+            if (match.negate_scalar && match.kernel == AccelKernel::IntMapAdd)
+                scalar_tv.val = builder_->CreateNeg(scalar_tv.val, "accel.neg");
+        }
+        TypedValue arr_tv = codegen(match.array);
+        if (!arr_tv.val)
+            return {};
+        if (arr_tv.type == CType::PROMISE)
+            arr_tv = auto_await(arr_tv);
+        args.push_back(scalar_tv);
+        args.push_back(arr_tv);
+        ret = CType::INT_ARRAY;
+        break;
+    }
+    case AccelKernel::IntReduceSum: {
+        TypedValue arr_tv = codegen(match.array);
+        if (!arr_tv.val)
+            return {};
+        if (arr_tv.type == CType::PROMISE)
+            arr_tv = auto_await(arr_tv);
+        args.push_back(arr_tv);
+        ret = CType::INT;
+        break;
+    }
+    case AccelKernel::FloatScale: {
+        TypedValue scalar_tv;
+        if (match.scalar_is_literal)
+            scalar_tv = {ConstantFP::get(LType::getDoubleTy(*context_), match.lit_f64), CType::FLOAT};
+        else {
+            scalar_tv = codegen(match.scalar);
+            if (!scalar_tv.val)
+                return {};
+            if (scalar_tv.type == CType::PROMISE)
+                scalar_tv = auto_await(scalar_tv);
+            if (scalar_tv.type == CType::INT) {
+                scalar_tv.val = builder_->CreateSIToFP(scalar_tv.val, LType::getDoubleTy(*context_));
+                scalar_tv.type = CType::FLOAT;
+            }
+        }
+        TypedValue arr_tv = codegen(match.array);
+        if (!arr_tv.val)
+            return {};
+        if (arr_tv.type == CType::PROMISE)
+            arr_tv = auto_await(arr_tv);
+        args.push_back(scalar_tv);
+        args.push_back(arr_tv);
+        ret = CType::FLOAT_ARRAY;
+        break;
+    }
+    case AccelKernel::FloatReduceSum: {
+        TypedValue arr_tv = codegen(match.array);
+        if (!arr_tv.val)
+            return {};
+        if (arr_tv.type == CType::PROMISE)
+            arr_tv = auto_await(arr_tv);
+        args.push_back(arr_tv);
+        ret = CType::FLOAT;
+        break;
+    }
+    case AccelKernel::None:
+        return {};
+    }
+
+    std::vector<LType*> arg_tys;
+    std::vector<Value*> vals;
+    for (auto& a : args) {
+        LType* expected = llvm_type(a.type);
+        arg_tys.push_back(expected);
+        vals.push_back(coerce_to_type(*builder_, a.val, expected));
+    }
+    auto* ft = llvm::FunctionType::get(llvm_type(ret), arg_tys, false);
+    auto* fn = module_->getFunction(match.abi_symbol);
+    if (!fn)
+        fn = Function::Create(ft, Function::ExternalLinkage, match.abi_symbol, module_.get());
+    Value* call = builder_->CreateCall(fn, vals, "accel_kernel");
+    return {call, ret};
+}
 
 // ===== codegen_apply helpers =====
 
@@ -423,9 +553,10 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
     auto ext_it = imports_.extern_functions.find(fn_name);
     std::string mangled = ext_it->second;
 
-    // On-demand GENFN re-parse: if the function has source available
-    // and call-site arg types differ from the pre-compiled signature,
-    // re-parse and compile locally (cross-module monomorphization).
+    // On-demand GENFN re-parse. Source bodies compile in this Codegen
+    // instance, so `perform` inside an imported function sees the current
+    // handler_stack_ (effect-row GENFN, not a C++ name list). Types that
+    // differ from the pre-compiled signature also force remonomorphization.
     auto genfn_it = imports_.imported_sources.find(mangled);
     bool types_differ = false;
     if (genfn_it != imports_.imported_sources.end()) {
@@ -576,9 +707,47 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
         auto* expected_ty = ai < arg_types.size() ? arg_types[ai] : arg_val->getType();
         if (arg_val->getType() != expected_ty) {
             if (arg_val->getType()->isStructTy() && expected_ty->isIntegerTy()) {
-                arg_val = builder_->CreateExtractValue(arg_val, {0}, "adt_tag_arg");
-                if (arg_val->getType() != expected_ty)
-                    arg_val = builder_->CreateZExtOrTrunc(arg_val, expected_ty);
+                auto* sty = llvm::cast<llvm::StructType>(arg_val->getType());
+                unsigned num_elems = sty->getNumElements();
+                if (num_elems <= 1) {
+                    /* Nullary / tag-only ADT: pass the discriminant. */
+                    arg_val = builder_->CreateExtractValue(arg_val, {0}, "adt_tag_arg");
+                    if (arg_val->getType() != expected_ty)
+                        arg_val = builder_->CreateZExtOrTrunc(arg_val, expected_ty);
+                } else {
+                    /* Non-recursive ADT with fields: box to a heap ADT so C
+                     * sees a pointer (as i64), not a discarded payload. */
+                    auto* tag_v = builder_->CreateExtractValue(arg_val, {0});
+                    if (!tag_v->getType()->isIntegerTy(64))
+                        tag_v = builder_->CreateZExtOrTrunc(tag_v, i64_ty_local);
+                    auto* boxed = builder_->CreateCall(
+                        rt_.adt_alloc_,
+                        {tag_v, ConstantInt::get(i64_ty_local, num_elems - 1)}, "adt_box_arg");
+                    int64_t heap_mask = 0;
+                    for (unsigned fi = 1; fi < num_elems; fi++) {
+                        auto* fv = builder_->CreateExtractValue(arg_val, {fi});
+                        if (!fv->getType()->isIntegerTy(64)) {
+                            if (fv->getType()->isPointerTy())
+                                fv = builder_->CreatePtrToInt(fv, i64_ty_local);
+                            else if (fv->getType()->isIntegerTy())
+                                fv = builder_->CreateZExtOrTrunc(fv, i64_ty_local);
+                            else if (fv->getType()->isDoubleTy())
+                                fv = builder_->CreateBitCast(fv, i64_ty_local);
+                        }
+                        builder_->CreateCall(
+                            rt_.adt_set_field_,
+                            {boxed, ConstantInt::get(i64_ty_local, fi - 1), fv});
+                        size_t sub_i = fi - 1;
+                        if (sub_i < all_args[ai].subtypes.size() &&
+                            is_heap_type(all_args[ai].subtypes[sub_i]) && sub_i < 64)
+                            heap_mask |= ((int64_t)1 << sub_i);
+                    }
+                    if (heap_mask != 0)
+                        builder_->CreateCall(
+                            rt_.adt_set_heap_mask_,
+                            {boxed, ConstantInt::get(i64_ty_local, heap_mask)});
+                    arg_val = builder_->CreatePtrToInt(boxed, expected_ty, "adt_box_i64");
+                }
             } else if (arg_val->getType()->isIntegerTy() && expected_ty->isPointerTy())
                 arg_val = builder_->CreateIntToPtr(arg_val, expected_ty);
             else if (arg_val->getType()->isPointerTy() && expected_ty->isIntegerTy())
@@ -1153,6 +1322,19 @@ TypedValue Codegen::codegen_apply(ApplyExpr* node) {
 
     // 1. Flatten juxtaposition chain: f x y → collect all args and root name
     auto [fn_name, module_fqn, chain] = flatten_apply_chain(node);
+
+    if (accelerator_lowering_enabled_) {
+        if (auto plan = match_transparent_apply(node))
+            return emit_accelerator_kernel(*plan);
+        if (strict_accelerator_ && is_unlowerable_column_apply(node)) {
+            error_count_++;
+            diag_->error(node->source_context, ErrorCode::E0700,
+                         "accelerator lambda is not in the fixed Std\\GPU kernel library "
+                         "(arbitrary lambdas are not compiled to SPIR-V; use a fixed shape "
+                         "or drop --strict-accelerator for the host path)");
+            return {};
+        }
+    }
 
     // 2. Evaluate all arguments
     auto eval = evaluate_apply_args(chain);

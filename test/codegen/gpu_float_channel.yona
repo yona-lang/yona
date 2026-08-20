@@ -1,0 +1,22 @@
+import fill from Std\FloatArray in
+import gpuFloatChannel, drainMapFloatGPU, Scale, reduceFloatGPU, FSum from Std\GPU,
+       send, recv, close from Std\Channel in
+let (sl, rl) = gpuFloatChannel 4 in
+case sl of Linear sender ->
+case rl of Linear receiver ->
+let (ol, orl) = gpuFloatChannel 4 in
+case ol of Linear out_s ->
+case orl of Linear out_r ->
+    let a = fill 2 1.0 in
+    let _ = send sender a in
+    let _ = close sender in
+    let n = drainMapFloatGPU (Scale 2.0) receiver out_s in
+    let _ = close out_s in
+    case recv out_r of
+        Some b ->
+            let s = reduceFloatGPU FSum b in
+            n + s
+        None -> 0
+    end
+end end
+end end

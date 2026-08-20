@@ -4,8 +4,8 @@
 
 #include "runtime/async_runtime.h"
 
-/// C ABI for `Std\GPU` — **discovery only** until the public compute API lands;
-/// see docs/design-gpu-async.md (`mapGPU`, `Promise`, fences, pinned buffers).
+/// C ABI for `Std\GPU` — discovery, columnar ops, `mapGPU` / graph / pinned
+/// buffers; see docs/design-gpu-async.md and docs/gpu-architecture.md.
 /// Without CMake Vulkan (any platform), probes return zeros / false.
 
 #ifdef __cplusplus
@@ -49,6 +49,10 @@ int yona_gpu_vulkan_dispatch_nop_once(void);
  * setup; -30..-42 resource / dispatch failures (see gpu_stub.c). */
 int yona_gpu_vulkan_float64_buffer_scale_inplace(double* elements, uint32_t count, double scale);
 
+/* Block-reduce sum of `count` doubles into `*out_sum` (f64 shader or f32 narrow).
+ * Same device as scale. Returns 0 on success; negative codes match scale_inplace. */
+int yona_gpu_vulkan_float64_buffer_reduce_sum(const double* elements, uint32_t count, double* out_sum);
+
 /* Same as scale with factor 2.0. */
 int yona_gpu_vulkan_float64_buffer_mul2_inplace(double* elements, uint32_t count);
 
@@ -63,6 +67,16 @@ yona_promise_t* yona_gpu_vulkan_float64_buffer_scale_async(double* elements, uin
  * promise when non-NULL. Returns NULL if promise allocation fails or without Vulkan. */
 yona_promise_t* yona_gpu_vulkan_float64_buffer_mul2_async(double* elements, uint32_t count,
                                                           yona_task_group_t* group);
+
+/* Host-visible Vulkan-mapped float staging (persistent map). On success returns 0,
+ * sets *out_host to the mapped double[count] (zeroed), and *out_opaque to a handle
+ * for yona_gpu_vulkan_free_pinned_floats. Returns -1 when Vulkan is unavailable or
+ * ctx_init fails (caller should fall back to malloc). Set YONA_GPU_PINNED_HOST_MALLOC=1
+ * in the Std\GPU allocator to skip this path. */
+int yona_gpu_vulkan_alloc_pinned_floats(int64_t count, double** out_host, void** out_opaque);
+
+/* Release a handle from yona_gpu_vulkan_alloc_pinned_floats (no-op on NULL). */
+void yona_gpu_vulkan_free_pinned_floats(void* opaque);
 
 #ifdef __cplusplus
 }

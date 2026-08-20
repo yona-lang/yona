@@ -5,7 +5,7 @@ AFN yona_Std_Process__exec 1 STRING -> STRING
 AFN yona_Std_Process__execStatus 1 STRING -> INT
 FN yona_Std_Process__setenv 2 STRING STRING -> INT
 FN yona_Std_Process__hostname 0 -> STRING
-FN yona_Std_Process__spawn 1 STRING -> INT
+FN yona_Std_Process__spawn 1 STRING -> LINEAR
 FN yona_Std_Process__readLine 1 INT -> STRING
 AFN yona_Std_Process__readAll 1 INT -> STRING
 AFN yona_Std_Process__wait 1 INT -> INT

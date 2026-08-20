@@ -40,6 +40,10 @@
 //   4. Effects (algebraic handlers)
 //      - handler_stack_: active `handle ... with` handlers for perform
 //        resolution. Lexically nested handle frames push/pop here.
+//      - compiling_unhandled_perform_ok_: module-export compile may emit a
+//        runtime `:UnhandledEffect` raise so GENFN bodies that `perform`
+//        can be precompiled; call-site remonomorphization inside `handle`
+//        binds the caller's clauses (effect-row-directed, not a name list).
 //
 //   5. Closure devirtualization
 //      - closure_known_fn_: Value* → Function*. When a known lambda is
@@ -84,13 +88,15 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ast.h"
 #include "types.h"
 #include "Diagnostic.h"
+#include "typechecker/TypeChecker.h"
+#include "AcceleratorLowering.h"
 
-namespace yona::compiler::typechecker { class TypeChecker; }
 namespace yona::parser { class Parser; }
 
 namespace yona::compiler::codegen {
@@ -150,6 +156,11 @@ public:
 
     bool emit_object_file(const std::string& output_path);
     bool emit_interface_file(const std::string& output_path);
+
+    /// After `compile_module`, type-check exported function bodies and copy
+    /// inferred latent effect rows onto FN metadata for `.yonai` emission.
+    void populate_interface_effect_rows(ast::ModuleDecl* mod,
+                                        typechecker::TypeChecker& tc);
     bool load_interface_file(const std::string& path);
     std::string emit_ir();
 
@@ -163,9 +174,27 @@ public:
     void load_prelude(parser::Parser* parser = nullptr,
                        typechecker::TypeChecker* type_checker = nullptr);
     void set_opt_level(int level) { opt_level_ = (level < 0) ? 0 : (level > 3) ? 3 : level; }
+    /// Rewrite IntArray/FloatArray map/filter/foldl whose lambdas are in the
+    /// Std\GPU kernel library into the columnar runtime ABI. Default on;
+    /// GPU vs CPU remains a runtime decision (`YONA_GPU_VULKAN_MIN_LEN`, device).
+    void set_accelerator_lowering(bool enabled) { accelerator_lowering_enabled_ = enabled; }
+    void set_strict_accelerator(bool enabled) { strict_accelerator_ = enabled; }
 
     // Module search paths for resolving imports
     std::vector<std::string> module_paths_;
+
+    /// `.yonai` signatures for the type checker (`set_import_type_source`).
+    class ImportTypes final : public typechecker::ImportTypeSource {
+    public:
+        explicit ImportTypes(Codegen* cg) : cg_(cg) {}
+        std::optional<typechecker::ImportedFnSig> imported_function_sig(
+            const std::string& module_fqn, const std::string& name) override;
+        std::vector<std::string> imported_module_exports(
+            const std::string& module_fqn) override;
+    private:
+        Codegen* cg_;
+    };
+    ImportTypes import_types_{this};
 
     // Run LLVM optimization passes
     void optimize();
@@ -214,6 +243,12 @@ private:
         // read-only (not returned, not stored). Call sites skip rc_inc;
         // function exit skips rc_dec. Empty vector = all params owned.
         std::vector<bool> borrowed_params;
+        /// Type-checker overlay: C ABI is still `return_type` / `param_types`.
+        bool return_linear = false;
+        std::vector<char> tuple_elem_linear;
+        std::vector<char> param_linear;
+        std::vector<std::string> effect_labels;
+        typechecker::SerializedFnEffects effect_spec;
     };
 
     // Escape analysis: returns true if `name` appears in a "storing"
@@ -394,6 +429,14 @@ private:
         // means parameter i is read-only/non-escaping, so call sites can
         // avoid defensive ownership bumps across module boundaries.
         std::vector<bool> borrowed_params;
+        /// Type-checker overlay. `LINEAR` in `.yonai` does not change CType
+        /// (C still returns fd/int); LinearityChecker reads this via ImportTypeSource.
+        bool return_linear = false;
+        std::vector<char> tuple_elem_linear;
+        std::vector<char> param_linear;
+        /// Latent `Effect.op` labels (`effects …` on FN lines). GitHub #8.
+        std::vector<std::string> effect_labels;
+        typechecker::SerializedFnEffects effect_spec;
     };
     ModuleFunctionMeta module_meta_from_compiled(const CompiledFunction& cf) const;
     CompiledFunction compiled_function_from_meta(llvm::Function* fn,
@@ -615,6 +658,11 @@ private:
         std::unordered_map<std::string, llvm::Value*> handler_closures;
     };
     std::vector<HandlerContext> handler_stack_;
+    /// When true, `perform` without a lexical handler emits `yona_rt_raise`
+    /// (`:UnhandledEffect`) instead of a compile error. Set while compiling
+    /// exported module functions so effectful GENFN (e.g. `Std\GPU.raiseGpu`)
+    /// can be precompiled; importers remonomorphize inside `handle`.
+    bool compiling_unhandled_perform_ok_ = false;
     llvm::Value* current_group_ = nullptr; ///< Active task group for structured concurrency
     std::unordered_set<std::string> effect_resume_names_; ///< Names of resume fn ptr params
 
@@ -633,6 +681,9 @@ private:
     TypedValue codegen_function_def(FunctionExpr* node, const std::string& name);
     TypedValue codegen_apply(ApplyExpr* node);
     TypedValue codegen_lambda_alias(LambdaAlias* node);
+    TypedValue emit_accelerator_kernel(const yona::compiler::AccelMatch& match);
+    bool accelerator_lowering_enabled_ = true;
+    bool strict_accelerator_ = false;
 
     // codegen_apply helpers (extracted for readability)
     struct ApplyChain {
@@ -677,6 +728,8 @@ private:
     TypedValue codegen_extern_decl(ExternDeclExpr* node);
     std::pair<std::string, std::filesystem::path> build_fqn_path(FqnExpr* fqn);
     void load_module_interface(const std::filesystem::path& mod_path);
+    void load_module_by_fqn(const std::string& mod_fqn);
+    static typechecker::ImportedFnSig sig_from_meta(const ModuleFunctionMeta& meta);
     /// Parse a .yona stdlib source file and register its declarations into the
     /// current Codegen state. Functions become deferred and compile on demand
     /// at call sites in the importing program. Used as fallback when no

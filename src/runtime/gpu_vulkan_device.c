@@ -39,6 +39,8 @@ void yona_gpu_vulkan_device_set_last_note(const char *msg) { (void)msg; }
 
 int yona_gpu_vulkan_device_timeline_semaphore(void) { return 0; }
 
+int yona_gpu_vulkan_device_synchronization2(void) { return 0; }
+
 int yona_gpu_vulkan_device_last_issue_kind(void) { return 0; }
 
 void yona_gpu_vulkan_device_note_vk(const char *ctx, int32_t vk_result) {
@@ -119,6 +121,7 @@ static VkQueue yona_vk_queue = VK_NULL_HANDLE;
 static uint32_t yona_vk_queue_family = (uint32_t)-1;
 static int yona_vk_shader_int64_enabled;
 static int yona_vk_timeline_sem_supported;
+static int yona_vk_sync2_enabled;
 
 static char yona_vk_last_note[256];
 static int yona_vk_last_issue_kind;
@@ -312,6 +315,7 @@ static void yona_vk_destroy_all(void) {
   yona_vk_queue_family = (uint32_t)-1;
   yona_vk_shader_int64_enabled = 0;
   yona_vk_timeline_sem_supported = 0;
+  yona_vk_sync2_enabled = 0;
 
   if (yona_vk_instance != VK_NULL_HANDLE && yona_pfn_vkDestroyInstance)
     yona_pfn_vkDestroyInstance(yona_vk_instance, NULL);
@@ -765,6 +769,8 @@ static int yona_vk_do_try_init_unlocked(void) {
     return -3;
   }
 
+  yona_vk_sync2_enabled = try_modern ? 1 : 0;
+
   if (!yona_vk_shader_int64_enabled)
     yona_vk_note_cpy("device ready; shaderInt64 unavailable — IntArray GPU uses i32 when values fit");
   else
@@ -845,6 +851,15 @@ int yona_gpu_vulkan_device_timeline_semaphore(void) {
   YONA_VKDEV_LOCK();
   if (yona_vk_dev != VK_NULL_HANDLE)
     out = yona_vk_timeline_sem_supported;
+  YONA_VKDEV_UNLOCK();
+  return out;
+}
+
+int yona_gpu_vulkan_device_synchronization2(void) {
+  int out = 0;
+  YONA_VKDEV_LOCK();
+  if (yona_vk_dev != VK_NULL_HANDLE)
+    out = yona_vk_sync2_enabled;
   YONA_VKDEV_UNLOCK();
   return out;
 }

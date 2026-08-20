@@ -1,0 +1,12 @@
+## Gpu effect ops return Unit; resume with unit then transform via return clause.
+handle
+    do
+        perform Gpu.oom ()
+        0
+    end
+with
+    Gpu.oom () resume -> resume ()
+    Gpu.deviceLost () resume -> resume ()
+    Gpu.fail code resume -> resume ()
+    return val -> 1
+end

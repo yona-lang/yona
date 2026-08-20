@@ -1,0 +1,5 @@
+import map, fromSeq, foldl from Std\IntArray in
+let xs = fromSeq [1, 2, 3, 4, 5] in
+let shifted = map (\x -> x + 1) xs in
+let doubled = map (\x -> x * 2) shifted in
+foldl (\a b -> a + b) 0 doubled

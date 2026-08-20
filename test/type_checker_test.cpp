@@ -139,6 +139,42 @@ TEST_CASE("Unifier: occurs check prevents infinite types") {
     CHECK(!u.unify(a, seq_a, SourceLocation::unknown())); // a ~ Seq a -> infinite
 }
 
+TEST_CASE("Unifier: effect-row occurs is least fixed point, not infinite type") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier u(arena, uf, diag);
+    auto* r = arena.fresh_var(0); uf.add_var(r->var_id, 0);
+    auto* cyclic = arena.make_effect_row({"State.get"}, r);
+    CHECK(u.unify(r, cyclic, SourceLocation::unknown()));
+    auto* bound = u.resolve(r);
+    REQUIRE(bound != nullptr);
+    CHECK(bound->tag == MonoType::MEffectRow);
+    CHECK(bound->effect_labels == std::vector<std::string>{"State.get"});
+    CHECK(bound->effect_rest == nullptr);
+    CHECK(!diag.has_errors());
+}
+
+TEST_CASE("Unifier: effect-row occurs keeps an independent open rest") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier u(arena, uf, diag);
+    auto* r_self = arena.fresh_var(0); uf.add_var(r_self->var_id, 0);
+    auto* r_param = arena.fresh_var(0); uf.add_var(r_param->var_id, 0);
+    auto* cyclic = arena.make_effect_row({"Log.log"}, r_self, {r_param});
+    CHECK(u.unify(r_self, cyclic, SourceLocation::unknown()));
+    auto* bound = u.resolve(r_self);
+    REQUIRE(bound != nullptr);
+    CHECK(bound->tag == MonoType::MEffectRow);
+    CHECK(bound->effect_labels == std::vector<std::string>{"Log.log"});
+    auto* rest = u.resolve(bound->effect_rest);
+    REQUIRE(rest != nullptr);
+    CHECK(rest->tag == MonoType::Var);
+    CHECK(rest->var_id == r_param->var_id);
+    CHECK(!diag.has_errors());
+}
+
 TEST_CASE("Unifier: App types unify") {
     TypeArena arena;
     UnionFind uf;
@@ -792,6 +828,471 @@ TEST_CASE("Effect: no error for handled perform") {
     delete main_node;
 }
 
+TEST_CASE("Effect row: function with unhandled perform has latent row") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream("(\\x -> perform State.get ())");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto printed = pretty_print(checker.zonk(t));
+    CHECK(printed.find("!{State.get}") != std::string::npos);
+    CHECK(checker.last_escaping_effects().empty()); // captured on the arrow, not top-level
+}
+
+TEST_CASE("Effect row: handle subtracts covered ops from latent row") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "(\\x -> handle perform State.get () with State.get () resume -> resume 1 end)");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto printed = pretty_print(checker.zonk(t));
+    CHECK(printed.find("!{") == std::string::npos);
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: partial handler leaves remaining ops") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    auto* unit_t = arena.make_con(TyCon::Unit);
+    checker.register_effect("State", "s", {
+        {"get", {}, int_t},
+        {"put", {int_t}, unit_t},
+    });
+
+    yona::parser::Parser parser;
+    // handle only get; put still escapes
+    std::istringstream stream(
+        "(\\x -> handle\n"
+        "  let _ = perform State.put 1 in perform State.get ()\n"
+        "with\n"
+        "  State.get () resume -> resume 0\n"
+        "end)");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto printed = pretty_print(checker.zonk(t));
+    CHECK(printed.find("State.put") != std::string::npos);
+    CHECK(printed.find("State.get") == std::string::npos);
+}
+
+TEST_CASE("Effect row: applying effectful function without handle is E0202") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let f = (\\x -> perform State.get ()) in f 0");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(checker.has_errors());
+    CHECK(error_explanation(ErrorCode::E0202).find("E0202") != std::string::npos);
+}
+
+TEST_CASE("Effect row: E0202 points at the introducing perform") {
+    DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    // perform is on line 1; the escaping call is on line 2
+    const char* src =
+        "let f = (\\x -> perform State.get ()) in\n"
+        "f 0";
+    yona::parser::Parser parser;
+    std::istringstream stream(src);
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    REQUIRE(checker.has_errors());
+
+    const DiagnosticEngine::Record* e0202 = nullptr;
+    for (auto& rec : diag.records()) {
+        if (rec.level == DiagLevel::Error && rec.code == ErrorCode::E0202) {
+            e0202 = &rec;
+            break;
+        }
+    }
+    REQUIRE(e0202 != nullptr);
+    CHECK(e0202->loc.line == 1);
+    CHECK(e0202->message.find("State.get") != std::string::npos);
+
+    bool saw_call_note = false;
+    for (auto& rec : diag.records()) {
+        if (rec.level == DiagLevel::Note && rec.loc.line == 2)
+            saw_call_note = true;
+    }
+    CHECK(saw_call_note);
+}
+
+TEST_CASE("Effect row: applying effectful function inside matching handle is OK") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let f = (\\x -> perform State.get ()) in\n"
+        "handle f 0 with State.get () resume -> resume 7 end");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: HOF apply threads an open rest") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("(\\f x -> f x)");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto* zt = checker.zonk(t);
+    REQUIRE(zt != nullptr);
+    REQUIRE(zt->tag == MonoType::Arrow);
+    REQUIRE(zt->param_type != nullptr);
+    REQUIRE(zt->param_type->tag == MonoType::Arrow);
+    REQUIRE(zt->return_type != nullptr);
+    REQUIRE(zt->return_type->tag == MonoType::Arrow);
+    // (a -> !{|r} b) -> a -> !{|r} b — result arrow must stay open
+    CHECK(zt->param_type->effect_rest != nullptr);
+    CHECK(zt->return_type->effect_rest != nullptr);
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: HOF apply of effectful function is E0202") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let apply = (\\f x -> f x) in\n"
+        "let g = (\\y -> perform State.get ()) in\n"
+        "apply g 0");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(checker.has_errors());
+}
+
+TEST_CASE("Effect row: E0202 through a HOF points at perform") {
+    DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    const char* src =
+        "let apply = (\\f x -> f x) in\n"
+        "let g = (\\y -> perform State.get ()) in\n"
+        "apply g 0";
+    yona::parser::Parser parser;
+    std::istringstream stream(src);
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    REQUIRE(checker.has_errors());
+
+    const DiagnosticEngine::Record* e0202 = nullptr;
+    for (auto& rec : diag.records()) {
+        if (rec.level == DiagLevel::Error && rec.code == ErrorCode::E0202) {
+            e0202 = &rec;
+            break;
+        }
+    }
+    REQUIRE(e0202 != nullptr);
+    CHECK(e0202->loc.line == 2);
+    CHECK(e0202->message.find("State.get") != std::string::npos);
+}
+
+TEST_CASE("Effect row: HOF apply of effectful function inside handle is OK") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let apply = (\\f x -> f x) in\n"
+        "let g = (\\y -> perform State.get ()) in\n"
+        "handle apply g 0 with State.get () resume -> resume 7 end");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: HOF that returns an effectful function keeps effects on the inner arrow") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream("(\\x -> (\\y -> perform State.get ()))");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto printed = pretty_print(checker.zonk(t));
+    // a -> (b -> !{State.get} Int) — outer arrow is pure
+    CHECK(printed.find("!{State.get}") != std::string::npos);
+    // The first (outer) arrow should not itself carry the row.
+    auto outer_end = printed.find("->");
+    REQUIRE(outer_end != std::string::npos);
+    CHECK(printed.substr(0, outer_end).find("!{") == std::string::npos);
+    CHECK(checker.last_escaping_effects().empty());
+}
+
+TEST_CASE("Effect row: applying a returned effectful function is E0202") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let mk = (\\x -> (\\y -> perform State.get ())) in mk 0 1");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(checker.has_errors());
+}
+
+TEST_CASE("Effect row: HOF own perform unions with applied open rest") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream("(\\f x -> let _ = perform State.get () in f x)");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto* zt = checker.zonk(t);
+    REQUIRE(zt != nullptr);
+    REQUIRE(zt->tag == MonoType::Arrow);
+    REQUIRE(zt->return_type != nullptr);
+    REQUIRE(zt->return_type->tag == MonoType::Arrow);
+    auto* result_arrow = zt->return_type;
+    auto result_printed = pretty_print(result_arrow);
+    CHECK(result_printed.find("State.get") != std::string::npos);
+    CHECK(result_arrow->effect_rest != nullptr);
+}
+
+TEST_CASE("Effect row: two-function HOF unions distinct closed rows at the call site") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    auto* unit_t = arena.make_con(TyCon::Unit);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+    checker.register_effect("Log", "", {{"log", {int_t}, unit_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let app2 = (\\f g x -> let _ = f x in g x) in\n"
+        "let get = (\\y -> perform State.get ()) in\n"
+        "let log = (\\z -> perform Log.log 1) in\n"
+        "app2 get log 0");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(checker.has_errors());
+}
+
+TEST_CASE("Effect row: two-function HOF with both effects handled is OK") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    auto* unit_t = arena.make_con(TyCon::Unit);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+    checker.register_effect("Log", "", {{"log", {int_t}, unit_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let app2 = (\\f g x -> let _ = f x in g x) in\n"
+        "let get = (\\y -> perform State.get ()) in\n"
+        "let log = (\\z -> perform Log.log 1) in\n"
+        "handle app2 get log 0 with\n"
+        "  State.get () resume -> resume 0\n"
+        "  Log.log n resume -> resume ()\n"
+        "end");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: recursive function captures body effects, not an empty row") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let loop n = if n <= 0 then 0 else (perform State.get ()) + loop (n - 1) in loop");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto printed = pretty_print(checker.zonk(t));
+    CHECK(printed.find("!{State.get}") != std::string::npos);
+    CHECK(printed.find("!{|") == std::string::npos);
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: recursive effectful function applied at top level is E0202") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let loop n = if n <= 0 then 0 else (perform State.get ()) + loop (n - 1) in loop 3");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(checker.has_errors());
+}
+
+TEST_CASE("Effect row: recursive effectful function inside handle is OK") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let loop n = if n <= 0 then 0 else (perform State.get ()) + loop (n - 1) in\n"
+        "handle loop 3 with State.get () resume -> resume 0 end");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: recursive pure function does not keep an unsound open rest") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("let f x = if x <= 0 then 0 else f (x - 1) in f");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    auto printed = pretty_print(checker.zonk(t));
+    CHECK(printed.find("!{") == std::string::npos);
+    CHECK(!checker.has_errors());
+}
+
+TEST_CASE("Effect row: recursive HOF still threads the parameter rest") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* int_t = arena.make_con(TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let app f n = if n <= 0 then f n else app f (n - 1) in\n"
+        "let g = (\\y -> perform State.get ()) in\n"
+        "app g 3");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    checker.check(result.node.get());
+    CHECK(checker.has_errors());
+}
+
+TEST_CASE("Effect row: .yonai effects spec parse/format open rest") {
+    SerializedFnEffects fx;
+    REQUIRE(parse_fn_effects("|r0 0:|r0", fx));
+    CHECK(fx.result.labels.empty());
+    CHECK(fx.result.rest_ids == std::vector<int>{0});
+    REQUIRE(fx.params.size() == 1);
+    CHECK(fx.params[0].first == 0);
+    CHECK(fx.params[0].second.open());
+    CHECK(format_fn_effects(fx) == "|r0 0:|r0");
+
+    SerializedFnEffects closed;
+    REQUIRE(parse_fn_effects("Gpu.oom,State.get", closed));
+    CHECK(closed.result.labels == (std::vector<std::string>{"Gpu.oom", "State.get"}));
+    CHECK(!closed.result.open());
+    CHECK(format_fn_effects(closed) == "Gpu.oom,State.get");
+
+    SerializedFnEffects mixed;
+    REQUIRE(parse_fn_effects("State.get|r0 0:|r0", mixed));
+    CHECK(mixed.result.labels == std::vector<std::string>{"State.get"});
+    CHECK(mixed.result.open());
+    CHECK(format_fn_effects(mixed) == "State.get|r0 0:|r0");
+}
+
+TEST_CASE("Error code: E0202 string and explanation") {
+    CHECK(error_code_str(ErrorCode::E0202) == "E0202");
+    CHECK(parse_error_code("E0202").value_or(ErrorCode::E0100) == ErrorCode::E0202);
+    CHECK(!error_explanation(ErrorCode::E0202).empty());
+}
+
 // ===== Error Code Tests =====
 
 TEST_CASE("Error code: E0100 string representation") {
@@ -1190,6 +1691,9 @@ TEST_CASE("RefinementChecker: let r = Option does not warn unmatched-adt") {
 // ===== Linearity Checker Tests =====
 
 #include "typechecker/LinearityChecker.h"
+#include "Codegen.h"
+#include "repo_paths.h"
+#include <filesystem>
 
 TEST_SUITE("LinearityChecker") {
 
@@ -1228,19 +1732,57 @@ TEST_CASE("LinearEnv: untracked variable is not tracked") {
     CHECK(!env.is_consumed("x"));
 }
 
-TEST_CASE("LinearityChecker: producer function creates obligation") {
-    // let conn = tcpConnect "localhost" 8080 in conn
-    // Warning: conn not consumed
+static void register_linear_adt(yona::compiler::typechecker::TypeChecker& tc) {
+    tc.register_adt("Linear", {"a"}, {{"Linear", 1}});
+}
+
+TEST_CASE("LinearityChecker: Linear constructor creates obligation") {
+    // let conn = Linear 0 in conn — constructor path (no TypeChecker)
     yona::compiler::DiagnosticEngine diag;
     diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
-    std::istringstream stream("let conn = tcpConnect \"localhost\" 8080 in conn");
+    std::istringstream stream("let conn = Linear 0 in conn");
     auto result = parser.parse_input(stream);
     REQUIRE(result.node);
     lc.check(result.node.get());
-    // Should warn about unconsumed linear value
+    CHECK(diag.warning_count() > 0);
+}
+
+TEST_CASE("LinearityChecker: user-defined Linear-returning function creates obligation") {
+    // Non-stdlib producer: makeHandle : a -> Linear a
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("let makeHandle x = Linear x, h = makeHandle 0 in h");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    REQUIRE(!tc.has_direct_errors());
+    lc.check(result.node.get());
+    CHECK(diag.warning_count() > 0);
+}
+
+TEST_CASE("LinearityChecker: tuple of Linear from user function is tracked") {
+    // channel-shaped producer without a C++ name allowlist
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("let mkCh n = (Linear n, Linear n), (a, b) = mkCh 16 in 0");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    REQUIRE(!tc.has_direct_errors());
+    lc.check(result.node.get());
     CHECK(diag.warning_count() > 0);
 }
 
@@ -1260,35 +1802,189 @@ TEST_CASE("LinearityChecker: non-producer function no warning") {
 }
 
 TEST_CASE("LinearityChecker: use after consume is error") {
-    // let conn = tcpConnect "host" 80 in
-    // let conn2 = conn in   (transfers obligation, conn consumed)
-    // let conn3 = conn in   (ERROR: conn already consumed)
     yona::compiler::DiagnosticEngine diag;
-    yona::compiler::typechecker::LinearityChecker lc(diag);
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
 
     yona::parser::Parser parser;
-    std::istringstream stream("let conn = tcpConnect \"host\" 80 in let conn2 = conn in let conn3 = conn in conn3");
+    std::istringstream stream(
+        "let makeHandle x = Linear x, conn = makeHandle 0, conn2 = conn, conn3 = conn in conn3");
     auto result = parser.parse_input(stream);
     REQUIRE(result.node);
+    tc.check(result.node.get());
+    REQUIRE(!tc.has_direct_errors());
     lc.check(result.node.get());
     CHECK(lc.has_errors());
 }
 
 TEST_CASE("LinearityChecker: transfer via alias is OK") {
-    // let conn = tcpConnect "host" 80 in
-    // let conn2 = conn in   (transfers, conn consumed, conn2 live)
-    // conn2  (but conn2 still unconsumed — warning)
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let makeHandle x = Linear x, conn = makeHandle 0, conn2 = conn in conn2");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    REQUIRE(!tc.has_direct_errors());
+    lc.check(result.node.get());
+    CHECK(!lc.has_errors()); // no error (transfer is OK)
+    CHECK(diag.warning_count() > 0); // warning: conn2 unconsumed
+}
+
+static bool imported_linear_leaks(const std::string& source) {
+    using yona::compiler::codegen::Codegen;
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    yona::parser::Parser parser;
+    Codegen codegen("lin_import");
+    if (std::filesystem::exists(yona::test::lib_dir()))
+        codegen.module_paths_.push_back(std::filesystem::canonical(yona::test::lib_dir()).string());
+    codegen.load_prelude(&parser, &tc);
+    std::istringstream stream(source);
+    auto result = parser.parse_input(stream);
+    if (!result.node) return false;
+    tc.set_import_type_source(&codegen.import_types_);
+    tc.check(result.node.get());
+    if (tc.has_direct_errors()) return false;
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+    lc.check(result.node.get());
+    return diag.warning_count() > 0;
+}
+
+TEST_CASE("LinearityChecker: imported openFile creates obligation") {
+    CHECK(imported_linear_leaks(
+        "import openFile from Std\\File in let h = openFile \"f\" Read in h"));
+}
+
+TEST_CASE("LinearityChecker: wildcard openFile creates obligation") {
+    CHECK(imported_linear_leaks(
+        "import Std\\File in let h = openFile \"f\" Read in h"));
+}
+
+TEST_CASE("LinearityChecker: imported channel tuple is tracked") {
+    CHECK(imported_linear_leaks(
+        "import channel from Std\\Channel in let (a, b) = channel 16 in 0"));
+}
+
+TEST_CASE("LinearityChecker: imported non-linear File function has no leak") {
+    CHECK(!imported_linear_leaks(
+        "import exists from Std\\File in exists \"f\""));
+}
+
+TEST_CASE("LinearityChecker: extern Linear return creates obligation") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("extern mk : Int -> Linear in let h = mk 0 in h");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    REQUIRE(!tc.has_direct_errors());
+    lc.check(result.node.get());
+    CHECK(diag.warning_count() > 0);
+}
+
+TEST_CASE("LinearityChecker: with binds Linear and discharges at exit") {
+    // `with` is the Closeable cleanup path: track the binding, then consume it
+    // when the with scope ends (no leak warning for the resource name).
     yona::compiler::DiagnosticEngine diag;
     diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
-    std::istringstream stream("let conn = tcpConnect \"host\" 80 in let conn2 = conn in conn2");
+    std::istringstream stream("with h = Linear 0 in 0");
     auto result = parser.parse_input(stream);
     REQUIRE(result.node);
     lc.check(result.node.get());
-    CHECK(!lc.has_errors()); // no error (transfer is OK)
-    CHECK(diag.warning_count() > 0); // warning: conn2 unconsumed
+    CHECK(!lc.has_errors());
+    CHECK(diag.warning_count() == 0);
+}
+
+TEST_CASE("LinearityChecker: with body unconsumed Linear warns") {
+    // Walking the with body is required to see the inner leak.
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::LinearityChecker lc(diag);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("with h = Linear 0 in let x = Linear 1 in 0");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    lc.check(result.node.get());
+    CHECK(diag.warning_count() > 0);
+}
+
+TEST_CASE("LinearityChecker: with use-after-consume in body is error") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+
+    yona::parser::Parser parser;
+    // Transfer then re-bind the same Linear — second use is E0600.
+    std::istringstream stream("with h = Linear 0 in let a = h, b = h in 0");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    lc.check(result.node.get());
+    CHECK(lc.has_errors());
+}
+
+TEST_CASE("LinearityChecker: FunctionExpr body unconsumed Linear warns") {
+    // Nested lambda / local fn must be walked; otherwise this stays silent.
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::LinearityChecker lc(diag);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("let f = \\_ -> let h = Linear 0 in 0 in f");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    lc.check(result.node.get());
+    CHECK(diag.warning_count() > 0);
+}
+
+TEST_CASE("LinearityChecker: named local fn body unconsumed Linear warns") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::LinearityChecker lc(diag);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("let f _ = let h = Linear 0 in 0 in f");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    lc.check(result.node.get());
+    CHECK(diag.warning_count() > 0);
+}
+
+TEST_CASE("LinearityChecker: Linear function parameter must be consumed") {
+    yona::compiler::DiagnosticEngine diag;
+    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+
+    // Direct lambda application keeps the param monomorphic (Linear), so the
+    // FunctionExpr arrow type is Linear -> _ after typecheck.
+    yona::parser::Parser parser;
+    std::istringstream stream("(\\h -> 0) (Linear 0)");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    REQUIRE(!tc.has_direct_errors());
+    lc.check(result.node.get());
+    CHECK(diag.warning_count() > 0);
 }
 
 TEST_CASE("Error code: E0600/E0601/E0602/E0603 strings") {

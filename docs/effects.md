@@ -1,10 +1,56 @@
 # Algebraic Effects in Yona
 
-**Status (2026-08-18):** **partial.** `perform` / `handle` parse, typecheck, and
-compile as in-scope handler dispatch. `effect` declarations, CPS resume,
-module export, and **effect rows** are **not implemented**.
-Evidence: [type-system-status.md](type-system-status.md) §1–2.
-Rows: GitHub [#8](https://github.com/yona-lang/yonac-llvm/issues/8).
+**Status (2026-08-19):** **partial → rows shipping (GitHub #8).**
+`perform` / `handle` parse, typecheck, and compile as in-scope handler
+dispatch. **Effect rows** are inferred on function arrows (`!{Effect.op}`),
+including open rests on higher-order functions (`!{|r}`) and recursive
+definitions. Rows are written to `.yonai` as `effects …` (closed labels or
+open `|rN` plus per-parameter `N:row`), restored on import, and checked at
+call sites (**E0202**, primary span on the introducing `perform`). Parsed
+`effect` declarations and a full runtime handler stack are **not**
+implemented. Imported GENFN bodies that `perform` remonomorphize in the
+caller's `Codegen` so a surrounding `handle` binds (`Std\GPU.raiseGpu`).
+Evidence:
+[type-system-status.md](type-system-status.md) §1–2; plan:
+[2026-08-19-effect-row-inference.md](superpowers/plans/2026-08-19-effect-row-inference.md).
+
+## Effect rows (implemented)
+
+Function types carry a **latent effect row**: sorted unique `Effect.op`
+labels, optionally open (`|r`) during inference.
+
+```text
+(\x -> perform State.get ())   :  (a -> !{State.get} Int)
+(\f x -> f x)                  :  ((a -> !{|r} b) -> (a -> !{|r} b))
+```
+
+- **`perform`** adds `Effect.op` to the ambient escaping row when no covering
+  `handle` is in scope (and still emits `-Wunhandled-effect`).
+- **`handle`** subtracts the ops it covers; remaining ops escape to the outer
+  row.
+- **Application** unions the callee’s latent row into the ambient row. At
+  program top level, uncovered latent effects are **E0202**.
+- **Higher-order functions** keep an open rest `|r` so applying `map` / `apply`
+  to an effectful function joins that function’s row (and E0202 still fires).
+- **Recursion** takes the least fixed point of `r ~ !{L | r}` (`r := !{L}`)
+  instead of reporting an infinite type; leftover self-application rests on
+  pure recursive functions are closed.
+- **`.yonai`**: `FN … effects Gpu.oom,State.get` on exported functions after
+  module compile (`populate_interface_effect_rows`). Open HOF tails use
+  `|rN` and per-parameter rows that share the same rest id, e.g.
+  `effects |r0 0:|r0` for `apply`.
+
+```yona
+-- Call site must handle latent effects from an imported / inferred function
+handle f 0 with
+    State.get () resume -> resume 7
+end
+```
+
+**Not yet:** empty-row totality gate (#5), parsed `effect` decls (#9),
+a runtime handler stack for every precompiled body. `Std\GPU` kernels
+return `GpuIssue` / `Result`; `raiseGpu` / `withGpuFallback` `perform`
+after GENFN remonomorphization inside a user `handle`.
 
 ## The Problem
 

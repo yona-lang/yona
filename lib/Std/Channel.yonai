@@ -112,7 +112,7 @@ INSTANCE Array Seq
 INSTANCE Array String
   IMPL length yona_Prelude__Array_String__length
   IMPL get yona_Prelude__Array_String__get
-FN yona_Std_Channel__channel 1 INT -> TUPLE
+FN yona_Std_Channel__channel 1 INT -> TUPLE LINEAR LINEAR
 FN yona_Prelude__Array_Seq__length 1 INT -> INT
 FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
 FN yona_Prelude__Hash_Int__hash 1 INT -> INT

@@ -12,7 +12,9 @@
 /// The `Linear` ADT is the mechanism — wrapping a resource handle in `Linear`
 /// creates a compile-time obligation to unwrap it via pattern matching.
 ///
-/// Producer functions (tcpConnect, spawn, etc.) return `Linear Int`.
+/// Producers are discovered from types: a let-bound expression whose inferred
+/// type is `Linear _` (or a product containing `Linear _`) is tracked. The
+/// `Linear` constructor is also recognized when types are unavailable.
 /// The only way to extract the inner value is `case x of Linear fd -> ...`.
 /// This pattern match is the consumption point.
 
@@ -20,9 +22,11 @@
 #include "ast.h"
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace yona::compiler::typechecker {
+
+class TypeChecker;
+struct MonoType;
 
 /// Tracks the lifecycle status of a linear variable.
 enum class LinearStatus {
@@ -47,7 +51,7 @@ struct LinearEnv {
     /// Mark a variable as consumed. Returns false if already consumed.
     bool consume(const std::string& name, const SourceLocation& loc);
 
-    /// Check if a variable is live (created but not consumed).
+    /// Check if a variable is live (created but not yet consumed).
     bool is_live(const std::string& name) const;
 
     /// Check if a variable is consumed.
@@ -62,16 +66,9 @@ struct LinearEnv {
 
 class LinearityChecker {
 public:
-    explicit LinearityChecker(DiagnosticEngine& diag);
-
-    /// Register a function as a "producer" — its return value is Linear.
-    void register_producer(const std::string& fn_name);
-
-    /// Register a function as a "tuple producer" — returns a tuple of linear
-    /// values. When destructured via `let (a, b) = fn ... in ...`, all
-    /// destructured names are tracked as linear obligations. Used for
-    /// channel which returns (Sender, Receiver).
-    void register_tuple_producer(const std::string& fn_name);
+    /// \p tc optional; when set, producers are those whose inferred type is
+    /// `Linear _` or a product of `Linear` values.
+    explicit LinearityChecker(DiagnosticEngine& diag, TypeChecker* tc = nullptr);
 
     /// Check an AST tree for linearity violations.
     void check(ast::AstNode* node);
@@ -84,21 +81,29 @@ private:
     void check_case(ast::CaseExpr* node, LinearEnv& env);
     void check_if(ast::IfExpr* node, LinearEnv& env);
     void check_apply(ast::ApplyExpr* node, LinearEnv& env);
+    void check_with(ast::WithExpr* node, LinearEnv& env);
+    void check_function(ast::FunctionExpr* node, LinearEnv& env);
 
     /// Warn about any live linear variables going out of scope.
     void warn_unconsumed(const LinearEnv& env);
+
+    /// Zonked inferred type of \p expr, or nullptr.
+    const MonoType* type_of_expr(ast::AstNode* expr);
+
+    /// True if \p expr produces a `Linear _` value (type-directed, with
+    /// `Linear` constructor fallback when types are absent/unresolved).
+    bool expr_produces_linear(ast::AstNode* expr);
+
+    /// Mark pattern identifiers whose corresponding type is `Linear _`.
+    void track_linear_pattern(ast::PatternNode* pat, const MonoType* ty,
+                              LinearEnv& env, const SourceLocation& loc);
 
     /// Check if a constructor name indicates a Linear wrapper.
     static bool is_linear_constructor(const std::string& name) { return name == "Linear"; }
 
     DiagnosticEngine& diag_;
+    TypeChecker* tc_ = nullptr;
     int error_count_ = 0;
-
-    /// Functions whose return values become linear obligations.
-    std::unordered_set<std::string> producer_functions_;
-
-    /// Functions returning tuples of linear values (e.g., channel).
-    std::unordered_set<std::string> tuple_producer_functions_;
 };
 
 } // namespace yona::compiler::typechecker

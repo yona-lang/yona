@@ -1,0 +1,2 @@
+import filter, fromSeq, foldl from Std\IntArray in
+foldl (\a b -> a + b) 0 (filter (\x -> x < 3) (fromSeq [1, 2, 3, 4, 5]))

@@ -14,6 +14,57 @@
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
 
+### GPU / Std\GPU
+- `mapGPU` / `reduceGPU` (Int `Buffer`) and `mapFloatGPU` / `reduceFloatGPU`
+  (`FloatArray`) via fixed kernel ADTs (`IntMapOp`, `FloatMapOp`, …).
+- `mapReduceGraphGPU`: one Vulkan submit for map→…→reduce with
+  `VK_KHR_synchronization2` barriers and timeline wait when enabled
+  (`YONA_GPU_VULKAN_GRAPH` / `YONA_GPU_VULKAN_COMPUTE`). Stages are Add, Mul,
+  and Square (each a real compute shader; unknown tags refuse the GPU path).
+- Async float fence waiter: short-timeout poll; task-group cancel completes the
+  promise with **-887** early and discards host writeback while GPU resources drain.
+- `PinnedFloats`: prefers Vulkan host-visible mapped memory; malloc fallback;
+  `YONA_GPU_PINNED_HOST_MALLOC=1` forces malloc. `pinnedBackend`,
+  `mapFloatPinnedGPU`. CPU↔GPU pipelines: `gpuFloatChannel` / `drainMapFloatGPU`.
+- Typed GPU failures: `GpuIssue`, `checkGpu`, `withGpuIssue` from `Std\GPU`
+  (Result-style). `raiseGpu` / `withGpuFallback` `perform Gpu.*`; GENFN
+  remonomorphization inside a user `handle` binds the caller's clauses
+  (effect rows on `.yonai`; not a C++ name list). Module-export compile of
+  those helpers emits `:UnhandledEffect` if invoked with no handler.
+  Direct use-site `perform Gpu.oom` / `deviceLost` / `fail` still works.
+- Transparent lowering: inline `Std\IntArray` / `Std\FloatArray` `map` /
+  `filter` / `foldl` in the fixed kernel library compile to the Std\GPU ABI
+  (`x + k`, `x - k`, `0 - x`, `x * k`, `x * x`, `x > k`, `x < k`, sum,
+  float scale/sum). `filterLessThan` and `mapSquare` use real Vulkan shaders
+  when compute is enabled (same env as filter / mapMul).
+  `yonac --no-accelerator-lowering` keeps host closures.
+  `yonac --strict-accelerator` errors (**E0700**) on unlowerable lambdas
+  (full arbitrary-lambda SPIR-V still deferred).
+- Bench: `gpu_filter_lt_hot`, `gpu_map_square_hot`, `gpu_pinned_scale_hot`
+  in `run_gpu_compare.py`.
+- `reduceFloatGPU` uses a real GPU block-reduce (`gpu_f64_reduce.comp` /
+  `gpu_f32_reduce.comp`) when the stub device is up, else CPU.
+- Bench: `bench/accelerators/gpu_pinned_scale_hot.yona` in `run_gpu_compare.py`.
+
+### Type system
+- **Effect-row inference (GitHub #8):** function arrows carry latent
+  `!{Effect.op}` rows; `handle` subtracts covered ops; `.yonai` emits/parses
+  `effects Op1,Op2` and open HOF tails (`effects |r0 0:|r0`). Applying an
+  effectful function without a covering handler is **E0202**, pointed at the
+  introducing `perform` with a note at the call. Higher-order functions keep
+  an open `|r` rest (`\f x -> f x`); recursive functions take the least fixed
+  point of `r ~ !{L | r}` instead of an infinite type. See `docs/effects.md`.
+- LinearityChecker is type-directed (`Linear _` and products of Linear). There
+  is no C++ producer-name allowlist.
+- `.yonai` `LINEAR` overlay for imported C stdlib (`openFile`, `tcpConnect`,
+  `channel`, `spawn`, and other LINEAR rows). CType stays INT/TUPLE.
+- FQN `Pkg\Mod::func` (`ModuleCall`) uses the same import overlay as selective
+  and wildcard imports.
+- LinearityChecker walks `WithExpr` (bind Linear from the resource; discharge at
+  with-exit via Closeable) and `FunctionExpr` bodies (fresh scope; Linear
+  parameters from the zonked arrow type). TypeChecker binds `with` names to the
+  resource expression’s type (not a fresh unbound var).
+
 ## v0.1.3 (2026-08-18)
 
 Packaging-only release so the GitHub Release workflow can finish Homebrew and Copr.

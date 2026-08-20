@@ -13,44 +13,50 @@
 - Prefer pure Yona over C unless syscalls / layout / measured hot paths require C (`CLAUDE.md` stdlib rule).
 - New language features update lexer → parser → AST → codegen together; AST changes touch `include/ast.h`, `include/ast_visitor.h`, and codegen.
 - Discoveries that are bugs go into `docs/todo-list.md` with a one-line repro before continuing.
+- When finishing a phase or bugfix, update this plan, `docs/todo-list.md`, and `CHANGELOG.md` in the same change. Do not leave stale checkboxes.
 - Do not silently expand scope past the active phase; open a GitHub issue or todo checkbox instead.
 - Build/test defaults: `cmake --preset x64-debug-linux`, `cmake --build --preset build-debug-linux`, `ctest --preset unit-tests-linux` (or `./out/build/x64-debug-linux/tests -tc=…`).
 
 ---
 
-## Current State Snapshot (2026-08-17)
+## Current State Snapshot (2026-08-18)
 
-### Shipped recently (HEAD ≈ `4207cb9` on `master`)
+`VERSION` **0.1.3**. `master` HEAD `30f8953` (v0.1.3 tag). Linearity overlay is in the working tree (uncommitted).
 
-- Task-group bump arenas + raise unwind (`513ff84` lineage) and nested-fn arena IR isolation
-- Windows parity, packaging/installer scaffold, transfer-scope O(1) droppability, borrow-aware `.yonai`
-- `@borrow` first slice; `-Wunmatched-adt`
-- `Std\GPU` columnar API + Vulkan map/mul/reduce/filter paths, accelerator diagnostics (`--emit-accelerator-report`), GPU crossover benches
-- `extern native` + floatArrayMul2Async promise path
-- Channel deadlock detection (listed under Completed Milestones — do **not** re-prioritize as greenfield)
+### Done since this plan was written (2026-08-17)
+
+- **Phase 0:** flaky `binary_seek` / `binary_write_read` and `net_runtime_test` TCP SIGSEGV (`d896a9e`)
+- **Phase 1 / [#3](https://github.com/yona-lang/yonac-llvm/issues/3):** `docs/type-system-status.md` (`d7abcba`); issue **closed** 2026-08-18. Follow-ups [#9](https://github.com/yona-lang/yonac-llvm/issues/9)–[#11](https://github.com/yona-lang/yonac-llvm/issues/11)
+- **Track P (partial):** macOS kqueue + MoltenVK; Windows Erlang `--skip-erl` / `YONA_BENCH_SKIP_ERLANG`; tags **v0.1.1–v0.1.3** (Copr `check-rpaths` / `libyona_lib.so`, Homebrew `HOMEBREW_TAP_TOKEN` or `HOMEBREW_TAP_SSH_KEY`, in-process LLD ELF/Darwin args, system CLI11/LLD)
+- **LinearityChecker (working tree, uncommitted):** no C++ producer-name allowlist; type-directed `Linear`; `.yonai` `LINEAR` overlay; `ImportExpr` / wildcard / FQN `Pkg\Mod::func` (`ModuleCall`) via `ImportTypeSource`
+
+### Shipped earlier (still true)
+
+- Task-group bump arenas + raise unwind (`513ff84`) and nested-fn arena IR isolation
+- Windows parity, transfer-scope O(1) droppability, borrow-aware `.yonai`, `@borrow`, `-Wunmatched-adt`
+- `Std\GPU` columnar API + Vulkan map/mul/reduce/filter, `--emit-accelerator-report`, crossover benches
+- `extern native` + floatArrayMul2Async; channel deadlock detection
 
 ### Local open work (`docs/todo-list.md`)
 
 | Priority band | Item | Notes |
 |---|---|---|
-| **P0 bugs** | Flaky `binary_seek` / `binary_write_read` codegen fixtures | stdout sometimes `0` |
-| **P0 bugs** | `net_runtime_test` TCP loopback SIGSEGV (intermittent) | Linux |
-| **P1 tooling** | Windows Erlang OTP crash (`0xC0000005`) for `--compare-erl` | Outside runner; document/skip/WSL |
+| **P1 language** | [#8](https://github.com/yona-lang/yonac-llvm/issues/8) effect-row inference + `.yonai` | **Shipped** 2026-08-19 (open-row `.yonai` + E0202 origins) |
 | **P1 language** | Type-level `&T` borrows | Design: `docs/design-borrow-types.md` |
-| **P1 GPU** | `mapGPU` / timeline semaphores / task-group cancel | Design: `docs/design-gpu-async.md` |
-| **P2 platform** | macOS kqueue + MoltenVK | Large; parallel track |
-| **P2 distro** | Installer polish, embedded LLD default | After correctness |
+| **P1 GPU** | Track G **remaining** | Full arbitrary-lambda SPIR-V; io_uring/reactor research; occupancy hints; macOS/Windows bench re-capture. Kernel library includes `x * x` / Vulkan `filterLessThan`. `raiseGpu` GENFN path shipped. **Surface shipped**. |
+| **P2 distro** | Windows installer polish; LLD default on Windows (LibXml2) | Linux/macOS in-process LLD shipped in v0.1.2 |
+| **P2 formal** | Rocq Phase 0 skeleton | Parallel; does not block #8 |
 
-### Open GitHub issues (all opened 2026-08-17)
+### GitHub issues (opened 2026-08-17)
 
-| # | Title | Role in sequence |
+| # | Title | Status |
 |---|---|---|
-| [#3](https://github.com/yona-lang/yonac-llvm/issues/3) | Audit advanced type-system features vs docs | **Foundation — do first** |
-| [#8](https://github.com/yona-lang/yonac-llvm/issues/8) | Complete effect-row inference + `.yonai` propagation | After #3; unlocks totality + typed-core honesty |
-| [#6](https://github.com/yona-lang/yonac-llvm/issues/6) | Opaque exported types / sealed constructors | Independent of #8; after #3 |
-| [#5](https://github.com/yona-lang/yonac-llvm/issues/5) | Opt-in totality + effect-freedom checking | Needs #8 (empty row) + #3 honesty |
-| [#4](https://github.com/yona-lang/yonac-llvm/issues/4) | Deterministic evaluator for pure total exprs | Needs #5 (and ideally typed input from #7 or typechecked AST) |
-| [#7](https://github.com/yona-lang/yonac-llvm/issues/7) | Stable typed-core for external backends | Arch doc can start after #3; full API after #8 |
+| [#3](https://github.com/yona-lang/yonac-llvm/issues/3) | Type-system audit | **Closed** 2026-08-18 |
+| [#8](https://github.com/yona-lang/yonac-llvm/issues/8) | Effect-row inference + `.yonai` | **Closed** 2026-08-19 |
+| [#6](https://github.com/yona-lang/yonac-llvm/issues/6) | Opaque exported types | Open; after #3; parallel with #8 |
+| [#5](https://github.com/yona-lang/yonac-llvm/issues/5) | Opt-in totality + effect-freedom | Open; needs #8 |
+| [#4](https://github.com/yona-lang/yonac-llvm/issues/4) | Deterministic evaluator | Open; needs #5 |
+| [#7](https://github.com/yona-lang/yonac-llvm/issues/7) | Typed-core API | Open; arch after #3; API after #8 |
 
 ```mermaid
 flowchart TD
@@ -77,6 +83,8 @@ flowchart TD
 ---
 
 ## Phase 0 — Stabilize CI (bugs first)
+
+**Status (2026-08-18):** **Done.** Unique fixture object/exe paths + File `auto_await`; net SIGSEGV via shared io_uring ring (`d896a9e`). See `docs/todo-list.md` Bugs.
 
 **Goal:** Make `ctest --preset unit-tests-linux` trustworthy on a clean Linux box.
 
@@ -150,6 +158,8 @@ Update `docs/todo-list.md` Bugs section checkboxes when fixed.
 
 ## Phase 1 — GitHub #3: Type-system status audit
 
+**Status (2026-08-18):** **Done.** `docs/type-system-status.md` (`d7abcba`); [#3](https://github.com/yona-lang/yonac-llvm/issues/3) closed. Follow-ups #9 effect decls, #10 blocking E0500/E0600, #11 `-Wincomplete-patterns`.
+
 **Goal:** Deliver `docs/type-system-status.md` so later issues do not invent features that already exist (or depend on fiction).
 
 **Files:**
@@ -159,13 +169,13 @@ Update `docs/todo-list.md` Bugs section checkboxes when fixed.
 
 ### Task 1.1: Build the matrix skeleton
 
-- [ ] **Step 1: Create the status doc with rows for each feature family**
+- [x] **Step 1: Create the status doc with rows for each feature family**
 
 Feature families (minimum): algebraic effects + handlers, effect rows, linear types, refinement types, row polymorphism, `@borrow` / planned `&T`, `.yonai` GENFN / borrow metadata, pattern matching exhaustiveness / `-Wunmatched-adt`.
 
 Columns: Parser | AST | Typechecker | Codegen | `.yonai` | Tests | Classification (`implemented` / `partial` / `design-only` / `missing`).
 
-- [ ] **Step 2: For each cell, link a file path or test name**
+- [x] **Step 2: For each cell, link a file path or test name**
 
 Example evidence style (required by #3):
 
@@ -173,25 +183,31 @@ Example evidence style (required by #3):
 | Effect handlers | implemented | `src/codegen/CodegenEffects.cpp` | `test/type_checker_test.cpp` (*handle*) |
 ```
 
-- [ ] **Step 3: Mark contradictions**
+- [x] **Step 3: Mark contradictions**
 
 If a design doc claims behavior that has no test, classify as `design-only` or `partial` and note the gap.
 
-- [ ] **Step 4: Draw the dependency graph for #8 / #5 / #4 / #6 / #7**
+- [x] **Step 4: Draw the dependency graph for #8 / #5 / #4 / #6 / #7**
 
 Put it in `docs/type-system-status.md` (can mirror the mermaid above with audit findings).
 
-- [ ] **Step 5: Open follow-up GitHub issues only for newly discovered defects**
+- [x] **Step 5: Open follow-up GitHub issues only for newly discovered defects**
 
 Do not implement features in this phase (#3 non-goals).
 
-- [ ] **Step 6: Close or comment on #3 with the PR/commit that adds the matrix**
+- [x] **Step 6: Close or comment on #3 with the PR/commit that adds the matrix**
 
 Acceptance from #3: every named feature has the six status columns; design-only is explicit; follow-ups are split.
 
 ---
 
 ## Phase 2 — GitHub #8: Effect-row inference + cross-module propagation
+
+**Status (2026-08-19):** **Shipped** (local inference, handler subtract,
+pretty-print, `.yonai` `effects` including open `|rN` + per-param rows,
+E0202 with perform-origin spans, HOF open-rest threading, recursion LFP).
+Dedicated plan:
+[`2026-08-19-effect-row-inference.md`](2026-08-19-effect-row-inference.md).
 
 **Prerequisite:** Phase 1 complete (know what already unifies/prints).
 
@@ -208,6 +224,16 @@ Acceptance from #3: every named feature has the six status columns; design-only 
 
 **Exit:** #8 acceptance criteria checked; update `docs/type-system-status.md` effect-row row to `implemented` or remaining `partial` with honest gaps.
 
+### Slice 1 checklist (2026-08-19)
+
+- [x] Arrow latent `effect_labels` / open `effect_rest` + `MEffectRow`
+- [x] Infer: perform / handle / function / apply; pretty `!{…}`
+- [x] Handler subtraction (nested / partial tested)
+- [x] `.yonai` `effects` emit/parse + import → ImportedFnSig
+- [x] E0202 at top-level apply of effectful callee
+- [x] Docs: effects.md, type-system-status, CHANGELOG, this plan
+- [x] Slice 2: HOF open-row stress, recursion LFP, tests (2026-08-19)
+- [x] Full #8: open-row `.yonai` (`|rN` + `N:row` on exports), E0202 origin spans (2026-08-19)
 ---
 
 ## Phase 3A — GitHub #6: Opaque exported types (parallelizable with Phase 2)
@@ -263,38 +289,62 @@ Acceptance from #3: every named feature has the six status columns; design-only 
 
 ## Parallel tracks (do not block Phases 0–2)
 
-### Track G — GPU (`docs/design-gpu-async.md`, todo Std\GPU next)
+### Track G — GPU (`docs/design-gpu-async.md`, todo Std\GPU)
 
-1. `mapGPU` / `reduceGPU` on FloatArray/IntArray (Yona surface + runtime)
-2. Timeline semaphores; remove `vkDeviceWaitIdle` from hot paths
-3. Task-group cancel integration with pending GPU work
-4. Only then: pinned buffers / multi-stage graphs / transparent lowering
+**Status (2026-08-19):** User-facing Track G **surface shipped** (`mapGPU` /
+`reduceGPU` / float variants, `mapReduceGraphGPU`, early cancel, Vulkan-mapped
+`PinnedFloats` + channels, transparent fixed-kernel lowering, typed `Gpu`
+perform helpers, `--strict-accelerator` / E0700). Kernel library also lowers
+`x - k` / `0 - x` / `x * x` / `x < k` (`filterLessThan` + `mapSquare` Vulkan).
+`raiseGpu` GENFN + use-site `handle` is the designed library `perform` path.
+**Still open** (see `docs/todo-list.md` *Language — GPU*):
+
+1. [x] `mapGPU` / `reduceGPU` on FloatArray/IntArray (Yona surface + runtime)
+2. [x] Multi-kernel timeline / `VK_KHR_synchronization2` barrier graphs; drop remaining idle waits from hot paths
+3. [x] Tighter task-group cancel of in-flight GPU work
+4. [x] Pinned buffers / multi-stage graphs / transparent lowering (Vulkan-mapped pins +
+   `gpuFloatChannel` / `drainMapFloatGPU` + transparent IntArray/FloatArray kernel rewrite)
+5. [x] Typed `Gpu` effect ops (`raiseGpu` / `withGpuFallback`; effect-row **#8** shipped 2026-08-19 including open-row `.yonai`)
+6. [x] Honest rejection for arbitrary accelerator lambdas (`--strict-accelerator` / E0700)
+7. [ ] Full **arbitrary-lambda → SPIR-V** compiler (today: expanded fixed library including `x * x` / `filterLessThan` Vulkan + host path or E0700)
+8. [ ] Optional **io_uring / reactor GPU integration** (**research** — no concrete deliverable beyond Option C in `design-gpu-async.md` §3.2)
+9. [ ] **CPU/GPU occupancy / scheduling hints** (**research** — no design deliverable yet)
+10. [x] **`perform Gpu` from `Std\GPU`** — designed path: `GpuIssue` from kernels; `raiseGpu` / `withGpuFallback` GENFN remonomorphize inside user `handle` (2026-08-19). Not a runtime handler stack.
+11. [ ] **macOS / Windows** GPU bench re-capture after Track G (`run_gpu_compare.py` / pinned + filter_lt + map_square rows) — Linux-only agent env; leave for host re-run
 
 ### Track P — Platform / distribution
 
-1. Document Windows Erlang OTP crash + CI skip / WSL guidance (`docs/todo-list.md` Active Priorities §1)
-2. macOS kqueue runtime + MoltenVK GPU portability (large; schedule after P0 bugs)
-3. Installer / embedded LLD — after correctness and packaging smoke tests stay green
+1. [x] Document Windows Erlang OTP crash + CI skip / WSL (`--skip-erl`, `YONA_BENCH_SKIP_ERLANG`)
+2. [x] macOS kqueue runtime + MoltenVK GPU portability
+3. [x] v0.1.1–v0.1.3 packaging: system CLI11/LLD, Linux/macOS in-process LLD args, Copr `check-rpaths` + `libyona_lib.so`, Homebrew tap credentials
+4. [ ] Windows installer polish/signing; sysroot layout pass; LLD default on Windows (LibXml2)
 
 ### Track L — Language follow-ups (after #3)
 
-1. `&T` type-level borrows per `docs/design-borrow-types.md` (builds on shipped `@borrow`)
-2. Supervisors-as-handlers (after structured concurrency cancel story is frozen)
-3. LSP / package manager — product call; prefer after typed-core (#7) so tools share semantic facts
+1. [ ] `&T` type-level borrows per `docs/design-borrow-types.md` (builds on shipped `@borrow`)
+2. [x] LinearityChecker type-directed producers + `.yonai` `LINEAR` overlay + FQN `ModuleCall` (working tree, uncommitted)
+3. [x] LinearityChecker walk `WithExpr` (`with h = Linear …` tracks + Closeable discharge)
+4. [x] LinearityChecker walk `FunctionExpr` bodies (nested lambdas / local fns / Linear params)
+5. [ ] Supervisors-as-handlers (after structured concurrency cancel story is frozen)
+6. [ ] LSP / package manager — product call; prefer after typed-core (#7) so tools share semantic facts
 
 ---
 
 ## Recommended execution order (next 2–4 weeks)
 
+W1 (Phase 0) and W1–W2 (Phase 1 / #3) are **done** as of 2026-08-18.
+
 | Week | Focus | Done when |
 |---|---|---|
-| **W1** | Phase 0 bugs | Flaky binary + net SIGSEGV fixed or reliably quarantined with issue+repro |
-| **W1–W2** | Phase 1 (#3) | `docs/type-system-status.md` merged; #3 closable |
-| **W2–W3** | Phase 2 (#8) **or** Track G first GPU slice | Effect rows round-trip **or** `mapGPU` + tests |
+| **W1** | Phase 0 bugs | **Done** — flaky binary + net SIGSEGV fixed (`d896a9e`) |
+| **W1–W2** | Phase 1 (#3) | **Done** — `docs/type-system-status.md`; #3 closed |
+| **W2–W3** | Phase 2 (#8) **or** Track G remaining research | Effect rows round-trip **or** SPIR-V / platform bench re-capture |
 | **W3–W4** | Phase 3A (#6) and/or Phase 3B (#5) design | Opaque types shipping **or** totality design + first checker |
 
 **Default recommendation if only one series can run:**  
-`Phase 0 → Phase 1 (#3) → Phase 2 (#8) → Phase 3B (#5) → Phase 4 (#7) → Phase 5 (#4)`, with **Track G** on a second lane when a GPU-capable machine is available.
+`Phase 2 (#8) → Phase 3B (#5) → Phase 4 (#7) → Phase 5 (#4)`, with **Track G
+remaining** (SPIR-V / research / platform re-capture) on a second lane.
+Linearity leftovers (`WithExpr` / `FunctionExpr`) can land beside #8.
 
 ---
 
@@ -310,9 +360,11 @@ Acceptance from #3: every named feature has the six status columns; design-only 
 
 Plan saved to `docs/superpowers/plans/2026-08-17-next-plan-of-action.md`.
 
-**Two ways to proceed:**
+**Next:** [#6](https://github.com/yona-lang/yonac-llvm/issues/6) opaque types
+or [#5](https://github.com/yona-lang/yonac-llvm/issues/5) totality / empty-row
+gate; Track G remaining is full arbitrary-lambda SPIR-V / research /
+macOS-Windows bench re-capture.
 
-1. **Subagent-Driven (recommended)** — dispatch a fresh subagent per Phase 0 / Phase 1 task, review between tasks  
-2. **Inline Execution** — run Phase 0 in this session with checkpoints  
-
-**Which approach — and which starting phase (0 bugs vs #3 audit vs GPU track)?**
+Linearity `WithExpr` / `FunctionExpr` walks and the kernel-library increment
+(`x - k` / `x < k`) landed 2026-08-19 beside Track G. Effect-row #8 (including
+open-row `.yonai` and E0202 origins) landed the same day.

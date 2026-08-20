@@ -63,9 +63,11 @@ def _tool_env() -> dict:
     env = os.environ.copy()
     extra: list[str] = []
     if os.name == "nt":
-        llvm_bin = Path("C:/local/LLVM/bin")
-        if llvm_bin.exists():
-            extra.append(str(llvm_bin))
+        llvm_prefix = os.environ.get("LLVM_INSTALL_PREFIX") or os.environ.get("LLVM_HOME")
+        if llvm_prefix:
+            llvm_bin = Path(llvm_prefix) / "bin"
+            if llvm_bin.exists():
+                extra.append(str(llvm_bin))
     if extra:
         env["PATH"] = os.pathsep.join(extra + [env.get("PATH", "")])
     return env
@@ -80,6 +82,8 @@ def _exe_suffix(path: Path) -> Path:
 BENCHES = (
     ("map_reduce", "gpu_map_reduce_hot.yona"),
     ("filter", "gpu_filter_hot.yona"),
+    ("filter_lt", "gpu_filter_lt_hot.yona"),
+    ("map_square", "gpu_map_square_hot.yona"),
     ("pipeline", "gpu_columnar_pipeline.yona"),
     ("materialize", "gpu_materialize_sum.yona"),
     ("map_reduce_10k", "gpu_map_reduce_10k.yona"),
@@ -89,6 +93,8 @@ BENCHES = (
     # FloatArray scale via gpu_stub.f64 fence path (.expected 0 = success; fails on hosts
     # without Vulkan + shaderFloat64 — same deterministic output across CPU/Vulkan env cols).
     ("float_scale", "gpu_float_scale_hot.yona"),
+    # PinnedFloats in-place scale (Vulkan-mapped when available, else host-malloc).
+    ("pinned_scale", "gpu_pinned_scale_hot.yona"),
 )
 
 BENCH_ONLY_CHOICES = [b[0] for b in BENCHES] + ["all"]

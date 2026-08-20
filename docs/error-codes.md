@@ -113,6 +113,26 @@ perform State.put
 perform State.put 42
 ```
 
+### E0202 — Unhandled effect at call site
+
+A function whose type includes latent effects (`!{Effect.op}`) is applied
+where those operations are not covered by a surrounding `handle ... with`.
+The primary diagnostic points at the introducing `perform`; a note marks
+the call that lets the effect escape.
+
+```yona
+-- f : a -> !{State.get} Int
+let f = (\x -> perform State.get ()) in
+f 0   -- Error: points at `perform State.get`
+
+-- Fix: handle the effect at the use site
+handle f 0 with
+    State.get () resume -> resume 7
+end
+```
+
+Direct `perform` without a handler still warns via `-Wunhandled-effect`.
+
 ## Parse Errors (E03xx)
 
 ### E0300 — Unexpected token

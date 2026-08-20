@@ -529,4 +529,154 @@ TEST_CASE("gpu vulkan filterGreaterThan: empty and full passes when gpu runs") {
     yona_rt_rc_dec((void*)all);
 }
 
+static void graph_env_enable_small_arrays(void) {
+#ifdef _WIN32
+    (void)_putenv_s("YONA_GPU_VULKAN_GRAPH", "1");
+    (void)_putenv_s("YONA_GPU_VULKAN_GRAPH_MIN_LEN", "1");
+#else
+    (void)setenv("YONA_GPU_VULKAN_GRAPH", "1", 1);
+    (void)setenv("YONA_GPU_VULKAN_GRAPH_MIN_LEN", "1", 1);
+#endif
+}
+
+static void graph_env_clear(void) {
+#ifdef _WIN32
+    (void)_putenv_s("YONA_GPU_VULKAN_GRAPH", "");
+    (void)_putenv_s("YONA_GPU_VULKAN_GRAPH_MIN_LEN", "");
+#else
+    (void)unsetenv("YONA_GPU_VULKAN_GRAPH");
+    (void)unsetenv("YONA_GPU_VULKAN_GRAPH_MIN_LEN");
+#endif
+}
+
+TEST_CASE("gpu vulkan mapReduceGraph Add then Mul then reduceSum") {
+    graph_env_enable_small_arrays();
+    if (yona_gpu_vulkan_device_try_init() != 0) {
+        graph_env_clear();
+        MESSAGE("Vulkan graph skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+
+    int64_t stages[1 + 4];
+    stages[0] = 4;
+    stages[1] = 0; /* Add */
+    stages[2] = 1;
+    stages[3] = 1; /* Mul */
+    stages[4] = 2;
+
+    int64_t buf[1 + 5];
+    buf[0] = 5;
+    for (int i = 0; i < 5; i++)
+        buf[1 + i] = (int64_t)(i + 1);
+
+    int64_t sum = 0;
+    int ok = yona_gpu_vulkan_try_map_reduce_graph_int64(stages, buf, &sum);
+    graph_env_clear();
+    yona_gpu_vulkan_device_shutdown();
+
+    if (!ok) {
+        apple_require_gpu_ok(ok);
+        MESSAGE("Vulkan mapReduceGraph skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+    /* (1..5)+1 then *2 → 4+6+8+10+12 = 40 */
+    CHECK(sum == 40);
+}
+
+TEST_CASE("gpu vulkan mapReduceGraph Add then Square then reduceSum") {
+    graph_env_enable_small_arrays();
+    if (yona_gpu_vulkan_device_try_init() != 0) {
+        graph_env_clear();
+        MESSAGE("Vulkan graph skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+
+    int64_t stages[1 + 4];
+    stages[0] = 4;
+    stages[1] = 0; /* Add */
+    stages[2] = 1;
+    stages[3] = 2; /* Square */
+    stages[4] = 0;
+
+    int64_t buf[1 + 5];
+    buf[0] = 5;
+    for (int i = 0; i < 5; i++)
+        buf[1 + i] = (int64_t)(i + 1);
+
+    int64_t sum = 0;
+    int ok = yona_gpu_vulkan_try_map_reduce_graph_int64(stages, buf, &sum);
+    graph_env_clear();
+    yona_gpu_vulkan_device_shutdown();
+
+    if (!ok) {
+        apple_require_gpu_ok(ok);
+        MESSAGE("Vulkan mapReduceGraph Square skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+    /* (1..5)+1 then square → 4+9+16+25+36 = 90 */
+    CHECK(sum == 90);
+}
+
+TEST_CASE("gpu vulkan filterLessThan: optional gpu roundtrip") {
+    yona_gpu_vulkan_device_shutdown();
+    filter_env_enable_small_arrays();
+
+    int64_t buf[1 + 8];
+    buf[0] = 8;
+    for (int i = 0; i < 8; i++)
+        buf[1 + i] = (int64_t)(i + 1);
+
+    int64_t* out = nullptr;
+    int ok = yona_gpu_vulkan_try_filter_less_than_int64(4, buf, &out);
+
+    filter_env_clear();
+    yona_gpu_vulkan_device_shutdown();
+
+    if (!ok) {
+        apple_require_gpu_ok(ok);
+        MESSAGE("Vulkan filterLessThan skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+
+    REQUIRE(out != nullptr);
+    CHECK(out[0] == 3);
+    CHECK(out[1] == 1);
+    CHECK(out[2] == 2);
+    CHECK(out[3] == 3);
+
+    yona_rt_rc_dec((void*)out);
+}
+
+TEST_CASE("gpu vulkan mapSquare: optional gpu roundtrip") {
+    yona_gpu_vulkan_device_shutdown();
+    mapmul_env_enable_small_arrays();
+
+    int64_t buf[1 + 5];
+    buf[0] = 5;
+    for (int i = 0; i < 5; i++)
+        buf[1 + i] = (int64_t)(i + 1);
+
+    int64_t* out = nullptr;
+    int ok = yona_gpu_vulkan_try_map_square_int64(buf, &out);
+
+    mapmul_env_clear();
+    yona_gpu_vulkan_device_shutdown();
+
+    if (!ok) {
+        apple_require_gpu_ok(ok);
+        MESSAGE("Vulkan mapSquare skipped: ", yona_gpu_vulkan_device_last_note());
+        return;
+    }
+
+    REQUIRE(out != nullptr);
+    CHECK(out[0] == 5);
+    CHECK(out[1] == 1);
+    CHECK(out[2] == 4);
+    CHECK(out[3] == 9);
+    CHECK(out[4] == 16);
+    CHECK(out[5] == 25);
+
+    yona_rt_rc_dec((void*)out);
+}
+
 #endif /* YONA_COMPILE_GPU_VULKAN */

@@ -6,18 +6,73 @@ The initial backend is portable CPU execution over `IntArray` columns. It
 keeps explicit upload/materialize boundaries so programs are ready for future
 Vulkan or vendor-backed device storage without changing the high-level API.
 With `YONA_COMPILE_GPU_VULKAN`, optional Vulkan compute can handle `mapAdd`,
-`mapMul`, `reduceSum`, and `filterGreaterThan` (see `docs/gpu-architecture.md`).
-`mapAdd`/`mapMul`/`reduceSum`/`filterGreaterThan` prefer device-local SSBOs with staging
-when VRAM allows; set `YONA_GPU_VULKAN_HOST_SSBO=1` to force the legacy host-mapped SSBO path.
-`filterGreaterThan` uses GPU mark + GPU inclusive prefix + exclusive indices +
+`mapMul`, `mapSquare`, `reduceSum`, `filterGreaterThan`, and `filterLessThan`
+(see `docs/gpu-architecture.md`).
+`mapAdd`/`mapMul`/`mapSquare`/`reduceSum`/`filterGreaterThan`/`filterLessThan`
+prefer device-local SSBOs with staging when VRAM allows; set
+`YONA_GPU_VULKAN_HOST_SSBO=1` to force the legacy host-mapped SSBO path.
+Filter kernels use GPU mark + GPU inclusive prefix + exclusive indices +
 GPU scatter when enabled (`YONA_GPU_VULKAN_FILTER` or `YONA_GPU_VULKAN_COMPUTE`).
 Set `YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1` to force the older host-side prefix (debug only).
+
+User-facing `mapGPU` / `reduceGPU` dispatch a **fixed kernel library** via
+op ADTs (`IntMapOp` / `IntReduceOp` / `FloatMapOp` / `FloatReduceOp`) — not
+arbitrary Yona lambdas to SPIR-V (see `docs/design-gpu-async.md` §2).
+`mapReduceGraphGPU` batches map stages (+ reduce) into one Vulkan submit with
+synchronization2 barriers when the device supports it.
+
+Transparent lowering: `Std\IntArray` / `Std\FloatArray` `map` / `filter` /
+`foldl` whose lambdas match the fixed kernel library (`x + k`, `x - k`,
+`0 - x`, `x * k`, `x * x`, `x > k`, `x < k`, sum) compile to the same runtime ABI as
+`mapAdd` / `mapMul` / `mapSquare` / `filterGreaterThan` / `filterLessThan` /
+`reduceSum` / `mapFloatGPU` / `reduceFloatGPU`. Device vs CPU is decided at run time
+(`YONA_GPU_VULKAN_MIN_LEN` for IntArray kernels; float uses the stub device
+when init succeeds, else CPU). Disable with `yonac --no-accelerator-lowering`.
+Arbitrary lambdas stay on the host closure path by default; `yonac
+--strict-accelerator` rejects them (E0700) instead of silently keeping the
+host path.
+
+`PinnedFloats` prefers Vulkan host-visible mapped memory when the stub
+device is up; set `YONA_GPU_PINNED_HOST_MALLOC=1` to force malloc. CPU↔GPU
+float pipelines use `gpuFloatChannel` + `drainMapFloatGPU` (Std\Channel).
+Typed failures: `GpuIssue` + `checkGpu` / `withGpuIssue` from this module
+(Result-style; no `perform` in the precompiled object). `raiseGpu` /
+`withGpuFallback` `perform Gpu.*`; GENFN remonomorphization inside a user
+`handle` binds the caller's clauses (effect rows on `.yonai`). Direct
+use-site `perform Gpu.oom` / `Gpu.deviceLost` / `Gpu.fail` still works.
 
 ## Types
 
 ### `type Buffer = Buffer IntArray`
 
 Opaque accelerator buffer. The CPU backend stores an owned IntArray copy.
+
+### `type IntMapOp = Add Int | Mul Int | Square`
+
+Fixed int map kernels (constructor tag is the runtime discriminant).
+
+### `type IntReduceOp = Sum`
+
+Fixed int reduce kernels.
+
+### `type FloatMapOp = Scale Float | Mul2`
+
+Fixed float map kernels.
+
+### `type FloatReduceOp = FSum`
+
+Fixed float reduce kernels.
+
+### `type PinnedFloats = PinnedFloats Int`
+
+Host contiguous float staging (handle). Prefer `Linear` wrapping at call
+sites; call `closePinnedFloats` when finished. Prefers Vulkan host-visible
+mapped memory when `yona_gpu_vulkan_ctx_init` succeeds; otherwise malloc.
+Override with `YONA_GPU_PINNED_HOST_MALLOC=1`. Query via `pinnedBackend`.
+
+### `type GpuIssue = GpuOk | GpuOom | GpuDeviceLost | GpuOther Int`
+
+Classified GPU failure from `vulkanLastIssueKind` (0/1/2/3).
 
 ## Functions
 
@@ -102,13 +157,97 @@ extern raw_mapMul            : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__
 ### `extern`
 
 ```yona
+extern raw_mapSquare         : IntArray -> IntArray = "yona_Std_GPU_raw__mapSquare"
+```
+
+### `extern`
+
+```yona
 extern raw_filterGreaterThan : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__filterGreaterThan"
 ```
 
 ### `extern`
 
 ```yona
+extern raw_filterLessThan    : Int -> IntArray -> IntArray = "yona_Std_GPU_raw__filterLessThan"
+```
+
+### `extern`
+
+```yona
 extern raw_reduceSum         : IntArray -> Int = "yona_Std_GPU_raw__reduceSum"
+```
+
+### `extern`
+
+```yona
+extern raw_mapFloatOp        : FloatMapOp -> FloatArray -> FloatArray = "yona_Std_GPU_raw__mapFloatOp"
+```
+
+### `extern`
+
+```yona
+extern raw_reduceFloatGPU    : FloatArray -> Float = "yona_Std_GPU_raw__reduceFloatGPU"
+```
+
+### `extern`
+
+```yona
+extern raw_mapReduceGraph    : IntArray -> IntArray -> Int = "yona_Std_GPU_raw__mapReduceGraph"
+```
+
+### `extern`
+
+```yona
+extern raw_allocPinnedFloats : Int -> Int = "yona_Std_GPU_raw__allocPinnedFloats"
+```
+
+### `extern`
+
+```yona
+extern raw_closePinnedFloats : Int -> Int = "yona_Std_GPU_raw__closePinnedFloats"
+```
+
+### `extern`
+
+```yona
+extern raw_pinnedLength      : Int -> Int = "yona_Std_GPU_raw__pinnedLength"
+```
+
+### `extern`
+
+```yona
+extern raw_pinnedGet         : Int -> Int -> Float = "yona_Std_GPU_raw__pinnedGet"
+```
+
+### `extern`
+
+```yona
+extern raw_pinnedSet         : Int -> Int -> Float -> Int = "yona_Std_GPU_raw__pinnedSet"
+```
+
+### `extern`
+
+```yona
+extern raw_pinnedToFloatArray : Int -> FloatArray = "yona_Std_GPU_raw__pinnedToFloatArray"
+```
+
+### `extern`
+
+```yona
+extern raw_copyFloatArrayToPinned : FloatArray -> Int -> Int = "yona_Std_GPU_raw__copyFloatArrayToPinned"
+```
+
+### `extern`
+
+```yona
+extern raw_pinnedBackend     : Int -> String = "yona_Std_GPU_raw__pinnedBackend"
+```
+
+### `extern`
+
+```yona
+extern raw_mapFloatPinnedOp  : FloatMapOp -> Int -> Int = "yona_Std_GPU_raw__mapFloatPinnedOp"
 ```
 
 ### `backendName`
@@ -385,6 +524,36 @@ or `YONA_GPU_VULKAN_COMPUTE=1` and length thresholds are met (`docs/gpu-architec
 filterGreaterThan threshold buffer =
 ```
 
+### `filterLessThan`
+
+```yona
+filterLessThan : Int -> Buffer -> Buffer
+```
+
+Keep values strictly less than the threshold. Vulkan when `YONA_GPU_VULKAN_FILTER`
+or `YONA_GPU_VULKAN_COMPUTE=1` (same min-length env as `filterGreaterThan`).
+
+### `filterLessThan`
+
+```yona
+filterLessThan threshold buffer =
+```
+
+### `mapSquare`
+
+```yona
+mapSquare : Buffer -> Buffer
+```
+
+Square every element (`x * x`). Vulkan when `YONA_GPU_VULKAN_MAPMUL=1` or
+`YONA_GPU_VULKAN_COMPUTE=1` (same min-length env as `mapMul`).
+
+### `mapSquare`
+
+```yona
+mapSquare buffer =
+```
+
 ### `reduceSum`
 
 ```yona
@@ -399,6 +568,255 @@ Sum all values. Vulkan when `YONA_GPU_VULKAN_REDUCE=1` or
 ```yona
 reduceSum buffer =
 ```
+
+### `mapGPU`
+
+```yona
+mapGPU : IntMapOp -> Buffer -> Buffer
+```
+
+Type-directed int map over a `Buffer` (fixed kernel library).
+
+### `mapGPU`
+
+```yona
+mapGPU op buffer =
+```
+
+### `reduceGPU`
+
+```yona
+reduceGPU : IntReduceOp -> Buffer -> Int
+```
+
+Type-directed int reduce over a `Buffer`.
+
+### `reduceGPU`
+
+```yona
+reduceGPU op buffer =
+```
+
+### `mapFloatGPU`
+
+```yona
+mapFloatGPU : FloatMapOp -> FloatArray -> FloatArray
+```
+
+Type-directed float map (GPU scale kernel when available, else CPU).
+
+### `mapFloatGPU`
+
+```yona
+mapFloatGPU op arr = raw_mapFloatOp op arr
+```
+
+### `reduceFloatGPU`
+
+```yona
+reduceFloatGPU : FloatReduceOp -> FloatArray -> Float
+```
+
+Type-directed float reduce (GPU block-reduce when the stub device is up, else CPU).
+
+### `reduceFloatGPU`
+
+```yona
+reduceFloatGPU op arr =
+```
+
+### `encodeIntMapStages`
+
+```yona
+encodeIntMapStages stages =
+```
+
+Encode `IntMapOp` stages as an IntArray of (op, arg) pairs: op 0 = Add, 1 = Mul, 2 = Square.
+
+### `mapReduceGraphGPU`
+
+```yona
+mapReduceGraphGPU stages buffer =
+```
+
+One-submit map chain then `reduceSum` when the Vulkan graph path is available;
+otherwise applies maps then reduce on the CPU/backend path.
+
+### `allocPinnedFloats`
+
+```yona
+allocPinnedFloats : Int -> PinnedFloats
+```
+
+Allocate `n` contiguous floats (Vulkan-mapped when available, else malloc).
+
+### `allocPinnedFloats`
+
+```yona
+allocPinnedFloats n = PinnedFloats (raw_allocPinnedFloats n)
+```
+
+### `closePinnedFloats`
+
+```yona
+closePinnedFloats : PinnedFloats -> Int
+```
+
+Release pinned storage.
+
+### `closePinnedFloats`
+
+```yona
+closePinnedFloats pf =
+```
+
+### `pinnedLength`
+
+```yona
+pinnedLength : PinnedFloats -> Int
+```
+
+### `pinnedLength`
+
+```yona
+pinnedLength pf =
+```
+
+### `pinnedGet`
+
+```yona
+pinnedGet : PinnedFloats -> Int -> Float
+```
+
+### `pinnedGet`
+
+```yona
+pinnedGet pf i =
+```
+
+### `pinnedSet`
+
+```yona
+pinnedSet : PinnedFloats -> Int -> Float -> Int
+```
+
+### `pinnedSet`
+
+```yona
+pinnedSet pf i v =
+```
+
+### `pinnedToFloatArray`
+
+```yona
+pinnedToFloatArray : PinnedFloats -> FloatArray
+```
+
+### `pinnedToFloatArray`
+
+```yona
+pinnedToFloatArray pf =
+```
+
+### `copyFloatArrayToPinned`
+
+```yona
+copyFloatArrayToPinned : FloatArray -> PinnedFloats -> Int
+```
+
+### `copyFloatArrayToPinned`
+
+```yona
+copyFloatArrayToPinned arr pf =
+```
+
+### `pinnedBackend`
+
+```yona
+pinnedBackend : PinnedFloats -> String
+```
+
+`"vulkan-mapped"` or `"host-malloc"` (or `"invalid"`).
+
+### `pinnedBackend`
+
+```yona
+pinnedBackend pf =
+```
+
+### `mapFloatPinnedGPU`
+
+```yona
+mapFloatPinnedGPU : FloatMapOp -> PinnedFloats -> Int
+```
+
+In-place float map on pinned storage (GPU scale when available, else CPU).
+
+### `mapFloatPinnedGPU`
+
+```yona
+mapFloatPinnedGPU op pf =
+```
+
+### `gpuFloatChannel`
+
+```yona
+gpuFloatChannel n =
+```
+
+Bounded `FloatArray` channel for CPU→GPU pipelines (`Std\Channel`).
+
+### `drainMapFloatGPU`
+
+```yona
+drainMapFloatGPU op rx tx =
+```
+
+Drain `rx` until closed: `mapFloatGPU op` each chunk and `send` to `tx`.
+Returns the number of chunks processed.
+
+### `gpuLastIssue`
+
+```yona
+gpuLastIssue =
+```
+
+Map `vulkanLastIssueKind` to `GpuIssue`.
+
+### `checkGpu`
+
+```yona
+checkGpu =
+```
+
+`Ok 0` when the last classified Vulkan issue is none; else `Err` with `GpuIssue`.
+
+### `withGpuIssue`
+
+```yona
+withGpuIssue on_ok on_issue =
+```
+
+Branch on the last classified Vulkan issue without string-parsing `vulkanLastNote`.
+
+### `raiseGpu`
+
+```yona
+raiseGpu issue =
+```
+
+Convert `GpuIssue` to `perform Gpu.*`. Designed for a user `handle` at the
+use site: GENFN remonomorphizes this body so `perform` binds the caller's
+clauses. The precompiled module object raises `:UnhandledEffect` if invoked
+with no handler (stdlib kernels still return `GpuIssue` / `Result`).
+
+### `withGpuFallback`
+
+```yona
+withGpuFallback action =
+```
+
+Run `action`, then `raiseGpu` on the last classified Vulkan issue (`GpuOk` is a no-op).
 
 ### `extern`
 
@@ -416,3 +834,4 @@ extern native floatArrayScaleAsync : Float -> FloatArray -> Int = "yona_Std_GPU_
 ```
 
 In-place multiply each element by `scale` (same Vulkan path as `floatArrayMul2Async`).
+

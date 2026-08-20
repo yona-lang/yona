@@ -12,7 +12,9 @@
 //   yonac -I lib main.yona            # compile with module search path
 //   yonac -Wall -Werror main.yona     # enable warnings, treat as errors
 //   yonac --explain E0100             # explain error code E0100
-//   yonac --emit-accelerator-report f.yona -I lib  # JSON: Std\GPU sites
+//   yonac --emit-accelerator-report f.yona -I lib  # JSON: Std\GPU + transparent sites
+//   yonac --no-accelerator-lowering f.yona         # keep host map/foldl closures
+//   yonac --strict-accelerator f.yona              # E0700 on unlowerable column lambdas
 //   yonac --emit-accelerator-report --emit-accelerator-report-with-types mod.yona -I lib  # module + types
 
 #include <algorithm>
@@ -253,6 +255,8 @@ int main(int argc, char *argv[]) {
   bool emit_obj = false;
   bool emit_accelerator_report = false;
   bool emit_accelerator_report_with_types = false;
+  bool no_accelerator_lowering = false;
+  bool strict_accelerator = false;
   bool flag_wall = false;
   bool flag_wextra = false;
   bool flag_werror = false;
@@ -280,6 +284,12 @@ int main(int argc, char *argv[]) {
   app.add_flag("--emit-accelerator-report-with-types", emit_accelerator_report_with_types,
                "With --emit-accelerator-report on a module, run the typechecker first "
                "(JSON report_kind \"module\", optional inferred_type per site)");
+  app.add_flag("--no-accelerator-lowering", no_accelerator_lowering,
+               "Keep IntArray/FloatArray map/filter/foldl on the host closure path "
+               "(do not rewrite recognized kernels to the Std\\GPU ABI)");
+  app.add_flag("--strict-accelerator", strict_accelerator,
+               "Error (E0700) on IntArray/FloatArray map/filter/foldl lambdas "
+               "outside the fixed Std\\GPU kernel library (no silent host fallback)");
   app.add_flag("--Wall", flag_wall, "Enable common warnings");
   app.add_flag("--Wextra", flag_wextra, "Enable all warnings");
   app.add_flag("--Werror", flag_werror, "Treat warnings as errors");
@@ -378,6 +388,8 @@ int main(int argc, char *argv[]) {
   if (flag_debug)
     codegen.set_debug_info(true, filename);
   codegen.set_opt_level(opt_level);
+  codegen.set_accelerator_lowering(!no_accelerator_lowering);
+  codegen.set_strict_accelerator(strict_accelerator && !no_accelerator_lowering);
 
   vector<filesystem::path> sysroots = discover_sysroots(argc > 0 ? argv[0] : nullptr, sysroot_path);
   yona::toolchain::LinkerPlan linker_selection;
@@ -441,6 +453,7 @@ int main(int argc, char *argv[]) {
     if (emit_accelerator_report && emit_accelerator_report_with_types) {
       typechecker::TypeChecker type_checker(diag);
       codegen.load_prelude(&parser, &type_checker);
+      type_checker.set_import_type_source(&codegen.import_types_);
       auto result = parser.parse_module(source, filename);
       if (!result.has_value()) {
         for (auto &e : result.error())
@@ -452,7 +465,9 @@ int main(int argc, char *argv[]) {
       emit_accelerator_diagnostic_report_for_module(std::cout, result.value().get(), filename, &type_checker);
       return 0;
     }
-    codegen.load_prelude(&parser); // registers constructors in parser
+    typechecker::TypeChecker type_checker(diag);
+    codegen.load_prelude(&parser, &type_checker);
+    type_checker.set_import_type_source(&codegen.import_types_);
     auto result = parser.parse_module(source, filename);
     if (!result.has_value()) {
       for (auto &e : result.error())
@@ -464,6 +479,8 @@ int main(int argc, char *argv[]) {
       return 0;
     }
     llvm_mod = codegen.compile_module(result.value().get());
+    if (llvm_mod)
+      codegen.populate_interface_effect_rows(result.value().get(), type_checker);
   } else {
     parser::Parser parser;
     typechecker::TypeChecker type_checker(diag);
@@ -482,6 +499,7 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
+    type_checker.set_import_type_source(&codegen.import_types_);
     type_checker.check(parse_result.node.get());
     if (type_checker.has_direct_errors()) {
       return 1;
@@ -500,7 +518,7 @@ int main(int argc, char *argv[]) {
     refinement_checker.check(parse_result.node.get());
 
     // Linearity checking (non-blocking)
-    typechecker::LinearityChecker linearity_checker(diag);
+    typechecker::LinearityChecker linearity_checker(diag, &type_checker);
     linearity_checker.check(parse_result.node.get());
 
     llvm_mod = codegen.compile(parse_result.node.get());

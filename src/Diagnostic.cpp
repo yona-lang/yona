@@ -80,11 +80,13 @@ void DiagnosticEngine::set_source(std::string_view source, std::string_view file
 
 void DiagnosticEngine::error(const SourceLocation& loc, const std::string& message) {
     ++error_count_;
+    records_.push_back({DiagLevel::Error, loc, std::nullopt, message});
     emit(DiagLevel::Error, loc, message);
 }
 
 void DiagnosticEngine::error(const SourceLocation& loc, ErrorCode code, const std::string& message) {
     ++error_count_;
+    records_.push_back({DiagLevel::Error, loc, code, message});
     emit(DiagLevel::Error, loc, message, error_code_str(code));
 }
 
@@ -96,14 +98,17 @@ void DiagnosticEngine::warning(const SourceLocation& loc, const std::string& mes
 
     if (warnings_as_errors_) {
         ++error_count_;
+        records_.push_back({DiagLevel::Error, loc, std::nullopt, message});
         emit(DiagLevel::Error, loc, message, flag_str);
     } else {
         ++warning_count_;
+        records_.push_back({DiagLevel::Warning, loc, std::nullopt, message});
         emit(DiagLevel::Warning, loc, message, flag_str);
     }
 }
 
 void DiagnosticEngine::note(const SourceLocation& loc, const std::string& message) {
+    records_.push_back({DiagLevel::Note, loc, std::nullopt, message});
     emit(DiagLevel::Note, loc, message);
 }
 
@@ -222,6 +227,7 @@ std::string error_code_str(ErrorCode code) {
         case ErrorCode::E0106: return "E0106";
         case ErrorCode::E0200: return "E0200";
         case ErrorCode::E0201: return "E0201";
+        case ErrorCode::E0202: return "E0202";
         case ErrorCode::E0300: return "E0300";
         case ErrorCode::E0301: return "E0301";
         case ErrorCode::E0302: return "E0302";
@@ -235,6 +241,7 @@ std::string error_code_str(ErrorCode code) {
         case ErrorCode::E0601: return "E0601";
         case ErrorCode::E0602: return "E0602";
         case ErrorCode::E0603: return "E0603";
+        case ErrorCode::E0700: return "E0700";
     }
     return "E????";
 }
@@ -249,6 +256,7 @@ std::optional<ErrorCode> parse_error_code(const std::string& str) {
     if (str == "E0106") return ErrorCode::E0106;
     if (str == "E0200") return ErrorCode::E0200;
     if (str == "E0201") return ErrorCode::E0201;
+    if (str == "E0202") return ErrorCode::E0202;
     if (str == "E0300") return ErrorCode::E0300;
     if (str == "E0301") return ErrorCode::E0301;
     if (str == "E0302") return ErrorCode::E0302;
@@ -262,6 +270,7 @@ std::optional<ErrorCode> parse_error_code(const std::string& str) {
     if (str == "E0601") return ErrorCode::E0601;
     if (str == "E0602") return ErrorCode::E0602;
     if (str == "E0603") return ErrorCode::E0603;
+    if (str == "E0700") return ErrorCode::E0700;
     return std::nullopt;
 }
 
@@ -415,6 +424,29 @@ std::string error_explanation(ErrorCode code) {
                 "\n"
                 "  -- Fix: pass the required argument\n"
                 "  perform State.put 42\n";
+
+        case ErrorCode::E0202:
+            return
+                "Unhandled effect at call site [E0202]\n"
+                "\n"
+                "A function whose type includes latent effects (the `!{Effect.op}` row) is\n"
+                "applied where those operations are not covered by a surrounding\n"
+                "`handle ... with` block. The primary span is the introducing `perform`;\n"
+                "a note marks the call that lets the effect escape.\n"
+                "\n"
+                "Example:\n"
+                "\n"
+                "  -- f : () -> !{Gpu.oom} ()\n"
+                "  let f = (\\() -> perform Gpu.oom ()) in\n"
+                "  f ()   -- Error: points at `perform Gpu.oom`\n"
+                "\n"
+                "  -- Fix: handle the effect at the use site\n"
+                "  handle f () with\n"
+                "      Gpu.oom () resume -> resume ()\n"
+                "  end\n"
+                "\n"
+                "Direct `perform` without a handler still warns via -Wunhandled-effect;\n"
+                "E0202 is for applying an already-inferred effectful function.\n";
 
         case ErrorCode::E0300:
             return
@@ -613,6 +645,20 @@ std::string error_explanation(ErrorCode code) {
                 "  let f @borrow s = s in ...\n"
                 "\n"
                 "Fix: remove `@borrow`, or change the body so the parameter is only read.\n";
+
+        case ErrorCode::E0700:
+            return
+                "Unlowerable accelerator lambda [E0700]\n"
+                "\n"
+                "`yonac --strict-accelerator` requires `Std\\IntArray` / `Std\\FloatArray`\n"
+                "`map` / `filter` / `foldl` lambdas to match the fixed Std\\GPU kernel library\n"
+                "(`x + k`, `x * k`, `x > k`, sum, float scale). Arbitrary lambdas such as\n"
+                "`\\\\x -> x * x` are not compiled to SPIR-V; without this flag they stay on the\n"
+                "correct host closure path. With `--strict-accelerator` they are a hard error\n"
+                "so GPU expectations cannot silently diverge from the fixed-kernel ABI.\n"
+                "\n"
+                "Fix: rewrite to a fixed kernel (`map (\\\\x -> x + 1)`, explicit `mapGPU`, …),\n"
+                "or drop `--strict-accelerator` to keep the host path.\n";
     }
     return "";
 }

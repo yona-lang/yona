@@ -74,6 +74,7 @@ static string compile_and_run(const string &code, const char *run_env_key = null
   if (!parse_result.node)
     return "PARSE_ERROR";
 
+  type_checker.set_import_type_source(&codegen.import_types_);
   type_checker.check(parse_result.node.get());
   if (type_checker.has_direct_errors())
     return "TYPE_ERROR";
@@ -359,6 +360,7 @@ TEST_SUITE("PerceusExceptionCleanup") {
     istringstream stream(source);
     auto pr = parser.parse_input(stream);
     REQUIRE(pr.node);
+    type_checker.set_import_type_source(&codegen.import_types_);
     type_checker.check(pr.node.get());
     REQUIRE(!type_checker.has_direct_errors());
     auto module = codegen.compile(pr.node.get());
@@ -382,6 +384,7 @@ TEST_SUITE("PerceusExceptionCleanup") {
     istringstream stream(source);
     auto pr = parser.parse_input(stream);
     REQUIRE(pr.node);
+    type_checker.set_import_type_source(&codegen.import_types_);
     type_checker.check(pr.node.get());
     REQUIRE(!type_checker.has_direct_errors());
     auto module = codegen.compile(pr.node.get());
@@ -413,6 +416,7 @@ TEST_SUITE("PerceusExceptionCleanup") {
     istringstream stream(source);
     auto pr = parser.parse_input(stream);
     REQUIRE(pr.node);
+    type_checker.set_import_type_source(&codegen.import_types_);
     type_checker.check(pr.node.get());
     REQUIRE(!type_checker.has_direct_errors());
     auto module = codegen.compile(pr.node.get());
@@ -445,6 +449,7 @@ TEST_SUITE("PerceusExceptionCleanup") {
     istringstream stream(source);
     auto pr = parser.parse_input(stream);
     REQUIRE(pr.node);
+    type_checker.set_import_type_source(&codegen.import_types_);
     type_checker.check(pr.node.get());
     REQUIRE(!type_checker.has_direct_errors());
     auto happy_mod = codegen.compile(pr.node.get());
@@ -805,6 +810,148 @@ returnSeq xs = xs
     CHECK(yona::test::link::popen_read_all(exe_path) == "1");
   }
 
+  TEST_CASE("Interface files preserve effect-row metadata") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_effect_row";
+    fs::create_directories(yona_lib / "Test");
+    fs::path iface = yona_lib / "Test" / "EffRow.yonai";
+    {
+      std::ofstream out(iface);
+      out << "FN yona_Test_EffRow__boom 1 INT -> INT effects Gpu.oom,State.get\n";
+    }
+
+    Codegen loader("effect_row_load");
+    REQUIRE(loader.load_interface_file(iface.string()));
+    loader.module_paths_.push_back(yona_lib.string());
+
+    auto sig = loader.import_types_.imported_function_sig("Test\\EffRow", "boom");
+    REQUIRE(sig.has_value());
+    CHECK(sig->effect_labels.size() == 2);
+    CHECK(sig->effect_labels[0] == "Gpu.oom");
+    CHECK(sig->effect_labels[1] == "State.get");
+
+    // Re-emit should keep the effects trailer
+    string yonai = read_file(iface);
+    CHECK(yonai.find("effects Gpu.oom,State.get") != string::npos);
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.set_import_type_source(&loader.import_types_);
+    auto* unit_t = checker.arena().make_con(typechecker::TyCon::Unit);
+    auto* int_t = checker.arena().make_con(typechecker::TyCon::Int);
+    checker.register_effect("Gpu", "", {{"oom", {unit_t}, unit_t}});
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    parser::Parser p;
+    istringstream stream("import boom from Test\\EffRow in boom 0");
+    auto expr = p.parse_input(stream);
+    REQUIRE(expr.node != nullptr);
+    checker.check(expr.node.get());
+    CHECK(checker.has_errors()); // E0202
+  }
+
+  TEST_CASE("Interface files preserve open effect-row rest on HOF exports") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_effect_row_open";
+    fs::create_directories(yona_lib / "Test");
+    fs::path iface = yona_lib / "Test" / "HofApply.yonai";
+    {
+      std::ofstream out(iface);
+      out << "FN yona_Test_HofApply__apply 2 INT INT -> INT effects |r0 0:|r0\n";
+    }
+
+    Codegen loader("effect_row_open_load");
+    REQUIRE(loader.load_interface_file(iface.string()));
+    loader.module_paths_.push_back(yona_lib.string());
+
+    auto sig = loader.import_types_.imported_function_sig("Test\\HofApply", "apply");
+    REQUIRE(sig.has_value());
+    CHECK(sig->effect_labels.empty());
+    CHECK(sig->effect_open);
+    REQUIRE(sig->param_effect_rows.size() >= 1);
+    CHECK(sig->param_effect_rows[0].has_value());
+    CHECK(sig->param_effect_rows[0]->open());
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.set_import_type_source(&loader.import_types_);
+    auto* int_t = checker.arena().make_con(typechecker::TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    parser::Parser p;
+    istringstream stream(
+        "import apply from Test\\HofApply in\n"
+        "let g = (\\y -> perform State.get ()) in\n"
+        "apply g 0");
+    auto expr = p.parse_input(stream);
+    REQUIRE(expr.node != nullptr);
+    checker.check(expr.node.get());
+    CHECK(checker.has_errors()); // E0202 via imported |r
+
+    const DiagnosticEngine::Record* e0202 = nullptr;
+    for (auto& rec : diag.records()) {
+      if (rec.level == DiagLevel::Error && rec.code == ErrorCode::E0202) {
+        e0202 = &rec;
+        break;
+      }
+    }
+    REQUIRE(e0202 != nullptr);
+    CHECK(e0202->loc.line == 2);
+    CHECK(e0202->message.find("State.get") != std::string::npos);
+  }
+
+  TEST_CASE("Module export writes open |r for apply and importer E0202") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_hof_export";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p1;
+    string mod_source = R"(
+module Test\HofExport
+
+export apply
+
+apply f x = f x
+)";
+    auto mod_result = p1.parse_module(mod_source, "hof_export.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("hof_export_mod");
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+
+    DiagnosticEngine tc_diag;
+    typechecker::TypeChecker tc(tc_diag);
+    mod_codegen.populate_interface_effect_rows(mod_result.value().get(), tc);
+
+    fs::path iface = yona_lib / "Test" / "HofExport.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+    string yonai = read_file(iface);
+    CHECK(yonai.find("effects") != string::npos);
+    CHECK(yonai.find("|r") != string::npos);
+    CHECK(yonai.find("0:") != string::npos);
+
+    Codegen loader("hof_export_load");
+    REQUIRE(loader.load_interface_file(iface.string()));
+    loader.module_paths_.push_back(yona_lib.string());
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.set_import_type_source(&loader.import_types_);
+    auto* int_t = checker.arena().make_con(typechecker::TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_t}});
+
+    parser::Parser p2;
+    istringstream stream(
+        "import apply from Test\\HofExport in\n"
+        "let g = (\\y -> perform State.get ()) in\n"
+        "apply g 0");
+    auto expr = p2.parse_input(stream);
+    REQUIRE(expr.node != nullptr);
+    checker.check(expr.node.get());
+    CHECK(checker.has_errors());
+  }
+
   TEST_CASE("Interface NAT rows serialize FloatArray as FLOAT_ARRAY") {
     namespace fs = std::filesystem;
     fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_nat_float_arr";
@@ -1162,6 +1309,7 @@ reduceSum shifted
   std::istringstream stream(source);
   auto parse_result = parser.parse_input(stream);
   REQUIRE(parse_result.node);
+  type_checker.set_import_type_source(&codegen.import_types_);
   type_checker.check(parse_result.node.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());
@@ -1205,6 +1353,7 @@ let pm = floatArrayMul2Async xs in
   std::istringstream stream(source);
   auto parse_result = parser.parse_input(stream);
   REQUIRE(parse_result.node);
+  type_checker.set_import_type_source(&codegen.import_types_);
   type_checker.check(parse_result.node.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());
@@ -1239,6 +1388,7 @@ TEST_CASE("accelerator_diagnostic_report_std_gpu_discovery_calls") {
   std::istringstream stream(source);
   auto parse_result = parser.parse_input(stream);
   REQUIRE(parse_result.node);
+  type_checker.set_import_type_source(&codegen.import_types_);
   type_checker.check(parse_result.node.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());
@@ -1296,6 +1446,7 @@ TEST_CASE("accelerator_diagnostic_report_module_typed_scan") {
   }
   typechecker::TypeChecker type_checker(diag);
   codegen.load_prelude(&parser, &type_checker);
+  type_checker.set_import_type_source(&codegen.import_types_);
 
   const char *source = R"(module Test\AccelReportModTyped
 

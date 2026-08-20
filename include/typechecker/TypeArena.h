@@ -8,6 +8,7 @@
 
 #include "InferType.h"
 #include <deque>
+#include <unordered_map>
 
 namespace yona::compiler::typechecker {
 
@@ -19,8 +20,11 @@ public:
     /// Create a built-in type constructor.
     MonoTypePtr make_con(TyCon con);
 
-    /// Create a function type.
-    MonoTypePtr make_arrow(MonoTypePtr param, MonoTypePtr ret);
+    /// Create a function type (optional latent effect row).
+    MonoTypePtr make_arrow(MonoTypePtr param, MonoTypePtr ret,
+                           std::vector<std::string> effect_labels = {},
+                           MonoTypePtr effect_rest = nullptr,
+                           std::unordered_map<std::string, SourceLocation> origins = {});
 
     /// Create a named type application (e.g., Option Int).
     MonoTypePtr make_app(const std::string& name, std::vector<MonoTypePtr> args);
@@ -31,6 +35,16 @@ public:
     /// Create a record type (closed or open row).
     MonoTypePtr make_record(std::vector<std::pair<std::string, MonoTypePtr>> fields,
                              MonoTypePtr row_rest = nullptr);
+
+    /// Create an effect-row binder (open-row unification).
+    /// `extra_rests` are additional open tails (union of row variables).
+    MonoTypePtr make_effect_row(std::vector<std::string> labels,
+                                MonoTypePtr rest = nullptr,
+                                std::vector<MonoTypePtr> extra_rests = {},
+                                std::unordered_map<std::string, SourceLocation> origins = {});
+
+    /// One rest pointer for a function arrow: nullptr, a var, or a union row.
+    MonoTypePtr pack_effect_rest(const std::vector<MonoTypePtr>& open_rests);
 
     /// Allocate and return a stable pointer to a MonoType.
     MonoTypePtr alloc(MonoType t);

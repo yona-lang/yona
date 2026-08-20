@@ -19,13 +19,48 @@
 #include "TypeEnv.h"
 #include "Diagnostic.h"
 #include "ast.h"
+#include <algorithm>
+#include <optional>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace yona::compiler::typechecker {
+
+/// `.yonai` FN shape for the type checker. CType/ABI stays on the codegen
+/// side; this overlay is how `Linear` (and products of Linear) cross modules.
+struct ImportedFnSig {
+    int arity = 0;
+    bool return_linear = false;           ///< whole return is `Linear _`
+    std::vector<char> tuple_elem_linear;  ///< per-element Linear on a tuple return
+    std::vector<char> param_linear;       ///< per-parameter Linear (same length as arity, or empty)
+    /// Latent `Effect.op` labels from `.yonai` `effects …` (sorted unique).
+    std::vector<std::string> effect_labels;
+    /// True when the result arrow is an open row (`|rN` in `.yonai`).
+    bool effect_open = false;
+    /// Per-parameter effect rows (index = param slot). Missing = not a function.
+    std::vector<std::optional<SerializedEffectRow>> param_effect_rows;
+    /// Full parsed `effects` trailer (result + params, shared rest ids).
+    SerializedFnEffects effect_spec;
+};
+
+/// Loads imported function signatures from `.yonai` (implemented by Codegen).
+class ImportTypeSource {
+public:
+    virtual ~ImportTypeSource() = default;
+    virtual std::optional<ImportedFnSig> imported_function_sig(
+        const std::string& module_fqn, const std::string& name) = 0;
+    virtual std::vector<std::string> imported_module_exports(
+        const std::string& module_fqn) = 0;
+};
 
 class TypeChecker {
 public:
     explicit TypeChecker(DiagnosticEngine& diag);
+
+    /// When set, `ImportExpr` / FQN / wildcard bind `.yonai` types instead of
+    /// unconstrained fresh variables.
+    void set_import_type_source(ImportTypeSource* src) { import_src_ = src; }
 
     /// Type-check a top-level expression. Returns inferred type (nullptr on error).
     MonoTypePtr check(ast::AstNode* node);
@@ -62,10 +97,40 @@ public:
     void register_effect(const std::string& effect_name, const std::string& type_param,
                           const std::vector<std::tuple<std::string, std::vector<MonoTypePtr>, MonoTypePtr>>& operations);
 
+    /// Concrete escaping `Effect.op` labels from the last `check` (top-level ambient).
+    const std::vector<std::string>& last_escaping_effects() const { return top_escaping_.labels; }
+
     /// Solve deferred trait constraints. Returns false on unsatisfied constraints.
     bool solve_constraints();
 
 private:
+    struct EscapingEffects {
+        std::vector<std::string> labels;
+        std::unordered_map<std::string, SourceLocation> origins;
+        void add(const std::string& label, const SourceLocation& loc) {
+            if (std::find(labels.begin(), labels.end(), label) != labels.end()) return;
+            labels.push_back(label);
+            std::sort(labels.begin(), labels.end());
+            origins.emplace(label, loc);
+        }
+        void add_all(const std::vector<std::string>& ls, const SourceLocation& loc) {
+            for (auto& l : ls) add(l, loc);
+        }
+        void subtract(const std::vector<std::string>& handled) {
+            std::unordered_set<std::string> h(handled.begin(), handled.end());
+            std::vector<std::string> kept;
+            for (auto& l : labels) {
+                if (!h.count(l)) kept.push_back(l);
+                else origins.erase(l);
+            }
+            labels = std::move(kept);
+        }
+        /// Open effect-row tails from applied function parameters (HOF).
+        std::vector<MonoTypePtr> open_rests;
+        void add_rest(MonoTypePtr rest) {
+            if (rest) open_rests.push_back(rest);
+        }
+    };
     /// Main recursive inference. Returns inferred monotype.
     MonoTypePtr infer(ast::AstNode* node, std::shared_ptr<TypeEnv> env, int level);
 
@@ -97,6 +162,21 @@ private:
     void bind_collection_extractor(ast::CollectionExtractorExpr* ce,
                                     std::shared_ptr<TypeEnv> env, int level);
 
+    /// Join latent effects of an applied arrow into the ambient escaping row.
+    void join_arrow_effects(MonoTypePtr arrow, const SourceLocation& loc);
+
+    /// After inferring a recursive function, close open rests that came only
+    /// from self-application (not from a function parameter).
+    void close_recursive_self_rests(MonoTypePtr fn_type);
+
+    /// True if `Effect.op` is covered by the current handler stack.
+    bool is_effect_handled(const std::string& op_key) const;
+
+    /// Reject ambient/callee effects not covered by handlers (E0202).
+    void check_effects_covered(const std::vector<std::string>& labels,
+                               const SourceLocation& call_loc,
+                               const std::unordered_map<std::string, SourceLocation>* origins);
+
     // --- Generalization / Instantiation ---
 
     /// Generalize a type at the given level: free vars with level > given become quantified.
@@ -118,6 +198,19 @@ private:
 
     /// Map operator AST type to operator name string for env lookup.
     static std::string op_name(ast::AstNodeType type);
+
+    /// Build a curried function type from a `.yonai` import signature.
+    MonoTypePtr mono_from_import_sig(const ImportedFnSig& sig, int level);
+
+    /// Convert a parsed Yona type annotation (extern decls) to a MonoType.
+    MonoTypePtr from_ast_type(const yona::compiler::types::Type& t, int level);
+
+    /// Bind an imported name from `.yonai`, or a fresh var if unknown.
+    void bind_import_name(std::shared_ptr<TypeEnv> env, const std::string& module_fqn,
+                          const std::string& func_name, const std::string& bind_name,
+                          int level);
+
+    ImportTypeSource* import_src_ = nullptr;
 
     TypeArena arena_;
     UnionFind uf_;
@@ -161,6 +254,10 @@ private:
 
     /// Handler scope stack: each entry lists the effect operations handled at that level.
     std::vector<std::vector<std::string>> handler_scope_stack_;
+
+    /// Ambient escaping effects for the expression currently being inferred.
+    EscapingEffects* ambient_effects_ = nullptr;
+    EscapingEffects top_escaping_;
 };
 
 } // namespace yona::compiler::typechecker

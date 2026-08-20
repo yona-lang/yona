@@ -3,160 +3,263 @@ CTOR Buffer 0 1 fields _0:ADT
 ADT FileHandle 1 1
 CTOR FileHandle 0 1 fields _0:INT
 ADT FileMode 4 0
-CTOR Read 0 0
-CTOR ReadWrite 2 0
 CTOR Write 1 0
+CTOR ReadWrite 2 0
+CTOR Read 0 0
 CTOR Append 3 0
+ADT FloatMapOp 2 1
+CTOR Scale 0 1 fields _0:FLOAT
+CTOR Mul2 1 0
+ADT FloatReduceOp 1 0
+CTOR FSum 0 0
+ADT GpuIssue 4 1
+CTOR GpuOther 3 1 fields _0:INT
+CTOR GpuOk 0 0
+CTOR GpuOom 1 0
+CTOR GpuDeviceLost 2 0
+ADT IntMapOp 3 1
+CTOR Add 0 1 fields _0:INT
+CTOR Mul 1 1 fields _0:INT
+CTOR Square 2 0
+ADT IntReduceOp 1 0
+CTOR Sum 0 0
 ADT Iterator 1 1 recursive
 CTOR Iterator 0 1 fields _0:FUNCTION:ADT:Option
 ADT Linear 1 1
 CTOR Linear 0 1 fields _0:INT
 ADT Option 2 1
-CTOR Some 0 1 fields _0:INT
 CTOR None 1 0
+CTOR Some 0 1 fields _0:INT
+ADT PinnedFloats 1 1
+CTOR PinnedFloats 0 1 fields _0:INT
+ADT Receiver 1 1
+CTOR Receiver 0 1 fields _0:INT
 ADT Result 2 1
-CTOR Ok 0 1 fields _0:INT
 CTOR Err 1 1 fields _0:INT
+CTOR Ok 0 1 fields _0:INT
+ADT Sender 1 1
+CTOR Sender 0 1 fields _0:INT
 ADT Type 18 1
-CTOR TSum 16 0
 CTOR TAdt 15 1 fields _0:STRING
-CTOR TInt 0 0
-CTOR TFloat 1 0
-CTOR TBool 2 0
-CTOR TString 3 0
 CTOR TSymbol 4 0
 CTOR TUnit 5 0
-CTOR TSeq 6 0
-CTOR TIntArray 13 0
-CTOR TSet 7 0
-CTOR TDict 8 0
-CTOR TFunction 10 0
-CTOR TTuple 9 0
-CTOR TPromise 11 0
-CTOR TByteArray 12 0
-CTOR TFloatArray 14 0
+CTOR TBool 2 0
 CTOR TRecord 17 0
+CTOR TInt 0 0
+CTOR TFunction 10 0
+CTOR TDict 8 0
+CTOR TFloat 1 0
+CTOR TFloatArray 14 0
+CTOR TString 3 0
+CTOR TSeq 6 0
+CTOR TSum 16 0
+CTOR TTuple 9 0
+CTOR TSet 7 0
+CTOR TPromise 11 0
+CTOR TIntArray 13 0
+CTOR TByteArray 12 0
 ADT Whence 3 0
-CTOR SeekEnd 2 0
-CTOR SeekSet 0 0
 CTOR SeekCur 1 0
-TRAIT Closeable a 1
-  METHOD close
-TRAIT Show a 1
-  METHOD show
-TRAIT Eq a 1
-  METHOD eq
-TRAIT Ord a 1
-  METHOD compare
-TRAIT Hash a 1
-  METHOD hash
+CTOR SeekSet 0 0
+CTOR SeekEnd 2 0
 TRAIT Array a 2
   METHOD length
   METHOD get
-INSTANCE Show Float
-  IMPL show yona_Prelude__Show_Float__show
-INSTANCE Closeable Int
-  IMPL close Closeable_Int__close
+TRAIT Hash a 1
+  METHOD hash
+TRAIT Ord a 1
+  METHOD compare
+TRAIT Eq a 1
+  METHOD eq
+TRAIT Show a 1
+  METHOD show
+TRAIT Closeable a 1
+  METHOD close
+INSTANCE Hash Bool
+  IMPL hash yona_Prelude__Hash_Bool__hash
+INSTANCE Hash String
+  IMPL hash yona_Prelude__Hash_String__hash
+INSTANCE Hash Float
+  IMPL hash yona_Prelude__Hash_Float__hash
+INSTANCE Array Seq
+  IMPL get yona_Prelude__Array_Seq__get
+  IMPL length yona_Prelude__Array_Seq__length
+INSTANCE Hash Int
+  IMPL hash yona_Prelude__Hash_Int__hash
+INSTANCE Ord Float
+  IMPL compare yona_Prelude__Ord_Float__compare
+INSTANCE Ord Int
+  IMPL compare yona_Prelude__Ord_Int__compare
+INSTANCE Array FloatArray
+  IMPL get yona_Prelude__Array_FloatArray__get
+  IMPL length yona_Prelude__Array_FloatArray__length
 INSTANCE Closeable FileHandle
   IMPL close yona_Std_File__closeFileHandle
+INSTANCE Eq Symbol
+  IMPL eq yona_Prelude__Eq_Symbol__eq
 INSTANCE Ord String
   IMPL compare yona_Prelude__Ord_String__compare
-INSTANCE Eq Bool
-  IMPL eq yona_Prelude__Eq_Bool__eq
 INSTANCE Show Int
   IMPL show yona_Prelude__Show_Int__show
-INSTANCE Show String
-  IMPL show yona_Prelude__Show_String__show
-INSTANCE Eq String
-  IMPL eq yona_Prelude__Eq_String__eq
+INSTANCE Array String
+  IMPL get yona_Prelude__Array_String__get
+  IMPL length yona_Prelude__Array_String__length
+INSTANCE Hash Symbol
+  IMPL hash yona_Prelude__Hash_Symbol__hash
 INSTANCE Show Bool
   IMPL show yona_Prelude__Show_Bool__show
+INSTANCE Closeable Int
+  IMPL close Closeable_Int__close
+INSTANCE Eq String
+  IMPL eq yona_Prelude__Eq_String__eq
+INSTANCE Array IntArray
+  IMPL get yona_Prelude__Array_IntArray__get
+  IMPL length yona_Prelude__Array_IntArray__length
+INSTANCE Array ByteArray
+  IMPL get yona_Prelude__Array_ByteArray__get
+  IMPL length yona_Prelude__Array_ByteArray__length
+INSTANCE Eq Bool
+  IMPL eq yona_Prelude__Eq_Bool__eq
 INSTANCE Ord Bool
   IMPL compare yona_Prelude__Ord_Bool__compare
+INSTANCE Show String
+  IMPL show yona_Prelude__Show_String__show
+INSTANCE Eq Float
+  IMPL eq yona_Prelude__Eq_Float__eq
+INSTANCE Show Float
+  IMPL show yona_Prelude__Show_Float__show
 INSTANCE Show Symbol
   IMPL show yona_Prelude__Show_Symbol__show
 INSTANCE Eq Int
   IMPL eq yona_Prelude__Eq_Int__eq
-INSTANCE Array FloatArray
-  IMPL length yona_Prelude__Array_FloatArray__length
-  IMPL get yona_Prelude__Array_FloatArray__get
-INSTANCE Eq Float
-  IMPL eq yona_Prelude__Eq_Float__eq
-INSTANCE Eq Symbol
-  IMPL eq yona_Prelude__Eq_Symbol__eq
-INSTANCE Ord Int
-  IMPL compare yona_Prelude__Ord_Int__compare
-INSTANCE Ord Float
-  IMPL compare yona_Prelude__Ord_Float__compare
-INSTANCE Hash Int
-  IMPL hash yona_Prelude__Hash_Int__hash
-INSTANCE Hash Float
-  IMPL hash yona_Prelude__Hash_Float__hash
-INSTANCE Hash String
-  IMPL hash yona_Prelude__Hash_String__hash
-INSTANCE Hash Bool
-  IMPL hash yona_Prelude__Hash_Bool__hash
-INSTANCE Hash Symbol
-  IMPL hash yona_Prelude__Hash_Symbol__hash
-INSTANCE Array ByteArray
-  IMPL length yona_Prelude__Array_ByteArray__length
-  IMPL get yona_Prelude__Array_ByteArray__get
-INSTANCE Array IntArray
-  IMPL length yona_Prelude__Array_IntArray__length
-  IMPL get yona_Prelude__Array_IntArray__get
-INSTANCE Array Seq
-  IMPL length yona_Prelude__Array_Seq__length
-  IMPL get yona_Prelude__Array_Seq__get
-INSTANCE Array String
-  IMPL length yona_Prelude__Array_String__length
-  IMPL get yona_Prelude__Array_String__get
-FN yona_Prelude__Array_Seq__length 1 INT -> INT
-FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
+FN yona_Std_GPU__gpuLastIssue 0 -> ADT
+FN yona_Std_GPU__drainMapFloatGPU 3 INT INT INT -> INT
+FN yona_Std_GPU__mapFloatPinnedGPU 2 ADT ADT -> INT borrow 10
+FN yona_Std_GPU__pinnedBackend 1 ADT -> STRING
+FN yona_Std_GPU__pinnedToFloatArray 1 ADT -> FLOAT_ARRAY
+FN yona_Std_GPU__pinnedSet 3 ADT INT FLOAT -> INT
+FN yona_Std_GPU__closePinnedFloats 1 ADT -> INT
+FN yona_Std_GPU__withGpuIssue 2 FUNCTION FUNCTION -> INT borrow 11
+FN yona_Std_GPU__gpuFloatChannel 1 INT -> TUPLE
+FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
+FN yona_Prelude__Hash_String__hash 1 STRING -> INT
+FN yona_Std_GPU__vulkanLastNote 0 -> STRING
+FN yona_Prelude__Array_IntArray__length 1 INT -> INT
+FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
+FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
+FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
+FN yona_Std_GPU__reduceSum 1 ADT -> INT
+FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
+FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
+FN Closeable_Int__close 1 INT -> UNIT
+FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
+FN yona_Std_GPU__materialize 1 ADT -> INT_ARRAY
+FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
+FN yona_Std_GPU__allocPinnedFloats 1 INT -> ADT retadt PinnedFloats
+FN yona_Std_GPU__mapReduceGraphGPU 2 INT ADT -> INT
+FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
+FN yona_Std_GPU__pinnedLength 1 ADT -> INT
+FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
+FN yona_Std_GPU__reduceGPU 2 ADT ADT -> INT
+FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
+FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
+FN yona_Std_GPU__copyFloatArrayToPinned 2 FLOAT_ARRAY ADT -> INT borrow 10
 FN yona_Prelude__Hash_Int__hash 1 INT -> INT
+FN yona_Prelude__Array_Seq__length 1 INT -> INT
+FN yona_Std_GPU__vulkanAvailable 0 -> BOOL
+FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
+FN yona_Std_GPU__apiVersion 1 UNIT -> INT
+FN yona_Std_GPU__length 1 ADT -> INT
 FN yona_Prelude__Show_String__show 1 STRING -> STRING
 FN yona_Prelude__Show_Int__show 1 INT -> STRING
-FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
+FN yona_Std_GPU__filterGreaterThan 2 INT ADT -> ADT
+FN yona_Std_GPU__filterLessThan 2 INT ADT -> ADT
 FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
 FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
-FN yona_Std_GPU__backendName 0 -> STRING
-FN yona_Std_GPU__vulkanStatus 0 -> STRING
-FN yona_Std_GPU__vulkanLastNote 0 -> STRING
-FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
-FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
-FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
-FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
-FN yona_Prelude__Hash_String__hash 1 STRING -> INT
-FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
-FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
-FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
-FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
-FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
-FN yona_Std_GPU__length 1 ADT -> INT
-FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
-FN yona_Prelude__Hash_Bool__hash 1 INT -> INT
-FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
-FN yona_Std_GPU__mapMul 2 INT ADT -> ADT
-FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
-FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
-FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_IntArray__length 1 INT -> INT
-FN yona_Std_GPU__materialize 1 ADT -> ADT
-FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_String__length 1 STRING -> INT
-FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
 FN yona_Prelude__Array_String__get 2 STRING INT -> INT
-FN Closeable_Int__close 1 INT -> UNIT
+FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
+FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
+FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
+FN yona_Prelude__Array_String__length 1 STRING -> INT
+FN yona_Std_GPU__mapFloatGPU 2 ADT FLOAT_ARRAY -> FLOAT_ARRAY borrow 10
+FN yona_Std_GPU__pinnedGet 2 ADT INT -> FLOAT
+FN yona_Std_GPU__backendName 0 -> STRING
+NAT yona_Std_GPU__floatArrayScaleAsync 2 FLOAT FLOAT_ARRAY -> INT
+FN yona_Std_GPU__mapGPU 2 ADT ADT -> ADT
+FN yona_Std_GPU__vulkanLastIssueKind 0 -> INT
+FN yona_Std_GPU__checkGpu 0 -> ADT
+FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
+NAT yona_Std_GPU__floatArrayMul2Async 1 FLOAT_ARRAY -> INT
+FN yona_Std_GPU__vulkanStatus 0 -> STRING
+FN yona_Std_GPU__vulkanTimelineSemaphore 0 -> BOOL
 FN yona_Std_GPU__hasGpu 0 -> BOOL
 FN yona_Std_GPU__hasSimd 0 -> BOOL
-FN yona_Std_GPU__vulkanAvailable 0 -> BOOL
-FN yona_Std_GPU__vulkanTimelineSemaphore 0 -> BOOL
-FN yona_Std_GPU__vulkanLastIssueKind 0 -> INT
-FN yona_Std_GPU__filterGreaterThan 2 INT ADT -> ADT
-FN yona_Std_GPU__upload 1 ADT -> ADT retadt Buffer
+FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
+FN yona_Std_GPU__available 1 UNIT -> BOOL
+FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
+FN yona_Std_GPU__physicalDeviceCount 1 UNIT -> INT
+FN yona_Std_GPU__upload 1 INT_ARRAY -> ADT retadt Buffer
 FN yona_Std_GPU__mapAdd 2 INT ADT -> ADT
-FN yona_Std_GPU__reduceSum 1 ADT -> INT
-FN yona_Std_GPU__available 0 -> BOOL
-FN yona_Std_GPU__apiVersion 0 -> INT
-FN yona_Std_GPU__physicalDeviceCount 0 -> INT
-NAT yona_Std_GPU__floatArrayMul2Async 1 FLOAT_ARRAY -> INT
-NAT yona_Std_GPU__floatArrayScaleAsync 2 FLOAT FLOAT_ARRAY -> INT
+FN yona_Std_GPU__mapMul 2 INT ADT -> ADT
+FN yona_Std_GPU__mapSquare 1 ADT -> ADT
+FN yona_Std_GPU__raiseGpu 1 ADT -> UNIT effects Gpu.deviceLost,Gpu.fail,Gpu.oom
+FN yona_Std_GPU__withGpuFallback 1 FUNCTION -> INT effects Gpu.deviceLost,Gpu.fail,Gpu.oom
+FN yona_Std_GPU__reduceFloatGPU 2 ADT FLOAT_ARRAY -> FLOAT
+GENFN_BEGIN yona_Std_GPU__withGpuIssue withGpuIssue
+withGpuIssue on_ok on_issue =
+    case vulkanLastIssueKind of
+        0 -> on_ok ()
+        1 -> on_issue GpuOom
+        2 -> on_issue GpuDeviceLost
+        code -> on_issue (GpuOther code)
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_GPU__checkGpu checkGpu
+checkGpu =
+    case vulkanLastIssueKind of
+        0 -> Ok 0
+        1 -> Err GpuOom
+        2 -> Err GpuDeviceLost
+        code -> Err (GpuOther code)
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_GPU__drainMapFloatGPU drainMapFloatGPU
+drainMapFloatGPU op rx tx =
+    import send, recv from Std\Channel in
+    case recv rx of
+        None -> 0
+        Some chunk ->
+            let mapped = mapFloatGPU op chunk in
+            let _ = send tx mapped in
+            1 + drainMapFloatGPU op rx tx
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_GPU__gpuFloatChannel gpuFloatChannel
+gpuFloatChannel n =
+    import channel from Std\Channel in
+    channel n
+GENFN_END
+GENFN_BEGIN yona_Std_GPU__gpuLastIssue gpuLastIssue
+gpuLastIssue =
+    case vulkanLastIssueKind of
+        0 -> GpuOk
+        1 -> GpuOom
+        2 -> GpuDeviceLost
+        code -> GpuOther code
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_GPU__raiseGpu raiseGpu
+raiseGpu issue =
+    case issue of
+        GpuOk -> ()
+        GpuOom -> perform Gpu.oom ()
+        GpuDeviceLost -> perform Gpu.deviceLost ()
+        GpuOther code -> perform Gpu.fail code
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_GPU__withGpuFallback withGpuFallback
+withGpuFallback action =
+    let result = action () in
+    let _ = raiseGpu gpuLastIssue in
+    result
+GENFN_END

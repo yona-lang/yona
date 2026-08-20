@@ -33,6 +33,7 @@ python3 bench/runner.py --json
 # Std\GPU: CPU vs Vulkan wall times (same correctness checks)
 python3 bench/run_gpu_compare.py
 python3 bench/run_gpu_compare.py --only float_scale   # FloatArray gpu_stub f64 (golden 0)
+python3 bench/run_gpu_compare.py --only pinned_scale  # PinnedFloats in-place scale
 
 # Reference lanes only: stdout must match each benchmark's .expected (CI-friendly; no yonac)
 python3 bench/runner.py --verify-reference-outputs
@@ -87,6 +88,7 @@ bench/
     gpu_filter_hot.yona         # upload -> filterGreaterThan -> reduceSum (100k rows)
     gpu_filter_10k.yona           # same at 10k rows
     gpu_float_scale_hot.yona      # FloatArray scale async (gpu_stub); stdout must match .expected
+    gpu_pinned_scale_hot.yona     # PinnedFloats in-place scale (mapped or malloc)
   reference/             # Reference implementations (C, Erlang, Haskell,
     fibonacci.c          # Java, JavaScript, Python). Only .c and .erl are
     fibonacci.erl        # currently wired into the runner's comparison

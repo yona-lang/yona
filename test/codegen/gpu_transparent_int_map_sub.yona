@@ -1,0 +1,2 @@
+import map, fromSeq, foldl from Std\IntArray in
+foldl (\a b -> a + b) 0 (map (\x -> x - 1) (fromSeq [1, 2, 3, 4, 5]))

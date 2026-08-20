@@ -14,6 +14,10 @@
 
 #include "analysis/BorrowEscapeAnalysis.h"
 
+#include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <unordered_map>
 #include <variant>
 
 namespace yona::compiler::typechecker {
@@ -40,7 +44,14 @@ TypeChecker::TypeChecker(DiagnosticEngine& diag)
 }
 
 MonoTypePtr TypeChecker::check(AstNode* node) {
-    return infer(node, root_env_, 0);
+    top_escaping_ = EscapingEffects{};
+    auto* saved = ambient_effects_;
+    ambient_effects_ = &top_escaping_;
+    auto* ty = infer(node, root_env_, 0);
+    // Top-level escaping effects that remain unhandled: keep warning path via
+    // perform; call-site E0202 covers applying effectful functions.
+    ambient_effects_ = saved;
+    return ty;
 }
 
 MonoTypePtr TypeChecker::type_of(AstNode* node) const {
@@ -58,8 +69,31 @@ MonoTypePtr TypeChecker::zonk(MonoTypePtr type) {
     switch (type->tag) {
         case MonoType::Var: return type; // unresolved var
         case MonoType::Con: return type;
-        case MonoType::Arrow:
-            return arena_.make_arrow(zonk(type->param_type), zonk(type->return_type));
+        case MonoType::Arrow: {
+            std::vector<std::string> labels = type->effect_labels;
+            std::vector<MonoTypePtr> opens;
+            auto* rest0 = type->effect_rest ? zonk(type->effect_rest) : nullptr;
+            collect_effect_row_parts(rest0, &uf_, std::nullopt, labels, opens);
+            std::unordered_map<std::string, SourceLocation> origins = type->effect_origins;
+            collect_effect_origins(rest0, &uf_, origins);
+            return arena_.make_arrow(zonk(type->param_type), zonk(type->return_type),
+                                     std::move(labels), arena_.pack_effect_rest(opens),
+                                     std::move(origins));
+        }
+        case MonoType::MEffectRow: {
+            std::vector<std::string> labels = type->effect_labels;
+            std::vector<MonoTypePtr> opens;
+            auto* rest0 = type->effect_rest ? zonk(type->effect_rest) : nullptr;
+            collect_effect_row_parts(rest0, &uf_, std::nullopt, labels, opens);
+            for (auto* extra : type->args)
+                collect_effect_row_parts(zonk(extra), &uf_, std::nullopt, labels, opens);
+            std::unordered_map<std::string, SourceLocation> origins = type->effect_origins;
+            collect_effect_origins(rest0, &uf_, origins);
+            for (auto* extra : type->args)
+                collect_effect_origins(zonk(extra), &uf_, origins);
+            return arena_.make_effect_row(std::move(labels), arena_.pack_effect_rest(opens),
+                                          {}, std::move(origins));
+        }
         case MonoType::App: {
             std::vector<MonoTypePtr> args;
             for (auto* a : type->args) args.push_back(zonk(a));
@@ -199,32 +233,34 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
         case AST_IMPORT_EXPR: {
             auto* imp = static_cast<ImportExpr*>(node);
             auto import_env = env->child();
-            // Bind imported names as fresh type variables
             for (auto* clause : imp->clauses) {
                 if (auto* fi = dynamic_cast<FunctionsImport*>(clause)) {
+                    std::string mod;
+                    if (fi->fromFqn) mod = fi->fromFqn->to_string();
                     for (auto* fa : fi->aliases) {
-                        // Use alias name if set, otherwise original name
                         std::string bind_name = (fa->alias && !fa->alias->value.empty())
                             ? fa->alias->value : fa->name->value;
-                        auto* v = arena_.fresh_var(level);
-                        uf_.add_var(v->var_id, level);
-                        import_env->bind(bind_name, v);
+                        bind_import_name(import_env, mod, fa->name->value, bind_name, level);
+                    }
+                } else if (auto* mi = dynamic_cast<ModuleImport*>(clause)) {
+                    if (import_src_ && mi->fqn) {
+                        std::string mod = mi->fqn->to_string();
+                        for (auto& name : import_src_->imported_module_exports(mod))
+                            bind_import_name(import_env, mod, name, name, level);
                     }
                 }
-                // Wildcard module import: bind nothing specific (names resolved at codegen)
             }
             result = infer(imp->expr, import_env, level);
             break;
         }
 
         case AST_EXTERN_DECL: {
-            // extern name : Type in body — type is body type
+            // extern name : Type in body — bind the declared type (so Linear returns
+            // are visible to LinearityChecker) and infer the body.
             auto* ext = static_cast<ExternDeclExpr*>(node);
             auto child_env = env->child();
-            // Bind the extern name as a fresh polymorphic var
-            auto* extern_var = arena_.fresh_var(level);
-            uf_.add_var(extern_var->var_id, level);
-            child_env->bind(ext->name, extern_var);
+            auto* declared = from_ast_type(ext->declared_type, level);
+            child_env->bind_scheme(ext->name, generalize(declared, -1));
             result = infer(ext->body, child_env, level);
             break;
         }
@@ -295,11 +331,9 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
 
         case AST_WITH_EXPR: {
             auto* we = static_cast<WithExpr*>(node);
-            infer(we->contextExpr, env, level);
+            auto* ctx_type = infer(we->contextExpr, env, level);
             auto child_env = env->child();
-            auto* ctx_var = arena_.fresh_var(level);
-            uf_.add_var(ctx_var->var_id, level);
-            child_env->bind(we->name->value, ctx_var);
+            child_env->bind(we->name->value, ctx_type ? ctx_type : arena_.fresh_var(level));
             result = infer(we->bodyExpr, child_env, level);
             break;
         }
@@ -455,7 +489,8 @@ MonoTypePtr TypeChecker::infer_let(LetExpr* node, std::shared_ptr<TypeEnv> env, 
             auto* fn_type = infer(prelim.la->lambda, child_env, level + 1);
             unifier_.unify(prelim.var, fn_type, prelim.la->lambda->source_context,
                            "in recursive function '" + prelim.la->name->value + "'");
-            auto scheme = generalize(fn_type, level);
+            close_recursive_self_rests(fn_type);
+            auto scheme = generalize(unifier_.resolve(fn_type), level);
             child_env->bind_scheme(prelim.la->name->value, scheme);
         }
     }
@@ -484,7 +519,11 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr* node,
         }
     }
 
-    // Infer body type
+    // Infer body under a fresh ambient effect row (latent effects of this fn).
+    EscapingEffects body_fx;
+    auto* saved_fx = ambient_effects_;
+    ambient_effects_ = &body_fx;
+
     MonoTypePtr body_type = nullptr;
     for (auto* body : node->bodies) {
         if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
@@ -495,10 +534,42 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr* node,
     }
     if (!body_type) body_type = arena_.make_con(TyCon::Unit);
 
-    // Build curried arrow type: a -> b -> c -> ret
+    ambient_effects_ = saved_fx;
+
+    auto latent = normalize_effect_labels(body_fx.labels);
+    std::vector<std::string> rest_labels;
+    std::vector<MonoTypePtr> open_rests;
+    for (auto* rest : body_fx.open_rests)
+        collect_effect_row_parts(rest, &uf_, std::nullopt, rest_labels, open_rests);
+    for (auto& l : rest_labels)
+        if (std::find(latent.begin(), latent.end(), l) == latent.end())
+            latent.push_back(l);
+    latent = normalize_effect_labels(std::move(latent));
+    MonoTypePtr latent_rest = arena_.pack_effect_rest(open_rests);
+    std::unordered_map<std::string, SourceLocation> origins = body_fx.origins;
+    for (auto* rest : body_fx.open_rests)
+        collect_effect_origins(rest, &uf_, origins);
+
+    // Build curried arrow type: a -> b -> !{E|r} ret  (effects on innermost arrow)
     MonoTypePtr fn_type = body_type;
-    for (int i = (int)param_types.size() - 1; i >= 0; i--)
-        fn_type = arena_.make_arrow(param_types[i], fn_type);
+    if (param_types.empty()) {
+        // No arrow wrapper (historical nullary); body effects escape to ambient.
+        if (ambient_effects_) {
+            for (auto& l : latent) {
+                auto it = origins.find(l);
+                ambient_effects_->add(l, it != origins.end() ? it->second : node->source_context);
+            }
+            if (latent_rest) ambient_effects_->add_rest(latent_rest);
+        }
+        fn_type = body_type;
+    } else {
+        for (int i = (int)param_types.size() - 1; i >= 0; i--) {
+            if (i == (int)param_types.size() - 1)
+                fn_type = arena_.make_arrow(param_types[i], fn_type, latent, latent_rest, origins);
+            else
+                fn_type = arena_.make_arrow(param_types[i], fn_type);
+        }
+    }
 
     check_param_borrow_annotations(node);
     return fn_type;
@@ -571,6 +642,27 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr* node, std::shared_ptr<TypeEnv> e
             error_count_++;
             return arena_.fresh_var(level);
         }
+    } else if (auto* mc = dynamic_cast<ModuleCall*>(node->call)) {
+        if (import_src_) {
+            std::string mod;
+            if (auto* fqn = std::get_if<FqnExpr*>(&mc->fqn)) {
+                if (*fqn) mod = (*fqn)->to_string();
+            } else if (auto* expr = std::get_if<ExprNode*>(&mc->fqn)) {
+                if (*expr && (*expr)->get_type() == AST_FQN_EXPR)
+                    mod = static_cast<FqnExpr*>(*expr)->to_string();
+                else if (*expr && (*expr)->get_type() == AST_IDENTIFIER_EXPR)
+                    mod = static_cast<IdentifierExpr*>(*expr)->name->value;
+            }
+            if (!mod.empty() && mc->funName) {
+                auto sig = import_src_->imported_function_sig(mod, mc->funName->value);
+                if (sig)
+                    callee_type = mono_from_import_sig(*sig, level);
+            }
+        }
+        if (!callee_type) {
+            callee_type = arena_.fresh_var(level);
+            uf_.add_var(callee_type->var_id, level);
+        }
     } else if (auto* ec = dynamic_cast<ExprCall*>(node->call)) {
         callee_type = infer(ec->expr, env, level);
     } else {
@@ -587,14 +679,28 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr* node, std::shared_ptr<TypeEnv> e
 
         auto* arg_type = infer(arg_node, env, level);
 
+        auto* resolved = unifier_.resolve(result_type);
+        if (resolved && resolved->tag == MonoType::Arrow) {
+            join_arrow_effects(resolved, node->source_context);
+            if (!unifier_.unify(resolved->param_type, arg_type, node->source_context,
+                                "in function application"))
+                return arena_.fresh_var(level);
+            result_type = resolved->return_type;
+            continue;
+        }
+
         auto* result_var = arena_.fresh_var(level);
         uf_.add_var(result_var->var_id, level);
-        auto* expected_fn = arena_.make_arrow(arg_type, result_var);
+        auto* effect_rest = arena_.fresh_var(level);
+        uf_.add_var(effect_rest->var_id, level);
+        auto* expected_fn = arena_.make_arrow(arg_type, result_var, {}, effect_rest);
 
         if (!unifier_.unify(result_type, expected_fn, node->source_context,
                             "in function application"))
             return result_var;
 
+        auto* applied = unifier_.resolve(expected_fn);
+        join_arrow_effects(applied, node->source_context);
         result_type = result_var;
     }
 
@@ -717,6 +823,11 @@ void TypeChecker::collect_free_vars(MonoTypePtr type, int level, std::vector<Typ
     if (type->tag == MonoType::Arrow) {
         collect_free_vars(type->param_type, level, vars);
         collect_free_vars(type->return_type, level, vars);
+        if (type->effect_rest) collect_free_vars(type->effect_rest, level, vars);
+    }
+    if (type->tag == MonoType::MEffectRow) {
+        if (type->effect_rest) collect_free_vars(type->effect_rest, level, vars);
+        for (auto* extra : type->args) collect_free_vars(extra, level, vars);
     }
     if (type->tag == MonoType::App)
         for (auto* a : type->args) collect_free_vars(a, level, vars);
@@ -744,9 +855,21 @@ MonoTypePtr TypeChecker::substitute(MonoTypePtr type,
         return type;
     }
     if (type->tag == MonoType::Con) return type;
-    if (type->tag == MonoType::Arrow)
+    if (type->tag == MonoType::Arrow) {
+        MonoTypePtr rest = type->effect_rest ? substitute(type->effect_rest, subst) : nullptr;
         return arena_.make_arrow(substitute(type->param_type, subst),
-                                  substitute(type->return_type, subst));
+                                  substitute(type->return_type, subst),
+                                  type->effect_labels, rest, type->effect_origins);
+    }
+    if (type->tag == MonoType::MEffectRow) {
+        MonoTypePtr rest = type->effect_rest ? substitute(type->effect_rest, subst) : nullptr;
+        std::vector<MonoTypePtr> extras;
+        extras.reserve(type->args.size());
+        for (auto* extra : type->args)
+            extras.push_back(substitute(extra, subst));
+        return arena_.make_effect_row(type->effect_labels, rest, std::move(extras),
+                                      type->effect_origins);
+    }
     if (type->tag == MonoType::App) {
         std::vector<MonoTypePtr> new_args;
         for (auto* a : type->args) new_args.push_back(substitute(a, subst));
@@ -1169,48 +1292,154 @@ void TypeChecker::register_effect(const std::string& effect_name, const std::str
 
 // ===== Perform =====
 
+bool TypeChecker::is_effect_handled(const std::string& op_key) const {
+    for (auto it = handler_scope_stack_.rbegin(); it != handler_scope_stack_.rend(); ++it) {
+        for (auto& handled_op : *it) {
+            if (handled_op == op_key) return true;
+        }
+    }
+    return false;
+}
+
+void TypeChecker::close_recursive_self_rests(MonoTypePtr fn_type) {
+    fn_type = unifier_.resolve(fn_type);
+    if (!fn_type || fn_type->tag != MonoType::Arrow) return;
+
+    std::vector<std::string> ignored;
+    std::vector<MonoTypePtr> param_rests;
+    for (auto* t = fn_type; t && t->tag == MonoType::Arrow; t = unifier_.resolve(t->return_type)) {
+        collect_effect_row_parts(unifier_.resolve(t->param_type), &uf_, std::nullopt,
+                                 ignored, param_rests);
+    }
+
+    std::unordered_set<TypeId> param_ids;
+    for (auto* r : param_rests)
+        if (r && r->tag == MonoType::Var) param_ids.insert(r->var_id);
+
+    MonoTypePtr innermost = fn_type;
+    while (auto* ret = unifier_.resolve(innermost->return_type)) {
+        if (ret->tag != MonoType::Arrow) break;
+        innermost = ret;
+    }
+    innermost = unifier_.resolve(innermost);
+    if (!innermost || innermost->tag != MonoType::Arrow) return;
+
+    std::vector<std::string> result_labels;
+    std::vector<MonoTypePtr> result_rests;
+    collect_effect_row_parts(innermost->effect_rest, &uf_, std::nullopt,
+                             result_labels, result_rests);
+    SourceLocation loc = SourceLocation::unknown();
+    for (auto* rest : result_rests) {
+        rest = unifier_.resolve(rest);
+        if (!rest || rest->tag != MonoType::Var) continue;
+        if (param_ids.count(rest->var_id)) continue;
+        unifier_.unify(rest, arena_.make_effect_row({}, nullptr), loc,
+                       "closing recursive self-application effect rest");
+    }
+}
+
+void TypeChecker::join_arrow_effects(MonoTypePtr arrow, const SourceLocation& loc) {
+    if (!ambient_effects_ || !arrow) return;
+    arrow = unifier_.resolve(arrow);
+    if (!arrow || (arrow->tag != MonoType::Arrow && arrow->tag != MonoType::MEffectRow))
+        return;
+    auto labels = collect_effect_labels(arrow, &uf_);
+    std::vector<std::string> rest_labels;
+    std::vector<MonoTypePtr> opens;
+    collect_effect_row_parts(arrow->effect_rest, &uf_, std::nullopt, rest_labels, opens);
+    if (arrow->tag == MonoType::MEffectRow) {
+        for (auto* extra : arrow->args)
+            collect_effect_row_parts(extra, &uf_, std::nullopt, rest_labels, opens);
+    }
+    for (auto* rest : opens)
+        ambient_effects_->add_rest(rest);
+    std::unordered_map<std::string, SourceLocation> origins;
+    collect_effect_origins(arrow, &uf_, origins);
+    std::vector<std::string> uncovered;
+    for (auto& l : labels) {
+        if (!is_effect_handled(l)) {
+            SourceLocation origin = loc;
+            auto it = origins.find(l);
+            if (it != origins.end() && it->second.is_valid())
+                origin = it->second;
+            ambient_effects_->add(l, origin);
+            uncovered.push_back(l);
+        }
+    }
+    // Call-site check: applying an effectful function at the top level (or any
+    // ambient that is the program root) without a covering handler is E0202.
+    if (!uncovered.empty() && ambient_effects_ == &top_escaping_)
+        check_effects_covered(uncovered, loc, &ambient_effects_->origins);
+}
+
+void TypeChecker::check_effects_covered(
+    const std::vector<std::string>& labels, const SourceLocation& call_loc,
+    const std::unordered_map<std::string, SourceLocation>* origins) {
+    for (auto& label : labels) {
+        if (is_effect_handled(label)) continue;
+        SourceLocation report = call_loc;
+        if (origins) {
+            auto it = origins->find(label);
+            if (it != origins->end() && it->second.is_valid())
+                report = it->second;
+        }
+        diag_.error(report, ErrorCode::E0202,
+                    "unhandled effect '" + label + "' escapes; "
+                    "wrap the call in `handle ... with` that covers " + label);
+        if (call_loc.is_valid() &&
+            (call_loc.line != report.line || call_loc.column != report.column ||
+             call_loc.offset != report.offset)) {
+            diag_.note(call_loc, "effect '" + label + "' escapes at this call");
+        }
+        error_count_++;
+    }
+}
+
 MonoTypePtr TypeChecker::infer_perform(PerformExpr* node, std::shared_ptr<TypeEnv> env, int level) {
     std::string op_key = node->effect_name + "." + node->operation_name;
 
-    // Check handler scope — is this perform inside a matching handle?
-    bool handled = false;
-    for (auto it = handler_scope_stack_.rbegin(); it != handler_scope_stack_.rend(); ++it) {
-        for (auto& handled_op : *it) {
-            if (handled_op == op_key) { handled = true; break; }
-        }
-        if (handled) break;
-    }
+    bool handled = is_effect_handled(op_key);
     if (!handled) {
         diag_.warning(node->source_context,
                       "effect operation '" + op_key + "' may not be handled; "
                       "ensure a 'handle...with' block provides a handler for " + node->effect_name,
                       WarningFlag::UnhandledEffect);
+        if (ambient_effects_)
+            ambient_effects_->add(op_key, node->source_context);
     }
 
     // Look up the operation's type signature
     auto it = effect_ops_.find(op_key);
     if (it != effect_ops_.end()) {
         auto& info = it->second;
-        // Check argument count
-        // Filter out unit args from the perform call (matching codegen behavior)
+        // Match codegen: skip unit args in `perform Op ()` when the op takes no params.
+        std::vector<AstNode*> meaningful_args;
+        for (auto* arg : node->args) {
+            if (arg && arg->get_type() == AST_UNIT_EXPR && info.param_types.empty())
+                continue;
+            meaningful_args.push_back(arg);
+        }
         size_t expected = info.param_types.size();
-        size_t actual = node->args.size();
+        size_t actual = meaningful_args.size();
         if (actual != expected) {
             diag_.error(node->source_context, ErrorCode::E0201,
                         "effect operation '" + op_key + "' expects " +
                         std::to_string(expected) + " argument(s), got " + std::to_string(actual));
             error_count_++;
         }
-        // Type-check arguments
-        for (size_t i = 0; i < node->args.size() && i < info.param_types.size(); i++) {
-            auto* arg_type = infer(node->args[i], env, level);
+        for (size_t i = 0; i < meaningful_args.size() && i < info.param_types.size(); i++) {
+            auto* arg_type = infer(meaningful_args[i], env, level);
             unifier_.unify(arg_type, info.param_types[i], node->source_context,
                            "in argument " + std::to_string(i + 1) + " of perform " + op_key);
+        }
+        // Still walk skipped unit args for completeness
+        for (auto* arg : node->args) {
+            if (arg && arg->get_type() == AST_UNIT_EXPR && info.param_types.empty())
+                infer(arg, env, level);
         }
         return info.return_type;
     }
 
-    // Unknown effect — infer args, return fresh var
     for (auto* arg : node->args)
         infer(arg, env, level);
 
@@ -1222,7 +1451,6 @@ MonoTypePtr TypeChecker::infer_perform(PerformExpr* node, std::shared_ptr<TypeEn
 // ===== Handle =====
 
 MonoTypePtr TypeChecker::infer_handle(HandleExpr* node, std::shared_ptr<TypeEnv> env, int level) {
-    // Collect which operations this handle block covers
     std::vector<std::string> handled_ops;
     for (auto* clause : node->clauses) {
         if (!clause->is_return_clause) {
@@ -1230,18 +1458,31 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr* node, std::shared_ptr<TypeEnv>
         }
     }
 
-    // Push handler scope, then infer body
+    // Body effects are collected separately; handled ops are subtracted before
+    // joining the remainder into the outer ambient row.
+    EscapingEffects body_fx;
+    auto* saved_fx = ambient_effects_;
+    ambient_effects_ = &body_fx;
+
     handler_scope_stack_.push_back(handled_ops);
     auto* body_type = infer(node->body, env, level);
     handler_scope_stack_.pop_back();
 
-    // The result type of the whole handle expression.
-    // If there's a return clause, it transforms the body result — so result_type
-    // may differ from body_type. Start with a fresh var.
+    ambient_effects_ = saved_fx;
+    body_fx.subtract(handled_ops);
+    if (ambient_effects_) {
+        for (auto& l : body_fx.labels) {
+            auto it = body_fx.origins.find(l);
+            ambient_effects_->add(l, it != body_fx.origins.end() ? it->second
+                                                                : node->source_context);
+        }
+        for (auto* rest : body_fx.open_rests)
+            ambient_effects_->add_rest(rest);
+    }
+
     auto* result_type = arena_.fresh_var(level);
     uf_.add_var(result_type->var_id, level);
 
-    // Check for a return clause first to establish the result type
     bool has_return = false;
     for (auto* clause : node->clauses) {
         if (clause->is_return_clause) {
@@ -1254,20 +1495,17 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr* node, std::shared_ptr<TypeEnv>
             break;
         }
     }
-    // No return clause → result is body type
     if (!has_return)
         unifier_.unify(result_type, body_type, node->body->source_context, "in handle body");
 
     result_type = unifier_.resolve(result_type);
 
-    // Infer operation handler clauses
     for (auto* clause : node->clauses) {
         if (clause->is_return_clause) continue;
 
         auto clause_env = env->child();
         std::string op_key = clause->effect_name + "." + clause->operation_name;
 
-        // Bind operation argument names
         auto op_it = effect_ops_.find(op_key);
         for (size_t i = 0; i < clause->arg_names.size(); i++) {
             MonoTypePtr arg_type;
@@ -1280,7 +1518,6 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr* node, std::shared_ptr<TypeEnv>
             clause_env->bind(clause->arg_names[i], arg_type);
         }
 
-        // Bind resume: function from op's return type to result type
         if (!clause->resume_name.empty()) {
             MonoTypePtr resume_param;
             if (op_it != effect_ops_.end())
@@ -1300,6 +1537,175 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr* node, std::shared_ptr<TypeEnv>
     }
 
     return result_type;
+}
+
+void TypeChecker::bind_import_name(std::shared_ptr<TypeEnv> env, const std::string& module_fqn,
+                                   const std::string& func_name, const std::string& bind_name,
+                                   int level) {
+    if (import_src_) {
+        auto sig = import_src_->imported_function_sig(module_fqn, func_name);
+        if (sig) {
+            auto* ty = mono_from_import_sig(*sig, level);
+            env->bind_scheme(bind_name, generalize(ty, -1));
+            return;
+        }
+    }
+    auto* v = arena_.fresh_var(level);
+    uf_.add_var(v->var_id, level);
+    env->bind(bind_name, v);
+}
+
+MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int level) {
+    auto fresh = [this, level]() {
+        auto* v = arena_.fresh_var(level);
+        uf_.add_var(v->var_id, level);
+        return v;
+    };
+    auto linear = [&]() { return arena_.make_app("Linear", {fresh()}); };
+
+    SerializedFnEffects spec = sig.effect_spec;
+    if (spec.empty() && !sig.effect_labels.empty())
+        spec.result.labels = sig.effect_labels;
+
+    std::unordered_map<int, MonoTypePtr> rest_vars;
+    auto rest_for = [&](const SerializedEffectRow& row) -> MonoTypePtr {
+        std::vector<MonoTypePtr> opens;
+        for (int id : row.rest_ids) {
+            auto it = rest_vars.find(id);
+            if (it == rest_vars.end()) {
+                auto* v = fresh();
+                rest_vars[id] = v;
+                opens.push_back(v);
+            } else {
+                opens.push_back(it->second);
+            }
+        }
+        return arena_.pack_effect_rest(opens);
+    };
+
+    auto param_row = [&](int i) -> const SerializedEffectRow* {
+        for (auto& [idx, row] : spec.params)
+            if (idx == i) return &row;
+        if (i >= 0 && i < (int)sig.param_effect_rows.size() && sig.param_effect_rows[(size_t)i])
+            return &*sig.param_effect_rows[(size_t)i];
+        return nullptr;
+    };
+
+    MonoTypePtr ret;
+    if (!sig.tuple_elem_linear.empty()) {
+        std::vector<MonoTypePtr> elems;
+        elems.reserve(sig.tuple_elem_linear.size());
+        for (char lin : sig.tuple_elem_linear)
+            elems.push_back(lin ? linear() : fresh());
+        ret = arena_.make_tuple(elems);
+    } else if (sig.return_linear) {
+        ret = linear();
+    } else {
+        ret = fresh();
+    }
+
+    MonoTypePtr fn = ret;
+    for (int i = sig.arity - 1; i >= 0; i--) {
+        bool lin = i < (int)sig.param_linear.size() && sig.param_linear[(size_t)i];
+        MonoTypePtr param = lin ? linear() : fresh();
+        if (auto* prow = param_row(i)) {
+            param = arena_.make_arrow(fresh(), fresh(), prow->labels, rest_for(*prow));
+        }
+        if (i == sig.arity - 1)
+            fn = arena_.make_arrow(param, fn, spec.result.labels, rest_for(spec.result));
+        else
+            fn = arena_.make_arrow(param, fn);
+    }
+    if (sig.arity == 0 && (!spec.result.labels.empty() || spec.result.open()))
+        fn = arena_.make_arrow(arena_.make_con(TyCon::Unit), ret,
+                               spec.result.labels, rest_for(spec.result));
+    return fn;
+}
+
+MonoTypePtr TypeChecker::from_ast_type(const yona::compiler::types::Type& t, int level) {
+    using yona::compiler::types::BuiltinType;
+    using yona::compiler::types::FunctionType;
+    using yona::compiler::types::NamedType;
+    using yona::compiler::types::ProductType;
+    using yona::compiler::types::PromiseType;
+    using yona::compiler::types::RefinedType;
+    using yona::compiler::types::SingleItemCollectionType;
+
+    if (std::holds_alternative<std::nullptr_t>(t)) {
+        auto* v = arena_.fresh_var(level);
+        uf_.add_var(v->var_id, level);
+        return v;
+    }
+    if (std::holds_alternative<BuiltinType>(t)) {
+        switch (std::get<BuiltinType>(t)) {
+            case BuiltinType::Bool: return arena_.make_con(TyCon::Bool);
+            case BuiltinType::String: return arena_.make_con(TyCon::String);
+            case BuiltinType::Symbol: return arena_.make_con(TyCon::Symbol);
+            case BuiltinType::Unit: return arena_.make_con(TyCon::Unit);
+            case BuiltinType::Float32:
+            case BuiltinType::Float64:
+            case BuiltinType::Float128:
+                return arena_.make_con(TyCon::Float);
+            case BuiltinType::Seq:
+                return arena_.make_app("Seq", {[&]() {
+                    auto* v = arena_.fresh_var(level);
+                    uf_.add_var(v->var_id, level);
+                    return v;
+                }()});
+            case BuiltinType::Set:
+                return arena_.make_app("Set", {[&]() {
+                    auto* v = arena_.fresh_var(level);
+                    uf_.add_var(v->var_id, level);
+                    return v;
+                }()});
+            default:
+                return arena_.make_con(TyCon::Int);
+        }
+    }
+    if (std::holds_alternative<std::shared_ptr<FunctionType>>(t)) {
+        auto& ft = std::get<std::shared_ptr<FunctionType>>(t);
+        return arena_.make_arrow(from_ast_type(ft->argumentType, level),
+                                 from_ast_type(ft->returnType, level));
+    }
+    if (std::holds_alternative<std::shared_ptr<ProductType>>(t)) {
+        auto& pt = std::get<std::shared_ptr<ProductType>>(t);
+        std::vector<MonoTypePtr> elems;
+        elems.reserve(pt->types.size());
+        for (auto& e : pt->types)
+            elems.push_back(from_ast_type(e, level));
+        return arena_.make_tuple(elems);
+    }
+    if (std::holds_alternative<std::shared_ptr<NamedType>>(t)) {
+        auto& nt = std::get<std::shared_ptr<NamedType>>(t);
+        if (nt->name == "Linear") {
+            MonoTypePtr inner;
+            if (!std::holds_alternative<std::nullptr_t>(nt->type))
+                inner = from_ast_type(nt->type, level);
+            else {
+                inner = arena_.fresh_var(level);
+                uf_.add_var(inner->var_id, level);
+            }
+            return arena_.make_app("Linear", {inner});
+        }
+        return arena_.make_app(nt->name, {});
+    }
+    if (std::holds_alternative<std::shared_ptr<PromiseType>>(t)) {
+        auto& pr = std::get<std::shared_ptr<PromiseType>>(t);
+        return from_ast_type(pr->valueType, level); // auto-await: Promise T ~ T
+    }
+    if (std::holds_alternative<std::shared_ptr<RefinedType>>(t)) {
+        auto& rt = std::get<std::shared_ptr<RefinedType>>(t);
+        return from_ast_type(rt->base_type, level);
+    }
+    if (std::holds_alternative<std::shared_ptr<SingleItemCollectionType>>(t)) {
+        auto& col = std::get<std::shared_ptr<SingleItemCollectionType>>(t);
+        auto* elem = from_ast_type(col->valueType, level);
+        const char* name = (col->kind == SingleItemCollectionType::Seq) ? "Seq" : "Set";
+        return arena_.make_app(name, {elem});
+    }
+    auto* v = arena_.fresh_var(level);
+    uf_.add_var(v->var_id, level);
+    return v;
 }
 
 } // namespace yona::compiler::typechecker

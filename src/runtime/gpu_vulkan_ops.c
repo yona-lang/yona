@@ -20,6 +20,12 @@ int yona_gpu_vulkan_try_map_mul_int64(int64_t factor, int64_t* arr, int64_t** ou
     return 0;
 }
 
+int yona_gpu_vulkan_try_map_square_int64(int64_t* arr, int64_t** out) {
+    (void)arr;
+    (void)out;
+    return 0;
+}
+
 int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
     (void)arr;
     (void)out_sum;
@@ -30,6 +36,20 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
     (void)threshold;
     (void)arr;
     (void)out;
+    return 0;
+}
+
+int yona_gpu_vulkan_try_filter_less_than_int64(int64_t threshold, int64_t* arr, int64_t** out) {
+    (void)threshold;
+    (void)arr;
+    (void)out;
+    return 0;
+}
+
+int yona_gpu_vulkan_try_map_reduce_graph_int64(int64_t* stages, int64_t* arr, int64_t* out_sum) {
+    (void)stages;
+    (void)arr;
+    (void)out_sum;
     return 0;
 }
 
@@ -56,14 +76,18 @@ VkResult yona_vk_compute_ensure_mapadd_pipe(void);
 VkResult yona_vk_compute_ensure_mapadd_i32_pipe(void);
 VkResult yona_vk_compute_ensure_mapmul_pipe(void);
 VkResult yona_vk_compute_ensure_mapmul_i32_pipe(void);
+VkResult yona_vk_compute_ensure_mapsquare_pipe(void);
+VkResult yona_vk_compute_ensure_mapsquare_i32_pipe(void);
 VkResult yona_vk_compute_ensure_reduce_pipe(void);
 VkResult yona_vk_compute_ensure_reduce_i32_pipe(void);
 VkResult yona_vk_compute_ensure_filter_mark_pipe(void);
+VkResult yona_vk_compute_ensure_filter_mark_lt_pipe(void);
 VkResult yona_vk_compute_ensure_filter_scatter_pipe(void);
 VkResult yona_vk_compute_ensure_filter_flags_to_i64_pipe(void);
 VkResult yona_vk_compute_ensure_filter_prefix_pipe(void);
 VkResult yona_vk_compute_ensure_filter_inc_to_exc_pipe(void);
 VkResult yona_vk_compute_ensure_filter_mark_i32_pipe(void);
+VkResult yona_vk_compute_ensure_filter_mark_lt_i32_pipe(void);
 VkResult yona_vk_compute_ensure_filter_scatter_i32_pipe(void);
 VkResult yona_vk_compute_ensure_filter_flags_to_i32_pipe(void);
 VkResult yona_vk_compute_ensure_filter_prefix_i32_pipe(void);
@@ -72,14 +96,18 @@ YonaVkSimplePipe* yona_vk_compute_mapadd_pipe(void);
 YonaVkSimplePipe* yona_vk_compute_mapadd_i32_pipe(void);
 YonaVkSimplePipe* yona_vk_compute_mapmul_pipe(void);
 YonaVkSimplePipe* yona_vk_compute_mapmul_i32_pipe(void);
+YonaVkSimplePipe* yona_vk_compute_mapsquare_pipe(void);
+YonaVkSimplePipe* yona_vk_compute_mapsquare_i32_pipe(void);
 YonaVkReducePipe* yona_vk_compute_reduce_pipe(void);
 YonaVkReducePipe* yona_vk_compute_reduce_i32_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_mark_pipe(void);
+YonaVkReducePipe* yona_vk_compute_filter_mark_lt_pipe(void);
 YonaVkScatterPipe* yona_vk_compute_filter_scatter_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_flags_to_i64_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_prefix_pipe(void);
 YonaVkScatterPipe* yona_vk_compute_filter_inc_to_exc_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_mark_i32_pipe(void);
+YonaVkReducePipe* yona_vk_compute_filter_mark_lt_i32_pipe(void);
 YonaVkScatterPipe* yona_vk_compute_filter_scatter_i32_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_flags_to_i32_pipe(void);
 YonaVkReducePipe* yona_vk_compute_filter_prefix_i32_pipe(void);
@@ -181,6 +209,17 @@ static int yona_vk_i32_map_mul_fits(const int64_t* arr, int64_t factor) {
         int64_t v = arr[1 + i];
         if (v < (int64_t)INT32_MIN || v > (int64_t)INT32_MAX) return 0;
         int64_t p = v * factor;
+        if (p < (int64_t)INT32_MIN || p > (int64_t)INT32_MAX) return 0;
+    }
+    return 1;
+}
+
+static int yona_vk_i32_map_square_fits(const int64_t* arr) {
+    int64_t len = arr[0];
+    for (int64_t i = 0; i < len; i++) {
+        int64_t v = arr[1 + i];
+        if (v < (int64_t)INT32_MIN || v > (int64_t)INT32_MAX) return 0;
+        int64_t p = v * v;
         if (p < (int64_t)INT32_MIN || p > (int64_t)INT32_MAX) return 0;
     }
     return 1;
@@ -898,6 +937,44 @@ int yona_gpu_vulkan_try_map_mul_int64(int64_t factor, int64_t* arr, int64_t** ou
     return ok;
 }
 
+int yona_gpu_vulkan_try_map_square_int64(int64_t* arr, int64_t** out) {
+    *out = NULL;
+    if (!yona_vk_env_mapmul()) {
+        yona_vk_note_cpy("mapsquare: set YONA_GPU_VULKAN_MAPMUL=1 or YONA_GPU_VULKAN_COMPUTE=1");
+        return 0;
+    }
+    if (!yona_vk_common_precheck(arr, "mapsquare")) return 0;
+
+    int64_t min_len =
+        yona_vk_min_len_two("YONA_GPU_VULKAN_MIN_LEN", "YONA_GPU_VULKAN_MAPMUL_MIN_LEN");
+    int64_t len = arr[0];
+    if (len < min_len) {
+        yona_vk_note_cpy("mapsquare: IntArray shorter than configured GPU min length");
+        return 0;
+    }
+    if (len > (int64_t)0x7fffffff) {
+        yona_vk_note_cpy("mapsquare: IntArray length exceeds supported range");
+        return 0;
+    }
+
+    int use_i32 = yona_vk_prefer_i32();
+    if (use_i32 && !yona_vk_i32_map_square_fits(arr)) {
+        yona_vk_note_cpy("mapsquare: values exceed int32; GPU i32 path skipped (no shaderInt64)");
+        return 0;
+    }
+
+    int ok = 0;
+    yona_vk_compute_submit_lock();
+    if (use_i32)
+        ok = yona_vk_run_simple_map("mapsquare", yona_vk_compute_ensure_mapsquare_i32_pipe,
+                                   yona_vk_compute_mapsquare_i32_pipe(), 0, arr, out, 1);
+    else
+        ok = yona_vk_run_simple_map("mapsquare", yona_vk_compute_ensure_mapsquare_pipe,
+                                   yona_vk_compute_mapsquare_pipe(), 0, arr, out, 0);
+    yona_vk_compute_submit_unlock();
+    return ok;
+}
+
 int yona_gpu_vulkan_try_reduce_sum_int64(int64_t* arr, int64_t* out_sum) {
     *out_sum = 0;
     if (!yona_vk_env_reduce()) {
@@ -1365,7 +1442,17 @@ reduce_fail:
     return 0;
 }
 
+static int yona_vk_try_filter_int64(int64_t threshold, int64_t* arr, int64_t** out, int less_than);
+
 int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* arr, int64_t** out) {
+    return yona_vk_try_filter_int64(threshold, arr, out, 0);
+}
+
+int yona_gpu_vulkan_try_filter_less_than_int64(int64_t threshold, int64_t* arr, int64_t** out) {
+    return yona_vk_try_filter_int64(threshold, arr, out, 1);
+}
+
+static int yona_vk_try_filter_int64(int64_t threshold, int64_t* arr, int64_t** out, int less_than) {
     *out = NULL;
     if (!yona_vk_env_filter()) {
         yona_vk_note_cpy("filter: set YONA_GPU_VULKAN_FILTER=1 or YONA_GPU_VULKAN_COMPUTE=1");
@@ -1441,15 +1528,23 @@ int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t* ar
 
     VkResult r = VK_SUCCESS;
     const int gpu_prefix = !yona_vk_filter_use_cpu_prefix();
-    YonaVkReducePipe* mp =
-        use_i32 ? yona_vk_compute_filter_mark_i32_pipe() : yona_vk_compute_filter_mark_pipe();
+    YonaVkReducePipe* mp = NULL;
+    if (less_than)
+        mp = use_i32 ? yona_vk_compute_filter_mark_lt_i32_pipe()
+                     : yona_vk_compute_filter_mark_lt_pipe();
+    else
+        mp = use_i32 ? yona_vk_compute_filter_mark_i32_pipe() : yona_vk_compute_filter_mark_pipe();
     YonaVkScatterPipe* sp =
         use_i32 ? yona_vk_compute_filter_scatter_i32_pipe() : yona_vk_compute_filter_scatter_pipe();
     YonaVkReducePipe* ft = NULL;
     YonaVkReducePipe* pp = NULL;
     YonaVkScatterPipe* ix = NULL;
-    r = use_i32 ? yona_vk_compute_ensure_filter_mark_i32_pipe()
-                : yona_vk_compute_ensure_filter_mark_pipe();
+    if (less_than)
+        r = use_i32 ? yona_vk_compute_ensure_filter_mark_lt_i32_pipe()
+                    : yona_vk_compute_ensure_filter_mark_lt_pipe();
+    else
+        r = use_i32 ? yona_vk_compute_ensure_filter_mark_i32_pipe()
+                    : yona_vk_compute_ensure_filter_mark_pipe();
     if (r != VK_SUCCESS) {
         char b[120];
         snprintf(b, sizeof b, "filter: mark pipeline ensure VkResult=%d", (int)r);
@@ -2437,6 +2532,557 @@ filt_fail:
     free(packed_in);
     yona_vk_compute_submit_unlock();
     return 0;
+}
+
+static int yona_vk_env_graph(void) {
+    if (yona_vk_env_compute()) return 1;
+    const char* g = getenv("YONA_GPU_VULKAN_GRAPH");
+    return g && strcmp(g, "1") == 0;
+}
+
+static void yona_vk_barrier2_ssbo(PFN_vkCmdPipelineBarrier2KHR pfn_b2, VkCommandBuffer cmd,
+                                 VkPipelineStageFlags2 src, VkPipelineStageFlags2 dst,
+                                 VkAccessFlags2 src_acc, VkAccessFlags2 dst_acc) {
+    VkMemoryBarrier2 mb = {0};
+    mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+    mb.srcStageMask = src;
+    mb.dstStageMask = dst;
+    mb.srcAccessMask = src_acc;
+    mb.dstAccessMask = dst_acc;
+    VkDependencyInfo dep = {0};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.memoryBarrierCount = 1;
+    dep.pMemoryBarriers = &mb;
+    pfn_b2(cmd, &dep);
+}
+
+int yona_gpu_vulkan_try_map_reduce_graph_int64(int64_t* stages, int64_t* arr, int64_t* out_sum) {
+    *out_sum = 0;
+    if (!stages || !arr) return 0;
+    if (!yona_vk_env_graph()) {
+        yona_vk_note_cpy("graph: set YONA_GPU_VULKAN_GRAPH=1 or YONA_GPU_VULKAN_COMPUTE=1");
+        return 0;
+    }
+    if (!yona_vk_common_precheck(arr, "graph")) return 0;
+
+    int64_t nflat = stages[0];
+    if (nflat < 0 || (nflat % 2) != 0) {
+        yona_vk_note_cpy("graph: stage IntArray length must be even (op, arg) pairs");
+        return 0;
+    }
+    int64_t nstages = nflat / 2;
+    if (nstages > 64) {
+        yona_vk_note_cpy("graph: too many map stages");
+        return 0;
+    }
+    for (int64_t s = 0; s < nstages; s++) {
+        int64_t op = stages[1 + s * 2];
+        if (op != 0 && op != 1 && op != 2) {
+            yona_vk_note_cpy("graph: unknown map op tag");
+            return 0;
+        }
+    }
+
+    int64_t min_len =
+        yona_vk_min_len_two("YONA_GPU_VULKAN_MIN_LEN", "YONA_GPU_VULKAN_GRAPH_MIN_LEN");
+    int64_t len = arr[0];
+    if (len < min_len) {
+        yona_vk_note_cpy("graph: IntArray shorter than configured GPU min length");
+        return 0;
+    }
+    if (len > (int64_t)0x7fffffff) {
+        yona_vk_note_cpy("graph: IntArray length exceeds supported range");
+        return 0;
+    }
+
+    int use_i32 = yona_vk_prefer_i32();
+    if (use_i32) {
+        int64_t* scratch = (int64_t*)malloc((size_t)(len + 1) * sizeof(int64_t));
+        if (!scratch) return 0;
+        scratch[0] = len;
+        memcpy(scratch + 1, arr + 1, (size_t)len * sizeof(int64_t));
+        for (int64_t s = 0; s < nstages; s++) {
+            int64_t op = stages[1 + s * 2];
+            int64_t arg = stages[1 + s * 2 + 1];
+            int okfit = 0;
+            if (op == 0)
+                okfit = yona_vk_i32_map_add_fits(scratch, arg);
+            else if (op == 1)
+                okfit = yona_vk_i32_map_mul_fits(scratch, arg);
+            else if (op == 2)
+                okfit = yona_vk_i32_map_square_fits(scratch);
+            else {
+                free(scratch);
+                yona_vk_note_cpy("graph: unknown map op tag");
+                return 0;
+            }
+            if (!okfit) {
+                free(scratch);
+                yona_vk_note_cpy("graph: values exceed int32; GPU i32 path skipped");
+                return 0;
+            }
+            for (int64_t i = 0; i < len; i++) {
+                if (op == 0)
+                    scratch[1 + i] += arg;
+                else if (op == 1)
+                    scratch[1 + i] *= arg;
+                else
+                    scratch[1 + i] *= scratch[1 + i];
+            }
+        }
+        if (!yona_vk_i32_reduce_fits(scratch)) {
+            free(scratch);
+            yona_vk_note_cpy("graph: reduce exceeds int32; GPU i32 path skipped");
+            return 0;
+        }
+        free(scratch);
+    }
+
+    PFN_vkCreateDescriptorPool vkCreateDescriptorPool;
+    PFN_vkDestroyDescriptorPool vkDestroyDescriptorPool;
+    PFN_vkAllocateDescriptorSets vkAllocateDescriptorSets;
+    PFN_vkUpdateDescriptorSets vkUpdateDescriptorSets;
+    PFN_vkCreateBuffer vkCreateBuffer;
+    PFN_vkDestroyBuffer vkDestroyBuffer;
+    PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
+    PFN_vkAllocateMemory vkAllocateMemory;
+    PFN_vkFreeMemory vkFreeMemory;
+    PFN_vkBindBufferMemory vkBindBufferMemory;
+    PFN_vkMapMemory vkMapMemory;
+    PFN_vkUnmapMemory vkUnmapMemory;
+    PFN_vkInvalidateMappedMemoryRanges vkInvalidateMappedMemoryRanges;
+    PFN_vkCreateCommandPool vkCreateCommandPool;
+    PFN_vkDestroyCommandPool vkDestroyCommandPool;
+    PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
+    PFN_vkFreeCommandBuffers vkFreeCommandBuffers;
+    PFN_vkBeginCommandBuffer vkBeginCommandBuffer;
+    PFN_vkEndCommandBuffer vkEndCommandBuffer;
+    PFN_vkCmdBindPipeline vkCmdBindPipeline;
+    PFN_vkCmdBindDescriptorSets vkCmdBindDescriptorSets;
+    PFN_vkCmdPushConstants vkCmdPushConstants;
+    PFN_vkCmdDispatch vkCmdDispatch;
+    PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier;
+    PFN_vkCreateFence vkCreateFence;
+    PFN_vkDestroyFence vkDestroyFence;
+    PFN_vkQueueSubmit vkQueueSubmit;
+    PFN_vkWaitForFences vkWaitForFences;
+    PFN_vkResetFences vkResetFences;
+    if (!yona_vk_load_dispatch_pfns(
+            &vkCreateDescriptorPool, &vkDestroyDescriptorPool, &vkAllocateDescriptorSets,
+            &vkUpdateDescriptorSets, &vkCreateBuffer, &vkDestroyBuffer,
+            &vkGetBufferMemoryRequirements, &vkAllocateMemory, &vkFreeMemory, &vkBindBufferMemory,
+            &vkMapMemory, &vkUnmapMemory, &vkInvalidateMappedMemoryRanges, &vkCreateCommandPool,
+            &vkDestroyCommandPool, &vkAllocateCommandBuffers, &vkFreeCommandBuffers,
+            &vkBeginCommandBuffer, &vkEndCommandBuffer, &vkCmdBindPipeline, &vkCmdBindDescriptorSets,
+            &vkCmdPushConstants, &vkCmdDispatch, &vkCmdPipelineBarrier, &vkCreateFence,
+            &vkDestroyFence, &vkQueueSubmit, &vkWaitForFences, &vkResetFences)) {
+        yona_vk_note_cpy("graph: vkGetDeviceProcAddr returned null for a required entry point");
+        return 0;
+    }
+
+    PFN_vkQueueSubmit2KHR pfn_submit2 =
+        (PFN_vkQueueSubmit2KHR)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, "vkQueueSubmit2KHR");
+    if (!pfn_submit2)
+        pfn_submit2 = (PFN_vkQueueSubmit2KHR)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, "vkQueueSubmit2");
+    PFN_vkWaitSemaphoresKHR pfn_wait_sem =
+        (PFN_vkWaitSemaphoresKHR)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, "vkWaitSemaphoresKHR");
+    if (!pfn_wait_sem)
+        pfn_wait_sem = (PFN_vkWaitSemaphoresKHR)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, "vkWaitSemaphores");
+    PFN_vkCmdPipelineBarrier2KHR pfn_b2 =
+        (PFN_vkCmdPipelineBarrier2KHR)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, "vkCmdPipelineBarrier2KHR");
+    if (!pfn_b2)
+        pfn_b2 = (PFN_vkCmdPipelineBarrier2KHR)(void*)yona_pfn_vkGetDeviceProcAddr(yona_vk_dev, "vkCmdPipelineBarrier2");
+    PFN_vkCreateSemaphore vkCreateSemaphore = YONA_VK_DPA(vkCreateSemaphore);
+    PFN_vkDestroySemaphore vkDestroySemaphore = YONA_VK_DPA(vkDestroySemaphore);
+
+    int use_sync2 = yona_vk_sync2_enabled && pfn_submit2 && pfn_wait_sem && pfn_b2 &&
+                    vkCreateSemaphore && vkDestroySemaphore;
+
+    yona_vk_compute_submit_lock();
+
+    VkResult r;
+    if (use_i32)
+        r = yona_vk_compute_ensure_mapadd_i32_pipe();
+    else
+        r = yona_vk_compute_ensure_mapadd_pipe();
+    if (r != VK_SUCCESS) {
+        yona_vk_compute_submit_unlock();
+        return 0;
+    }
+    if (use_i32)
+        r = yona_vk_compute_ensure_mapmul_i32_pipe();
+    else
+        r = yona_vk_compute_ensure_mapmul_pipe();
+    if (r != VK_SUCCESS) {
+        yona_vk_compute_submit_unlock();
+        return 0;
+    }
+    if (use_i32)
+        r = yona_vk_compute_ensure_mapsquare_i32_pipe();
+    else
+        r = yona_vk_compute_ensure_mapsquare_pipe();
+    if (r != VK_SUCCESS) {
+        yona_vk_compute_submit_unlock();
+        return 0;
+    }
+    if (use_i32)
+        r = yona_vk_compute_ensure_reduce_i32_pipe();
+    else
+        r = yona_vk_compute_ensure_reduce_pipe();
+    if (r != VK_SUCCESS) {
+        yona_vk_compute_submit_unlock();
+        return 0;
+    }
+
+    YonaVkSimplePipe* p_add =
+        use_i32 ? yona_vk_compute_mapadd_i32_pipe() : yona_vk_compute_mapadd_pipe();
+    YonaVkSimplePipe* p_mul =
+        use_i32 ? yona_vk_compute_mapmul_i32_pipe() : yona_vk_compute_mapmul_pipe();
+    YonaVkSimplePipe* p_sq =
+        use_i32 ? yona_vk_compute_mapsquare_i32_pipe() : yona_vk_compute_mapsquare_pipe();
+    YonaVkReducePipe* p_red =
+        use_i32 ? yona_vk_compute_reduce_i32_pipe() : yona_vk_compute_reduce_pipe();
+
+    uint32_t ulen = (uint32_t)len;
+    uint32_t groups = (ulen + 63u) / 64u;
+    size_t esz = use_i32 ? sizeof(int32_t) : sizeof(int64_t);
+    VkDeviceSize nbytes_in = (VkDeviceSize)((size_t)len * esz);
+    VkDeviceSize nbytes_sums = (VkDeviceSize)((size_t)groups * esz);
+    int32_t* packed_in = NULL;
+    if (use_i32) {
+        packed_in = (int32_t*)malloc((size_t)len * sizeof(int32_t));
+        if (!packed_in) {
+            yona_vk_compute_submit_unlock();
+            return 0;
+        }
+        for (int64_t i = 0; i < len; i++) packed_in[i] = (int32_t)arr[1 + i];
+    }
+    const void* host_src = use_i32 ? (const void*)packed_in : (const void*)(arr + 1);
+
+    VkDescriptorPool dpool = VK_NULL_HANDLE;
+    VkDescriptorSet dset_add = VK_NULL_HANDLE;
+    VkDescriptorSet dset_mul = VK_NULL_HANDLE;
+    VkDescriptorSet dset_sq = VK_NULL_HANDLE;
+    VkDescriptorSet dset_red = VK_NULL_HANDLE;
+    VkBuffer buf_in = VK_NULL_HANDLE;
+    VkBuffer buf_sums = VK_NULL_HANDLE;
+    VkDeviceMemory mem_in = VK_NULL_HANDLE;
+    VkDeviceMemory mem_sums = VK_NULL_HANDLE;
+    VkCommandPool cpool = VK_NULL_HANDLE;
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    VkFence fence = VK_NULL_HANDLE;
+    VkSemaphore timeline = VK_NULL_HANDLE;
+    void* mapped_in = NULL;
+    void* mapped_sums = NULL;
+    int ok = 0;
+
+    VkDescriptorPoolSize dps = {0};
+    dps.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    dps.descriptorCount = 8;
+    VkDescriptorPoolCreateInfo dpci = {0};
+    dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    dpci.maxSets = 4;
+    dpci.poolSizeCount = 1;
+    dpci.pPoolSizes = &dps;
+    r = vkCreateDescriptorPool(yona_vk_dev, &dpci, NULL, &dpool);
+    if (r != VK_SUCCESS) goto graph_fail;
+
+    VkDescriptorSetAllocateInfo dsai_a = {0};
+    dsai_a.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    dsai_a.descriptorPool = dpool;
+    dsai_a.descriptorSetCount = 1;
+    dsai_a.pSetLayouts = &p_add->dsl;
+    r = vkAllocateDescriptorSets(yona_vk_dev, &dsai_a, &dset_add);
+    if (r != VK_SUCCESS) goto graph_fail;
+    VkDescriptorSetAllocateInfo dsai_m = {0};
+    dsai_m.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    dsai_m.descriptorPool = dpool;
+    dsai_m.descriptorSetCount = 1;
+    dsai_m.pSetLayouts = &p_mul->dsl;
+    r = vkAllocateDescriptorSets(yona_vk_dev, &dsai_m, &dset_mul);
+    if (r != VK_SUCCESS) goto graph_fail;
+    VkDescriptorSetAllocateInfo dsai_s = {0};
+    dsai_s.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    dsai_s.descriptorPool = dpool;
+    dsai_s.descriptorSetCount = 1;
+    dsai_s.pSetLayouts = &p_sq->dsl;
+    r = vkAllocateDescriptorSets(yona_vk_dev, &dsai_s, &dset_sq);
+    if (r != VK_SUCCESS) goto graph_fail;
+    VkDescriptorSetAllocateInfo dsai_r = {0};
+    dsai_r.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    dsai_r.descriptorPool = dpool;
+    dsai_r.descriptorSetCount = 1;
+    dsai_r.pSetLayouts = &p_red->dsl;
+    r = vkAllocateDescriptorSets(yona_vk_dev, &dsai_r, &dset_red);
+    if (r != VK_SUCCESS) goto graph_fail;
+
+    VkBufferCreateInfo bci = {0};
+    bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bci.size = nbytes_in;
+    bci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    r = vkCreateBuffer(yona_vk_dev, &bci, NULL, &buf_in);
+    if (r != VK_SUCCESS) goto graph_fail;
+    bci.size = nbytes_sums;
+    r = vkCreateBuffer(yona_vk_dev, &bci, NULL, &buf_sums);
+    if (r != VK_SUCCESS) goto graph_fail;
+
+    VkMemoryRequirements rq_in, rq_sums;
+    vkGetBufferMemoryRequirements(yona_vk_dev, buf_in, &rq_in);
+    vkGetBufferMemoryRequirements(yona_vk_dev, buf_sums, &rq_sums);
+    uint32_t mt_in = 0, mt_sums = 0;
+    if (yona_vk_pick_memory_type(rq_in.memoryTypeBits,
+                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                 &mt_in) != 0) {
+        yona_vk_note_cpy("graph: no HOST_VISIBLE|HOST_COHERENT memory for column SSBO");
+        goto graph_fail;
+    }
+    if (yona_vk_pick_memory_type(rq_sums.memoryTypeBits,
+                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                 &mt_sums) != 0) {
+        yona_vk_note_cpy("graph: no HOST_VISIBLE|HOST_COHERENT memory for reduce SSBO");
+        goto graph_fail;
+    }
+    VkMemoryAllocateInfo mai = {0};
+    mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    mai.allocationSize = rq_in.size;
+    mai.memoryTypeIndex = mt_in;
+    r = vkAllocateMemory(yona_vk_dev, &mai, NULL, &mem_in);
+    if (r != VK_SUCCESS) goto graph_fail;
+    mai.allocationSize = rq_sums.size;
+    mai.memoryTypeIndex = mt_sums;
+    r = vkAllocateMemory(yona_vk_dev, &mai, NULL, &mem_sums);
+    if (r != VK_SUCCESS) goto graph_fail;
+    r = vkBindBufferMemory(yona_vk_dev, buf_in, mem_in, 0);
+    if (r != VK_SUCCESS) goto graph_fail;
+    r = vkBindBufferMemory(yona_vk_dev, buf_sums, mem_sums, 0);
+    if (r != VK_SUCCESS) goto graph_fail;
+
+    r = vkMapMemory(yona_vk_dev, mem_in, 0, nbytes_in, 0, &mapped_in);
+    if (r != VK_SUCCESS) goto graph_fail;
+    r = vkMapMemory(yona_vk_dev, mem_sums, 0, nbytes_sums, 0, &mapped_sums);
+    if (r != VK_SUCCESS) goto graph_fail;
+    memcpy(mapped_in, host_src, (size_t)nbytes_in);
+    memset(mapped_sums, 0, (size_t)nbytes_sums);
+
+    VkDescriptorBufferInfo dbi_in = {0};
+    dbi_in.buffer = buf_in;
+    dbi_in.offset = 0;
+    dbi_in.range = nbytes_in;
+    VkWriteDescriptorSet w_add = {0};
+    w_add.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    w_add.dstSet = dset_add;
+    w_add.dstBinding = 0;
+    w_add.descriptorCount = 1;
+    w_add.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    w_add.pBufferInfo = &dbi_in;
+    VkWriteDescriptorSet w_mul = w_add;
+    w_mul.dstSet = dset_mul;
+    VkWriteDescriptorSet w_sq = w_add;
+    w_sq.dstSet = dset_sq;
+    vkUpdateDescriptorSets(yona_vk_dev, 1, &w_add, 0, NULL);
+    vkUpdateDescriptorSets(yona_vk_dev, 1, &w_mul, 0, NULL);
+    vkUpdateDescriptorSets(yona_vk_dev, 1, &w_sq, 0, NULL);
+
+    VkDescriptorBufferInfo dbi_red[2] = {0};
+    dbi_red[0] = dbi_in;
+    dbi_red[1].buffer = buf_sums;
+    dbi_red[1].offset = 0;
+    dbi_red[1].range = nbytes_sums;
+    VkWriteDescriptorSet w_red[2] = {0};
+    w_red[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    w_red[0].dstSet = dset_red;
+    w_red[0].dstBinding = 0;
+    w_red[0].descriptorCount = 1;
+    w_red[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    w_red[0].pBufferInfo = &dbi_red[0];
+    w_red[1] = w_red[0];
+    w_red[1].dstBinding = 1;
+    w_red[1].pBufferInfo = &dbi_red[1];
+    vkUpdateDescriptorSets(yona_vk_dev, 2, w_red, 0, NULL);
+
+    VkCommandPoolCreateInfo cpci0 = {0};
+    cpci0.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cpci0.queueFamilyIndex = yona_vk_queue_family;
+    cpci0.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    r = vkCreateCommandPool(yona_vk_dev, &cpci0, NULL, &cpool);
+    if (r != VK_SUCCESS) goto graph_fail;
+    VkCommandBufferAllocateInfo cbai = {0};
+    cbai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cbai.commandPool = cpool;
+    cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cbai.commandBufferCount = 1;
+    r = vkAllocateCommandBuffers(yona_vk_dev, &cbai, &cmd);
+    if (r != VK_SUCCESS) goto graph_fail;
+
+    VkCommandBufferBeginInfo bi = {0};
+    bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    r = vkBeginCommandBuffer(cmd, &bi);
+    if (r != VK_SUCCESS) goto graph_fail;
+
+    if (use_sync2) {
+        yona_vk_barrier2_ssbo(pfn_b2, cmd, VK_PIPELINE_STAGE_2_HOST_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_HOST_WRITE_BIT, VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
+    } else {
+        VkMemoryBarrier mb = {0};
+        mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        mb.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        mb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &mb, 0,
+                             NULL, 0, NULL);
+    }
+
+    for (int64_t s = 0; s < nstages; s++) {
+        int64_t op = stages[1 + s * 2];
+        int64_t arg = stages[1 + s * 2 + 1];
+        YonaVkSimplePipe* pipe;
+        VkDescriptorSet dset;
+        if (op == 0) {
+            pipe = p_add;
+            dset = dset_add;
+        } else if (op == 1) {
+            pipe = p_mul;
+            dset = dset_mul;
+        } else {
+            pipe = p_sq;
+            dset = dset_sq;
+        }
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe->pipe);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipe->pl, 0, 1, &dset, 0, NULL);
+        char pc[16];
+        uint32_t push_bytes;
+        if (use_i32) {
+            int32_t s32 = (int32_t)arg;
+            memcpy(pc, &s32, sizeof(int32_t));
+            memcpy(pc + sizeof(int32_t), &ulen, sizeof(uint32_t));
+            push_bytes = 8;
+        } else {
+            memcpy(pc, &arg, sizeof(int64_t));
+            memcpy(pc + sizeof(int64_t), &ulen, sizeof(uint32_t));
+            push_bytes = 12;
+        }
+        vkCmdPushConstants(cmd, pipe->pl, VK_SHADER_STAGE_COMPUTE_BIT, 0, push_bytes, pc);
+        vkCmdDispatch(cmd, groups, 1, 1);
+        if (use_sync2) {
+            yona_vk_barrier2_ssbo(pfn_b2, cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
+                                  VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
+        } else {
+            VkMemoryBarrier mb = {0};
+            mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            mb.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            mb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                                 1, &mb, 0, NULL, 0, NULL);
+        }
+    }
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, p_red->pipe);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, p_red->pl, 0, 1, &dset_red, 0, NULL);
+    vkCmdPushConstants(cmd, p_red->pl, VK_SHADER_STAGE_COMPUTE_BIT, 0, 4, &ulen);
+    vkCmdDispatch(cmd, groups, 1, 1);
+
+    if (use_sync2) {
+        yona_vk_barrier2_ssbo(pfn_b2, cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_2_HOST_BIT,
+                              VK_ACCESS_2_SHADER_WRITE_BIT, VK_ACCESS_2_HOST_READ_BIT);
+    } else {
+        VkMemoryBarrier mb = {0};
+        mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        mb.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        mb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mb, 0,
+                             NULL, 0, NULL);
+    }
+
+    r = vkEndCommandBuffer(cmd);
+    if (r != VK_SUCCESS) goto graph_fail;
+
+    uint64_t tl_val = 1;
+    if (use_sync2) {
+        VkSemaphoreTypeCreateInfo sti = {0};
+        sti.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+        sti.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+        VkSemaphoreCreateInfo sci = {0};
+        sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        sci.pNext = &sti;
+        r = vkCreateSemaphore(yona_vk_dev, &sci, NULL, &timeline);
+        if (r != VK_SUCCESS) goto graph_fail;
+
+        VkCommandBufferSubmitInfo cbs = {0};
+        cbs.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cbs.commandBuffer = cmd;
+        VkSemaphoreSubmitInfo sig = {0};
+        sig.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        sig.semaphore = timeline;
+        sig.value = tl_val;
+        sig.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        VkSubmitInfo2 si2 = {0};
+        si2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        si2.commandBufferInfoCount = 1;
+        si2.pCommandBufferInfos = &cbs;
+        si2.signalSemaphoreInfoCount = 1;
+        si2.pSignalSemaphoreInfos = &sig;
+        r = pfn_submit2(yona_vk_queue, 1, &si2, VK_NULL_HANDLE);
+        if (r != VK_SUCCESS) goto graph_fail;
+        VkSemaphoreWaitInfo wi = {0};
+        wi.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+        wi.semaphoreCount = 1;
+        wi.pSemaphores = &timeline;
+        wi.pValues = &tl_val;
+        r = pfn_wait_sem(yona_vk_dev, &wi, UINT64_MAX);
+        if (r != VK_SUCCESS) goto graph_fail;
+    } else {
+        VkFenceCreateInfo fci = {0};
+        fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        r = vkCreateFence(yona_vk_dev, &fci, NULL, &fence);
+        if (r != VK_SUCCESS) goto graph_fail;
+        VkSubmitInfo si = {0};
+        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        si.commandBufferCount = 1;
+        si.pCommandBuffers = &cmd;
+        r = vkQueueSubmit(yona_vk_queue, 1, &si, fence);
+        if (r != VK_SUCCESS) goto graph_fail;
+        r = vkWaitForFences(yona_vk_dev, 1, &fence, VK_TRUE, UINT64_MAX);
+        if (r != VK_SUCCESS) goto graph_fail;
+    }
+
+    if (vkInvalidateMappedMemoryRanges) {
+        VkMappedMemoryRange inv = {0};
+        inv.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        inv.memory = mem_sums;
+        inv.offset = 0;
+        inv.size = nbytes_sums;
+        vkInvalidateMappedMemoryRanges(yona_vk_dev, 1, &inv);
+    }
+
+    int64_t total = 0;
+    if (use_i32) {
+        const int32_t* lanes = (const int32_t*)mapped_sums;
+        for (uint32_t i = 0; i < groups; i++) total += (int64_t)lanes[i];
+    } else {
+        const int64_t* lanes = (const int64_t*)mapped_sums;
+        for (uint32_t i = 0; i < groups; i++) total += lanes[i];
+    }
+    *out_sum = total;
+    ok = 1;
+
+graph_fail:
+    if (mapped_in) vkUnmapMemory(yona_vk_dev, mem_in);
+    if (mapped_sums) vkUnmapMemory(yona_vk_dev, mem_sums);
+    if (fence != VK_NULL_HANDLE) vkDestroyFence(yona_vk_dev, fence, NULL);
+    if (timeline != VK_NULL_HANDLE) vkDestroySemaphore(yona_vk_dev, timeline, NULL);
+    if (cmd != VK_NULL_HANDLE && cpool != VK_NULL_HANDLE)
+        vkFreeCommandBuffers(yona_vk_dev, cpool, 1, &cmd);
+    if (cpool != VK_NULL_HANDLE) vkDestroyCommandPool(yona_vk_dev, cpool, NULL);
+    if (buf_in != VK_NULL_HANDLE) vkDestroyBuffer(yona_vk_dev, buf_in, NULL);
+    if (buf_sums != VK_NULL_HANDLE) vkDestroyBuffer(yona_vk_dev, buf_sums, NULL);
+    if (mem_in != VK_NULL_HANDLE) vkFreeMemory(yona_vk_dev, mem_in, NULL);
+    if (mem_sums != VK_NULL_HANDLE) vkFreeMemory(yona_vk_dev, mem_sums, NULL);
+    if (dpool != VK_NULL_HANDLE) vkDestroyDescriptorPool(yona_vk_dev, dpool, NULL);
+    free(packed_in);
+    yona_vk_compute_submit_unlock();
+    return ok;
 }
 
 #endif /* YONA_GPU_VULKAN_ENABLED */

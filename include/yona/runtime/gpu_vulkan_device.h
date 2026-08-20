@@ -60,6 +60,9 @@ int yona_gpu_vulkan_device_shader_int64(void);
  */
 int yona_gpu_vulkan_device_timeline_semaphore(void);
 
+/** 1 if the logical device was created with VK_KHR_synchronization2 enabled. */
+int yona_gpu_vulkan_device_synchronization2(void);
+
 /**
  * Short human-readable hint for the last failed device init, opt-in GPU kernel
  * attempt, or fence wait on async float compute (empty if none recorded).
@@ -94,6 +97,9 @@ int yona_gpu_vulkan_try_map_add_int64(int64_t delta, int64_t *arr, int64_t **out
 /** Opt-in GPU mapMul; same env pattern as mapAdd (YONA_GPU_VULKAN_MAPMUL / _COMPUTE). */
 int yona_gpu_vulkan_try_map_mul_int64(int64_t factor, int64_t *arr, int64_t **out);
 
+/** Opt-in GPU mapSquare (`x * x`); same env pattern as mapMul. */
+int yona_gpu_vulkan_try_map_square_int64(int64_t *arr, int64_t **out);
+
 /** Opt-in GPU reduceSum (block reduce + host tail); YONA_GPU_VULKAN_REDUCE / _COMPUTE. */
 int yona_gpu_vulkan_try_reduce_sum_int64(int64_t *arr, int64_t *out_sum);
 
@@ -104,6 +110,13 @@ int yona_gpu_vulkan_try_reduce_sum_int64(int64_t *arr, int64_t *out_sum);
  * Set YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1 to force the legacy host-side exclusive prefix.
  */
 int yona_gpu_vulkan_try_filter_greater_than_int64(int64_t threshold, int64_t *arr, int64_t **out);
+
+/** Opt-in GPU filterLessThan — same mark/prefix/scatter as greater-than with an LT mark shader. */
+int yona_gpu_vulkan_try_filter_less_than_int64(int64_t threshold, int64_t *arr, int64_t **out);
+
+/** Opt-in multi-kernel map→…→reduceSum in one command buffer (sync2 barriers +
+ * timeline submit when the device was created with KHR synchronization2). */
+int yona_gpu_vulkan_try_map_reduce_graph_int64(int64_t *stages, int64_t *arr, int64_t *out_sum);
 #endif
 
 #ifdef __cplusplus

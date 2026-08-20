@@ -1,0 +1,12 @@
+import fill from Std\FloatArray in
+import mapFloatGPU, reduceFloatGPU, Scale, Mul2, FSum, allocPinnedFloats, pinnedSet, pinnedGet, closePinnedFloats from Std\GPU in
+let a = fill 4 1.5 in
+let b = mapFloatGPU (Scale 2.0) a in
+let c = mapFloatGPU Mul2 b in
+let s = reduceFloatGPU FSum c in
+let p = allocPinnedFloats 2 in
+let _ = pinnedSet p 0 1.0 in
+let _ = pinnedSet p 1 2.0 in
+let pin_sum = pinnedGet p 0 + pinnedGet p 1 in
+let _ = closePinnedFloats p in
+s + pin_sum

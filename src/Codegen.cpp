@@ -175,6 +175,20 @@ void Codegen::load_prelude(parser::Parser* parser,
             auto* fn_type = arena.make_arrow(arg_var, type_adt);
             type_checker->register_trait_method("Prelude", "typeOf", fn_type);
         }
+
+        // Std\GPU typed failure ops (design-gpu-async.md §6). Effect decls are
+        // not in the language yet; register perform signatures for Gpu.oom /
+        // deviceLost / fail so typecheck matches use-site handle/perform.
+        // Unit arg matches `perform Gpu.oom ()` (same surface as State fixtures).
+        {
+            auto* unit_t = arena.make_con(typechecker::TyCon::Unit);
+            auto* int_t = arena.make_con(typechecker::TyCon::Int);
+            type_checker->register_effect("Gpu", "", {
+                {"oom", {unit_t}, unit_t},
+                {"deviceLost", {unit_t}, unit_t},
+                {"fail", {int_t}, unit_t},
+            });
+        }
     }
 }
 
@@ -1039,7 +1053,9 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
             }
         }
 
+        compiling_unhandled_perform_ok_ = true;
         auto cf = compile_function(fn_name, def_it->second, typed_args);
+        compiling_unhandled_perform_ok_ = false;
 
         if (is_exported) {
             // Store type metadata for importers

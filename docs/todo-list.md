@@ -12,7 +12,13 @@
 - **Vulkan filter compute path:** SPIR-V under `src/runtime/gpu/shaders/filter_*.comp` (embedded `*_spv.inc`), runtime in `gpu_vulkan_ops.c` / `gpu_vulkan_compute.c` / `gpu_cpu.c`; API in `lib/Std/GPU.yona` — see `docs/gpu-architecture.md`
 - **GPU / Vulkan (desktop, non-macOS):** roadmap + **documented limitations** (`docs/gpu-architecture.md`: *Vulkan limitations*, *Roadmap implementation status*); Windows `yonac` links `vulkan-1.lib` from CMake-configured path with `VULKAN_SDK` fallback (`INSTALL.md`, `cmake/yona_vulkan_link_cfg.h.in`)
 - Runtime backends: Linux + Windows native paths in place
-- **Accelerator diagnostics (**`docs/gpu-transparent-lowering.md`**):** `yonac --emit-accelerator-report` → JSON `yona.accelerator_diag.v1`; expression programs use `report_kind":"program"` (post typecheck + `solve_constraints`); modules default to `report_kind":"module_ast"`; `--emit-accelerator-report-with-types` (with the report flag, module sources only) runs `typecheck_module_for_accelerator_report` then emits `report_kind":"module"` (optional `inferred_type` when HM pretty-print is informative). Covers explicit `Std\GPU` columnar + `floatArray*Async` + discovery sites (`hasGpu`, `vulkanTimelineSemaphore`, `available ()`, …). API: `include/AcceleratorDiag.h`; tests: `accelerator_diagnostic_report_`* in `test/codegen_test.cpp`. Collector uses a heap-held `std::function` so recursive apply-walk does not dangle.
+- **Accelerator diagnostics + transparent lowering (**`docs/gpu-transparent-lowering.md`**):**
+  `yonac --emit-accelerator-report` → JSON `yona.accelerator_diag.v1` (explicit
+  `Std\GPU` sites plus `"kind":"transparent"` kernel rewrites). Codegen rewrites
+  inline IntArray/FloatArray `map`/`filter`/`foldl` in the kernel library to the
+  Std\GPU ABI (disable with `--no-accelerator-lowering`). API:
+  `include/AcceleratorLowering.h`; tests: `accelerator_lowering_*` and
+  `accelerator_diagnostic_report_*`.
 - `bench/runner.py`**:** `--verify-reference-outputs` / `--reference-verify-langs` for golden `.expected` checks without `yonac`; `--skip-erl` / `YONA_BENCH_SKIP_ERLANG` when Windows OTP crashes; clearer Erlang `erlc` failure diagnostics when BEAM exits `0xC0000005`
 
 
@@ -21,28 +27,27 @@
 
 
 
-### 1) Benchmarking hardening
+### 1) Benchmarking hardening — **done**
 
-- [x] Add a benchmark reference conformance check (validate expected output per language lane) — `python3 bench/runner.py [-- FILTER] --verify-reference-outputs [--reference-verify-langs LANGS]` (`LANGS` comma list or `all`; default `c`; does not require `yonac`); exits 1 on mismatch; see `bench/README.md`
-- [x] **Erlang / Windows OTP lane** — **Mitigation shipped:** `--skip-erl` and `YONA_BENCH_SKIP_ERLANG=1` omit Erlang from compare/verify-startup lanes (`bench/README.md`). Broken OTP hosts: repair/reinstall, try another patch release, exclude AV interference, or use **WSL/Linux Erlang** for `--compare-erl`
+Reference conformance (`bench/runner.py --verify-reference-outputs`) and Windows
+Erlang skip (`--skip-erl` / `YONA_BENCH_SKIP_ERLANG`) are shipped; see
+`bench/README.md` and Completed Milestones.
 
 
 
-### 2) Platform/runtime closure
+### 2) Platform/runtime closure — **done**
 
-- [x] macOS platform layer (kqueue path + per-OS runtime files)
-- [x] macOS `Std\GPU` Vulkan path: MoltenVK / portability (device init, `VK_KHR_portability_enumeration` / `portability_subset`, Darwin loader names, unified-memory host SSBO). **`shaderInt64` is typically absent on Metal** — `hasGpu` is 1 when the device is ready; IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit; float scale uses f32. See `docs/gpu-vulkan-implementation-plan.md` §11.
+macOS kqueue + MoltenVK/`Std\GPU` portability shipped (`docs/gpu-vulkan-implementation-plan.md`
+§11). Metal usually lacks `shaderInt64`; IntArray GPU uses i32 when values fit.
 
 
 
 ### 3) Distribution readiness
 
-- [x] Copr / AUR / Launchpad CI jobs + package-first install docs (`dist/RELEASING.md`) — first publish on next `v*` tag after one-time Copr project, AUR key, and PPA + GitHub secrets
-- [x] Homebrew tap `akovari/homebrew-tap` (`dist/ci/generate-homebrew-formula.sh`, `homebrew` release job) — source formula; first publish on next `v*` tag after `HOMEBREW_TAP_SSH_KEY`
+- [x] Copr / AUR / Launchpad + Homebrew tap + Linux/macOS in-process LLD (v0.1.2–v0.1.3) — see Completed Milestones
 - [ ] Windows installer productionization (upgrade behavior, signing, final UX polish)
 - [ ] Final packaging pass for sysroot-based CLI/REPL distribution layout
-- [ ] Enable embedded LLD backend by default across supported toolchains (resolve remaining dependency gates, e.g. MSVC-compatible LibXml2 on Windows)
-- [ ] Implement true embedded LLD backend for Linux/macOS in-process mode
+- [ ] Enable embedded LLD backend by default across supported toolchains (remaining gate: MSVC-compatible LibXml2 on Windows)
 
 
 
@@ -57,7 +62,7 @@ API (#7) until the audit (#3) and effect-row story (#8) are honest about what
 already works.
 
 - [x] **[#3](https://github.com/yona-lang/yonac-llvm/issues/3) Type-system status audit** — `docs/type-system-status.md` (2026-08-18). Next: #8. Follow-ups from the audit: [#9](https://github.com/yona-lang/yonac-llvm/issues/9) effect decls, [#10](https://github.com/yona-lang/yonac-llvm/issues/10) blocking E0500/E0600, [#11](https://github.com/yona-lang/yonac-llvm/issues/11) `-Wincomplete-patterns`.
-- [ ] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference +** `.yonai` **propagation** — after #3. Infer, normalize, write/restore rows, check call sites. Dedicated plan before coding.
+- [x] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference +** `.yonai` **propagation** — **closed** 2026-08-19. Arrow `!{Effect.op}` rows, handler subtract, `.yonai` `effects` (closed + open `|rN` / per-param rows), **E0202** at introducing `perform` + call-site note, HOF open-rest threading, recursion LFP. Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
 - [ ] **[#6](https://github.com/yona-lang/yonac-llvm/issues/6) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
 - [ ] **[#5](https://github.com/yona-lang/yonac-llvm/issues/5) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
 - [ ] **[#7](https://github.com/yona-lang/yonac-llvm/issues/7) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format.
@@ -93,36 +98,35 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
 
 ### Suggested next steps (rolling)
 
-- [x] **yonac module files with** `##` **preamble** — `is_module_source` in
-  `cli/main.cpp` skips `#` line comments before detecting `module`, so
-  `yonac -o lib/Std/M.yona lib/Std/M.yona` works for Http-style leading docs.
-- [x] **Phase 0 CI bugs** — flaky `binary_seek` / `binary_write_read` and
-  `net_runtime_test` TCP SIGSEGV (see Bugs).
-- [x] **Type-system audit (#3)** — `docs/type-system-status.md`.
-- [ ] **Next language work:** effect-row inference (#8). Formal spec track
-  (does not block #8): Phase 0 of
+- [ ] **Next language work:** [#6](https://github.com/yona-lang/yonac-llvm/issues/6)
+  opaque types, or [#5](https://github.com/yona-lang/yonac-llvm/issues/5)
+  totality / empty-row gate now that #8 rows are real. Formal spec track:
+  Phase 0 of
   [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
 
 High leverage after the audit: `&T` **/ borrow types**
 ([design-borrow-types.md](./design-borrow-types.md)), **supervisors-as-handlers**
 (after cancel story is frozen), **LLVM coroutine plan** only after cancellation
-semantics are frozen. **GPU** (parallel; does not block #3/#8):
-[design-gpu-async.md](./design-gpu-async.md); `Std\GPU` columnar + async
-float + Vulkan discovery are **shipped**; `docs/gpu-architecture.md`.
-**Next (non-macOS):** `mapGPU` **/** `reduceGPU`, timeline semaphore **use** /
-`vkQueueSubmit2`, task-group cancel for in-flight GPU, then pinned buffers /
-graphs / transparent lowering (*benchmark gate —* `gpu-transparent-lowering.md`).
-Product: **LSP** or **package manager** if adoption beats runtime research;
-prefer after typed-core (#7).
+semantics are frozen. **GPU** Track G surface is **shipped**
+([design-gpu-async.md](./design-gpu-async.md), `docs/gpu-architecture.md`);
+open follow-ups are under *Language — GPU* below (full arbitrary-lambda SPIR-V,
+io_uring/reactor research, occupancy hints, macOS/Windows bench re-capture).
+`raiseGpu` GENFN + `x * x` / Vulkan `filterLessThan` landed 2026-08-19.
+Effect-row inference for `Gpu` is **#8**
+(do not duplicate). Product: **LSP** or **package manager** if adoption beats
+runtime research; prefer after typed-core (#7).
 
-### Bugs
+### Bugs (open)
 
-- [x] **doctest:** `Codegen E2E` `binary_seek` / `binary_write_read` flakiness (stdout wrong / `0`) — unique object/exe per fixture suffix; plus single-binding `let` `auto_await` for real io_uring File ops (skip `spawn`).
-- [x] **doctest:** `net_runtime_test` TCP loopback **SIGSEGV** (Linux io_uring) — accept SQE `socklen_t`* in `sqe.off`; shared ring in `uring_linux.c` (was per-TU `static` in `uring.h`); `ring_await` stashes unmatched CQEs. UDP test matches sync FN API.
-- [x] **Windows** `tests`**/Vulkan:** undefined `yona_rt_promise_new` **/** `yona_rt_promise_complete` ( `gpu_stub.c` vs async runtime) — **Fixed:** same APIs + `yona_test_native_promise_immediate` implemented in `async_win32.c` (parity with `async_posix.c`).
-- [x] **macOS arm64 build:** Clang 22 rejects `__builtin_setjmp` / `__builtin_longjmp` — **Fixed:** `yona_sjlj_setjmp` / `yona_sjlj_longjmp` in `include/yona/runtime/sjlj.h` (AArch64 inline asm matching llvm.eh.sjlj slots).
-- [x] **macOS** `closure_consumed_sort` **/ typed-float:** `FunctionType::get` SIGSEGV after `fn->eraseFromParent()` — body instruction UAF (`getType()` null on Darwin). **Fixed:** snapshot LLVM type before erase; honor annotated return type so `Float -> Float` is not inferred as i64.
-- [x] **macOS E2E** `stdlib_file_read` **/** `stdlib_io`:** `/etc/os-release` stub on non-Linux (same as Windows); stdout/stderr writes complete on the submit path so discarded `println` in `do` is visible (Linux io_uring already hits the kernel before submit returns).
+- [ ] **Exported fn calling private module helper: E0104 at import site + wrong result, exit 0.** GENFN re-parse cannot resolve unexported names and the documented extern fallback does not kick in; compilation continues and the executable returns 0. Repro: module `Secret` with `helper x = x * x` (unexported) and exported `doubledSquare x = 2 * helper x`; then `yonac -I . -o demo main.yona` where `main.yona` is `import doubledSquare from Secret in doubledSquare 5` → E0104 printed, `./demo` prints `0` (expected `50`), yonac exit 0.
+- [ ] **Printing a tuple containing a Seq fails LLVM module verification.** Repro: `yonac -e '(42, [1, 2, 3])' -o t` → `Module verification failed: Call parameter type does not match function signature!` on `yona_rt_print_seq` (seq element loaded as i64, passed where ptr expected).
+- [ ] **Imported module function as first-class HOF argument: codegen "Operand is null".** Repro: `yonac -e 'import map from Std\List, length from Std\String in map length ["ab", "abc"]' -I lib` → `Module verification failed: Operand is null` on `call ptr @map(<null operand!>, ptr %seq)`. Wrapping in a lambda (`map (\s -> length s) …`) works. Same failure via `Std\Stream.map length`.
+- [ ] **Top-level print of nested Seq prints element pointers.** Repro: `yonac -e '[[1, 2], [3]]' -o t && ./t` → `[651968424, 651968360]` instead of `[[1, 2], [3]]` (inner seqs printed as i64 addresses; heap_flag not consulted by the printer).
+- [x] **Docs claimed `foldl`/`foldr` are prelude.** Agent instructions (`CLAUDE.md`, `project-guidance.mdc`) and the public site now import from `Std\List`. `yonac -e 'foldl …'` still E0104 — that is correct.
+- [ ] **`:>` (append) parses and type-checks but has no codegen.** Repro: `yonac -e '[1, 2] :> 3'` → `error: unsupported expression type`. Related: `--` (remove) and `in` (membership) are lexed as operator tokens and listed in `docs/language-syntax.md` but rejected by the parser (`yonac -e 'println (2 in [1, 2, 3])'` → E0301).
+
+Fixed Phase 0 / platform / import-`LINEAR` / LinearityChecker `WithExpr` +
+`FunctionExpr` walk bugs are archived under Completed Milestones.
 
 
 
@@ -146,20 +150,9 @@ prefer after typed-core (#7).
 
 ### Language — Safety & Ownership
 
-- [x] **Use-site handling for algebraic types** — `-Wunmatched-adt` (`--Wall`):
-  discarded `App` types except `Seq`/`Set`/`Dict` in non-final `do` steps
-  or `let _ = ...` emit a warning (see `RefinementChecker` + `TypeChecker`).
-- [x] **Borrow annotations for read-only parameters** (first slice).
-  **Shipped:** optional `@borrow` before a parameter (parser + AST),
-  enforced with **E0603** via the same escape predicate as borrow
-  inference (`analysis/BorrowEscapeAnalysis`). When valid, codegen
-  matches **automatic inference** (no extra refcount win vs inferred
-  code). **Benefits:** documented callee-reads-only contract; compile
-  errors on refactors that would reintroduce `rc_inc`/`rc_dec`; base for
-  future `&` / type-level borrows. See
-  `docs/memory-management.md#explicit-borrow` and `bench/README.md`
-  (parity benchmark vs `list_sum`). **Not yet:** `&` in types, distinct
-  borrow types in HM, or inference loosened beyond escape analysis.
+Shipped: `-Wunmatched-adt`, `@borrow` (E0603) — see Completed Milestones /
+`docs/memory-management.md#explicit-borrow`.
+
 - [ ] **Type-level borrows (**`&T`**) and signature carry-over** — follow-up
   to `@borrow` (see `memory-management.md#explicit-borrow`). **Design:**
   [design-borrow-types.md](./design-borrow-types.md) (syntax, `MonoType`,
@@ -174,13 +167,8 @@ prefer after typed-core (#7).
 
 ### Language — Architecture & Infrastructure
 
-- [x] **Per-task-group arenas** — each task group allocates from a
-  bump arena that's freed wholesale on group completion. Leverages
-  existing arena + escape analysis (`include/EscapeAnalysis.h`) +
-  the structured concurrency plan. Kills the "raise leaks heap
-  values" problem for task groups on `raise` unwind (TLS bind stack
-  - `yona_rt_group_end` from `exceptions.c`) and on success via codegen.
-  Benchmark: `bench/concurrency/task_group_arena.yona`.
+Shipped: per-task-group bump arenas — see Completed Milestones.
+
 - [ ] **Supervisors as effect handlers** — model Erlang-style
   supervision trees via the existing algebraic effect system. A
   supervisor is a `handle ... with` that catches child-task failures
@@ -201,74 +189,45 @@ prefer after typed-core (#7).
 
 Yona is **concurrent and non-blocking first**; GPU work should compose
 with **async**, **task groups**, and **channels**, not compete with them.
-Rough order: **explicit device API** → **async completion + cancellation**
-→ **multi-stage pipelines** → **transparent lowering** last (needs stable
-eligibility + effect “schedule” story). **Design:**
-[design-gpu-async.md](./design-gpu-async.md).
+**Design:** [design-gpu-async.md](./design-gpu-async.md). Status table:
+`docs/gpu-architecture.md` (*Roadmap implementation status*).
 
-- [x] **Compiler:** `extern native` **+** `.yonai` **NAT imports** — `ast::ExternPromiseKind`
-  (`Sync` / `ThreadPool` / `IoUring` / `NativePtr`), `PromiseAwaitPath` on
-  `TypedValue` for `auto_await`, shared `declare_import_extern_fn` /
-  `bind_imported_promise_cf` (`CodegenModule.cpp`). Fixture
-  `test/codegen/extern_native_immediate.yona`; `yona_test_native_promise_immediate`
-  in `async.c`. Documented in `docs/design-gpu-async.md` §8.0.
+**Track G surface — shipped** (details in Completed Milestones /
+`docs/gpu-transparent-lowering.md`): `extern native` / NAT; columnar
+`Std\GPU` + Vulkan kernels; `mapGPU` / `reduceGPU` / `mapFloatGPU` /
+`reduceFloatGPU`; `mapReduceGraphGPU`; async float fence + early cancel
+(**-887**); Vulkan-mapped `PinnedFloats` + `gpuFloatChannel` /
+`drainMapFloatGPU`; transparent fixed-kernel lowering; `GpuIssue` /
+`checkGpu` / use-site `perform Gpu.*`; `--strict-accelerator` / **E0700**.
 
-- [ ] **Std\GPU + Vulkan runtime (roadmap)** — **Shipped:** `lib/Std/GPU.yona` /
-  `lib/Std/GPU.yonai` — columnar `Buffer`, `mapAdd` / `mapMul` /
-  `reduceSum` / `filterGreaterThan`, discovery (`backendName`,
-  `vulkanStatus`, `hasGpu`, `vulkanAvailable`, `vulkanTimelineSemaphore`
-  (Vulkan 1.2 feature chain **or** `VK_KHR_timeline_semaphore` extension list — `docs/gpu-architecture.md`),
-  `available`, `apiVersion`,   `physicalDeviceCount`, …), `floatArray*Async`
-  (`extern native`, fence-thread completion in `gpu_stub.c`), extended `vulkanLastNote`
-  (float + int failure hints), `yonac` Windows Vulkan import-lib path from CMake (`cmake/yona_vulkan_link_cfg.h.in`), crossover benches + `gpu_bench_meta.py` (`let` sizing),
-  `--emit-accelerator-report` (discovery ops included). Timeline capability: Vulkan 1.2 feature
-  probe **or** `VK_KHR_timeline_semaphore` in extension list (`gpu_vulkan_device.c`).
-  Implementation refs:
-  `gpu_vulkan_device.c` / `gpu_vulkan_ops.c`, `gpu_stub.c`, `gpu_cpu.c`.
-  **Still open:** `mapGPU` / `reduceGPU`, `vkQueueSubmit2` + timeline semaphore
-  **usage** (not just `vulkanTimelineSemaphore` probe); `VK_KHR_synchronization2`;
-  tighter task-group policies (abort in-flight submits where drivers allow — not done); drop any remaining idle waits from hot paths; pinned host buffers /
-  channels; multi-stage Vulkan graphs; typed GPU effect for device lost / OOM; transparent lowering
-  (*benchmark corpus* gate). Vulkan specifics: regenerate SPIR-V via `scripts/gen_gpu_*_spv.sh`.
-- [ ] **Transparent GPU lowering** (future). Compiler automatically
-  lowers FloatArray.map/foldl to GPU when the array is large enough
-  and the lambda is pure. Transparent, like Yona's transparent async.
-  Inspired by: Halide (algorithm/schedule separation — effects as
-  schedules), Julia (@cuda JIT specialization — maps to Yona's
-  deferred compilation), ArrayFire/Accelerate (combinator fusion →
-  GPU dispatch — maps to Yona's stream fusion).
-- [ ] **GPU + async: non-blocking submit and completion** — **Partial:** fence
-  waiter thread + `extern native` + `yona_rt_promise_complete` already avoid
-  parking **pool** workers on GPU; `gpu_stub` maps **task-group cancel**
-  after fence success to promise result **-887** (opt-in doctest
-  `YONA_GPU_TEST_F64_GROUP_CANCEL=1`) **and skips** `vkQueueSubmit` **when already cancelled**.
-  Vulkan `vulkanTimelineSemaphore` probes 1.2 core feature **and** `VK_KHR_timeline_semaphore`
-  extension (**no** submit-path timeline waits yet). Still need **timeline semaphore use** /
-  `VK_KHR_synchronization2`, optional **io_uring /
-  reactor** integration, **structured concurrency** policies for in-flight work. Task threads
-  must never block on `vkDeviceWaitIdle` / `vkQueueWaitIdle` in the common path.
-  Prerequisite: stable cancellation story for async (see coroutine item).
-- [ ] **Pinned host buffers + channels (CPU↔GPU pipeline)** — optional
-  `GpuBuffer` / pinned-memory type produced by `allocReadback` or
-  `withPinned …`; **senders/receivers** (or iterators) move chunks between
-  CPU producers and GPU kernels without memcpy where the driver allows.
-  Interesting for **streaming** (log lines, sensor blocks) without loading
-  full `FloatArray` before dispatch. Watch **refcount + async lifetime**:
-  buffer must stay alive until GPU completes; align with Perceus
-  transfer or explicit `Linear` device handles.
-- [ ] **Multi-stage GPU graphs (task-parallel maps)** — compile a **DAG**
-  of kernels (map → map → reduce) into a single **Vulkan command buffer**
-  or `VK_KHR_synchronization2` barrier graph to reduce host round-trips;
-  mirrors **parallel comprehensions** / `Std\Parallel` at a coarser
-  granularity. Start after single-kernel `Std\GPU` works.
-- [ ] **GPU “capability” or effect bit** — **Partial today:** `vulkanLastNote` +
-  targeted `VkResult` strings (OOM / device lost hints) on int + float paths (**not** a
-  typed effect). **Still need:** `perform Gpu`-style handler so library code can branch on
-  device lost / OOM / caps without string parsing; aligns with effect discipline.
+**Open follow-ups:**
+
+- [ ] **Arbitrary-lambda → SPIR-V** — today: fixed kernel library lowers to
+  Std\GPU ABI (including `x - k` → mapAdd, `0 - x` → mapMul(-1), `x * x` →
+  `mapSquare`, `x < k` → `filterLessThan` with a real Vulkan LT mark shader).
+  Other lambdas stay on the host path, or `yonac --strict-accelerator`
+  errors (**E0700**). Missing: full SPIR-V compiler for arbitrary closures
+  (e.g. `\x -> x + x * x`).
+- [ ] **Optional io_uring / reactor GPU integration** (research) — fence
+  waiter thread is shipped; Option C in `design-gpu-async.md` §3.2
+  (interleave GPU completion in the io_uring reap loop) is not. No concrete
+  design deliverable beyond the option note.
 - [ ] **CPU/GPU occupancy and scheduling hints** (research) — optional
   attributes or stdlib helpers for **wave size**, **shared memory**, or
-  “prefer throughput vs latency” — analogous to **branch hints** on CPU;
-  avoid until `Std\GPU` has users and profiling data.
+  “prefer throughput vs latency”; avoid until `Std\GPU` has users and
+  profiling data. No concrete design deliverable yet.
+- [x] **`perform Gpu` from `Std\GPU` via GENFN + use-site `handle`** — designed
+  path (2026-08-19): kernels stay `GpuIssue` / `Result`; `raiseGpu` /
+  `withGpuFallback` `perform Gpu.*` and remonomorphize inside a user `handle`
+  so clauses bind (effect rows, not a C++ name list). Precompiled export
+  raises `:UnhandledEffect` if called with no handler. Full runtime handler
+  stack across all precompiled bodies remains out of scope (CPS compile).
+- [ ] **macOS / Windows GPU bench re-capture** after Track G — Linux path
+  verified in-tree; macOS MoltenVK and Windows Vulkan crossover / pinned
+  benches (`bench/run_gpu_compare.py`, including `gpu_pinned_scale_hot`)
+  were not re-run in the Track G landing pass (this agent environment is
+  Linux-only). Refresh `docs/benchmark-results-macos.md` /
+  `docs/benchmark-results-windows.md` when those hosts are available.
 
 
 
@@ -298,7 +257,8 @@ eligibility + effect “schedule” story). **Design:**
 - [ ] Distributed Yona
 - [ ] Serialization system
 - [ ] STM
-- [x] Vulkan `Std\GPU`: macOS MoltenVK device init (`docs/gpu-vulkan-implementation-plan.md` §11). Int64/f64 compute still CPU-only on Metal.
+
+(macOS MoltenVK device init is shipped — Completed Milestones / Active Priorities §2.)
 
 
 
@@ -306,6 +266,7 @@ eligibility + effect “schedule” story). **Design:**
 
 - [ ] Package manager/build tool
 - [ ] LSP server
+- [ ] **Documentation extraction / generation (think first, don't scrape).** Public Learn/Guides/Reference in `site/src/content/docs/` stay handwritten. `scripts/gendocs.py` is a regex walk of `lib/Std/*.yona` `##` comments and misses `.yonai`/C modules, types, effects, and exports. Design a compiler-aware extractor (`yonac --emit-docs` or successor) so API reference cannot drift from source; until then, keep `##` comments + handwritten site pages updated in the same change (see `keep-docs-up-to-date`).
 
 
 
@@ -320,31 +281,22 @@ eligibility + effect “schedule” story). **Design:**
 - [x] Handle-level `Std\File` operations routed through platform wrappers
 - [x] CI/CD across Linux/macOS/Windows + Linux arm64 coverage in matrix
 - [x] Docker + Homebrew + RPM + DEB + release workflow
-- [x] Windows benchmark matrix parity (all language cells filled) + native peak RSS capture
-- [x] Startup probe cache normalization (versioned cache + stale Windows RSS invalidation)
-- [x] Windows benchmark refresh + 3x stability reruns (perf deltas + large-file I/O variance)
-- [x] O(1) transfer-scope basic block detection (scope-entry ordinal watermark + O(1) droppability checks)
-- [x] Unified seq/map transfer bookkeeping into explicit domain-tagged transfer tracking
-- [x] Borrow inference metadata across `.yonai` module boundaries, with caller temp cleanup and unwind-safe owned fallbacks
-- [x] Stdlib `.yonai` regeneration blockers resolved across all `lib/Std/**/*.yona` modules
-- [x] Deterministic channel deadlock detection with managed worker compensation
-- [x] Initial `Std\GPU` accelerated columnar API with CPU/SIMD fallback, runtime ABI, tests, docs, and crossover benchmarks
-- [x] Optional Vulkan P0: `YONA_ENABLE_VULKAN` + `find_path`/`find_library` (`VULKAN_SDK`), `include/yona/runtime/gpu_build_config.h`, `compiled_runtime`/`yonac`/`yona_link_util` compile parity, `VK_NO_PROTOTYPES` (no app link to loader — see `docs/gpu-architecture.md`)
-- [x] Vulkan P1 scaffold: `gpu_vulkan_device.c` (runtime `vkGetInstanceProcAddr` dispatch, compute queue), `vulkan-device` / refined `vulkanStatus`, `yona_lib*` compile parity when `YONA_ENABLE_VULKAN`, doctest `gpu_vulkan_device_test.cpp`
-- [x] Vulkan P2 slice: embedded `map_add_int64` SPIR-V (`src/runtime/gpu/shaders/map_add_int64.comp` → `map_add_int64_spv.inc`), `shaderInt64` when available, opt-in `YONA_GPU_VULKAN_MAPADD=1` + `YONA_GPU_VULKAN_MAPADD_MIN_LEN` (default 4096) from `gpu_vulkan_ops.c` / `gpu_vulkan_compute.c` included by `gpu_vulkan_device.c`
-- [x] Vulkan P3 extension: `map_mul_int64` + `reduce_block_int64` SPIR-V, `YONA_GPU_VULKAN_MAPMUL` / `REDUCE` / `COMPUTE`, cached pipelines, `hasGpu` + `vulkanLastNote` in `Std\GPU`, codegen env isolation for GPU fixtures
-- [x] Vulkan filter pipeline: SPIR-V stages (`filter_mark_int64`, prefix/flags/inclusive-exclusive/scatter) + `*_spv.inc` embeds, runtime dispatch in `gpu_vulkan_ops.c` / `gpu_vulkan_compute.c`, CPU path alignment in `gpu_cpu.c`, device caps in `gpu_vulkan_device.h`
-- [x] GPU Vulkan crossover tooling: `bench/run_gpu_compare.py` (hot + 10k/5k accelerators), `--json-report`, `bench/gpu_bench_meta.py`; Windows capture procedure in `docs/benchmark-results-windows.md` (*Std\GPU / Vulkan crossover*)
-- [x] `yonac --emit-accelerator-report` — JSON `yona.accelerator_diag.v1` for explicit `Std\GPU` sites (`report_kind`: `program` after typecheck; modules `module_ast` or `--emit-accelerator-report-with-types` → `module`); `include/AcceleratorDiag.h`, `typecheck_module_for_accelerator_report`, doctest in `codegen_test.cpp`
-- [x] Vulkan / `Std\GPU` ergonomics (recent): `vulkanTimelineSemaphore` + C
-  `yona_gpu_vulkan_device_timeline_semaphore()` (Vulkan 1.2 feature probe **and**
-  `VK_KHR_timeline_semaphore` enumeration — `docs/gpu-architecture.md` *Vulkan limitations*);
-  richer `vulkanLastNote` /
-  `gpu_stub` `VkResult` reporting; `AcceleratorDiag` discovery exports;
-  Windows `yonac` CMake-embedded `vulkan-1.lib` path (`cmake/yona_vulkan_link_cfg.h.in`);
-  `bench/gpu_bench_meta.py` `let x = N` metadata + path fix
-- [x] Linker/distribution milestone: dual modes, prebuilt runtime packaging, in-process LLD scaffold, CI reporting, and CMake modularization
-- [x] Windows installer milestone: WiX scaffold + Windows release CI artifacts (ZIP + MSI)
+- [x] Windows + macOS benchmark matrix parity + RSS / startup probe hardening
+- [x] O(1) transfer-scope + unified seq/map transfer bookkeeping; borrow `.yonai` metadata
+- [x] Stdlib `.yonai` regeneration; channel deadlock detection
+- [x] `-Wunmatched-adt`; `@borrow` / E0603; per-task-group bump arenas
+- [x] Phase 0 CI: flaky `binary_seek` / `binary_write_read`; `net_runtime_test` TCP SIGSEGV
+- [x] Windows Vulkan promise symbols; macOS SJLJ + Darwin codegen UAF; macOS File/IO stubs
+- [x] LinearityChecker type-directed + `.yonai` `LINEAR` overlay + FQN `ModuleCall`
+- [x] LinearityChecker walk of `WithExpr` (Closeable discharge) + `FunctionExpr` bodies
+- [x] `yonac` `##` preamble modules; type-system audit #3; bench reference check + Erlang skip
+- [x] macOS kqueue + MoltenVK `Std\GPU` portability
+- [x] `Std\GPU` columnar + Vulkan P0–P3/filter + `--emit-accelerator-report` + crossover benches
+- [x] **Track G surface:** mapGPU/graphs/cancel/pins/channels/transparent lowering/`perform Gpu`/E0700
+- [x] Transparent kernel library: `x - k` / `0 - x` / `x * x` / `x < k` (`mapSquare` + Vulkan `filterLessThan`)
+- [x] `raiseGpu` / `withGpuFallback` GENFN remonomorphize inside user `handle`
+- [x] Vulkan ergonomics (timeline probe, `vulkanLastNote`, Windows `vulkan-1.lib` path)
+- [x] Linker/distribution + v0.1.2/v0.1.3 packaging (LLD, Copr, Homebrew); Windows WiX scaffold
 
 
 
@@ -364,7 +316,8 @@ treated as an explicit advanced/fallback mode.
 - Formal specification program of record:
   [docs/superpowers/plans/2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md)
   (Rocq theories under `formal/` once Phase 0 lands).
-- Process hygiene: update this todo list after each implementation round.
+- Process hygiene: update this todo list, the active plan under
+  `docs/superpowers/plans/`, and `CHANGELOG.md` after each implementation round.
 - Keep this file focused on actionable open work and short milestone summaries.
 - `ctest` for `doctest_tests` sets `YONA_COMPILE_GPU_VULKAN=0` so unit tests do
 not pick up a stray Vulkan runtime compile from the parent environment; see

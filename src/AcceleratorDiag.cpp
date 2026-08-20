@@ -1,7 +1,8 @@
-/// Diagnostics-only report for explicit Std\GPU-shaped call sites (transparent
-/// lowering guardrail). See docs/gpu-transparent-lowering.md.
+/// JSON report of explicit Std\GPU call sites and transparent kernel rewrites.
+/// See docs/gpu-transparent-lowering.md.
 
 #include "AcceleratorDiag.h"
+#include "AcceleratorLowering.h"
 
 #include "ast.h"
 #include "typechecker/InferType.h"
@@ -46,8 +47,17 @@ const std::unordered_map<std::string, std::string>& gpu_export_api_signatures() 
         {"length", "Buffer -> Int"},
         {"mapAdd", "Int -> Buffer -> Buffer"},
         {"mapMul", "Int -> Buffer -> Buffer"},
+        {"mapSquare", "Buffer -> Buffer"},
         {"filterGreaterThan", "Int -> Buffer -> Buffer"},
+        {"filterLessThan", "Int -> Buffer -> Buffer"},
         {"reduceSum", "Buffer -> Int"},
+        {"mapGPU", "IntMapOp -> Buffer -> Buffer"},
+        {"reduceGPU", "IntReduceOp -> Buffer -> Int"},
+        {"mapFloatGPU", "FloatMapOp -> FloatArray -> FloatArray"},
+        {"reduceFloatGPU", "FloatReduceOp -> FloatArray -> Float"},
+        {"mapReduceGraphGPU", "Seq IntMapOp -> Buffer -> Int"},
+        {"allocPinnedFloats", "Int -> PinnedFloats"},
+        {"closePinnedFloats", "PinnedFloats -> Int"},
         {"floatArrayMul2Async", "FloatArray -> Int"},
         {"floatArrayScaleAsync", "Float -> FloatArray -> Int"},
     };
@@ -83,8 +93,22 @@ bool is_gpu_kernel_name(const std::string& n) {
         "length",
         "mapAdd",
         "mapMul",
+        "mapSquare",
         "filterGreaterThan",
+        "filterLessThan",
         "reduceSum",
+        "mapGPU",
+        "reduceGPU",
+        "mapFloatGPU",
+        "reduceFloatGPU",
+        "mapReduceGraphGPU",
+        "allocPinnedFloats",
+        "closePinnedFloats",
+        "pinnedLength",
+        "pinnedGet",
+        "pinnedSet",
+        "pinnedToFloatArray",
+        "copyFloatArrayToPinned",
         "floatArrayMul2Async",
         "floatArrayScaleAsync",
     };
@@ -135,6 +159,8 @@ struct AccelSite {
     SourceLocation loc;
     std::string api_signature;
     std::string inferred_pp;
+    std::string kind;    // "explicit" or "transparent"
+    std::string kernel;  // Std\GPU ABI name when kind is transparent
 };
 
 static void walk_collection_extractor(CollectionExtractorExpr* ce,
@@ -393,8 +419,27 @@ static std::function<void(ApplyExpr*)> make_accel_site_collector(std::vector<Acc
                 s.op = std::move(got->first);
                 s.binding = std::move(got->second);
                 s.loc = ae->source_context;
+                s.kind = "explicit";
                 if (auto it = gpu_export_api_signatures().find(s.op); it != gpu_export_api_signatures().end())
                     s.api_signature = it->second;
+                if (tc) {
+                    if (auto* ty = tc->type_of(ae)) {
+                        auto* z = const_cast<typechecker::TypeChecker*>(tc)->zonk(ty);
+                        if (inferred_mono_informative(z)) {
+                            std::string pp = pretty_print(z);
+                            if (inferred_pretty_informative(pp)) s.inferred_pp = std::move(pp);
+                        }
+                    }
+                }
+                sites.push_back(std::move(s));
+            } else if (auto tm = match_transparent_apply(ae)) {
+                AccelSite s;
+                s.op = tm->kernel_name ? tm->kernel_name : "map";
+                s.binding = tm->binding.empty() ? std::string("import") : tm->binding;
+                s.loc = ae->source_context;
+                s.kind = "transparent";
+                s.kernel = tm->kernel_name ? tm->kernel_name : "";
+                s.api_signature = "columnar Std\\GPU ABI";
                 if (tc) {
                     if (auto* ty = tc->type_of(ae)) {
                         auto* z = const_cast<typechecker::TypeChecker*>(tc)->zonk(ty);
@@ -427,6 +472,10 @@ static void write_accel_json(std::ostream& out, const std::vector<AccelSite>& si
             << json_escape(s.binding) << "\",\"api_signature\":\""
             << json_escape(s.api_signature) << "\",\"line\":" << s.loc.line << ",\"column\":"
             << s.loc.column;
+        if (!s.kind.empty())
+            out << ",\"kind\":\"" << json_escape(s.kind) << "\"";
+        if (!s.kernel.empty())
+            out << ",\"kernel\":\"" << json_escape(s.kernel) << "\"";
         if (!s.inferred_pp.empty())
             out << ",\"inferred_type\":\"" << json_escape(s.inferred_pp) << "\"";
         out << '}';

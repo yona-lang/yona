@@ -2,15 +2,48 @@
 ///
 /// `type Linear a = Linear a` is a built-in ADT that wraps resource handles.
 /// The checker ensures each Linear value is pattern-matched exactly once:
-///   - Construction: `Linear fd` or producer function returning Linear
+///   - Construction: `Linear fd` or any expression whose type is `Linear _`
+///     (including user-defined producers and products of Linear values)
 ///   - Consumption: `case x of Linear fd -> ...` (pattern match)
 ///   - Error: using a consumed value, or branch inconsistency
 ///   - Warning: dropping a live value at scope exit
 
 #include "typechecker/LinearityChecker.h"
+#include "typechecker/TypeChecker.h"
+
+#include <algorithm>
 
 namespace yona::compiler::typechecker {
 using namespace yona::ast;
+
+namespace {
+
+bool is_linear_type(const MonoType* t) {
+    return t && t->tag == MonoType::App && t->type_name == "Linear";
+}
+
+/// Callee name of a (possibly nested) application, or empty.
+std::string apply_callee_name(AstNode* expr) {
+    if (!expr || expr->get_type() != AST_APPLY_EXPR) return {};
+    auto* cur = static_cast<ApplyExpr*>(expr);
+    while (cur) {
+        if (auto* nc = dynamic_cast<NameCall*>(cur->call))
+            return nc->name->value;
+        if (auto* ec = dynamic_cast<ExprCall*>(cur->call)) {
+            if (ec->expr->get_type() == AST_APPLY_EXPR)
+                cur = static_cast<ApplyExpr*>(ec->expr);
+            else if (ec->expr->get_type() == AST_IDENTIFIER_EXPR)
+                return static_cast<IdentifierExpr*>(ec->expr)->name->value;
+            else
+                return {};
+        } else {
+            return {};
+        }
+    }
+    return {};
+}
+
+} // namespace
 
 // ===== LinearEnv =====
 
@@ -52,27 +85,40 @@ std::vector<std::string> LinearEnv::live_vars() const {
 
 // ===== LinearityChecker =====
 
-LinearityChecker::LinearityChecker(DiagnosticEngine& diag) : diag_(diag) {
-    // Register stdlib producer functions (return Linear values)
-    // Net module
-    register_producer("tcpConnect");
-    register_producer("tcpListen");
-    register_producer("tcpAccept");
-    register_producer("udpBind");
-    // Process module
-    register_producer("spawn");
-    // File module
-    register_producer("openFile");
-    // Channel module — returns (Sender, Receiver) tuple of linear values
-    register_tuple_producer("channel");
+LinearityChecker::LinearityChecker(DiagnosticEngine& diag, TypeChecker* tc)
+    : diag_(diag), tc_(tc) {}
+
+const MonoType* LinearityChecker::type_of_expr(AstNode* expr) {
+    if (!tc_ || !expr) return nullptr;
+    return tc_->zonk(tc_->type_of(expr));
 }
 
-void LinearityChecker::register_producer(const std::string& fn_name) {
-    producer_functions_.insert(fn_name);
+bool LinearityChecker::expr_produces_linear(AstNode* expr) {
+    if (auto* t = type_of_expr(expr)) {
+        if (is_linear_type(t)) return true;
+        // Conclusive non-Linear type: not a producer (including unresolved-as-Int, etc.)
+        if (t->tag != MonoType::Var) return false;
+    }
+    return is_linear_constructor(apply_callee_name(expr));
 }
 
-void LinearityChecker::register_tuple_producer(const std::string& fn_name) {
-    tuple_producer_functions_.insert(fn_name);
+void LinearityChecker::track_linear_pattern(PatternNode* pat, const MonoType* ty,
+                                            LinearEnv& env, const SourceLocation& loc) {
+    if (!pat) return;
+    if (is_linear_type(ty)) {
+        if (pat->get_type() == AST_PATTERN_VALUE) {
+            auto* pv = static_cast<PatternValue*>(pat);
+            if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
+                env.create((*id)->name->value, loc);
+        }
+        return;
+    }
+    if (!ty || ty->tag != MonoType::MTuple) return;
+    if (pat->get_type() != AST_TUPLE_PATTERN) return;
+    auto* tp = static_cast<TuplePattern*>(pat);
+    const size_t n = std::min(tp->patterns.size(), ty->elements.size());
+    for (size_t i = 0; i < n; i++)
+        track_linear_pattern(tp->patterns[i], ty->elements[i], env, loc);
 }
 
 void LinearityChecker::check(AstNode* node) {
@@ -111,6 +157,18 @@ void LinearityChecker::check_node(AstNode* node, LinearEnv& env) {
         case AST_APPLY_EXPR:
             check_apply(static_cast<ApplyExpr*>(node), env);
             break;
+        case AST_WITH_EXPR:
+            check_with(static_cast<WithExpr*>(node), env);
+            break;
+        case AST_FUNCTION_EXPR:
+            check_function(static_cast<FunctionExpr*>(node), env);
+            break;
+        case AST_IMPORT_EXPR:
+            check_node(static_cast<ImportExpr*>(node)->expr, env);
+            break;
+        case AST_EXTERN_DECL:
+            check_node(static_cast<ExternDeclExpr*>(node)->body, env);
+            break;
         case AST_DO_EXPR: {
             auto* doex = static_cast<DoExpr*>(node);
             for (auto* step : doex->steps)
@@ -132,38 +190,6 @@ void LinearityChecker::check_let(LetExpr* node, LinearEnv& env) {
             check_node(va->expr, env);
             std::string name = va->identifier->name->value;
 
-            // Check if RHS is a Linear constructor or producer function call.
-            // Multi-arg calls produce nested ApplyExprs: Apply(Apply(f, a1), a2).
-            // Walk to the innermost call to find the function name.
-            if (va->expr->get_type() == AST_APPLY_EXPR) {
-                auto* apply = static_cast<ApplyExpr*>(va->expr);
-                // Find the root function name through nested applies
-                std::string fn_name;
-                auto* cur = apply;
-                while (cur) {
-                    if (auto* nc = dynamic_cast<NameCall*>(cur->call)) {
-                        fn_name = nc->name->value;
-                        break;
-                    }
-                    if (auto* ec = dynamic_cast<ExprCall*>(cur->call)) {
-                        if (ec->expr->get_type() == AST_APPLY_EXPR)
-                            cur = static_cast<ApplyExpr*>(ec->expr);
-                        else {
-                            if (ec->expr->get_type() == AST_IDENTIFIER_EXPR)
-                                fn_name = static_cast<IdentifierExpr*>(ec->expr)->name->value;
-                            break;
-                        }
-                    } else break;
-                }
-                if (!fn_name.empty()) {
-                    if (is_linear_constructor(fn_name))
-                        env.create(name, va->source_context);
-                    if (producer_functions_.count(fn_name))
-                        env.create(name, va->source_context);
-                }
-            }
-
-            // Identifier alias: transfer linear obligation
             if (va->expr->get_type() == AST_IDENTIFIER_EXPR) {
                 auto* id = static_cast<IdentifierExpr*>(va->expr);
                 std::string src = id->name->value;
@@ -175,50 +201,18 @@ void LinearityChecker::check_let(LetExpr* node, LinearEnv& env) {
                     diag_.error(va->source_context, ErrorCode::E0600,
                                 "linear value '" + src + "' was already consumed");
                     error_count_++;
+                } else if (expr_produces_linear(va->expr)) {
+                    env.create(name, va->source_context);
                 }
+            } else if (expr_produces_linear(va->expr)) {
+                env.create(name, va->source_context);
             }
         } else if (auto* la = dynamic_cast<LambdaAlias*>(alias)) {
-            // Check if lambda body captures any linear values
             check_node(la->lambda, env);
         } else if (auto* pa = dynamic_cast<PatternAlias*>(alias)) {
             check_node(pa->expr, env);
-            // Tuple destructuring: let (a, b) = expr in ...
-            // If expr is a call to a tuple_producer function, mark all
-            // pattern names as linear obligations.
-            if (pa->expr->get_type() == AST_APPLY_EXPR) {
-                auto* apply = static_cast<ApplyExpr*>(pa->expr);
-                std::string fn_name;
-                auto* cur = apply;
-                while (cur) {
-                    if (auto* nc = dynamic_cast<NameCall*>(cur->call)) {
-                        fn_name = nc->name->value;
-                        break;
-                    }
-                    if (auto* ec = dynamic_cast<ExprCall*>(cur->call)) {
-                        if (ec->expr->get_type() == AST_APPLY_EXPR)
-                            cur = static_cast<ApplyExpr*>(ec->expr);
-                        else {
-                            if (ec->expr->get_type() == AST_IDENTIFIER_EXPR)
-                                fn_name = static_cast<IdentifierExpr*>(ec->expr)->name->value;
-                            break;
-                        }
-                    } else break;
-                }
-                if (!fn_name.empty() && tuple_producer_functions_.count(fn_name)) {
-                    // Walk the pattern and mark each identifier name as linear
-                    if (pa->pattern && pa->pattern->get_type() == AST_TUPLE_PATTERN) {
-                        auto* tp = static_cast<TuplePattern*>(pa->pattern);
-                        for (auto* sub : tp->patterns) {
-                            if (sub->get_type() == AST_PATTERN_VALUE) {
-                                auto* pv = static_cast<PatternValue*>(sub);
-                                if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr)) {
-                                    env.create((*id)->name->value, pa->source_context);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            track_linear_pattern(pa->pattern, type_of_expr(pa->expr), env,
+                                 pa->source_context);
         }
     }
     check_node(node->expr, env);
@@ -309,6 +303,10 @@ void LinearityChecker::check_if(IfExpr* node, LinearEnv& env) {
 }
 
 void LinearityChecker::check_apply(ApplyExpr* node, LinearEnv& env) {
+    // Check callee (may be a lambda FunctionExpr)
+    if (auto* ec = dynamic_cast<ExprCall*>(node->call))
+        check_node(ec->expr, env);
+
     // Check if any argument is a consumed linear variable
     for (auto& arg_variant : node->args) {
         AstNode* arg_node = std::holds_alternative<ExprNode*>(arg_variant)
@@ -330,9 +328,6 @@ void LinearityChecker::check_apply(ApplyExpr* node, LinearEnv& env) {
         }
     }
 
-    // Check for producer function calls handled in check_let
-    // (direct apply without let binding — the linear value is immediately consumed)
-
     // Recurse into arguments
     for (auto& arg_variant : node->args) {
         AstNode* arg_node = std::holds_alternative<ExprNode*>(arg_variant)
@@ -340,6 +335,75 @@ void LinearityChecker::check_apply(ApplyExpr* node, LinearEnv& env) {
             : static_cast<AstNode*>(std::get<ValueExpr*>(arg_variant));
         check_node(arg_node, env);
     }
+}
+
+void LinearityChecker::check_with(WithExpr* node, LinearEnv& env) {
+    check_node(node->contextExpr, env);
+
+    const std::string name = node->name->value;
+    LinearEnv body_env = env;
+    const bool resource_linear = expr_produces_linear(node->contextExpr);
+    if (resource_linear)
+        body_env.create(name, node->source_context);
+
+    check_node(node->bodyExpr, body_env);
+
+    // `with` always runs Closeable.close on the resource — that discharges the
+    // Linear obligation for the bound name (idiomatic openFile / tcpConnect).
+    if (resource_linear && body_env.is_live(name))
+        body_env.consume(name, node->source_context);
+
+    // Propagate consumption of outer linears that the body fully consumed.
+    for (auto& [v, status] : env.vars) {
+        if (status != LinearStatus::Live) continue;
+        if (body_env.is_consumed(v))
+            env.consume(v, node->source_context);
+    }
+
+    // Linears created inside the body (other than the with-bound resource)
+    // that are still live are leaks at with-exit.
+    for (auto& live : body_env.live_vars()) {
+        if (live == name) continue;
+        if (env.is_tracked(live)) continue; // outer; still live in outer too
+        auto it = body_env.created_at.find(live);
+        SourceLocation loc = (it != body_env.created_at.end())
+            ? it->second : node->source_context;
+        diag_.warning(loc,
+                      "linear value '" + live + "' not consumed — possible resource leak; "
+                      "use `case " + live + " of Linear fd -> close fd end` to release",
+                      WarningFlag::UnhandledEffect);
+    }
+}
+
+void LinearityChecker::check_function(FunctionExpr* node, LinearEnv& /*outer*/) {
+    // Function bodies are a separate linear scope (v1: no linear captures).
+    LinearEnv fn_env;
+
+    // Track Linear parameters from the (zonked) function type when available.
+    const MonoType* fn_ty = type_of_expr(node);
+    std::vector<const MonoType*> param_tys;
+    if (fn_ty) {
+        const MonoType* cur = fn_ty;
+        while (cur && cur->tag == MonoType::Arrow && param_tys.size() < node->patterns.size()) {
+            param_tys.push_back(cur->param_type);
+            cur = cur->return_type;
+        }
+    }
+    for (size_t i = 0; i < node->patterns.size(); ++i) {
+        const MonoType* pty = i < param_tys.size() ? param_tys[i] : nullptr;
+        track_linear_pattern(node->patterns[i], pty, fn_env, node->source_context);
+    }
+
+    for (auto* body : node->bodies) {
+        if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
+            check_node(bwg->expr, fn_env);
+        } else if (auto* g = dynamic_cast<BodyWithGuards*>(body)) {
+            check_node(g->guard, fn_env);
+            check_node(g->expr, fn_env);
+        }
+    }
+
+    warn_unconsumed(fn_env);
 }
 
 } // namespace yona::compiler::typechecker

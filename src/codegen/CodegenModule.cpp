@@ -14,6 +14,8 @@
 #include <fstream>
 #include <filesystem>
 #include <map>
+#include <optional>
+#include <unordered_set>
 
 namespace yona::compiler::codegen {
 using namespace llvm;
@@ -179,6 +181,11 @@ Codegen::ModuleFunctionMeta Codegen::module_meta_from_compiled(const CompiledFun
     meta.promise_inner_type = cf.promise_inner_type;
     meta.return_adt_name = cf.return_adt_name;
     meta.borrowed_params = cf.borrowed_params;
+    meta.return_linear = cf.return_linear || cf.return_adt_name == "Linear";
+    meta.tuple_elem_linear = cf.tuple_elem_linear;
+    meta.param_linear = cf.param_linear;
+    meta.effect_labels = cf.effect_labels;
+    meta.effect_spec = cf.effect_spec;
     return meta;
 }
 
@@ -193,6 +200,11 @@ Codegen::CompiledFunction Codegen::compiled_function_from_meta(llvm::Function* f
     cf.extern_promise = meta.extern_promise;
     cf.promise_inner_type = meta.promise_inner_type;
     cf.return_adt_name = meta.return_adt_name;
+    cf.return_linear = meta.return_linear || meta.return_adt_name == "Linear";
+    cf.tuple_elem_linear = meta.tuple_elem_linear;
+    cf.param_linear = meta.param_linear;
+    cf.effect_labels = meta.effect_labels;
+    cf.effect_spec = meta.effect_spec;
     return cf;
 }
 
@@ -280,13 +292,35 @@ bool Codegen::emit_interface_file(const std::string& path) {
         default: out << "FN "; break;
         }
         out << mangled << " " << meta.param_types.size();
-        for (auto ct : meta.param_types) out << " " << ctype_to_string(ct);
-        out << " -> " << ctype_to_string(is_promise_row ? meta.promise_inner_type : meta.return_type);
-        if (!is_promise_row && meta.return_type == CType::ADT && !meta.return_adt_name.empty())
-            out << " retadt " << meta.return_adt_name;
+        for (size_t i = 0; i < meta.param_types.size(); i++) {
+            if (i < meta.param_linear.size() && meta.param_linear[i])
+                out << " LINEAR";
+            else
+                out << " " << ctype_to_string(meta.param_types[i]);
+        }
+        CType printed_ret = is_promise_row ? meta.promise_inner_type : meta.return_type;
+        out << " -> ";
+        if (!meta.tuple_elem_linear.empty() && printed_ret == CType::TUPLE) {
+            out << "TUPLE";
+            for (char lin : meta.tuple_elem_linear)
+                out << (lin ? " LINEAR" : " INT");
+        } else if (meta.return_linear && printed_ret == CType::INT) {
+            out << "LINEAR";
+        } else {
+            out << ctype_to_string(printed_ret);
+            if (!is_promise_row && meta.return_type == CType::ADT && !meta.return_adt_name.empty())
+                out << " retadt " << meta.return_adt_name;
+        }
         auto borrow_mask = borrowed_params_to_mask(meta.borrowed_params, meta.param_types.size());
         if (borrow_mask.find('1') != std::string::npos)
             out << " borrow " << borrow_mask;
+        typechecker::SerializedFnEffects fx = meta.effect_spec;
+        if (fx.empty() && !meta.effect_labels.empty()) {
+            fx.result.labels = meta.effect_labels;
+        }
+        if (!fx.empty()) {
+            out << " effects " << typechecker::format_fn_effects(fx);
+        }
         out << "\n";
     }
 
@@ -441,15 +475,25 @@ bool Codegen::load_interface_file(const std::string& path) {
             iss >> mangled >> param_count;
 
             ModuleFunctionMeta meta;
+            meta.param_linear.assign((size_t)param_count, 0);
             for (int i = 0; i < param_count; i++) {
                 std::string type_str;
                 iss >> type_str;
-                meta.param_types.push_back(string_to_ctype(type_str));
+                if (type_str == "LINEAR") {
+                    meta.param_types.push_back(CType::INT);
+                    meta.param_linear[(size_t)i] = 1;
+                } else {
+                    meta.param_types.push_back(string_to_ctype(type_str));
+                }
             }
             std::string arrow;
             iss >> arrow; // "->"
             std::string ret_str;
             iss >> ret_str;
+            if (ret_str == "LINEAR") {
+                meta.return_linear = true;
+                ret_str = "INT";
+            }
             const bool is_promise_row = ext_kind != ast::ExternPromiseKind::Sync;
             meta.return_type = is_promise_row ? CType::PROMISE : string_to_ctype(ret_str);
             meta.extern_promise = ext_kind;
@@ -463,6 +507,19 @@ bool Codegen::load_interface_file(const std::string& path) {
                         meta.borrowed_params = borrowed_mask_to_params(mask, (size_t)param_count);
                 } else if (trailing == "retadt") {
                     iss >> meta.return_adt_name;
+                    if (meta.return_adt_name == "Linear")
+                        meta.return_linear = true;
+                } else if (trailing == "LINEAR") {
+                    meta.tuple_elem_linear.push_back(1);
+                } else if (trailing == "effects") {
+                    std::string spec;
+                    std::getline(iss, spec);
+                    typechecker::SerializedFnEffects fx;
+                    if (typechecker::parse_fn_effects(spec, fx)) {
+                        meta.effect_spec = std::move(fx);
+                        meta.effect_labels = meta.effect_spec.result.labels;
+                    }
+                    break;
                 }
             }
 
@@ -523,6 +580,76 @@ void Codegen::load_module_interface(const std::filesystem::path& mod_path) {
             return;
         }
     }
+}
+
+void Codegen::load_module_by_fqn(const std::string& mod_fqn) {
+    std::filesystem::path p;
+    std::string rest = mod_fqn;
+    while (!rest.empty()) {
+        auto pos = rest.find('\\');
+        if (pos == std::string::npos) {
+            p /= rest;
+            break;
+        }
+        p /= rest.substr(0, pos);
+        rest = rest.substr(pos + 1);
+    }
+    load_module_interface(p);
+}
+
+typechecker::ImportedFnSig Codegen::sig_from_meta(const ModuleFunctionMeta& meta) {
+    typechecker::ImportedFnSig sig;
+    sig.arity = (int)meta.param_types.size();
+    sig.return_linear = meta.return_linear || meta.return_adt_name == "Linear";
+    sig.tuple_elem_linear = meta.tuple_elem_linear;
+    sig.param_linear = meta.param_linear;
+    sig.effect_labels = meta.effect_labels;
+    sig.effect_spec = meta.effect_spec;
+    if (sig.effect_spec.empty() && !sig.effect_labels.empty())
+        sig.effect_spec.result.labels = sig.effect_labels;
+    sig.effect_open = sig.effect_spec.result.open();
+    if (!sig.effect_spec.params.empty()) {
+        int max_idx = 0;
+        for (auto& [idx, _] : sig.effect_spec.params)
+            if (idx > max_idx) max_idx = idx;
+        sig.param_effect_rows.assign(static_cast<size_t>(max_idx) + 1, std::nullopt);
+        for (auto& [idx, row] : sig.effect_spec.params) {
+            if (idx >= 0)
+                sig.param_effect_rows[static_cast<size_t>(idx)] = row;
+        }
+    }
+    if (!sig.tuple_elem_linear.empty())
+        sig.return_linear = false;
+    return sig;
+}
+
+std::optional<typechecker::ImportedFnSig>
+Codegen::ImportTypes::imported_function_sig(const std::string& module_fqn,
+                                            const std::string& name) {
+    cg_->load_module_by_fqn(module_fqn);
+    auto it = cg_->imports_.meta.find(mangle_name(module_fqn, name));
+    if (it == cg_->imports_.meta.end())
+        return std::nullopt;
+    return sig_from_meta(it->second);
+}
+
+std::vector<std::string>
+Codegen::ImportTypes::imported_module_exports(const std::string& module_fqn) {
+    cg_->load_module_by_fqn(module_fqn);
+    std::string expected_prefix = "yona_";
+    for (char c : module_fqn)
+        expected_prefix += (c == '\\') ? '_' : c;
+    expected_prefix += "__";
+    std::vector<std::string> names;
+    for (auto& [mangled, _] : cg_->imports_.meta) {
+        if (mangled.find(expected_prefix) != 0)
+            continue;
+        std::string tail = mangled.substr(expected_prefix.size());
+        if (tail.find("__") != std::string::npos)
+            continue;
+        names.push_back(std::move(tail));
+    }
+    return names;
 }
 
 bool Codegen::load_yona_module(const std::filesystem::path& yona_path) {
@@ -1093,6 +1220,50 @@ static std::pair<std::vector<CType>, CType> uncurry_type_signature(const types::
         current = &ft->returnType;
     }
     return {params, yona_type_to_ctype(*current)};
+}
+
+static typechecker::SerializedFnEffects effects_from_type(typechecker::MonoTypePtr ty,
+                                                          typechecker::TypeChecker& tc,
+                                                          int arity) {
+    ty = tc.zonk(ty);
+    return typechecker::serialized_effects_from_arrow(ty, arity, nullptr);
+}
+
+void Codegen::populate_interface_effect_rows(ast::ModuleDecl* mod,
+                                             typechecker::TypeChecker& tc) {
+    if (!mod || !mod->fqn) return;
+    std::string fqn;
+    if (mod->fqn->packageName.has_value()) {
+        auto* pkg = mod->fqn->packageName.value();
+        for (size_t i = 0; i < pkg->parts.size(); i++) {
+            if (i > 0) fqn += "\\";
+            fqn += pkg->parts[i]->value;
+        }
+        fqn += "\\";
+    }
+    fqn += mod->fqn->moduleName->value;
+
+    std::unordered_set<std::string> export_set(mod->exports.begin(), mod->exports.end());
+    for (auto* func : mod->functions) {
+        if (!func || export_set.count(func->name) == 0) continue;
+        tc.check(func);
+        auto* ty = tc.type_of(func);
+        if (!ty) ty = tc.check(func);
+        int arity = static_cast<int>(func->patterns.size());
+        auto spec = effects_from_type(ty, tc, arity);
+        auto labels = spec.result.labels;
+        std::string mangled = mangle_name(fqn, func->name);
+        auto it = imports_.meta.find(mangled);
+        if (it != imports_.meta.end()) {
+            it->second.effect_spec = spec;
+            it->second.effect_labels = labels;
+        }
+        auto cf_it = compiled_functions_.find(func->name);
+        if (cf_it != compiled_functions_.end()) {
+            cf_it->second.effect_spec = spec;
+            cf_it->second.effect_labels = labels;
+        }
+    }
 }
 
 } // namespace yona::compiler::codegen

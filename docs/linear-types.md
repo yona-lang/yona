@@ -1,10 +1,14 @@
 # Linear Types
 
-**Status (2026-08-18):** **partial.** `Linear` is a Prelude ADT. Use-after-consume
+**Status (2026-08-19):** **partial.** `Linear` is a Prelude ADT. Use-after-consume
 is **E0600** via `LinearityChecker` (non-blocking; skipped on modules).
 **E0602** is documented but never emitted (leaks use `-Wunhandled-effect`).
-Not an HM type; no `.yonai` obligation metadata.
-Evidence: [type-system-status.md](type-system-status.md) §4.
+Not an HM type. Producers are **type-directed** (`Linear _` or a product of
+Linear) — there is no C++ name allowlist. `.yonai` may mark FN/IO/AFN returns
+as `LINEAR` (CType stays INT/TUPLE). `WithExpr` and `FunctionExpr` bodies are
+walked: `with` binds then discharges the resource via Closeable; lambdas /
+local fns get a fresh linear scope (including Linear parameters when the
+zonked arrow type is known). Evidence: [type-system-status.md](type-system-status.md) §4.
 
 ## Overview
 
@@ -77,15 +81,19 @@ let conn = Linear (tcpConnect "host" 8080) in
 
 ### Producer Functions
 
-These functions return values that are tracked as linear obligations:
+These stdlib functions return `LINEAR` (or a tuple of Linear) in `.yonai`.
+The checker tracks them because their inferred type is `Linear _`, not
+because their names are hardcoded:
 
 | Module | Function | Creates |
 |--------|----------|---------|
+| **File** | `openFile` | File handle |
 | **Net** | `tcpConnect` | Socket handle |
 | **Net** | `tcpListen` | Server socket |
 | **Net** | `tcpAccept` | Client socket |
 | **Net** | `udpBind` | UDP socket |
 | **Process** | `spawn` | Process handle |
+| **Channel** | `channel` | `(Sender, Receiver)` tuple of Linear |
 
 ### Usage Pattern
 
@@ -109,14 +117,17 @@ end
 
 ### With `with` Blocks
 
-The `with` expression handles resource cleanup automatically. Inside a `with` block, the handle is managed by the block itself:
+The `with` expression handles resource cleanup at **codegen** (Closeable) and
+**LinearityChecker** discharges the bound Linear at with-exit (so the
+idiomatic `with h = openFile … in …` does not leak-warn). Nested Linears
+created inside the body are still tracked.
 
 ```yona
 -- Recommended pattern for simple resource usage
-with tcpConnect "host" 8080 as conn in
+with conn = tcpConnect "host" 8080 in
     recv conn 4096
 end
--- conn automatically closed by 'with'
+-- conn automatically closed by 'with' (codegen + linearity discharge)
 ```
 
 ## Composing with Effects
@@ -151,12 +162,19 @@ fetchData host port =
 
 The `LinearityChecker` is a flow-sensitive AST walker (similar to the RefinementChecker):
 
-1. Identifies linear values from `Linear` constructor calls and registered producer functions
+1. Identifies linear values from inferred types (`Linear _` or a product of
+   Linear). The `Linear` constructor is a fallback when types are missing.
+   Imported C functions use a `.yonai` `LINEAR` overlay (`ImportTypeSource`),
+   including selective import, wildcard import, and FQN `Pkg\Mod::func`
+   (`ModuleCall`).
 2. Tracks a `LinearEnv` mapping variable names to `Live` or `Consumed` status
 3. Pattern match on `Linear x` consumes the value
 4. `let y = x` transfers the obligation (x consumed, y live)
 5. At scope exit, warns about live (unconsumed) values
 6. At each use, errors if the value is already consumed
 7. In if/case, checks that both branches consume the same set
+8. Walks `WithExpr` (bind Linear from the resource expr; discharge at exit via
+   Closeable) and `FunctionExpr` bodies (fresh scope; Linear params from the
+   zonked function type). Still skipped on module top-levels as a whole unit.
 
 The checker is a compile-time-only pass. Codegen is unchanged — RC handles the actual memory management.

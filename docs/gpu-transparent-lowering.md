@@ -1,22 +1,26 @@
 # Transparent Accelerator Lowering
 
-Transparent accelerator lowering is intentionally behind the explicit
-`Std\GPU` API and benchmark crossover model. The compiler should only offload
-when it can prove that the transformed program preserves host semantics and the
-benchmark model predicts a win.
+Transparent lowering rewrites recognized `Std\IntArray` / `Std\FloatArray`
+`map` / `filter` / `foldl` shapes into the **same columnar runtime ABI** as
+explicit `Std\GPU` (`mapAdd`, `mapMul`, `filterGreaterThan`, `filterLessThan`,
+`reduceSum`, `mapFloatScale`, `reduceFloatGPU`). There is no second device backend.
+
+The compiler matches **inline lambdas** against the fixed kernel library
+(stdlib op + lambda shape, not a GPU export-name allowlist). GPU vs CPU is
+decided at **run time** by that ABI: IntArray kernels use documented
+`YONA_GPU_VULKAN_MIN_LEN` (default 4096) and per-op env vars; float map/reduce
+use the stub device when `yona_gpu_vulkan_ctx_init` succeeds (same as
+`mapFloatGPU`), else CPU. `yonac --no-accelerator-lowering` keeps the host
+closure path. `yonac --strict-accelerator` turns unlowerable IntArray/FloatArray
+`map` / `filter` / `foldl` lambdas into **E0700** (no SPIR-V from arbitrary
+closures yet — host path remains correct without the flag).
 
 ## Compiler Hook
 
-The lowering analysis should run after typechecking and before final codegen
-selection. At that point the compiler has:
-
-- A typed AST from the typechecker.
-- Module/import metadata from `.yonai` files.
-- Access to purity, ownership, and escape information used by codegen.
-
-The pass should produce an accelerator plan rather than directly emitting
-device code. Codegen can then lower that plan into calls to the same runtime ABI
-used by `Std\GPU`.
+Analysis runs at codegen of `ApplyExpr` (imports already resolved). It
+produces an `AccelMatch` plan (`include/AcceleratorLowering.h`); codegen
+emits calls to the Std\GPU raw C symbols. Named lambdas, `\x -> x + x * x`,
+effects inside the lambda, and `Std\List.map` are not rewritten.
 
 ## Candidate Shape
 
@@ -49,28 +53,24 @@ flowchart TD
     Cost -->|"Accelerator wins"| Runtime["Std GPU Runtime ABI"]
 ```
 
-The first implementation should only emit plans that could also be written by
-hand with `Std\GPU`: upload, primitive map/filter/reduce kernels, and
-materialize. This keeps transparent lowering from creating a second execution
-system.
+The implementation only emits plans that could also be written by hand with
+`Std\GPU` primitive map/filter/reduce kernels. This keeps transparent lowering
+from creating a second execution system.
 
 ## Crossover Inputs
 
-The cost model should be populated from benchmark data:
+Length is usually unknown at compile time, so the compiler does **not** invent
+a second size cutoff. Runtime already has the crossover knobs:
 
-- Input row count.
-- Bytes transferred host-to-backend and backend-to-host.
-- Number of kernels launched.
-- CPU scalar/SIMD time.
-- GPU backend time when available.
-- End-to-end time including materialization.
+- IntArray: `YONA_GPU_VULKAN_MIN_LEN` (default 4096) and per-op `*_MIN_LEN`.
+- Float: try the stub Vulkan device; CPU if init or dispatch fails.
 
-When data is missing, the compiler should keep CPU code.
+Benchmark data still informs those runtime defaults (`bench/run_gpu_compare.py`).
 
-## Benchmark corpus (before any transparent lowering)
+## Benchmark corpus
 
-Transparent lowering should not ship until there is **repeatable evidence** for the
-shapes the compiler would emit. Today that means:
+The accelerators under `bench/accelerators/` remain the evidence for runtime
+GPU vs CPU timing. Today that means:
 
 1. **Explicit `Std\GPU` programs** — The accelerators under `bench/accelerators/`
    include the large hot paths (`gpu_map_reduce_hot.yona`, `gpu_filter_hot.yona`,
@@ -108,21 +108,38 @@ Document published numbers in a machine-specific note (e.g. wiki or
 `docs/benchmark-results-*.md`) and treat them as **hints** for defaults, not
 universal constants.
 
-## Rollout
+## Status (2026-08-19)
 
-1. **Benchmark corpus** — Collect `run_gpu_compare.py` runs (use `--json-report`)
-   on representative hardware; document row counts and environment (see
-   *Benchmark corpus* above). No compiler changes required.
-2. Emit diagnostics-only candidate reports — `yonac --emit-accelerator-report file.yona` prints JSON
-   (`yona.accelerator_diag.v1`) listing explicit `Std\GPU` kernel-shaped call sites, then exits (no
-   codegen). **Expression programs:** after typecheck + `solve_constraints`; root has
-   `"report_kind":"program"`; optional `inferred_type` per site. **Modules:** default is an AST scan
-   of function / extern / instance / trait-default bodies (`"report_kind":"module_ast"`). With
-   `--emit-accelerator-report-with-types`, the same surfaces are typechecked first; root is
-   `"report_kind":"module"` and sites may include `inferred_type`. Root may include `file` (source
-   path). Each site has `op`, `binding` (`import` or `Std\GPU` FQN), `api_signature` (surface type
-   from `Std\GPU` exports), `line`, and `column`. Use `-I` like a normal compile where imports matter.
-3. Add an opt-in compiler flag for transparent lowering experiments.
-4. Compare generated offload against explicit `Std\GPU` code.
-5. Enable default lowering only for operation families with stable crossover
-   wins across supported platforms.
+**Shipped for the fixed kernel library** (inline lambdas only):
+
+| Host op | Lambda shape | ABI |
+|---------|--------------|-----|
+| `Std\IntArray.map` | `\x -> x + k` / `k + x` (or `\x -> x + x` as `* 2`) | `yona_Std_GPU_raw__mapAdd` / `__mapMul` |
+| `Std\IntArray.map` | `\x -> x - k` (literal or runtime negate → `mapAdd`) | `yona_Std_GPU_raw__mapAdd` |
+| `Std\IntArray.map` | `\x -> 0 - x` | `yona_Std_GPU_raw__mapMul` (`-1`) |
+| `Std\IntArray.map` | `\x -> x * k` / `k * x` | `yona_Std_GPU_raw__mapMul` |
+| `Std\IntArray.map` | `\x -> x * x` | `yona_Std_GPU_raw__mapSquare` |
+| `Std\IntArray.filter` | `\x -> x > k` / `k < x` | `yona_Std_GPU_raw__filterGreaterThan` |
+| `Std\IntArray.filter` | `\x -> x < k` | `yona_Std_GPU_raw__filterLessThan` (Vulkan LT mark shader when filter compute is on) |
+| `Std\IntArray.foldl` | `\a b -> a + b` (or `b + a`) with init `0` | `yona_Std_GPU_raw__reduceSum` |
+| `Std\FloatArray.map` | `\x -> x * s` / `s * x` | `yona_Std_GPU_raw__mapFloatScale` |
+| `Std\FloatArray.foldl` | `\a b -> a + b` with init `0` / `0.0` | `yona_Std_GPU_raw__reduceFloatGPU` |
+
+Not lowered (host closure path): named lambdas, `\x -> x + x * x`, effects, `Std\List.map`, Buffer
+programs that already call `mapAdd` / `mapGPU` explicitly.
+
+`--emit-accelerator-report` still prints JSON (`yona.accelerator_diag.v1`). Explicit
+`Std\GPU` sites have `"kind":"explicit"`. Lowered host sites have `"kind":"transparent"`
+and `"kernel"` (the ABI name). **Expression programs:** after typecheck + `solve_constraints`;
+root has `"report_kind":"program"`. **Modules:** AST scan (`"module_ast"`) or
+`--emit-accelerator-report-with-types` (`"module"`).
+
+## Rollout (history)
+
+1. **Benchmark corpus** — `run_gpu_compare.py --json-report` (see *Benchmark corpus* above).
+2. Diagnostics-only reports — `--emit-accelerator-report` (still supported).
+3. Compiler rewrite to the Std\GPU ABI (this pass) — default on; `--no-accelerator-lowering` to disable.
+4. Runtime GPU vs CPU remains the documented env / device gate (`docs/gpu-architecture.md`).
+5. Wider families (arbitrary lambdas → SPIR-V, List, named functions) stay out of
+   scope; use `--strict-accelerator` for an honest compile-time rejection
+   (**E0700**) until a SPIR-V path exists.

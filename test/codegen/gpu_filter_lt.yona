@@ -1,0 +1,5 @@
+import fromSeq from Std\IntArray in
+import upload, filterLessThan, reduceSum from Std\GPU in
+let input = fromSeq [1, 2, 3, 4, 5] in
+let buffer = upload input in
+reduceSum (filterLessThan 4 buffer)

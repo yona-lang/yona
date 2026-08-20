@@ -9,16 +9,20 @@
 
 #include "gpu/map_add_int64_spv.inc"
 #include "gpu/map_mul_int64_spv.inc"
+#include "gpu/map_square_int64_spv.inc"
 #include "gpu/reduce_block_int64_spv.inc"
 #include "gpu/map_add_int32_spv.inc"
 #include "gpu/map_mul_int32_spv.inc"
+#include "gpu/map_square_int32_spv.inc"
 #include "gpu/reduce_block_int32_spv.inc"
 #include "gpu/filter_mark_int64_spv.inc"
+#include "gpu/filter_mark_lt_int64_spv.inc"
 #include "gpu/filter_scatter_int64_spv.inc"
 #include "gpu/filter_flags_to_i64_spv.inc"
 #include "gpu/filter_prefix_inclusive_step_spv.inc"
 #include "gpu/filter_inclusive_to_exclusive_spv.inc"
 #include "gpu/filter_mark_int32_spv.inc"
+#include "gpu/filter_mark_lt_int32_spv.inc"
 #include "gpu/filter_scatter_int32_spv.inc"
 #include "gpu/filter_flags_to_int32_spv.inc"
 #include "gpu/filter_prefix_inclusive_step_int32_spv.inc"
@@ -82,16 +86,20 @@ typedef struct YonaVkScatterPipe {
 
 static YonaVkSimplePipe g_yona_pipe_mapadd;
 static YonaVkSimplePipe g_yona_pipe_mapmul;
+static YonaVkSimplePipe g_yona_pipe_mapsquare;
 static YonaVkSimplePipe g_yona_pipe_mapadd_i32;
 static YonaVkSimplePipe g_yona_pipe_mapmul_i32;
+static YonaVkSimplePipe g_yona_pipe_mapsquare_i32;
 static YonaVkReducePipe g_yona_pipe_reduce;
 static YonaVkReducePipe g_yona_pipe_reduce_i32;
 static YonaVkReducePipe g_yona_pipe_filter_mark;
+static YonaVkReducePipe g_yona_pipe_filter_mark_lt;
 static YonaVkScatterPipe g_yona_pipe_filter_scatter;
 static YonaVkReducePipe g_yona_pipe_filter_flags_to_i64;
 static YonaVkReducePipe g_yona_pipe_filter_prefix;
 static YonaVkScatterPipe g_yona_pipe_filter_inc_to_exc;
 static YonaVkReducePipe g_yona_pipe_filter_mark_i32;
+static YonaVkReducePipe g_yona_pipe_filter_mark_lt_i32;
 static YonaVkScatterPipe g_yona_pipe_filter_scatter_i32;
 static YonaVkReducePipe g_yona_pipe_filter_flags_to_i32;
 static YonaVkReducePipe g_yona_pipe_filter_prefix_i32;
@@ -122,16 +130,20 @@ void yona_vk_compute_destroy_cached_pipelines(void) {
     if (yona_vk_dev == VK_NULL_HANDLE) {
         memset(&g_yona_pipe_mapadd, 0, sizeof g_yona_pipe_mapadd);
         memset(&g_yona_pipe_mapmul, 0, sizeof g_yona_pipe_mapmul);
+        memset(&g_yona_pipe_mapsquare, 0, sizeof g_yona_pipe_mapsquare);
         memset(&g_yona_pipe_mapadd_i32, 0, sizeof g_yona_pipe_mapadd_i32);
         memset(&g_yona_pipe_mapmul_i32, 0, sizeof g_yona_pipe_mapmul_i32);
+        memset(&g_yona_pipe_mapsquare_i32, 0, sizeof g_yona_pipe_mapsquare_i32);
         memset(&g_yona_pipe_reduce, 0, sizeof g_yona_pipe_reduce);
         memset(&g_yona_pipe_reduce_i32, 0, sizeof g_yona_pipe_reduce_i32);
         memset(&g_yona_pipe_filter_mark, 0, sizeof g_yona_pipe_filter_mark);
+        memset(&g_yona_pipe_filter_mark_lt, 0, sizeof g_yona_pipe_filter_mark_lt);
         memset(&g_yona_pipe_filter_scatter, 0, sizeof g_yona_pipe_filter_scatter);
         memset(&g_yona_pipe_filter_flags_to_i64, 0, sizeof g_yona_pipe_filter_flags_to_i64);
         memset(&g_yona_pipe_filter_prefix, 0, sizeof g_yona_pipe_filter_prefix);
         memset(&g_yona_pipe_filter_inc_to_exc, 0, sizeof g_yona_pipe_filter_inc_to_exc);
         memset(&g_yona_pipe_filter_mark_i32, 0, sizeof g_yona_pipe_filter_mark_i32);
+        memset(&g_yona_pipe_filter_mark_lt_i32, 0, sizeof g_yona_pipe_filter_mark_lt_i32);
         memset(&g_yona_pipe_filter_scatter_i32, 0, sizeof g_yona_pipe_filter_scatter_i32);
         memset(&g_yona_pipe_filter_flags_to_i32, 0, sizeof g_yona_pipe_filter_flags_to_i32);
         memset(&g_yona_pipe_filter_prefix_i32, 0, sizeof g_yona_pipe_filter_prefix_i32);
@@ -140,16 +152,20 @@ void yona_vk_compute_destroy_cached_pipelines(void) {
     }
     yona_vk_destroy_simple_pipe(&g_yona_pipe_mapadd);
     yona_vk_destroy_simple_pipe(&g_yona_pipe_mapmul);
+    yona_vk_destroy_simple_pipe(&g_yona_pipe_mapsquare);
     yona_vk_destroy_simple_pipe(&g_yona_pipe_mapadd_i32);
     yona_vk_destroy_simple_pipe(&g_yona_pipe_mapmul_i32);
+    yona_vk_destroy_simple_pipe(&g_yona_pipe_mapsquare_i32);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_reduce);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_reduce_i32);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_mark);
+    yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_mark_lt);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_scatter);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_flags_to_i64);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_prefix);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_inc_to_exc);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_mark_i32);
+    yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_mark_lt_i32);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_scatter_i32);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_flags_to_i32);
     yona_vk_destroy_simple_pipe((YonaVkSimplePipe*)&g_yona_pipe_filter_prefix_i32);
@@ -512,6 +528,22 @@ VkResult yona_vk_compute_ensure_mapmul_i32_pipe(void) {
     return r;
 }
 
+VkResult yona_vk_compute_ensure_mapsquare_pipe(void) {
+    if (g_yona_pipe_mapsquare.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_simple_compute_pipe(
+        kYonaGpuMapSquareInt64Spv, kYonaGpuMapSquareInt64SpvWordCount, 12u, &g_yona_pipe_mapsquare);
+    if (r == VK_SUCCESS) g_yona_pipe_mapsquare.ready = 1;
+    return r;
+}
+
+VkResult yona_vk_compute_ensure_mapsquare_i32_pipe(void) {
+    if (g_yona_pipe_mapsquare_i32.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_simple_compute_pipe(
+        kYonaGpuMapSquareInt32Spv, kYonaGpuMapSquareInt32SpvWordCount, 8u, &g_yona_pipe_mapsquare_i32);
+    if (r == VK_SUCCESS) g_yona_pipe_mapsquare_i32.ready = 1;
+    return r;
+}
+
 VkResult yona_vk_compute_ensure_reduce_pipe(void) {
     if (g_yona_pipe_reduce.ready) return VK_SUCCESS;
     VkResult r = yona_vk_build_two_ssbo_compute_pipe(
@@ -533,6 +565,15 @@ VkResult yona_vk_compute_ensure_filter_mark_pipe(void) {
     VkResult r = yona_vk_build_two_ssbo_compute_pipe(
         kYonaGpuFilterMarkInt64Spv, kYonaGpuFilterMarkInt64SpvWordCount, 12u, &g_yona_pipe_filter_mark);
     if (r == VK_SUCCESS) g_yona_pipe_filter_mark.ready = 1;
+    return r;
+}
+
+VkResult yona_vk_compute_ensure_filter_mark_lt_pipe(void) {
+    if (g_yona_pipe_filter_mark_lt.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_two_ssbo_compute_pipe(
+        kYonaGpuFilterMarkLtInt64Spv, kYonaGpuFilterMarkLtInt64SpvWordCount, 12u,
+        &g_yona_pipe_filter_mark_lt);
+    if (r == VK_SUCCESS) g_yona_pipe_filter_mark_lt.ready = 1;
     return r;
 }
 
@@ -581,6 +622,15 @@ VkResult yona_vk_compute_ensure_filter_mark_i32_pipe(void) {
     return r;
 }
 
+VkResult yona_vk_compute_ensure_filter_mark_lt_i32_pipe(void) {
+    if (g_yona_pipe_filter_mark_lt_i32.ready) return VK_SUCCESS;
+    VkResult r = yona_vk_build_two_ssbo_compute_pipe(
+        kYonaGpuFilterMarkLtInt32Spv, kYonaGpuFilterMarkLtInt32SpvWordCount, 8u,
+        &g_yona_pipe_filter_mark_lt_i32);
+    if (r == VK_SUCCESS) g_yona_pipe_filter_mark_lt_i32.ready = 1;
+    return r;
+}
+
 VkResult yona_vk_compute_ensure_filter_scatter_i32_pipe(void) {
     if (g_yona_pipe_filter_scatter_i32.ready) return VK_SUCCESS;
     VkResult r = yona_vk_build_four_ssbo_compute_pipe(kYonaGpuFilterScatterInt32Spv,
@@ -625,11 +675,17 @@ YonaVkSimplePipe* yona_vk_compute_mapmul_pipe(void) { return &g_yona_pipe_mapmul
 
 YonaVkSimplePipe* yona_vk_compute_mapmul_i32_pipe(void) { return &g_yona_pipe_mapmul_i32; }
 
+YonaVkSimplePipe* yona_vk_compute_mapsquare_pipe(void) { return &g_yona_pipe_mapsquare; }
+
+YonaVkSimplePipe* yona_vk_compute_mapsquare_i32_pipe(void) { return &g_yona_pipe_mapsquare_i32; }
+
 YonaVkReducePipe* yona_vk_compute_reduce_pipe(void) { return &g_yona_pipe_reduce; }
 
 YonaVkReducePipe* yona_vk_compute_reduce_i32_pipe(void) { return &g_yona_pipe_reduce_i32; }
 
 YonaVkReducePipe* yona_vk_compute_filter_mark_pipe(void) { return &g_yona_pipe_filter_mark; }
+
+YonaVkReducePipe* yona_vk_compute_filter_mark_lt_pipe(void) { return &g_yona_pipe_filter_mark_lt; }
 
 YonaVkScatterPipe* yona_vk_compute_filter_scatter_pipe(void) { return &g_yona_pipe_filter_scatter; }
 
@@ -644,6 +700,10 @@ YonaVkScatterPipe* yona_vk_compute_filter_inc_to_exc_pipe(void) {
 }
 
 YonaVkReducePipe* yona_vk_compute_filter_mark_i32_pipe(void) { return &g_yona_pipe_filter_mark_i32; }
+
+YonaVkReducePipe* yona_vk_compute_filter_mark_lt_i32_pipe(void) {
+    return &g_yona_pipe_filter_mark_lt_i32;
+}
 
 YonaVkScatterPipe* yona_vk_compute_filter_scatter_i32_pipe(void) {
     return &g_yona_pipe_filter_scatter_i32;
