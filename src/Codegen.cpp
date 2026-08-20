@@ -44,6 +44,7 @@
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
+#include <cstdlib>
 #include <map>
 
 namespace yona::compiler::codegen {
@@ -94,8 +95,47 @@ Codegen::Codegen(const std::string& module_name, compiler::DiagnosticEngine* dia
 }
 Codegen::~Codegen() = default;
 
+static void append_yona_path_dirs(std::vector<std::string>& module_paths) {
+    const char* env = std::getenv("YONA_PATH");
+    if (!env || !*env)
+        return;
+#ifdef _WIN32
+    const char sep = ';';
+#else
+    const char sep = ':';
+#endif
+    std::string cur;
+    auto flush = [&]() {
+        if (cur.empty())
+            return;
+        std::error_code ec;
+        auto p = std::filesystem::path(cur);
+        if (!std::filesystem::is_directory(p, ec)) {
+            cur.clear();
+            return;
+        }
+        auto canon = std::filesystem::canonical(p, ec);
+        if (ec) {
+            cur.clear();
+            return;
+        }
+        std::string s = canon.string();
+        if (std::find(module_paths.begin(), module_paths.end(), s) == module_paths.end())
+            module_paths.push_back(s);
+        cur.clear();
+    };
+    for (const char* c = env; *c; ++c) {
+        if (*c == sep)
+            flush();
+        else
+            cur.push_back(*c);
+    }
+    flush();
+}
+
 void Codegen::load_prelude(parser::Parser* parser,
                             typechecker::TypeChecker* type_checker) {
+    append_yona_path_dirs(module_paths_);
     // 1. Load Prelude.yonai — populates types_.adt_constructors and imports_.meta
     load_module_interface(std::filesystem::path("Prelude"));
 
@@ -319,6 +359,7 @@ void Codegen::declare_runtime() {
     rt_.print_newline_ = decl("yona_rt_print_newline", vd, {});
     rt_.print_seq_     = decl("yona_rt_print_seq", vd, {i64p});
     rt_.string_concat_ = decl("yona_rt_string_concat", ptr, {ptr, ptr});
+    rt_.string_eq_     = decl("yona_Prelude__Eq_String__eq", i64, {ptr, ptr});
     rt_.seq_alloc_     = decl("yona_rt_seq_alloc", i64p, {i64});
     rt_.seq_set_       = decl("yona_rt_seq_set", vd, {i64p, i64, i64});
     rt_.seq_set_heap_  = decl("yona_rt_seq_set_heap", vd, {i64p, i64});
@@ -1084,6 +1125,26 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         }
     }
 
+    // Non-blocking: sibling-aware effect rows for .yonai FN lines.
+    {
+        DiagnosticEngine fx_diag;
+        typechecker::TypeChecker fx_tc(fx_diag);
+        fx_tc.check_module(mod);
+        for (auto* func : mod->functions) {
+            if (!func || !export_set.count(func->name)) continue;
+            auto* ty = fx_tc.type_of(func);
+            if (!ty) continue;
+            auto row = fx_tc.effect_row_info(fx_tc.zonk(ty));
+            if (row.ops.empty() && !row.open_rest) continue;
+            std::string mangled = mangle_name(fqn, func->name);
+            auto meta_it = imports_.meta.find(mangled);
+            if (meta_it == imports_.meta.end()) continue;
+            meta_it->second.effect_ops = std::move(row.ops);
+            meta_it->second.effect_open_rest = row.open_rest;
+            meta_it->second.effect_hof = row.hof;
+        }
+    }
+
     // Third pass: compile trait instance methods with ExternalLinkage
     // so importing modules can call them via resolved trait dispatch.
     for (auto& [key, inst] : types_.trait_instances) {
@@ -1430,7 +1491,20 @@ void Codegen::codegen_print_value(const TypedValue& tv) {
                         {ConstantInt::get(i64_ty_local, i + 2)}); // +2 for tuple header
                     auto* elem = builder_->CreateLoad(i64_ty_local, gep);
                     CType et = tv.subtypes[i];
-                    codegen_print_value({elem, et});
+                    // Tuple slots are always i64; restore the LLVM type print
+                    // helpers expect (i1 for Bool, ptr for String, f64, …).
+                    Value* typed = elem;
+                    LType* want = llvm_type(et);
+                    if (typed->getType() != want) {
+                        if (want->isPointerTy())
+                            typed = builder_->CreateIntToPtr(typed, want);
+                        else if (want->isDoubleTy())
+                            typed = builder_->CreateBitCast(typed, want);
+                        else if (want->isIntegerTy() &&
+                                 want->getIntegerBitWidth() < 64)
+                            typed = builder_->CreateTrunc(typed, want);
+                    }
+                    codegen_print_value({typed, et});
                 }
             }
             builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr(")")});

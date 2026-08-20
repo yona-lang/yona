@@ -82,23 +82,21 @@ end
 Match algebraic data type constructors and bind fields:
 
 ```yona
-type Option a = Some a | None
-
+let maybeValue = Some 42 in
 case maybeValue of
     Some x -> x * 2
     None -> 0
 end
 ```
 
-Nested patterns:
+`Some`/`None` are prelude constructors; a `type` declaration is only legal
+inside a `module`. Nested sequence patterns:
 
 ```yona
-type List a = Cons a (List a) | Nil
-
-case myList of
-    Cons x (Cons y _) -> x + y    -- first two elements
-    Cons x Nil -> x               -- single element
-    Nil -> 0                      -- empty
+case [1, 2, 3] of
+    [x, y | _] -> x + y
+    [x] -> x
+    [] -> 0
 end
 ```
 
@@ -107,9 +105,13 @@ end
 Match named fields of record-style ADTs:
 
 ```yona
+module Demo\People
+
+export greet
+
 type Person = Person { name : String, age : Int }
 
-case person of
+greet person = case person of
     Person { name = n, age = a } -> n ++ " is " ++ show a
 end
 ```

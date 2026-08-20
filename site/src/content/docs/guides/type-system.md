@@ -148,9 +148,12 @@ handle f 0 with
 end                                   # => 7
 ```
 
-Rows survive module boundaries: exported functions record their row in
-`.yonai` (including open rests on higher-order parameters), and imports
-restore it for call-site checking.
+Rows survive module boundaries: exported functions record
+`effects Fs.read` (closed) or `effects | hof` (`apply f x = f x`) on the
+`.yonai` `FN` line. Imports restore that row for call-site E0202.
+Siblings are typechecked as a unit, so wrapping an effectful helper
+exports the helper's row. A missing `effects` field means unknown, not
+pure.
 
 Honest limitations: `effect Name … end` declarations do not parse yet (an
 operation's identity is its `Effect.op` label at the `perform` site),

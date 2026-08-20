@@ -7,11 +7,7 @@ collect results programmatically.
 
 ## Functions
 
-### `assertEqual`
-
-```yona
-assertEqual expected actual =
-```
+### `assertEqual : Int -> Int -> (a, b)`
 
 Asserts that `expected` equals `actual`.
 
@@ -20,11 +16,7 @@ assertEqual 42 42   # => (:pass, "assertEqual")
 assertEqual 1 2     # => (:fail, "assertEqual: expected equal values")
 ```
 
-### `assertNotEqual`
-
-```yona
-assertNotEqual expected actual =
-```
+### `assertNotEqual : Int -> Int -> (a, b)`
 
 Asserts that `expected` does not equal `actual`.
 
@@ -32,11 +24,7 @@ Asserts that `expected` does not equal `actual`.
 assertNotEqual 1 2   # => (:pass, "assertNotEqual")
 ```
 
-### `assertTrue`
-
-```yona
-assertTrue value =
-```
+### `assertTrue : Int -> (a, b)`
 
 Asserts that `value` is true.
 
@@ -44,11 +32,7 @@ Asserts that `value` is true.
 assertTrue (1 > 0)   # => (:pass, "assertTrue")
 ```
 
-### `assertFalse`
-
-```yona
-assertFalse value =
-```
+### `assertFalse : Int -> (a, b)`
 
 Asserts that `value` is false.
 
@@ -56,11 +40,7 @@ Asserts that `value` is false.
 assertFalse (1 > 2)   # => (:pass, "assertFalse")
 ```
 
-### `assertGreater`
-
-```yona
-assertGreater a b =
-```
+### `assertGreater : Int -> Int -> (a, b)`
 
 Asserts that `a > b`.
 
@@ -68,15 +48,10 @@ Asserts that `a > b`.
 assertGreater 5 3   # => (:pass, "assertGreater")
 ```
 
-### `assertLess`
-
-```yona
-assertLess a b =
-```
+### `assertLess : Int -> Int -> (a, b)`
 
 Asserts that `a < b`.
 
 ```
 assertLess 3 5   # => (:pass, "assertLess")
 ```
-

@@ -1,5 +1,4 @@
 #include "typechecker/TypeArena.h"
-#include <set>
 
 namespace yona::compiler::typechecker {
 
@@ -17,36 +16,13 @@ MonoTypePtr TypeArena::make_con(TyCon con) {
 }
 
 MonoTypePtr TypeArena::make_arrow(MonoTypePtr param, MonoTypePtr ret,
-                                  std::vector<std::string> effect_labels,
-                                  MonoTypePtr effect_rest,
-                                  std::unordered_map<std::string, SourceLocation> origins) {
-    return alloc(MonoType::make_arrow(param, ret, normalize_effect_labels(std::move(effect_labels)),
-                                      effect_rest, std::move(origins)));
+                                   std::vector<LatentEffect> effects,
+                                   MonoTypePtr rest) {
+    return alloc(MonoType::make_arrow(param, ret, std::move(effects), rest));
 }
 
-MonoTypePtr TypeArena::make_effect_row(std::vector<std::string> labels, MonoTypePtr rest,
-                                       std::vector<MonoTypePtr> extra_rests,
-                                       std::unordered_map<std::string, SourceLocation> origins) {
-    MonoType t = MonoType::make_effect_row(normalize_effect_labels(std::move(labels)), rest,
-                                           std::move(origins));
-    t.args = std::move(extra_rests);
-    return alloc(std::move(t));
-}
-
-MonoTypePtr TypeArena::pack_effect_rest(const std::vector<MonoTypePtr>& open_rests) {
-    std::vector<MonoTypePtr> unique;
-    std::set<TypeId> seen;
-    for (auto* r : open_rests) {
-        if (!r) continue;
-        if (r->tag == MonoType::Var) {
-            if (!seen.insert(r->var_id).second) continue;
-        }
-        unique.push_back(r);
-    }
-    if (unique.empty()) return nullptr;
-    if (unique.size() == 1) return unique[0];
-    return make_effect_row({}, unique[0],
-                           std::vector<MonoTypePtr>(unique.begin() + 1, unique.end()));
+MonoTypePtr TypeArena::make_erow(std::vector<LatentEffect> effects, MonoTypePtr rest) {
+    return alloc(MonoType::make_erow(std::move(effects), rest));
 }
 
 MonoTypePtr TypeArena::make_app(const std::string& name, std::vector<MonoTypePtr> args) {

@@ -9,15 +9,19 @@
 
 #include "SourceLocation.h"
 #include <cstdint>
-#include <optional>
 #include <string>
-#include <string_view>
-#include <unordered_map>
 #include <vector>
 
 namespace yona::compiler::typechecker {
 
 using TypeId = uint32_t;
+
+/// A concrete effect operation a function may perform (`Fs.read`), plus the
+/// introducing `perform` location for E0202.
+struct LatentEffect {
+    std::string op_key;
+    SourceLocation perform_loc;
+};
 
 /// Built-in type constructors.
 enum class TyCon {
@@ -32,10 +36,10 @@ struct MonoType {
         Var,        ///< Unification variable
         Con,        ///< Built-in type constructor
         App,        ///< Named type application: App("Option", [Int])
-        Arrow,      ///< Function type: Arrow(param, ret) with latent effect row
+        Arrow,      ///< Function type: Arrow(param, ret)
         MTuple,     ///< Product type: Tuple([Int, String])
         MRecord,    ///< Record type: { name : String, age : Int | r }
-        MEffectRow, ///< Effect row value used when binding open effect rests
+        ERow,       ///< Effect row payload: labels + optional rest var
     } tag;
 
     // Var
@@ -52,6 +56,9 @@ struct MonoType {
     // Arrow
     const MonoType* param_type = nullptr;
     const MonoType* return_type = nullptr;
+    /// Known latent effects. `effect_rest` is a Var / ERow / nullptr (closed).
+    std::vector<LatentEffect> arrow_effects;
+    const MonoType* effect_rest = nullptr;
 
     // MTuple
     std::vector<const MonoType*> elements;
@@ -59,13 +66,6 @@ struct MonoType {
     // MRecord: sorted (name, type) pairs + optional row rest variable
     std::vector<std::pair<std::string, const MonoType*>> record_fields;
     const MonoType* row_rest = nullptr; // row variable (Var) or nullptr (closed row)
-
-    // Arrow + MEffectRow: sorted unique "Effect.op" labels; effect_rest is
-    // Var / MEffectRow / nullptr (closed). Empty closed row = pure.
-    std::vector<std::string> effect_labels;
-    const MonoType* effect_rest = nullptr;
-    /// Introducing `perform` (or first join) for each concrete label.
-    std::unordered_map<std::string, SourceLocation> effect_origins;
 
     /// Create a Var type
     static MonoType make_var(TypeId id, int lvl) {
@@ -75,19 +75,18 @@ struct MonoType {
     static MonoType make_con(TyCon c) {
         MonoType t; t.tag = Con; t.con = c; return t;
     }
-    /// Create an Arrow type (optional latent effect row)
+    /// Create an Arrow type
     static MonoType make_arrow(const MonoType* p, const MonoType* r,
-                               std::vector<std::string> effects = {},
-                               const MonoType* effect_rest = nullptr,
-                               std::unordered_map<std::string, SourceLocation> origins = {}) {
-        MonoType t;
-        t.tag = Arrow;
-        t.param_type = p;
-        t.return_type = r;
-        t.effect_labels = std::move(effects);
-        t.effect_rest = effect_rest;
-        t.effect_origins = std::move(origins);
-        return t;
+                               std::vector<LatentEffect> effects = {},
+                               const MonoType* rest = nullptr) {
+        MonoType t; t.tag = Arrow; t.param_type = p; t.return_type = r;
+        t.arrow_effects = std::move(effects); t.effect_rest = rest; return t;
+    }
+    /// Create an effect-row payload (labels + optional rest).
+    static MonoType make_erow(std::vector<LatentEffect> effects,
+                              const MonoType* rest = nullptr) {
+        MonoType t; t.tag = ERow; t.arrow_effects = std::move(effects);
+        t.effect_rest = rest; return t;
     }
     /// Create an App type
     static MonoType make_app(const std::string& name, std::vector<const MonoType*> a) {
@@ -102,69 +101,9 @@ struct MonoType {
                                  const MonoType* rest = nullptr) {
         MonoType t; t.tag = MRecord; t.record_fields = std::move(fields); t.row_rest = rest; return t;
     }
-    /// Create an effect-row binder (for open-row unification)
-    static MonoType make_effect_row(std::vector<std::string> labels,
-                                    const MonoType* rest = nullptr,
-                                    std::unordered_map<std::string, SourceLocation> origins = {}) {
-        MonoType t;
-        t.tag = MEffectRow;
-        t.effect_labels = std::move(labels);
-        t.effect_rest = rest;
-        t.effect_origins = std::move(origins);
-        return t;
-    }
 };
 
 using MonoTypePtr = const MonoType*;
-
-/// Sort + unique effect operation labels (`Effect.op`).
-std::vector<std::string> normalize_effect_labels(std::vector<std::string> labels);
-
-/// Pretty-print an effect row: `!{}`, `!{State.get}`, `!{Gpu.oom|a}`.
-std::string pretty_effect_row(const std::vector<std::string>& labels, MonoTypePtr rest);
-
-/// Flatten concrete labels from an arrow / effect-row (resolve open rests).
-std::vector<std::string> collect_effect_labels(MonoTypePtr type, class UnionFind* uf = nullptr);
-
-/// Split a row / rest chain into concrete labels and unbound rest variables.
-/// `skip_var` is omitted (used for effect-row occurs / least fixed point).
-void collect_effect_row_parts(MonoTypePtr row, class UnionFind* uf,
-                              std::optional<TypeId> skip_var,
-                              std::vector<std::string>& labels,
-                              std::vector<MonoTypePtr>& open_rests);
-
-/// Merge introducing locations (first write wins).
-void merge_effect_origins(std::unordered_map<std::string, SourceLocation>& dst,
-                          const std::unordered_map<std::string, SourceLocation>& src);
-
-/// Collect introducing locations from an arrow / effect-row (follow open rests).
-void collect_effect_origins(MonoTypePtr type, class UnionFind* uf,
-                            std::unordered_map<std::string, SourceLocation>& origins);
-
-/// One `.yonai` effect row: labels plus optional open rest ids (`|r0`).
-struct SerializedEffectRow {
-    std::vector<std::string> labels;
-    std::vector<int> rest_ids;
-    bool open() const { return !rest_ids.empty(); }
-};
-
-/// Function-level `effects` trailer: result row plus per-parameter rows.
-struct SerializedFnEffects {
-    SerializedEffectRow result;
-    std::vector<std::pair<int, SerializedEffectRow>> params;
-    bool empty() const {
-        return result.labels.empty() && result.rest_ids.empty() && params.empty();
-    }
-};
-
-std::string format_serialized_row(const SerializedEffectRow& row);
-std::string format_fn_effects(const SerializedFnEffects& fx);
-bool parse_fn_effects(std::string_view spec, SerializedFnEffects& out);
-
-/// Encode the curried arrow's result row and function-typed parameter rows.
-/// `ty` should already be zonked. Walks exactly `arity` arrows.
-SerializedFnEffects serialized_effects_from_arrow(MonoTypePtr ty, int arity,
-                                                  class UnionFind* uf = nullptr);
 
 /// A trait constraint: e.g., Num a
 struct Constraint {

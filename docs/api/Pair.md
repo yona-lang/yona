@@ -7,17 +7,15 @@ enabling dot access and named pattern matching.
 
 ## Types
 
-### `type Pair a b = Pair { fst : a, snd : b }`
+### Pair
+
+`type Pair a b = Pair { fst : a, snd : b }`
 
 A pair with named fields.
 
 ## Functions
 
-### `pair`
-
-```yona
-pair a b = Pair { fst = a, snd = b }
-```
+### `pair : a -> b -> Pair c d`
 
 Creates a pair from two values.
 
@@ -25,11 +23,7 @@ Creates a pair from two values.
 pair 1 2   # => Pair { fst = 1, snd = 2 }
 ```
 
-### `first`
-
-```yona
-first p = case p of Pair { fst = a } -> a end
-```
+### `first : Pair a b -> c`
 
 Extracts the first element.
 
@@ -37,11 +31,7 @@ Extracts the first element.
 first (pair 1 2)   # => 1
 ```
 
-### `second`
-
-```yona
-second p = case p of Pair { snd = b } -> b end
-```
+### `second : Pair a b -> c`
 
 Extracts the second element.
 
@@ -49,11 +39,7 @@ Extracts the second element.
 second (pair 1 2)   # => 2
 ```
 
-### `mapFirst`
-
-```yona
-mapFirst fn p =
-```
+### `mapFirst : (a -> b) -> Pair c d -> Pair e f`
 
 Transforms the first element.
 
@@ -61,11 +47,7 @@ Transforms the first element.
 mapFirst (\x -> x * 10) (pair 3 5)   # => Pair { fst = 30, snd = 5 }
 ```
 
-### `mapSecond`
-
-```yona
-mapSecond fn p =
-```
+### `mapSecond : (a -> b) -> Pair c d -> Pair e f`
 
 Transforms the second element.
 
@@ -73,11 +55,7 @@ Transforms the second element.
 mapSecond (\x -> x * 10) (pair 3 5)   # => Pair { fst = 3, snd = 50 }
 ```
 
-### `mapPair`
-
-```yona
-mapPair fn gn p =
-```
+### `mapPair : (a -> b) -> (c -> d) -> Pair e f -> Pair g h`
 
 Transforms both elements with two functions.
 
@@ -85,11 +63,7 @@ Transforms both elements with two functions.
 mapPair (\x -> x + 1) (\x -> x * 2) (pair 3 5)   # => Pair { fst = 4, snd = 10 }
 ```
 
-### `swap`
-
-```yona
-swap p =
-```
+### `swap : Pair a b -> Pair c d`
 
 Swaps the two elements.
 
@@ -97,11 +71,7 @@ Swaps the two elements.
 swap (pair 1 2)   # => Pair { fst = 2, snd = 1 }
 ```
 
-### `toTuple`
-
-```yona
-toTuple p =
-```
+### `toTuple : Pair a b -> (c, d)`
 
 Converts to a tuple `(a, b)`.
 
@@ -109,15 +79,10 @@ Converts to a tuple `(a, b)`.
 toTuple (pair 1 2)   # => (1, 2)
 ```
 
-### `fromTuple`
-
-```yona
-fromTuple (a, b) = Pair { fst = a, snd = b }
-```
+### `fromTuple : (a, b) -> Pair c d`
 
 Creates a pair from a tuple.
 
 ```
 fromTuple (1, 2)   # => Pair { fst = 1, snd = 2 }
 ```
-

@@ -8,11 +8,7 @@ converting strings. Iterator-returning functions (`split`, `lines`,
 
 ## Functions
 
-### `length`
-
-```yona
-length str =
-```
+### `length : String -> Int`
 
 Returns the length of the string in bytes.
 
@@ -21,11 +17,7 @@ import length from Std\String in
 length "hello"   # => 5
 ```
 
-### `isEmpty`
-
-```yona
-isEmpty str =
-```
+### `isEmpty : String -> Bool`
 
 Returns `true` if the string has zero length.
 
@@ -35,11 +27,7 @@ isEmpty ""      # => true
 isEmpty "hi"    # => false
 ```
 
-### `toUpperCase`
-
-```yona
-toUpperCase str =
-```
+### `toUpperCase : String -> String`
 
 Convert all characters to uppercase.
 
@@ -48,11 +36,7 @@ import toUpperCase from Std\String in
 toUpperCase "hello"   # => "HELLO"
 ```
 
-### `toLowerCase`
-
-```yona
-toLowerCase str =
-```
+### `toLowerCase : String -> String`
 
 Convert all characters to lowercase.
 
@@ -61,11 +45,7 @@ import toLowerCase from Std\String in
 toLowerCase "HELLO"   # => "hello"
 ```
 
-### `trim`
-
-```yona
-trim str =
-```
+### `trim : String -> String`
 
 Remove leading and trailing whitespace.
 
@@ -74,11 +54,7 @@ import trim from Std\String in
 trim "  hello  "   # => "hello"
 ```
 
-### `indexOf`
-
-```yona
-indexOf str needle =
-```
+### `indexOf : String -> String -> Int`
 
 Return the index of the first occurrence of `needle`, or -1 if not found.
 
@@ -87,11 +63,7 @@ import indexOf from Std\String in
 indexOf "hello world" "world"   # => 6
 ```
 
-### `contains`
-
-```yona
-contains str needle =
-```
+### `contains : String -> String -> Bool`
 
 Returns `true` if `str` contains `needle`.
 
@@ -100,11 +72,7 @@ import contains from Std\String in
 contains "hello world" "world"   # => true
 ```
 
-### `startsWith`
-
-```yona
-startsWith str prefix =
-```
+### `startsWith : String -> String -> Bool`
 
 Returns `true` if `str` starts with `prefix`.
 
@@ -113,11 +81,7 @@ import startsWith from Std\String in
 startsWith "hello" "hel"   # => true
 ```
 
-### `endsWith`
-
-```yona
-endsWith str suffix =
-```
+### `endsWith : String -> String -> Bool`
 
 Returns `true` if `str` ends with `suffix`.
 
@@ -126,11 +90,7 @@ import endsWith from Std\String in
 endsWith "hello.txt" ".txt"   # => true
 ```
 
-### `substring`
-
-```yona
-substring str start end =
-```
+### `substring : String -> Int -> Int -> String`
 
 Extract a substring from index `start` (inclusive) to `end` (exclusive).
 
@@ -139,11 +99,7 @@ import substring from Std\String in
 substring "hello" 1 4   # => "ell"
 ```
 
-### `replace`
-
-```yona
-replace str old new =
-```
+### `replace : String -> String -> String -> String`
 
 Replace all occurrences of `old` with `new`.
 
@@ -152,11 +108,7 @@ import replace from Std\String in
 replace "aabaa" "a" "x"   # => "xxbxx"
 ```
 
-### `split`
-
-```yona
-split str delimiter =
-```
+### `split : String -> String -> Iterator a`
 
 Split a string by a delimiter. Returns an `Iterator String`.
 
@@ -166,11 +118,7 @@ let iter = split "a,b,c" "," in
 # consume with iterator protocol
 ```
 
-### `join`
-
-```yona
-join separator seq =
-```
+### `join : String -> [a] -> String`
 
 Join a sequence of strings with a separator.
 
@@ -179,11 +127,7 @@ import join from Std\String in
 join ", " ["a", "b", "c"]   # => "a, b, c"
 ```
 
-### `charAt`
-
-```yona
-charAt str index =
-```
+### `charAt : String -> Int -> Int`
 
 Returns the character code (Int) at the given index.
 
@@ -192,11 +136,7 @@ import charAt from Std\String in
 charAt "ABC" 0   # => 65
 ```
 
-### `padLeft`
-
-```yona
-padLeft width pad str =
-```
+### `padLeft : Int -> String -> String -> String`
 
 Pad `str` on the left with `pad` until it reaches `width`.
 
@@ -205,11 +145,7 @@ import padLeft from Std\String in
 padLeft 5 "0" "42"   # => "00042"
 ```
 
-### `padRight`
-
-```yona
-padRight width pad str =
-```
+### `padRight : Int -> String -> String -> String`
 
 Pad `str` on the right with `pad` until it reaches `width`.
 
@@ -218,11 +154,7 @@ import padRight from Std\String in
 padRight 5 "." "hi"   # => "hi..."
 ```
 
-### `reverse`
-
-```yona
-reverse str =
-```
+### `reverse : String -> String`
 
 Reverse a string.
 
@@ -231,11 +163,7 @@ import reverse from Std\String in
 reverse "hello"   # => "olleh"
 ```
 
-### `repeat`
-
-```yona
-repeat n str =
-```
+### `repeat : Int -> String -> String`
 
 Repeat a string `n` times.
 
@@ -244,11 +172,7 @@ import repeat from Std\String in
 repeat 3 "ab"   # => "ababab"
 ```
 
-### `take`
-
-```yona
-take n str =
-```
+### `take : Int -> String -> String`
 
 Take the first `n` characters of a string.
 
@@ -257,11 +181,7 @@ import take from Std\String in
 take 3 "hello"   # => "hel"
 ```
 
-### `drop`
-
-```yona
-drop n str =
-```
+### `drop : Int -> String -> String`
 
 Drop the first `n` characters of a string.
 
@@ -270,11 +190,7 @@ import drop from Std\String in
 drop 3 "hello"   # => "lo"
 ```
 
-### `count`
-
-```yona
-count str needle =
-```
+### `count : String -> String -> Int`
 
 Count the number of non-overlapping occurrences of `needle` in `str`.
 
@@ -283,11 +199,7 @@ import count from Std\String in
 count "ababa" "ab"   # => 2
 ```
 
-### `lines`
-
-```yona
-lines str =
-```
+### `lines : String -> Iterator a`
 
 Split a string into lines. Returns an `Iterator String`.
 
@@ -297,11 +209,7 @@ let iter = lines "a\nb\nc" in
 # consume with iterator protocol
 ```
 
-### `unlines`
-
-```yona
-unlines seq =
-```
+### `unlines : [a] -> String`
 
 Join a sequence of strings with newline separators.
 
@@ -310,11 +218,7 @@ import unlines from Std\String in
 unlines ["a", "b", "c"]   # => "a\nb\nc"
 ```
 
-### `chars`
-
-```yona
-chars str =
-```
+### `chars : String -> Iterator a`
 
 Returns an `Iterator` over individual characters of the string.
 
@@ -324,11 +228,7 @@ let iter = chars "hello" in
 # consume with iterator protocol
 ```
 
-### `fromChars`
-
-```yona
-fromChars seq =
-```
+### `fromChars : [a] -> String`
 
 Build a string from a sequence of character codes.
 
@@ -337,11 +237,7 @@ import fromChars from Std\String in
 fromChars [72, 105]   # => "Hi"
 ```
 
-### `toInt`
-
-```yona
-toInt str =
-```
+### `toInt : String -> Int`
 
 Parse a string as an integer.
 
@@ -350,11 +246,7 @@ import toInt from Std\String in
 toInt "42"   # => 42
 ```
 
-### `toFloat`
-
-```yona
-toFloat str =
-```
+### `toFloat : String -> Float`
 
 Parse a string as a float.
 

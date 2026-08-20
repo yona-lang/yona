@@ -7,11 +7,7 @@ and UUID v4 generation.
 
 ## Functions
 
-### `sha256`
-
-```yona
-sha256 input =
-```
+### `sha256 : String -> String`
 
 Compute the SHA-256 hash of a string. Returns the hex-encoded digest.
 
@@ -20,11 +16,7 @@ import sha256 from Std\Crypto in
 sha256 "hello"   # => "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 ```
 
-### `randomBytes`
-
-```yona
-randomBytes n =
-```
+### `randomBytes : Int -> String`
 
 Generate `n` cryptographically secure random bytes, returned as a raw string.
 
@@ -34,11 +26,7 @@ let key = randomBytes 32 in
 length key   # => 32
 ```
 
-### `randomHex`
-
-```yona
-randomHex n =
-```
+### `randomHex : Int -> String`
 
 Generate `n` random bytes and return them as a hex-encoded string (2n characters).
 
@@ -47,11 +35,7 @@ import randomHex from Std\Crypto in
 randomHex 16   # => "a3f2b1..." (32 hex characters)
 ```
 
-### `uuid4`
-
-```yona
-uuid4 =
-```
+### `uuid4 : String`
 
 Generate a random UUID v4 string.
 

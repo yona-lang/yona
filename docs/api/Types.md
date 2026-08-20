@@ -7,11 +7,7 @@ Int, Float, Bool, and String.
 
 ## Functions
 
-### `toInt`
-
-```yona
-toInt str =
-```
+### `toInt : String -> Int`
 
 Parse a string as an integer.
 
@@ -20,11 +16,7 @@ import toInt from Std\Types in
 toInt "42"   # => 42
 ```
 
-### `toFloat`
-
-```yona
-toFloat str =
-```
+### `toFloat : String -> Float`
 
 Parse a string as a float.
 
@@ -33,11 +25,7 @@ import toFloat from Std\Types in
 toFloat "3.14"   # => 3.14
 ```
 
-### `intToString`
-
-```yona
-intToString n =
-```
+### `intToString : Int -> String`
 
 Convert an integer to its string representation.
 
@@ -46,11 +34,7 @@ import intToString from Std\Types in
 intToString 42   # => "42"
 ```
 
-### `floatToString`
-
-```yona
-floatToString x =
-```
+### `floatToString : Float -> String`
 
 Convert a float to its string representation.
 
@@ -59,11 +43,7 @@ import floatToString from Std\Types in
 floatToString 3.14   # => "3.14"
 ```
 
-### `boolToString`
-
-```yona
-boolToString b =
-```
+### `boolToString : Bool -> String`
 
 Convert a boolean to `"true"` or `"false"`.
 

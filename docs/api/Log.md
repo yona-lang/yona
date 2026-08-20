@@ -7,11 +7,7 @@ level filter. Messages below the current level are suppressed.
 
 ## Functions
 
-### `debug`
-
-```yona
-debug msg =
-```
+### `debug : String -> ()`
 
 Log a message at DEBUG level.
 
@@ -20,11 +16,7 @@ import debug from Std\Log in
 debug "entering function foo"
 ```
 
-### `info`
-
-```yona
-info msg =
-```
+### `info : String -> ()`
 
 Log a message at INFO level.
 
@@ -33,11 +25,7 @@ import info from Std\Log in
 info "server started on port 8080"
 ```
 
-### `warn`
-
-```yona
-warn msg =
-```
+### `warn : String -> ()`
 
 Log a message at WARN level.
 
@@ -46,11 +34,7 @@ import warn from Std\Log in
 warn "disk usage above 90%"
 ```
 
-### `error`
-
-```yona
-error msg =
-```
+### `error : String -> ()`
 
 Log a message at ERROR level.
 
@@ -59,11 +43,7 @@ import error from Std\Log in
 error "failed to connect to database"
 ```
 
-### `setLevel`
-
-```yona
-setLevel level =
-```
+### `setLevel : Int -> ()`
 
 Set the global log level. Use 0 = DEBUG, 1 = INFO, 2 = WARN, 3 = ERROR.
 
@@ -72,11 +52,7 @@ import setLevel from Std\Log in
 setLevel 2   # only WARN and ERROR messages will appear
 ```
 
-### `getLevel`
-
-```yona
-getLevel =
-```
+### `getLevel : Int`
 
 Returns the current global log level as an integer.
 

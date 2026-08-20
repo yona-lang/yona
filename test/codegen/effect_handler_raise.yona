@@ -1,0 +1,7 @@
+try
+    handle perform Boom.go () with
+        Boom.go () resume -> raise 42
+        return val -> val
+    end
+catch _ -> 1
+end

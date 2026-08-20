@@ -1,12 +1,13 @@
 ---
 title: Effects
-description: Algebraic effects — perform operations, handle them at the call site, and let the compiler infer effect rows on function types.
+description: Algebraic effects — perform operations, handle them at the call site, and check unhandled latent effects at apply (E0202).
 ---
 
 <span class="yona-status yona-status--partial">Partial</span> — `perform`,
-`handle`, and inferred effect rows work today; handlers are shallow in-scope
-dispatch (`resume` is an identity continuation, not a captured continuation),
-and standalone `effect` declarations do not parse yet.
+`handle`, and **closed** latent effect sets on lambdas work today. Applying
+an unhandled effectful function is **E0202**. Handlers are shallow in-scope
+dispatch (`resume` is an identity continuation, not a captured continuation).
+Open rows and standalone `effect` declarations are not implemented yet.
 
 Algebraic effects separate *what* a computation requests from *how* the
 request is served. A function says `perform Log.log msg`; the **caller**
@@ -70,29 +71,35 @@ end
 
 ## Effect rows on function types
 
-Function arrows carry a **latent effect row**: the set of operations the
-function may perform, written `!{Effect.op}` between the arrow and the
-result type. Rows are **inferred by the compiler** — you never write them
-in source, but you will see them in diagnostics and interface files:
+Function arrows carry a **latent effect row**: the operations the function
+may perform, plus an optional open rest. The compiler infers this from
+`perform` and from applying other effectful functions. You never write the
+row in source; it appears in diagnostics as `!{Effect.op}`:
 
 ```yona
-\x -> perform State.get ()     # inferred: a -> !{State.get} Int
-\f x -> f x                    # inferred: (a -> !{|r} b) -> a -> !{|r} b
+\x -> perform State.get ()     # a -> !{State.get} b
+\f x -> f x                    # (a -> !{|r} b) -> a -> !{|r} b
 ```
 
-The inference rules, precisely:
+What is implemented today:
 
-- **`perform`** adds its `Effect.op` label to the row of the function being
-  inferred, when no covering `handle` is in scope at that point.
-- **`handle` subtracts** the operations its clauses cover. Operations not
-  covered escape into the enclosing row.
-- **Application unions** the callee's latent row into the ambient row of
-  the caller.
-- **Higher-order functions keep open rows.** A function like `apply f x = f x`
-  gets an open rest `!{|r}` that unifies with its argument's row — passing
-  an effectful function through `map` or `apply` does not lose the effect.
-- **Recursive functions** get the least fixed point of their own row, so
-  self-application does not produce an infinite type.
+- **`perform`** inside a lambda, when no covering `handle` is in scope,
+  is recorded on that function's row.
+- **Application unions** the callee's uncovered ops (and open rest) into
+  the enclosing function — so `let apply = \f x -> f x` and
+  `let g = \() -> f ()` propagate effects.
+- **`handle` subtracts** the operations its clauses cover. Ops not covered
+  escape into the enclosing row.
+- **`handle` covers apply.** Applying the function inside a handler for
+  those operations is accepted — including
+  `let f = \x -> perform E.op x in handle f v with …`.
+- **Application of an uncovered row is E0202** (below).
+- **Direct `perform`** with no enclosing lambda and no handler stays a
+  `-Wunhandled-effect` warning.
+
+Closed and open HOF rows on exported `FN` lines are restored on import.
+A least-fixed-point story beyond generalizing the rest var is not
+implemented.
 
 ## E0202 — unhandled effects are errors
 
@@ -126,19 +133,20 @@ raises `:UnhandledEffect` at runtime if reached.
 
 ## Rows cross module boundaries
 
-When a module is compiled, the inferred rows of its exported functions are
-written into the `.yonai` interface file and restored on import, so E0202
-checking works across modules exactly as within one file:
+`.yonai` `FN` lines may carry a closed set, an open rest, or both:
 
-```text
-FN yona_My_Mod__fetch 1 STRING -> STRING effects Db.query,Log.log
-FN yona_My_Mod__apply 2 FUNCTION INT -> INT effects |r0 0:|r0
+```
+FN yona_Test_Fx__fetch 1 STRING -> STRING effects Fs.read
+FN yona_Test_Hof__apply 2 STRING -> STRING effects | hof
 ```
 
-The second line shows an open higher-order row: `apply`'s latent row `|r0`
-is shared with its first parameter's row, so importing `apply` and passing
-it an effectful function joins that function's operations into your row —
-and E0202 still fires if nothing handles them.
+`effects | hof` is the `apply f x = f x` shape: the first parameter is
+a function, and applying it propagates that argument's effects. A
+missing `effects` field stays unknown (fresh type vars), so existing
+stdlib interfaces are unchanged. Module compile typechecks siblings as
+a unit, so `wrap = \() -> readSecret ()` records `readSecret`'s row on
+`wrap`. Importing and applying an effectful export is **E0202** unless
+a `handle` at the import/apply site covers every listed op.
 
 ## Worked example: GPU fallback
 
@@ -181,6 +189,9 @@ Stated plainly, because they shape what you can write today:
   `Effect.op` labels at `perform` and `handle` sites; there is no place to
   declare operation signatures, so argument types are checked structurally
   at each site.
+- **A missing `effects` field means unknown, not pure.** Closed sets and
+  `effects | hof` are restored; `\x f -> f x` (function not first) is
+  not a serialized HOF shape.
 
 ## Why effects
 

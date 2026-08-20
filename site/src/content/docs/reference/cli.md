@@ -65,7 +65,7 @@ The individual warning flags and which group enables them are listed on the [err
 | `-I, --include <path>` | Add a module search path (for `.yonai` interface files); repeatable |
 | `--sysroot <path>` | Yona distribution root, used to find `lib/` and the runtime objects |
 
-Imports are resolved by searching, in order: paths given with `-I`, the input file's directory, the current directory, then `lib/` and `share/yona/lib/` under each discovered distribution root. Distribution roots come from `--sysroot`, the `YONA_HOME` environment variable, and the directory containing the `yonac` executable.
+Imports (and `Prelude.yonai`) are resolved by searching, in order: paths given with `-I`, directories in `YONA_PATH`, the input file's directory, the current directory, then `lib/` and `share/yona/lib/` under each discovered distribution root. Distribution roots come from `--sysroot`, the `YONA_HOME` environment variable, and the directory containing the `yonac` executable. `YONA_PATH` is a `:`-separated list on Unix and a `;`-separated list on Windows.
 
 ### Accelerators
 
@@ -114,6 +114,7 @@ yona> 1 + 2
 | Variable | Effect |
 |----------|--------|
 | `YONA_HOME` | Additional Yona distribution root; searched for `lib/` (modules, `Prelude`) and packaged runtime objects |
+| `YONA_PATH` | Extra module search directories (`Prelude.yonai` and `import … from …`). Separated by `:` on Unix and `;` on Windows. Needed when compiling from a directory that has no cwd-relative `lib/` |
 | `YONAC_CC` | C compiler driver used to compile the runtime from source and to drive external linking (default: `cc` on Unix, `clang` on Windows) |
 | `YONAC_LINKER_MODE` | Default for `--linker-mode` (`auto`, `bundled`, `system`, `inprocess`) when the flag is not given |
 | `YONAC_REQUIRE_INPROCESS_LLD` | When set to `1`/`true`/`yes`/`on`, make a failed or unavailable in-process LLD link a hard error instead of falling back to the external linker |

@@ -8,11 +8,7 @@ randomness, use `Std.Crypto`.
 
 ## Functions
 
-### `int`
-
-```yona
-int lo hi =
-```
+### `int : Int -> Int -> Int`
 
 Generate a random integer in the range `[lo, hi]` (inclusive).
 
@@ -21,11 +17,7 @@ import int from Std\Random in
 int 1 100   # => 42 (random)
 ```
 
-### `float`
-
-```yona
-float =
-```
+### `float : Float`
 
 Generate a random float in the range `[0.0, 1.0)`.
 
@@ -34,11 +26,7 @@ import float from Std\Random in
 float   # => 0.7312... (random)
 ```
 
-### `choice`
-
-```yona
-choice seq =
-```
+### `choice : [a] -> Int`
 
 Pick a random element from a sequence. Returns the element.
 
@@ -47,11 +35,7 @@ import choice from Std\Random in
 choice [10, 20, 30]   # => 20 (random)
 ```
 
-### `shuffle`
-
-```yona
-shuffle seq =
-```
+### `shuffle : [a] -> [b]`
 
 Return a new sequence with elements in random order.
 

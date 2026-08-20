@@ -9,11 +9,7 @@ current fiber without blocking the OS thread.
 
 ## Functions
 
-### `getenv`
-
-```yona
-getenv name =
-```
+### `getenv : String -> String`
 
 Get the value of an environment variable. Returns an empty string if not set.
 
@@ -22,11 +18,7 @@ import getenv from Std\Process in
 getenv "HOME"   # => "/home/user"
 ```
 
-### `getcwd`
-
-```yona
-getcwd =
-```
+### `getcwd : String`
 
 Returns the current working directory.
 
@@ -35,11 +27,7 @@ import getcwd from Std\Process in
 getcwd   # => "/home/user/project"
 ```
 
-### `exit`
-
-```yona
-exit code =
-```
+### `exit : Int -> Int`
 
 Terminate the process with the given exit code.
 
@@ -48,11 +36,7 @@ import exit from Std\Process in
 exit 0
 ```
 
-### `exec`
-
-```yona
-exec command =
-```
+### `exec : String -> String`
 
 Execute a shell command and return its stdout as a string. Async.
 
@@ -62,11 +46,7 @@ let output = exec "ls -la" in
 println output
 ```
 
-### `execStatus`
-
-```yona
-execStatus command =
-```
+### `execStatus : String -> Int`
 
 Execute a shell command and return its exit status code. Async.
 
@@ -76,11 +56,7 @@ let code = execStatus "make build" in
 println (show code)
 ```
 
-### `setenv`
-
-```yona
-setenv name value =
-```
+### `setenv : String -> String -> Int`
 
 Set an environment variable. Returns 0 on success.
 
@@ -89,11 +65,7 @@ import setenv from Std\Process in
 setenv "MY_VAR" "hello"
 ```
 
-### `hostname`
-
-```yona
-hostname =
-```
+### `hostname : String`
 
 Returns the system hostname.
 
@@ -102,11 +74,7 @@ import hostname from Std\Process in
 hostname   # => "myhost"
 ```
 
-### `spawn`
-
-```yona
-spawn command =
-```
+### `spawn : String -> Int`
 
 Spawn a subprocess without waiting for it to finish. Returns a process handle (Int).
 
@@ -117,11 +85,7 @@ let status = wait proc in
 println (show status)
 ```
 
-### `readLine`
-
-```yona
-readLine proc =
-```
+### `readLine : Int -> String`
 
 Read a single line from the subprocess stdout.
 
@@ -131,27 +95,15 @@ let proc = spawn "echo hello" in
 readLine proc   # => "hello"
 ```
 
-### `readAll`
-
-```yona
-readAll proc =
-```
+### `readAll : Int -> String`
 
 Read all remaining stdout from a subprocess as a string. Async.
 
-### `wait`
-
-```yona
-wait proc =
-```
+### `wait : Int -> Int`
 
 Wait for a subprocess to exit and return its exit status. Async.
 
-### `kill`
-
-```yona
-kill proc signal =
-```
+### `kill : Int -> Int -> Int`
 
 Send a signal to a subprocess. Returns 0 on success.
 
@@ -161,27 +113,15 @@ let proc = spawn "sleep 100" in
 kill proc 15   # SIGTERM
 ```
 
-### `writeStdin`
-
-```yona
-writeStdin proc data =
-```
+### `writeStdin : Int -> String -> Int`
 
 Write a string to the subprocess stdin. Returns the number of bytes written.
 
-### `closeStdin`
-
-```yona
-closeStdin proc =
-```
+### `closeStdin : Int -> Int`
 
 Close the stdin pipe of a subprocess. Returns 0 on success.
 
-### `pid`
-
-```yona
-pid proc =
-```
+### `pid : Int -> Int`
 
 Returns the OS process ID of a subprocess.
 

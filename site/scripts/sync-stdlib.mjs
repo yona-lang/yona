@@ -2,7 +2,9 @@
 /**
  * Import the generated stdlib API reference from this repository's
  * docs/api/ (produced by scripts/gendocs.py) into src/content/docs/stdlib/
- * with Starlight frontmatter.
+ * with Starlight frontmatter. Maintainers: do not edit those pages by
+ * hand — they are overwritten by this script. That note is not shown
+ * on the published pages.
  *
  * Usage: node scripts/sync-stdlib.mjs
  *        (run from site/, or npm run sync)
@@ -27,6 +29,27 @@ const yamlQuote = (s) => `'${s.replaceAll("'", "''")}'`;
 function rewriteLinks(text) {
 	return text.replace(/\]\(([A-Za-z0-9_]+)\.md(#[^)]*)?\)/g, (_, mod, anchor) => {
 		return `](/stdlib/${mod.toLowerCase()}/${anchor ?? ''})`;
+	});
+}
+
+function compactSignatures(text) {
+	let next = text.replace(
+		/^### `([^`]+)`\n\n```(?:yona)?\n([\s\S]*?)\n```\n/gm,
+		(m, name, body) => {
+			if (name.includes(':')) return m;
+			const first = body.trim().split('\n')[0].replace(/\s*=\s*$/, '');
+			return `### ${name}\n\n\`${first}\`\n\n`;
+		},
+	);
+	next = next.replace(/^### `type ([A-Z][a-zA-Z0-9_]*)([^`]*)`\n/gm, '### $1\n\n`type $1$2`\n');
+	return next.replace(/\n{3,}/g, '\n\n');
+}
+
+function liftSignatures(text) {
+	return text.replace(/^### ([a-z][a-zA-Z0-9_]*)\n\n`([^`]+)`\n/gm, (m, name, sig) => {
+		if (!sig.includes(':')) return m;
+		const full = sig.startsWith(name) ? sig : `${name} : ${sig}`;
+		return `### \`${full}\`\n`;
 	});
 }
 
@@ -61,13 +84,9 @@ function transform(raw, { isIndex }) {
 
 	const title = isIndex ? 'Standard library' : heading.replace('Std.', 'Std\\');
 
-	text = tagBareFences(rewriteLinks(text));
+	text = liftSignatures(tagBareFences(rewriteLinks(compactSignatures(text))));
 
-	const note = isIndex
-		? '\n:::note\nThis reference is generated from `##` comments in `lib/Std/` by `scripts/gendocs.py`.\nDo not edit these pages by hand.\n:::\n'
-		: '';
-
-	return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(description)}\n---\n${note}\n${text}`;
+	return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(description)}\n---\n\n<div class="stdlib-api">\n\n${text}\n\n</div>\n`;
 }
 
 rmSync(OUT_DIR, { recursive: true, force: true });

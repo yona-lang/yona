@@ -1668,7 +1668,7 @@ unique_ptr<ExprNode> ParserImpl::parse_perform_expr() {
     while (!is_at_end() && !check(TokenType::YNEWLINE) && !check(TokenType::YSEMICOLON) &&
            !check(TokenType::YIN) && !check(TokenType::YEND) && !check(TokenType::YWITH) &&
            !check(TokenType::YELSE) && !check(TokenType::YTHEN) && !check(TokenType::YRBRACKET) &&
-           !check(TokenType::YRPAREN)) {
+           !check(TokenType::YRPAREN) && !check(TokenType::YCOMMA)) {
         auto arg = parse_expr();
         if (!arg) break;
         args.push_back(arg.release());

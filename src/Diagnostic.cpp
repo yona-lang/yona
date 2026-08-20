@@ -427,26 +427,24 @@ std::string error_explanation(ErrorCode code) {
 
         case ErrorCode::E0202:
             return
-                "Unhandled effect at call site [E0202]\n"
+                "Unhandled effect at application [E0202]\n"
                 "\n"
-                "A function whose type includes latent effects (the `!{Effect.op}` row) is\n"
-                "applied where those operations are not covered by a surrounding\n"
-                "`handle ... with` block. The primary span is the introducing `perform`;\n"
-                "a note marks the call that lets the effect escape.\n"
+                "A function that performs an effect is applied, but no `handle...with`\n"
+                "block in scope covers that operation. The primary location is the\n"
+                "introducing `perform`; a note points at the call that escaped.\n"
                 "\n"
                 "Example:\n"
                 "\n"
-                "  -- f : () -> !{Gpu.oom} ()\n"
-                "  let f = (\\() -> perform Gpu.oom ()) in\n"
-                "  f ()   -- Error: points at `perform Gpu.oom`\n"
+                "  -- Error: plan's latent Fs.read is applied with no handler\n"
+                "  let plan = \\() -> perform Fs.read \"/etc/shadow\" in\n"
+                "  plan ()\n"
                 "\n"
-                "  -- Fix: handle the effect at the use site\n"
-                "  handle f () with\n"
-                "      Gpu.oom () resume -> resume ()\n"
-                "  end\n"
-                "\n"
-                "Direct `perform` without a handler still warns via -Wunhandled-effect;\n"
-                "E0202 is for applying an already-inferred effectful function.\n";
+                "  -- Fix: handle the apply site\n"
+                "  let plan = \\() -> perform Fs.read path in\n"
+                "  handle plan \"/tmp/x\" with\n"
+                "      Fs.read p resume -> resume p\n"
+                "      return val -> val\n"
+                "  end\n";
 
         case ErrorCode::E0300:
             return

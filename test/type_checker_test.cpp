@@ -129,6 +129,46 @@ TEST_CASE("Unifier: arrow types unify structurally") {
     CHECK(u.resolve(a)->con == TyCon::String);
 }
 
+TEST_CASE("Unifier: closed effect sets with the same ops unify") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier u(arena, uf, diag);
+    auto* int_t = arena.make_con(TyCon::Int);
+    LatentEffect e{"Fs.read", SourceLocation::unknown()};
+    auto* fn1 = arena.make_arrow(int_t, int_t, {e});
+    auto* fn2 = arena.make_arrow(int_t, int_t, {e});
+    CHECK(u.unify(fn1, fn2, SourceLocation::unknown()));
+}
+
+TEST_CASE("Unifier: closed effect sets with different ops fail") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier u(arena, uf, diag);
+    auto* int_t = arena.make_con(TyCon::Int);
+    auto* fn1 = arena.make_arrow(int_t, int_t, {{"Fs.read", SourceLocation::unknown()}});
+    auto* fn2 = arena.make_arrow(int_t, int_t, {{"Net.post", SourceLocation::unknown()}});
+    CHECK(!u.unify(fn1, fn2, SourceLocation::unknown()));
+}
+
+TEST_CASE("Unifier: open effect rest absorbs a closed set") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier u(arena, uf, diag);
+    auto* int_t = arena.make_con(TyCon::Int);
+    auto* rest = arena.fresh_var(0); uf.add_var(rest->var_id, 0);
+    auto* open = arena.make_arrow(int_t, int_t, {}, rest);
+    auto* closed = arena.make_arrow(int_t, int_t, {{"Fs.read", SourceLocation::unknown()}});
+    CHECK(u.unify(open, closed, SourceLocation::unknown()));
+    auto* bound = u.resolve(rest);
+    REQUIRE(bound != nullptr);
+    CHECK(bound->tag == MonoType::ERow);
+    REQUIRE(!bound->arrow_effects.empty());
+    CHECK(bound->arrow_effects[0].op_key == "Fs.read");
+}
+
 TEST_CASE("Unifier: occurs check prevents infinite types") {
     TypeArena arena;
     UnionFind uf;
@@ -137,42 +177,6 @@ TEST_CASE("Unifier: occurs check prevents infinite types") {
     auto* a = arena.fresh_var(0); uf.add_var(a->var_id, 0);
     auto* seq_a = arena.make_app("Seq", {a});
     CHECK(!u.unify(a, seq_a, SourceLocation::unknown())); // a ~ Seq a -> infinite
-}
-
-TEST_CASE("Unifier: effect-row occurs is least fixed point, not infinite type") {
-    TypeArena arena;
-    UnionFind uf;
-    DiagnosticEngine diag;
-    Unifier u(arena, uf, diag);
-    auto* r = arena.fresh_var(0); uf.add_var(r->var_id, 0);
-    auto* cyclic = arena.make_effect_row({"State.get"}, r);
-    CHECK(u.unify(r, cyclic, SourceLocation::unknown()));
-    auto* bound = u.resolve(r);
-    REQUIRE(bound != nullptr);
-    CHECK(bound->tag == MonoType::MEffectRow);
-    CHECK(bound->effect_labels == std::vector<std::string>{"State.get"});
-    CHECK(bound->effect_rest == nullptr);
-    CHECK(!diag.has_errors());
-}
-
-TEST_CASE("Unifier: effect-row occurs keeps an independent open rest") {
-    TypeArena arena;
-    UnionFind uf;
-    DiagnosticEngine diag;
-    Unifier u(arena, uf, diag);
-    auto* r_self = arena.fresh_var(0); uf.add_var(r_self->var_id, 0);
-    auto* r_param = arena.fresh_var(0); uf.add_var(r_param->var_id, 0);
-    auto* cyclic = arena.make_effect_row({"Log.log"}, r_self, {r_param});
-    CHECK(u.unify(r_self, cyclic, SourceLocation::unknown()));
-    auto* bound = u.resolve(r_self);
-    REQUIRE(bound != nullptr);
-    CHECK(bound->tag == MonoType::MEffectRow);
-    CHECK(bound->effect_labels == std::vector<std::string>{"Log.log"});
-    auto* rest = u.resolve(bound->effect_rest);
-    REQUIRE(rest != nullptr);
-    CHECK(rest->tag == MonoType::Var);
-    CHECK(rest->var_id == r_param->var_id);
-    CHECK(!diag.has_errors());
 }
 
 TEST_CASE("Unifier: App types unify") {
@@ -215,6 +219,9 @@ TEST_CASE("pretty_print formats types correctly") {
     CHECK(pretty_print(arena.make_con(TyCon::String)) == "String");
     auto* fn = arena.make_arrow(arena.make_con(TyCon::Int), arena.make_con(TyCon::Bool));
     CHECK(pretty_print(fn) == "(Int -> Bool)");
+    auto* eff = arena.make_arrow(arena.make_con(TyCon::Int), arena.make_con(TyCon::Bool),
+                                 {{"Fs.read", SourceLocation::unknown()}});
+    CHECK(pretty_print(eff) == "(Int -> !{Fs.read} Bool)");
     auto* opt = arena.make_app("Option", {arena.make_con(TyCon::Int)});
     CHECK(pretty_print(opt) == "Option Int");
     auto* tup = arena.make_tuple({arena.make_con(TyCon::Int), arena.make_con(TyCon::String)});
@@ -350,6 +357,8 @@ TEST_CASE("register_builtins: type names available") {
 
 #include "typechecker/TypeChecker.h"
 #include "Parser.h"
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 
 static std::string check_expr_str(const std::string& source) {
@@ -795,6 +804,208 @@ TEST_CASE("Effect: handle with return clause transforms result") {
     CHECK(pretty_print(zt) == "Int");
 
     delete main_node;
+}
+
+TEST_CASE("Effect: applying unhandled perform lambda is E0202") {
+    yona::parser::Parser parser;
+    string source = R"(let plan = \() -> perform Fs.read "/etc/shadow" in plan ())";
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    checker.check(parsed.value().get());
+    CHECK(checker.has_direct_errors());
+    CHECK(diag.has_errors());
+}
+
+TEST_CASE("Effect: handle covers apply of perform lambda") {
+    yona::parser::Parser parser;
+    string source = R"(
+handle
+    let f = \x -> perform Fs.read x in
+    f "ok"
+with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)";
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    checker.check(parsed.value().get());
+    CHECK_FALSE(checker.has_direct_errors());
+}
+
+static bool check_source_has_direct_errors(const string& source) {
+    yona::parser::Parser parser;
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    checker.check(parsed.value().get());
+    return checker.has_direct_errors();
+}
+
+TEST_CASE("Effect: HOF apply of perform lambda is E0202") {
+    CHECK(check_source_has_direct_errors(
+        R"(let apply = \f x -> f x in apply (\() -> perform Fs.read "/etc/shadow") ())"));
+}
+
+TEST_CASE("Effect: handle covers HOF apply of perform lambda") {
+    CHECK_FALSE(check_source_has_direct_errors(R"(
+let apply = \f x -> f x in
+handle apply (\x -> perform Fs.read x) "ok" with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)"));
+}
+
+TEST_CASE("Effect: wrapping perform lambda apply is E0202") {
+    CHECK(check_source_has_direct_errors(R"(
+let f = \() -> perform Fs.read "/etc/shadow" in
+let g = \() -> f () in
+g ()
+)"));
+}
+
+TEST_CASE("Effect: handle covers wrapped perform lambda") {
+    CHECK_FALSE(check_source_has_direct_errors(R"(
+let f = \() -> perform Fs.read "/etc/shadow" in
+let g = \() -> f () in
+handle g () with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)"));
+}
+
+TEST_CASE("Effect: imported FN effects from .yonai are E0202") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "yona_yonai_fx_e0202";
+    fs::create_directories(dir / "Test");
+    {
+        std::ofstream out(dir / "Test" / "Fx.yonai");
+        out << "FN yona_Test_Fx__fetch 1 STRING -> STRING effects Fs.read\n";
+    }
+    yona::parser::Parser parser;
+    string source = R"(import fetch from Test\Fx in fetch "/etc/shadow")";
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    checker.add_module_path(dir.string());
+    checker.check(parsed.value().get());
+    CHECK(checker.has_direct_errors());
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST_CASE("Effect: handle covers imported FN from .yonai") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "yona_yonai_fx_handle";
+    fs::create_directories(dir / "Test");
+    {
+        std::ofstream out(dir / "Test" / "Fx.yonai");
+        out << "FN yona_Test_Fx__fetch 1 STRING -> STRING effects Fs.read\n";
+    }
+    yona::parser::Parser parser;
+    string source = R"(
+import fetch from Test\Fx in
+handle fetch "ok" with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)";
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    checker.add_module_path(dir.string());
+    checker.check(parsed.value().get());
+    CHECK_FALSE(checker.has_direct_errors());
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST_CASE("Effect: imported HOF open rest from .yonai is E0202") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "yona_yonai_hof_e0202";
+    fs::create_directories(dir / "Test");
+    {
+        std::ofstream out(dir / "Test" / "Hof.yonai");
+        out << "FN yona_Test_Hof__apply 2 STRING -> STRING effects | hof\n";
+    }
+    yona::parser::Parser parser;
+    string source = R"(import apply from Test\Hof in apply (\() -> perform Fs.read "/etc/shadow") ())";
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    checker.add_module_path(dir.string());
+    checker.check(parsed.value().get());
+    CHECK(checker.has_direct_errors());
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST_CASE("Effect: handle covers imported HOF from .yonai") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "yona_yonai_hof_handle";
+    fs::create_directories(dir / "Test");
+    {
+        std::ofstream out(dir / "Test" / "Hof.yonai");
+        out << "FN yona_Test_Hof__apply 2 STRING -> STRING effects | hof\n";
+    }
+    yona::parser::Parser parser;
+    string source = R"(
+import apply from Test\Hof in
+handle apply (\x -> perform Fs.read x) "ok" with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)";
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    checker.add_module_path(dir.string());
+    checker.check(parsed.value().get());
+    CHECK_FALSE(checker.has_direct_errors());
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST_CASE("Effect: handle subtracts covered op from enclosing row") {
+    CHECK(check_source_has_direct_errors(R"(
+let f = \x -> let a = perform Fs.read x, b = perform Net.post x in a in
+let g = \x -> handle (f x) with
+    Fs.read path resume -> resume path
+    return val -> val
+end in
+g "ok"
+)"));
+}
+
+TEST_CASE("Effect: handle covers apply of lambda defined outside handle") {
+    yona::parser::Parser parser;
+    string source = R"(
+let f = \x -> perform Fs.read x in
+handle f "ok" with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)";
+    auto parsed = parser.parse_expression(source, "<test>");
+    REQUIRE(parsed.has_value());
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    checker.check(parsed.value().get());
+    CHECK_FALSE(checker.has_direct_errors());
 }
 
 TEST_CASE("Effect: no error for handled perform") {
@@ -1264,29 +1475,6 @@ TEST_CASE("Effect row: recursive HOF still threads the parameter rest") {
     CHECK(checker.has_errors());
 }
 
-TEST_CASE("Effect row: .yonai effects spec parse/format open rest") {
-    SerializedFnEffects fx;
-    REQUIRE(parse_fn_effects("|r0 0:|r0", fx));
-    CHECK(fx.result.labels.empty());
-    CHECK(fx.result.rest_ids == std::vector<int>{0});
-    REQUIRE(fx.params.size() == 1);
-    CHECK(fx.params[0].first == 0);
-    CHECK(fx.params[0].second.open());
-    CHECK(format_fn_effects(fx) == "|r0 0:|r0");
-
-    SerializedFnEffects closed;
-    REQUIRE(parse_fn_effects("Gpu.oom,State.get", closed));
-    CHECK(closed.result.labels == (std::vector<std::string>{"Gpu.oom", "State.get"}));
-    CHECK(!closed.result.open());
-    CHECK(format_fn_effects(closed) == "Gpu.oom,State.get");
-
-    SerializedFnEffects mixed;
-    REQUIRE(parse_fn_effects("State.get|r0 0:|r0", mixed));
-    CHECK(mixed.result.labels == std::vector<std::string>{"State.get"});
-    CHECK(mixed.result.open());
-    CHECK(format_fn_effects(mixed) == "State.get|r0 0:|r0");
-}
-
 TEST_CASE("Error code: E0202 string and explanation") {
     CHECK(error_code_str(ErrorCode::E0202) == "E0202");
     CHECK(parse_error_code("E0202").value_or(ErrorCode::E0100) == ErrorCode::E0202);
@@ -1299,12 +1487,16 @@ TEST_CASE("Error code: E0100 string representation") {
     CHECK(error_code_str(ErrorCode::E0100) == "E0100");
     CHECK(error_code_str(ErrorCode::E0103) == "E0103");
     CHECK(error_code_str(ErrorCode::E0200) == "E0200");
+    CHECK(error_code_str(ErrorCode::E0202) == "E0202");
 }
 
 TEST_CASE("Error code: parse_error_code round-trips") {
     auto code = parse_error_code("E0100");
     REQUIRE(code.has_value());
     CHECK(*code == ErrorCode::E0100);
+    auto e0202 = parse_error_code("E0202");
+    REQUIRE(e0202.has_value());
+    CHECK(*e0202 == ErrorCode::E0202);
     auto e0603 = parse_error_code("E0603");
     REQUIRE(e0603.has_value());
     CHECK(*e0603 == ErrorCode::E0603);
@@ -1318,6 +1510,7 @@ TEST_CASE("Error code: explanations are non-empty") {
     CHECK(!error_explanation(ErrorCode::E0103).empty());
     CHECK(!error_explanation(ErrorCode::E0105).empty());
     CHECK(!error_explanation(ErrorCode::E0200).empty());
+    CHECK(!error_explanation(ErrorCode::E0202).empty());
     CHECK(!error_explanation(ErrorCode::E0300).empty());
     CHECK(!error_explanation(ErrorCode::E0400).empty());
     CHECK(!error_explanation(ErrorCode::E0404).empty());

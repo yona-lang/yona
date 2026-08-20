@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+- Applying a function whose body performs an effect with no covering `handle`
+  is a compile error **E0202** (points at the introducing `perform`, note at
+  the call). Direct unhandled `perform` is still `-Wunhandled-effect`.
+- Function arrows unify effect rows (closed sets + open rest). Higher-order
+  `apply f x = f x` propagates the argument's effects; wrapping
+  `let g = \() -> f ()` unions into `g`; a `handle` subtracts covered ops
+  from the enclosing row. Types pretty-print as `(a -> !{Fs.read} b)`.
+  Exported functions write closed rows on `.yonai` `FN` lines
+  (`effects Fs.read` or `effects Fs.read,Net.post`); importers restore
+  them so unhandled apply is **E0202** and a covering `handle` is not.
+  FN lines without `effects` stay fresh type vars (stdlib unchanged).
+  Open HOF rows write `effects | hof` so `apply f x = f x` still
+  propagates the argument's effects after import. Module compile
+  typechecks siblings as a unit so `wrap = \() -> readSecret ()`
+  records `readSecret`'s row on `wrap`.
+
 ### Documentation
 - Public Yona 2.0 docs live in-repo at `site/` (Astro Starlight) and deploy
   to Cloudflare Pages via `.github/workflows/docs-site.yml`. Preview locally
@@ -9,10 +26,18 @@
   GitHub Pages at https://yona-lang.github.io/.
 - Docs site traffic is measured with cookieless Plausible at
   `plausible.kiket.dev` (`data-domain` `yona-lang.org`).
-- Docs examples drop dummy trailing `0`, `let … in do`, and single-expression
-  `do` wrappers.
+- Docs examples drop dummy trailing `0` and single-expression `do` wrappers.
+  `let … in do` is valid: `let` binds (and may parallelize), `do` sequences.
+- Style page: `let` and `do` have different semantics; combining them is
+  idiomatic when you need both. The anti-pattern is `let _ = effect`.
+- Stdlib reference no longer shows the “generated, do not edit” maintainer
+  note on the public pages.
+- Stdlib API pages put the full `name : T1 -> T2 -> R` signature in the
+  heading (from source annotations or `.yonai` types), not a bare name or
+  a parameter list.
 - Function docs use `name pats = body` and juxtaposition application; the
   invented `name(x, y) ->` form and `f(x, y)` as a two-arg call are gone.
+- `Std\Parallel.pmap` example is a fenced code block on the stdlib page.
 
 ### GPU / Std\GPU
 - `mapGPU` / `reduceGPU` (Int `Buffer`) and `mapFloatGPU` / `reduceFloatGPU`

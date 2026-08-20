@@ -9,45 +9,16 @@ matches re "hello 123"
 
 ## Functions
 
-### `extern`
+### `compile : String -> Int`
 
-```yona
-extern compile    : String -> Int                       = "yona_regex_compile"
-```
+### `matches : Int -> String -> Bool`
 
-### `extern`
+### `find : Int -> String -> Seq`
 
-```yona
-extern matches    : Int -> String -> Bool               = "yona_regex_matches"
-```
+### `findAll : Int -> String -> Seq`
 
-### `extern`
+### `replace : Int -> String -> String -> String`
 
-```yona
-extern find       : Int -> String -> Seq                = "yona_regex_find"
-```
+### `replaceAll : Int -> String -> String -> String`
 
-### `extern`
-
-```yona
-extern findAll    : Int -> String -> Seq                = "yona_regex_findAll"
-```
-
-### `extern`
-
-```yona
-extern replace    : Int -> String -> String -> String   = "yona_regex_replace"
-```
-
-### `extern`
-
-```yona
-extern replaceAll : Int -> String -> String -> String   = "yona_regex_replaceAll"
-```
-
-### `extern`
-
-```yona
-extern split      : Int -> String -> Seq                = "yona_regex_split"
-```
-
+### `split : Int -> String -> Seq`

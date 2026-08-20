@@ -27,13 +27,29 @@ in a ++ b ++ c
 
 ## Do Blocks
 
-**Use `do` for sequential side effects.** Don't wrap `do` in `let`:
+**`let` and `do` have different semantics.** `let` binds values —
+independent right-hand sides may run in parallel. `do` sequences effects
+strictly top to bottom. Combining them is valid when you want both
+(parallel bindings, then ordered steps):
 
 ```yona
--- Bad: wrapping do in let
+# Good — two reads in flight, then ordered writes
+let
+    a = readFile "foo.txt",
+    b = readFile "bar.txt"
+in do
+    writeFile "out-a.txt" (process a)
+    writeFile "out-b.txt" (process b)
+end
+```
+
+The anti-pattern is using `let` as a sequencer for an unused effect:
+
+```yona
+# Bad — discard-binding to force an effect
 let _ = writeFile "out.txt" data in data
 
--- Good: do block for side effects
+# Good — do block for side effects
 do
     writeFile "out.txt" data
     data

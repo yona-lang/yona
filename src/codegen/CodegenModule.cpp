@@ -184,8 +184,9 @@ Codegen::ModuleFunctionMeta Codegen::module_meta_from_compiled(const CompiledFun
     meta.return_linear = cf.return_linear || cf.return_adt_name == "Linear";
     meta.tuple_elem_linear = cf.tuple_elem_linear;
     meta.param_linear = cf.param_linear;
-    meta.effect_labels = cf.effect_labels;
-    meta.effect_spec = cf.effect_spec;
+    meta.effect_ops = cf.effect_ops;
+    meta.effect_open_rest = cf.effect_open_rest;
+    meta.effect_hof = cf.effect_hof;
     return meta;
 }
 
@@ -203,8 +204,9 @@ Codegen::CompiledFunction Codegen::compiled_function_from_meta(llvm::Function* f
     cf.return_linear = meta.return_linear || meta.return_adt_name == "Linear";
     cf.tuple_elem_linear = meta.tuple_elem_linear;
     cf.param_linear = meta.param_linear;
-    cf.effect_labels = meta.effect_labels;
-    cf.effect_spec = meta.effect_spec;
+    cf.effect_ops = meta.effect_ops;
+    cf.effect_open_rest = meta.effect_open_rest;
+    cf.effect_hof = meta.effect_hof;
     return cf;
 }
 
@@ -314,12 +316,14 @@ bool Codegen::emit_interface_file(const std::string& path) {
         auto borrow_mask = borrowed_params_to_mask(meta.borrowed_params, meta.param_types.size());
         if (borrow_mask.find('1') != std::string::npos)
             out << " borrow " << borrow_mask;
-        typechecker::SerializedFnEffects fx = meta.effect_spec;
-        if (fx.empty() && !meta.effect_labels.empty()) {
-            fx.result.labels = meta.effect_labels;
-        }
-        if (!fx.empty()) {
-            out << " effects " << typechecker::format_fn_effects(fx);
+        if (!meta.effect_ops.empty() || meta.effect_open_rest) {
+            out << " effects ";
+            for (size_t i = 0; i < meta.effect_ops.size(); i++) {
+                if (i) out << ",";
+                out << meta.effect_ops[i];
+            }
+            if (meta.effect_open_rest) out << "|";
+            if (meta.effect_hof) out << " hof";
         }
         out << "\n";
     }
@@ -512,14 +516,30 @@ bool Codegen::load_interface_file(const std::string& path) {
                 } else if (trailing == "LINEAR") {
                     meta.tuple_elem_linear.push_back(1);
                 } else if (trailing == "effects") {
-                    std::string spec;
-                    std::getline(iss, spec);
-                    typechecker::SerializedFnEffects fx;
-                    if (typechecker::parse_fn_effects(spec, fx)) {
-                        meta.effect_spec = std::move(fx);
-                        meta.effect_labels = meta.effect_spec.result.labels;
+                    std::string ops;
+                    if (iss >> ops) {
+                        if (ops == "|") {
+                            meta.effect_open_rest = true;
+                        } else {
+                            if (!ops.empty() && ops.back() == '|') {
+                                meta.effect_open_rest = true;
+                                ops.pop_back();
+                            }
+                            std::string cur;
+                            for (char c : ops) {
+                                if (c == ',') {
+                                    if (!cur.empty()) meta.effect_ops.push_back(cur);
+                                    cur.clear();
+                                } else {
+                                    cur += c;
+                                }
+                            }
+                            if (!cur.empty()) meta.effect_ops.push_back(cur);
+                        }
+                        std::string extra;
+                        if (iss >> extra && extra == "hof")
+                            meta.effect_hof = true;
                     }
-                    break;
                 }
             }
 
@@ -603,21 +623,6 @@ typechecker::ImportedFnSig Codegen::sig_from_meta(const ModuleFunctionMeta& meta
     sig.return_linear = meta.return_linear || meta.return_adt_name == "Linear";
     sig.tuple_elem_linear = meta.tuple_elem_linear;
     sig.param_linear = meta.param_linear;
-    sig.effect_labels = meta.effect_labels;
-    sig.effect_spec = meta.effect_spec;
-    if (sig.effect_spec.empty() && !sig.effect_labels.empty())
-        sig.effect_spec.result.labels = sig.effect_labels;
-    sig.effect_open = sig.effect_spec.result.open();
-    if (!sig.effect_spec.params.empty()) {
-        int max_idx = 0;
-        for (auto& [idx, _] : sig.effect_spec.params)
-            if (idx > max_idx) max_idx = idx;
-        sig.param_effect_rows.assign(static_cast<size_t>(max_idx) + 1, std::nullopt);
-        for (auto& [idx, row] : sig.effect_spec.params) {
-            if (idx >= 0)
-                sig.param_effect_rows[static_cast<size_t>(idx)] = row;
-        }
-    }
     if (!sig.tuple_elem_linear.empty())
         sig.return_linear = false;
     return sig;
@@ -1222,13 +1227,6 @@ static std::pair<std::vector<CType>, CType> uncurry_type_signature(const types::
     return {params, yona_type_to_ctype(*current)};
 }
 
-static typechecker::SerializedFnEffects effects_from_type(typechecker::MonoTypePtr ty,
-                                                          typechecker::TypeChecker& tc,
-                                                          int arity) {
-    ty = tc.zonk(ty);
-    return typechecker::serialized_effects_from_arrow(ty, arity, nullptr);
-}
-
 void Codegen::populate_interface_effect_rows(ast::ModuleDecl* mod,
                                              typechecker::TypeChecker& tc) {
     if (!mod || !mod->fqn) return;
@@ -1249,19 +1247,19 @@ void Codegen::populate_interface_effect_rows(ast::ModuleDecl* mod,
         tc.check(func);
         auto* ty = tc.type_of(func);
         if (!ty) ty = tc.check(func);
-        int arity = static_cast<int>(func->patterns.size());
-        auto spec = effects_from_type(ty, tc, arity);
-        auto labels = spec.result.labels;
+        auto row = tc.effect_row_info(tc.zonk(ty));
         std::string mangled = mangle_name(fqn, func->name);
         auto it = imports_.meta.find(mangled);
         if (it != imports_.meta.end()) {
-            it->second.effect_spec = spec;
-            it->second.effect_labels = labels;
+            it->second.effect_ops = row.ops;
+            it->second.effect_open_rest = row.open_rest;
+            it->second.effect_hof = row.hof;
         }
         auto cf_it = compiled_functions_.find(func->name);
         if (cf_it != compiled_functions_.end()) {
-            cf_it->second.effect_spec = spec;
-            cf_it->second.effect_labels = labels;
+            cf_it->second.effect_ops = row.ops;
+            cf_it->second.effect_open_rest = row.open_rest;
+            cf_it->second.effect_hof = row.hof;
         }
     }
 }

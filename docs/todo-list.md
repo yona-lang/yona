@@ -3,7 +3,7 @@
 ## Current Snapshot
 
 - Compiler: Yona -> LLVM IR -> native executable via `yonac`
-- REPL: `yona` compile-and-run interactive mode
+- REPL: `yona` compile-and-run interactive mode. Script mode (`#!/usr/bin/env yona` + `Std\Process.getArgs`) is planned: [2026-08-19-yona-script-shebang.md](./superpowers/plans/2026-08-19-yona-script-shebang.md)
 - Tests: doctest (`gpu_vulkan_device` + optional `gpu_vulkan_mapadd` / mapMul / reduce); codegen `gpu_backend_flags` + `gpu_vulkan_last_note` (child env `YONA_GPU_DISABLE_VULKAN=1`); with `-DYONA_ENABLE_VULKAN=ON`, run `ctest -R doctest_gpu_vulkan -V` (see `CLAUDE.md`); full `tests.exe` per `CLAUDE.md` (`YONA_PATH`, `YONAC_CC` on Windows)
 - **Windows dev checklist:** full `clang+llvm-*-windows-msvc` tree for `LLVM_INSTALL_PREFIX`, correct env spelling, `CC`**/*`*CXX` or CMake compiler flags if Clang lives outside that prefix, and `YONAC_CC` or `PATH` for doctest (`tests.exe`) — see **INSTALL.md** (Windows: *Complete Windows LLVM tree*, `YONAC_CC` *and doctest*).
 - Windows benchmark run (2026-04-26): 35/35 Yona rows passing, report refreshed, perf deltas reviewed
@@ -46,6 +46,7 @@ macOS kqueue + MoltenVK/`Std\GPU` portability shipped (`docs/gpu-vulkan-implemen
 
 - [x] Copr / AUR / Launchpad + Homebrew tap + Linux/macOS in-process LLD (v0.1.2–v0.1.3) — see Completed Milestones
 - [ ] Windows installer productionization (upgrade behavior, signing, final UX polish)
+- [ ] `#!/usr/bin/env yona` script mode + `Std\Process.getArgs` after package install — [2026-08-19-yona-script-shebang.md](./superpowers/plans/2026-08-19-yona-script-shebang.md)
 - [ ] Final packaging pass for sysroot-based CLI/REPL distribution layout
 - [ ] Enable embedded LLD backend by default across supported toolchains (remaining gate: MSVC-compatible LibXml2 on Windows)
 
@@ -62,7 +63,7 @@ API (#7) until the audit (#3) and effect-row story (#8) are honest about what
 already works.
 
 - [x] **[#3](https://github.com/yona-lang/yonac-llvm/issues/3) Type-system status audit** — `docs/type-system-status.md` (2026-08-18). Next: #8. Follow-ups from the audit: [#9](https://github.com/yona-lang/yonac-llvm/issues/9) effect decls, [#10](https://github.com/yona-lang/yonac-llvm/issues/10) blocking E0500/E0600, [#11](https://github.com/yona-lang/yonac-llvm/issues/11) `-Wincomplete-patterns`.
-- [x] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference +** `.yonai` **propagation** — **closed** 2026-08-19. Arrow `!{Effect.op}` rows, handler subtract, `.yonai` `effects` (closed + open `|rN` / per-param rows), **E0202** at introducing `perform` + call-site note, HOF open-rest threading, recursion LFP. Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
+- [x] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference +** `.yonai` **propagation** — after #3. **Landed 2026-08-19:** closed sets + E0202; unify of effect rows; HOF rest vars; apply-union / wrap; handler subtraction; pretty-print `!{…}`; `.yonai` `FN … effects Fs.read`. **Follow-ups landed same day:** open HOF rest (`effects | hof`, `Effect: imported HOF open rest from .yonai is E0202`, `Interface files preserve exported HOF open rest`); sibling-aware module typecheck (`Interface files preserve sibling-wrapped FN effect rows`, wrap-before-sibling). HOF restore is the `apply f x = f x` shape (first param is the function). Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
 - [ ] **[#6](https://github.com/yona-lang/yonac-llvm/issues/6) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
 - [ ] **[#5](https://github.com/yona-lang/yonac-llvm/issues/5) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
 - [ ] **[#7](https://github.com/yona-lang/yonac-llvm/issues/7) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format.
@@ -98,6 +99,12 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
 
 ### Suggested next steps (rolling)
 
+- [x] **yonac module files with** `##` **preamble** — `is_module_source` in
+  `cli/main.cpp` skips `#` line comments before detecting `module`, so
+  `yonac -o lib/Std/M.yona lib/Std/M.yona` works for Http-style leading docs.
+- [x] **Phase 0 CI bugs** — flaky `binary_seek` / `binary_write_read` and
+  `net_runtime_test` TCP SIGSEGV (see Bugs).
+- [x] **Type-system audit (#3)** — `docs/type-system-status.md`.
 - [ ] **Next language work:** [#6](https://github.com/yona-lang/yonac-llvm/issues/6)
   opaque types, or [#5](https://github.com/yona-lang/yonac-llvm/issues/5)
   totality / empty-row gate now that #8 rows are real. Formal spec track:
@@ -124,6 +131,18 @@ runtime research; prefer after typed-core (#7).
 - [ ] **Top-level print of nested Seq prints element pointers.** Repro: `yonac -e '[[1, 2], [3]]' -o t && ./t` → `[651968424, 651968360]` instead of `[[1, 2], [3]]` (inner seqs printed as i64 addresses; heap_flag not consulted by the printer).
 - [x] **Docs claimed `foldl`/`foldr` are prelude.** Agent instructions (`CLAUDE.md`, `project-guidance.mdc`) and the public site now import from `Std\List`. `yonac -e 'foldl …'` still E0104 — that is correct.
 - [ ] **`:>` (append) parses and type-checks but has no codegen.** Repro: `yonac -e '[1, 2] :> 3'` → `error: unsupported expression type`. Related: `--` (remove) and `in` (membership) are lexed as operator tokens and listed in `docs/language-syntax.md` but rejected by the parser (`yonac -e 'println (2 in [1, 2, 3])'` → E0301).
+- [x] **codegen/print:** printing a tuple that mixes `Bool`/`String` fails LLVM module verification (`yona_rt_print_bool` / `yona_rt_print_string` called with `i64` instead of `i1`/`ptr`). Repro: `yonac -e "(true, \"hi\")"` (Yona bool literals are lowercase). Found 2026-08-19 while smoke-testing `Std\\GPU` discovery on macOS. **Fixed:** unbox i64 tuple slots to the LLVM type print helpers expect (`print_tuple_bool_string`).
+- [x] **parser:** `perform` as a multi-binding `let` RHS breaks the binding list — `let a = perform Fs.read "x", b = perform Net.post "y" in a` → `E0301 Unexpected token` at the comma. Single-binding `let x = perform Fs.read "x" in x` parses fine. Found while drafting site homepage examples (2026-08-19). **Fixed:** `parse_perform_expr` now stops argument collection at `,` (same as `in`/`end`), so multi-binding `let` can follow (`Parser: perform as multi-binding let RHS`).
+- [x] **effects/CLI:** unhandled `perform` through a let-bound lambda is a hard compile error **E0202** (primary at `perform`, note at the apply). Repro: `let plan = \() -> perform Fs.read "/etc/shadow" in plan ()` → `yonac` exits 1, no linked binary. Also `let apply = \f x -> f x in apply (\() -> perform Fs.read …) ()` (`Effect: HOF apply of perform lambda is E0202`). Valid `let f = \x -> perform E.op x in handle f v with …` still typechecks (`Effect: handle covers apply of lambda defined outside handle`, fixture `effect_lambda_handle`). Direct unhandled `perform` stays `-Wunhandled-effect`. Not codegen `handler_stack_` emptiness.
+- [x] **effects/codegen:** handler clauses break beyond plain `resume value` — (a) comparing the op argument (`Fs.read path resume -> if path == "x" then resume path else ...`) crashes LLVM codegen (`ICmp` assertion, `Instructions.h:1183`); (b) `raise` inside a clause → "Terminator found in the middle of a basic block"; (c) interpolating a `perform`-bound value inside the handled expression (`"got: {manifest}"`) failed LLVM verification (`string_concat` got `i64` from `perform`, which is typed `INT`). The `(() -> a)` E0100 from the original note was not reproduced (no effect-row typing). **Fixed:** string `==` uses content compare when either side is `STRING`; `string_concat` IntToPtr's i64 slots; handler `CreateRet` skipped after `raise` (`effect_handler_compare_arg`, `effect_handler_raise`, `effect_handler_interp`). Working: canned `resume "lit"`, arg passthrough, real I/O with the arg (`resume (readFile path)` runs correctly). Found 2026-08-19 while drafting site homepage examples.
+- [x] **prelude loading:** `Prelude.yonai` is located via cwd-relative `lib/`, ignoring `YONA_PATH` — from any other directory, prelude constructors silently vanish (`Some 42` → `E0104 undefined function 'Some'`; `case … of Some x -> …` misparse → `E0301 Expected '->' after pattern`). Repro: `cd /tmp && YONA_PATH=<repo>/lib yonac --emit-ir <repo>/test/codegen/prelude_none.yona`. **Fixed:** `load_prelude` and `yonac` append `YONA_PATH` directories to the module search list (`Prelude constructors load via YONA_PATH`).
+- [x] **docs:** site homepage "shape of the language" and quick-start "pattern matching in ten lines" examples use top-level `type` declarations in expression programs — `yonac` rejects them (`E0301` at `type`); `type` requires a `module` wrapper. Homepage fix folded into the 2026-08-19 homepage rework. **Fixed:** quick-start already uses prelude `Some`/`None` (verified `yonac -e`); internal `docs/pattern-matching.md` and site `learn/pattern-matching.md` now keep `type` inside a `module` and use prelude Option for expression snippets.
+- [x] **doctest:** `Codegen E2E` `binary_seek` / `binary_write_read` flakiness (stdout wrong / `0`) — unique object/exe per fixture suffix; plus single-binding `let` `auto_await` for real io_uring File ops (skip `spawn`).
+- [x] **doctest:** `net_runtime_test` TCP loopback **SIGSEGV** (Linux io_uring) — accept SQE `socklen_t`* in `sqe.off`; shared ring in `uring_linux.c` (was per-TU `static` in `uring.h`); `ring_await` stashes unmatched CQEs. UDP test matches sync FN API.
+- [x] **Windows** `tests`**/Vulkan:** undefined `yona_rt_promise_new` **/** `yona_rt_promise_complete` ( `gpu_stub.c` vs async runtime) — **Fixed:** same APIs + `yona_test_native_promise_immediate` implemented in `async_win32.c` (parity with `async_posix.c`).
+- [x] **macOS arm64 build:** Clang 22 rejects `__builtin_setjmp` / `__builtin_longjmp` — **Fixed:** `yona_sjlj_setjmp` / `yona_sjlj_longjmp` in `include/yona/runtime/sjlj.h` (AArch64 inline asm matching llvm.eh.sjlj slots).
+- [x] **macOS** `closure_consumed_sort` **/ typed-float:** `FunctionType::get` SIGSEGV after `fn->eraseFromParent()` — body instruction UAF (`getType()` null on Darwin). **Fixed:** snapshot LLVM type before erase; honor annotated return type so `Float -> Float` is not inferred as i64.
+- [x] **macOS E2E** `stdlib_file_read` **/** `stdlib_io`:** `/etc/os-release` stub on non-Linux (same as Windows); stdout/stderr writes complete on the submit path so discarded `println` in `do` is visible (Linux io_uring already hits the kernel before submit returns).
 
 Fixed Phase 0 / platform / import-`LINEAR` / LinearityChecker `WithExpr` +
 `FunctionExpr` walk bugs are archived under Completed Milestones.

@@ -150,3 +150,87 @@ footer.sl-flex {
 	border-top: 1px solid var(--sl-color-hairline-light);
 	padding-top: 1rem;
 }
+
+/* --------------------- stdlib API reference --------------------- */
+
+.sl-markdown-content:has(.stdlib-api) {
+	max-width: 52rem;
+}
+
+.sl-markdown-content .stdlib-api .sl-heading-wrapper {
+	--sl-anchor-icon-gap: 0.55em;
+}
+
+.sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h2 {
+	font-family: var(--sl-font);
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--sl-color-gray-3);
+	border-bottom: 1px solid var(--sl-color-hairline);
+	padding-bottom: 0.45rem;
+	margin-top: 2.4rem;
+	margin-bottom: 0.4rem;
+}
+
+.sl-markdown-content .stdlib-api h2 {
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+	color: inherit;
+	margin: 0;
+	padding-block: 0;
+	padding-inline-start: 0;
+	border: none;
+}
+
+.sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h3 {
+	font-family: var(--sl-font-mono);
+	font-size: 0.92rem;
+	font-weight: 500;
+	letter-spacing: 0;
+	line-height: 1.45;
+	margin-top: 1.6rem;
+	margin-bottom: 0.75rem;
+	padding: 0.55rem 0.85rem;
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.3rem;
+	background: color-mix(in srgb, var(--sl-color-gray-6) 70%, transparent);
+	scroll-margin-top: 6rem;
+}
+
+.sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h2 + .sl-heading-wrapper.level-h3 {
+	margin-top: 0.85rem;
+}
+
+.sl-markdown-content .stdlib-api h3 {
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: inherit;
+	letter-spacing: inherit;
+	line-height: inherit;
+	margin: 0;
+	padding-block: 0;
+	padding-inline-start: 0;
+	border: none;
+	background: none;
+	scroll-margin-top: 6rem;
+}
+
+.sl-markdown-content .stdlib-api h3 code {
+	background: none;
+	padding: 0;
+	font-size: inherit;
+}
+
+.sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h3 + div.expressive-code {
+	margin-top: 0.35rem;
+	margin-bottom: 0.9rem;
+}
+
+.sl-markdown-content .stdlib-api table {
+	font-size: 0.92rem;
+}

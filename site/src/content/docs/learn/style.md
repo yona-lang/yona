@@ -45,10 +45,30 @@ in a ++ b
 
 See [Concurrency](/learn/concurrency/) for the full model.
 
-## Never wrap `do` in `let`
+## `let` and `do` have different semantics
 
-`let _ = effect in …` abuses a value binding to sequence an effect; `do`
-says what you mean and guarantees ordering.
+`let` binds values. Independent right-hand sides may run in parallel and
+are awaited at first use. `do` sequences effects: every step runs strictly
+top to bottom, even when the steps look independent. Combining them is
+valid — and often the right shape — when you want both:
+
+```yona
+# Good — two reads in flight, then ordered writes
+let
+    a = readFile "foo.txt",
+    b = readFile "bar.txt"
+in do
+    writeFile "out-a.txt" (process a)
+    writeFile "out-b.txt" (process b)
+end
+```
+
+Putting those reads in a `do` would serialize them. Putting those writes in
+a multi-binding `let` would allow them to overlap. Use `let` when the
+bindings are values (and may run together); use `do` when *order itself*
+is the point. See [Concurrency](/learn/concurrency/).
+
+The anti-pattern is using `let` *as* a sequencer for an unused effect:
 
 ```yona
 # Bad — discard-binding to force an effect
@@ -63,8 +83,9 @@ do
 end
 ```
 
-`do` blocks also take intermediate bindings (`name = expr`), executed
-strictly top to bottom — the idiomatic shape for sequential I/O:
+`do` also takes intermediate bindings (`name = expr`), executed strictly in
+order — the idiomatic shape for a protocol or any sequential I/O where the
+steps depend on each other:
 
 ```yona
 do
@@ -75,11 +96,9 @@ do
 end
 ```
 
-Rule of thumb: `let` for values, `do` for effects. Do not combine them
-(`let … in do … end` is just a `do` with bindings, or a `let` whose body
-is the last call). Do not wrap a single expression in `do`. Do not pad a
-function or program with a dummy last value such as `0` — the last real
-expression *is* the result (`println` already yields `()`).
+Do not wrap a single expression in `do`. Do not pad a function or program
+with a dummy last value such as `0` — the last real expression *is* the
+result (`println` already yields `()`).
 
 ## Comma-separate imports
 
@@ -272,8 +291,8 @@ Prefer `Result a e` (`Ok`/`Err`) for fallible operations and `Option a`
 ## Quick checklist
 
 - Flat `let`, one binding list — independent bindings parallelize.
-- `do … end` for effects; never `let _ = …`, never `let … in do`, never a
-  one-line `do`, never a dummy trailing `0`.
+- `let` for values, `do` for ordered effects; combining them is fine.
+  Never `let _ = effect`, never a one-line `do`, never a dummy trailing `0`.
 - One `import`, comma-separated clauses.
 - `with` for anything `Closeable`.
 - `[| … ]` when the body is worth a task; `[ … ]` otherwise.
