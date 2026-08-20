@@ -47,6 +47,7 @@ jobs:
           mkdir -p ${DIST}/bin ${DIST}/lib/Std ${DIST}/runtime ${DIST}/src/runtime/platform ${DIST}/include/yona/runtime
           cp out/build/x64-release-linux/yonac ${DIST}/bin/
           cp out/build/x64-release-linux/yona ${DIST}/bin/
+          cp out/build/x64-release-linux/yona-repl ${DIST}/bin/
           cp lib/Std/*.yona* ${DIST}/lib/Std/ 2>/dev/null || true
           cp out/build/x64-release-linux/runtime/* ${DIST}/runtime/ 2>/dev/null || true
           cp src/compiled_runtime.c ${DIST}/src/
@@ -96,6 +97,7 @@ jobs:
           mkdir -p ${DIST}/bin ${DIST}/lib/Std ${DIST}/runtime ${DIST}/src/runtime/platform ${DIST}/include/yona/runtime
           cp out/build/x64-release-macos/yonac ${DIST}/bin/
           cp out/build/x64-release-macos/yona ${DIST}/bin/
+          cp out/build/x64-release-macos/yona-repl ${DIST}/bin/
           cp lib/Std/*.yona* ${DIST}/lib/Std/ 2>/dev/null || true
           cp out/build/x64-release-macos/runtime/* ${DIST}/runtime/ 2>/dev/null || true
           cp src/compiled_runtime.c ${DIST}/src/

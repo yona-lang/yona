@@ -1228,11 +1228,21 @@ unique_ptr<ExprNode> ParserImpl::parse_with_expr() {
 
     expect(TokenType::YASSIGN, "Expected '=' after identifier in with expression");
 
-    auto resource = parse_expr();
+    auto resource = parse_expr_until_in();
+    if (!resource) {
+        error(ParseError::Type::INVALID_SYNTAX,
+              "Failed to parse resource expression in with");
+        return nullptr;
+    }
 
     expect(TokenType::YIN, "Expected 'in' after resource expression in with");
 
     auto body = parse_expr();
+    if (!body) {
+        error(ParseError::Type::INVALID_SYNTAX,
+              "Failed to parse body expression in with");
+        return nullptr;
+    }
 
     auto name_expr = new NameExpr(loc, name);
     return make_unique<WithExpr>(loc, false, resource.release(), name_expr, body.release());

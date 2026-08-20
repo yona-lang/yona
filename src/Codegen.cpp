@@ -355,6 +355,7 @@ void Codegen::declare_runtime() {
                                 Function::ExternalLinkage, name, module_.get());
     };
 
+    rt_.set_process_args_ = decl("yona_rt_set_process_args", vd, {LType::getInt32Ty(*context_), ptr});
     rt_.print_int_     = decl("yona_rt_print_int", vd, {i64});
     rt_.print_float_   = decl("yona_rt_print_float", vd, {f64});
     rt_.print_string_  = decl("yona_rt_print_string", vd, {ptr});
@@ -1488,7 +1489,8 @@ void Codegen::optimize() {
 
 Function* Codegen::codegen_main(AstNode* node) {
     auto i32 = LType::getInt32Ty(*context_);
-    auto fn = Function::Create(llvm::FunctionType::get(i32, {}, false),
+    auto ptr = PointerType::get(*context_, 0);
+    auto fn = Function::Create(llvm::FunctionType::get(i32, {i32, ptr}, false),
                                 Function::ExternalLinkage, "main", module_.get());
     // Create debug info for main function
     if (debug_.enabled && debug_.builder && debug_.file) {
@@ -1504,6 +1506,7 @@ Function* Codegen::codegen_main(AstNode* node) {
     auto bb = BasicBlock::Create(*context_, "entry", fn);
     builder_->SetInsertPoint(bb);
     set_debug_loc(node->source_context);
+    builder_->CreateCall(rt_.set_process_args_, {fn->getArg(0), fn->getArg(1)});
 
     auto result = codegen(node);
     // Don't add print/ret if the block is already terminated (e.g., by raise)

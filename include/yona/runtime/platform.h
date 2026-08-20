@@ -68,6 +68,11 @@ int64_t yona_platform_exec_status(const char* cmd);
 int64_t yona_platform_setenv(const char* name, const char* value);
 char* yona_platform_hostname(void);
 int64_t yona_platform_exit_process(int64_t code);
+char* yona_Std_Process__executablePath(void);
+char* yona_Std_Process__tempDir(void);
+char* yona_Std_Process__tempFile(const char* prefix, const char* suffix);
+int64_t yona_Std_Process__run(const char* file, int64_t* argv_seq);
+int64_t yona_Std_Process__execArgs(const char* file, int64_t* argv_seq);
 
 void* yona_Std_Process__spawn(const char* cmd);
 char* yona_Std_Process__readLine(void* proc);

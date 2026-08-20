@@ -1,0 +1,3 @@
+import drop from Std\String, isEmpty from Std\List in
+let f rest s = if isEmpty rest then drop 1 s else s in
+f [] "ab"

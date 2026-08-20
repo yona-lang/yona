@@ -8,7 +8,7 @@ use io_uring on Linux for non-blocking I/O.
 
 ## Functions
 
-### `tcpConnect : String -> Int -> Int`
+### `tcpConnect : String -> Int -> Linear a`
 
 Connect to a TCP server. Async (io_uring). Returns a socket descriptor.
 
@@ -23,7 +23,7 @@ do
 end
 ```
 
-### `tcpListen : String -> Int -> Int`
+### `tcpListen : String -> Int -> Linear a`
 
 Create a TCP server socket bound to `host:port`. Returns a listener descriptor.
 
@@ -34,7 +34,7 @@ let client = tcpAccept server in
 close client
 ```
 
-### `tcpAccept : Int -> Int`
+### `tcpAccept : Int -> Linear a`
 
 Accept an incoming TCP connection. Async (io_uring). Returns a client socket descriptor.
 
@@ -58,7 +58,7 @@ Receive up to `maxBytes` from a socket as a byte buffer. Async (io_uring).
 
 Close a socket descriptor. Returns 0 on success.
 
-### `udpBind : String -> Int -> Int`
+### `udpBind : String -> Int -> Linear a`
 
 Create a UDP socket bound to `host:port`. Returns a socket descriptor.
 

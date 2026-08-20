@@ -64,6 +64,9 @@ inline const char* err_null() {
 inline std::string include_flags() {
     std::ostringstream o;
     o << " -I" << qpath(yona::test::src_dir()) << " -I" << qpath(yona::test::repo_root() / "include");
+#ifdef YONA_BUILD_INCLUDE_DIR
+    o << " -I" << qpath(YONA_BUILD_INCLUDE_DIR);
+#endif
     return o.str();
 }
 
@@ -342,6 +345,14 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
     {
         const char* from = R"(spawn "echo line1; echo line2; echo line3")";
         const char* to = R"(spawn "echo line1&&echo line2&&echo line3")";
+        for (size_t pos = 0; (pos = s.find(from, pos)) != std::string::npos;) {
+            s.replace(pos, std::strlen(from), to);
+            pos += std::strlen(to);
+        }
+    }
+    {
+        const char* from = R"(run "/bin/sh" ["/bin/sh", "-c", "exit 7"])";
+        const char* to = R"(run "cmd.exe" ["cmd.exe", "/c", "exit", "7"])";
         for (size_t pos = 0; (pos = s.find(from, pos)) != std::string::npos;) {
             s.replace(pos, std::strlen(from), to);
             pos += std::strlen(to);

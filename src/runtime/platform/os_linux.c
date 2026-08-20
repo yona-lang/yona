@@ -20,12 +20,15 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <limits.h>
 
 extern void* rc_alloc(int64_t type_tag, size_t bytes);
 extern void* yona_rt_rc_alloc_string(size_t bytes);
 extern void yona_rt_rc_inc(void* ptr);
 extern void yona_rt_rc_dec(void* ptr);
 extern int64_t* yona_rt_seq_alloc(int64_t count);
+extern int64_t yona_rt_seq_get(int64_t* seq, int64_t index);
+extern int64_t yona_rt_seq_length(int64_t* seq);
 
 #define RC_TYPE_PROCESS 17
 
@@ -339,6 +342,121 @@ void yona_process_destroy(void* proc_handle) {
         int status;
         waitpid((pid_t)proc->pid, &status, WNOHANG);
     }
+}
+
+static char* yona_copy_cstr(const char* src) {
+    if (!src) src = "";
+    size_t n = strlen(src);
+    char* r = (char*)yona_rt_rc_alloc_string(n + 1);
+    memcpy(r, src, n + 1);
+    return r;
+}
+
+static int yona_prefix_ok(const char* prefix) {
+    if (!prefix || !prefix[0]) return 0;
+    for (const char* p = prefix; *p; p++) {
+        if (*p == '/' || *p == '\\') return 0;
+    }
+    return 1;
+}
+
+static char** yona_seq_to_argv(int64_t* argv_seq) {
+    int64_t n = argv_seq ? yona_rt_seq_length(argv_seq) : 0;
+    if (n < 0) n = 0;
+    char** argv = (char**)calloc((size_t)n + 1, sizeof(char*));
+    if (!argv) return NULL;
+    for (int64_t i = 0; i < n; i++)
+        argv[i] = (char*)(intptr_t)yona_rt_seq_get(argv_seq, i);
+    return argv;
+}
+
+char* yona_Std_Process__executablePath(void) {
+    char buf[PATH_MAX];
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0) return yona_copy_cstr("");
+    buf[n] = '\0';
+    return yona_copy_cstr(buf);
+}
+
+char* yona_Std_Process__tempDir(void) {
+    const char* d = getenv("TMPDIR");
+    if (!d || !d[0]) d = getenv("TMP");
+    if (!d || !d[0]) d = getenv("TEMP");
+    if (!d || !d[0]) d = "/tmp";
+    return yona_copy_cstr(d);
+}
+
+char* yona_Std_Process__tempFile(const char* prefix, const char* suffix) {
+    if (!yona_prefix_ok(prefix)) prefix = "yona";
+    if (!suffix) suffix = "";
+    char* dir = yona_Std_Process__tempDir();
+    size_t need = strlen(dir) + 1 + strlen(prefix) + 6 + strlen(suffix) + 1;
+    char* tmpl = (char*)malloc(need);
+    if (!tmpl) {
+        yona_rt_rc_dec(dir);
+        return yona_copy_cstr("");
+    }
+    snprintf(tmpl, need, "%s/%sXXXXXX", dir, prefix);
+    yona_rt_rc_dec(dir);
+    int fd = mkstemp(tmpl);
+    if (fd < 0) {
+        free(tmpl);
+        return yona_copy_cstr("");
+    }
+    close(fd);
+    if (suffix[0]) {
+        size_t flen = strlen(tmpl) + strlen(suffix) + 1;
+        char* named = (char*)malloc(flen);
+        if (!named) {
+            unlink(tmpl);
+            free(tmpl);
+            return yona_copy_cstr("");
+        }
+        snprintf(named, flen, "%s%s", tmpl, suffix);
+        if (rename(tmpl, named) != 0) {
+            unlink(tmpl);
+            free(named);
+            free(tmpl);
+            return yona_copy_cstr("");
+        }
+        char* r = yona_copy_cstr(named);
+        free(named);
+        free(tmpl);
+        return r;
+    }
+    char* r = yona_copy_cstr(tmpl);
+    free(tmpl);
+    return r;
+}
+
+int64_t yona_Std_Process__run(const char* file, int64_t* argv_seq) {
+    if (!file || !file[0]) return -1;
+    char** argv = yona_seq_to_argv(argv_seq);
+    if (!argv) return -1;
+    pid_t pid = fork();
+    if (pid < 0) {
+        free(argv);
+        return -1;
+    }
+    if (pid == 0) {
+        execvp(file, argv);
+        _exit(127);
+    }
+    free(argv);
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) return -1;
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return -(int64_t)WTERMSIG(status);
+    return -1;
+}
+
+int64_t yona_Std_Process__execArgs(const char* file, int64_t* argv_seq) {
+    if (!file || !file[0]) return 127;
+    char** argv = yona_seq_to_argv(argv_seq);
+    if (!argv) return 127;
+    execvp(file, argv);
+    free(argv);
+    return 127;
 }
 
 /* ===== Platform constants ===== */

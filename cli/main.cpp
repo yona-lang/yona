@@ -5,9 +5,8 @@
 // Usage:
 //   yonac input.yona                  # compile expression to executable
 //   yonac input.yona -o output        # compile to output
-//   yonac -e "1 + 2"                  # compile expression
-//   yonac --emit-ir -e "1 + 2"        # print LLVM IR
-//   yonac --emit-obj -e "1 + 2"       # emit object file
+//   yonac - --emit-ir                 # compile stdin (print LLVM IR)
+//   yonac - --emit-obj                # emit object file from stdin
 //   yonac module.yona                 # compile module to .o + .yonai
 //   yonac -I lib main.yona            # compile with module search path
 //   yonac -Wall -Werror main.yona     # enable warnings, treat as errors
@@ -249,7 +248,6 @@ int main(int argc, char *argv[]) {
   CLI::App app{"yonac — Yona compiler"};
 
   string input_file;
-  string expression;
   string output_file;
   bool emit_ir = false;
   bool emit_obj = false;
@@ -269,8 +267,7 @@ int main(int argc, char *argv[]) {
   string linker_mode_opt;
 
   app.set_version_flag("--version", YONA_VERSION_STRING);
-  app.add_option("input", input_file, "Input .yona file");
-  app.add_option("-e,--expression", expression, "Compile expression");
+  app.add_option("input", input_file, "Input .yona file, or - to read stdin");
   app.add_option("-o,--output", output_file, "Output file");
   app.add_option("-I,--include", include_paths, "Module search paths (for .yonai files)");
   app.add_option("--sysroot", sysroot_path, "Yona distribution root (used to find lib/ and runtime objects)");
@@ -329,9 +326,11 @@ int main(int argc, char *argv[]) {
   // Get source code
   string source;
   string filename;
-  if (!expression.empty()) {
-    source = expression;
-    filename = "<expression>";
+  if (input_file == "-") {
+    stringstream buf;
+    buf << cin.rdbuf();
+    source = buf.str();
+    filename = "<stdin>";
   } else if (!input_file.empty()) {
     ifstream file(input_file);
     if (!file.is_open()) {
@@ -343,7 +342,7 @@ int main(int argc, char *argv[]) {
     source = buf.str();
     filename = input_file;
   } else {
-    cerr << "Error: no input. Use 'yonac file.yona' or 'yonac -e \"expr\"'" << endl;
+    cerr << "Error: no input. Use 'yonac file.yona' or 'yonac -' (stdin)" << endl;
     return 1;
   }
 
@@ -356,7 +355,7 @@ int main(int argc, char *argv[]) {
   // Set default output
   if (output_file.empty()) {
     if (is_module || emit_obj) {
-      if (!input_file.empty())
+      if (!input_file.empty() && input_file != "-")
         output_file = filesystem::path(input_file).stem().string() + ".o";
       else
         output_file = "a.o";

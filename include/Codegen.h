@@ -501,6 +501,7 @@ private:
     // All runtime function declarations grouped in a struct
     struct RuntimeDecls {
         // Printing
+        llvm::Function *set_process_args_ = nullptr;
         llvm::Function *print_int_ = nullptr, *print_float_ = nullptr,
             *print_string_ = nullptr, *print_bool_ = nullptr, *print_newline_ = nullptr,
             *print_seq_ = nullptr, *print_symbol_ = nullptr, *print_set_ = nullptr,

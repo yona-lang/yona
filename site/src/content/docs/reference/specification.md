@@ -36,7 +36,8 @@ and module segments match `[A-Z][A-Za-z0-9_]*` (PascalCase).
    and may span lines */
 ```
 
-`#` introduces a line comment. `##` at the start of a line is a documentation
+`#` introduces a line comment, including a leading `#!…` shebang line.
+`##` at the start of a line is a documentation
 comment, attached to the following declaration by documentation tooling; to
 the compiler it is an ordinary comment. `/* … */` comments nest and may
 contain newlines.

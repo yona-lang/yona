@@ -153,6 +153,7 @@ FN yona_Std_IO__putStrLn 2 INT INT -> PROMISE
 FN yona_Std_IO__isTty 1 INT -> BOOL
 FN yona_Std_IO__write 2 INT INT -> PROMISE
 FN yona_Std_IO__readLineFrom 1 INT -> PROMISE
+FN yona_Std_IO__readStdin 0 -> STRING
 GENFN_BEGIN yona_Std_IO__stderrFd stderrFd
 stderrFd = 2
 GENFN_END

@@ -2,12 +2,41 @@
 
 ## Unreleased
 
+### Added
+- `yona` is a Yona-written runner (shebang `#!/usr/bin/env yona`): compile a
+  file, stdin, or `-e` expression via sibling `yonac`, then exec the result.
+  No arguments on a TTY starts the C++ REPL (`yona-repl`).
+- `yonac -` reads source from stdin (compile only).
+- `Std\Process.getArgs`, `executablePath`, `yonaVersion`, `tempDir`,
+  `tempFile`, `run`, and `execArgs`. `Std\IO.readStdin` reads stdin to EOF.
+- CMake `yona_add_executable` (`cmake/YonaTools.cmake`) compiles Yona tools
+  during the build; `tools/yona` is the first consumer.
+
+### Fixed
+- `with` expression parser no longer crashes: `parse_expr_until_in()` stops
+  before the `in` keyword when parsing the resource, and null checks prevent
+  constructing `WithExpr` with a null body (`with fd = 0 in 42`).
+- Imported `Std\List.isEmpty` (and other GENFNs) inside a `let`-bound
+  function whose parameter is named `rest` no longer fails with
+  `undefined function 'cmp'`. Case-pattern bindings are visible to
+  free-var analysis, and sibling GENFNs are registered without the
+  caller's locals. Sibling registration also skips names already
+  imported from another module (`drop` from `Std\String` is not
+  replaced by `Std\List.drop`).
+- `AFN` calls that are the body of a `let`-bound function are awaited
+  before return (`let f cmd = exec cmd in f "echo x"` prints `x`, not
+  a Promise pointer).
+- Invalid UTF-8 (e.g. `printf '\xc0\x15@'`) is a lex error instead of
+  a `yonac` busy-loop.
+
 ### Changed
 - The LLVM compiler repository is now [yona-lang/yona](https://github.com/yona-lang/yona)
   (same stars and URL as the former GraalVM tree). The GraalVM/Truffle
   implementation, its issues, wiki snapshot, and 0.8.x releases are archived at
   [yona-lang/yona-graalvm](https://github.com/yona-lang/yona-graalvm).
   `yona-lang/yonac-llvm` is an archived pointer.
+- **Breaking:** `yonac -e` / `--expression` is removed. One-liners are
+  `yona -e '…'`. Inspect IR with `yonac --emit-ir -` or a file.
 
 ## v0.1.4 (2026-08-20)
 

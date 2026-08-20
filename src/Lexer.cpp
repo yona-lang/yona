@@ -190,7 +190,12 @@ std::expected<char32_t, LexError> Lexer::advance_char() {
 
 void Lexer::skip_char() {
     if (auto result = advance_char(); !result) {
-        // Ignore error when skipping
+        // peek/advance leave current_ unchanged on invalid UTF-8. Skip one
+        // raw byte so tokenize() recovery cannot grow the error list forever.
+        if (current_ < source_.length()) {
+            current_++;
+            column_++;
+        }
     }
 }
 

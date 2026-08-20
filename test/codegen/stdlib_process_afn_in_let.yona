@@ -1,0 +1,3 @@
+import exec from Std\Process in
+let f cmd = exec cmd in
+f "echo async exec"

@@ -10,7 +10,12 @@ Fixed Phase 0 / platform / import-`LINEAR` / LinearityChecker `WithExpr` +
 ## Current Snapshot
 
 - Compiler: Yona -> LLVM IR -> native executable via `yonac`
-- REPL: `yona` compile-and-run interactive mode. Script mode (`#!/usr/bin/env yona` + `Std\Process.getArgs`) is planned: [2026-08-19-yona-script-shebang.md](./superpowers/plans/2026-08-19-yona-script-shebang.md)
+- Runner: Yona-written `yona` (`tools/yona/main.yona`) — shebang
+  `#!/usr/bin/env yona`, `yona -e`, piped stdin, `Std\Process.getArgs`.
+  No-args TTY starts C++ `yona-repl`. `yonac` compiles only (`yonac -`
+  for stdin). Old C++ plan:
+  [2026-08-19-yona-script-shebang.md](./superpowers/plans/2026-08-19-yona-script-shebang.md)
+  (superseded 2026-08-20).
 - Tests: doctest (`gpu_vulkan_device` + optional `gpu_vulkan_mapadd` / mapMul / reduce); codegen `gpu_backend_flags` + `gpu_vulkan_last_note` (child env `YONA_GPU_DISABLE_VULKAN=1`); with `-DYONA_ENABLE_VULKAN=ON`, run `ctest -R doctest_gpu_vulkan -V` (see `CLAUDE.md`); full `tests.exe` per `CLAUDE.md` (`YONA_PATH`, `YONAC_CC` on Windows)
 - **Windows dev checklist:** full `clang+llvm-*-windows-msvc` tree for `LLVM_INSTALL_PREFIX`, correct env spelling, `CC`**/*`*CXX` or CMake compiler flags if Clang lives outside that prefix, and `YONAC_CC` or `PATH` for doctest (`tests.exe`) — see **INSTALL.md** (Windows: *Complete Windows LLVM tree*, `YONAC_CC` *and doctest*).
 - Windows benchmark run (2026-04-26): 35/35 Yona rows passing, report refreshed, perf deltas reviewed
@@ -53,7 +58,7 @@ macOS kqueue + MoltenVK/`Std\GPU` portability shipped (`docs/gpu-vulkan-implemen
 
 - [x] Copr / AUR / Launchpad + Homebrew tap + Linux/macOS in-process LLD (v0.1.2–v0.1.3) — see Completed Milestones
 - [ ] Windows installer productionization (upgrade behavior, signing, final UX polish)
-- [ ] `#!/usr/bin/env yona` script mode + `Std\Process.getArgs` after package install — [2026-08-19-yona-script-shebang.md](./superpowers/plans/2026-08-19-yona-script-shebang.md)
+- [x] `#!/usr/bin/env yona` script mode + `Std\Process.getArgs` after package install — Yona-written `yona` runner; C++ REPL is `yona-repl`
 - [ ] Final packaging pass for sysroot-based CLI/REPL distribution layout
 - [ ] Enable embedded LLD backend by default across supported toolchains (remaining gate: MSVC-compatible LibXml2 on Windows)
 
@@ -75,8 +80,24 @@ already works.
 - [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
 - [ ] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format.
 - [ ] **[#4](https://github.com/yona-lang/yona/issues/75) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
+- [ ] **`Linear FileHandle` (and other resources) for real** — today `.yonai`
+  marks `openFile` / `spawn` / sockets / channel ends as bare `LINEAR`
+  (`Linear a` in docs); the runtime still allocates a `FileHandle` ADT;
+  `closeFileHandle` / `readBytes` take `Int` and unpack the fd. Target API:
+  `openFile : String -> FileMode -> Linear FileHandle`,
+  `spawn : String -> Linear Process`, same for TCP/UDP and channel ends.
+  Consume with `with` or `case Linear h -> …`; `Closeable` on the payload,
+  no parallel raw-`Int` handle path. `.yonai` must carry `LINEAR` **and**
+  the inner ADT. Linearity leaks / use-after-consume must fail the build
+  (not warn) on expression programs **and** module bodies — blocked on
+  [#10](https://github.com/yona-lang/yona/issues/81). Update
+  `docs/linear-types.md`, `docs/api/File.md` / Process / Net / Channel,
+  and the site Memory + type-system pages in the same change. Evidence:
+  codegen fixtures that typecheck `Linear FileHandle` and reject a leak.
 
 Default series: `#3 → #8 → #5 → #7 → #4`, with **#6** beside #8 after the audit.
+`Linear FileHandle` can proceed beside #10 (interface + stdlib) but must not
+claim “done” until leaks are errors in modules.
 
 ### Formal specification (Rocq)
 
@@ -108,8 +129,9 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
 
 - [ ] **Next language work:** [#6](https://github.com/yona-lang/yona/issues/77)
   opaque types, or [#5](https://github.com/yona-lang/yona/issues/76)
-  totality / empty-row gate now that #8 rows are real. Formal spec track:
-  Phase 0 of
+  totality / empty-row gate now that #8 rows are real, or **`Linear FileHandle`
+  for real** (stdlib + `.yonai` payload types; hard errors with #10). Formal
+  spec track: Phase 0 of
   [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
 
 High leverage after the audit: `&T` **/ borrow types**
@@ -302,6 +324,11 @@ with **async**, **task groups**, and **channels**, not compete with them.
 - [x] HAMT destroy `rc_dec`s heap keys/values; prelude constructors load via `YONA_PATH`
 - [x] Effect handlers: string `==`, concat of `perform` values, `raise` terminator; apply of unhandled `perform` is E0202
 - [x] Docs: `type` in expression programs needs a `module`; `foldl`/`map` are `Std\List` not prelude
+- [x] Yona-written `yona` runner (`tools/yona/main.yona`); C++ REPL is `yona-repl`; `yonac -e` removed (`yona -e` / `yonac -`)
+- [x] GENFN sibling register: no caller-local capture (`rest`/`cmp` on `isEmpty`); no shadowing other-module imports (`String.drop`)
+- [x] AFN as the body of a `let`-bound function auto-awaits (not a Promise pointer)
+- [x] Invalid UTF-8 is a lex error; `tokenize()` recovery advances one byte (no `brk` loop)
+- [x] `with` parser null-body SIGSEGV: `parse_expr_until_in()` for resource, null checks before `WithExpr` ctor
 
 
 

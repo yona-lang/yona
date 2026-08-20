@@ -2,8 +2,8 @@
 ##
 ## Every operation that can block on a slow device submits through
 ## io_uring (on Linux) or the thread pool (for reads), returns a
-## `Promise`, and auto-awaits at the use site. The only synchronous
-## calls are pure syscalls that never block — `isTty`, `flush`.
+## `Promise`, and auto-awaits at the use site. Synchronous calls:
+## `isTty`, `flush`, and `readStdin` (stdin to EOF).
 ##
 ## Trivial programs stay trivial: `println "hello"` is still one line.
 ## The non-blocking machinery is invisible until you put several I/O
@@ -25,7 +25,7 @@ module Std\IO
 export stdinFd, stdoutFd, stderrFd
 export print, println, eprint, eprintln
 export putStr, putStrLn, write
-export readLine, readLineFrom
+export readLine, readLineFrom, readStdin
 export flush, isTty, isatty
 
 ## File descriptor numbers, exposed as Int so any Std\File handle call
@@ -48,6 +48,7 @@ stderrFd = 2
 extern io    yona_Std_IO__writeStr    : Int -> String -> ()     = "yona_Std_IO__writeStr"
 extern io    yona_Std_IO__writeLine   : Int -> String -> ()     = "yona_Std_IO__writeLine"
 extern async yona_Std_IO__readLineFd  : Int -> Option           = "yona_Std_IO__readLineFd"
+extern       yona_Std_IO__readStdin    : () -> String           = "yona_Std_IO__readStdin"
 extern       yona_Std_IO__isTty       : Int -> Bool             = "yona_Std_IO__isTty"
 extern       yona_Std_IO__flushFd     : Int -> Bool             = "yona_Std_IO__flushFd"
 
@@ -85,6 +86,10 @@ readLine = yona_Std_IO__readLineFd stdinFd
 
 ## Read one line from an arbitrary fd. Same semantics as `readLine`.
 readLineFrom fd = yona_Std_IO__readLineFd fd
+
+## Read stdin to EOF as a string. Used when the program source *is*
+## stdin (`yona -` or a pipe); a file script still inherits stdin.
+readStdin = yona_Std_IO__readStdin
 
 ## ----- Handle control -------------------------------------------------------
 

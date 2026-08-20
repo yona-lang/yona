@@ -34,6 +34,14 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #endif
+#if defined(__has_include)
+#  if __has_include("version.h")
+#    include "version.h"
+#  endif
+#endif
+#ifndef YONA_VERSION_STRING
+#define YONA_VERSION_STRING "unknown"
+#endif
 #if defined(__linux__) || defined(__APPLE__)
 #include <execinfo.h>
 #define YONA_HAS_BACKTRACE 1
@@ -2350,6 +2358,70 @@ int64_t yona_Std_Process__setenv(const char* name, const char* value) {
 }
 const char* yona_Std_Process__hostname(void) {
     return yona_platform_hostname();
+}
+
+static int yona_rt_argc = 0;
+static char** yona_rt_argv = NULL;
+
+void yona_rt_set_process_args(int argc, char** argv) {
+    yona_rt_argc = argc;
+    yona_rt_argv = argv;
+}
+
+static char* yona_rt_copy_cstr(const char* src) {
+    if (!src) src = "";
+    size_t n = strlen(src);
+    char* r = (char*)yona_rt_rc_alloc_string(n + 1);
+    memcpy(r, src, n + 1);
+    return r;
+}
+
+int64_t* yona_Std_Process__getArgs(void) {
+    extern int64_t* yona_rt_seq_alloc(int64_t count);
+    extern void yona_rt_seq_set(int64_t* seq, int64_t index, int64_t value);
+    extern void yona_rt_seq_set_heap(int64_t* seq, int64_t flag);
+    int64_t n = yona_rt_argc > 0 ? (int64_t)yona_rt_argc : 0;
+    int64_t* seq = yona_rt_seq_alloc(n);
+    for (int64_t i = 0; i < n; i++) {
+        const char* a = (yona_rt_argv && yona_rt_argv[i]) ? yona_rt_argv[i] : "";
+        yona_rt_seq_set(seq, i, (int64_t)(intptr_t)yona_rt_copy_cstr(a));
+    }
+    yona_rt_seq_set_heap(seq, 1);
+    return seq;
+}
+
+const char* yona_Std_Process__yonaVersion(void) {
+    return yona_rt_copy_cstr(YONA_VERSION_STRING);
+}
+
+char* yona_Std_IO__readStdin(void) {
+    const size_t max_cap = 64u * 1024u * 1024u;
+    size_t cap = 4096, len = 0;
+    char* buf = (char*)malloc(cap);
+    if (!buf) return yona_rt_copy_cstr("");
+    for (;;) {
+        if (len >= cap) {
+            if (cap >= max_cap) break;
+            size_t ncap = cap * 2;
+            if (ncap > max_cap) ncap = max_cap;
+            char* nb = (char*)realloc(buf, ncap);
+            if (!nb) break;
+            buf = nb;
+            cap = ncap;
+        }
+#if defined(_WIN32)
+        int n = (int)read(0, buf + len, (unsigned)(cap - len));
+#else
+        ssize_t n = read(0, buf + len, cap - len);
+#endif
+        if (n <= 0) break;
+        len += (size_t)n;
+    }
+    char* r = (char*)yona_rt_rc_alloc_string(len + 1);
+    memcpy(r, buf, len);
+    r[len] = '\0';
+    free(buf);
+    return r;
 }
 
 /* ===== Std\Http — HTTP client ===== */

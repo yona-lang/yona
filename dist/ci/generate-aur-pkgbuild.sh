@@ -25,6 +25,7 @@ package() {
   cd "yona-\${pkgver}-linux-x86_64"
   install -Dm755 bin/yonac "\$pkgdir/usr/bin/yonac"
   install -Dm755 bin/yona "\$pkgdir/usr/bin/yona"
+  install -Dm755 bin/yona-repl "\$pkgdir/usr/bin/yona-repl"
   install -d "\$pkgdir/usr/lib/yona"
   cp -a lib runtime src include "\$pkgdir/usr/lib/yona/"
 }

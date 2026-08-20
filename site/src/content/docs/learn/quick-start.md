@@ -1,18 +1,18 @@
 ---
 title: Quick start
-description: Your first Yona programs — expressions, files, executables, and the REPL.
+description: Your first Yona programs — expressions, files, executables, scripts, and the REPL.
 ---
 
 This page takes you from nothing to a compiled, running Yona program.
 [Install Yona](/install/) first; you need `yonac` (the compiler) and `yona`
-(the REPL) on `PATH`.
+(the runner / REPL) on `PATH`.
 
 ## Evaluate an expression
 
-`yonac -e` compiles and runs a single expression:
+`yona -e` compiles and runs a single expression:
 
 ```bash
-yonac -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
+yona -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
 # => 55
 ```
 
@@ -98,15 +98,28 @@ data types are declared with `type` inside a module — see
 [Modules](/learn/modules/). More in [Pattern matching](/learn/pattern-matching/)
 and [Types and data](/learn/types/).
 
-## The REPL
+## Scripts and the REPL
+
+A file can be a script. After `chmod +x`, the kernel finds `yona` on `PATH`:
+
+```yona
+#!/usr/bin/env yona
+import println from Std\IO in
+println "Hello from a script"
+```
+
+`yona hello.yona` is the same path. Each invocation compiles; for a tool you
+run often, `yonac -o hello hello.yona`. Piped stdin is also a program:
+`echo '1 + 2' | yona`.
+
+With no file and a TTY, `yona` starts the REPL:
 
 ```bash
 yona
 ```
 
-`yona` compiles and runs each entered expression natively — it is the same
-pipeline as `yonac`, not an interpreter. Useful for exploring the standard
-library:
+The REPL compiles and runs each entered expression natively. Useful for
+exploring the standard library:
 
 ```yona
 import map from Std\List in map (\x -> x * x) [1, 2, 3]

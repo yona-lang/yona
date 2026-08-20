@@ -118,6 +118,74 @@ static std::pair<std::vector<CType>, CType> uncurry_type_signature(const types::
 
 // ===== Free variable analysis =====
 
+static void bind_pattern_names(AstNode* pat, std::unordered_set<std::string>& bound) {
+    if (!pat) return;
+    switch (pat->get_type()) {
+        case AST_PATTERN_VALUE: {
+            auto* pv = static_cast<PatternValue*>(pat);
+            if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
+                bound.insert((*id)->name->value);
+            break;
+        }
+        case AST_TUPLE_PATTERN:
+            for (auto* p : static_cast<TuplePattern*>(pat)->patterns)
+                bind_pattern_names(p, bound);
+            break;
+        case AST_SEQ_PATTERN:
+            for (auto* p : static_cast<SeqPattern*>(pat)->patterns)
+                bind_pattern_names(p, bound);
+            break;
+        case AST_HEAD_TAILS_PATTERN: {
+            auto* hp = static_cast<HeadTailsPattern*>(pat);
+            for (auto* h : hp->heads) bind_pattern_names(h, bound);
+            bind_pattern_names(hp->tail, bound);
+            break;
+        }
+        case AST_TAILS_HEAD_PATTERN: {
+            auto* tp = static_cast<TailsHeadPattern*>(pat);
+            bind_pattern_names(tp->tail, bound);
+            for (auto* h : tp->heads) bind_pattern_names(h, bound);
+            break;
+        }
+        case AST_HEAD_TAILS_HEAD_PATTERN: {
+            auto* hp = static_cast<HeadTailsHeadPattern*>(pat);
+            for (auto* h : hp->left) bind_pattern_names(h, bound);
+            bind_pattern_names(hp->tail, bound);
+            for (auto* h : hp->right) bind_pattern_names(h, bound);
+            break;
+        }
+        case AST_CONSTRUCTOR_PATTERN:
+            for (auto* p : static_cast<ConstructorPattern*>(pat)->sub_patterns)
+                bind_pattern_names(p, bound);
+            break;
+        case AST_AS_DATA_STRUCTURE_PATTERN: {
+            auto* ap = static_cast<AsDataStructurePattern*>(pat);
+            if (ap->identifier) bound.insert(ap->identifier->name->value);
+            bind_pattern_names(ap->pattern, bound);
+            break;
+        }
+        case AST_TYPED_PATTERN:
+            bound.insert(static_cast<TypedPattern*>(pat)->binding_name);
+            break;
+        case AST_OR_PATTERN:
+            for (auto& p : static_cast<OrPattern*>(pat)->patterns)
+                bind_pattern_names(p.get(), bound);
+            break;
+        case AST_DICT_PATTERN:
+            for (auto& kv : static_cast<DictPattern*>(pat)->keyValuePairs) {
+                bind_pattern_names(kv.first, bound);
+                bind_pattern_names(kv.second, bound);
+            }
+            break;
+        case AST_RECORD_PATTERN:
+            for (auto& item : static_cast<RecordPattern*>(pat)->items)
+                bind_pattern_names(item.second, bound);
+            break;
+        default:
+            break;
+    }
+}
+
 void Codegen::collect_free_vars(AstNode* node, const std::unordered_set<std::string>& bound,
                                  std::unordered_set<std::string>& free_vars) {
     if (!node) return;
@@ -162,7 +230,12 @@ void Codegen::collect_free_vars(AstNode* node, const std::unordered_set<std::str
         case AST_CASE_EXPR: {
             auto* e = static_cast<CaseExpr*>(node);
             collect_free_vars(e->expr, bound, free_vars);
-            for (auto* c : e->clauses) collect_free_vars(c->body, bound, free_vars);
+            for (auto* c : e->clauses) {
+                auto nb = bound;
+                bind_pattern_names(c->pattern, nb);
+                if (c->guard) collect_free_vars(c->guard, nb, free_vars);
+                collect_free_vars(c->body, nb, free_vars);
+            }
             break;
         }
         case AST_APPLY_EXPR: {
@@ -183,13 +256,8 @@ void Codegen::collect_free_vars(AstNode* node, const std::unordered_set<std::str
             // Lambda expression: \x -> body — add params to bound, recurse into body
             auto* fn = static_cast<FunctionExpr*>(node);
             auto nb = bound;
-            for (auto* pat : fn->patterns) {
-                if (pat->get_type() == AST_PATTERN_VALUE) {
-                    auto* pv = static_cast<PatternValue*>(pat);
-                    if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
-                        nb.insert((*id)->name->value);
-                }
-            }
+            for (auto* pat : fn->patterns)
+                bind_pattern_names(pat, nb);
             for (auto* body : fn->bodies) {
                 if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body))
                     collect_free_vars(bwg->expr, nb, free_vars);
@@ -1080,6 +1148,11 @@ Codegen::CompiledFunction Codegen::compile_function(
         if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
             current_fn_body_ = bwg->expr;
             body_tv = codegen(bwg->expr);
+            // AFN calls return PROMISE. Top-level print awaits them, but a
+            // let-bound function's inferred return is usually INT — without
+            // this, `let f cmd = exec cmd in f "echo x"` prints a pointer.
+            if (body_tv.type == CType::PROMISE)
+                body_tv = auto_await(body_tv);
         }
     }
     current_fn_body_ = saved_fn_body;
@@ -1213,8 +1286,11 @@ Codegen::CompiledFunction Codegen::compile_function(
             body_tv = {};
             if (!def.ast->bodies.empty()) {
                 auto* body = def.ast->bodies[0];
-                if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body))
+                if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
                     body_tv = codegen(bwg->expr);
+                    if (body_tv.type == CType::PROMISE)
+                        body_tv = auto_await(body_tv);
+                }
             }
             ret_ctype = body_tv ? body_tv.type : CType::INT;
         }
