@@ -2,7 +2,10 @@
 
 ## Bugs (open)
 
-_None right now._
+None currently tracked here. The `in` terminator vs membership parse cluster
+(`nested_let`, `perform`/`handle` RHS, `stdlib_math`) is fixed — `stop_at_in`
+is now threaded through `let`, `perform` args, `raise`, and `with` the same
+way as `if`/`lambda`.
 
 Fixed Phase 0 / platform / import-`LINEAR` / LinearityChecker `WithExpr` +
 `FunctionExpr` walk bugs are archived under Completed Milestones.

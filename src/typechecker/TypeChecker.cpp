@@ -663,7 +663,13 @@ MonoTypePtr TypeChecker::infer_let(LetExpr* node, std::shared_ptr<TypeEnv> env, 
                            "in pattern destructuring");
         } else if (dynamic_cast<LambdaAlias*>(alias)) {
             auto& prelim = lambda_prelims[lambda_idx++];
+            if (prelim.var && prelim.var->tag == MonoType::Var)
+                recursive_self_vars_.push_back(prelim.var->var_id);
             auto* fn_type = infer(prelim.la->lambda, child_env, level + 1);
+            if (prelim.var && prelim.var->tag == MonoType::Var &&
+                !recursive_self_vars_.empty() &&
+                recursive_self_vars_.back() == prelim.var->var_id)
+                recursive_self_vars_.pop_back();
             unifier_.unify(prelim.var, fn_type, prelim.la->lambda->source_context,
                            "in recursive function '" + prelim.la->name->value + "'");
             auto scheme = generalize(fn_type, level);
@@ -830,6 +836,15 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr* node, std::shared_ptr<TypeEnv> e
         auto* arg_type = infer(arg_node, env, level);
 
         auto* resolved = unifier_.resolve(result_type);
+        bool recursive_self_apply = false;
+        if (resolved && resolved->tag == MonoType::Var) {
+            for (auto id : recursive_self_vars_) {
+                if (id == resolved->var_id) {
+                    recursive_self_apply = true;
+                    break;
+                }
+            }
+        }
 
         auto* result_var = arena_.fresh_var(level);
         uf_.add_var(result_var->var_id, level);
@@ -863,8 +878,10 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr* node, std::shared_ptr<TypeEnv> e
         }
 
         // After unify, a Var callee is the expected arrow (open rest shared with HOF).
+        // Skip self-application: the body's own performs already fill the row.
         auto* after = unifier_.resolve(resolved);
-        apply_callee_effects(after, node->source_context);
+        if (!recursive_self_apply)
+            apply_callee_effects(after, node->source_context);
 
         // Keep the original return type so inner-arrow effects survive multi-arg apply
         if (after && after->tag == MonoType::Arrow && after->return_type)
@@ -933,8 +950,11 @@ void TypeChecker::apply_callee_effects(MonoTypePtr callee, const SourceLocation&
         if (rest) {
             rest = unifier_.resolve(rest);
             if (rest && rest->tag == MonoType::Var) {
+                // First open rest wins. Unifying a second parameter's rest
+                // with the first forces `app2 get log` to give `get` and
+                // `log` the same closed row (E0100). Independent rests stay
+                // on each function parameter; the HOF result keeps the first.
                 if (!row.rest) row.rest = rest;
-                else unifier_.unify(row.rest, rest, apply_loc, "in effect row");
             }
         }
         return;
@@ -1555,19 +1575,27 @@ MonoTypePtr TypeChecker::infer_perform(PerformExpr* node, std::shared_ptr<TypeEn
     auto it = effect_ops_.find(op_key);
     if (it != effect_ops_.end()) {
         auto& info = it->second;
-        // Check argument count
-        // Filter out unit args from the perform call (matching codegen behavior)
+        // `perform State.get ()` is the 0-arg surface (Unit is not a payload).
+        // Ops that actually take Unit (`Gpu.oom`) keep the argument.
         size_t expected = info.param_types.size();
-        size_t actual = node->args.size();
+        std::vector<ExprNode*> payload;
+        payload.reserve(node->args.size());
+        for (auto* arg : node->args) {
+            if (expected == 0 && arg && arg->get_type() == AST_UNIT_EXPR) {
+                infer(arg, env, level);
+                continue;
+            }
+            payload.push_back(arg);
+        }
+        size_t actual = payload.size();
         if (actual != expected) {
             diag_.error(node->source_context, ErrorCode::E0201,
                         "effect operation '" + op_key + "' expects " +
                         std::to_string(expected) + " argument(s), got " + std::to_string(actual));
             error_count_++;
         }
-        // Type-check arguments
-        for (size_t i = 0; i < node->args.size() && i < info.param_types.size(); i++) {
-            auto* arg_type = infer(node->args[i], env, level);
+        for (size_t i = 0; i < payload.size() && i < info.param_types.size(); i++) {
+            auto* arg_type = infer(payload[i], env, level);
             unifier_.unify(arg_type, info.param_types[i], node->source_context,
                            "in argument " + std::to_string(i + 1) + " of perform " + op_key);
         }

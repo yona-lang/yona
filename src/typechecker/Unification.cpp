@@ -237,9 +237,18 @@ bool Unifier::unify_effect_rows(const std::vector<LatentEffect>& a_labs_in, Mono
     for (auto& [k, e] : b_map)
         if (a_map.find(k) == a_map.end()) b_extras.push_back(e);
 
+    auto same_rest_var = [&](MonoTypePtr x, MonoTypePtr y) {
+        auto* xr = resolve(x);
+        auto* yr = resolve(y);
+        return xr && yr && xr->tag == MonoType::Var && yr->tag == MonoType::Var &&
+               xr->var_id == yr->var_id;
+    };
+
     if (!a_extras.empty()) {
         if (b_rest) {
-            if (!unify(b_rest, arena_.make_erow(a_extras, a_rest), loc, context))
+            // ρ ~ {extras | ρ} would occur-check; close ρ as {extras}.
+            MonoTypePtr tail = same_rest_var(b_rest, a_rest) ? nullptr : a_rest;
+            if (!unify(b_rest, arena_.make_erow(a_extras, tail), loc, context))
                 return false;
         } else {
             diag_.error(loc, ErrorCode::E0100,
@@ -249,7 +258,8 @@ bool Unifier::unify_effect_rows(const std::vector<LatentEffect>& a_labs_in, Mono
     }
     if (!b_extras.empty()) {
         if (a_rest) {
-            if (!unify(a_rest, arena_.make_erow(b_extras, b_rest), loc, context))
+            MonoTypePtr tail = same_rest_var(a_rest, b_rest) ? nullptr : b_rest;
+            if (!unify(a_rest, arena_.make_erow(b_extras, tail), loc, context))
                 return false;
         } else {
             diag_.error(loc, ErrorCode::E0100,

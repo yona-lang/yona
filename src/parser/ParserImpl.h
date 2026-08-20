@@ -157,15 +157,15 @@ public:
 
     // Control flow
     unique_ptr<ExprNode> parse_if_expr(bool stop_at_in = false);
-    unique_ptr<ExprNode> parse_let_expr();
+    unique_ptr<ExprNode> parse_let_expr(bool stop_at_in = false);
     unique_ptr<AliasExpr> parse_alias();
     unique_ptr<ExprNode> parse_case_expr();
     unique_ptr<CaseClause> parse_case_clause();
     unique_ptr<ExprNode> parse_do_expr();
     unique_ptr<ExprNode> parse_try_expr();
-    unique_ptr<ExprNode> parse_raise_expr();
-    unique_ptr<ExprNode> parse_with_expr();
-    unique_ptr<ExprNode> parse_perform_expr();
+    unique_ptr<ExprNode> parse_raise_expr(bool stop_at_in = false);
+    unique_ptr<ExprNode> parse_with_expr(bool stop_at_in = false);
+    unique_ptr<ExprNode> parse_perform_expr(bool stop_at_in = false);
     unique_ptr<ExprNode> parse_handle_expr();
     unique_ptr<ExprNode> parse_do_remaining(vector<ExprNode*>& exprs);
     unique_ptr<ExprNode> parse_record_expr();

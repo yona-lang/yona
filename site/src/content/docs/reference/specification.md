@@ -149,7 +149,9 @@ let _ = println "side effect" in 42       # discard binding
 
 `let bindings in body` introduces bindings scoped to `body`. Bindings are
 separated by commas. A binding's left side is a pattern; a name followed by
-parameter patterns is sugar for binding a lambda. A type annotation may
+parameter patterns is sugar for binding a lambda. Nested `let` is allowed
+(`let y = let z = 1 in z * 2 in y`); style still prefers one multi-binding
+`let` when the bindings are independent. A type annotation may
 precede a function binding on its own line:
 
 ```yona
@@ -405,7 +407,11 @@ except `**`, `::`, and the arrows:
 Sequence-specific operators: `x :: xs` prepends, `xs :> x` appends, and
 `xs ++ ys` concatenates. `a -- b` removes every element of `b` from `a`
 (sequence difference; set difference on sets). `x in coll` is a membership
-test on a sequence or set, or a key test on a dictionary.
+test on a sequence or set, or a key test on a dictionary. The same keyword
+closes `let` and `with`, so membership in a let-binding RHS that is itself
+a `let`, `if` then/else, `lambda`, `perform` argument, `raise`, or `with`
+body must be parenthesized: `then (2 in xs)`, `let z = 1 in (2 in xs)`.
+`if 2 in xs then …` is fine — the condition is not a terminator context.
 
 ## 6. Evaluation model
 

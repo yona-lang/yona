@@ -227,18 +227,33 @@ unique_ptr<ExprNode> ParserImpl::parse_expr_until_in() {
 }
 
 unique_ptr<ExprNode> ParserImpl::parse_prefix_expr_until_in() {
-    SourceLocation loc = current_location();
-
     if (is_at_end()) {
         return nullptr;
     }
 
-    if (peek().type == TokenType::YBACKSLASH) {
-        return parse_lambda_expr(true);
-    } else if (peek().type == TokenType::YIF) {
-        return parse_if_expr(true);
-    } else {
-        return parse_prefix_expr();
+    // Constructs that can swallow a terminator `in` as membership must
+    // inherit stop_at_in. `handle`/`try`/`do`/`case` are self-delimited
+    // (`with`/`end`); dispatch them here so a let-RHS handle does not
+    // fall through to an unscoped parse_prefix_expr() path.
+    switch (peek().type) {
+        case TokenType::YBACKSLASH:
+            return parse_lambda_expr(true);
+        case TokenType::YIF:
+            return parse_if_expr(true);
+        case TokenType::YLET:
+            return parse_let_expr(true);
+        case TokenType::YPERFORM:
+            return parse_perform_expr(true);
+        case TokenType::YWITH:
+            return parse_with_expr(true);
+        case TokenType::YRAISE:
+            return parse_raise_expr(true);
+        case TokenType::YHANDLE:
+            return parse_handle_expr();
+        case TokenType::YTRY:
+            return parse_try_expr();
+        default:
+            return parse_prefix_expr();
     }
 }
 
@@ -886,7 +901,7 @@ unique_ptr<ExprNode> ParserImpl::parse_if_expr(bool stop_at_in) {
         else_expr.release());
 }
 
-unique_ptr<ExprNode> ParserImpl::parse_let_expr() {
+unique_ptr<ExprNode> ParserImpl::parse_let_expr(bool stop_at_in) {
     SourceLocation loc = current_location();
     advance(); // consume 'let'
     skip_newlines();
@@ -905,7 +920,9 @@ unique_ptr<ExprNode> ParserImpl::parse_let_expr() {
     skip_newlines();
     expect(TokenType::YIN, "Expected 'in' after let bindings");
     skip_newlines();
-    auto body = parse_expr();
+    // Nested `let y = let z = 1 in z * 2 in y`: the inner body must not
+    // treat the outer terminator `in` as membership.
+    auto body = stop_at_in ? parse_expr_until_in() : parse_expr();
 
     if (!body) {
         error(ParseError::Type::INVALID_SYNTAX, "Expected expression after 'in'");
@@ -1202,10 +1219,10 @@ unique_ptr<ExprNode> ParserImpl::parse_try_expr() {
     return make_unique<TryCatchExpr>(loc, expr.release(), catch_expr);
 }
 
-unique_ptr<ExprNode> ParserImpl::parse_raise_expr() {
+unique_ptr<ExprNode> ParserImpl::parse_raise_expr(bool stop_at_in) {
     SourceLocation loc = current_location();
     advance(); // consume 'raise'
-    auto value = parse_expr();
+    auto value = stop_at_in ? parse_expr_until_in() : parse_expr();
     if (!value) {
         error(ParseError::Type::INVALID_SYNTAX, "Expected expression after 'raise'");
         return nullptr;
@@ -1213,7 +1230,7 @@ unique_ptr<ExprNode> ParserImpl::parse_raise_expr() {
     return make_unique<RaiseExpr>(loc, value.release());
 }
 
-unique_ptr<ExprNode> ParserImpl::parse_with_expr() {
+unique_ptr<ExprNode> ParserImpl::parse_with_expr(bool stop_at_in) {
     SourceLocation loc = current_location();
     advance(); // consume 'with'
 
@@ -1237,7 +1254,7 @@ unique_ptr<ExprNode> ParserImpl::parse_with_expr() {
 
     expect(TokenType::YIN, "Expected 'in' after resource expression in with");
 
-    auto body = parse_expr();
+    auto body = stop_at_in ? parse_expr_until_in() : parse_expr();
     if (!body) {
         error(ParseError::Type::INVALID_SYNTAX,
               "Failed to parse body expression in with");
@@ -1661,7 +1678,7 @@ unique_ptr<NameExpr> ParserImpl::parse_name() {
 // ===== Algebraic Effects =====
 
 /// Parse `perform Effect.op args`
-unique_ptr<ExprNode> ParserImpl::parse_perform_expr() {
+unique_ptr<ExprNode> ParserImpl::parse_perform_expr(bool stop_at_in) {
     SourceLocation loc = current_location();
     advance(); // consume 'perform'
     skip_newlines();
@@ -1690,7 +1707,10 @@ unique_ptr<ExprNode> ParserImpl::parse_perform_expr() {
            !check(TokenType::YIN) && !check(TokenType::YEND) && !check(TokenType::YWITH) &&
            !check(TokenType::YELSE) && !check(TokenType::YTHEN) && !check(TokenType::YRBRACKET) &&
            !check(TokenType::YRPAREN) && !check(TokenType::YCOMMA)) {
-        auto arg = parse_expr();
+        // In a stop_at_in context, `parse_expr()` would treat the
+        // terminator `in` as membership (`perform Fs.read "x" in plan`).
+        // Parenthesize membership in that position: `(2 in xs)`.
+        auto arg = stop_at_in ? parse_expr_until_in() : parse_expr();
         if (!arg) break;
         args.push_back(arg.release());
     }
@@ -1704,7 +1724,9 @@ unique_ptr<ExprNode> ParserImpl::parse_handle_expr() {
     advance(); // consume 'handle'
     skip_newlines();
 
-    // Parse body expression (everything until 'with')
+    // Body until `with`. Use parse_expr() so `2 in xs` is membership;
+    // inner `let`/`perform` inherit stop_at_in via parse_expr_until_in
+    // on binding RHSs and must not treat this as a reason to stop at `in`.
     auto body = parse_expr();
     if (!body) {
         error(ParseError::Type::INVALID_SYNTAX, "Expected expression after 'handle'");

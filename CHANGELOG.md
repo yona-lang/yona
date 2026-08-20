@@ -13,6 +13,15 @@
   during the build; `tools/yona` is the first consumer.
 
 ### Fixed
+- Nested `let`, `perform`/`raise` as a let-binding RHS, and `with` bodies
+  no longer swallow a terminator `in` as membership. `let y = let z = 1 in
+  z * 2 in y` and `let plan = \() -> perform Fs.read "x" in plan ()` parse
+  again. `2 in [1, 2, 3]` and `if 2 in xs then …` still work. Parenthesize
+  membership in a let-binding RHS that is itself a `let`/`if`/`lambda`/
+  `perform`/`raise`/`with`: `then (2 in xs)`, `let z = 1 in (2 in xs)`.
+- `perform State.get ()` is a 0-argument operation (the `()` is not a
+  payload). Recursive functions capture body effects as a closed row
+  (`!{State.get}`) instead of an unsound open rest or an infinite type.
 - `with` expression parser no longer crashes: `parse_expr_until_in()` stops
   before the `in` keyword when parsing the resource, and null checks prevent
   constructing `WithExpr` with a null body (`with fd = 0 in 42`).

@@ -226,6 +226,12 @@ private:
     };
     std::vector<CollectedRow> latent_effect_stack_;
 
+    /// Type vars of `let`-bound functions currently being inferred. A
+    /// recursive self-application must not inject its own apply-rest into
+    /// the function's latent row (that yields `ρ ~ {labels | ρ}` or an
+    /// unsound open rest on a pure recursive function).
+    std::vector<TypeId> recursive_self_vars_;
+
     std::vector<std::string> module_paths_;
     ImportTypeSource* import_src_ = nullptr;
 

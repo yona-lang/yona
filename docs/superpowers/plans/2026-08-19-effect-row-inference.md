@@ -1,10 +1,14 @@
 # Effect-row inference (#8) — implementation plan
 
-**Status (2026-08-19):** Slices 1–3 **shipped** — local inference, handler
+**Status (2026-08-20):** Slices 1–3 **shipped** — local inference, handler
 subtract, pretty-print, `.yonai` `effects` (closed labels + open `|rN` /
 per-param rows), E0202 with perform-origin spans, HOF open-rest threading,
-recursion least-fixed-point unify. #8 acceptance is met; empty-row totality
-is [#5](https://github.com/yona-lang/yona/issues/76), parsed `effect`
+recursion least-fixed-point unify. Follow-up after the `in` terminator
+parse fix: `perform State.get ()` is 0-arg (Unit is not a payload);
+recursive self-apply skips `apply_callee_effects`; two-function HOFs
+keep independent rests; `ρ ~ {L | ρ}` closes the rest instead of E0101.
+#8 acceptance is met; empty-row totality is
+[#5](https://github.com/yona-lang/yona/issues/76), parsed `effect`
 decls are [#9](https://github.com/yona-lang/yona/issues/80).
 
 ## Goal

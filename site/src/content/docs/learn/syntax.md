@@ -218,7 +218,9 @@ From highest to lowest binding strength:
 12. Bitwise AND (`&`)
 13. Bitwise XOR (`^`)
 14. Bitwise OR (`|`)
-15. Membership (`in`)
+15. Membership (`in`) — also the `let`/`with` terminator; parenthesize
+    membership in a then/else or nested-`let` body that is a let-binding
+    RHS: `then (2 in xs)`. `if 2 in xs then …` is fine.
 16. Logical AND (`&&`)
 17. Logical OR (`||`)
 18. Pipe (`|>`, `<|`)
