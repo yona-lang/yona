@@ -71,6 +71,7 @@ ResultType AstVisitor<ResultType>::dispatchVisit(AstNode *node) const {
     if (auto* n = dynamic_cast<ValuesSequenceExpr*>(node)) return visit(n);
     if (auto* n = dynamic_cast<InExpr*>(node)) return visit(n);
     if (auto* n = dynamic_cast<JoinExpr*>(node)) return visit(n);
+    if (auto* n = dynamic_cast<RemoveExpr*>(node)) return visit(n);
     if (auto* n = dynamic_cast<PatternValue*>(node)) return visit(n);
     if (auto* n = dynamic_cast<PatternWithoutGuards*>(node)) return visit(n);
     if (auto* n = dynamic_cast<PatternWithGuards*>(node)) return visit(n);

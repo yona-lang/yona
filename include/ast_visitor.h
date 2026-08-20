@@ -88,6 +88,7 @@ class PatternWithGuards;
 class PatternWithoutGuards;
 class PowerExpr;
 class RaiseExpr;
+class RemoveExpr;
 class RangeSequenceExpr;
 class RecordInstanceExpr;
 class RecordNode;
@@ -232,6 +233,7 @@ public:
   virtual ResultType visit(PatternWithoutGuards *node) const = 0;
   virtual ResultType visit(PowerExpr *node) const = 0;
   virtual ResultType visit(RaiseExpr *node) const = 0;
+  virtual ResultType visit(RemoveExpr *node) const = 0;
   virtual ResultType visit(RangeSequenceExpr *node) const = 0;
   virtual ResultType visit(RecordInstanceExpr *node) const = 0;
   virtual ResultType visit(RecordNode *node) const = 0;

@@ -91,7 +91,40 @@ bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceLocation& lo
             return unify_effect_rows(a->arrow_effects, a->effect_rest,
                                      b->arrow_effects, b->effect_rest, loc, context);
 
-        case MonoType::App:
+        case MonoType::App: {
+            // `.yonai` writes every algebraic type as ADT. That wildcard must
+            // unify with a named ADT (Stream, Option, FileMode) but not with
+            // Seq/Set/Dict — those have their own tags.
+            auto is_collection = [](MonoTypePtr t) {
+                return t->type_name == "Seq" || t->type_name == "Set" ||
+                       t->type_name == "Dict";
+            };
+            if (a->type_name == "ADT" && b->type_name != "ADT") {
+                if (is_collection(b)) {
+                    diag_.error(loc, ErrorCode::E0100, "type mismatch: " + pretty_print(a) +
+                                " vs " + pretty_print(b) +
+                                (context.empty() ? "" : " " + context));
+                    return false;
+                }
+                size_t n = std::min(a->args.size(), b->args.size());
+                for (size_t i = 0; i < n; i++) {
+                    if (!unify(a->args[i], b->args[i], loc, context)) return false;
+                }
+                return true;
+            }
+            if (b->type_name == "ADT" && a->type_name != "ADT") {
+                if (is_collection(a)) {
+                    diag_.error(loc, ErrorCode::E0100, "type mismatch: " + pretty_print(a) +
+                                " vs " + pretty_print(b) +
+                                (context.empty() ? "" : " " + context));
+                    return false;
+                }
+                size_t n = std::min(a->args.size(), b->args.size());
+                for (size_t i = 0; i < n; i++) {
+                    if (!unify(a->args[i], b->args[i], loc, context)) return false;
+                }
+                return true;
+            }
             if (a->type_name != b->type_name || a->args.size() != b->args.size()) {
                 diag_.error(loc, ErrorCode::E0100, "type mismatch: " + pretty_print(a) +
                             " vs " + pretty_print(b) +
@@ -102,6 +135,7 @@ bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceLocation& lo
                 if (!unify(a->args[i], b->args[i], loc, context)) return false;
             }
             return true;
+        }
 
         case MonoType::MTuple:
             if (a->elements.size() != b->elements.size()) {

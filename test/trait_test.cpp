@@ -603,6 +603,25 @@ import Test\GenLib3 in unwrap_or 0 (Just 99)
     CHECK(result == "99");
 }
 
+TEST_CASE("Exported fn calling private module helper") {
+    // GENFN re-parse of `doubledSquare` must resolve unexported `helper`
+    // (or skip GENFN and call the precompiled export). Expected 50, not
+    // E0104 + a binary that prints 0.
+    string mod_source = R"(
+module Test\Secret
+
+export doubledSquare
+
+helper x = x * x
+doubledSquare x = 2 * helper x
+)";
+    string expr_source = R"(
+import doubledSquare from Test\Secret in doubledSquare 5
+)";
+    auto result = compile_and_run_trait(mod_source, expr_source, "Test/Secret");
+    CHECK(result == "50");
+}
+
 // ===== Auto-derive tests =====
 
 // Helper that loads Prelude (needed for Show/Eq/Ord/Hash trait definitions)

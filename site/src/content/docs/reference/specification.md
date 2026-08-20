@@ -389,22 +389,22 @@ except `**`, `::`, and the arrows:
 | 5 | `*` `/` `%` | multiplicative |
 | 6 | `+` `-` | additive |
 | 7 | `<<` `>>` `>>>` | shifts |
-| 8 | `++` | concatenation (sequences, strings) |
-| 9 | `::` | cons (prepend) |
+| 8 | `++` `--` | concatenation; remove elements of the right from the left |
+| 9 | `::` `:>` | cons (prepend); append (snoc) |
 | 10 | `<` `>` `<=` `>=` | comparison |
 | 11 | `==` `!=` | equality |
 | 12 | `&` | bitwise and |
 | 13 | `^` | bitwise xor |
 | 14 | `\|` | bitwise or |
-| 15 | `&&` | logical and (short-circuit) |
-| 16 | `\|\|` | logical or (short-circuit) |
-| 17 | `\|>` `<\|` | pipes |
+| 15 | `in` | membership (seq/set element, dict key) |
+| 16 | `&&` | logical and (short-circuit) |
+| 17 | `\|\|` | logical or (short-circuit) |
+| 18 | `\|>` `<\|` | pipes |
 
-Sequence-specific operators: `x :: xs` prepends and `xs ++ ys`
-concatenates. The lexer reserves `:>` (append), `--` (remove), and `in`
-(membership) as operator tokens, but the current compiler does not accept
-them in expressions — use `xs ++ [x]`, `Std\List.filter`, and
-`Std\List.contains` (or `Std\Set.contains`) instead.
+Sequence-specific operators: `x :: xs` prepends, `xs :> x` appends, and
+`xs ++ ys` concatenates. `a -- b` removes every element of `b` from `a`
+(sequence difference; set difference on sets). `x in coll` is a membership
+test on a sequence or set, or a key test on a dictionary.
 
 ## 6. Evaluation model
 

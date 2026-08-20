@@ -494,6 +494,10 @@ JoinExpr::JoinExpr(SourceContext token, ExprNode *left, ExprNode *right) : Binar
 
 void JoinExpr::print(std::ostream &os) const { os << *left << "++" << *right; }
 
+RemoveExpr::RemoveExpr(SourceContext token, ExprNode *left, ExprNode *right) : BinaryOpExpr(token, left, right) {}
+
+void RemoveExpr::print(std::ostream &os) const { os << *left << "--" << *right; }
+
 BitwiseAndExpr::BitwiseAndExpr(SourceContext token, ExprNode *left, ExprNode *right) : BinaryOpExpr(token, left, right) {}
 
 void BitwiseAndExpr::print(std::ostream &os) const { os << *left << "&" << *right; }

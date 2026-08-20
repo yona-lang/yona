@@ -157,8 +157,9 @@ public:
     bool emit_object_file(const std::string& output_path);
     bool emit_interface_file(const std::string& output_path);
 
-    /// After `compile_module`, type-check exported function bodies and copy
-    /// inferred latent effect rows onto FN metadata for `.yonai` emission.
+    /// After `compile_module`, type-check the module as a unit (`check_module`)
+    /// so exported wrappers see private siblings, then copy inferred latent
+    /// effect rows onto FN metadata for `.yonai` emission.
     void populate_interface_effect_rows(ast::ModuleDecl* mod,
                                         typechecker::TypeChecker& tc);
     bool load_interface_file(const std::string& path);
@@ -467,6 +468,10 @@ private:
         std::unordered_map<std::string, std::string> extern_functions;       // local → mangled
         std::unordered_map<std::string, std::string> function_source;        // mangled → source
         std::unordered_set<std::string> interface_symbols;                   // symbols owned by current module
+        /// Unexported helpers referenced by exported GENFN bodies. Emitted as
+        /// GENFN (not FN) so remonomorphization can compile them locally
+        /// without making them public imports.
+        std::unordered_set<std::string> private_genfn_symbols;
         std::unordered_map<std::string, ImportedFunctionSource> imported_sources;
         std::vector<std::unique_ptr<ast::FunctionExpr>> imported_ast_nodes;  // ownership
         std::unordered_map<std::string, ModuleFunctionMeta> meta;            // function metadata
@@ -509,13 +514,16 @@ private:
             *seq_set_heap_ = nullptr,
             *seq_length_ = nullptr, *seq_cons_ = nullptr, *seq_join_ = nullptr,
             *seq_head_ = nullptr, *seq_tail_ = nullptr, *seq_tail_consume_ = nullptr,
-            *seq_is_empty_ = nullptr, *seq_snoc_ = nullptr;
+            *seq_is_empty_ = nullptr, *seq_snoc_ = nullptr,
+            *seq_contains_ = nullptr, *seq_difference_ = nullptr;
         // Sets
         llvm::Function *set_alloc_ = nullptr, *set_put_ = nullptr, *set_insert_ = nullptr,
+            *set_set_heap_ = nullptr,
             *set_contains_ = nullptr, *set_size_ = nullptr, *set_elements_ = nullptr,
             *set_union_ = nullptr, *set_intersection_ = nullptr, *set_difference_ = nullptr;
         // Dicts
         llvm::Function *dict_alloc_ = nullptr, *dict_set_ = nullptr, *dict_put_ = nullptr,
+            *dict_set_heap_ = nullptr,
             *dict_get_ = nullptr, *dict_size_ = nullptr, *dict_contains_ = nullptr,
             *dict_keys_ = nullptr;
         // ADTs
@@ -757,6 +765,12 @@ private:
     void bind_imported_promise_cf(const std::string& logical_name, llvm::Function* fn,
                                    const ModuleFunctionMeta& meta);
     void register_trait_externs();
+    /// Register same-module GENFN siblings as deferred functions so a
+    /// remonomorphized export can call unexported helpers.
+    void register_sibling_genfns(const std::string& mangled);
+    /// Build a first-class closure for an imported name used as a value.
+    TypedValue materialize_imported_function_value(const std::string& name);
+    TypedValue dummy_typed_value(CType ct);
     llvm::Type* adt_llvm_type(const std::string& type_name);
     std::unique_ptr<ast::ModuleDecl> reparse_genfn(const std::string& local_name, const std::string& source_text);
 
@@ -766,7 +780,10 @@ private:
     TypedValue codegen_set(SetExpr* node);
     TypedValue codegen_dict(DictExpr* node);
     TypedValue codegen_cons(ConsLeftExpr* node);
+    TypedValue codegen_cons_right(ConsRightExpr* node);
     TypedValue codegen_join(JoinExpr* node);
+    TypedValue codegen_in(InExpr* node);
+    TypedValue codegen_remove(RemoveExpr* node);
 
     // Generators / comprehensions
     TypedValue codegen_seq_generator(SeqGeneratorExpr* node);

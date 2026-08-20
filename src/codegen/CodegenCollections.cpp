@@ -186,6 +186,8 @@ TypedValue Codegen::codegen_set(SetExpr* node) {
             val = builder_->CreatePtrToInt(val, i64_ty);
         set = builder_->CreateCall(rt_.set_insert_, {set, val}, "set");
     }
+    if (n > 0 && is_heap_type(elem_type))
+        builder_->CreateCall(rt_.set_set_heap_, {set, ConstantInt::get(i64_ty, 1)});
     return {set, CType::SET, {elem_type}};
 }
 
@@ -210,6 +212,12 @@ TypedValue Codegen::codegen_dict(DictExpr* node) {
         if (val_val->getType()->isPointerTy())
             val_val = builder_->CreatePtrToInt(val_val, i64_ty);
         dict = builder_->CreateCall(rt_.dict_put_, {dict, key_val, val_val}, "dict");
+    }
+    if (n > 0 && (is_heap_type(key_type) || is_heap_type(val_type))) {
+        builder_->CreateCall(rt_.dict_set_heap_,
+            {dict,
+             ConstantInt::get(i64_ty, is_heap_type(key_type) ? 1 : 0),
+             ConstantInt::get(i64_ty, is_heap_type(val_type) ? 1 : 0)});
     }
     return {dict, CType::DICT, {key_type, val_type}};
 }
@@ -300,6 +308,96 @@ TypedValue Codegen::codegen_join(JoinExpr* node) {
         return builder_->CreateIntToPtr(tv.val, PointerType::get(*context_, 0));
     };
     return {builder_->CreateCall(rt_.seq_join_, {as_seq(left), as_seq(right)}), CType::SEQ};
+}
+
+TypedValue Codegen::codegen_cons_right(ConsRightExpr* node) {
+    set_debug_loc(node->source_context);
+    auto seq = codegen(node->left);
+    auto elem = codegen(node->right);
+    if (!elem || !seq) return {};
+    auto i64_ty = LType::getInt64Ty(*context_);
+    Value* seq_ptr = seq.val;
+    Value* elem_val = elem.val;
+    if (is_heap_type(elem.type) && elem_val && !isa<Constant>(elem_val) &&
+        !elem_val->getType()->isStructTy())
+        emit_rc_inc(elem_val, elem.type);
+    if (elem_val->getType()->isPointerTy())
+        elem_val = builder_->CreatePtrToInt(elem_val, i64_ty);
+    else if (elem_val->getType()->isStructTy()) {
+        auto* alloca = builder_->CreateAlloca(elem_val->getType());
+        builder_->CreateStore(elem_val, alloca);
+        uint64_t sz = module_->getDataLayout().getTypeAllocSize(elem_val->getType());
+        auto* boxed = builder_->CreateCall(rt_.box_, {alloca, ConstantInt::get(i64_ty, sz)});
+        elem_val = builder_->CreatePtrToInt(boxed, i64_ty);
+    }
+    if (seq_ptr->getType()->isIntegerTy())
+        seq_ptr = builder_->CreateIntToPtr(seq_ptr, PointerType::get(*context_, 0));
+    auto* result = builder_->CreateCall(rt_.seq_snoc_, {seq_ptr, elem_val}, "snoc");
+    if (seq.type == CType::SEQ && seq.val && !isa<Constant>(seq.val)
+        && !seq.val->getType()->isStructTy()) {
+        bool is_named = false;
+        for (auto& [k, v] : named_values_)
+            if (v.val == seq.val) { is_named = true; break; }
+        if (!is_named) {
+            auto* is_same = builder_->CreateICmpEQ(result, seq_ptr, "snoc_inplace");
+            auto* dec_bb = BasicBlock::Create(*context_, "snoc.dec",
+                builder_->GetInsertBlock()->getParent());
+            auto* cont_bb = BasicBlock::Create(*context_, "snoc.cont",
+                builder_->GetInsertBlock()->getParent());
+            builder_->CreateCondBr(is_same, cont_bb, dec_bb);
+            builder_->SetInsertPoint(dec_bb);
+            emit_rc_dec(seq_ptr, CType::SEQ);
+            builder_->CreateBr(cont_bb);
+            builder_->SetInsertPoint(cont_bb);
+        }
+    }
+    if (is_heap_type(elem.type))
+        builder_->CreateCall(rt_.seq_set_heap_, {result, ConstantInt::get(i64_ty, 1)});
+    return {result, CType::SEQ, {elem.type}};
+}
+
+TypedValue Codegen::codegen_in(InExpr* node) {
+    set_debug_loc(node->source_context);
+    auto elem = codegen(node->left);
+    auto coll = codegen(node->right);
+    if (!elem || !coll) return {};
+    auto i64_ty = LType::getInt64Ty(*context_);
+    auto ptr_ty = PointerType::get(*context_, 0);
+    Value* elem_val = elem.val;
+    if (elem_val->getType()->isPointerTy())
+        elem_val = builder_->CreatePtrToInt(elem_val, i64_ty);
+    else if (elem_val->getType()->isIntegerTy() && elem_val->getType() != i64_ty)
+        elem_val = builder_->CreateZExtOrTrunc(elem_val, i64_ty);
+    Value* coll_ptr = coll.val;
+    if (!coll_ptr->getType()->isPointerTy())
+        coll_ptr = builder_->CreateIntToPtr(coll_ptr, ptr_ty);
+    Value* found = nullptr;
+    if (coll.type == CType::SET)
+        found = builder_->CreateCall(rt_.set_contains_, {coll_ptr, elem_val}, "in_set");
+    else if (coll.type == CType::DICT)
+        found = builder_->CreateCall(rt_.dict_contains_, {coll_ptr, elem_val}, "in_dict");
+    else
+        found = builder_->CreateCall(rt_.seq_contains_, {coll_ptr, elem_val}, "in_seq");
+    auto* zero = ConstantInt::get(i64_ty, 0);
+    return {builder_->CreateICmpNE(found, zero, "in"), CType::BOOL};
+}
+
+TypedValue Codegen::codegen_remove(RemoveExpr* node) {
+    set_debug_loc(node->source_context);
+    auto left = codegen(node->left);
+    auto right = codegen(node->right);
+    if (!left || !right) return {};
+    auto ptr_ty = PointerType::get(*context_, 0);
+    auto as_ptr = [&](const TypedValue& tv) -> Value* {
+        if (tv.val->getType()->isPointerTy()) return tv.val;
+        return builder_->CreateIntToPtr(tv.val, ptr_ty);
+    };
+    if (left.type == CType::SET || right.type == CType::SET) {
+        return {builder_->CreateCall(rt_.set_difference_, {as_ptr(left), as_ptr(right)}, "set_diff"),
+                CType::SET, left.subtypes};
+    }
+    return {builder_->CreateCall(rt_.seq_difference_, {as_ptr(left), as_ptr(right)}, "seq_diff"),
+            CType::SEQ, left.subtypes};
 }
 
 // ===== Generator / Comprehension codegen =====
@@ -709,6 +807,8 @@ TypedValue Codegen::codegen_set_generator(SetGeneratorExpr* node) {
     named_values_ = saved;
 
     builder_->SetInsertPoint(done_bb);
+    if (is_heap_type(body_val.type))
+        builder_->CreateCall(rt_.set_set_heap_, {set_phi, ConstantInt::get(i64_ty, 1)});
     return {set_phi, CType::SET};
 }
 
@@ -782,6 +882,12 @@ TypedValue Codegen::codegen_dict_generator(DictGeneratorExpr* node) {
     named_values_ = saved;
 
     builder_->SetInsertPoint(done_bb);
+    if (is_heap_type(key_val.type) || is_heap_type(val_val.type)) {
+        builder_->CreateCall(rt_.dict_set_heap_,
+            {dict_phi,
+             ConstantInt::get(i64_ty, is_heap_type(key_val.type) ? 1 : 0),
+             ConstantInt::get(i64_ty, is_heap_type(val_val.type) ? 1 : 0)});
+    }
     return {dict_phi, CType::DICT};
 }
 

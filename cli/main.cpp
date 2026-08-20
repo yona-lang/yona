@@ -550,6 +550,10 @@ int main(int argc, char *argv[]) {
     // Errors already printed by DiagnosticEngine
     return 1;
   }
+  // Codegen may still produce a verifiable module after E0104/etc.; do not
+  // link a binary that would return the wrong result with exit 0.
+  if (codegen.error_count_ > 0)
+    return 1;
 
   // Print summary if there were warnings
   if (diag.warning_count() > 0) {

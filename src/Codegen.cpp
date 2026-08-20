@@ -46,6 +46,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include <map>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace yona::compiler::codegen {
 
@@ -372,12 +375,15 @@ void Codegen::declare_runtime() {
     rt_.seq_tail_consume_ = decl("yona_rt_seq_tail_consume", i64p, {i64p});
     rt_.seq_is_empty_  = decl("yona_rt_seq_is_empty", i64, {i64p});
     rt_.seq_snoc_      = decl("yona_rt_seq_snoc", i64p, {i64p, i64});  // append to end
+    rt_.seq_contains_  = decl("yona_rt_seq_contains", i64, {i64p, i64});
+    rt_.seq_difference_ = decl("yona_rt_seq_difference", i64p, {i64p, i64p});
     rt_.print_symbol_  = decl("yona_rt_print_symbol", vd, {ptr}); // takes char* name
 
     // Set runtime
     rt_.set_alloc_     = decl("yona_rt_set_alloc", i64p, {i64});
     rt_.set_put_       = decl("yona_rt_set_put", vd, {i64p, i64, i64});
     rt_.set_insert_    = decl("yona_rt_set_insert", i64p, {i64p, i64});
+    rt_.set_set_heap_  = decl("yona_rt_set_set_heap", vd, {i64p, i64});
     rt_.set_contains_  = decl("yona_rt_set_contains", i64, {i64p, i64});
     rt_.set_size_      = decl("yona_rt_set_size", i64, {i64p});
     rt_.set_elements_  = decl("yona_rt_set_elements", i64p, {i64p});
@@ -390,6 +396,7 @@ void Codegen::declare_runtime() {
     rt_.dict_alloc_    = decl("yona_rt_dict_alloc", i64p, {i64});
     rt_.dict_set_      = decl("yona_rt_dict_set", vd, {i64p, i64, i64, i64});
     rt_.dict_put_      = decl("yona_rt_dict_put", i64p, {i64p, i64, i64});
+    rt_.dict_set_heap_ = decl("yona_rt_dict_set_heap", vd, {i64p, i64, i64});
     rt_.dict_get_      = decl("yona_rt_dict_get", i64, {i64p, i64, i64});
     rt_.dict_size_     = decl("yona_rt_dict_size", i64, {i64p});
     rt_.dict_contains_ = decl("yona_rt_dict_contains", i64, {i64p, i64});
@@ -936,6 +943,48 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
             std::string mangled = mangle_name(fqn, fn_name);
             imports_.function_source[mangled] = func->source_text;
             imports_.interface_symbols.insert(mangled);
+        }
+    }
+
+    // Unexported helpers referenced by exported GENFN bodies must also be
+    // emitted so importers can remonomorphize the export without E0104.
+    {
+        std::unordered_map<std::string, FunctionExpr*> module_fns;
+        for (auto* func : mod->functions)
+            module_fns[func->name] = func;
+
+        std::vector<FunctionExpr*> work;
+        for (auto* func : mod->functions) {
+            if (export_set.count(func->name))
+                work.push_back(func);
+        }
+        std::unordered_set<std::string> visited;
+        while (!work.empty()) {
+            FunctionExpr* func = work.back();
+            work.pop_back();
+            if (!visited.insert(func->name).second) continue;
+
+            std::unordered_set<std::string> bound, free;
+            for (auto* pat : func->patterns) {
+                if (pat->get_type() == AST_PATTERN_VALUE) {
+                    auto* pv = static_cast<PatternValue*>(pat);
+                    if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
+                        bound.insert((*id)->name->value);
+                }
+            }
+            if (!func->bodies.empty()) {
+                if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(func->bodies[0]))
+                    collect_free_vars(bwg->expr, bound, free);
+            }
+            for (const auto& fv : free) {
+                auto it = module_fns.find(fv);
+                if (it == module_fns.end() || export_set.count(fv)) continue;
+                if (it->second->source_text.empty()) continue;
+                std::string dep_mangled = mangle_name(fqn, fv);
+                imports_.function_source[dep_mangled] = it->second->source_text;
+                imports_.private_genfn_symbols.insert(dep_mangled);
+                work.push_back(it->second);
+            }
         }
     }
 
@@ -1907,7 +1956,10 @@ TypedValue Codegen::codegen(AstNode* node) {
         case AST_SET_EXPR:        return codegen_set(static_cast<SetExpr*>(node));
         case AST_DICT_EXPR:       return codegen_dict(static_cast<DictExpr*>(node));
         case AST_CONS_LEFT_EXPR:  return codegen_cons(static_cast<ConsLeftExpr*>(node));
+        case AST_CONS_RIGHT_EXPR: return codegen_cons_right(static_cast<ConsRightExpr*>(node));
         case AST_JOIN_EXPR:       return codegen_join(static_cast<JoinExpr*>(node));
+        case AST_IN_EXPR:         return codegen_in(static_cast<InExpr*>(node));
+        case AST_REMOVE_EXPR:     return codegen_remove(static_cast<RemoveExpr*>(node));
         case AST_SEQ_GENERATOR_EXPR: return codegen_seq_generator(static_cast<SeqGeneratorExpr*>(node));
         case AST_SET_GENERATOR_EXPR: return codegen_set_generator(static_cast<SetGeneratorExpr*>(node));
         case AST_DICT_GENERATOR_EXPR: return codegen_dict_generator(static_cast<DictGeneratorExpr*>(node));

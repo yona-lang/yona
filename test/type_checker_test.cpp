@@ -191,6 +191,19 @@ TEST_CASE("Unifier: App types unify") {
     CHECK(u.resolve(a)->con == TyCon::Int);
 }
 
+TEST_CASE("Unifier: imported ADT wildcard unifies with named ADTs, not Seq") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier u(arena, uf, diag);
+    auto* elem = arena.fresh_var(0); uf.add_var(elem->var_id, 0);
+    auto* adt = arena.make_app("ADT", {elem});
+    auto* stream = arena.make_app("Stream", {arena.make_con(TyCon::String)});
+    auto* seq = arena.make_app("Seq", {arena.make_con(TyCon::String)});
+    CHECK(u.unify(adt, stream, SourceLocation::unknown()));
+    CHECK(!u.unify(adt, seq, SourceLocation::unknown()));
+}
+
 TEST_CASE("Unifier: tuple types unify element-wise") {
     TypeArena arena;
     UnionFind uf;

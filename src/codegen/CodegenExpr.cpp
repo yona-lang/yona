@@ -1261,7 +1261,13 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                     return result;
                 }
             }
-            if (!it->second.val) last_lambda_name_ = node->name->value;
+            if (!it->second.val) {
+                if (imports_.extern_functions.count(node->name->value)) {
+                    auto imported = materialize_imported_function_value(node->name->value);
+                    if (imported) return imported;
+                }
+                last_lambda_name_ = node->name->value;
+            }
         }
         return it->second;
     }

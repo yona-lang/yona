@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+## v0.1.4 (2026-08-20)
+
+### Fixed
+- `let f x = if … else … in body` parses again: `if` then/else no longer
+  consume the let-closing `in` as membership (`InExpr`). `2 in [1, 2, 3]`
+  and `if 2 in xs then …` still work. Parenthesize membership in a
+  then/else that is itself a let-binding RHS: `then (2 in xs)`.
+- HAMT set/dict destructors now `rc_dec` heap keys and values
+  (`KEY_HEAP`/`VAL_HEAP`), so `{[1], [2]}` and dicts of seqs no longer
+  leak inner collections when the map is dropped.
+- Applying `Std\Stream.map` (or `toSeq`) to a `Seq` is a compile-time
+  **E0100** instead of a runtime SIGSEGV. `.yonai` `SEQ` vs `ADT` tags
+  are now used at import so a sequence is not accepted where a Stream
+  is required (`toSeq (map length ["ab", "abc"])`). Use `fromSeq`.
+- Remonomorphizing `Std\Stream.map` (and other lazy ADT GENFNs) no longer
+  SIGSEGVs: the extracted function is detached from the temporary parse
+  module so parent walks cannot follow a freed `ModuleDecl`. Imported
+  `length` as a value works on Stream (`toSeq (map length (fromSeq xs))`).
+- Compiling a module that exports a wrapper around a private helper no
+  longer prints a spurious **E0104** while filling `.yonai` FN effect rows
+  (`populate_interface_effect_rows` uses sibling-aware `check_module`).
+- An imported function used as a first-class value (e.g. `map length xs`)
+  now materializes a closure instead of passing a null operand to the HOF.
+- Exported functions that call unexported module helpers remonomorphize
+  correctly (`doubledSquare` → `50`). Helper source is emitted as GENFN
+  (not a public FN). Failed remonomorphize falls back to the precompiled
+  extern; `yonac` exits 1 if codegen reported errors instead of linking a
+  wrong binary with exit 0.
+- Sequence operators `:>` (append), `--` (remove elements of the right from
+  the left), and `in` (membership on seq/set, key test on dict) now parse
+  and compile. `:>` already type-checked; it was missing codegen (`seq_snoc`).
+  `--` and `in` were lexed but dropped by the Pratt parser (E0301 inside
+  parens; bare expressions silently kept only the left operand).
+- Top-level print of nested sequences (and other heap elements in a Seq)
+  no longer dumps raw addresses: `[[1, 2], [3]]` prints as `[[1, 2], [3]]`.
+  The seq printer consults `heap_flag` and dispatches on the RC type tag.
+- Set/dict print no longer dumps nested heap values as integers:
+  `{[1, 2]}` and `{1: [10, 20]}` print the inner sequences. HAMT-backed
+  sets keep an `IS_SET` tag bit so `[{1}, {2}]` prints as sets, not
+  `{k: 1}` dicts.
+- Printing a tuple that contains a Seq (or other pointer-typed slot) is
+  no longer an LLVM verifier failure: i64 tuple slots are unboxed to the
+  type `yona_rt_print_*` helpers expect (`print_tuple_int_seq`).
+
 ### Added
 - Applying a function whose body performs an effect with no covering `handle`
   is a compile error **E0202** (points at the introducing `perform`, note at

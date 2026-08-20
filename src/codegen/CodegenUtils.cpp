@@ -411,8 +411,10 @@ std::pair<llvm::Type*, CType> Codegen::infer_return_type(AstNode* node) {
     auto ct = node->get_type();
 
     if (ct == AST_VALUES_SEQUENCE_EXPR || ct == AST_CONS_LEFT_EXPR ||
-        ct == AST_CONS_RIGHT_EXPR || ct == AST_JOIN_EXPR)
+        ct == AST_CONS_RIGHT_EXPR || ct == AST_JOIN_EXPR || ct == AST_REMOVE_EXPR)
         return {llvm_type(CType::SEQ), CType::SEQ};
+    if (ct == AST_IN_EXPR)
+        return {llvm_type(CType::BOOL), CType::BOOL};
     if (ct == AST_SET_EXPR) return {llvm_type(CType::SET), CType::SET};
     if (ct == AST_DICT_EXPR) return {llvm_type(CType::DICT), CType::DICT};
     if (ct == AST_SYMBOL_EXPR) return {i64_ty, CType::SYMBOL};

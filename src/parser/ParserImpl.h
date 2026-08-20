@@ -156,7 +156,7 @@ public:
     Precedence next_precedence(Precedence prec) const;
 
     // Control flow
-    unique_ptr<ExprNode> parse_if_expr();
+    unique_ptr<ExprNode> parse_if_expr(bool stop_at_in = false);
     unique_ptr<ExprNode> parse_let_expr();
     unique_ptr<AliasExpr> parse_alias();
     unique_ptr<ExprNode> parse_case_expr();

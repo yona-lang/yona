@@ -511,6 +511,40 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
             break;
         }
 
+        case AST_IN_EXPR: {
+            // x in coll — Seq a / Set a (element) or Dict k v (key) → Bool
+            auto* ie = static_cast<InExpr*>(node);
+            auto* elem_type = infer(ie->left, env, level);
+            auto* coll_type = infer(ie->right, env, level);
+            auto* resolved = unifier_.resolve(coll_type);
+            if (resolved && resolved->tag == MonoType::App && resolved->type_name == "Set"
+                && !resolved->args.empty()) {
+                unifier_.unify(elem_type, resolved->args[0],
+                               node->source_context, "in membership (in) set element");
+            } else if (resolved && resolved->tag == MonoType::App && resolved->type_name == "Dict"
+                       && !resolved->args.empty()) {
+                unifier_.unify(elem_type, resolved->args[0],
+                               node->source_context, "in membership (in) dict key");
+            } else {
+                auto* expected_seq = arena_.make_app("Seq", {elem_type});
+                unifier_.unify(coll_type, expected_seq, node->source_context,
+                               "in membership (in) sequence");
+            }
+            result = arena_.make_con(TyCon::Bool);
+            break;
+        }
+
+        case AST_REMOVE_EXPR: {
+            // a -- b — remove elements of b from a (same collection type)
+            auto* re = static_cast<RemoveExpr*>(node);
+            auto* left_type = infer(re->left, env, level);
+            auto* right_type = infer(re->right, env, level);
+            unifier_.unify(left_type, right_type, node->source_context,
+                           "in remove (--) (both sides must have the same collection type)");
+            result = unifier_.resolve(left_type);
+            break;
+        }
+
         case AST_FIELD_UPDATE_EXPR: {
             auto* fu = static_cast<FieldUpdateExpr*>(node);
             auto* obj_type = infer(fu->identifier, env, level);
@@ -804,8 +838,29 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr* node, std::shared_ptr<TypeEnv> e
         auto* expected_fn = arena_.make_arrow(arg_type, result_var, {}, apply_rest);
 
         if (!unifier_.unify(result_type, expected_fn, node->source_context,
-                            "in function application"))
+                            "in function application")) {
+            // Imported `.yonai` tags distinguish SEQ from ADT (Stream). A
+            // failed apply here is a hard mismatch, not partial inference —
+            // increment so CLI/`has_direct_errors()` reject the program.
+            auto is_app = [](MonoTypePtr t, const char* name) {
+                return t && t->tag == MonoType::App && t->type_name == name;
+            };
+            auto is_collection = [&](MonoTypePtr t) {
+                return is_app(t, "Seq") || is_app(t, "Set") || is_app(t, "Dict");
+            };
+            auto* expected_param = unifier_.resolve(result_type);
+            if (expected_param && expected_param->tag == MonoType::Arrow)
+                expected_param = unifier_.resolve(expected_param->param_type);
+            auto* actual = unifier_.resolve(arg_type);
+            if ((is_app(expected_param, "ADT") && is_collection(actual)) ||
+                (is_collection(expected_param) && is_app(actual, "ADT"))) {
+                if (is_app(actual, "Seq") || is_app(expected_param, "Seq"))
+                    diag_.note(node->source_context,
+                               "a Seq is not a Stream; wrap a sequence with fromSeq");
+                error_count_++;
+            }
             return result_var;
+        }
 
         // After unify, a Var callee is the expected arrow (open rest shared with HOF).
         auto* after = unifier_.resolve(resolved);
@@ -928,6 +983,8 @@ std::string TypeChecker::op_name(AstNodeType type) {
         case AST_LOGICAL_AND_EXPR: return "&&";
         case AST_LOGICAL_OR_EXPR: return "||";
         case AST_JOIN_EXPR: return "++";
+        case AST_REMOVE_EXPR: return "--";
+        case AST_IN_EXPR: return "in";
         case AST_CONS_LEFT_EXPR: return "::";
         case AST_PIPE_LEFT_EXPR: return "<|";
         case AST_PIPE_RIGHT_EXPR: return "|>";
@@ -1684,6 +1741,16 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
         return v;
     };
     auto linear = [&]() { return arena_.make_app("Linear", {fresh()}); };
+    // SEQ/SET/DICT/ADT/FUNCTION are structural in `.yonai`. INT and other
+    // scalars are often monomorphized placeholders for polymorphic params.
+    auto from_tag = [&](const std::string& tag) -> MonoTypePtr {
+        if (tag == "SEQ") return arena_.make_app("Seq", {fresh()});
+        if (tag == "SET") return arena_.make_app("Set", {fresh()});
+        if (tag == "DICT") return arena_.make_app("Dict", {fresh(), fresh()});
+        if (tag == "FUNCTION") return arena_.make_arrow(fresh(), fresh());
+        if (tag == "ADT") return arena_.make_app("ADT", {fresh()});
+        return fresh();
+    };
     MonoTypePtr ret;
     if (!sig.tuple_elem_linear.empty()) {
         std::vector<MonoTypePtr> elems;
@@ -1694,12 +1761,13 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
     } else if (sig.return_linear) {
         ret = linear();
     } else {
-        ret = fresh();
+        ret = from_tag(sig.return_tag);
     }
     MonoTypePtr fn = ret;
     for (int i = sig.arity - 1; i >= 0; i--) {
         bool is_lin = i < (int)sig.param_linear.size() && sig.param_linear[(size_t)i];
-        fn = arena_.make_arrow(is_lin ? linear() : fresh(), fn);
+        std::string tag = (i < (int)sig.param_tags.size()) ? sig.param_tags[(size_t)i] : "";
+        fn = arena_.make_arrow(is_lin ? linear() : from_tag(tag), fn);
     }
     return fn;
 }

@@ -1,0 +1,1 @@
+if 20 in ({10, 20, 30} -- {10, 30}) then true else false

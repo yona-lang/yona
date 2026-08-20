@@ -486,8 +486,9 @@ a >>> b # Zero-fill right shift
 
 ```yona
 a :: b  # Cons (prepend)
+a :> b  # Append (snoc)
 a ++ b  # Concatenate
-a -- b  # Remove elements
+a -- b  # Remove elements of b from a
 ```
 
 ### Other Operators
@@ -781,7 +782,7 @@ From highest to lowest:
 5. Multiplicative (`*`, `/`, `%`)
 6. Additive (`+`, `-`)
 7. Shift (`<<`, `>>`, `>>>`)
-8. Join (`++`)
+8. Join (`++`, `--`)
 9. Cons (`::`, `:>`)
 10. Comparison (`<`, `>`, `<=`, `>=`)
 11. Equality (`==`, `!=`)

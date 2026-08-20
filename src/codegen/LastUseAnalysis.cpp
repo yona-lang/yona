@@ -59,6 +59,7 @@ struct LastUseAnalyzer {
         case AST_LT_EXPR: case AST_GT_EXPR: case AST_LTE_EXPR: case AST_GTE_EXPR:
         case AST_LOGICAL_AND_EXPR: case AST_LOGICAL_OR_EXPR:
         case AST_CONS_LEFT_EXPR: case AST_CONS_RIGHT_EXPR: case AST_JOIN_EXPR:
+        case AST_IN_EXPR: case AST_REMOVE_EXPR:
         case AST_PIPE_LEFT_EXPR: case AST_PIPE_RIGHT_EXPR: {
             auto* bin = static_cast<BinaryOpExpr*>(node);
             // Walk right first (it executes second, so its uses are "later")

@@ -1,0 +1,2 @@
+import map, fromSeq, toSeq from Std\Stream, length from Std\String in
+toSeq (map length (fromSeq ["ab", "abc"]))

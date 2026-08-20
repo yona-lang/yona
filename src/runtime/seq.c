@@ -654,6 +654,38 @@ int64_t* yona_rt_seq_snoc(int64_t* seq, int64_t elem) {
     return (int64_t*)nr;
 }
 
+/* ===== Membership / difference ===== */
+
+int64_t yona_rt_seq_contains(int64_t* seq, int64_t elem) {
+    int64_t len = yona_rt_seq_length(seq);
+    for (int64_t i = 0; i < len; i++) {
+        if (yona_rt_seq_get(seq, i) == elem) return 1;
+    }
+    return 0;
+}
+
+/* Callee-borrows (same as join). Removes every element of `b` from `a`. */
+int64_t* yona_rt_seq_difference(int64_t* a, int64_t* b) {
+    int64_t la = yona_rt_seq_length(a);
+    if (la == 0) return a;
+    if (yona_rt_seq_length(b) == 0) return a;
+    int64_t keep = 0;
+    for (int64_t i = 0; i < la; i++) {
+        if (!yona_rt_seq_contains(b, yona_rt_seq_get(a, i))) keep++;
+    }
+    if (keep == la) return a;
+    int64_t* res = yona_rt_seq_alloc(keep);
+    int64_t hf = is_rbt(a) ? ((rbt_t*)a)->heap_flag : FLAT_HF(a);
+    res[1] = hf;
+    int64_t j = 0;
+    for (int64_t i = 0; i < la; i++) {
+        int64_t e = yona_rt_seq_get(a, i);
+        if (!yona_rt_seq_contains(b, e))
+            res[SEQ_HDR_SIZE + j++] = e;
+    }
+    return res;
+}
+
 /* ===== Join (concat) — O(n) ===== */
 
 /* Callee-borrows (same as cons). */
@@ -675,12 +707,20 @@ int64_t* yona_rt_seq_join(int64_t* a, int64_t* b) {
 
 /* ===== Print ===== */
 
+/* Defined in compiled_runtime.c — dispatches on the RC type tag. */
+extern void yona_rt_print_heap_value(int64_t val);
+
 void yona_rt_print_seq(int64_t* seq) {
     int64_t len = yona_rt_seq_length(seq);
+    int hf = is_rbt(seq) ? (int)((rbt_t*)seq)->heap_flag : FLAT_HF(seq);
     printf("[");
     for (int64_t i = 0; i < len; i++) {
         if (i > 0) printf(", ");
-        printf("%" PRId64, yona_rt_seq_get(seq, i));
+        int64_t elem = yona_rt_seq_get(seq, i);
+        if (hf)
+            yona_rt_print_heap_value(elem);
+        else
+            printf("%" PRId64, elem);
     }
     printf("]");
 }

@@ -235,6 +235,8 @@ unique_ptr<ExprNode> ParserImpl::parse_prefix_expr_until_in() {
 
     if (peek().type == TokenType::YBACKSLASH) {
         return parse_lambda_expr(true);
+    } else if (peek().type == TokenType::YIF) {
+        return parse_if_expr(true);
     } else {
         return parse_prefix_expr();
     }
@@ -633,6 +635,10 @@ unique_ptr<ExprNode> ParserImpl::parse_infix_expr(unique_ptr<ExprNode> left, Pre
         BINARY_OP_RIGHT_ASSOC(TokenType::YCONS, ConsLeftExpr, "::")
         BINARY_OP(TokenType::YCONS_RIGHT, ConsRightExpr, ":>")
 
+        // Sequence difference and membership
+        BINARY_OP(TokenType::YREMOVE, RemoveExpr, "--")
+        BINARY_OP(TokenType::YIN, InExpr, "in")
+
         // Pipe operators
         BINARY_OP_RIGHT_ASSOC(TokenType::YPIPE_LEFT, PipeLeftExpr, "<|")
         BINARY_OP(TokenType::YPIPE_RIGHT, PipeRightExpr, "|>")
@@ -816,10 +822,15 @@ Precedence ParserImpl::get_infix_precedence(TokenType type) const {
             return Precedence::COMPARISON;
 
         case TokenType::YCONS:
+        case TokenType::YCONS_RIGHT:
             return Precedence::CONS;
 
         case TokenType::YJOIN:
+        case TokenType::YREMOVE:
             return Precedence::JOIN;
+
+        case TokenType::YIN:
+            return Precedence::YIN;
 
         case TokenType::YLEFT_SHIFT:
         case TokenType::YRIGHT_SHIFT:
@@ -855,7 +866,7 @@ Precedence ParserImpl::next_precedence(Precedence prec) const {
 
 // --- Control flow ---
 
-unique_ptr<ExprNode> ParserImpl::parse_if_expr() {
+unique_ptr<ExprNode> ParserImpl::parse_if_expr(bool stop_at_in) {
     SourceLocation loc = current_location();
     advance(); // consume 'if'
 
@@ -863,11 +874,11 @@ unique_ptr<ExprNode> ParserImpl::parse_if_expr() {
     skip_newlines();
     expect(TokenType::YTHEN, "Expected 'then' after if condition");
     skip_newlines();
-    auto then_expr = parse_expr();
+    auto then_expr = stop_at_in ? parse_expr_until_in() : parse_expr();
     skip_newlines();
     expect(TokenType::YELSE, "Expected 'else' after then expression");
     skip_newlines();
-    auto else_expr = parse_expr();
+    auto else_expr = stop_at_in ? parse_expr_until_in() : parse_expr();
 
     return make_unique<IfExpr>(loc,
         condition.release(),

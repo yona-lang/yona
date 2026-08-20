@@ -55,18 +55,16 @@ place, making recursive list processing nearly allocation-free.
 
 ```yona
 0 :: [1, 2, 3]       # => [0, 1, 2, 3] — cons (prepend), O(1)
+[1, 2] :> 3          # => [1, 2, 3] — append (snoc), O(1) amortized
 [1, 2] ++ [3, 4]     # => [1, 2, 3, 4] — concatenation, O(n)
+[1, 2, 3, 2] -- [2]  # => [1, 3] — remove elements of the right from the left
+2 in [1, 2, 3]       # => true — membership (seq, set, or dict key)
 ```
 
-`::` is right-associative, so `1 :: 2 :: [3]` is `[1, 2, 3]`.
-
-### Append, remove, membership <span class="yona-status yona-status--partial">Partial</span>
-
-The grammar also defines `seq :> elem` (append at the end), `a -- b`
-(remove elements of `b` from `a`), and `x in coll` (membership test), but
-compiler support for these three is currently limited. Use `xs ++ [x]` to
-append, `Std\List::filter` to remove, and `Std\List::contains` /
-`Std\Dict::contains` / `Std\Set::contains` for membership.
+`::` is right-associative, so `1 :: 2 :: [3]` is `[1, 2, 3]`. `:>` is
+left-associative. `--` keeps the order of the left collection and drops
+every element that appears in the right (set difference on sets). `x in d`
+tests whether `x` is a key of dictionary `d`.
 
 ## Dictionaries
 

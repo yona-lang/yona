@@ -26,13 +26,18 @@
 
 namespace yona::compiler::typechecker {
 
-/// `.yonai` FN overlay for LinearityChecker. CType/ABI stays on the codegen
-/// side; this is how `Linear` (and products of Linear) cross modules.
+/// `.yonai` FN overlay for the type checker. CType/ABI stays on the codegen
+/// side; this carries `Linear` plus structural tags (`SEQ` vs `ADT`) so a
+/// Seq is not accepted where a Stream (or other ADT) is required.
 struct ImportedFnSig {
     int arity = 0;
     bool return_linear = false;
     std::vector<char> tuple_elem_linear;
     std::vector<char> param_linear;
+    /// Structural `.yonai` tags (`SEQ`, `ADT`, `FUNCTION`, …). `INT`/empty
+    /// means unconstrained — generics are snapshotted as INT in `.yonai`.
+    std::vector<std::string> param_tags;
+    std::string return_tag;
 };
 
 /// Loads imported function signatures from `.yonai` (implemented by Codegen).

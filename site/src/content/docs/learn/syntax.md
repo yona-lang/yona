@@ -104,8 +104,8 @@ double x = x * 2
 double 21   # => 42
 ```
 
-Never write `--` for a comment — `--` is the remove operator token, not a
-comment introducer, and will produce a parse error.
+Never write `--` for a comment — `--` is the remove operator (`a -- b`
+drops elements of `b` from `a`), not a comment introducer.
 
 ## Literals
 
@@ -208,7 +208,7 @@ From highest to lowest binding strength:
 5. Multiplicative (`*`, `/`, `%`)
 6. Additive (`+`, `-`)
 7. Shift (`<<`, `>>`, `>>>`)
-8. Join (`++`)
+8. Join (`++`, `--`)
 9. Cons (`::`, `:>`)
 10. Comparison (`<`, `>`, `<=`, `>=`)
 11. Equality (`==`, `!=`)

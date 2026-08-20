@@ -217,7 +217,7 @@ based on the type tag:
 | ADT | Each field per `heap_mask` |
 | Tuple | Each element per `heap_mask` |
 | Set | Each element if `heap_flag` set |
-| Dict (HAMT) | All child sub-nodes (nodemap entries) |
+| Dict (HAMT) | Heap keys/values per `KEY_HEAP`/`VAL_HEAP` aux flags; child sub-nodes |
 
 The `heap_mask` is a 64-bit bitmask set by the codegen at allocation time.
 It encodes which children are heap-typed (pointers that need `rc_dec`).

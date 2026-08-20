@@ -336,6 +336,59 @@ TEST_SUITE("Codegen E2E") {
 
 } // Codegen E2E
 
+TEST_CASE("print tuple containing seq") {
+  CHECK(compile_and_run("(42, [1, 2, 3])", nullptr, nullptr, "tc_print_tuple_int_seq") ==
+        "(42, [1, 2, 3])");
+}
+
+TEST_CASE("print nested seq") {
+  CHECK(compile_and_run("[[1, 2], [3]]", nullptr, nullptr, "tc_print_nested_seq") ==
+        "[[1, 2], [3]]");
+}
+
+TEST_CASE("print set of seq") {
+  CHECK(compile_and_run("{[1, 2]}", nullptr, nullptr, "tc_print_set_of_seq") == "{[1, 2]}");
+}
+
+TEST_CASE("print dict of seq") {
+  CHECK(compile_and_run("{1: [10, 20]}", nullptr, nullptr, "tc_print_dict_of_seq") ==
+        "{1: [10, 20]}");
+}
+
+TEST_CASE("print seq of sets") {
+  CHECK(compile_and_run("[{1}, {2}]", nullptr, nullptr, "tc_print_seq_of_sets") == "[{1}, {2}]");
+}
+
+TEST_CASE("print set of seqs dumps collections not addresses") {
+  string out = compile_and_run("{[1], [2]}", nullptr, nullptr, "tc_print_set_of_seqs");
+  CHECK_MESSAGE(out.find("[1]") != string::npos, (string("expected [1] in '") + out + "'"));
+  CHECK_MESSAGE(out.find("[2]") != string::npos, (string("expected [2] in '") + out + "'"));
+  CHECK_MESSAGE(out.find(": ") == string::npos, (string("set must not print as dict '") + out + "'"));
+}
+
+TEST_CASE("dropping a set of seqs releases inner heap objects") {
+  ensure_compiled_runtime_test_obj();
+  string source = "let s = {[1], [2]} in 0";
+
+  parser::Parser parser;
+  Codegen codegen("hamt_set_seq_drop_test");
+  DiagnosticEngine tc_diag;
+  typechecker::TypeChecker type_checker(tc_diag);
+  codegen.load_prelude(&parser, &type_checker);
+  istringstream stream(source);
+  auto pr = parser.parse_input(stream);
+  REQUIRE(pr.node);
+  type_checker.set_import_type_source(&codegen.import_types_);
+  type_checker.check(pr.node.get());
+  REQUIRE(!type_checker.has_direct_errors());
+  auto module = codegen.compile(pr.node.get());
+  REQUIRE(module);
+
+  fs::path obj_path = yona::test::link::scratch_root() / "yona_hamt_set_seq_drop.o";
+  REQUIRE(codegen.emit_object_file(obj_path.string()));
+  assert_linked_yona_zero_alloc_leaks(obj_path.string(), "yona_hamt_set_seq_drop");
+}
+
 // ===== Perceus exception cleanup (phase 3) =====
 //
 // Verifies that when `raise` unwinds past frames that own heap values
@@ -1027,6 +1080,40 @@ readSecret = \() -> perform Fs.read "/etc/shadow"
     CHECK(checker.has_direct_errors());
   }
 
+  TEST_CASE("Module compile of exported wrapper around private helper has no E0104") {
+    // CLI calls populate_interface_effect_rows after compile_module. Per-function
+    // check() cannot see unexported siblings; check_module must be used instead.
+    parser::Parser parser;
+    string mod_source = R"(
+module Secret
+
+export doubledSquare
+
+helper x = x * x
+doubledSquare x = 2 * helper x
+)";
+    auto mod_result = parser.parse_module(mod_source, "Secret.yona");
+    REQUIRE(mod_result.has_value());
+
+    DiagnosticEngine diag;
+    Codegen codegen("secret_helper_mod", &diag);
+    auto llvm_mod = codegen.compile_module(mod_result.value().get());
+    REQUIRE(llvm_mod != nullptr);
+    CHECK(codegen.error_count_ == 0);
+
+    typechecker::TypeChecker tc(diag);
+    codegen.populate_interface_effect_rows(mod_result.value().get(), tc);
+
+    bool saw_e0104 = false;
+    for (const auto& rec : diag.records()) {
+      if (rec.level == DiagLevel::Error && rec.code == ErrorCode::E0104)
+        saw_e0104 = true;
+    }
+    CHECK_FALSE(saw_e0104);
+    CHECK_FALSE(tc.has_direct_errors());
+    CHECK_FALSE(diag.has_errors());
+  }
+
 } // Codegen Modules
 
 // ===== Diagnostic / Error Reporting Tests =====
@@ -1285,6 +1372,73 @@ TEST_SUITE("Diagnostics") {
 // IR fixture tests removed — IR text comparison is fragile due to
 // whitespace/formatting differences between runs. The E2E fixture tests
 // (compile → run → check output) are more reliable and valuable.
+
+TEST_SUITE("Imported HOF") {
+
+  TEST_CASE("Imported module function as first-class HOF argument") {
+    // `length` is used as a value (passed to `map`), not called. Must
+    // materialize a closure; wrapping in a lambda already works.
+    CHECK(compile_and_run(
+              R"(import map from Std\List, length from Std\String in map length ["ab", "abc"])",
+              nullptr, nullptr, "imported_hof_length") == "[2, 3]");
+  }
+
+  TEST_CASE("Imported module function as first-class HOF argument on Stream") {
+    // Stream.map is lazy ADT / generator shaped. Imported `length` as a
+    // value must work on that path too — do not require `\s -> length s`.
+    CHECK(compile_and_run(
+              R"(import map, fromSeq, toSeq from Std\Stream, length from Std\String in toSeq (map length (fromSeq ["ab", "abc"])))",
+              nullptr, nullptr, "imported_hof_stream_length") == "[2, 3]");
+  }
+
+  TEST_CASE("Stream.map applied to a Seq is a type error") {
+    // Stream.map cases on Yield/Nil. A Seq is not a Stream; compiling
+    // `toSeq (map length ["ab", "abc"])` must fail at typecheck (E0100),
+    // not produce a crashing binary. Use fromSeq to lift the Seq.
+    const char *source =
+        R"(import map, toSeq from Std\Stream, length from Std\String in toSeq (map length ["ab", "abc"]))";
+
+    parser::Parser parser;
+    Codegen codegen("stream_map_seq_tyerr");
+    if (fs::exists(yona::test::lib_dir()))
+      codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    for (auto &dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
+      if (fs::exists(dir))
+        codegen.module_paths_.push_back(fs::canonical(dir).string());
+    }
+
+    DiagnosticEngine tc_diag;
+    typechecker::TypeChecker type_checker(tc_diag);
+    codegen.load_prelude(&parser, &type_checker);
+    for (auto &p : codegen.module_paths_)
+      type_checker.add_module_path(p);
+
+    istringstream stream(source);
+    auto parse_result = parser.parse_input(stream);
+    REQUIRE(parse_result.node);
+
+    type_checker.set_import_type_source(&codegen.import_types_);
+    type_checker.check(parse_result.node.get());
+
+    CHECK(type_checker.has_direct_errors());
+    CHECK(tc_diag.has_errors());
+    bool saw_e0100 = false;
+    bool mentions_seq = false;
+    bool mentions_stream_or_adt = false;
+    for (auto &rec : tc_diag.records()) {
+      if (rec.code && *rec.code == ErrorCode::E0100)
+        saw_e0100 = true;
+      if (rec.message.find("Seq") != string::npos)
+        mentions_seq = true;
+      if (rec.message.find("Stream") != string::npos || rec.message.find("ADT") != string::npos)
+        mentions_stream_or_adt = true;
+    }
+    CHECK(saw_e0100);
+    CHECK(mentions_seq);
+    CHECK(mentions_stream_or_adt);
+  }
+
+} // Imported HOF
 
 TEST_SUITE("Regex") {
 

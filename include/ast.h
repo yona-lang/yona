@@ -108,6 +108,7 @@ enum AstNodeType {
   AST_CONS_LEFT_EXPR,
   AST_CONS_RIGHT_EXPR,
   AST_JOIN_EXPR,
+  AST_REMOVE_EXPR,
   AST_BITWISE_AND_EXPR,
   AST_BITWISE_XOR_EXPR,
   AST_BITWISE_OR_EXPR,
@@ -1117,6 +1118,19 @@ public:
     return visitor.visit(const_cast<typename std::remove_const<typename std::remove_pointer<decltype(this)>::type>::type*>(this));
   }
   [[nodiscard]] AstNodeType get_type() const override { return AST_JOIN_EXPR; };
+};
+
+class RemoveExpr final : public BinaryOpExpr {
+private:
+  void print(std::ostream &os) const override;
+
+public:
+  explicit RemoveExpr(SourceContext token, ExprNode *left, ExprNode *right);
+  template<typename ResultType>
+  ResultType accept(const AstVisitor<ResultType> &visitor) const {
+    return visitor.visit(const_cast<typename std::remove_const<typename std::remove_pointer<decltype(this)>::type>::type*>(this));
+  }
+  [[nodiscard]] AstNodeType get_type() const override { return AST_REMOVE_EXPR; };
 };
 
 class BitwiseAndExpr final : public BinaryOpExpr {

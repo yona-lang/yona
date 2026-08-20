@@ -36,6 +36,14 @@ extern void yona_rt_rc_dec(void* ptr);
 #define HAMT_MASK  (HAMT_WIDTH - 1)  /* 0x1F */
 #define HAMT_HDR   3  /* datamap, nodemap, size */
 
+/* Extra bits in the RC type_tag word (bits 16+; unused for HAMT).
+ * Bits 0-7 = type tag, 8-15 = pool class. */
+#ifndef HAMT_FLAG_KEY_HEAP
+#define HAMT_FLAG_KEY_HEAP (1LL << 16)
+#define HAMT_FLAG_VAL_HEAP (1LL << 17)
+#define HAMT_FLAG_IS_SET   (1LL << 18)
+#endif
+
 /* ===== Hash function (splitmix64) ===== */
 
 static uint64_t hamt_hash(int64_t key) {
@@ -65,11 +73,42 @@ typedef struct {
     int64_t payload[]; /* [k0,v0,k1,v1,..., child0,child1,...] */
 } hamt_node_t;
 
+static int64_t hamt_aux_flags(hamt_node_t* n) {
+    if (!n) return 0;
+    return ((int64_t*)n)[-1] & ~0xFFFFLL;
+}
+
+static void hamt_or_aux_flags(hamt_node_t* n, int64_t flags) {
+    if (!n) return;
+    ((int64_t*)n)[-1] |= flags;
+}
+
+static void hamt_copy_aux_flags(hamt_node_t* dst, hamt_node_t* src) {
+    if (!dst || !src) return;
+    int64_t* d = ((int64_t*)dst) - 1;
+    int64_t* s = ((int64_t*)src) - 1;
+    *d = (*d & 0xFFFFLL) | (*s & ~0xFFFFLL);
+}
+
 /* Transient (unique-owner) check for in-place mutation. */
 static int hamt_is_unique(hamt_node_t* n) {
     if (!n) return 0;
     int64_t* hdr = ((int64_t*)n) - 2;
     return __builtin_expect(__atomic_load_n(&hdr[0], __ATOMIC_ACQUIRE) == 1, 1);
+}
+
+static void hamt_retain_slot(int64_t flags, int64_t key, int64_t val) {
+    if ((flags & HAMT_FLAG_KEY_HEAP) && key)
+        yona_rt_rc_inc((void*)(intptr_t)key);
+    if ((flags & HAMT_FLAG_VAL_HEAP) && val)
+        yona_rt_rc_inc((void*)(intptr_t)val);
+}
+
+static void hamt_release_slot(int64_t flags, int64_t key, int64_t val) {
+    if ((flags & HAMT_FLAG_KEY_HEAP) && key)
+        yona_rt_rc_dec((void*)(intptr_t)key);
+    if ((flags & HAMT_FLAG_VAL_HEAP) && val)
+        yona_rt_rc_dec((void*)(intptr_t)val);
 }
 
 static hamt_node_t* hamt_alloc(int data_count, int node_count, int64_t size) {
@@ -88,6 +127,13 @@ static hamt_node_t* hamt_alloc(int data_count, int node_count, int64_t size) {
     n->datamap = 0;
     n->nodemap = 0;
     n->size = size;
+    return n;
+}
+
+static hamt_node_t* hamt_alloc_like(int data_count, int node_count, int64_t size,
+                                    hamt_node_t* src) {
+    hamt_node_t* n = hamt_alloc(data_count, node_count, size);
+    if (src) hamt_copy_aux_flags(n, src);
     return n;
 }
 
@@ -150,7 +196,8 @@ static hamt_node_t* hamt_copy_with_data(hamt_node_t* old, int insert_idx,
                                           int64_t key, int64_t val) {
     int dc = hamt_data_count(old);
     int nc = hamt_node_count(old);
-    hamt_node_t* n = hamt_alloc(dc + 1, nc, old->size + 1);
+    int64_t flags = hamt_aux_flags(old);
+    hamt_node_t* n = hamt_alloc_like(dc + 1, nc, old->size + 1, old);
     n->datamap = old->datamap;
     n->nodemap = old->nodemap;
 
@@ -158,12 +205,14 @@ static hamt_node_t* hamt_copy_with_data(hamt_node_t* old, int insert_idx,
     for (int i = 0; i < insert_idx; i++) {
         n->payload[i * 2] = old->payload[i * 2];
         n->payload[i * 2 + 1] = old->payload[i * 2 + 1];
+        hamt_retain_slot(flags, n->payload[i * 2], n->payload[i * 2 + 1]);
     }
     n->payload[insert_idx * 2] = key;
     n->payload[insert_idx * 2 + 1] = val;
     for (int i = insert_idx; i < dc; i++) {
         n->payload[(i + 1) * 2] = old->payload[i * 2];
         n->payload[(i + 1) * 2 + 1] = old->payload[i * 2 + 1];
+        hamt_retain_slot(flags, n->payload[(i + 1) * 2], n->payload[(i + 1) * 2 + 1]);
     }
 
     /* Copy child pointers (rc_inc each) */
@@ -179,14 +228,21 @@ static hamt_node_t* hamt_copy_replace_data(hamt_node_t* old, int data_idx,
                                              int64_t new_val) {
     int dc = hamt_data_count(old);
     int nc = hamt_node_count(old);
-    hamt_node_t* n = hamt_alloc(dc, nc, old->size);
+    int64_t flags = hamt_aux_flags(old);
+    hamt_node_t* n = hamt_alloc_like(dc, nc, old->size, old);
     n->datamap = old->datamap;
     n->nodemap = old->nodemap;
 
     /* Copy all data, replacing value at data_idx */
     for (int i = 0; i < dc; i++) {
         n->payload[i * 2] = old->payload[i * 2];
-        n->payload[i * 2 + 1] = (i == data_idx) ? new_val : old->payload[i * 2 + 1];
+        hamt_retain_slot(flags, n->payload[i * 2], 0);
+        if (i == data_idx) {
+            n->payload[i * 2 + 1] = new_val;
+        } else {
+            n->payload[i * 2 + 1] = old->payload[i * 2 + 1];
+            hamt_retain_slot(flags, 0, n->payload[i * 2 + 1]);
+        }
     }
     /* Copy children */
     for (int i = 0; i < nc; i++) {
@@ -202,8 +258,9 @@ static hamt_node_t* hamt_copy_promote_to_node(hamt_node_t* old, int data_idx,
     int dc = hamt_data_count(old);
     int nc = hamt_node_count(old);
     int child_idx = hamt_index((uint64_t)old->nodemap | bit, bit);
+    int64_t flags = hamt_aux_flags(old);
 
-    hamt_node_t* n = hamt_alloc(dc - 1, nc + 1, old->size + 1);
+    hamt_node_t* n = hamt_alloc_like(dc - 1, nc + 1, old->size + 1, old);
     n->datamap = old->datamap & ~(int64_t)bit;
     n->nodemap = old->nodemap | (int64_t)bit;
 
@@ -213,6 +270,7 @@ static hamt_node_t* hamt_copy_promote_to_node(hamt_node_t* old, int data_idx,
         if (i == data_idx) continue;
         n->payload[di * 2] = old->payload[i * 2];
         n->payload[di * 2 + 1] = old->payload[i * 2 + 1];
+        hamt_retain_slot(flags, n->payload[di * 2], n->payload[di * 2 + 1]);
         di++;
     }
 
@@ -235,10 +293,11 @@ static hamt_node_t* hamt_copy_promote_to_node(hamt_node_t* old, int data_idx,
 
 static hamt_node_t* hamt_merge_two(int64_t key1, int64_t val1, uint64_t hash1,
                                     int64_t key2, int64_t val2, uint64_t hash2,
-                                    int shift) {
+                                    int shift, int64_t flags) {
     if (shift >= 64) {
         /* Hash collision at max depth: store both in a data node */
         hamt_node_t* n = hamt_alloc(2, 0, 2);
+        hamt_or_aux_flags(n, flags);
         uint64_t frag = hash1 & HAMT_MASK;
         uint64_t bit = (uint64_t)1 << frag;
         /* Use two different bits (wrap around) */
@@ -251,6 +310,7 @@ static hamt_node_t* hamt_merge_two(int64_t key1, int64_t val1, uint64_t hash1,
         n->payload[idx1 * 2 + 1] = val1;
         n->payload[idx2 * 2] = key2;
         n->payload[idx2 * 2 + 1] = val2;
+        hamt_retain_slot(flags, key1, val1);
         return n;
     }
 
@@ -260,8 +320,10 @@ static hamt_node_t* hamt_merge_two(int64_t key1, int64_t val1, uint64_t hash1,
     if (frag1 == frag2) {
         /* Same slot: recurse deeper */
         hamt_node_t* child = hamt_merge_two(key1, val1, hash1,
-                                              key2, val2, hash2, shift + HAMT_BITS);
+                                              key2, val2, hash2, shift + HAMT_BITS,
+                                              flags);
         hamt_node_t* n = hamt_alloc(0, 1, 2);
+        hamt_or_aux_flags(n, flags);
         uint64_t bit = (uint64_t)1 << frag1;
         n->nodemap = (int64_t)bit;
         n->payload[0] = (int64_t)(intptr_t)child;
@@ -272,6 +334,7 @@ static hamt_node_t* hamt_merge_two(int64_t key1, int64_t val1, uint64_t hash1,
     uint64_t bit1 = (uint64_t)1 << frag1;
     uint64_t bit2 = (uint64_t)1 << frag2;
     hamt_node_t* n = hamt_alloc(2, 0, 2);
+    hamt_or_aux_flags(n, flags);
     n->datamap = (int64_t)(bit1 | bit2);
     int idx1 = hamt_index(bit1 | bit2, bit1);
     int idx2 = hamt_index(bit1 | bit2, bit2);
@@ -279,6 +342,7 @@ static hamt_node_t* hamt_merge_two(int64_t key1, int64_t val1, uint64_t hash1,
     n->payload[idx1 * 2 + 1] = val1;
     n->payload[idx2 * 2] = key2;
     n->payload[idx2 * 2 + 1] = val2;
+    hamt_retain_slot(flags, key1, val1);
     return n;
 }
 
@@ -298,7 +362,10 @@ hamt_node_t* yona_rt_hamt_put(hamt_node_t* node, int64_t key, int64_t val) {
     }
 
     uint64_t hash = hamt_hash(key);
-    return yona_rt_hamt_put_impl(node, key, val, hash, 0);
+    hamt_node_t* result = yona_rt_hamt_put_impl(node, key, val, hash, 0);
+    if (result && result != node)
+        hamt_copy_aux_flags(result, node);
+    return result;
 }
 
 static hamt_node_t* yona_rt_hamt_put_impl(hamt_node_t* node, int64_t key,
@@ -315,7 +382,11 @@ static hamt_node_t* yona_rt_hamt_put_impl(hamt_node_t* node, int64_t key,
         if (existing_key == key) {
             /* Same key: replace value */
             if (unique) {
+                int64_t flags = hamt_aux_flags(node);
+                int64_t old_val = node->payload[idx * 2 + 1];
                 node->payload[idx * 2 + 1] = val;
+                if (old_val != val)
+                    hamt_release_slot(flags, 0, old_val);
                 return node;
             }
             return hamt_copy_replace_data(node, idx, val);
@@ -325,7 +396,8 @@ static hamt_node_t* yona_rt_hamt_put_impl(hamt_node_t* node, int64_t key,
         uint64_t existing_hash = hamt_hash(existing_key);
         int64_t existing_val = hamt_data_val(node, idx);
         hamt_node_t* child = hamt_merge_two(existing_key, existing_val, existing_hash,
-                                              key, val, hash, shift + HAMT_BITS);
+                                              key, val, hash, shift + HAMT_BITS,
+                                              hamt_aux_flags(node));
         /* Promote requires changing node size (data→child), can't mutate in place */
         return hamt_copy_promote_to_node(node, idx, child, bit);
     }
@@ -352,10 +424,13 @@ static hamt_node_t* yona_rt_hamt_put_impl(hamt_node_t* node, int64_t key,
         /* Copy node, replacing child at idx */
         int dc = hamt_data_count(node);
         int nc = hamt_node_count(node);
-        hamt_node_t* n = hamt_alloc(dc, nc, node->size + size_delta);
+        int64_t flags = hamt_aux_flags(node);
+        hamt_node_t* n = hamt_alloc_like(dc, nc, node->size + size_delta, node);
         n->datamap = node->datamap;
         n->nodemap = node->nodemap;
         memcpy(n->payload, node->payload, (size_t)(dc * 2) * sizeof(int64_t));
+        for (int i = 0; i < dc; i++)
+            hamt_retain_slot(flags, n->payload[i * 2], n->payload[i * 2 + 1]);
         for (int i = 0; i < nc; i++) {
             int64_t cp;
             if (i == idx) {
@@ -398,19 +473,41 @@ static void hamt_iterate_impl(hamt_node_t* node, hamt_iter_fn fn, void* ctx) {
 
 /* ===== Print ===== */
 
-typedef struct { int first; } print_ctx_t;
+extern void yona_rt_print_heap_value(int64_t val);
+
+typedef struct { int first; int64_t flags; int as_set; } print_ctx_t;
+
+static void hamt_print_slot(int64_t v, int heap) {
+    if (heap)
+        yona_rt_print_heap_value(v);
+    else
+        printf("%" PRId64, v);
+}
 
 static void hamt_print_entry(int64_t key, int64_t val, void* ctx) {
     print_ctx_t* pc = (print_ctx_t*)ctx;
     if (!pc->first) printf(", ");
-    printf("%" PRId64 ": %" PRId64, key, val);
+    hamt_print_slot(key, (pc->flags & HAMT_FLAG_KEY_HEAP) != 0);
+    if (!pc->as_set) {
+        printf(": ");
+        hamt_print_slot(val, (pc->flags & HAMT_FLAG_VAL_HEAP) != 0);
+    }
     pc->first = 0;
 }
 
 void yona_rt_hamt_print(hamt_node_t* node) {
     printf("{");
     if (node) {
-        print_ctx_t ctx = {1};
+        print_ctx_t ctx = {1, hamt_aux_flags(node), 0};
+        hamt_iterate_impl(node, hamt_print_entry, &ctx);
+    }
+    printf("}");
+}
+
+void yona_rt_hamt_print_set(hamt_node_t* node) {
+    printf("{");
+    if (node) {
+        print_ctx_t ctx = {1, hamt_aux_flags(node), 1};
         hamt_iterate_impl(node, hamt_print_entry, &ctx);
     }
     printf("}");
@@ -440,13 +537,27 @@ int64_t* yona_rt_hamt_keys(hamt_node_t* node) {
 
 /* ===== RC destructor support ===== */
 /* Called from yona_rt_rc_dec when a HAMT node's refcount hits 0.
- * Must rc_dec all child nodes (nodemap entries). */
+ * rc_dec heap keys/values per aux flags, then child sub-nodes. */
 
-void yona_rt_hamt_destroy_children(hamt_node_t* node) {
+void yona_rt_hamt_destroy_children(void* node_ptr) {
+    hamt_node_t* node = (hamt_node_t*)node_ptr;
+    if (!node) return;
+    int64_t flags = hamt_aux_flags(node);
     int dc = hamt_data_count(node);
     int nc = hamt_node_count(node);
+    for (int i = 0; i < dc; i++)
+        hamt_release_slot(flags, hamt_data_key(node, i), hamt_data_val(node, i));
     for (int i = 0; i < nc; i++) {
         void* child = (void*)(intptr_t)node->payload[dc * 2 + i];
         if (child) yona_rt_rc_dec(child);
     }
+}
+
+void yona_rt_hamt_stamp_aux_flags(void* node_ptr, int64_t flags) {
+    hamt_node_t* node = (hamt_node_t*)node_ptr;
+    if (!node || !flags) return;
+    hamt_or_aux_flags(node, flags);
+    int nc = hamt_node_count(node);
+    for (int i = 0; i < nc; i++)
+        yona_rt_hamt_stamp_aux_flags(hamt_child(node, i), flags);
 }

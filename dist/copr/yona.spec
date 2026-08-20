@@ -1,5 +1,5 @@
 Name:           yona
-Version:        0.1.3
+Version:        0.1.4
 Release:        1%{?dist}
 Summary:        Yona programming language compiler targeting LLVM
 License:        GPL-3.0-only
@@ -79,6 +79,9 @@ cp -a include/yona/runtime/. %{buildroot}%{_libdir}/yona/include/yona/runtime/
 %{_libdir}/yona/
 
 %changelog
+* Thu Aug 20 2026 Adam Kovari <adam@kovari.eu> - 0.1.4-1
+- Version 0.1.4; let-if-else no longer consumes closing in as membership
+
 * Tue Aug 18 2026 Adam Kovari <adam@kovari.eu> - 0.1.3-1
 - Version 0.1.3; ship libyona_lib.so and strip build-dir RUNPATH for Fedora check-rpaths
 

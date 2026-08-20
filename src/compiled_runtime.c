@@ -56,6 +56,14 @@
 #define RC_TYPE_SET     2
 #define RC_TYPE_DICT    3
 #define RC_TYPE_ADT     4
+/* HAMT print/RC aux bits live in the type_tag word (see hamt.c). */
+#ifndef HAMT_FLAG_KEY_HEAP
+#define HAMT_FLAG_KEY_HEAP (1LL << 16)
+#define HAMT_FLAG_VAL_HEAP (1LL << 17)
+#define HAMT_FLAG_IS_SET   (1LL << 18)
+#endif
+void yona_rt_hamt_destroy_children(void* node);
+void yona_rt_hamt_stamp_aux_flags(void* node, int64_t flags);
 #define RC_TYPE_CLOSURE 5
 #define RC_TYPE_STRING  6
 #define RC_TYPE_INT_ARRAY   18
@@ -392,16 +400,8 @@ void yona_rt_rc_dec(void* ptr) {
                 }
             }
         } else if (type_tag == RC_TYPE_DICT) {
-            /* HAMT node: rc_dec child sub-nodes.
-             * Children are at payload[data_count*2 + i] where
-             * data_count = popcount(payload[0] & 0xFFFFFFFF) (datamap).
-             * node_count = popcount(payload[1] & 0xFFFFFFFF) (nodemap). */
-            int dc = __builtin_popcountll((uint64_t)payload[0]);
-            int nc = __builtin_popcountll((uint64_t)payload[1]);
-            for (int i = 0; i < nc; i++) {
-                int64_t child = payload[3 + dc * 2 + i];
-                if (child) yona_rt_rc_dec((void*)(intptr_t)child);
-            }
+            /* HAMT: rc_dec heap keys/values (aux flags) and child sub-nodes. */
+            yona_rt_hamt_destroy_children(ptr);
         } else if (type_tag == RC_TYPE_SET) {
             /* Set: rc_dec all elements if heap_flag is set.
              * Layout: [count, heap_flag, elem0, ...] */
@@ -1046,6 +1046,14 @@ int64_t* yona_rt_set_alloc(int64_t count) {
 }
 
 void yona_rt_set_set_heap(int64_t* set, int64_t flag) {
+    if (!set) return;
+    int64_t* header = set - RC_HEADER_SIZE;
+    int64_t tag = DECODE_TAG(header[1]);
+    if (tag == RC_TYPE_DICT) {
+        if (flag)
+            yona_rt_hamt_stamp_aux_flags(set, HAMT_FLAG_KEY_HEAP | HAMT_FLAG_IS_SET);
+        return;
+    }
     set[1] = flag;
 }
 
@@ -1067,8 +1075,14 @@ int64_t* yona_rt_dict_alloc(int64_t count) {
 }
 
 void yona_rt_dict_set_heap(int64_t* dict, int64_t key_heap, int64_t val_heap) {
-    (void)dict; (void)key_heap; (void)val_heap;
-    /* HAMT handles RC via its tree structure. No-op for HAMT. */
+    if (!dict) return;
+    int64_t flags = 0;
+    if (key_heap)
+        flags |= HAMT_FLAG_KEY_HEAP;
+    if (val_heap)
+        flags |= HAMT_FLAG_VAL_HEAP;
+    if (flags)
+        yona_rt_hamt_stamp_aux_flags(dict, flags);
 }
 
 /* Persistent insert: returns NEW dict. Old dict is unchanged.
@@ -1136,11 +1150,18 @@ void yona_rt_print_dict(int64_t* dict) {
 /* Uses the same HAMT as dicts. Elements stored as keys with value=1. */
 
 static hamt_node_t* set_ensure_hamt(int64_t* set) {
-    if (!set) return yona_rt_hamt_empty();
+    if (!set) {
+        hamt_node_t* empty = yona_rt_hamt_empty();
+        hamt_or_aux_flags(empty, HAMT_FLAG_IS_SET);
+        return empty;
+    }
     int64_t* header = set - RC_HEADER_SIZE;
     int64_t tag = DECODE_TAG(header[1]);
     if (tag == RC_TYPE_DICT) return (hamt_node_t*)set;
     hamt_node_t* h = yona_rt_hamt_empty();
+    int64_t flags = HAMT_FLAG_IS_SET;
+    if (set[1]) flags |= HAMT_FLAG_KEY_HEAP;
+    hamt_or_aux_flags(h, flags);
     int64_t count = set[0];
     for (int64_t i = 0; i < count; i++)
         h = yona_rt_hamt_put(h, set[i + 2], 1);
@@ -1162,6 +1183,9 @@ int64_t* yona_rt_set_insert(int64_t* set, int64_t elem) {
         } else {
             /* Flat → HAMT: rebuild, consume old flat set. */
             hamt_node_t* h = yona_rt_hamt_empty();
+            int64_t flags = HAMT_FLAG_IS_SET;
+            if (set[1]) flags |= HAMT_FLAG_KEY_HEAP;
+            hamt_or_aux_flags(h, flags);
             int64_t count = set[0];
             for (int64_t i = 0; i < count; i++)
                 h = yona_rt_hamt_put(h, set[i + 2], 1);
@@ -1172,6 +1196,7 @@ int64_t* yona_rt_set_insert(int64_t* set, int64_t elem) {
         hamt_in = NULL;
     }
     int64_t* result = (int64_t*)yona_rt_hamt_put((hamt_node_t*)hamt_in, elem, 1);
+    hamt_or_aux_flags((hamt_node_t*)result, HAMT_FLAG_IS_SET);
     /* Consume input: if path-copy happened (result differs from hamt_in
      * which was the caller's input after ensure_hamt), drop the old. */
     if (hamt_in && result != hamt_in)
@@ -1222,6 +1247,7 @@ int64_t* yona_rt_set_union(int64_t* a, int64_t* b) {
 
 int64_t* yona_rt_set_intersection(int64_t* a, int64_t* b) {
     hamt_node_t* r = yona_rt_hamt_empty();
+    hamt_or_aux_flags(r, HAMT_FLAG_IS_SET);
     int64_t* ae = yona_rt_set_elements(a);
     for (int64_t i = 0; i < ae[0]; i++) {
         int64_t e = ae[2 + i];
@@ -1232,6 +1258,7 @@ int64_t* yona_rt_set_intersection(int64_t* a, int64_t* b) {
 
 int64_t* yona_rt_set_difference(int64_t* a, int64_t* b) {
     hamt_node_t* r = yona_rt_hamt_empty();
+    hamt_or_aux_flags(r, HAMT_FLAG_IS_SET);
     int64_t* ae = yona_rt_set_elements(a);
     for (int64_t i = 0; i < ae[0]; i++) {
         int64_t e = ae[2 + i];
@@ -1240,28 +1267,91 @@ int64_t* yona_rt_set_difference(int64_t* a, int64_t* b) {
     return (int64_t*)r;
 }
 
+void yona_rt_print_heap_value(int64_t val);
+void yona_rt_hamt_print_set(hamt_node_t* node);
+
 void yona_rt_print_set(int64_t* set) {
     if (!set) { printf("{}"); return; }
     int64_t* header = set - RC_HEADER_SIZE;
     int64_t tag = DECODE_TAG(header[1]);
     if (tag == RC_TYPE_DICT) {
-        int64_t* elems = yona_rt_hamt_keys((hamt_node_t*)set);
-        int64_t len = elems[0];
-        printf("{");
-        for (int64_t i = 0; i < len; i++) {
-            if (i > 0) printf(", ");
-            printf("%" PRId64, elems[2 + i]);
-        }
-        printf("}");
+        yona_rt_hamt_print_set((hamt_node_t*)set);
         return;
     }
     int64_t len = set[0];
+    int hf = (int)set[1];
     printf("{");
     for (int64_t i = 0; i < len; i++) {
         if (i > 0) printf(", ");
-        printf("%" PRId64, set[i + 2]);
+        int64_t elem = set[i + 2];
+        if (hf)
+            yona_rt_print_heap_value(elem);
+        else
+            printf("%" PRId64, elem);
     }
     printf("}");
+}
+
+/* Print a heap pointer stored as i64 in a seq/tuple slot. Consults the RC
+ * type tag so nested Seq/String/Tuple/… print as values, not addresses. */
+void yona_rt_print_heap_value(int64_t val) {
+    if (!val) {
+        printf("0");
+        return;
+    }
+    int64_t* ptr = (int64_t*)(intptr_t)val;
+    int64_t tag = DECODE_TAG(ptr[-1]);
+    switch ((int)tag) {
+        case RC_TYPE_SEQ:
+        case RC_TYPE_RBT_FWD:
+            yona_rt_print_seq(ptr);
+            break;
+        case RC_TYPE_STRING:
+            yona_rt_print_string((const char*)ptr);
+            break;
+        case RC_TYPE_SET:
+            yona_rt_print_set(ptr);
+            break;
+        case RC_TYPE_DICT:
+            if (hamt_aux_flags((hamt_node_t*)ptr) & HAMT_FLAG_IS_SET)
+                yona_rt_print_set(ptr);
+            else
+                yona_rt_print_dict(ptr);
+            break;
+        case RC_TYPE_TUPLE: {
+            int64_t n = ptr[0];
+            int64_t mask = ptr[1];
+            printf("(");
+            for (int64_t i = 0; i < n; i++) {
+                if (i > 0) printf(", ");
+                int64_t elem = ptr[2 + i];
+                if (i < 64 && (mask & ((int64_t)1 << i)))
+                    yona_rt_print_heap_value(elem);
+                else
+                    printf("%" PRId64, elem);
+            }
+            printf(")");
+            break;
+        }
+        case RC_TYPE_BYTE_ARRAY:
+            yona_rt_print_byte_array(ptr);
+            break;
+        case RC_TYPE_INT_ARRAY:
+            yona_rt_print_int_array(ptr);
+            break;
+        case RC_TYPE_FLOAT_ARRAY:
+            yona_rt_print_float_array((double*)ptr);
+            break;
+        case RC_TYPE_ADT:
+            printf("<adt>");
+            break;
+        case RC_TYPE_CLOSURE:
+            printf("<function>");
+            break;
+        default:
+            printf("%" PRId64, val);
+            break;
+    }
 }
 
 /* Forward declarations for ADT helpers used by iterators */

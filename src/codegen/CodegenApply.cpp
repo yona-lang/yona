@@ -214,6 +214,9 @@ void Codegen::precompile_function_args(EvaluatedArgs& args) {
                     hint_args.push_back({ConstantInt::get(LType::getInt64Ty(*context_), 0), CType::INT});
                 auto cf = compile_function(lname, def_it->second, hint_args);
                 args.all_args[ai] = {cf.fn, CType::FUNCTION, {cf.return_type}};
+            } else if (imports_.extern_functions.count(lname)) {
+                auto imported = materialize_imported_function_value(lname);
+                if (imported) args.all_args[ai] = imported;
             }
         }
     }
@@ -618,12 +621,21 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
                     }
                 }
             }
+            int errors_before = error_count_;
+            register_sibling_genfns(mangled);
             codegen_function_def(func_ast, fn_name);
             auto def_it2 = deferred_functions_.find(fn_name);
+            bool restore_externs = true;
             if (def_it2 != deferred_functions_.end()) {
                 compile_function(fn_name, def_it2->second, all_args);
                 auto cf_it2 = compiled_functions_.find(fn_name);
-                if (cf_it2 != compiled_functions_.end()) {
+                if (error_count_ > errors_before) {
+                    imports_.imported_sources.erase(mangled);
+                    compiled_functions_.erase(fn_name);
+                    deferred_functions_.erase(fn_name);
+                    // Fall through to the precompiled extern instead of a
+                    // half-compiled GENFN body that could not resolve helpers.
+                } else if (cf_it2 != compiled_functions_.end()) {
                     // Remove from extern so future calls use local copy
                     imports_.extern_functions = std::move(saved_externs);
                     for (const auto& scoped_caf : scoped_cafs)
@@ -639,9 +651,11 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
                     return {builder_->CreateCall(cf2.fn, vals, "genfn_call"), cf2.return_type};
                 }
             }
-            imports_.extern_functions = std::move(saved_externs);
-            for (const auto& scoped_caf : scoped_cafs)
-                compiled_functions_.erase(scoped_caf);
+            if (restore_externs) {
+                imports_.extern_functions = std::move(saved_externs);
+                for (const auto& scoped_caf : scoped_cafs)
+                    compiled_functions_.erase(scoped_caf);
+            }
         }
         // Fallthrough: if re-parse failed, call as extern
     }

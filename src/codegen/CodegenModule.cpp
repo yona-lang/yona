@@ -330,8 +330,10 @@ bool Codegen::emit_interface_file(const std::string& path) {
 
     // Write generic function source for cross-module monomorphization
     for (auto& [mangled, source] : imports_.function_source) {
-        if (!imports_.interface_symbols.empty() &&
-            imports_.interface_symbols.find(mangled) == imports_.interface_symbols.end())
+        bool is_export = imports_.interface_symbols.empty() ||
+                         imports_.interface_symbols.count(mangled);
+        bool is_private_helper = imports_.private_genfn_symbols.count(mangled);
+        if (!is_export && !is_private_helper)
             continue;
         // Extract local name from mangled: yona_Pkg_Mod__funcname -> funcname
         auto pos = mangled.rfind("__");
@@ -623,6 +625,10 @@ typechecker::ImportedFnSig Codegen::sig_from_meta(const ModuleFunctionMeta& meta
     sig.return_linear = meta.return_linear || meta.return_adt_name == "Linear";
     sig.tuple_elem_linear = meta.tuple_elem_linear;
     sig.param_linear = meta.param_linear;
+    sig.param_tags.reserve(meta.param_types.size());
+    for (auto ct : meta.param_types)
+        sig.param_tags.push_back(ctype_to_string(ct));
+    sig.return_tag = ctype_to_string(meta.return_type);
     if (!sig.tuple_elem_linear.empty())
         sig.return_linear = false;
     return sig;
@@ -874,6 +880,116 @@ void Codegen::register_yona_module_decls(ast::ModuleDecl* mod) {
     }
 }
 
+void Codegen::register_sibling_genfns(const std::string& mangled) {
+    auto sep = mangled.rfind("__");
+    if (sep == std::string::npos) return;
+    std::string module_prefix = mangled.substr(0, sep + 2);
+    for (const auto& [dep_mangled, ifs] : imports_.imported_sources) {
+        if (dep_mangled == mangled) continue;
+        if (dep_mangled.rfind(module_prefix, 0) != 0) continue;
+        if (deferred_functions_.count(ifs.local_name) || compiled_functions_.count(ifs.local_name))
+            continue;
+        auto reparsed = reparse_genfn(ifs.local_name, ifs.source_text);
+        if (!reparsed || reparsed->functions.empty()) continue;
+        auto* func_ast = reparsed->functions[0];
+        reparsed->functions.clear();
+        imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
+        codegen_function_def(func_ast, ifs.local_name);
+    }
+}
+
+TypedValue Codegen::dummy_typed_value(CType ct) {
+    auto* i64_ty = LType::getInt64Ty(*context_);
+    auto* ptr_ty = PointerType::get(*context_, 0);
+    switch (ct) {
+    case CType::FLOAT:
+        return {ConstantFP::get(LType::getDoubleTy(*context_), 0.0), ct};
+    case CType::BOOL:
+        return {ConstantInt::get(LType::getInt1Ty(*context_), 0), ct};
+    case CType::STRING:
+    case CType::SEQ:
+    case CType::FUNCTION:
+    case CType::SET:
+    case CType::DICT:
+    case CType::BYTE_ARRAY:
+    case CType::INT_ARRAY:
+    case CType::FLOAT_ARRAY:
+    case CType::PROMISE:
+    case CType::CHANNEL:
+        return {ConstantPointerNull::get(ptr_ty), ct};
+    default:
+        return {ConstantInt::get(i64_ty, 0), ct};
+    }
+}
+
+TypedValue Codegen::materialize_imported_function_value(const std::string& name) {
+    auto ext_it = imports_.extern_functions.find(name);
+    if (ext_it == imports_.extern_functions.end())
+        return {};
+    const std::string& mangled = ext_it->second;
+
+    auto wrap_existing = [&](Function* fn, CType ret) -> TypedValue {
+        if (!fn || !builder_ || !builder_->GetInsertBlock())
+            return {};
+        Value* clo = wrap_in_closure(fn, ret);
+        TypedValue tv{clo, CType::FUNCTION, {ret}};
+        named_values_[name] = tv;
+        return tv;
+    };
+
+    auto cf_it = compiled_functions_.find(name);
+    if (cf_it != compiled_functions_.end() && cf_it->second.fn) {
+        size_t user_arity = cf_it->second.param_types.size() - cf_it->second.capture_names.size();
+        if (user_arity > 0)
+            return wrap_existing(cf_it->second.fn, cf_it->second.return_type);
+    }
+
+    auto genfn_it = imports_.imported_sources.find(mangled);
+    auto meta_it = imports_.meta.find(mangled);
+    if (genfn_it != imports_.imported_sources.end() && meta_it != imports_.meta.end() &&
+        !meta_it->second.param_types.empty()) {
+        std::vector<TypedValue> dummy_args;
+        for (auto ct : meta_it->second.param_types)
+            dummy_args.push_back(dummy_typed_value(ct));
+        int errors_before = error_count_;
+        auto reparsed = reparse_genfn(genfn_it->second.local_name, genfn_it->second.source_text);
+        if (reparsed && !reparsed->functions.empty()) {
+            auto* func_ast = reparsed->functions[0];
+            reparsed->functions.clear();
+            imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
+            auto saved_externs = imports_.extern_functions;
+            register_sibling_genfns(mangled);
+            codegen_function_def(func_ast, name);
+            auto def_it = deferred_functions_.find(name);
+            if (def_it != deferred_functions_.end()) {
+                compile_function(name, def_it->second, dummy_args);
+                auto cf2 = compiled_functions_.find(name);
+                imports_.extern_functions = std::move(saved_externs);
+                if (cf2 != compiled_functions_.end() && cf2->second.fn &&
+                    error_count_ == errors_before) {
+                    imports_.extern_functions.erase(name);
+                    return wrap_existing(cf2->second.fn, cf2->second.return_type);
+                }
+            } else {
+                imports_.extern_functions = std::move(saved_externs);
+            }
+        }
+    }
+
+    if (meta_it == imports_.meta.end())
+        return {};
+    auto& meta = meta_it->second;
+    std::vector<LType*> arg_types;
+    for (auto ct : meta.param_types)
+        arg_types.push_back(llvm_type(ct));
+    auto* fn_type = llvm::FunctionType::get(llvm_type(meta.return_type), arg_types, false);
+    auto* ext_fn = module_->getFunction(mangled);
+    if (!ext_fn)
+        ext_fn = Function::Create(fn_type, Function::ExternalLinkage, mangled, module_.get());
+    compiled_functions_[name] = compiled_function_from_meta(ext_fn, meta, meta.return_type);
+    return wrap_existing(ext_fn, meta.return_type);
+}
+
 std::unique_ptr<ast::ModuleDecl> Codegen::reparse_genfn(
     const std::string& local_name, const std::string& source_text) {
     parser::Parser parser;
@@ -883,8 +999,19 @@ std::unique_ptr<ast::ModuleDecl> Codegen::reparse_genfn(
     }
     std::string mod_source = "module __Import\nexport " + local_name + "\n" + source_text + "\n";
     auto result = parser.parse_module(mod_source, "<imported>");
-    if (result.has_value()) return std::move(result.value());
-    return nullptr;
+    if (!result.has_value())
+        return nullptr;
+    auto mod = std::move(result.value());
+    // Callers steal FunctionExpr* and destroy this wrapper module. The
+    // function's parent still pointed at ModuleDecl, so later parent
+    // walks (accelerator import resolution on `Yield` / other applies)
+    // followed a dangling pointer into freed memory — SIGSEGV on
+    // Stream.map's lazy ADT path after HOF closure materialization.
+    for (auto* fn : mod->functions) {
+        if (fn)
+            fn->parent = nullptr;
+    }
+    return mod;
 }
 
 // Helper: get the LLVM type for an ADT based on its type name.
@@ -1241,12 +1368,16 @@ void Codegen::populate_interface_effect_rows(ast::ModuleDecl* mod,
     }
     fqn += mod->fqn->moduleName->value;
 
+    // Sibling-aware: private helpers must be in scope while inferring exports
+    // (same path compile_module uses for .yonai FN rows). Per-function check()
+    // cannot see unexported names and reports a spurious E0104.
+    tc.check_module(mod);
+
     std::unordered_set<std::string> export_set(mod->exports.begin(), mod->exports.end());
     for (auto* func : mod->functions) {
         if (!func || export_set.count(func->name) == 0) continue;
-        tc.check(func);
         auto* ty = tc.type_of(func);
-        if (!ty) ty = tc.check(func);
+        if (!ty) continue;
         auto row = tc.effect_row_info(tc.zonk(ty));
         std::string mangled = mangle_name(fqn, func->name);
         auto it = imports_.meta.find(mangled);
