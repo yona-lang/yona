@@ -3,6 +3,10 @@
 > **Superseded 2026-08-20.** The runner is written in Yona (`tools/yona/main.yona`),
 > `yonac -e` was removed in favor of `yona -e` and `yonac -`, and the C++ REPL
 > is `yona-repl`.
+>
+> **Windows CI (2026-08-20):** MSVC `popen`/`cmd /c` quote stripping broke
+> `yona`/`yonac` script doctests; `wrap_for_cmd_c` and `PATH` (not `HOME`)
+> in `stdlib_process` landed on master.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

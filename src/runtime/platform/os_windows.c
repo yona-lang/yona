@@ -493,6 +493,11 @@ char* yona_Std_Process__executablePath(void) {
 	if (!tmp) return yona_copy_cstr("");
 	WideCharToMultiByte(CP_UTF8, 0, wbuf, (int)n, tmp, utf8, NULL, NULL);
 	tmp[utf8] = '\0';
+	/* Std\Path historically split on `/` only; keep a slash-form so dirname of
+	 * this value finds the real sibling directory, not cwd. */
+	for (int i = 0; i < utf8; i++) {
+		if (tmp[i] == '\\') tmp[i] = '/';
+	}
 	char* r = yona_copy_cstr(tmp);
 	free(tmp);
 	return r;
@@ -532,22 +537,36 @@ char* yona_Std_Process__tempFile(const char* prefix, const char* suffix) {
 
 int64_t yona_Std_Process__run(const char* file, int64_t* argv_seq) {
 	if (!file || !file[0]) return -1;
+	size_t flen = strlen(file);
+	char* native = (char*)malloc(flen + 1);
+	if (!native) return -1;
+	memcpy(native, file, flen + 1);
+	for (char* p = native; *p; p++) {
+		if (*p == '/') *p = '\\';
+	}
 	char* cmdline = yona_win_cmdline(argv_seq);
-	if (!cmdline) return -1;
+	if (!cmdline) {
+		free(native);
+		return -1;
+	}
 	STARTUPINFOA si;
 	memset(&si, 0, sizeof(si));
 	si.cb = sizeof(si);
 	PROCESS_INFORMATION pi;
 	memset(&pi, 0, sizeof(pi));
-	BOOL ok = CreateProcessA(file, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
-	free(cmdline);
+	BOOL ok = CreateProcessA(native, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
 	if (!ok) {
-		/* PATH search: let CreateProcess resolve the image. */
-		cmdline = yona_win_cmdline(argv_seq);
-		if (!cmdline) return -1;
-		ok = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+		/* CreateProcess may mutate lpCommandLine; rebuild for PATH search. */
 		free(cmdline);
+		cmdline = yona_win_cmdline(argv_seq);
+		if (!cmdline) {
+			free(native);
+			return -1;
+		}
+		ok = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
 	}
+	free(native);
+	free(cmdline);
 	if (!ok) return -1;
 	CloseHandle(pi.hThread);
 	if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {

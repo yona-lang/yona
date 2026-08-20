@@ -2689,13 +2689,21 @@ int64_t yona_Std_Time__elapsed(int64_t start, int64_t end) {
 
 /* ===== Std\Path — file path manipulation ===== */
 
+static int yona_path_is_sep(char c) {
+#ifdef _WIN32
+    return c == '/' || c == '\\';
+#else
+    return c == '/';
+#endif
+}
+
 const char* yona_Std_Path__join(const char* a, const char* b) {
     size_t la = strlen(a), lb = strlen(b);
     /* Skip trailing slash on a */
-    if (la > 0 && a[la-1] == '/') la--;
+    if (la > 0 && yona_path_is_sep(a[la-1])) la--;
     /* Skip leading slash on b */
     const char* bs = b;
-    if (lb > 0 && b[0] == '/') { bs++; lb--; }
+    if (lb > 0 && yona_path_is_sep(b[0])) { bs++; lb--; }
     char* r = (char*)rc_alloc(RC_TYPE_STRING, la + 1 + lb + 1);
     memcpy(r, a, la);
     r[la] = '/';
@@ -2708,7 +2716,7 @@ const char* yona_Std_Path__dirname(const char* path) {
     size_t len = strlen(path);
     /* Find last slash */
     const char* last = NULL;
-    for (size_t i = 0; i < len; i++) if (path[i] == '/') last = path + i;
+    for (size_t i = 0; i < len; i++) if (yona_path_is_sep(path[i])) last = path + i;
     if (!last) { char* r = (char*)rc_alloc(RC_TYPE_STRING, 2); r[0] = '.'; r[1] = '\0'; return r; }
     size_t dlen = (size_t)(last - path);
     if (dlen == 0) dlen = 1; /* root "/" */
@@ -2721,7 +2729,7 @@ const char* yona_Std_Path__dirname(const char* path) {
 const char* yona_Std_Path__basename(const char* path) {
     size_t len = strlen(path);
     const char* last = path;
-    for (size_t i = 0; i < len; i++) if (path[i] == '/') last = path + i + 1;
+    for (size_t i = 0; i < len; i++) if (yona_path_is_sep(path[i])) last = path + i + 1;
     size_t blen = strlen(last);
     char* r = (char*)rc_alloc(RC_TYPE_STRING, blen + 1);
     memcpy(r, last, blen + 1);
@@ -2731,7 +2739,7 @@ const char* yona_Std_Path__basename(const char* path) {
 const char* yona_Std_Path__extension(const char* path) {
     const char* base = path;
     size_t len = strlen(path);
-    for (size_t i = 0; i < len; i++) if (path[i] == '/') base = path + i + 1;
+    for (size_t i = 0; i < len; i++) if (yona_path_is_sep(path[i])) base = path + i + 1;
     const char* dot = NULL;
     for (const char* p = base; *p; p++) if (*p == '.') dot = p;
     if (!dot || dot == base) { char* r = (char*)rc_alloc(RC_TYPE_STRING, 1); r[0] = '\0'; return r; }
@@ -2745,7 +2753,7 @@ const char* yona_Std_Path__withExtension(const char* path, const char* ext) {
     /* Find last dot in basename */
     const char* base = path;
     size_t len = strlen(path);
-    for (size_t i = 0; i < len; i++) if (path[i] == '/') base = path + i + 1;
+    for (size_t i = 0; i < len; i++) if (yona_path_is_sep(path[i])) base = path + i + 1;
     const char* dot = NULL;
     for (const char* p = base; *p; p++) if (*p == '.') dot = p;
     size_t stem_len = dot ? (size_t)(dot - path) : len;
@@ -2757,7 +2765,14 @@ const char* yona_Std_Path__withExtension(const char* path, const char* ext) {
 }
 
 int64_t yona_Std_Path__isAbsolute(const char* path) {
-    return path[0] == '/' ? 1 : 0;
+    if (!path || !path[0]) return 0;
+    if (yona_path_is_sep(path[0])) return 1;
+#ifdef _WIN32
+    if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) &&
+        path[1] == ':')
+        return 1;
+#endif
+    return 0;
 }
 
 /* ===== Std\FloatMath — floating-point math (wrappers for math.h) ===== */

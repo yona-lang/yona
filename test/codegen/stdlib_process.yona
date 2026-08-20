@@ -1,1 +1,1 @@
-import getenv from Std\Process in let home = getenv "HOME" in if home == "" then 0 else 1
+import getenv from Std\Process in let path = getenv "PATH" in if path == "" then 0 else 1

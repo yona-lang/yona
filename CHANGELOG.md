@@ -56,6 +56,12 @@
 - CI linker-mode validation tracks `scripts/ci/smoke.yona` (and
   `scripts/**/*.yona` is no longer gitignored). `yonac -e` is gone, so
   the smoke used a file that never reached the checkout.
+- Windows `yona` / `yonac` doctest cases no longer die in `cmd.exe`
+  quoting: MSVC `popen` is `cmd /c`, which strips the first and last
+  quote when the line starts with `"`. Tests wrap that command so
+  extra quoted argv survives. `stdlib_process` checks `PATH` instead
+  of `HOME` (unset on Windows CI). `Std\Path` treats `\` as a separator
+  on Windows so the runner can find sibling `yonac`.
 
 ### Changed
 - The LLVM compiler repository is now [yona-lang/yona](https://github.com/yona-lang/yona)

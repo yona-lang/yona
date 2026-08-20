@@ -12,10 +12,12 @@ current fiber without blocking the OS thread.
 ### `getenv : String -> String`
 
 Get the value of an environment variable. Returns an empty string if not set.
+This is a raw lookup: Windows CI and many desktop sessions have `USERPROFILE`
+but not `HOME`.
 
 ```yona
 import getenv from Std\Process in
-getenv "HOME"   # => "/home/user"
+getenv "PATH"   # non-empty when the process inherited a PATH
 ```
 
 ### `getcwd : String`

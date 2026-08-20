@@ -50,7 +50,12 @@ static std::string shell_quote(const std::string& s) {
 
 static CmdResult run_cmd(const std::string& cmd) {
     CmdResult r;
-    FILE* pipe = popen(cmd.c_str(), "r");
+#ifdef _WIN32
+    const std::string line = yona::test::link::wrap_for_cmd_c(cmd);
+#else
+    const std::string& line = cmd;
+#endif
+    FILE* pipe = popen(line.c_str(), "r");
     if (!pipe) {
         r.out = "POPEN_ERROR";
         return r;
@@ -100,6 +105,17 @@ static fs::path write_temp_yona(const std::string& stem, const std::string& body
     std::ofstream o(p);
     o << body;
     return p;
+}
+
+TEST_CASE("wrap_for_cmd_c preserves quoted argv for MSVC popen") {
+    using yona::test::link::wrap_for_cmd_c;
+    CHECK(wrap_for_cmd_c("\"D:/yona.exe\" --version 2>nul") ==
+          "\"\"D:/yona.exe\" --version\" 2>nul");
+    CHECK(wrap_for_cmd_c("\"D:/yona.exe\" \"file.yona\" 2>nul") ==
+          "\"\"D:/yona.exe\" \"file.yona\"\" 2>nul");
+    CHECK(wrap_for_cmd_c("\"D:/yonac.exe\" --sysroot \"D:/build\" - -o \"D:/out.exe\" < \"D:/in.yona\" 2>nul") ==
+          "\"\"D:/yonac.exe\" --sysroot \"D:/build\" - -o \"D:/out.exe\" < \"D:/in.yona\"\" 2>nul");
+    CHECK(wrap_for_cmd_c("D:/yona.exe -e \"1 + 2\" 2>nul") == "D:/yona.exe -e \"1 + 2\" 2>nul");
 }
 
 TEST_CASE("yona runner is built") {
@@ -182,18 +198,16 @@ TEST_CASE("yonac - reads stdin") {
     fs::path out = yona::test::link::scratch_root() / ("yonac_stdin" + yona::test::link::exe_suffix());
 #ifndef _WIN32
     cmd << "printf '%s' '1 + 2' | ";
-#endif
     cmd << yona::test::link::qpath(tool("yonac")) << " --sysroot " << yona::test::link::qpath(bin_dir())
         << " - -o " << yona::test::link::qpath(out);
-#ifdef _WIN32
+#else
     fs::path in = yona::test::link::scratch_root() / "yonac_stdin_src.yona";
     {
         std::ofstream o(in, std::ios::binary);
-        o << "1 + 2";
+        o << "1 + 2\n";
     }
-    cmd.str("");
     cmd << yona::test::link::qpath(tool("yonac")) << " --sysroot " << yona::test::link::qpath(bin_dir())
-        << " " << yona::test::link::qpath(in) << " -o " << yona::test::link::qpath(out);
+        << " - -o " << yona::test::link::qpath(out) << " < " << yona::test::link::qpath(in);
 #endif
     cmd << yona::test::link::err_null();
     auto compile = run_cmd(cmd.str());

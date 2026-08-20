@@ -18,7 +18,8 @@ join "/home/user" "docs"   # => "/home/user/docs"
 
 ### `dirname : String -> String`
 
-Return the directory portion of a path.
+Return the directory portion of a path. On Windows, both `/` and `\` are
+separators (`dirname "C:\\Users\\x\\a.exe"` is `C:\Users\x`).
 
 ```yona
 import dirname from Std\Path in
@@ -54,7 +55,8 @@ withExtension "data.csv" ".json"   # => "data.json"
 
 ### `isAbsolute : String -> Bool`
 
-Returns `true` if the path is absolute.
+Returns `true` if the path is absolute. On Windows this includes drive
+paths (`C:\…`, `D:/…`) as well as `/` and `\` roots.
 
 ```yona
 import isAbsolute from Std\Path in

@@ -33,6 +33,25 @@ inline std::string qpath(const std::filesystem::path& p) {
     return "\"" + p.lexically_normal().generic_string() + "\"";
 }
 
+/** MSVC `popen`/`system` is `cmd.exe /c <command>`. If `<command>` starts with `"`,
+ * cmd.exe strips the first and last quote on the line (unless the two-quote
+ * executable-name exception applies). Extra quoted argv then becomes
+ * `exe" "arg` and the child never starts. Wrap so inner quotes survive;
+ * keep a trailing ` 2>nul` outside the wrap so it stays a redirection.
+ * No-op when the command does not start with `"`. */
+inline std::string wrap_for_cmd_c(std::string command) {
+    std::string tail;
+    static const char kNul[] = " 2>nul";
+    const size_t n = sizeof(kNul) - 1;
+    if (command.size() >= n && command.compare(command.size() - n, n, kNul) == 0) {
+        tail = kNul;
+        command.resize(command.size() - n);
+    }
+    if (!command.empty() && command.front() == '"')
+        command = "\"" + command + "\"";
+    return command + tail;
+}
+
 inline const char* cc() {
     const char* e = std::getenv("YONAC_CC");
     if (e && *e) return e;
