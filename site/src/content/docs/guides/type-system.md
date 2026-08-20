@@ -230,7 +230,7 @@ compilation.
 Yona has two compilation entry points, and they differ in which passes run:
 
 - **Expression programs** (a `.yona` file whose top level is an
-  expression, or `yonac -e`): parse → HM type checking → the non-blocking
+  expression, or `yona -e` / `yonac -`): parse → HM type checking → the non-blocking
   refinement and linearity checkers → codegen. All diagnostics described on
   this page can appear.
 - **Module compilation** (a `.yona` file declaring `module …`): parse → HM

@@ -76,6 +76,11 @@ on a thread-pool worker.
 
 Read one line from an arbitrary fd. Same semantics as `readLine`.
 
+### `readStdin : String`
+
+Read stdin to EOF as a string. Used when the program source *is*
+stdin (`yona -` or a pipe); a file script still inherits stdin.
+
 ### `flush : Int -> Bool`
 
 Force pending writes on `fd` to disk / device (`fsync`). Most

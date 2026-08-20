@@ -104,7 +104,7 @@ import fromSeq from Std\ByteArray in
 writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 ```
 
-### `openFile : String -> FileMode -> FileHandle`
+### `openFile : String -> FileMode -> Linear a`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
 Returns a file descriptor (Int).

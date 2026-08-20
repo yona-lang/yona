@@ -1,0 +1,2 @@
+import executablePath from Std\Process, exists from Std\File in
+if exists executablePath then "ok" else "missing"

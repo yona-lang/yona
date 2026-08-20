@@ -29,7 +29,7 @@
 | `Std\Types` | 5 | Type conversions (intToString, toFloat) |
 | `Std\IO` | 7 | Console I/O (print, println, readLine) |
 | `Std\File` | 9 | File I/O via io_uring (readFile, writeFile, readFileBytes) |
-| `Std\Process` | 3 | getenv, getcwd, exit |
+| `Std\Process` | 16 | getenv, getcwd, exit, getArgs, run, execArgs, … |
 | `Std\Random` | 4 | int, float, choice, shuffle |
 | `Std\Json` | 7 | JSON stringify/parse |
 | `Std\Crypto` | 4 | sha256, randomBytes, uuid4 |

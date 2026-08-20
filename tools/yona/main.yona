@@ -1,0 +1,178 @@
+# yona — compile-and-run driver (shebang target)
+#
+# Built from this file by cmake/YonaTools.cmake (`yona_add_executable`).
+# The binary lands next to yonac and yona-repl.
+#
+# Job split:
+#   yonac  — AOT compile only (file or `-` for stdin). Never runs code.
+#   yona   — shebang / script / `-e` / piped stdin: compile via sibling
+#            yonac to a unique temp executable, run it, unlink, exit with
+#            the child status. No compile cache. No yonac flags forwarded
+#            (`YONA_PATH` / `YONA_HOME` still apply inside yonac).
+#   yona-repl — C++ REPL. `yona` with no args on a TTY execs it.
+#
+# Child argv[0] is rewritten so getArgs matches how the user invoked us:
+#   yona script.yona a b  →  [script.yona, a, b]
+#   yona -e '…' a         →  [-e, a]
+#   echo '…' | yona a     →  [-, a]
+#
+# Windows: `yona script.yona args` is the same path; shebang is Unix-only.
+# Scripts must be expression programs, not `module` sources.
+#
+# 0-arg let bindings are eager CAFs, so startRepl / usage take a dummy `_`
+# and are called as `startRepl 0` / `usage 0`.
+# startsWith / endsWith take the needle first: startsWith "module" s.
+
+import getArgs, executablePath, run, execArgs, exit, yonaVersion, tempFile from Std\Process,
+       isTty, eprintln, println, readStdin, stdinFd from Std\IO,
+       exists, writeFile, remove, readFile from Std\File,
+       join, dirname from Std\Path,
+       startsWith, endsWith, drop, charAt from Std\String,
+       isEmpty from Std\List
+in
+let
+  die msg code =
+    do
+      eprintln msg
+      exit code
+    end,
+
+  # Same directory as this executable (never a hardcoded prefix).
+  findSibling name =
+    let dir = dirname executablePath,
+        unix = join dir name,
+        win = join dir (name ++ ".exe")
+    in
+      if exists unix then unix else if exists win then win else "",
+
+  dropLine s =
+    if s == "" then s
+    else if charAt s 0 == 10 then drop 1 s
+    else if charAt s 0 == 13 then
+      if drop 1 s != "" && charAt (drop 1 s) 0 == 10 then drop 2 s else drop 1 s
+    else dropLine (drop 1 s),
+
+  # Skip leading whitespace and `#` comment lines (including `#!`) so a
+  # shebang does not hide a following `module` declaration.
+  skipHashComments s =
+    if s == "" then s
+    else
+      let c = charAt s 0 in
+      if c == 32 || c == 9 || c == 10 || c == 13 then skipHashComments (drop 1 s)
+      else if c == 35 then skipHashComments (dropLine s)
+      else s,
+
+  isModuleSource src = startsWith "module" (skipHashComments src),
+
+  # Replace this process. argv is `["yona"]` so the REPL banner matches.
+  startRepl _ =
+    let repl = findSibling "yona-repl" in
+    if repl == "" then die "yona: cannot find yona-repl next to this executable" 127
+    else execArgs repl ["yona"],
+
+  # Blocking wait (`run` is FN). Inherit stdio; fail with yonac's status.
+  compileToTemp sourcePath =
+    let yonac = findSibling "yonac" in
+    if yonac == "" then
+      do
+        eprintln "yona: cannot find yonac next to this executable"
+        exit 127
+        ""
+      end
+    else
+      do
+        tmpExe = tempFile "yona-run" (if endsWith ".exe" yonac then ".exe" else "")
+        code = run yonac [yonac, sourcePath, "-o", tmpExe]
+        if code != 0 then
+          do
+            remove tmpExe
+            exit code
+            ""
+          end
+        else tmpExe
+      end,
+
+  # argv0 is the script path, `-e`, or `-` — not the temp file name.
+  runTemp tmpExe argv0 userArgs =
+    do
+      status = run tmpExe (argv0 :: userArgs)
+      remove tmpExe
+      exit status
+    end,
+
+  compileAndRun sourcePath argv0 userArgs =
+    do
+      tmpExe = compileToTemp sourcePath
+      runTemp tmpExe argv0 userArgs
+    end,
+
+  compileStdin userArgs =
+    do
+      src = readStdin
+      tmpSrc = tempFile "yona-src" ".yona"
+      writeFile tmpSrc src
+      if isModuleSource src then
+        do
+          remove tmpSrc
+          die "yona: script must be an expression program (not a module)" 1
+        end
+      else
+        do
+          tmpExe = compileToTemp tmpSrc
+          remove tmpSrc
+          runTemp tmpExe "-" userArgs
+        end
+    end,
+
+  compileExpr expr userArgs =
+    do
+      tmpSrc = tempFile "yona-src" ".yona"
+      writeFile tmpSrc expr
+      tmpExe = compileToTemp tmpSrc
+      remove tmpSrc
+      runTemp tmpExe "-e" userArgs
+    end,
+
+  compileFile path userArgs =
+    if exists path then
+      do
+        src = readFile path
+        if isModuleSource src then
+          die "yona: script must be an expression program (not a module)" 1
+        else compileAndRun path path userArgs
+      end
+    else die ("yona: cannot open " ++ path) 1,
+
+  usage _ =
+    do
+      println "Usage: yona [script.yona | - | -e expr] [args...]"
+      println "       yona --repl"
+      println "       yona --help | --version"
+      exit 0
+    end,
+
+  dispatch rest =
+    if isEmpty rest then if isTty stdinFd then startRepl 0 else compileStdin []
+    else case rest of
+      [flag | more] ->
+        if flag == "--help" || flag == "-h" then usage 0
+        else if flag == "--version" || flag == "-V" then
+          do
+            println yonaVersion
+            exit 0
+          end
+        else if flag == "--repl" then startRepl 0
+        else if flag == "-e" || flag == "--expression" then
+          case more of
+            [] -> die "yona: -e requires an expression" 2
+            [expr | userArgs] -> compileExpr expr userArgs
+          end
+        else if flag == "-" then compileStdin more
+        else if startsWith "-" flag then die ("yona: unknown option: " ++ flag) 2
+        else compileFile flag more
+    end
+in
+  case getArgs of
+    [] -> dispatch []
+    [_ | rest] -> dispatch rest
+  end

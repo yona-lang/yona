@@ -74,20 +74,20 @@ contains "hello world" "world"   # => true
 
 ### `startsWith : String -> String -> Bool`
 
-Returns `true` if `str` starts with `prefix`.
+Returns `true` if `str` starts with `prefix` (`startsWith prefix str`).
 
 ```yona
 import startsWith from Std\String in
-startsWith "hello" "hel"   # => true
+startsWith "hel" "hello"   # => true
 ```
 
 ### `endsWith : String -> String -> Bool`
 
-Returns `true` if `str` ends with `suffix`.
+Returns `true` if `str` ends with `suffix` (`endsWith suffix str`).
 
 ```yona
 import endsWith from Std\String in
-endsWith "hello.txt" ".txt"   # => true
+endsWith ".txt" "hello.txt"   # => true
 ```
 
 ### `substring : String -> Int -> Int -> String`

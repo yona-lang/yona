@@ -1,5 +1,9 @@
 # Yona Shebang Scripts and getArgs Implementation Plan
 
+> **Superseded 2026-08-20.** The runner is written in Yona (`tools/yona/main.yona`),
+> `yonac -e` was removed in favor of `yona -e` and `yonac -`, and the C++ REPL
+> is `yona-repl`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Teach the packaged `yona` binary to compile-and-run a file so `#!/usr/bin/env yona` works after brew/dnf/apt install, and add `Std\Process.getArgs` so both shebang scripts and AOT binaries can read CLI arguments.

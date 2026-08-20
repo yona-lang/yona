@@ -1,0 +1,8 @@
+import tempFile from Std\Process, writeFile, exists, remove from Std\File in
+do
+    path = tempFile "yona-test" ".txt"
+    wrote = writeFile path "hi"
+    ok = exists path
+    remove path
+    if wrote && ok then "ok" else "fail"
+end

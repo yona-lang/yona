@@ -74,7 +74,7 @@ import hostname from Std\Process in
 hostname   # => "myhost"
 ```
 
-### `spawn : String -> Int`
+### `spawn : String -> Linear a`
 
 Spawn a subprocess without waiting for it to finish. Returns a process handle (Int).
 
@@ -130,3 +130,37 @@ import spawn, pid from Std\Process in
 let proc = spawn "sleep 10" in
 pid proc   # => 12345
 ```
+
+### `getArgs : [a]`
+
+POSIX `argv` as a sequence of strings: program or script path, then user
+arguments. After `yonac -o hello && ./hello a b`, the first element is
+`./hello`. After `yona script.yona a b`, the first element is the script
+path.
+
+### `executablePath : String`
+
+Absolute path of the running executable (`/proc/self/exe` on Linux).
+
+### `yonaVersion : String`
+
+The same version string as `yonac --version`.
+
+### `tempDir : String`
+
+Directory for temporary files (`TMPDIR` / `TEMP` / platform default).
+
+### `tempFile : String -> String -> String`
+
+Create a unique empty file from a prefix and suffix (`mkstemp` style).
+The prefix must not contain path separators.
+
+### `run : String -> [a] -> Int`
+
+Execute `file` with a full argv vector (no shell). Inherit stdin, stdout,
+and stderr. Wait and return the exit status.
+
+### `execArgs : String -> [a] -> Int`
+
+Replace the current process with `file` and the given argv (Unix `execve`;
+Windows waits then exits).

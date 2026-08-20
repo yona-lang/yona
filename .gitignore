@@ -76,6 +76,7 @@ test/_scratch/
 !test/code/**/*.yona
 !test/codegen/*.yona
 !lib/**/*.yona
+!tools/**/*.yona
 !bench/**/*.yona
 a.out
 bench/history.jsonl

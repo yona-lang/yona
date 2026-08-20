@@ -253,6 +253,20 @@ TEST_CASE("ErrorHandling") {
     CHECK(errors[0].type == LexError::Type::UNTERMINATED_STRING);
 }
 
+TEST_CASE("InvalidUtf8DoesNotHang") {
+    // Overlong / invalid 2-byte start (0xC0) plus a non-continuation byte.
+    // Recovery must advance past the bad byte; otherwise tokenize() grows
+    // the error vector forever.
+    const char raw[] = {'\xc0', '\x15', '@'};
+    Lexer lexer(std::string_view(raw, sizeof(raw)));
+    auto result = lexer.tokenize();
+
+    REQUIRE_FALSE(result.has_value());
+    auto errors = result.error();
+    REQUIRE(errors.size() >= 1);
+    CHECK(errors[0].type == LexError::Type::INVALID_CHARACTER);
+}
+
 TEST_CASE("CharacterLiterals") {
     LexerTest fixture;
     Lexer lexer("'a' '\\n' '\\u0041'");

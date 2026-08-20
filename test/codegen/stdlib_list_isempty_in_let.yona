@@ -1,0 +1,3 @@
+import isEmpty from Std\List in
+let f rest = if isEmpty rest then 0 else 1 in
+f []

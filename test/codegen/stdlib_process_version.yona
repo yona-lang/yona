@@ -1,0 +1,2 @@
+import yonaVersion from Std\Process, length from Std\String in
+if length yonaVersion > 0 then "ok" else "empty"

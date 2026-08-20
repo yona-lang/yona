@@ -21,7 +21,7 @@ and the humans configuring them.
 
 Yona's compiler is built for error-driven repair:
 
-1. **Compile:** `yonac program.yona` (or `yonac -e '<expr>'` for a one-liner).
+1. **Compile:** `yonac program.yona`. **Run a one-liner:** `yona -e '<expr>'`.
 2. **Read the diagnostic code.** Errors carry stable codes (for example
    `E0202` — unhandled effect at a call site).
 3. **Ask the compiler to explain:** `yonac --explain E0202` prints the full

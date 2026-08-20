@@ -21,6 +21,7 @@ $wxsPath = Join-Path $PSScriptRoot "YonaInstaller.wxs"
 Require-Path $absBuildDir "Build directory"
 Require-Path (Join-Path $absBuildDir "yonac.exe") "yonac.exe"
 Require-Path (Join-Path $absBuildDir "yona.exe") "yona.exe"
+Require-Path (Join-Path $absBuildDir "yona-repl.exe") "yona-repl.exe"
 Require-Path (Join-Path $absBuildDir "runtime") "runtime directory"
 Require-Path $wxsPath "WiX source"
 
@@ -38,6 +39,7 @@ New-Item -ItemType Directory -Path (Join-Path $stageDir "include\yona\runtime") 
 
 Copy-Item (Join-Path $absBuildDir "yonac.exe") (Join-Path $stageDir "bin\yonac.exe")
 Copy-Item (Join-Path $absBuildDir "yona.exe") (Join-Path $stageDir "bin\yona.exe")
+Copy-Item (Join-Path $absBuildDir "yona-repl.exe") (Join-Path $stageDir "bin\yona-repl.exe")
 Copy-Item (Join-Path $repoRoot "lib\Std\*") (Join-Path $stageDir "lib\Std\") -Recurse -Force
 Copy-Item (Join-Path $absBuildDir "runtime\*") (Join-Path $stageDir "runtime\") -Recurse -Force
 Copy-Item (Join-Path $repoRoot "src\compiled_runtime.c") (Join-Path $stageDir "src\compiled_runtime.c")

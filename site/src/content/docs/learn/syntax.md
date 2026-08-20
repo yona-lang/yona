@@ -8,6 +8,9 @@ single expression, and evaluating it produces the program's result. This
 page covers the lexical ground rules — how expressions begin and end, what
 literals look like, and how they evaluate.
 
+`#` starts a line comment, so a Unix shebang `#!/usr/bin/env yona` is legal
+source and is ignored by the compiler.
+
 ## Everything is an expression
 
 Every construct — `if`, `case`, `let`, `do`, function bodies — is an

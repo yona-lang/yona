@@ -40,7 +40,7 @@ import backendName, hasGpu, hasSimd, vulkanStatus, vulkanAvailable,
   `GpuIssue` API (below) for control flow.
 
 ```bash
-yonac -e 'import backendName from Std\GPU in backendName' -o probe && ./probe
+yona -e 'import backendName from Std\GPU in backendName'
 # => cpu-simd        (on a typical x86-64 host without the Vulkan build)
 ```
 

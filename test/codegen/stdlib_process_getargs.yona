@@ -1,0 +1,2 @@
+import getArgs from Std\Process, length from Std\List in
+if length getArgs >= 1 then "ok" else "empty"

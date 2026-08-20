@@ -3,11 +3,15 @@ title: Installation
 description: Install the Yona compiler and REPL from packages, or build from source.
 ---
 
-Every installation provides two executables:
+Every installation provides these executables:
 
 - **`yonac`** — the compiler. Compiles `.yona` source to native executables,
-  object files, or LLVM IR.
-- **`yona`** — the REPL, in compile-and-run mode.
+  object files, or LLVM IR. It never runs the result. Source is a file or
+  `-` (stdin).
+- **`yona`** — compile-and-run a file, stdin, or `-e` expression. Shebang
+  target (`#!/usr/bin/env yona`). No arguments on a TTY starts the REPL.
+- **`yona-repl`** — the interactive REPL binary; `yona` execs it when you
+  want a prompt.
 
 ## Packages (recommended)
 
@@ -27,7 +31,7 @@ automatically; `--sysroot` overrides it.
 Verify the installation:
 
 ```bash
-yonac -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
+yona -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
 # => 55
 ```
 

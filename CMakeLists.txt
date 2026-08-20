@@ -472,17 +472,17 @@ endif()
 
 add_dependencies(yonac yona_runtime_objects yona_runtime_static)
 
-# REPL executable
-add_executable(yona ${all_repl_SRCS})
-target_include_directories(yona PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(yona PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
+# REPL executable (invoked by the Yona-written `yona` runner)
+add_executable(yona-repl ${all_repl_SRCS})
+target_include_directories(yona-repl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(yona-repl PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 if(YONA_LINK_STATIC_CLI)
-	target_link_libraries(yona PRIVATE yona_lib_static)
-	target_compile_definitions(yona PRIVATE YONA_STATIC_BUILD)
+	target_link_libraries(yona-repl PRIVATE yona_lib_static)
+	target_compile_definitions(yona-repl PRIVATE YONA_STATIC_BUILD)
 else()
-	target_link_libraries(yona PRIVATE yona_lib)
+	target_link_libraries(yona-repl PRIVATE yona_lib)
 endif()
-add_dependencies(yona yona_runtime_objects yona_runtime_static)
+add_dependencies(yona-repl yona_runtime_objects yona_runtime_static)
 
 # Absolute repo path for tests (fixtures, lib/, src/) regardless of process CWD (e.g. CTest).
 # Generated even when BUILD_TESTING=OFF: the Windows REPL force-includes this header.
@@ -493,9 +493,12 @@ configure_file(
 
 if(WIN32)
 	# repl uses popen; map to _popen on UCRT (same header as tests).
-	target_compile_options(yona PRIVATE
+	target_compile_options(yona-repl PRIVATE
 		"-include" "${CMAKE_CURRENT_BINARY_DIR}/test_config/yona_test_config.h")
 endif()
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaTools.cmake")
+add_subdirectory(tools)
 
 include(CTest)
 

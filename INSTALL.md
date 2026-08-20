@@ -190,7 +190,7 @@ ctest --preset unit-tests-windows
 
 ```bash
 docker build -t yona .
-docker run --rm yona yonac -e '"hello world"'
+docker run --rm yona yona -e '"hello world"'
 docker run --rm -it yona  # interactive REPL
 ```
 
@@ -198,7 +198,7 @@ docker run --rm -it yona  # interactive REPL
 
 ```bash
 # Compile and run a simple expression
-yonac -e '1 + 2'
+yona -e '1 + 2'
 # Output: 3
 
 # Compile a file

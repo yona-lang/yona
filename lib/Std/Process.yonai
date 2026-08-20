@@ -13,3 +13,10 @@ FN yona_Std_Process__kill 2 INT INT -> INT
 FN yona_Std_Process__writeStdin 2 INT STRING -> INT
 FN yona_Std_Process__closeStdin 1 INT -> INT
 FN yona_Std_Process__pid 1 INT -> INT
+FN yona_Std_Process__getArgs 0 -> SEQ
+FN yona_Std_Process__executablePath 0 -> STRING
+FN yona_Std_Process__yonaVersion 0 -> STRING
+FN yona_Std_Process__tempDir 0 -> STRING
+FN yona_Std_Process__tempFile 2 STRING STRING -> STRING
+FN yona_Std_Process__run 2 STRING SEQ -> INT
+FN yona_Std_Process__execArgs 2 STRING SEQ -> INT

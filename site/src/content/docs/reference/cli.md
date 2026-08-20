@@ -3,13 +3,15 @@ title: Compiler CLI
 description: Complete reference for the yonac compiler and the yona REPL, including all flags and environment variables.
 ---
 
-Yona ships two binaries: `yonac`, the ahead-of-time compiler, and `yona`, an interactive compile-and-run REPL.
+Yona ships `yonac` (ahead-of-time compiler), `yona` (compile-and-run runner
+and shebang target), and `yona-repl` (interactive REPL, started by `yona`
+when stdin is a TTY).
 
 ## yonac
 
 ```bash
 yonac [input.yona] [options]
-yonac -e "expression" [options]
+yonac - [options]          # source from stdin
 ```
 
 `yonac` compiles Yona source to a native executable via LLVM. If the first non-comment token of the input is `module`, the file is compiled as a **module** to an object file plus a `.yonai` interface file; otherwise it is compiled as an **expression program** and linked into an executable.
@@ -18,10 +20,10 @@ yonac -e "expression" [options]
 
 | Option | Description |
 |--------|-------------|
-| `input` | Positional argument: the input `.yona` file |
-| `-e, --expression <expr>` | Compile an expression given on the command line instead of a file |
+| `input` | Positional argument: the input `.yona` file, or `-` to read stdin |
 
-Exactly one input source is required — a file or `-e`.
+Exactly one input source is required — a file or `-`. `yonac` never runs
+the result. For a one-liner, use `yona -e`.
 
 ### Output
 
@@ -36,7 +38,7 @@ Default output names when `-o` is omitted:
 | Input kind | Default output |
 |------------|----------------|
 | Expression program | `a.out` (`a.exe` on Windows) |
-| Module, or any input with `--emit-obj` | input stem + `.o` (`a.o` for `-e` expressions) |
+| Module, or any input with `--emit-obj` | input stem + `.o` (`a.o` for stdin) |
 
 Compiling a module additionally writes an interface file next to the object file, with the same stem and the `.yonai` extension.
 
@@ -95,9 +97,53 @@ In `inprocess` mode `yonac` links with an in-process LLD; if that is unavailable
 | `--explain <code>` | Print the detailed explanation for an error code (e.g. `E0100`) and exit |
 | `--version` | Print the compiler version and exit |
 
-## yona (REPL)
+## yona (runner)
 
-`yona` is an interactive compile-and-run loop: each line you type is compiled to a temporary native executable, run, and its output printed.
+`yona` compiles source with the sibling `yonac` to a temporary executable,
+runs it, then deletes the temp file. It is not an interpreter. The driver
+source is `tools/yona/main.yona`, built by `yona_add_executable` in
+`cmake/YonaTools.cmake`.
+
+```bash
+yona [script.yona [args…]]
+yona - [args…]
+yona -e 'expression' [args…]
+yona --repl
+```
+
+| Invocation | Behavior |
+|------------|----------|
+| `yona` on a TTY | Start `yona-repl` |
+| `yona` with piped stdin | Compile stdin and run |
+| `yona file.yona args` | Compile the file and run; `getArgs` sees the script path then `args` |
+| `yona -` | Compile stdin and run; program argv[0] is `-` |
+| `yona -e 'expr'` | Compile the expression and run; program argv[0] is `-e` |
+| `yona --repl` | Start the REPL even if stdin is a pipe |
+| `yona --help` / `--version` | Usage or the same version string as `yonac --version` |
+
+```bash
+$ yona -e '1 + 2'
+3
+```
+
+Shebang (Unix). The lexer treats `#` as a line comment, so `#!` is legal:
+
+```yona
+#!/usr/bin/env yona
+import println from Std\IO in
+println "hello"
+```
+
+The file must be an **expression program**, not a `module`. Each run
+compiles; for something you invoke often, `yonac -o tool tool.yona`.
+Windows has no shebang; `yona script.yona args` is the same code path.
+
+`YONA_PATH` and `YONA_HOME` are read by `yonac` when `yona` compiles.
+
+## yona-repl
+
+Interactive compile-and-run loop. Each line is compiled to a temporary
+native executable, run, and its output printed.
 
 ```bash
 $ yona
@@ -107,7 +153,8 @@ yona> 1 + 2
 ```
 
 - Exit with `Ctrl-D`, `:q`, or `:quit`.
-- The REPL honors `YONAC_CC`, `YONAC_LINKER_MODE`, and `YONAC_REQUIRE_INPROCESS_LLD`, and discovers the runtime from the same distribution roots as `yonac` (including `YONA_HOME`).
+- Honors `YONAC_CC`, `YONAC_LINKER_MODE`, and `YONAC_REQUIRE_INPROCESS_LLD`,
+  and discovers the runtime from the same distribution roots as `yonac`.
 
 ## Environment variables
 
@@ -132,14 +179,20 @@ yonac hello.yona -o hello
 Evaluate an expression directly:
 
 ```bash
-yonac -e "1 + 2" -o calc
+yona -e "1 + 2"
+```
+
+Compile a snippet from stdin to an executable without running it:
+
+```bash
+printf '%s\n' '1 + 2' | yonac - -o calc
 ./calc
 ```
 
 Inspect the generated LLVM IR:
 
 ```bash
-yonac --emit-ir -e "import foldl from Std\List in foldl (\acc x -> acc + x) 0 [1, 2, 3]"
+printf '%s\n' 'import foldl from Std\List in foldl (\acc x -> acc + x) 0 [1, 2, 3]' | yonac --emit-ir -
 ```
 
 Get a detailed explanation for an error code:

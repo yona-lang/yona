@@ -884,10 +884,18 @@ void Codegen::register_sibling_genfns(const std::string& mangled) {
     auto sep = mangled.rfind("__");
     if (sep == std::string::npos) return;
     std::string module_prefix = mangled.substr(0, sep + 2);
+    // Imported GENFNs are module-level. Analyze them without the caller's
+    // locals — otherwise a parameter named `rest` looks like a free var of
+    // `sortBy`'s `[pivot|rest]` clause and the sibling is compiled as a
+    // dummy-INT closure (`undefined function 'cmp'`).
+    auto saved_nv = named_values_;
+    named_values_.clear();
     for (const auto& [dep_mangled, ifs] : imports_.imported_sources) {
         if (dep_mangled == mangled) continue;
         if (dep_mangled.rfind(module_prefix, 0) != 0) continue;
-        if (deferred_functions_.count(ifs.local_name) || compiled_functions_.count(ifs.local_name))
+        if (deferred_functions_.count(ifs.local_name) || compiled_functions_.count(ifs.local_name)
+            || imports_.extern_functions.count(ifs.local_name)
+            || saved_nv.count(ifs.local_name))
             continue;
         auto reparsed = reparse_genfn(ifs.local_name, ifs.source_text);
         if (!reparsed || reparsed->functions.empty()) continue;
@@ -896,6 +904,7 @@ void Codegen::register_sibling_genfns(const std::string& mangled) {
         imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
         codegen_function_def(func_ast, ifs.local_name);
     }
+    named_values_ = std::move(saved_nv);
 }
 
 TypedValue Codegen::dummy_typed_value(CType ct) {

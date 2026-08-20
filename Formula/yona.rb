@@ -63,7 +63,7 @@ class Yona < Formula
     system "cmake", "--build", "build"
 
     lib.install "build/#{shared_library("yona_lib")}"
-    libexec.install "build/yonac", "build/yona"
+    libexec.install "build/yonac", "build/yona", "build/yona-repl"
 
     sysroot = lib/"yona"
     (sysroot/"lib").mkpath
