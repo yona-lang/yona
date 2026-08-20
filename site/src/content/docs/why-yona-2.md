@@ -24,7 +24,7 @@ Hosting on GraalVM/Truffle was a sound bet at the time. A small team got a
 world-class JIT, garbage collection, and polyglot interoperability with Java
 and JavaScript without writing a compiler backend from scratch. Yona 0.8.x
 shipped, worked, and found its voice. The
-[GraalVM implementation](https://github.com/yona-lang/yona) remains available
+[GraalVM implementation](https://github.com/yona-lang/yona-graalvm) remains available
 in that form, and its original documentation is preserved at
 [yona-lang.github.io](https://yona-lang.github.io/).
 

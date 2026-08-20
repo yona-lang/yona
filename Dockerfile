@@ -1,7 +1,7 @@
 # Yona Compiler — Multi-stage Docker build
 #
 # Build:   docker build -t yona .
-# Run:     docker run --rm yona yonac -e '"hello world"'
+# Run:     docker run --rm yona yona -e '"hello world"'
 # Shell:   docker run --rm -it yona
 #
 # Stage 1: Build the compiler from source

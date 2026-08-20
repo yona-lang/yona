@@ -99,6 +99,6 @@ class Yona < Formula
 
   test do
     assert_match(/\d+\.\d+\.\d+/, shell_output("#{bin}/yonac --version"))
-    assert_equal "42\n", shell_output("#{bin}/yonac -e '42'")
+    assert_equal "42\n", shell_output("#{bin}/yona -e '42'")
   end
 end

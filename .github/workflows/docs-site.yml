@@ -78,20 +78,20 @@ jobs:
           name: docs-site
           path: dist
 
-      - name: Check Cloudflare token
-        id: cf
+      - name: Require Cloudflare token
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "CLOUDFLARE_API_TOKEN is unset; skipping Pages deploy."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "::error::CLOUDFLARE_API_TOKEN is unset on this repository."
+            echo "After the yona-lang/yona history move, re-add CLOUDFLARE_API_TOKEN"
+            echo "(and CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_PAGES_PROJECT if needed),"
+            echo "then re-run Docs site. Silent skip left yona-lang.org on stale"
+            echo "yonac-llvm / yonac -e content."
+            exit 1
           fi
 
       - name: Publish
-        if: steps.cf.outputs.skip != 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -15,7 +15,7 @@ A compiled functional programming language targeting LLVM, featuring persistent 
 ## Quick Start
 
 ```bash
-yonac -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
+yona -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
 # => 55
 ```
 
