@@ -63,7 +63,7 @@ class Yona < Formula
     system "cmake", "--build", "build"
 
     lib.install "build/#{shared_library("yona_lib")}"
-    libexec.install "build/yonac", "build/yona", "build/yona-repl"
+    libexec.install "build/yonac", "build/yona", "build/yona-repl", "build/yls"
 
     sysroot = lib/"yona"
     (sysroot/"lib").mkpath
@@ -83,12 +83,14 @@ class Yona < Formula
     }
     (bin/"yonac").write_env_script libexec/"yonac", env
     (bin/"yona").write_env_script libexec/"yona", env
+    (bin/"yls").write_env_script libexec/"yls", env
   end
 
   def caveats
     <<~EOS
-      LLVM is keg-only. The `yonac` and `yona` wrappers add Homebrew LLVM and LLD
+      LLVM is keg-only. The `yonac`, `yona`, and `yls` wrappers add Homebrew LLVM and LLD
       to PATH and set YONA_HOME / YONAC_CC so compiling programs works out of the box.
+      `yona-repl` is installed beside `yona` in libexec.
 
       Optional Vulkan GPU runtime:
         brew install akovari/tap/yona --with-vulkan

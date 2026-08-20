@@ -12,6 +12,8 @@ Every installation provides these executables:
   target (`#!/usr/bin/env yona`). No arguments on a TTY starts the REPL.
 - **`yona-repl`** — the interactive REPL binary; `yona` execs it when you
   want a prompt.
+- **`yls`** — the language server (`yls --stdio`). See
+  [Editor and language server](/guides/editor/).
 
 ## Packages (recommended)
 

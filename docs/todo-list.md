@@ -81,7 +81,7 @@ already works.
 - [x] **[#8](https://github.com/yona-lang/yona/issues/79) Effect-row inference +** `.yonai` **propagation** — after #3. **Landed 2026-08-19:** closed sets + E0202; unify of effect rows; HOF rest vars; apply-union / wrap; handler subtraction; pretty-print `!{…}`; `.yonai` `FN … effects Fs.read`. **Follow-ups landed same day:** open HOF rest (`effects | hof`, `Effect: imported HOF open rest from .yonai is E0202`, `Interface files preserve exported HOF open rest`); sibling-aware module typecheck (`Interface files preserve sibling-wrapped FN effect rows`, wrap-before-sibling). HOF restore is the `apply f x = f x` shape (first param is the function). Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
 - [ ] **[#6](https://github.com/yona-lang/yona/issues/77) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
 - [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
-- [ ] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format.
+- [ ] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format. **Seed landed 2026-08-20:** `include/typed_core/Query.h` + `yls` Analysis (first consumer). Still missing: example non-LLVM backend, versioned C ABI, `--emit-typed-core`.
 - [ ] **[#4](https://github.com/yona-lang/yona/issues/75) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
 - [ ] **`Linear FileHandle` (and other resources) for real** — today `.yonai`
   marks `openFile` / `spawn` / sockets / channel ends as bare `LINEAR`
@@ -286,7 +286,16 @@ with **async**, **task groups**, and **channels**, not compete with them.
 ### Tooling
 
 - [ ] Package manager/build tool
-- [ ] LSP server
+- [x] **VS Code extension + `yls` language server** — C++ `yls --stdio` +
+  `editors/vscode` (2026-08-20). Plan:
+  [2026-08-20-yona-vscode-lsp.md](./superpowers/plans/2026-08-20-yona-vscode-lsp.md).
+  Design: [2026-08-20-yls-vscode-design.md](./superpowers/specs/2026-08-20-yls-vscode-design.md).
+  Site: [Editor and language server](../site/src/content/docs/guides/editor.md).
+  Review fixes (2026-08-20): `#`/`##` module detection, pattern-binding
+  index, JSON `\u` decode, workspace roots + watched-file refresh,
+  juxtaposition signature help, Windows binary stdio. Remaining:
+  Marketplace / Open VSX publish, incremental parse, Yona rewrite of `yls`
+  after #7 + `Std\Json`.
 - [ ] **Documentation extraction / generation (think first, don't scrape).** Public Learn/Guides/Reference in `site/src/content/docs/` stay handwritten. `scripts/gendocs.py` is a regex walk of `lib/Std/*.yona` `##` comments and misses `.yonai`/C modules, types, effects, and exports. Design a compiler-aware extractor (`yonac --emit-docs` or successor) so API reference cannot drift from source; until then, keep `##` comments + handwritten site pages updated in the same change (see `keep-docs-up-to-date`).
 
 
@@ -332,6 +341,7 @@ with **async**, **task groups**, and **channels**, not compete with them.
 - [x] AFN as the body of a `let`-bound function auto-awaits (not a Promise pointer)
 - [x] Invalid UTF-8 is a lex error; `tokenize()` recovery advances one byte (no `brk` loop)
 - [x] `with` parser null-body SIGSEGV: `parse_expr_until_in()` for resource, null checks before `WithExpr` ctor
+- [x] VS Code extension + C++ `yls` (stdio LSP) + shared TextMate grammar + `typed_core/Query.h`
 
 
 

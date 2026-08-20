@@ -87,6 +87,7 @@ export default defineConfig({
 						{ label: 'Iterators and streams', slug: 'guides/iterators' },
 						{ label: 'Accelerators (GPU)', slug: 'guides/accelerators' },
 						{ label: 'Performance', slug: 'guides/performance' },
+						{ label: 'Editor and language server', slug: 'guides/editor' },
 					],
 				},
 				{

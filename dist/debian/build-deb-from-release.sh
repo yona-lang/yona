@@ -34,6 +34,12 @@ SRC="$WORKDIR/yona-${VERSION}-linux-${TARBALL_ARCH}"
 
 install -m 0755 "$SRC/bin/yonac" "$PKGDIR/usr/bin/yonac"
 install -m 0755 "$SRC/bin/yona" "$PKGDIR/usr/bin/yona"
+if [ -f "$SRC/bin/yona-repl" ]; then
+  install -m 0755 "$SRC/bin/yona-repl" "$PKGDIR/usr/bin/yona-repl"
+fi
+if [ -f "$SRC/bin/yls" ]; then
+  install -m 0755 "$SRC/bin/yls" "$PKGDIR/usr/bin/yls"
+fi
 cp -a "$SRC/lib" "$SRC/runtime" "$SRC/src" "$SRC/include" "$PKGDIR/usr/lib/yona/"
 install -m 0644 "$SRC/README.md" "$PKGDIR/usr/share/doc/yona/README.md"
 if [ -f "$SRC/CHANGELOG.md" ]; then

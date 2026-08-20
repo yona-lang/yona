@@ -1,0 +1,330 @@
+#include "lsp/Analysis.h"
+#include "lsp/Json.h"
+#include "lsp/JsonRpc.h"
+#include "lsp/Server.h"
+#include "lsp/Utf16.h"
+
+#include <doctest/doctest.h>
+#include <sstream>
+#include <string>
+
+using namespace yona::lsp;
+
+TEST_CASE("UTF-16 mapper: ASCII") {
+    auto p = offset_to_position("ab\ncd", 4);
+    CHECK(p.line == 1);
+    CHECK(p.character == 1);
+    CHECK(position_to_offset("ab\ncd", Position{1, 1}) == 4);
+}
+
+TEST_CASE("UTF-16 mapper: non-BMP emoji") {
+    // U+1F600 is F0 9F 98 80 — one codepoint, two UTF-16 units
+    std::string s = "a\xF0\x9F\x98\x80" "b";
+    auto p = offset_to_position(s, 5); // after emoji
+    CHECK(p.line == 0);
+    CHECK(p.character == 3);
+    CHECK(position_to_offset(s, Position{0, 3}) == 5);
+}
+
+TEST_CASE("UTF-16 mapper: CRLF") {
+    auto p = offset_to_position("a\r\nb", 3);
+    CHECK(p.line == 1);
+    CHECK(p.character == 0);
+}
+
+TEST_CASE("JSON parse and dump objects") {
+    auto j = Json::parse(R"({"id":1,"method":"initialize","params":{"x":true}})");
+    CHECK(j.is_object());
+    CHECK(j.get("id").as_int() == 1);
+    CHECK(j.get("method").as_string() == "initialize");
+    CHECK(j.get("params").get("x").as_bool());
+    auto dumped = j.dump();
+    CHECK(dumped.find("\"method\":\"initialize\"") != std::string::npos);
+}
+
+TEST_CASE("JSON-RPC Content-Length framing") {
+    Json body;
+    body["jsonrpc"] = "2.0";
+    body["id"] = 1;
+    body["result"] = nullptr;
+    auto framed = JsonRpc::encode(body);
+    CHECK(framed.find("Content-Length:") == 0);
+    std::istringstream in(framed);
+    auto read = JsonRpc::read_body(in);
+    REQUIRE(read);
+    auto msg = JsonRpc::parse_message(*read);
+    REQUIRE(msg);
+    CHECK(msg->has_id);
+}
+
+TEST_CASE("Analysis diagnostics for undefined variable") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "unknown_name");
+    auto diags = a.diagnostics();
+    bool found = false;
+    for (const auto& d : diags) {
+        if (d.code == "E0103" || d.message.find("undefined") != std::string::npos)
+            found = true;
+    }
+    CHECK(found);
+}
+
+TEST_CASE("Analysis hover on let binding") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "let answer = 42 in answer");
+    auto hover = a.hover(Position{0, 5});
+    REQUIRE(hover);
+    CHECK(hover->contents.find("answer") != std::string::npos);
+}
+
+TEST_CASE("Analysis definition and references") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "let answer = 42 in answer");
+    auto defs = a.definition(Position{0, 20});
+    CHECK(!defs.empty());
+    auto refs = a.references(Position{0, 5}, true);
+    CHECK(refs.size() >= 1);
+}
+
+TEST_CASE("Analysis completion includes keywords") {
+    Analysis a;
+    a.analyze("file:///tmp/t.yona", "let x = 1 in x");
+    auto items = a.completions(Position{0, 0});
+    bool has_let = false;
+    for (const auto& it : items) {
+        if (it.get("label").as_string() == "let")
+            has_let = true;
+    }
+    CHECK(has_let);
+}
+
+TEST_CASE("Analysis document symbols") {
+    Analysis a;
+    a.analyze("file:///tmp/t.yona", "let answer = 42 in answer");
+    auto syms = a.document_symbols();
+    bool found = false;
+    for (const auto& s : syms) {
+        if (s.name == "answer")
+            found = true;
+    }
+    CHECK(found);
+}
+
+TEST_CASE("Server initialize and hover") {
+    Server srv;
+    RpcMessage init;
+    init.has_id = true;
+    init.id = 1;
+    init.method = "initialize";
+    init.params = Json::Object{};
+    auto cap = srv.handle(init);
+    CHECK(cap.get("capabilities").get("hoverProvider").as_bool());
+
+    Json td;
+    td["uri"] = "file:///tmp/t.yona";
+    td["text"] = "let answer = 42 in answer";
+    Json params;
+    params["textDocument"] = td;
+    RpcMessage open;
+    open.method = "textDocument/didOpen";
+    open.params = params;
+    srv.handle(open);
+
+    Json pos;
+    pos["line"] = 0;
+    pos["character"] = 5;
+    Json hp;
+    hp["textDocument"] = Json::Object{{"uri", Json("file:///tmp/t.yona")}};
+    hp["position"] = pos;
+    RpcMessage hover;
+    hover.has_id = true;
+    hover.id = 2;
+    hover.method = "textDocument/hover";
+    hover.params = hp;
+    auto hv = srv.handle(hover);
+    CHECK(hv.get("contents").get("value").as_string().find("answer") != std::string::npos);
+}
+
+TEST_CASE("Server publishDiagnostics notification") {
+    Server srv;
+    Json td;
+    td["uri"] = "file:///tmp/bad.yona";
+    td["text"] = "unknown_name";
+    Json params;
+    params["textDocument"] = td;
+    RpcMessage open;
+    open.method = "textDocument/didOpen";
+    open.params = params;
+    srv.handle(open);
+    auto note = srv.diagnostics_notification("file:///tmp/bad.yona");
+    CHECK(note.get("method").as_string() == "textDocument/publishDiagnostics");
+    CHECK(!note.get("params").get("diagnostics").as_array().empty());
+}
+
+TEST_CASE("JSON decodes BMP unicode escape") {
+    auto j = Json::parse(R"("\u0041")");
+    CHECK(j.as_string() == "A");
+}
+
+TEST_CASE("JSON decodes UTF-16 surrogate pair") {
+    // U+1F600 GRINNING FACE as a JSON surrogate pair
+    auto j = Json::parse(R"("\uD83D\uDE00")");
+    CHECK(j.as_string() == "\xF0\x9F\x98\x80");
+}
+
+TEST_CASE("JSON rejects nesting deeper than 64") {
+    std::string ok;
+    ok.assign(64, '[');
+    ok.append(64, ']');
+    std::string ok_err;
+    auto ok_json = Json::parse(ok, &ok_err);
+    CHECK(ok_json.is_array());
+    CHECK(ok_err.empty());
+
+    std::string too;
+    too.assign(65, '[');
+    too.append(65, ']');
+    std::string err;
+    auto deep = Json::parse(too, &err);
+    CHECK(deep.is_null());
+    CHECK(err.find("deep") != std::string::npos);
+}
+
+TEST_CASE("UTF-16 mapper: combining character is its own unit") {
+    // U+0065 LATIN SMALL LETTER E + U+0301 COMBINING ACUTE ACCENT + 'x'
+    std::string s = "e\xCC\x81x";
+    CHECK(offset_to_position(s, 3).character == 2);
+    CHECK(position_to_offset(s, Position{0, 2}) == 3);
+}
+
+static bool has_parse_error(const std::vector<LspDiagnostic>& diags) {
+    for (const auto& d : diags) {
+        if (d.code == "E0301")
+            return true;
+    }
+    return false;
+}
+
+TEST_CASE("Analysis treats leading ## docs as a module") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/List.yona", "## docs\nmodule Std\\List\nexport x\nx = 1");
+    CHECK_FALSE(has_parse_error(a.diagnostics()));
+    bool found_x = false;
+    for (const auto& s : a.document_symbols()) {
+        if (s.name == "x")
+            found_x = true;
+    }
+    CHECK(found_x);
+}
+
+TEST_CASE("Analysis rename updates a function parameter") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src =
+        "## docs\n"
+        "module Test\\Map\n"
+        "export map\n"
+        "map fn seq = case seq of\n"
+        "  [] -> []\n"
+        "  [h|t] -> fn h\n"
+        "end\n";
+    a.analyze("file:///tmp/Map.yona", src);
+    CHECK_FALSE(has_parse_error(a.diagnostics()));
+    // Line 3: "map fn seq = case seq of" — parameter `fn` starts at column 4
+    Json edits;
+    auto old = a.rename(Position{3, 4}, "f", edits);
+    REQUIRE(old);
+    CHECK(*old == "fn");
+    REQUIRE(edits.is_array());
+    REQUIRE(!edits.as_array().empty());
+    Json file0 = edits.as_array()[0];
+    Json file_edits = file0.get("edits");
+    REQUIRE(file_edits.as_array().size() >= 2);
+    bool saw_param = false;
+    bool saw_use = false;
+    for (const auto& e : file_edits.as_array()) {
+        Json start = e.get("range").get("start");
+        CHECK(e.get("newText").as_string() == "f");
+        if (start.get("line").as_int() == 3 && start.get("character").as_int() == 4)
+            saw_param = true;
+        if (start.get("line").as_int() == 5)
+            saw_use = true;
+    }
+    CHECK(saw_param);
+    CHECK(saw_use);
+}
+
+TEST_CASE("Analysis signature help looks behind a space") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "identity 1");
+    auto help = a.signature_help(Position{0, 9});
+    REQUIRE(help);
+    CHECK(help->get("signatures").as_array().at(0).get("label").as_string().find("identity") !=
+          std::string::npos);
+}
+
+TEST_CASE("default_module_paths includes workspace roots") {
+    auto paths = default_module_paths("/tmp/doc.yona", {"/workspace/root"});
+    bool found = false;
+    for (const auto& p : paths) {
+        if (p.find("workspace") != std::string::npos && p.find("root") != std::string::npos)
+            found = true;
+    }
+    CHECK(found);
+}
+
+TEST_CASE("Server initialize uses workspace folders and version") {
+    Server srv;
+    RpcMessage init;
+    init.has_id = true;
+    init.id = 1;
+    init.method = "initialize";
+    Json folder;
+    folder["uri"] = "file:///workspace/root";
+    folder["name"] = "root";
+    init.params = Json::Object{
+        {"rootUri", Json("file:///workspace/root")},
+        {"workspaceFolders", Json::Array{folder}},
+    };
+    auto cap = srv.handle(init);
+    CHECK(cap.get("capabilities").get("hoverProvider").as_bool());
+    CHECK(!cap.get("serverInfo").get("version").as_string().empty());
+
+    Json td;
+    td["uri"] = "file:///workspace/root/t.yona";
+    td["text"] = "1";
+    RpcMessage open;
+    open.method = "textDocument/didOpen";
+    open.params = Json::Object{{"textDocument", td}};
+    srv.handle(open);
+    CHECK(srv.diagnostics_notification("file:///workspace/root/t.yona")
+              .get("method")
+              .as_string() == "textDocument/publishDiagnostics");
+}
+
+TEST_CASE("Server reanalyzes open buffers on watched file change") {
+    Server srv;
+    Json td;
+    td["uri"] = "file:///tmp/t.yona";
+    td["text"] = "unknown_name";
+    RpcMessage open;
+    open.method = "textDocument/didOpen";
+    open.params = Json::Object{{"textDocument", td}};
+    srv.handle(open);
+
+    RpcMessage watch;
+    watch.method = "workspace/didChangeWatchedFiles";
+    Json ev;
+    ev["uri"] = "file:///tmp/other.yona";
+    ev["type"] = 2;
+    watch.params = Json::Object{{"changes", Json::Array{ev}}};
+    auto result = srv.handle(watch);
+    CHECK_FALSE(result.is_null());
+    auto note = srv.diagnostics_notification("file:///tmp/t.yona");
+    CHECK(!note.get("params").get("diagnostics").as_array().empty());
+}

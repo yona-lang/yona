@@ -249,6 +249,8 @@ list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_stub\\.c$")
 # Platform layer: OS TUs (Linux io_uring / macOS kqueue / Windows IOCP)
 # + async/channel sources (#included from compiled_runtime.c only).
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/platform/.*\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/lsp/")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "include/lsp/")
 set(YONA_PLATFORM_RUNTIME_SOURCES)
 if(WIN32)
 	list(APPEND YONA_PLATFORM_RUNTIME_SOURCES
@@ -287,6 +289,7 @@ file(GLOB all_yonac_SRCS
 		"${PROJECT_SOURCE_DIR}/cli/*.cpp"
 		"${PROJECT_SOURCE_DIR}/cli/*.c"
 )
+list(FILTER all_yonac_SRCS EXCLUDE REGEX "cli/yls\\.cpp$")
 
 file(GLOB all_repl_SRCS
 		"${PROJECT_SOURCE_DIR}/include/*.h"
@@ -359,6 +362,27 @@ endif()
 if (CMAKE_VERSION VERSION_GREATER 3.12)
 	set_property(TARGET yona_lib PROPERTY CXX_STANDARD 23)
 endif ()
+
+file(GLOB YONA_LSP_LIB_SRCS "${PROJECT_SOURCE_DIR}/src/lsp/*.cpp")
+add_library(yona_lsp_static STATIC ${YONA_LSP_LIB_SRCS})
+target_include_directories(yona_lsp_static PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/include
+	${CMAKE_CURRENT_BINARY_DIR}/include
+	${LLVM_INCLUDE_DIRS})
+target_compile_definitions(yona_lsp_static PRIVATE YONA_STATIC_BUILD)
+# Do not link yona_lib here: tests already use yona_lib_static. Pulling the
+# shared library onto that executable registers LLVM cl::opt twice.
+
+add_executable(yls "${PROJECT_SOURCE_DIR}/cli/yls.cpp")
+target_include_directories(yls PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(yls PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
+target_link_libraries(yls PRIVATE yona_lsp_static)
+if(YONA_LINK_STATIC_CLI)
+	target_link_libraries(yls PRIVATE yona_lib_static)
+	target_compile_definitions(yls PRIVATE YONA_STATIC_BUILD)
+else()
+	target_link_libraries(yls PRIVATE yona_lib)
+endif()
 
 # Compiler executable
 add_executable(yonac ${all_yonac_SRCS})
@@ -536,7 +560,7 @@ add_executable(
 target_sources(tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test/doctest_main.cpp)
 
 # Link with doctest and yona_lib_static for tests
-target_link_libraries(tests PRIVATE doctest::doctest yona_lib_static)
+target_link_libraries(tests PRIVATE doctest::doctest yona_lib_static yona_lsp_static)
 
 # Define YONA_STATIC_BUILD for tests to avoid DLL export/import issues
 target_compile_definitions(tests PRIVATE YONA_STATIC_BUILD)
