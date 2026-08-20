@@ -28,6 +28,9 @@
   a Promise pointer).
 - Invalid UTF-8 (e.g. `printf '\xc0\x15@'`) is a lex error instead of
   a `yonac` busy-loop.
+- CI linker-mode validation tracks `scripts/ci/smoke.yona` (and
+  `scripts/**/*.yona` is no longer gitignored). `yonac -e` is gone, so
+  the smoke used a file that never reached the checkout.
 
 ### Changed
 - The LLVM compiler repository is now [yona-lang/yona](https://github.com/yona-lang/yona)
