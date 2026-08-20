@@ -1,6 +1,7 @@
 #include "lsp/Analysis.h"
 
 #include "Codegen.h"
+#include "ModuleSource.h"
 #include "Diagnostic.h"
 #include "Parser.h"
 #include "typechecker/LinearityChecker.h"
@@ -20,43 +21,8 @@
 namespace yona::lsp {
 namespace {
 
-bool looks_like_module(std::string_view src) {
-    // Match lexer / yonac `is_module_source`: `#` starts a line comment
-    // through newline (same as `##` docs). Stdlib modules often begin with
-    // doc lines, so the first token is `module` only after those comments.
-    std::size_t i = 0;
-    const std::size_t n = src.size();
-    while (i < n) {
-        const unsigned char c = static_cast<unsigned char>(src[i]);
-        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
-            ++i;
-            continue;
-        }
-        if (c == '#') {
-            while (i < n && src[i] != '\n' && src[i] != '\r')
-                ++i;
-            continue;
-        }
-        break;
-    }
-    if (i + 6 > n)
-        return false;
-    return src.substr(i, 6) == "module" &&
-           (i + 6 >= n || !std::isalnum(static_cast<unsigned char>(src[i + 6])));
-}
-
 bool is_ident_char(unsigned char c) {
     return std::isalnum(c) || c == '_' || c == '\'';
-}
-
-bool contains(const Range& r, Position p) {
-    if (p.line < r.start.line || p.line > r.end.line)
-        return false;
-    if (p.line == r.start.line && p.character < r.start.character)
-        return false;
-    if (p.line == r.end.line && p.character > r.end.character)
-        return false;
-    return true;
 }
 
 int span_size(const Range& r) {
@@ -643,7 +609,7 @@ void Analysis::analyze(std::string uri, std::string text) {
     impl_->codegen->load_prelude(impl_->parser.get(), impl_->checker.get());
     impl_->checker->set_import_type_source(&impl_->codegen->import_types_);
 
-    const bool is_mod = looks_like_module(text_);
+    const bool is_mod = yona::is_module_source(text_);
     ast::AstNode* root = nullptr;
     if (is_mod) {
         auto result = impl_->parser->parse_module(text_, uri_);
@@ -695,7 +661,7 @@ const Occurrence* find_at(const std::vector<Occurrence>& occs, Position pos) {
     const Occurrence* best = nullptr;
     int best_sz = 1 << 30;
     for (const auto& o : occs) {
-        if (!contains(o.range, pos))
+        if (!o.range.contains(pos))
             continue;
         int sz = span_size(o.range);
         if (sz < best_sz) {
@@ -868,7 +834,7 @@ std::optional<Json> Analysis::signature_help(Position pos) const {
 std::vector<Json> Analysis::inlay_hints(Range range) const {
     std::vector<Json> out;
     for (const auto& s : impl_->symbols) {
-        if (!contains(range, s.range.end) && !contains(range, s.range.start))
+        if (!range.overlaps(s.range))
             continue;
         if (s.type.empty())
             continue;
@@ -910,7 +876,7 @@ std::vector<Json> Analysis::outgoing_calls(std::string_view name) const {
 std::vector<Json> Analysis::code_actions(Range range) const {
     std::vector<Json> out;
     for (const auto& d : diagnostics()) {
-        if (!contains(d.range, range.start) && !contains(range, d.range.start))
+        if (!d.range.overlaps(range))
             continue;
         if (d.code.empty())
             continue;

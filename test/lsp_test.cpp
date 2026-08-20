@@ -1,3 +1,4 @@
+#include "ModuleSource.h"
 #include "lsp/Analysis.h"
 #include "lsp/Json.h"
 #include "lsp/JsonRpc.h"
@@ -77,6 +78,24 @@ TEST_CASE("Analysis hover on let binding") {
     auto hover = a.hover(Position{0, 5});
     REQUIRE(hover);
     CHECK(hover->contents.find("answer") != std::string::npos);
+}
+
+TEST_CASE("Analysis hover does not match the exclusive end of a name") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "let answer = 42 in answer");
+    // "answer" is LSP [4, 10); character 10 is the space after the binding
+    auto hover = a.hover(Position{0, 10});
+    CHECK_FALSE(hover);
+}
+
+TEST_CASE("is_module_source skips # and ## then requires a module token") {
+    CHECK(yona::is_module_source("module Foo"));
+    CHECK(yona::is_module_source("## docs\nmodule Std\\List"));
+    CHECK(yona::is_module_source("# comment\n  module X"));
+    CHECK_FALSE(yona::is_module_source("let x = 1 in x"));
+    CHECK_FALSE(yona::is_module_source("modulex = 1"));
+    CHECK_FALSE(yona::is_module_source("module_x = 1"));
 }
 
 TEST_CASE("Analysis definition and references") {
@@ -327,4 +346,39 @@ TEST_CASE("Server reanalyzes open buffers on watched file change") {
     CHECK_FALSE(result.is_null());
     auto note = srv.diagnostics_notification("file:///tmp/t.yona");
     CHECK(!note.get("params").get("diagnostics").as_array().empty());
+}
+
+TEST_CASE("Analysis semantic tokens are a multiple of five") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "let answer = 42 in answer");
+    auto toks = a.semantic_tokens();
+    CHECK(!toks.empty());
+    CHECK(toks.size() % 5 == 0);
+}
+
+TEST_CASE("Analysis inlay hints overlap a query that misses name endpoints") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "let f = identity in f");
+    auto all = a.inlay_hints(Range{{0, 0}, {0, 40}});
+    auto inner = a.inlay_hints(Range{{0, 4}, {0, 5}});
+    auto after = a.inlay_hints(Range{{1, 0}, {1, 1}});
+    CHECK(inner.size() == all.size());
+    CHECK(after.empty());
+    if (!all.empty())
+        CHECK(all[0].get("label").as_string().find(" : ") == 0);
+}
+
+TEST_CASE("Analysis explain code action uses the diagnostic range") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "unknown_name");
+    auto acts = a.code_actions(Range{{0, 0}, {0, 1}});
+    bool found = false;
+    for (const auto& act : acts) {
+        if (act.get("command").get("command").as_string() == "yona.explain")
+            found = true;
+    }
+    CHECK(found);
 }

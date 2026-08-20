@@ -18,9 +18,28 @@ struct Position {
     std::size_t character = 0;
 };
 
+inline bool operator==(const Position& a, const Position& b) {
+    return a.line == b.line && a.character == b.character;
+}
+
+inline bool operator<(const Position& a, const Position& b) {
+    return a.line < b.line || (a.line == b.line && a.character < b.character);
+}
+
+inline bool operator<=(const Position& a, const Position& b) {
+    return a < b || a == b;
+}
+
 struct Range {
     Position start;
     Position end;
+
+    /// LSP ranges are end-exclusive: [start, end).
+    bool contains(Position p) const { return start <= p && p < end; }
+
+    bool overlaps(const Range& other) const {
+        return start < other.end && other.start < end;
+    }
 };
 
 struct Diagnostic {

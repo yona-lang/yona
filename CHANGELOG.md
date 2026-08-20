@@ -22,7 +22,9 @@
   other patterns for rename/hover, decodes JSON `\uXXXX` (including
   surrogate pairs), looks behind a space for juxtaposition signature help,
   uses `initialize` workspace roots in module search, and re-analyzes open
-  buffers on `workspace/didChangeWatchedFiles`. Windows stdio is binary so
+  buffers on `workspace/didChangeWatchedFiles`. Hover and related queries
+  treat LSP ranges as end-exclusive. `yonac` and `yls` share
+  `is_module_source` in `include/ModuleSource.h`. Windows stdio is binary so
   `Content-Length` stays in sync. The extension setting is
   `yona.trace.server` (vscode-languageclient).
 

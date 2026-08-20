@@ -8,8 +8,10 @@
 `looks_like_module` matches `yonac` `#`/`##` skip; AST walk indexes
 pattern bindings; JSON `\u` + surrogates; workspace roots +
 `didChangeWatchedFiles`; signature-help look-behind; Windows binary stdio;
-Codegen reused across `didChange`. Marketplace publish and a Yona-written
-server remain later work.
+Codegen reused across `didChange`. Follow-up: LSP ranges are end-exclusive
+(`Range::contains` / `overlaps`); `yonac` and `yls` share
+`include/ModuleSource.h`. Marketplace publish and a Yona-written server
+remain later work.
 
 **Goal:** Ship a production-quality VS Code/Cursor extension and C++ `yls`
 language server covering Yona syntax and semantics, while evolving the
@@ -197,8 +199,8 @@ project and must preserve this server's protocol conformance suite.
 - [x] `./out/build/x64-debug-linux/tests` — 391/391 passed (2026-08-20, after
   rebase onto `a9b57ba`).
 - [x] Focused `yls` unit and subprocess protocol tests pass
-  (`--source-file='*lsp_test.cpp'` 22/22 after review fixes;
-  `scripts/ci/smoke-yls.py`).
+  (`--source-file='*lsp_test.cpp'` 27/27 after exclusive-end + shared
+  `is_module_source`; `scripts/ci/smoke-yls.py`).
 - [x] Extension compile, lint, and unit tests pass (`editors/vscode`).
 - [ ] `./scripts/format.sh` — `clang-format` not installed on this host.
 - [x] IDE diagnostics report no newly introduced errors.
