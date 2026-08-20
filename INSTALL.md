@@ -8,7 +8,7 @@
 | Ubuntu / Debian | `sudo add-apt-repository ppa:kovariadam/yona && sudo apt update && sudo apt install yona` |
 | Arch | `yay -S yona-bin` |
 | macOS / Linuxbrew | `brew install akovari/tap/yona` |
-| Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yonac-llvm/releases/latest) |
+| Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest) |
 
 These install `yonac` and `yona` on `PATH`. Distro packages put the compiler sysroot under `/usr/lib/yona` or `/usr/lib64/yona`; Homebrew uses `$(brew --prefix)/lib/yona`.
 
@@ -40,8 +40,8 @@ sudo dnf install llvm llvm-devel llvm-libs llvm-static \
     libxml2-devel doctest-devel pkgconf
 
 # Build
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
+git clone https://github.com/yona-lang/yona.git
+cd yona
 cmake --preset x64-release-linux
 cmake --build --preset build-release-linux
 
@@ -59,8 +59,8 @@ sudo apt install llvm-dev clang lld liblld-dev libpolly-dev cmake ninja-build \
     libpcre2-dev libcli11-dev libxml2-dev doctest-dev pkg-config
 
 # Build
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
+git clone https://github.com/yona-lang/yona.git
+cd yona
 cmake --preset x64-release-linux
 cmake --build --preset build-release-linux
 ```
@@ -81,7 +81,7 @@ brew install akovari/tap/yona --with-vulkan
 brew install --HEAD akovari/tap/yona
 ```
 
-The tap is updated from GitHub Releases (`dist/ci/generate-homebrew-formula.sh`). First formula publish is the next `v*` tag after `HOMEBREW_TAP_SSH_KEY` is set on `yona-lang/yonac-llvm` (same deploy key as [akovari/winetop](https://github.com/akovari/winetop)).
+The tap is updated from GitHub Releases (`dist/ci/generate-homebrew-formula.sh`). First formula publish is the next `v*` tag after `HOMEBREW_TAP_SSH_KEY` is set on `yona-lang/yona` (same deploy key as [akovari/winetop](https://github.com/akovari/winetop)).
 
 ### Build from a source checkout
 
@@ -89,8 +89,8 @@ The tap is updated from GitHub Releases (`dist/ci/generate-homebrew-formula.sh`)
 # Install dependencies
 brew install llvm lld cmake ninja pcre2 cli11 doctest pkgconf
 
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
+git clone https://github.com/yona-lang/yona.git
+cd yona
 cmake --preset x64-release-macos
 cmake --build --preset build-release-macos
 ```
@@ -133,8 +133,8 @@ Open **x64 Native Tools** or **Developer PowerShell for VS** (so `cl`, the linke
 Then:
 
 ```powershell
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
+git clone https://github.com/yona-lang/yona.git
+cd yona
 
 # Point at your extracted LLVM (example: C:\LLVM)
 $env:LLVM_INSTALL_PREFIX = "C:\LLVM"

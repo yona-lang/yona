@@ -5,17 +5,20 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   build-linux:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     strategy:
       matrix:
         arch: [x86_64]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up LLVM
         uses: ./.github/actions/setup-llvm
@@ -61,9 +64,13 @@ jobs:
           path: yona-*-linux-*.tar.gz
 
   build-macos:
+    permissions:
+      contents: read
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up LLVM
         uses: ./.github/actions/setup-llvm
@@ -106,9 +113,13 @@ jobs:
           path: yona-*-macos-*.tar.gz
 
   build-windows:
+    permissions:
+      contents: read
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up LLVM
         uses: ./.github/actions/setup-llvm
@@ -167,9 +178,13 @@ jobs:
 
   release:
     needs: [build-linux, build-macos, build-windows]
+    permissions:
+      contents: write
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -177,7 +192,7 @@ jobs:
           merge-multiple: true
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             yona-*.tar.gz
@@ -189,11 +204,14 @@ jobs:
 
   homebrew:
     needs: [release]
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
         with:
-          path: yonac-llvm
+          path: yona
+          persist-credentials: false
 
       - name: Publish formula to tap
         env:
@@ -204,7 +222,7 @@ jobs:
           set -euo pipefail
           VER="${GITHUB_REF_NAME#v}"
           TAP_REPO="${TAP_REPO:-akovari/homebrew-tap}"
-          ARCHIVE="https://github.com/yona-lang/yonac-llvm/archive/refs/tags/v${VER}.tar.gz"
+          ARCHIVE="https://github.com/yona-lang/yona/archive/refs/tags/v${VER}.tar.gz"
           curl -fsSL "$ARCHIVE" -o /tmp/yona-src.tar.gz
           SHA256="$(sha256sum /tmp/yona-src.tar.gz | awk '{print $1}')"
 
@@ -227,7 +245,7 @@ jobs:
           fi
           cd tap
           mkdir -p Formula
-          bash ../yonac-llvm/dist/ci/generate-homebrew-formula.sh \
+          bash ../yona/dist/ci/generate-homebrew-formula.sh \
             "$VER" "$SHA256" Formula/yona.rb
           git config user.name "yona-ci"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -241,15 +259,19 @@ jobs:
 
   aur:
     needs: [release]
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Generate PKGBUILD
         run: bash dist/ci/generate-aur-pkgbuild.sh "${GITHUB_REF_NAME#v}" ./PKGBUILD
 
       - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1 # v4.1.1
         with:
           pkgname: yona-bin
           pkgbuild: ./PKGBUILD
@@ -262,9 +284,13 @@ jobs:
 
   copr:
     needs: [release]
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install copr-cli
         run: |
@@ -292,17 +318,21 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           echo "Building on Copr project ${PROJECT} from ${TAG}"
           copr-cli buildscm "$PROJECT" \
-              --clone-url "https://github.com/yona-lang/yonac-llvm.git" \
+              --clone-url "https://github.com/yona-lang/yona.git" \
               --commit "$TAG" \
               --spec dist/copr/yona.spec \
               --enable-net on
 
   launchpad:
     needs: [release]
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install Debian packaging tools
         run: |

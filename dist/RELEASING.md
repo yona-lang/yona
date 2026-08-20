@@ -24,7 +24,7 @@ First real Copr / AUR / PPA publish happens on the **next `v*` tag**, after the 
 
 ## One-time setup (you must do this)
 
-These accounts and secrets are **not** created by CI. Do them once on your machine, then copy the same credentials you already use for [akovari/winetop](https://github.com/akovari/winetop) onto `yona-lang/yonac-llvm`.
+These accounts and secrets are **not** created by CI. Do them once on your machine, then copy the same credentials you already use for [akovari/winetop](https://github.com/akovari/winetop) onto `yona-lang/yona`.
 
 ### 1. Fedora Copr project
 
@@ -74,7 +74,7 @@ v0.1.2 Copr (`10875811`) failed Fedora `check-rpaths` because `yonac`/`yona` had
 
 ```bash
 copr-cli buildscm kovariadam/yona \
-  --clone-url https://github.com/yona-lang/yonac-llvm.git \
+  --clone-url https://github.com/yona-lang/yona.git \
   --commit master \
   --spec dist/copr/yona.spec \
   --enable-net on
@@ -116,7 +116,7 @@ copr-cli modify yona \
 
 ```bash
 copr-cli buildscm kovariadam/yona \
-  --clone-url https://github.com/yona-lang/yonac-llvm.git \
+  --clone-url https://github.com/yona-lang/yona.git \
   --commit master \
   --spec dist/copr/yona.spec \
   --enable-net on
@@ -162,7 +162,7 @@ The formula is a **source** build (Yona links LLVM; Ubuntu/macOS CI tarballs are
    was not set (empty key file).
 
 ```bash
-REPO=yona-lang/yonac-llvm
+REPO=yona-lang/yona
 gh secret set HOMEBREW_TAP_REPO --repo "$REPO" --body "akovari/homebrew-tap"
 # PAT with contents:write on akovari/homebrew-tap (classic `repo` or fine-grained):
 gh secret set HOMEBREW_TAP_TOKEN --repo "$REPO"
@@ -172,12 +172,12 @@ gh secret set HOMEBREW_TAP_SSH_KEY --repo "$REPO"
 
 Users install with `brew install akovari/tap/yona` (optional `--with-vulkan`, `--HEAD`).
 
-### 5. GitHub Actions secrets on `yona-lang/yonac-llvm`
+### 5. GitHub Actions secrets on `yona-lang/yona`
 
-You need **admin** on `yona-lang/yonac-llvm`. Reuse the winetop values:
+You need **admin** on `yona-lang/yona`. Reuse the winetop values:
 
 ```bash
-REPO=yona-lang/yonac-llvm
+REPO=yona-lang/yona
 
 # Copr (same API token as winetop)
 gh secret set COPR_LOGIN --repo "$REPO"      # paste login from ~/.config/copr
@@ -208,7 +208,7 @@ To copy from winetop without re-typing Copr fields (if `gh` can read the other r
 Confirm secrets exist:
 
 ```bash
-gh secret list --repo yona-lang/yonac-llvm
+gh secret list --repo yona-lang/yona
 ```
 
 Expected names: `AUR_SSH_PRIVATE_KEY`, `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAME`, `HOMEBREW_TAP_REPO`, `HOMEBREW_TAP_TOKEN` or `HOMEBREW_TAP_SSH_KEY`, `LAUNCHPAD_PPA`, `LAUNCHPAD_USER`, `LAUNCHPAD_GPG_FINGERPRINT`, `LAUNCHPAD_GPG_KEY_ID`, `LAUNCHPAD_GPG_PRIVATE_KEY`, `LAUNCHPAD_GPG_PASSPHRASE`.

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 VERSION="${1:?version required (no v prefix)}"
-SHA256="${2:?sha256 of github.com/yona-lang/yonac-llvm/archive/refs/tags/vVERSION.tar.gz}"
+SHA256="${2:?sha256 of github.com/yona-lang/yona/archive/refs/tags/vVERSION.tar.gz}"
 OUT="${3:-Formula/yona.rb}"
 
 mkdir -p "$(dirname "$OUT")"
@@ -13,12 +13,12 @@ cat >"$OUT" <<EOF
 
 class Yona < Formula
   desc "Yona programming language compiler targeting LLVM"
-  homepage "https://github.com/yona-lang/yonac-llvm"
+  homepage "https://github.com/yona-lang/yona"
   version "${VERSION}"
-  url "https://github.com/yona-lang/yonac-llvm/archive/refs/tags/v#{version}.tar.gz"
+  url "https://github.com/yona-lang/yona/archive/refs/tags/v#{version}.tar.gz"
   sha256 "${SHA256}"
   license "GPL-3.0-only"
-  head "https://github.com/yona-lang/yonac-llvm.git", branch: "master"
+  head "https://github.com/yona-lang/yona.git", branch: "master"
 
   livecheck do
     url :stable

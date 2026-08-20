@@ -4,8 +4,8 @@
 subtract, pretty-print, `.yonai` `effects` (closed labels + open `|rN` /
 per-param rows), E0202 with perform-origin spans, HOF open-rest threading,
 recursion least-fixed-point unify. #8 acceptance is met; empty-row totality
-is [#5](https://github.com/yona-lang/yonac-llvm/issues/5), parsed `effect`
-decls are [#9](https://github.com/yona-lang/yonac-llvm/issues/9).
+is [#5](https://github.com/yona-lang/yona/issues/76), parsed `effect`
+decls are [#9](https://github.com/yona-lang/yona/issues/80).
 
 ## Goal
 
@@ -75,5 +75,5 @@ handler elimination tests, `.yonai` round-trip, E0202 with call-site context.
 
 ## Follow-ups (not #8)
 
-- Parsed `effect` decls remain [#9](https://github.com/yona-lang/yonac-llvm/issues/9);
-  totality / empty-row gate remains [#5](https://github.com/yona-lang/yonac-llvm/issues/5).
+- Parsed `effect` decls remain [#9](https://github.com/yona-lang/yona/issues/80);
+  totality / empty-row gate remains [#5](https://github.com/yona-lang/yona/issues/76).

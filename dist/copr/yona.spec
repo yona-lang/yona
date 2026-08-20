@@ -3,8 +3,8 @@ Version:        0.1.4
 Release:        1%{?dist}
 Summary:        Yona programming language compiler targeting LLVM
 License:        GPL-3.0-only
-URL:            https://github.com/yona-lang/yonac-llvm
-Source0:        https://github.com/yona-lang/yonac-llvm/archive/refs/tags/v%{version}.tar.gz
+URL:            https://github.com/yona-lang/yona
+Source0:        https://github.com/yona-lang/yona/archive/refs/tags/v%{version}.tar.gz
 
 BuildRequires:  cmake >= 3.10
 BuildRequires:  ninja-build
@@ -33,7 +33,7 @@ persistent data structures, async I/O via io_uring, and a comprehensive
 standard library.
 
 %prep
-%autosetup -n yonac-llvm-%{version}
+%autosetup -n yona-%{version}
 
 %build
 # SKIP_BUILD_RPATH: v0.1.2 CMake links yonac to in-tree libyona_lib.so and

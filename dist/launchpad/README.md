@@ -6,7 +6,7 @@
 **Signing key fingerprint:** `A527 AE5A 9746 F3D9 54CA  8F4C 9C7E 01C1 5210 C325`  
 **Key ID:** `9C7E01C15210C325`
 
-## GitHub Actions secrets (on `yona-lang/yonac-llvm`)
+## GitHub Actions secrets (on `yona-lang/yona`)
 
 | Secret | Value |
 |--------|--------|
@@ -21,7 +21,7 @@
 
 ```bash
 FPR=A527AE5A9746F3D954CA8F4C9C7E01C15210C325
-REPO=yona-lang/yonac-llvm
+REPO=yona-lang/yona
 
 # 1) Metadata secrets (no private material)
 gh secret set LAUNCHPAD_PPA --repo "$REPO" --body "ppa:kovariadam/yona"

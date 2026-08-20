@@ -61,7 +61,7 @@ macOS kqueue + MoltenVK/`Std\GPU` portability shipped (`docs/gpu-vulkan-implemen
 
 ### 4) Type system (GitHub #3–#8)
 
-Program of record: issues on `yona-lang/yonac-llvm`. Execution plan:
+Program of record: issues on `yona-lang/yona`. Execution plan:
 [2026-08-17-next-plan-of-action.md](./superpowers/plans/2026-08-17-next-plan-of-action.md).
 Formal specification (Rocq, parallel research track):
 [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md)
@@ -69,12 +69,12 @@ Formal specification (Rocq, parallel research track):
 API (#7) until the audit (#3) and effect-row story (#8) are honest about what
 already works.
 
-- [x] **[#3](https://github.com/yona-lang/yonac-llvm/issues/3) Type-system status audit** — `docs/type-system-status.md` (2026-08-18). Next: #8. Follow-ups from the audit: [#9](https://github.com/yona-lang/yonac-llvm/issues/9) effect decls, [#10](https://github.com/yona-lang/yonac-llvm/issues/10) blocking E0500/E0600, [#11](https://github.com/yona-lang/yonac-llvm/issues/11) `-Wincomplete-patterns`.
-- [x] **[#8](https://github.com/yona-lang/yonac-llvm/issues/8) Effect-row inference +** `.yonai` **propagation** — after #3. **Landed 2026-08-19:** closed sets + E0202; unify of effect rows; HOF rest vars; apply-union / wrap; handler subtraction; pretty-print `!{…}`; `.yonai` `FN … effects Fs.read`. **Follow-ups landed same day:** open HOF rest (`effects | hof`, `Effect: imported HOF open rest from .yonai is E0202`, `Interface files preserve exported HOF open rest`); sibling-aware module typecheck (`Interface files preserve sibling-wrapped FN effect rows`, wrap-before-sibling). HOF restore is the `apply f x = f x` shape (first param is the function). Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
-- [ ] **[#6](https://github.com/yona-lang/yonac-llvm/issues/6) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
-- [ ] **[#5](https://github.com/yona-lang/yonac-llvm/issues/5) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
-- [ ] **[#7](https://github.com/yona-lang/yonac-llvm/issues/7) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format.
-- [ ] **[#4](https://github.com/yona-lang/yonac-llvm/issues/4) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
+- [x] **[#3](https://github.com/yona-lang/yona/issues/74) Type-system status audit** — `docs/type-system-status.md` (2026-08-18). Next: #8. Follow-ups from the audit: [#9](https://github.com/yona-lang/yona/issues/80) effect decls, [#10](https://github.com/yona-lang/yona/issues/81) blocking E0500/E0600, [#11](https://github.com/yona-lang/yona/issues/82) `-Wincomplete-patterns`.
+- [x] **[#8](https://github.com/yona-lang/yona/issues/79) Effect-row inference +** `.yonai` **propagation** — after #3. **Landed 2026-08-19:** closed sets + E0202; unify of effect rows; HOF rest vars; apply-union / wrap; handler subtraction; pretty-print `!{…}`; `.yonai` `FN … effects Fs.read`. **Follow-ups landed same day:** open HOF rest (`effects | hof`, `Effect: imported HOF open rest from .yonai is E0202`, `Interface files preserve exported HOF open rest`); sibling-aware module typecheck (`Interface files preserve sibling-wrapped FN effect rows`, wrap-before-sibling). HOF restore is the `apply f x = f x` shape (first param is the function). Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
+- [ ] **[#6](https://github.com/yona-lang/yona/issues/77) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
+- [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
+- [ ] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format.
+- [ ] **[#4](https://github.com/yona-lang/yona/issues/75) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
 
 Default series: `#3 → #8 → #5 → #7 → #4`, with **#6** beside #8 after the audit.
 
@@ -106,8 +106,8 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
 
 ### Suggested next steps (rolling)
 
-- [ ] **Next language work:** [#6](https://github.com/yona-lang/yonac-llvm/issues/6)
-  opaque types, or [#5](https://github.com/yona-lang/yonac-llvm/issues/5)
+- [ ] **Next language work:** [#6](https://github.com/yona-lang/yona/issues/77)
+  opaque types, or [#5](https://github.com/yona-lang/yona/issues/76)
   totality / empty-row gate now that #8 rows are real. Formal spec track:
   Phase 0 of
   [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
@@ -235,7 +235,7 @@ with **async**, **task groups**, and **channels**, not compete with them.
 - [ ] **Compile-Time Evaluator** — evaluate pure functions at compile time.
   Enables user-defined derive strategies, constant folding, static assertions.
   Requires: subset interpreter for pure Yona expressions (no I/O, no effects).
-  Tracked as [#4](https://github.com/yona-lang/yonac-llvm/issues/4); blocked on
+  Tracked as [#4](https://github.com/yona-lang/yona/issues/75); blocked on
   #5 (and ideally #7). See Active Priorities §4.
 - [ ] **User-Defined Derives** — traits declare themselves derivable via
   `derive` block that templates over ADT structure. Requires compile-time

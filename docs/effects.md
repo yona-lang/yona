@@ -7,7 +7,7 @@ Closed `.yonai` `FN … effects` rows and open `effects | hof` are written
 and restored on import. Sibling exports inherit applied helpers' rows.
 `effect` declarations and CPS resume are **not**. Evidence:
 [type-system-status.md](type-system-status.md) §1–2.
-Rows: GitHub [#8](https://github.com/yona-lang/yonac-llvm/issues/8).
+Rows: GitHub [#8](https://github.com/yona-lang/yona/issues/79).
 
 ## The Problem
 

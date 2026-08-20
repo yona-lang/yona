@@ -2,7 +2,7 @@
 
 **Status (2026-08-18):** **implemented** for **record** field rows
 (`MRecord` / `row_rest`). This document is **not** the effect-row spec
-(GitHub [#8](https://github.com/yona-lang/yonac-llvm/issues/8)).
+(GitHub [#8](https://github.com/yona-lang/yona/issues/79)).
 Evidence: [type-system-status.md](type-system-status.md) §3.
 
 ## Overview

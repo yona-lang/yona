@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+- The LLVM compiler repository is now [yona-lang/yona](https://github.com/yona-lang/yona)
+  (same stars and URL as the former GraalVM tree). The GraalVM/Truffle
+  implementation, its issues, wiki snapshot, and 0.8.x releases are archived at
+  [yona-lang/yona-graalvm](https://github.com/yona-lang/yona-graalvm).
+  `yona-lang/yonac-llvm` is an archived pointer.
+
 ## v0.1.4 (2026-08-20)
 
 ### Fixed

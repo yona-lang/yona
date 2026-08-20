@@ -14,7 +14,7 @@ cmake --build --preset build-debug-linux
 ## Project Structure
 
 ```
-yonac-llvm/
+yona/
   include/        C++ headers (AST, codegen, types, parser)
   src/            Compiler source (lexer, parser, codegen, runtime)
   src/runtime/    C runtime (seq, hamt, regex, platform layer)

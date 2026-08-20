@@ -22,7 +22,7 @@ WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
 TARBALL="yona-${VERSION}-linux-${TARBALL_ARCH}.tar.gz"
-TARBALL_URL="https://github.com/yona-lang/yonac-llvm/releases/download/v${VERSION}/${TARBALL}"
+TARBALL_URL="https://github.com/yona-lang/yona/releases/download/v${VERSION}/${TARBALL}"
 PKGDIR="$WORKDIR/yona_${VERSION}-1_${ARCH}"
 
 mkdir -p "$PKGDIR/DEBIAN" "$PKGDIR/usr/bin" "$PKGDIR/usr/lib/yona" "$PKGDIR/usr/share/doc/yona"
@@ -52,7 +52,7 @@ Priority: optional
 Architecture: ${ARCH}
 Maintainer: Adam Kovari <adam@kovari.eu>
 Depends: libc6, llvm (>= 16), clang, lld, libpcre2-8-0
-Homepage: https://github.com/yona-lang/yonac-llvm
+Homepage: https://github.com/yona-lang/yona
 Description: Yona programming language compiler targeting LLVM
  Compiled functional language with ADTs, pattern matching, and a stdlib.
 EOF

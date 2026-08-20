@@ -15,7 +15,7 @@ export default defineConfig({
 			description:
 				'Yona is a statically typed functional programming language compiled to native code via LLVM — transparent concurrency, algebraic effects, linear resources, and performance within reach of C.',
 			social: [
-				{ icon: 'github', label: 'GitHub', href: 'https://github.com/yona-lang/yonac-llvm' },
+				{ icon: 'github', label: 'GitHub', href: 'https://github.com/yona-lang/yona' },
 			],
 			head: [
 				{

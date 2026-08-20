@@ -17,7 +17,7 @@ Every installation provides two executables:
 | Ubuntu / Debian | `sudo add-apt-repository ppa:kovariadam/yona && sudo apt update && sudo apt install yona` |
 | Arch Linux | `yay -S yona-bin` |
 | macOS / Linuxbrew | `brew install akovari/tap/yona` |
-| Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yonac-llvm/releases/latest) |
+| Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest) |
 
 Distro packages place the compiler sysroot (standard library sources,
 interface files, runtime objects) under `/usr/lib/yona` or `/usr/lib64/yona`;
@@ -70,8 +70,8 @@ sudo dnf install llvm llvm-devel llvm-libs llvm-static \
     clang lld lld-devel cmake ninja-build pcre2-devel cli11-devel \
     libxml2-devel doctest-devel pkgconf
 
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
+git clone https://github.com/yona-lang/yona.git
+cd yona
 cmake --preset x64-release-linux
 cmake --build --preset build-release-linux
 ```
@@ -82,8 +82,8 @@ cmake --build --preset build-release-linux
 sudo apt install llvm-dev clang lld liblld-dev libpolly-dev cmake ninja-build \
     libpcre2-dev libcli11-dev libxml2-dev doctest-dev pkg-config
 
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
+git clone https://github.com/yona-lang/yona.git
+cd yona
 cmake --preset x64-release-linux
 cmake --build --preset build-release-linux
 ```
@@ -93,8 +93,8 @@ cmake --build --preset build-release-linux
 ```bash
 brew install llvm lld cmake ninja pcre2 cli11 doctest pkgconf
 
-git clone https://github.com/yona-lang/yonac-llvm.git
-cd yonac-llvm
+git clone https://github.com/yona-lang/yona.git
+cd yona
 cmake --preset x64-release-macos
 cmake --build --preset build-release-macos
 ```
@@ -109,7 +109,7 @@ path and set `LLVM_INSTALL_PREFIX` to its root (the directory containing
 Clang-only installer omits libraries that `find_package(LLVM)` requires.
 
 See
-[INSTALL.md](https://github.com/yona-lang/yonac-llvm/blob/master/INSTALL.md)
+[INSTALL.md](https://github.com/yona-lang/yona/blob/master/INSTALL.md)
 in the repository for the full Windows walkthrough, GPU/Vulkan options, and
 troubleshooting.
 

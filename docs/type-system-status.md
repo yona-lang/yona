@@ -1,7 +1,7 @@
 # Type-system status (audit)
 
 Evidence-based matrix for GitHub
-[#3](https://github.com/yona-lang/yonac-llvm/issues/3).
+[#3](https://github.com/yona-lang/yona/issues/74).
 Design docs are **not** treated as implementation evidence.
 Classifications: `implemented` | `partial` | `design-only` | `missing`.
 
@@ -88,13 +88,13 @@ Unhandled perform: `TEST_CASE("Effect: unhandled perform produces warning")`.
 `export effect` / `import effect`. Neither exists. Effect type parameters are
 discarded (`(void)type_param` in `register_effect`).
 
-**Follow-up:** parse `effect` decls ([#9](https://github.com/yona-lang/yonac-llvm/issues/9)).
+**Follow-up:** parse `effect` decls ([#9](https://github.com/yona-lang/yona/issues/80)).
 
 ---
 
 ## 2. Effect rows — **partial** (unify + HOF + E0202 + `.yonai`)
 
-[#8](https://github.com/yona-lang/yonac-llvm/issues/8) (2026-08-19):
+[#8](https://github.com/yona-lang/yona/issues/79) (2026-08-19):
 `Arrow.arrow_effects` + `effect_rest` (Var / `ERow` / closed). Unifier merges
 rows like record rows. Lambdas collect uncovered `perform`s and **uncovered
 apply**s (handler subtraction). `\() ->` thunks are `Unit -> ret`.
@@ -106,12 +106,12 @@ written as `FN … effects Fs.read` and/or `effects | hof`. Import restores
 a nonempty / open field into `Arrow.arrow_effects`; otherwise the name
 stays a fresh var. HOF restore is the first-param-is-function shape.
 
-**Still missing:** `effect` decls ([#9](https://github.com/yona-lang/yonac-llvm/issues/9));
+**Still missing:** `effect` decls ([#9](https://github.com/yona-lang/yona/issues/80));
 serializing `\x f -> f x` (function not first). Module compile still does
 not *fail* on type errors — rows are collected non-blocking.
 
 **Empty effect row is not a totality fact.** Open rest still means "unknown",
-not "pure". Totality [#5](https://github.com/yona-lang/yonac-llvm/issues/5)
+not "pure". Totality [#5](https://github.com/yona-lang/yona/issues/76)
 stays blocked.
 
 [`docs/row-polymorphism.md`](row-polymorphism.md) is **record** field rows
@@ -136,7 +136,7 @@ stays blocked.
 **Positive:** `{ name = "Alice", age = 30 }` field access (docs + tests).
 **Negative:** missing-field / type mismatch on records in the typechecker suite.
 
-This is **not** [#8](https://github.com/yona-lang/yonac-llvm/issues/8).
+This is **not** [#8](https://github.com/yona-lang/yona/issues/79).
 
 ---
 
@@ -299,14 +299,14 @@ flowchart TD
 
 | Work | Issue / note | Independent? |
 |------|----------------|--------------|
-| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yonac-llvm/issues/8) | Done 2026-08-19 (closed FN rows, `effects | hof`, sibling-aware `check_module`) |
-| Opaque exported types | [#6](https://github.com/yona-lang/yonac-llvm/issues/6) | After audit; parallel with #8 |
-| Totality / empty row | [#5](https://github.com/yona-lang/yonac-llvm/issues/5) | After #8 |
-| Typed-core | [#7](https://github.com/yona-lang/yonac-llvm/issues/7) | Arch after audit; API after #8 |
-| CTE | [#4](https://github.com/yona-lang/yonac-llvm/issues/4) | After #5 |
-| Parse `effect` decls + register ops | [#9](https://github.com/yona-lang/yonac-llvm/issues/9) | Yes (does not replace #8) |
-| Blocking E0500/E0600; emit E0602; run checkers on modules | [#10](https://github.com/yona-lang/yonac-llvm/issues/10) | Yes |
-| Diagnostic case exhaustiveness | [#11](https://github.com/yona-lang/yonac-llvm/issues/11) | Yes |
+| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yona/issues/79) | Done 2026-08-19 (closed FN rows, `effects | hof`, sibling-aware `check_module`) |
+| Opaque exported types | [#6](https://github.com/yona-lang/yona/issues/77) | After audit; parallel with #8 |
+| Totality / empty row | [#5](https://github.com/yona-lang/yona/issues/76) | After #8 |
+| Typed-core | [#7](https://github.com/yona-lang/yona/issues/78) | Arch after audit; API after #8 |
+| CTE | [#4](https://github.com/yona-lang/yona/issues/75) | After #5 |
+| Parse `effect` decls + register ops | [#9](https://github.com/yona-lang/yona/issues/80) | Yes (does not replace #8) |
+| Blocking E0500/E0600; emit E0602; run checkers on modules | [#10](https://github.com/yona-lang/yona/issues/81) | Yes |
+| Diagnostic case exhaustiveness | [#11](https://github.com/yona-lang/yona/issues/82) | Yes |
 | `&T` | [todo-list](todo-list.md); [design-borrow-types.md](design-borrow-types.md) | After audit; large |
 
 Default compiler series remains `#3 → #8 → #5 → #7 → #4`.

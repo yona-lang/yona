@@ -12,13 +12,13 @@ pkgver=${VERSION}
 pkgrel=1
 pkgdesc="Yona programming language compiler targeting LLVM"
 arch=('x86_64')
-url="https://github.com/yona-lang/yonac-llvm"
+url="https://github.com/yona-lang/yona"
 license=('GPL-3.0-only')
 depends=('llvm-libs' 'clang' 'lld' 'pcre2')
 provides=('yona')
 conflicts=('yona')
 options=('!strip')
-source=("\$pkgname-\$pkgver-linux-x86_64.tar.gz::https://github.com/yona-lang/yonac-llvm/releases/download/v\$pkgver/yona-\$pkgver-linux-x86_64.tar.gz")
+source=("\$pkgname-\$pkgver-linux-x86_64.tar.gz::https://github.com/yona-lang/yona/releases/download/v\$pkgver/yona-\$pkgver-linux-x86_64.tar.gz")
 sha256sums=('SKIP')
 
 package() {

@@ -6,7 +6,7 @@
 
 **Architecture:** Every typing rule exists as a Rocq inductive definition. The metatheory (progress, preservation, principal types) is machine-checked. A verified reference type checker extracted from Rocq validates the same programs the C++ compiler accepts. The formal spec becomes the language contract; the C++ implementation becomes an optimized replica of it.
 
-**Tech Stack:** Rocq 9.2, stdpp, Autosubst 2, QuickChick, MetaRocq verified extraction, Iris (phase 6), Alectryon/coqdoc. Cross-links: [todo-list.md](../../todo-list.md) §4 and § Formal specification; GitHub issues [#3](https://github.com/yona-lang/yonac-llvm/issues/3)–[#8](https://github.com/yona-lang/yonac-llvm/issues/8).
+**Tech Stack:** Rocq 9.2, stdpp, Autosubst 2, QuickChick, MetaRocq verified extraction, Iris (phase 6), Alectryon/coqdoc. Cross-links: [todo-list.md](../../todo-list.md) §4 and § Formal specification; GitHub issues [#3](https://github.com/yona-lang/yona/issues/74)–[#8](https://github.com/yona-lang/yona/issues/79).
 
 ## Global Constraints
 
@@ -19,8 +19,8 @@
 
 ## Why this shape
 
-- The implemented checker is HM + ADTs + rows + effect rows + traits + refinements + linearity ([include/typechecker/InferType.h](../../../include/typechecker/InferType.h), [docs/type-checker-design.md](../../type-checker-design.md)). Several features are partially implemented (GitHub [#3](https://github.com/yona-lang/yonac-llvm/issues/3) audit). Formalizing forces the honest answer #3 asks for.
-- The typed-core interface (GitHub [#7](https://github.com/yona-lang/yonac-llvm/issues/7)) is the bridge for differential testing: the compiler dumps typed judgments, the extracted verified checker re-validates them.
+- The implemented checker is HM + ADTs + rows + effect rows + traits + refinements + linearity ([include/typechecker/InferType.h](../../../include/typechecker/InferType.h), [docs/type-checker-design.md](../../type-checker-design.md)). Several features are partially implemented (GitHub [#3](https://github.com/yona-lang/yona/issues/74) audit). Formalizing forces the honest answer #3 asks for.
+- The typed-core interface (GitHub [#7](https://github.com/yona-lang/yona/issues/78)) is the bridge for differential testing: the compiler dumps typed judgments, the extracted verified checker re-validates them.
 - Yona's refinement language ([docs/refinement-types.md](../../refinement-types.md), `RefinePredicate` in [include/types.h](../../../include/types.h)) is deliberately finite (literal comparisons + boolean combinators + `LengthGt`) — decidable without SMT, so a fully verified refinement checker is achievable.
 
 ## Toolchain
@@ -71,13 +71,13 @@ The kernel every later feature builds on. Features: Int/Float/Bool/String/Symbol
 ### Phase 3 — Executable verified checker + differential testing
 
 - [ ] `infer : env -> term -> option scheme` extracted to OCaml (MetaRocq verified extraction).
-- [ ] Compiler side: `yonac --emit-typed-core` JSON dump of resolved AST + inferred types for the core fragment — seed of issue [#7](https://github.com/yona-lang/yonac-llvm/issues/7).
+- [ ] Compiler side: `yonac --emit-typed-core` JSON dump of resolved AST + inferred types for the core fragment — seed of issue [#7](https://github.com/yona-lang/yona/issues/78).
 - [ ] Harness runs every `test/codegen/*.yona` fixture through both checkers; disagreement = bug in one of them. QuickChick fuzzes random terms for agreement.
 
 ### Phase 4 — Type-system extensions (one module each)
 
 1. [ ] **Rows.v** — records + row polymorphism (open rows with row variables, as in `MRecord`); extend unification proofs.
-2. [ ] **Effects.v** — effect rows + algebraic effect handlers; operational semantics with `perform`/`handle` (frame-stack style); theorem: well-typed programs with empty effect row never get stuck on an unhandled effect. Informs issue [#8](https://github.com/yona-lang/yonac-llvm/issues/8) and totality (#5).
+2. [ ] **Effects.v** — effect rows + algebraic effect handlers; operational semantics with `perform`/`handle` (frame-stack style); theorem: well-typed programs with empty effect row never get stuck on an unhandled effect. Informs issue [#8](https://github.com/yona-lang/yona/issues/79) and totality (#5).
 3. [ ] **Async.v** — `Promise τ` + transparent await as type-directed elaboration into explicit-await core; theorem: elaboration is type-preserving.
 4. [ ] **Traits.v** — trait constraints elaborated to dictionary passing; coherence theorem (elaboration result independent of derivation).
 5. [ ] **Refine.v** — the finite predicate language; verified decision procedure for entailment (interval + boolean reasoning — no SMT); theorem: `E0500`-style checks are sound.

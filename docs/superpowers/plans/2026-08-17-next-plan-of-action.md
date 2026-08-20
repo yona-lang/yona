@@ -6,7 +6,7 @@
 
 **Architecture:** Treat GitHub issues #3–#8 as the type-system program of record; treat `docs/todo-list.md` as the product/runtime program of record. Do not start compile-time evaluation (#4) or typed-core (#7) until the audit (#3) and effect-row story (#8) are honest about what already works. Fix flaky doctests before new language features so CI remains a trustworthy gate.
 
-**Tech Stack:** Yona → LLVM 22 codegen (`yonac`), doctest, CMake presets (`x64-debug-linux` / `build-debug-linux`), GitHub issues on `yona-lang/yonac-llvm`, design docs under `docs/`.
+**Tech Stack:** Yona → LLVM 22 codegen (`yonac`), doctest, CMake presets (`x64-debug-linux` / `build-debug-linux`), GitHub issues on `yona-lang/yona`, design docs under `docs/`.
 
 ## Global Constraints
 
@@ -26,7 +26,7 @@
 ### Done since this plan was written (2026-08-17)
 
 - **Phase 0:** flaky `binary_seek` / `binary_write_read` and `net_runtime_test` TCP SIGSEGV (`d896a9e`)
-- **Phase 1 / [#3](https://github.com/yona-lang/yonac-llvm/issues/3):** `docs/type-system-status.md` (`d7abcba`); issue **closed** 2026-08-18. Follow-ups [#9](https://github.com/yona-lang/yonac-llvm/issues/9)–[#11](https://github.com/yona-lang/yonac-llvm/issues/11)
+- **Phase 1 / [#3](https://github.com/yona-lang/yona/issues/74):** `docs/type-system-status.md` (`d7abcba`); issue **closed** 2026-08-18. Follow-ups [#9](https://github.com/yona-lang/yona/issues/80)–[#11](https://github.com/yona-lang/yona/issues/82)
 - **Track P (partial):** macOS kqueue + MoltenVK; Windows Erlang `--skip-erl` / `YONA_BENCH_SKIP_ERLANG`; tags **v0.1.1–v0.1.3** (Copr `check-rpaths` / `libyona_lib.so`, Homebrew `HOMEBREW_TAP_TOKEN` or `HOMEBREW_TAP_SSH_KEY`, in-process LLD ELF/Darwin args, system CLI11/LLD)
 - **LinearityChecker (working tree, uncommitted):** no C++ producer-name allowlist; type-directed `Linear`; `.yonai` `LINEAR` overlay; `ImportExpr` / wildcard / FQN `Pkg\Mod::func` (`ModuleCall`) via `ImportTypeSource`
 
@@ -41,7 +41,7 @@
 
 | Priority band | Item | Notes |
 |---|---|---|
-| **P1 language** | [#8](https://github.com/yona-lang/yonac-llvm/issues/8) effect-row inference + `.yonai` | **Shipped** 2026-08-19 (open-row `.yonai` + E0202 origins) |
+| **P1 language** | [#8](https://github.com/yona-lang/yona/issues/79) effect-row inference + `.yonai` | **Shipped** 2026-08-19 (open-row `.yonai` + E0202 origins) |
 | **P1 language** | Type-level `&T` borrows | Design: `docs/design-borrow-types.md` |
 | **P1 GPU** | Track G **remaining** | Full arbitrary-lambda SPIR-V; io_uring/reactor research; occupancy hints; macOS/Windows bench re-capture. Kernel library includes `x * x` / Vulkan `filterLessThan`. `raiseGpu` GENFN path shipped. **Surface shipped**. |
 | **P2 distro** | Windows installer polish; LLD default on Windows (LibXml2) | Linux/macOS in-process LLD shipped in v0.1.2 |
@@ -51,12 +51,12 @@
 
 | # | Title | Status |
 |---|---|---|
-| [#3](https://github.com/yona-lang/yonac-llvm/issues/3) | Type-system audit | **Closed** 2026-08-18 |
-| [#8](https://github.com/yona-lang/yonac-llvm/issues/8) | Effect-row inference + `.yonai` | **Closed** 2026-08-19 |
-| [#6](https://github.com/yona-lang/yonac-llvm/issues/6) | Opaque exported types | Open; after #3; parallel with #8 |
-| [#5](https://github.com/yona-lang/yonac-llvm/issues/5) | Opt-in totality + effect-freedom | Open; needs #8 |
-| [#4](https://github.com/yona-lang/yonac-llvm/issues/4) | Deterministic evaluator | Open; needs #5 |
-| [#7](https://github.com/yona-lang/yonac-llvm/issues/7) | Typed-core API | Open; arch after #3; API after #8 |
+| [#3](https://github.com/yona-lang/yona/issues/74) | Type-system audit | **Closed** 2026-08-18 |
+| [#8](https://github.com/yona-lang/yona/issues/79) | Effect-row inference + `.yonai` | **Closed** 2026-08-19 |
+| [#6](https://github.com/yona-lang/yona/issues/77) | Opaque exported types | Open; after #3; parallel with #8 |
+| [#5](https://github.com/yona-lang/yona/issues/76) | Opt-in totality + effect-freedom | Open; needs #8 |
+| [#4](https://github.com/yona-lang/yona/issues/75) | Deterministic evaluator | Open; needs #5 |
+| [#7](https://github.com/yona-lang/yona/issues/78) | Typed-core API | Open; arch after #3; API after #8 |
 
 ```mermaid
 flowchart TD
@@ -158,7 +158,7 @@ Update `docs/todo-list.md` Bugs section checkboxes when fixed.
 
 ## Phase 1 — GitHub #3: Type-system status audit
 
-**Status (2026-08-18):** **Done.** `docs/type-system-status.md` (`d7abcba`); [#3](https://github.com/yona-lang/yonac-llvm/issues/3) closed. Follow-ups #9 effect decls, #10 blocking E0500/E0600, #11 `-Wincomplete-patterns`.
+**Status (2026-08-18):** **Done.** `docs/type-system-status.md` (`d7abcba`); [#3](https://github.com/yona-lang/yona/issues/74) closed. Follow-ups #9 effect decls, #10 blocking E0500/E0600, #11 `-Wincomplete-patterns`.
 
 **Goal:** Deliver `docs/type-system-status.md` so later issues do not invent features that already exist (or depend on fiction).
 
@@ -360,8 +360,8 @@ Linearity leftovers (`WithExpr` / `FunctionExpr`) can land beside #8.
 
 Plan saved to `docs/superpowers/plans/2026-08-17-next-plan-of-action.md`.
 
-**Next:** [#6](https://github.com/yona-lang/yonac-llvm/issues/6) opaque types
-or [#5](https://github.com/yona-lang/yonac-llvm/issues/5) totality / empty-row
+**Next:** [#6](https://github.com/yona-lang/yona/issues/77) opaque types
+or [#5](https://github.com/yona-lang/yona/issues/76) totality / empty-row
 gate; Track G remaining is full arbitrary-lambda SPIR-V / research /
 macOS-Windows bench re-capture.
 

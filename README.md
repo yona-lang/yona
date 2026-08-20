@@ -50,7 +50,7 @@ yay -S yona-bin
 
 ### Windows
 
-Download the MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yonac-llvm/releases/latest).
+Download the MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest).
 
 ### macOS / Linux (Homebrew)
 
