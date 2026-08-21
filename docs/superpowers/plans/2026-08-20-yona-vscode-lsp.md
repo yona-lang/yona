@@ -25,7 +25,9 @@ consumes closing `end` (2026-08-21). Typed-core C ABI + `yonac --emit-typed-core
   editor-default server remains later work. `yls-yona` now uses
   `Std\Json.get` / `asString` / `asInt` (2026-08-21). GENFN remonomorphization
   isolates importer names so `import length from Std\String` cannot shadow
-  `Std\Json.getPair`'s Prelude Array `length` (2026-08-21).
+  `Std\Json.getPair`'s Prelude Array `length` (2026-08-21). Isolation
+  copies the GENFN mangled name before clearing that map so sibling
+  functions (`Std\Stream.range` from `naturals`) stay visible (2026-08-21).
 
 **Goal:** Ship a production-quality VS Code/Cursor extension and C++ `yls`
 language server covering Yona syntax and semantics, while evolving the

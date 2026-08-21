@@ -1,5 +1,5 @@
 Name:           yona
-Version:        0.1.4
+Version:        0.1.5
 Release:        1%{?dist}
 Summary:        Yona programming language compiler targeting LLVM
 License:        GPL-3.0-only
@@ -85,6 +85,9 @@ cp -a include/yona/runtime/. %{buildroot}%{_libdir}/yona/include/yona/runtime/
 %{_libdir}/yona/
 
 %changelog
+* Fri Aug 21 2026 Adam Kovari <adam@kovari.eu> - 0.1.5-1
+- Version 0.1.5; GENFN isolation keeps Stream.range visible to naturals
+
 * Thu Aug 20 2026 Adam Kovari <adam@kovari.eu> - 0.1.4-1
 - Version 0.1.4; let-if-else no longer consumes closing in as membership
 

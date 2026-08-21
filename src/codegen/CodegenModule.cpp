@@ -880,7 +880,7 @@ void Codegen::register_yona_module_decls(ast::ModuleDecl* mod) {
     }
 }
 
-Codegen::GenfnNameIsolation::GenfnNameIsolation(Codegen& cg, const std::string& mangled)
+Codegen::GenfnNameIsolation::GenfnNameIsolation(Codegen& cg, std::string mangled)
     : cg(cg) {
     saved_externs = cg.imports_.extern_functions;
     cg.imports_.extern_functions.clear();
@@ -986,7 +986,7 @@ TypedValue Codegen::materialize_imported_function_value(const std::string& name)
     auto ext_it = imports_.extern_functions.find(name);
     if (ext_it == imports_.extern_functions.end())
         return {};
-    const std::string& mangled = ext_it->second;
+    const std::string mangled = ext_it->second;
 
     auto wrap_existing = [&](Function* fn, CType ret) -> TypedValue {
         if (!fn || !builder_ || !builder_->GetInsertBlock())

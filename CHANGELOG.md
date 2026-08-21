@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.5 (2026-08-21)
+
 ### Added
 - **`yls-yona` transport slice** — Yona-written LSP stdio server
   (`tools/yls/main.yona`, CMake `yls-yona`). Speaks `Content-Length`
@@ -83,6 +85,13 @@
   Array methods used by `Std\Json.getPair`, which made `jsonGet` return
   `None` on multi-key objects in `yls-yona`. `yls-yona` uses those
   helpers instead of raw-text field scans.
+- GENFN name isolation no longer hides sibling functions in the defining
+  module. Remonomorphizing `Std\Stream.naturals` can see `range` again
+  (`sum (take 10 naturals)`). Isolation now copies the mangled name
+  before clearing importer `extern_functions`, so a CAF path cannot
+  dangle and drop the module prefix. Importer aliases such as
+  `import length from Std\String` still cannot shadow Prelude Array
+  `length` inside `Std\Json.getPair`.
 - `Std\String.fromChars` now reads sequence elements (`yona_rt_seq_get`)
   instead of the flat header word, so `[123]` is `{` and not a leading NUL.
 - Nested `try` whose inner `catch` re-raises now reaches the outer handler

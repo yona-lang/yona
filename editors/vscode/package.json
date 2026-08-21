@@ -2,7 +2,7 @@
   "name": "yona",
   "displayName": "Yona",
   "description": "Yona language support: syntax highlighting and the yls language server.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "yona-lang",
   "license": "GPL-3.0-only",
   "repository": {

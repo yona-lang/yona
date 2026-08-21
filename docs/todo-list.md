@@ -2,14 +2,6 @@
 
 ## Bugs (open)
 
-- [ ] `Std\Stream.naturals` remonomorphize cannot see sibling `range`
-  after GENFN name isolation. Repro: `import naturals, take, sum from
-  Std\Stream in sum (take 10 naturals)` — `undefined function 'range'`
-  (`<imported>:3:60`). Same for `stream_pipeline` (`naturals |> map …`).
-  Isolation clears importer `extern_functions` and only restores names
-  already in `imports_.meta`; `range` is not imported so it is dropped.
-  Fixtures: `stdlib_naturals_caf`, `stream_pipeline`.
-
 The `in` terminator vs membership parse cluster (`nested_let`, `perform`/
 `handle` RHS, `stdlib_math`) is fixed — `stop_at_in` is now threaded through
 `let`, `perform` args, `raise`, and `with` the same way as `if`/`lambda`.
@@ -309,7 +301,7 @@ with **async**, **task groups**, and **channels**, not compete with them.
   parse errors.   Local VSIX packaging is in (`npm run vsix`, CI artifact).
   Marketplace CI publishes on `v*` tags (`VSCE_PAT`). Open VSX publish is
   fully wired (`publish-openvsx` + repository secret `OVSX_PAT`, publisher
-  `yona-lang`, extension 0.1.4); the job still no-ops if the secret is
+  `yona-lang`, extension 0.1.5); the job still no-ops if the secret is
   unset. Stdlib prereqs for a Yona `yls` landed 2026-08-21: recursive
   `Std\Json`, `Std\IO.readExact`, `Std\Utf16`. `yls-yona` uses
   `Std\Json.get` / `asString` / `asInt`. Remaining: Yona rewrite of `yls`
@@ -383,6 +375,14 @@ with **async**, **task groups**, and **channels**, not compete with them.
   `()` instead of the outer handler. Repro: `try (try raise 1 catch _ ->
   raise 2 end) catch _ -> 3 end`. `codegen_try_catch` marks merge
   unreachable when every catch arm terminates.
+- [x] **2026-08-21:** `Std\Stream.naturals` remonomorphize could not see
+  sibling `range` after GENFN name isolation (`undefined function
+  'range'`). Isolation cleared `extern_functions` while still holding a
+  reference into that map, so the CAF path lost the module prefix.
+  Isolation now takes the mangled name by value. Importer `length` from
+  `Std\String` stays hidden for `Std\Json.get`. Fixtures:
+  `stdlib_naturals_caf`, `stream_pipeline`,
+  `stdlib_json_get_import_length`.
 
 
 

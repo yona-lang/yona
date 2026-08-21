@@ -1191,7 +1191,8 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                     cf.return_type != CType::PROMISE) {
                     auto ext_it = imports_.extern_functions.find(node->name->value);
                     if (ext_it != imports_.extern_functions.end()) {
-                        auto genfn_it = imports_.imported_sources.find(ext_it->second);
+                        std::string mangled = ext_it->second;
+                        auto genfn_it = imports_.imported_sources.find(mangled);
                         if (genfn_it != imports_.imported_sources.end()) {
                             auto reparsed = reparse_genfn(genfn_it->second.local_name,
                                                            genfn_it->second.source_text);
@@ -1199,8 +1200,8 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                                 auto* func_ast = reparsed->functions[0];
                                 reparsed->functions.clear();
                                 imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-                                GenfnNameIsolation iso(*this, ext_it->second);
-                                register_sibling_genfns(ext_it->second);
+                                GenfnNameIsolation iso(*this, mangled);
+                                register_sibling_genfns(mangled);
                                 codegen_function_def(func_ast, node->name->value);
                                 auto local_def_it = deferred_functions_.find(node->name->value);
                                 if (local_def_it == deferred_functions_.end()) {
@@ -1257,7 +1258,8 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
             cf.return_type != CType::PROMISE) {
             auto ext_it = imports_.extern_functions.find(node->name->value);
             if (ext_it != imports_.extern_functions.end()) {
-                auto genfn_it = imports_.imported_sources.find(ext_it->second);
+                std::string mangled = ext_it->second;
+                auto genfn_it = imports_.imported_sources.find(mangled);
                 if (genfn_it != imports_.imported_sources.end()) {
                     auto reparsed = reparse_genfn(genfn_it->second.local_name,
                                                    genfn_it->second.source_text);
@@ -1265,8 +1267,8 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                         auto* func_ast = reparsed->functions[0];
                         reparsed->functions.clear();
                         imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-                        GenfnNameIsolation iso(*this, ext_it->second);
-                        register_sibling_genfns(ext_it->second);
+                        GenfnNameIsolation iso(*this, mangled);
+                        register_sibling_genfns(mangled);
                         codegen_function_def(func_ast, node->name->value);
                         auto local_def_it = deferred_functions_.find(node->name->value);
                         if (local_def_it != deferred_functions_.end()) {

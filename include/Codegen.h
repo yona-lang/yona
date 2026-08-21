@@ -780,7 +780,9 @@ private:
         std::unordered_map<std::string, TypedValue> hidden_nvs;
         std::vector<std::string> scoped_cafs;
         bool restored = false;
-        GenfnNameIsolation(Codegen& cg, const std::string& mangled);
+        /// `mangled` is taken by value: the constructor clears
+        /// `extern_functions`, so a reference into that map would dangle.
+        GenfnNameIsolation(Codegen& cg, std::string mangled);
         void restore();
         ~GenfnNameIsolation() { restore(); }
         GenfnNameIsolation(const GenfnNameIsolation&) = delete;
