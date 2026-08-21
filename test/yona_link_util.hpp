@@ -33,6 +33,20 @@ inline std::string qpath(const std::filesystem::path& p) {
     return "\"" + p.lexically_normal().generic_string() + "\"";
 }
 
+/** Quote a cmd.exe argv token. Unlike qpath, this is not a filesystem path:
+ * backslashes in `-e` source stay `\`, and `"` is escaped as `""`. */
+inline std::string qarg(const std::string& s) {
+    std::string o = "\"";
+    for (char c : s) {
+        if (c == '"')
+            o += "\"\"";
+        else
+            o += c;
+    }
+    o += "\"";
+    return o;
+}
+
 /** MSVC `popen`/`system` is `cmd.exe /c <command>`. If `<command>` starts with `"`,
  * cmd.exe strips the first and last quote on the line (unless the two-quote
  * executable-name exception applies). Extra quoted argv then becomes

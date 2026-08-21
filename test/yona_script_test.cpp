@@ -34,7 +34,7 @@ struct CmdResult {
 
 static std::string shell_quote(const std::string& s) {
 #ifdef _WIN32
-    return yona::test::link::qpath(s);
+    return yona::test::link::qarg(s);
 #else
     std::string o = "'";
     for (char c : s) {
@@ -116,6 +116,17 @@ TEST_CASE("wrap_for_cmd_c preserves quoted argv for MSVC popen") {
     CHECK(wrap_for_cmd_c("\"D:/yonac.exe\" --sysroot \"D:/build\" - -o \"D:/out.exe\" < \"D:/in.yona\" 2>nul") ==
           "\"\"D:/yonac.exe\" --sysroot \"D:/build\" - -o \"D:/out.exe\" < \"D:/in.yona\"\" 2>nul");
     CHECK(wrap_for_cmd_c("D:/yona.exe -e \"1 + 2\" 2>nul") == "D:/yona.exe -e \"1 + 2\" 2>nul");
+}
+
+TEST_CASE("qarg quotes cmd argv without filesystem-normalizing backslashes") {
+    using yona::test::link::qarg;
+    const std::string expr = "import getArgs from Std\\Process in getArgs";
+    CHECK(qarg(expr) == "\"" + expr + "\"");
+    CHECK(qarg("1 + 2") == "\"1 + 2\"");
+    CHECK(qarg("say \"hi\"") == "\"say \"\"hi\"\"\"");
+#ifdef _WIN32
+    CHECK(qarg(expr) != yona::test::link::qpath(expr));
+#endif
 }
 
 TEST_CASE("yona runner is built") {

@@ -59,8 +59,10 @@
 - Windows `yona` / `yonac` doctest cases no longer die in `cmd.exe`
   quoting: MSVC `popen` is `cmd /c`, which strips the first and last
   quote when the line starts with `"`. Tests wrap that command so
-  extra quoted argv survives. `stdlib_process` checks `PATH` instead
-  of `HOME` (unset on Windows CI). `Std\Path` treats `\` as a separator
+  extra quoted argv survives. `-e` expressions are quoted with `qarg`
+  (not `qpath`), so `Std\Process` keeps its backslash instead of
+  becoming `Std/Process`. `stdlib_process` checks `PATH` instead of
+  `HOME` (unset on Windows CI). `Std\Path` treats `\` as a separator
   on Windows so the runner can find sibling `yonac`.
 
 ### Changed

@@ -7,6 +7,10 @@
 > **Windows CI (2026-08-20):** MSVC `popen`/`cmd /c` quote stripping broke
 > `yona`/`yonac` script doctests; `wrap_for_cmd_c` and `PATH` (not `HOME`)
 > in `stdlib_process` landed on master.
+>
+> **Windows CI (2026-08-21):** `yona -e getArgs argv0 is -e` still failed
+> because `shell_quote` used `qpath`, which filesystem-normalizes `\` to
+> `/` (`Std\Process` → `Std/Process`). Non-path argv now uses `qarg`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
