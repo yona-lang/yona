@@ -1,3 +1,11 @@
+yona (0.1.6-1) noble; urgency=medium
+
+  * New upstream v0.1.6: Windows yls-yona CRT stdin/stdout binary mode
+    and VS Code npm test compile-before-test so Marketplace/Open VSX can
+    publish after the v0.1.5 Release smoke failure.
+
+ -- Adam Kovari <adam@kovari.eu>  Fri, 21 Aug 2026 16:00:00 +0000
+
 yona (0.1.5-1) noble; urgency=medium
 
   * New upstream v0.1.5: GENFN isolation keeps sibling Stream.range

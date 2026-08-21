@@ -301,7 +301,7 @@ with **async**, **task groups**, and **channels**, not compete with them.
   parse errors.   Local VSIX packaging is in (`npm run vsix`, CI artifact).
   Marketplace CI publishes on `v*` tags (`VSCE_PAT`). Open VSX publish is
   fully wired (`publish-openvsx` + repository secret `OVSX_PAT`, publisher
-  `yona-lang`, extension 0.1.5); the job still no-ops if the secret is
+  `yona-lang`, extension 0.1.6); the job still no-ops if the secret is
   unset. Stdlib prereqs for a Yona `yls` landed 2026-08-21: recursive
   `Std\Json`, `Std\IO.readExact`, `Std\Utf16`. `yls-yona` uses
   `Std\Json.get` / `asString` / `asInt`. Remaining: Yona rewrite of `yls`

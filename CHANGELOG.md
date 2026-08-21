@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.6 (2026-08-21)
+
 ### Fixed
 - VS Code extension `npm test` compiles TypeScript first. `out/` is gitignored
   and `npm run lint` is `--noEmit`, so a clean clone (and CI) no longer fails
@@ -9,7 +11,8 @@
 - Windows `yls-yona` stdio smoke: `Std\IO.readExact` / `writeBytes` now
   `_setmode` CRT stdin/stdout to binary (same as C++ `yls`). Text-mode
   CRLF translation was swallowing `\r` so the server never saw
-  `\r\n\r\n` and exited before an LSP header.
+  `\r\n\r\n` and exited before an LSP header. Retag after v0.1.5 Release
+  died on that smoke before Marketplace / Open VSX / GitHub Release ran.
 - CMake `Collect test results` no longer exits 1 under `set -e` when no
   `doctest*.xml` exists (smoke failure used to hide the real error).
 

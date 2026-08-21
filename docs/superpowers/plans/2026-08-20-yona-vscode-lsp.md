@@ -222,7 +222,8 @@ slice (`initialize` / `didOpen` / `shutdown` / `exit`). C++ `yls` remains
 the editor default. Hover/definition still need `yona_lib` typed-core.
 **2026-08-21 (later):** Windows CI `smoke_yls_yona` failed because CRT
 stdin/stdout stayed in text mode; `readExact`/`writeBytes` now `_setmode`
-binary like C++ `yls`.
+binary like C++ `yls`. Shipped in **v0.1.6** so Marketplace / Open VSX /
+GitHub Release can run (v0.1.5 Release died on that smoke; tags stay put).
 
 ## Verification gate
 

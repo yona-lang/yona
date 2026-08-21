@@ -22,13 +22,13 @@ npm run vsix
 ```
 
 In VS Code or Cursor: **Extensions: Install from VSIX…** and pick
-`yona-<version>.vsix` (for example `yona-0.1.5.vsix`).
+`yona-<version>.vsix` (for example `yona-0.1.6.vsix`).
 
 `npm run package` is the same as `npm run vsix` (`vsce package`).
 
 ## Marketplace and Open VSX
 
-Pushing a version tag (`v*`, for example `v0.1.5`) runs the Release
+Pushing a version tag (`v*`, for example `v0.1.6`) runs the Release
 workflow. `vscode-vsix` builds the `.vsix`; `publish-marketplace` then
 runs `vsce publish --packagePath` with environment `VSCE_PAT` (never
 echoed, never committed). `publish-openvsx` runs
