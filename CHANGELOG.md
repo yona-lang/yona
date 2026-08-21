@@ -6,6 +6,12 @@
 - VS Code extension `npm test` compiles TypeScript first. `out/` is gitignored
   and `npm run lint` is `--noEmit`, so a clean clone (and CI) no longer fails
   with `Cannot find module …/out/test/run.js`.
+- Windows `yls-yona` stdio smoke: `Std\IO.readExact` / `writeBytes` now
+  `_setmode` CRT stdin/stdout to binary (same as C++ `yls`). Text-mode
+  CRLF translation was swallowing `\r` so the server never saw
+  `\r\n\r\n` and exited before an LSP header.
+- CMake `Collect test results` no longer exits 1 under `set -e` when no
+  `doctest*.xml` exists (smoke failure used to hide the real error).
 
 ## v0.1.5 (2026-08-21)
 

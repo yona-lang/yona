@@ -124,7 +124,9 @@ jobs:
           cp test-results.xml collected-results/
         fi
         for f in "out/build/${{ matrix.build_dir }}"/doctest*.xml; do
-          [ -f "$f" ] && cp "$f" collected-results/
+          if [ -f "$f" ]; then
+            cp "$f" collected-results/
+          fi
         done
 
     - name: Upload test results
@@ -142,7 +144,9 @@ jobs:
         PY="$(command -v python3 || command -v python)"
         files=()
         for f in collected-results/doctest*.xml collected-results/test-results.xml; do
-          [ -f "$f" ] && files+=("$f")
+          if [ -f "$f" ]; then
+            files+=("$f")
+          fi
         done
         if [ "${#files[@]}" -eq 0 ]; then
           echo "No JUnit XML to summarize" >> "$GITHUB_STEP_SUMMARY"

@@ -220,6 +220,9 @@ project and must preserve this server's protocol conformance suite.
 **2026-08-21:** `yls-yona` (`tools/yls/main.yona`) is a transport-only stdio
 slice (`initialize` / `didOpen` / `shutdown` / `exit`). C++ `yls` remains
 the editor default. Hover/definition still need `yona_lib` typed-core.
+**2026-08-21 (later):** Windows CI `smoke_yls_yona` failed because CRT
+stdin/stdout stayed in text mode; `readExact`/`writeBytes` now `_setmode`
+binary like C++ `yls`.
 
 ## Verification gate
 

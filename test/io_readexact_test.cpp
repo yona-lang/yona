@@ -20,6 +20,7 @@
 extern "C" {
 char* yona_Std_IO__readExactBytes(int64_t fd, int64_t n);
 int64_t yona_Std_IO__readExact(int64_t fd, int64_t n);
+void yona_Std_IO__writeBytes(int64_t fd, const char* s);
 int64_t yona_Std_String__length(const char* s);
 void yona_rt_rc_dec(void* ptr);
 }
@@ -108,6 +109,25 @@ TEST_CASE("readExact Result is Err on short EOF") {
     CHECK(adt[0] == 1);
     REQUIRE(pipe_close(fds[0]) == 0);
 }
+
+#if defined(_WIN32)
+TEST_CASE("readExact and writeBytes set CRT stdio to binary mode") {
+    int old_in = _setmode(0, _O_TEXT);
+    int old_out = _setmode(1, _O_TEXT);
+    REQUIRE(old_in != -1);
+    REQUIRE(old_out != -1);
+
+    char* z = yona_Std_IO__readExactBytes(0, 0);
+    CHECK(take_rc(z) == "");
+    CHECK(_setmode(0, _O_BINARY) == _O_BINARY);
+
+    yona_Std_IO__writeBytes(1, "");
+    CHECK(_setmode(1, _O_BINARY) == _O_BINARY);
+
+    _setmode(0, old_in);
+    _setmode(1, old_out);
+}
+#endif
 
 #if !defined(_WIN32)
 TEST_CASE("readExact works on a socketpair (not a seekable file)") {

@@ -305,7 +305,8 @@ with **async**, **task groups**, and **channels**, not compete with them.
   unset. Stdlib prereqs for a Yona `yls` landed 2026-08-21: recursive
   `Std\Json`, `Std\IO.readExact`, `Std\Utf16`. `yls-yona` uses
   `Std\Json.get` / `asString` / `asInt`. Remaining: Yona rewrite of `yls`
-  as the editor default.
+  as the editor default. Windows `yls-yona` stdio smoke (2026-08-21):
+  `readExact`/`writeBytes` now `_setmode` CRT 0/1/2 to binary.
 - [ ] **Documentation extraction / generation (think first, don't scrape).** Public Learn/Guides/Reference in `site/src/content/docs/` stay handwritten. `scripts/gendocs.py` is a regex walk of `lib/Std/*.yona` `##` comments and misses `.yonai`/C modules, types, effects, and exports. Design a compiler-aware extractor (`yonac --emit-docs` or successor) so API reference cannot drift from source; until then, keep `##` comments + handwritten site pages updated in the same change (see `keep-docs-up-to-date`).
 
 

@@ -56,12 +56,16 @@ extern       readExactBytes : Int -> Int -> String = "yona_Std_IO__readExactByte
 ## Read exactly `n` bytes from `fd` with stream `read` (not seek/`pread`).
 ## Safe on pipes and sockets — required for LSP `Content-Length` framing
 ## on stdin. `fd` may be a raw descriptor (`stdinFd`) or a `FileHandle`.
+## On Windows, a raw stdio fd (`0`/`1`/`2`) is switched to binary mode so
+## CRT text-mode CRLF translation cannot desync the frame.
 ##
 ## ```
 ## readExact stdinFd 16
 ## ```
 extern       readExact : Int -> Int -> Result      = "yona_Std_IO__readExact"
 ## Synchronous write (no Promise/await). Use for pipe-safe LSP framing.
+## On Windows, a raw stdio fd is switched to binary mode (same as
+## `readExact`) so `\r\n` headers stay byte-exact.
 extern       writeBytes : Int -> String -> ()      = "yona_Std_IO__writeBytes"
 extern       yona_Std_IO__isTty       : Int -> Bool             = "yona_Std_IO__isTty"
 extern       yona_Std_IO__flushFd     : Int -> Bool             = "yona_Std_IO__flushFd"

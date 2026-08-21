@@ -87,6 +87,8 @@ stdin (`yona -` or a pipe); a file script still inherits stdin.
 Read exactly `n` bytes from `fd` with stream `read` (not seek/`pread`).
 Safe on pipes and sockets — required for LSP `Content-Length` framing
 on stdin. `fd` may be a raw descriptor (`stdinFd`) or a `FileHandle`.
+On Windows, a raw stdio fd (`0`/`1`/`2`) is switched to binary mode so
+CRT text-mode CRLF translation cannot desync the frame.
 
 ```
 readExact stdinFd 16
@@ -113,3 +115,5 @@ Alias for `isTty`, following the libc spelling.
 ### `writeBytes : Int -> String -> ()`
 
 Synchronous write (no Promise/await). Use for pipe-safe LSP framing.
+On Windows, a raw stdio fd is switched to binary mode (same as
+`readExact`) so `\r\n` headers stay byte-exact.

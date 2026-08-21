@@ -19,7 +19,18 @@ def read_message(proc: subprocess.Popen[bytes]) -> dict:
     while b"\r\n\r\n" not in headers:
         chunk = proc.stdout.read(1)
         if not chunk:
-            raise SystemExit("yls-yona closed stdout before a complete LSP header")
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            err = b""
+            if proc.stderr:
+                err = proc.stderr.read()
+            detail = err.decode("utf-8", errors="replace").strip()
+            raise SystemExit(
+                "yls-yona closed stdout before a complete LSP header"
+                + (f": {detail}" if detail else "")
+            )
         headers += chunk
     header_text = headers.decode("ascii", errors="replace")
     length = None

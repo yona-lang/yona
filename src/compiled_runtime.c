@@ -2431,7 +2431,20 @@ char* yona_Std_IO__readStdin(void) {
 #define YONA_READ_EXACT_MAX (16u * 1024u * 1024u)
 #endif
 
+#if defined(_WIN32)
+/* Content-Length framing is byte-exact. CRT stdin/stdout default to text
+ * mode, so _read/_write translate CRLF and desync LSP headers (C++ yls
+ * already calls _setmode on cin/cout). */
+static void yona_io_win_stdio_binary(int64_t fd_or_handle) {
+    if (fd_or_handle >= 0 && fd_or_handle <= 2)
+        (void)_setmode((int)fd_or_handle, _O_BINARY);
+}
+#endif
+
 char* yona_Std_IO__readExactBytes(int64_t fd_or_handle, int64_t n) {
+#if defined(_WIN32)
+    yona_io_win_stdio_binary(fd_or_handle);
+#endif
     if (n <= 0 || (uint64_t)n > YONA_READ_EXACT_MAX) {
         char* r = (char*)yona_rt_rc_alloc_string_len(1, 0);
         r[0] = '\0';
@@ -2509,6 +2522,9 @@ int64_t yona_Std_IO__readExact(int64_t fd_or_handle, int64_t n) {
 void yona_Std_IO__writeBytes(int64_t fd_or_handle, const char* s) {
     if (!s)
         return;
+#if defined(_WIN32)
+    yona_io_win_stdio_binary(fd_or_handle);
+#endif
     int fd;
     if (fd_or_handle > 65536) {
         int64_t* handle = (int64_t*)(intptr_t)fd_or_handle;

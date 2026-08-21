@@ -63,6 +63,8 @@ JSON-RPC over stdio (`initialize`, `didOpen`, `shutdown`, `exit`) using
 definition still need the C++ `yls` binary, which remains the editor
 default. Build it with CMake target `yls-yona`; smoke:
 `python3 scripts/ci/smoke-yls-yona.py out/build/x64-debug-linux/yls-yona`.
+On Windows, `readExact` / `writeBytes` put CRT stdio in binary mode so
+`Content-Length` `\r\n` framing stays byte-exact.
 
 ## Grammar source of truth
 
