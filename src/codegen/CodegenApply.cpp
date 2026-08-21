@@ -319,6 +319,8 @@ TypedValue Codegen::codegen_adt_construct(const std::string& fn_name, const std:
         TypedValue result{node_ptr, CType::ADT};
         result.adt_type_name = info.type_name;
         result.subtypes = field_subtypes;
+        for (auto& a : all_args)
+            if (a.boxed_heap) { result.boxed_heap = true; break; }
         return result;
     } else {
         // Non-recursive: flat struct {i8, i64*max_arity}
@@ -338,6 +340,8 @@ TypedValue Codegen::codegen_adt_construct(const std::string& fn_name, const std:
         TypedValue result{val, CType::ADT};
         result.adt_type_name = info.type_name;
         result.subtypes = field_subtypes;
+        for (auto& a : all_args)
+            if (a.boxed_heap) { result.boxed_heap = true; break; }
         return result;
     }
 }
@@ -597,35 +601,11 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
             auto* func_ast = reparsed->functions[0];
             reparsed->functions.clear();
             imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-            auto saved_externs = imports_.extern_functions;
-            std::vector<std::string> scoped_cafs;
-            auto sep = mangled.rfind("__");
-            std::string module_prefix = (sep == std::string::npos) ? "" : mangled.substr(0, sep + 2);
-            if (!module_prefix.empty()) {
-                for (const auto& [dep_mangled, dep_meta] : imports_.meta) {
-                    if (dep_mangled.rfind(module_prefix, 0) != 0) continue;
-                    auto dep_sep = dep_mangled.rfind("__");
-                    if (dep_sep == std::string::npos) continue;
-                    std::string dep_name = dep_mangled.substr(dep_sep + 2);
-                    imports_.extern_functions.emplace(dep_name, dep_mangled);
-                    if (dep_meta.param_types.empty() &&
-                        compiled_functions_.find(dep_name) == compiled_functions_.end()) {
-                        auto* ret_ty = llvm_type(dep_meta.return_type);
-                        auto* fn_type = llvm::FunctionType::get(ret_ty, {}, false);
-                        auto* fn = module_->getFunction(dep_mangled);
-                        if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage,
-                                                       dep_mangled, module_.get());
-                        compiled_functions_[dep_name] =
-                            compiled_function_from_meta(fn, dep_meta, dep_meta.return_type);
-                        scoped_cafs.push_back(dep_name);
-                    }
-                }
-            }
+            GenfnNameIsolation iso(*this, mangled);
             int errors_before = error_count_;
             register_sibling_genfns(mangled);
             codegen_function_def(func_ast, fn_name);
             auto def_it2 = deferred_functions_.find(fn_name);
-            bool restore_externs = true;
             if (def_it2 != deferred_functions_.end()) {
                 compile_function(fn_name, def_it2->second, all_args);
                 auto cf_it2 = compiled_functions_.find(fn_name);
@@ -633,28 +613,26 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
                     imports_.imported_sources.erase(mangled);
                     compiled_functions_.erase(fn_name);
                     deferred_functions_.erase(fn_name);
+                    iso.restore();
                     // Fall through to the precompiled extern instead of a
                     // half-compiled GENFN body that could not resolve helpers.
                 } else if (cf_it2 != compiled_functions_.end()) {
-                    // Remove from extern so future calls use local copy
-                    imports_.extern_functions = std::move(saved_externs);
-                    for (const auto& scoped_caf : scoped_cafs)
-                        compiled_functions_.erase(scoped_caf);
+                    iso.restore();
                     imports_.extern_functions.erase(fn_name);
                     imports_.imported_sources.erase(mangled);
                     auto& cf2 = cf_it2->second;
                     size_t genfn_arity = cf2.param_types.size() - cf2.capture_names.size();
                     if (all_args.size() < genfn_arity)
                         return codegen_partial_apply(fn_name, cf2, all_args);
-                    std::vector<Value*> vals;
-                    for (auto& a : all_args) vals.push_back(a.val);
-                    return {builder_->CreateCall(cf2.fn, vals, "genfn_call"), cf2.return_type};
+                    // Same Perceus DUP / return-subtype path as a local call.
+                    // A raw CreateCall skipped rc_inc on reused named Json
+                    // values, so a second `get j key` saw a consumed object.
+                    return emit_direct_call(fn_name, cf2, all_args);
+                } else {
+                    iso.restore();
                 }
-            }
-            if (restore_externs) {
-                imports_.extern_functions = std::move(saved_externs);
-                for (const auto& scoped_caf : scoped_cafs)
-                    compiled_functions_.erase(scoped_caf);
+            } else {
+                iso.restore();
             }
         }
         // Fallthrough: if re-parse failed, call as extern
@@ -1023,12 +1001,26 @@ void Codegen::prepare_callee_owned_heap_args(const CompiledFunction& cf,
     // exactly once.
     for (size_t ai = 0; ai < all_args.size(); ai++) {
         CType ct = all_args[ai].type;
-        if (!is_heap_type(ct)) continue;
+        CType callee_ct = (ai < cf.param_types.size()) ? cf.param_types[ai] : ct;
+        // Result/Option payloads are typed INT in .yonai even when the
+        // bits are a heap ADT pointer (e.g. `Ok j` from `Std\Json.parse`).
+        // Honor the callee param type so a reused `j` is DUP'd.
+        if (!is_heap_type(ct) && is_heap_type(callee_ct))
+            ct = callee_ct;
         if (!all_args[ai].val || isa<Constant>(all_args[ai].val)) continue;
         if (all_args[ai].val->getType()->isStructTy()) continue;
         std::string named_as;
         for (auto& [k, v] : named_values_)
             if (v.val == all_args[ai].val) { named_as = k; break; }
+        if (!is_heap_type(ct) && all_args[ai].boxed_heap) {
+            if (named_as.empty()) continue;
+            int uses = current_fn_body_
+                ? count_identifier_refs(current_fn_body_, named_as) : 2;
+            if (uses > 1)
+                emit_rc_inc(all_args[ai].val, CType::ADT);
+            continue;
+        }
+        if (!is_heap_type(ct)) continue;
         if (named_as.empty()) continue;  // anonymous → transfer (no inc)
         // Borrow inference: if the callee borrows this param, no rc_inc
         // needed — the caller retains ownership and the callee only reads.

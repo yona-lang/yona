@@ -24,6 +24,7 @@ private:
     Json initialize(const Json& params);
     Json hover(const Json& params);
     Json definition(const Json& params);
+    Json document_highlight(const Json& params);
     Json references(const Json& params);
     Json completion(const Json& params);
     Json document_symbol(const Json& params);

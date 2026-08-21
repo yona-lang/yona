@@ -1,0 +1,4 @@
+try raise 42 catch
+    _ -> 99
+    _ -> 0
+end

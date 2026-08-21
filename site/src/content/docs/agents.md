@@ -35,6 +35,7 @@ Useful introspection flags:
 |------|--------|
 | `--emit-ir` | LLVM IR instead of an executable |
 | `--emit-obj` | object file only |
+| `--emit-typed-core` | resolved names, types, effects, linearity, and spans (no LLVM) |
 | `--emit-accelerator-report` | JSON report of GPU-lowered and explicit accelerator sites |
 | `--explain E0xxx` | full explanation of a diagnostic |
 | `-I path` | additional `.yonai` interface search paths |
@@ -77,4 +78,6 @@ Follow the [style guide](/learn/style/); the high-signal rules:
 The TextMate grammar used by this site is
 [`site/grammars/yona.tmLanguage.json`](https://github.com/yona-lang/yona/blob/master/site/grammars/yona.tmLanguage.json).
 The VS Code extension copies the same file into `editors/vscode/syntaxes/`.
-See [Editor and language server](/guides/editor/).
+See [Editor and language server](/guides/editor/). A future Yona `yls`
+can use `Std\IO.readExact`, `Std\Json`, and `Std\Utf16`; the shipped
+server is still the C++ `yls --stdio` binary.

@@ -33,8 +33,13 @@ environment and sibling binaries.
 - Syntax highlighting (shared grammar with the documentation site)
 - Comments, brackets, and `end`-aware indentation
 - Diagnostics from parse, type, refinement, and linearity checking
-- Hover types, go-to-definition, find references, rename (including function
-  parameters and other pattern bindings in the same file)
+- Hover, go-to-definition, highlight, and completion still work on a
+  prefix that parsed when the buffer is incomplete (`let answer = 42 in`,
+  a trailing operator, unfinished `do` / `if` / `case`). The squiggle
+  stays the original parse error; recovery does not replace it.
+- Hover types, go-to-definition (same file, imported names, and
+  `Module.fn` calls), find references, document highlight,
+  rename (imported names are renamed only in the current file)
 - Modules that start with `#` / `##` documentation are analyzed as modules
   (same rule as `yonac`)
 - Workspace folder roots are searched for modules; open buffers refresh when
@@ -52,6 +57,13 @@ yls --stdio
 
 Optional `-I path` adds a module search directory, matching `yonac -I`.
 
+A Yona-written transport slice, `yls-yona`, speaks `Content-Length`
+JSON-RPC over stdio (`initialize`, `didOpen`, `shutdown`, `exit`) using
+`Std\IO.readExact` / `writeBytes`, `Std\Json`, and `Std\Utf16`. Hover and
+definition still need the C++ `yls` binary, which remains the editor
+default. Build it with CMake target `yls-yona`; smoke:
+`python3 scripts/ci/smoke-yls-yona.py out/build/x64-debug-linux/yls-yona`.
+
 ## Grammar source of truth
 
 Edit `site/grammars/yona.tmLanguage.json`, then:
@@ -60,3 +72,37 @@ Edit `site/grammars/yona.tmLanguage.json`, then:
 ./scripts/sync-yona-grammar.sh
 ./scripts/check-yona-grammar.sh
 ```
+
+## Packaging and Marketplace
+
+Build a VSIX locally (no publisher token required):
+
+```bash
+cd editors/vscode
+npm ci
+npm test
+npm run vsix
+```
+
+Then **Extensions: Install from VSIX…** and choose `yona-<version>.vsix`.
+Pull requests and pushes to `master`/`main` also build that artifact
+(`vscode-extension` job in CMake Multi-Platform) and do not publish it.
+
+Release CI publishes the same VSIX to the Visual Studio Marketplace when a
+`v*` tag is pushed (Release workflow jobs `vscode-vsix` then
+`publish-marketplace`). `vsce publish --packagePath` reads `VSCE_PAT` from
+the environment. Open VSX (`publish-openvsx`) runs
+`ovsx publish --packagePath` for publisher `yona-lang` with repository
+secret `OVSX_PAT`. The job is still skipped if that secret is unset so
+the workflow stays green. The `yona-lang` namespace is claimed on
+[Open VSX](https://open-vsx.org/). Tag version must match
+`editors/vscode/package.json`.
+
+Manual publish (tokens in the environment, never committed):
+
+```bash
+npx vsce publish --packagePath yona-<version>.vsix
+npx ovsx publish --packagePath yona-<version>.vsix
+```
+
+See `editors/vscode/README.md`.

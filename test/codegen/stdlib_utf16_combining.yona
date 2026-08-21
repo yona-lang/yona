@@ -1,0 +1,3 @@
+import offsetToCharacter, positionToOffset from Std\Utf16 in
+let s = "e\u0301x" in
+(offsetToCharacter s 3, positionToOffset s 0 2)

@@ -1883,9 +1883,10 @@ int64_t yona_Std_String__chars(const char* s) {
 }
 
 const char* yona_Std_String__fromChars(int64_t* seq) {
-    int64_t len = seq[0];
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, (size_t)len + 1);
-    for (int64_t i = 0; i < len; i++) r[i] = (char)seq[i + 1];
+    int64_t len = yona_rt_seq_length(seq);
+    char* r = (char*)yona_rt_rc_alloc_string_len((size_t)len + 1, (size_t)len);
+    for (int64_t i = 0; i < len; i++)
+        r[i] = (char)yona_rt_seq_get(seq, i);
     r[len] = '\0';
     return r;
 }
@@ -2424,6 +2425,116 @@ char* yona_Std_IO__readStdin(void) {
     return r;
 }
 
+/* readExact: stream read() loop — pipe/socket safe (not pread/seek).
+ * `fd_or_handle` is a raw descriptor (stdin is 0) or a FileHandle ADT. */
+#ifndef YONA_READ_EXACT_MAX
+#define YONA_READ_EXACT_MAX (16u * 1024u * 1024u)
+#endif
+
+char* yona_Std_IO__readExactBytes(int64_t fd_or_handle, int64_t n) {
+    if (n <= 0 || (uint64_t)n > YONA_READ_EXACT_MAX) {
+        char* r = (char*)yona_rt_rc_alloc_string_len(1, 0);
+        r[0] = '\0';
+        return r;
+    }
+    int fd;
+    if (fd_or_handle > 65536) {
+        int64_t* handle = (int64_t*)(intptr_t)fd_or_handle;
+        /* Linear FileHandle is [tag, 1, heap, inner]; FileHandle is [tag, 1, 0, fd]. */
+        if (handle[1] == 1 && handle[2] != 0 && handle[3] > 65536) {
+            int64_t* inner = (int64_t*)(intptr_t)handle[3];
+            fd = (int)inner[3];
+        } else {
+            fd = (int)handle[3];
+        }
+    } else {
+        fd = (int)fd_or_handle;
+    }
+    size_t want = (size_t)n;
+    char* buf = (char*)malloc(want);
+    if (!buf) {
+        char* r = (char*)yona_rt_rc_alloc_string_len(1, 0);
+        r[0] = '\0';
+        return r;
+    }
+    size_t got = 0;
+    while (got < want) {
+#if defined(_WIN32)
+        int k = (int)_read(fd, buf + got, (unsigned)(want - got));
+#else
+        ssize_t k = read(fd, buf + got, want - got);
+#endif
+        if (k <= 0)
+            break;
+        got += (size_t)k;
+    }
+    char* r = (char*)yona_rt_rc_alloc_string_len(got + 1, got);
+    memcpy(r, buf, got);
+    r[got] = '\0';
+    free(buf);
+    return r;
+}
+
+/* Result Json/String-style ADT: Ok tag 0 | Err tag 1, one heap field. */
+static int64_t yona_io_result_ok_str(char* s) {
+    int64_t* adt = (int64_t*)rc_alloc(RC_TYPE_ADT, (ADT_HDR_SIZE + 1) * sizeof(int64_t));
+    adt[0] = 0;
+    adt[1] = 1;
+    adt[2] = 1;
+    adt[3] = (int64_t)(intptr_t)s;
+    return (int64_t)(intptr_t)adt;
+}
+
+static int64_t yona_io_result_err(const char* msg) {
+    int64_t* adt = (int64_t*)rc_alloc(RC_TYPE_ADT, (ADT_HDR_SIZE + 1) * sizeof(int64_t));
+    adt[0] = 1;
+    adt[1] = 1;
+    adt[2] = 1;
+    adt[3] = (int64_t)(intptr_t)yona_rt_copy_cstr(msg);
+    return (int64_t)(intptr_t)adt;
+}
+
+int64_t yona_Std_IO__readExact(int64_t fd_or_handle, int64_t n) {
+    if (n < 0)
+        return yona_io_result_err("negative count");
+    if ((uint64_t)n > YONA_READ_EXACT_MAX)
+        return yona_io_result_err("too large");
+    char* s = yona_Std_IO__readExactBytes(fd_or_handle, n);
+    if (yona_rt_string_length_fast(s) == n)
+        return yona_io_result_ok_str(s);
+    return yona_io_result_err("unexpected eof");
+}
+
+/* Synchronous write — no Promise. Safe for LSP Content-Length framing. */
+void yona_Std_IO__writeBytes(int64_t fd_or_handle, const char* s) {
+    if (!s)
+        return;
+    int fd;
+    if (fd_or_handle > 65536) {
+        int64_t* handle = (int64_t*)(intptr_t)fd_or_handle;
+        if (handle[1] == 1 && handle[2] != 0 && handle[3] > 65536) {
+            int64_t* inner = (int64_t*)(intptr_t)handle[3];
+            fd = (int)inner[3];
+        } else {
+            fd = (int)handle[3];
+        }
+    } else {
+        fd = (int)fd_or_handle;
+    }
+    size_t n = (size_t)yona_rt_string_length_fast(s);
+    size_t off = 0;
+    while (off < n) {
+#if defined(_WIN32)
+        int k = (int)_write(fd, s + off, (unsigned)(n - off));
+#else
+        ssize_t k = write(fd, s + off, n - off);
+#endif
+        if (k <= 0)
+            break;
+        off += (size_t)k;
+    }
+}
+
 /* ===== Std\Http — HTTP client ===== */
 
 /* Build an HTTP/1.1 request string */
@@ -2830,78 +2941,8 @@ const char* yona_Std_Format__format(const char* fmt, int64_t* args) {
     return r;
 }
 
-/* ===== Std\Json — minimal JSON parser/stringifier ===== */
-
-/* JSON value types as tagged tuples:
- *   (:json_null)
- *   (:json_bool, 0|1)
- *   (:json_int, i64)
- *   (:json_string, ptr)
- *   (:json_array, seq_ptr)    — seq of json values
- *   (:json_object, seq_ptr)   — seq of (key, value) pairs
- */
-
-/* Stringify a JSON-like structure to a string.
- * Takes a Yona value and produces a JSON string representation. */
-const char* yona_Std_Json__stringify(int64_t value) {
-    /* Simple: just convert the int to a string for now.
-     * Full JSON stringify requires recursive ADT traversal which needs
-     * the codegen to pass type info. For Phase 5, we provide basic
-     * int/string/bool/seq serialization. */
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, 32);
-    snprintf(r, 32, "%" PRId64, value);
-    return r;
-}
-
-const char* yona_Std_Json__stringifyString(const char* s) {
-    size_t len = strlen(s);
-    /* Worst case: every char needs escaping (\uXXXX = 6 chars) + quotes */
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, len * 6 + 3);
-    size_t j = 0;
-    r[j++] = '"';
-    for (size_t i = 0; i < len; i++) {
-        switch (s[i]) {
-            case '"':  r[j++] = '\\'; r[j++] = '"';  break;
-            case '\\': r[j++] = '\\'; r[j++] = '\\'; break;
-            case '\n': r[j++] = '\\'; r[j++] = 'n';  break;
-            case '\r': r[j++] = '\\'; r[j++] = 'r';  break;
-            case '\t': r[j++] = '\\'; r[j++] = 't';  break;
-            default:   r[j++] = s[i]; break;
-        }
-    }
-    r[j++] = '"';
-    r[j] = '\0';
-    return r;
-}
-
-const char* yona_Std_Json__stringifyBool(int64_t b) {
-    const char* src = b ? "true" : "false";
-    size_t len = strlen(src);
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, len + 1);
-    memcpy(r, src, len + 1);
-    return r;
-}
-
-const char* yona_Std_Json__stringifyFloat(double f) {
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, 64);
-    snprintf(r, 64, "%g", f);
-    return r;
-}
-
-const char* yona_Std_Json__null(void) {
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, 5);
-    memcpy(r, "null", 5);
-    return r;
-}
-
-/* Parse a JSON number from string. Returns the integer value. */
-int64_t yona_Std_Json__parseInt(const char* s) {
-    return (int64_t)atoll(s);
-}
-
-double yona_Std_Json__parseFloat(const char* s) {
-    return atof(s);
-}
+/* ===== Std\Json — recursive ADT parse/stringify (see runtime/json.c) ===== */
+#include "runtime/json.c"
 
 /* ===== Std\Crypto — hashing and random bytes ===== */
 
@@ -3346,3 +3387,6 @@ int64_t yona_Prelude__Array_String__get(int64_t arr, int64_t i) {
 
 /* Closures: partial application, env-passing convention */
 #include "runtime/closures.c"
+
+/* UTF-8 ↔ LSP UTF-16 positions (documented C ABI + Std\Utf16) */
+#include "runtime/utf16.c"

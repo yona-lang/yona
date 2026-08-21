@@ -1,7 +1,189 @@
-FN yona_Std_Json__stringify 1 INT -> STRING
+ADT FileHandle 1 1
+CTOR FileHandle 0 1 fields _0:INT
+ADT FileMode 4 0
+CTOR Read 0 0
+CTOR ReadWrite 2 0
+CTOR Write 1 0
+CTOR Append 3 0
+ADT Iterator 1 1 recursive
+CTOR Iterator 0 1 fields _0:FUNCTION:ADT:Option
+ADT Linear 1 1
+CTOR Linear 0 1 fields _0:INT
+ADT Option 2 1
+CTOR Some 0 1 fields _0:INT
+CTOR None 1 0
+ADT Result 2 1
+CTOR Ok 0 1 fields _0:INT
+CTOR Err 1 1 fields _0:INT
+ADT Type 18 1
+CTOR TSum 16 0
+CTOR TAdt 15 1 fields _0:STRING
+CTOR TInt 0 0
+CTOR TFloat 1 0
+CTOR TBool 2 0
+CTOR TString 3 0
+CTOR TSymbol 4 0
+CTOR TUnit 5 0
+CTOR TSeq 6 0
+CTOR TIntArray 13 0
+CTOR TSet 7 0
+CTOR TDict 8 0
+CTOR TFunction 10 0
+CTOR TTuple 9 0
+CTOR TPromise 11 0
+CTOR TByteArray 12 0
+CTOR TFloatArray 14 0
+CTOR TRecord 17 0
+ADT Whence 3 0
+CTOR SeekEnd 2 0
+CTOR SeekSet 0 0
+CTOR SeekCur 1 0
+TRAIT Closeable a 1
+  METHOD close
+TRAIT Show a 1
+  METHOD show
+TRAIT Eq a 1
+  METHOD eq
+TRAIT Ord a 1
+  METHOD compare
+TRAIT Hash a 1
+  METHOD hash
+TRAIT Array a 2
+  METHOD length
+  METHOD get
+INSTANCE Show Float
+  IMPL show yona_Prelude__Show_Float__show
+INSTANCE Closeable Int
+  IMPL close Closeable_Int__close
+INSTANCE Closeable FileHandle
+  IMPL close yona_Std_File__closeFileHandle
+INSTANCE Ord String
+  IMPL compare yona_Prelude__Ord_String__compare
+INSTANCE Eq Bool
+  IMPL eq yona_Prelude__Eq_Bool__eq
+INSTANCE Show Int
+  IMPL show yona_Prelude__Show_Int__show
+INSTANCE Show String
+  IMPL show yona_Prelude__Show_String__show
+INSTANCE Eq String
+  IMPL eq yona_Prelude__Eq_String__eq
+INSTANCE Show Bool
+  IMPL show yona_Prelude__Show_Bool__show
+INSTANCE Ord Bool
+  IMPL compare yona_Prelude__Ord_Bool__compare
+INSTANCE Show Symbol
+  IMPL show yona_Prelude__Show_Symbol__show
+INSTANCE Eq Int
+  IMPL eq yona_Prelude__Eq_Int__eq
+INSTANCE Array FloatArray
+  IMPL length yona_Prelude__Array_FloatArray__length
+  IMPL get yona_Prelude__Array_FloatArray__get
+INSTANCE Eq Float
+  IMPL eq yona_Prelude__Eq_Float__eq
+INSTANCE Eq Symbol
+  IMPL eq yona_Prelude__Eq_Symbol__eq
+INSTANCE Ord Int
+  IMPL compare yona_Prelude__Ord_Int__compare
+INSTANCE Ord Float
+  IMPL compare yona_Prelude__Ord_Float__compare
+INSTANCE Hash Int
+  IMPL hash yona_Prelude__Hash_Int__hash
+INSTANCE Hash Float
+  IMPL hash yona_Prelude__Hash_Float__hash
+INSTANCE Hash String
+  IMPL hash yona_Prelude__Hash_String__hash
+INSTANCE Hash Bool
+  IMPL hash yona_Prelude__Hash_Bool__hash
+INSTANCE Hash Symbol
+  IMPL hash yona_Prelude__Hash_Symbol__hash
+INSTANCE Array ByteArray
+  IMPL length yona_Prelude__Array_ByteArray__length
+  IMPL get yona_Prelude__Array_ByteArray__get
+INSTANCE Array IntArray
+  IMPL length yona_Prelude__Array_IntArray__length
+  IMPL get yona_Prelude__Array_IntArray__get
+INSTANCE Array Seq
+  IMPL length yona_Prelude__Array_Seq__length
+  IMPL get yona_Prelude__Array_Seq__get
+INSTANCE Array String
+  IMPL length yona_Prelude__Array_String__length
+  IMPL get yona_Prelude__Array_String__get
+ADT Json 7 0 recursive
+CTOR JsonNull 0 0
+CTOR JsonBool 1 1 fields _0:BOOL
+CTOR JsonInt 2 1 fields _0:INT
+CTOR JsonFloat 3 1 fields _0:FLOAT
+CTOR JsonString 4 1 fields _0:STRING
+CTOR JsonArray 5 1 fields _0:SEQ
+CTOR JsonObject 6 1 fields _0:SEQ
 FN yona_Std_Json__stringifyString 1 STRING -> STRING
 FN yona_Std_Json__stringifyBool 1 BOOL -> STRING
 FN yona_Std_Json__stringifyFloat 1 FLOAT -> STRING
 FN yona_Std_Json__null 0 -> STRING
 FN yona_Std_Json__parseInt 1 STRING -> INT
 FN yona_Std_Json__parseFloat 1 STRING -> FLOAT
+FN yona_Std_Json__parse 1 STRING -> ADT retadt Result
+FN yona_Std_Json__stringify 1 ADT -> STRING
+GENFN_BEGIN yona_Std_Json__getPair getPair
+getPair pairs key =
+    getPairAt pairs key 0 (length pairs)
+GENFN_END
+GENFN_BEGIN yona_Std_Json__getPairAt getPairAt
+getPairAt pairs key i n =
+    if i >= n then None
+    else
+        case get pairs i of
+            (k, v) -> if k == key then Some v else getPairAt pairs key (i + 1) n
+        end
+GENFN_END
+GENFN_BEGIN yona_Std_Json__get get
+get j key =
+    case j of
+        JsonObject pairs -> getPair pairs key
+        _ -> None
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_Json__asString asString
+asString j =
+    case j of
+        JsonString s -> Some s
+        _ -> None
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_Json__asInt asInt
+asInt j =
+    case j of
+        JsonInt n -> Some n
+        _ -> None
+    end
+GENFN_END
+FN yona_Prelude__Array_Seq__length 1 INT -> INT
+FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
+FN yona_Prelude__Hash_Int__hash 1 INT -> INT
+FN yona_Prelude__Show_String__show 1 STRING -> STRING
+FN yona_Prelude__Show_Int__show 1 INT -> STRING
+FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
+FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
+FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
+FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
+FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
+FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
+FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
+FN yona_Prelude__Hash_String__hash 1 STRING -> INT
+FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
+FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
+FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
+FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
+FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
+FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
+FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
+FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
+FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
+FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
+FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
+FN yona_Prelude__Array_IntArray__length 1 INT -> INT
+FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
+FN yona_Prelude__Array_String__length 1 STRING -> INT
+FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
+FN yona_Prelude__Array_String__get 2 STRING INT -> INT
+FN Closeable_Int__close 1 INT -> UNIT

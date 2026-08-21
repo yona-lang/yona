@@ -1197,26 +1197,65 @@ unique_ptr<ExprNode> ParserImpl::parse_try_expr() {
     skip_newlines();
 
     auto expr = parse_expr();
+    if (!expr) {
+        error(ParseError::Type::INVALID_SYNTAX, "Expected expression after 'try'");
+        return nullptr;
+    }
     skip_newlines();
 
-    vector<CatchExpr*> catches;
+    if (!match(TokenType::YCATCH)) {
+        error(ParseError::Type::MISSING_TOKEN, "Expected 'catch' after try body",
+              TokenType::YCATCH);
+        return nullptr;
+    }
+    skip_newlines();
 
-    while (match(TokenType::YCATCH)) {
+    vector<CatchPatternExpr*> patterns;
+    size_t last_pos = current_;
+    while (!check(TokenType::YEND) && !is_at_end()) {
         skip_newlines();
+        if (check(TokenType::YEND)) break;
+
+        // Spec form is one `catch` with many arms; also accept a repeated
+        // `catch` keyword between arms (`catch p -> e catch q -> f end`).
+        if (match(TokenType::YCATCH)) {
+            skip_newlines();
+            if (check(TokenType::YEND)) break;
+        }
+
         auto error_pattern = parse_pattern();
+        if (!error_pattern) {
+            error(ParseError::Type::INVALID_PATTERN, "Expected pattern in catch clause");
+            break;
+        }
         expect(TokenType::YARROW, "Expected '->' after catch pattern");
         auto handler = parse_expr();
+        if (!handler) {
+            error(ParseError::Type::INVALID_SYNTAX, "Expected expression after '->'");
+            break;
+        }
         skip_newlines();
 
         auto pwg = new PatternWithoutGuards(current_location(), handler.release());
         variant<PatternWithoutGuards*, vector<PatternWithGuards*>> var = pwg;
-        auto catch_pattern = new CatchPatternExpr(current_location(), error_pattern.release(), var);
-        vector<CatchPatternExpr*> patterns = {catch_pattern};
-        catches.push_back(new CatchExpr(current_location(), patterns));
+        patterns.push_back(new CatchPatternExpr(current_location(),
+                                               error_pattern.release(), var));
+
+        if (current_ == last_pos) {
+            advance();
+        }
+        last_pos = current_;
     }
 
-    CatchExpr* catch_expr = catches.empty() ? nullptr : catches[0];
-    return make_unique<TryCatchExpr>(loc, expr.release(), catch_expr);
+    if (patterns.empty()) {
+        error(ParseError::Type::INVALID_SYNTAX, "Expected catch clause after 'catch'");
+        return nullptr;
+    }
+
+    expect(TokenType::YEND, "Expected 'end' after try/catch");
+
+    return make_unique<TryCatchExpr>(loc, expr.release(),
+                                    new CatchExpr(loc, patterns));
 }
 
 unique_ptr<ExprNode> ParserImpl::parse_raise_expr(bool stop_at_in) {

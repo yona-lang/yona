@@ -1,72 +1,62 @@
 # Std.Json
 
-Json -- JSON serialization helpers.
+Recursive JSON values — object/array parse and stringify.
 
-Provides functions to convert Yona values to JSON string fragments
-and to parse JSON primitives. Useful for building JSON output or
-parsing simple JSON values.
+`parse` returns `Result Json String`. `stringify` emits compact JSON.
+`get` / `asString` / `asInt` work from expression programs (imported
+constructors can be pattern-matched). Scalar helpers
+(`stringifyString`, `parseInt`, …) stay available for fragments.
+`yls-yona` uses `parse` / `stringify` / `get` for JSON-RPC bodies.
+
+Parse and stringify run in the C runtime (recursive ADT walk).
+
+## Types
+
+### Json
+
+`type Json =`
+
+JSON value: null, bool, int, float, string, array, or object.
+Objects preserve member order as a sequence of `(key, value)` pairs.
 
 ## Functions
 
-### `stringify : Int -> String`
+### `parse : String -> Result`
 
-Convert an integer to its JSON string representation.
+Parse one JSON value. Trailing non-whitespace is an error.
 
-```yona
-import stringify from Std\Json in
-stringify 42   # => "42"
 ```
+parse "{\"id\":1}"   # => Ok (JsonObject [("id", JsonInt 1)])
+```
+
+### `stringify : Json -> String`
+
+Compact JSON text for `j`.
+
+```
+stringify (JsonInt 1)   # => "1"
+```
+
+### `get : String -> Int -> Int`
+
+Look up `key` in a JSON object. `None` if `j` is not an object or the key is missing.
+
+### `asString : a -> b`
+
+Unwrap a JSON string.
+
+### `asInt : a -> b`
+
+Unwrap a JSON integer.
 
 ### `stringifyString : String -> String`
 
-Convert a string to a JSON-quoted string with proper escaping.
-
-```yona
-import stringifyString from Std\Json in
-stringifyString "hello \"world\""   # => "\"hello \\\"world\\\"\""
-```
-
 ### `stringifyBool : Bool -> String`
-
-Convert a boolean to `"true"` or `"false"`.
-
-```yona
-import stringifyBool from Std\Json in
-stringifyBool true   # => "true"
-```
 
 ### `stringifyFloat : Float -> String`
 
-Convert a float to its JSON string representation.
-
-```yona
-import stringifyFloat from Std\Json in
-stringifyFloat 3.14   # => "3.14"
-```
-
 ### `null : String`
-
-Returns the JSON null literal string `"null"`.
-
-```yona
-import null from Std\Json in
-null   # => "null"
-```
 
 ### `parseInt : String -> Int`
 
-Parse a JSON integer string to an Int.
-
-```yona
-import parseInt from Std\Json in
-parseInt "42"   # => 42
-```
-
 ### `parseFloat : String -> Float`
-
-Parse a JSON float string to a Float.
-
-```yona
-import parseFloat from Std\Json in
-parseFloat "3.14"   # => 3.14
-```

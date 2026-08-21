@@ -1,0 +1,1 @@
+let x = try 1 catch _ -> 2 end in x

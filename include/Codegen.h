@@ -120,6 +120,10 @@ struct TypedValue {
     CType type = CType::INT;
     std::vector<CType> subtypes; // tuple: element types; SEQ/SET: {elem_type}; DICT: {key_type, val_type}
     std::string adt_type_name;   // For CType::ADT: the ADT type name (e.g., "Option")
+    /// True when `val` is a heap pointer stored as INT (Result/Option payload
+    /// from a C ABI, or a field loaded from a heap ADT). Reused call sites
+    /// must DUP even though `type` is not `CType::ADT`.
+    bool boxed_heap = false;
     std::vector<std::string> record_fields; // For CType::RECORD: sorted field names (index = tuple position)
     PromiseAwaitPath promise_await = PromiseAwaitPath::AsyncPtr;
 
@@ -766,6 +770,24 @@ private:
     void bind_imported_promise_cf(const std::string& logical_name, llvm::Function* fn,
                                    const ModuleFunctionMeta& meta);
     void register_trait_externs();
+    /// Restrict name lookup to the defining module while remonomorphizing a
+    /// GENFN. Importer aliases (`import length from Std\String`) must not
+    /// shadow Prelude Array `length`/`get` used by `Std\Json.getPair`.
+    struct GenfnNameIsolation {
+        Codegen& cg;
+        std::unordered_map<std::string, std::string> saved_externs;
+        std::unordered_map<std::string, CompiledFunction> hidden_cfs;
+        std::unordered_map<std::string, TypedValue> hidden_nvs;
+        std::vector<std::string> scoped_cafs;
+        bool restored = false;
+        /// `mangled` is taken by value: the constructor clears
+        /// `extern_functions`, so a reference into that map would dangle.
+        GenfnNameIsolation(Codegen& cg, std::string mangled);
+        void restore();
+        ~GenfnNameIsolation() { restore(); }
+        GenfnNameIsolation(const GenfnNameIsolation&) = delete;
+        GenfnNameIsolation& operator=(const GenfnNameIsolation&) = delete;
+    };
     /// Register same-module GENFN siblings as deferred functions so a
     /// remonomorphized export can call unexported helpers.
     void register_sibling_genfns(const std::string& mangled);

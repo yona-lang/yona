@@ -880,6 +880,57 @@ void Codegen::register_yona_module_decls(ast::ModuleDecl* mod) {
     }
 }
 
+Codegen::GenfnNameIsolation::GenfnNameIsolation(Codegen& cg, std::string mangled)
+    : cg(cg) {
+    saved_externs = cg.imports_.extern_functions;
+    cg.imports_.extern_functions.clear();
+    auto sep = mangled.rfind("__");
+    std::string module_prefix = (sep == std::string::npos) ? "" : mangled.substr(0, sep + 2);
+    if (!module_prefix.empty()) {
+        for (const auto& [dep_mangled, dep_meta] : cg.imports_.meta) {
+            if (dep_mangled.rfind(module_prefix, 0) != 0) continue;
+            auto dep_sep = dep_mangled.rfind("__");
+            if (dep_sep == std::string::npos) continue;
+            std::string dep_name = dep_mangled.substr(dep_sep + 2);
+            cg.imports_.extern_functions[dep_name] = dep_mangled;
+            if (dep_meta.param_types.empty() &&
+                cg.compiled_functions_.find(dep_name) == cg.compiled_functions_.end()) {
+                auto* ret_ty = cg.llvm_type(dep_meta.return_type);
+                auto* fn_type = llvm::FunctionType::get(ret_ty, {}, false);
+                auto* fn = cg.module_->getFunction(dep_mangled);
+                if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage,
+                                               dep_mangled, cg.module_.get());
+                cg.compiled_functions_[dep_name] =
+                    cg.compiled_function_from_meta(fn, dep_meta, dep_meta.return_type);
+                scoped_cafs.push_back(dep_name);
+            }
+        }
+    }
+    for (const auto& [name, _] : saved_externs) {
+        if (cg.imports_.extern_functions.count(name)) continue;
+        if (auto it = cg.compiled_functions_.find(name); it != cg.compiled_functions_.end()) {
+            hidden_cfs[name] = std::move(it->second);
+            cg.compiled_functions_.erase(it);
+        }
+        if (auto it = cg.named_values_.find(name); it != cg.named_values_.end()) {
+            hidden_nvs[name] = it->second;
+            cg.named_values_.erase(it);
+        }
+    }
+}
+
+void Codegen::GenfnNameIsolation::restore() {
+    if (restored) return;
+    restored = true;
+    for (const auto& scoped_caf : scoped_cafs)
+        cg.compiled_functions_.erase(scoped_caf);
+    for (auto& [name, cf] : hidden_cfs)
+        cg.compiled_functions_[name] = std::move(cf);
+    for (auto& [name, tv] : hidden_nvs)
+        cg.named_values_[name] = tv;
+    cg.imports_.extern_functions = std::move(saved_externs);
+}
+
 void Codegen::register_sibling_genfns(const std::string& mangled) {
     auto sep = mangled.rfind("__");
     if (sep == std::string::npos) return;
@@ -935,7 +986,7 @@ TypedValue Codegen::materialize_imported_function_value(const std::string& name)
     auto ext_it = imports_.extern_functions.find(name);
     if (ext_it == imports_.extern_functions.end())
         return {};
-    const std::string& mangled = ext_it->second;
+    const std::string mangled = ext_it->second;
 
     auto wrap_existing = [&](Function* fn, CType ret) -> TypedValue {
         if (!fn || !builder_ || !builder_->GetInsertBlock())
@@ -966,21 +1017,21 @@ TypedValue Codegen::materialize_imported_function_value(const std::string& name)
             auto* func_ast = reparsed->functions[0];
             reparsed->functions.clear();
             imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-            auto saved_externs = imports_.extern_functions;
+            GenfnNameIsolation iso(*this, mangled);
             register_sibling_genfns(mangled);
             codegen_function_def(func_ast, name);
             auto def_it = deferred_functions_.find(name);
             if (def_it != deferred_functions_.end()) {
                 compile_function(name, def_it->second, dummy_args);
                 auto cf2 = compiled_functions_.find(name);
-                imports_.extern_functions = std::move(saved_externs);
+                iso.restore();
                 if (cf2 != compiled_functions_.end() && cf2->second.fn &&
                     error_count_ == errors_before) {
                     imports_.extern_functions.erase(name);
                     return wrap_existing(cf2->second.fn, cf2->second.return_type);
                 }
             } else {
-                imports_.extern_functions = std::move(saved_externs);
+                iso.restore();
             }
         }
     }

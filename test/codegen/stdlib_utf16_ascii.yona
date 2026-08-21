@@ -1,0 +1,3 @@
+import offsetToLine, offsetToCharacter, positionToOffset from Std\Utf16 in
+let s = "ab\ncd" in
+(offsetToLine s 4, offsetToCharacter s 4, positionToOffset s 1 1)

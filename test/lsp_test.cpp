@@ -6,6 +6,8 @@
 #include "lsp/Utf16.h"
 
 #include <doctest/doctest.h>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <string>
 
@@ -381,4 +383,250 @@ TEST_CASE("Analysis explain code action uses the diagnostic range") {
             found = true;
     }
     CHECK(found);
+}
+
+static std::filesystem::path write_mod(const std::filesystem::path& dir, const std::string& rel,
+                                       const std::string& body) {
+    auto p = dir / rel;
+    std::filesystem::create_directories(p.parent_path());
+    std::ofstream o(p);
+    o << body;
+    return p;
+}
+
+TEST_CASE("Analysis definition follows import to the source module") {
+    auto dir = std::filesystem::temp_directory_path() / "yona_yls_import_def";
+    write_mod(dir, "Orig/Mod.yona", "module Orig\\Mod\nexport answer\nanswer = 42\n");
+    Analysis a;
+    a.set_module_paths({dir.string()});
+    const std::string src = "import answer from Orig\\Mod in answer";
+    a.analyze("file:///tmp/use.yona", src);
+    auto pos = offset_to_position(src, src.rfind("answer"));
+    auto defs = a.definition(pos);
+    REQUIRE(!defs.empty());
+    CHECK(defs[0].uri.find("Orig") != std::string::npos);
+    CHECK(defs[0].uri.find("Mod.yona") != std::string::npos);
+}
+
+TEST_CASE("Analysis definition follows FQN module call") {
+    auto dir = std::filesystem::temp_directory_path() / "yona_yls_fqn_def";
+    write_mod(dir, "Orig.yona", "module Orig\nexport answer\nanswer = 42\n");
+    Analysis a;
+    a.set_module_paths({dir.string()});
+    const std::string src = "Orig.answer";
+    a.analyze("file:///tmp/use.yona", src);
+    auto pos = offset_to_position(src, src.rfind("answer"));
+    auto defs = a.definition(pos);
+    REQUIRE(!defs.empty());
+    CHECK(defs[0].uri.find("Orig.yona") != std::string::npos);
+}
+
+TEST_CASE("Analysis definition follows FQN call in the defining module") {
+    auto dir = std::filesystem::temp_directory_path() / "yona_yls_self_fqn";
+    auto p = write_mod(dir, "Orig.yona",
+                       "module Orig\nexport answer\nanswer = 42\nuse = Orig.answer\n");
+    std::ifstream in(p);
+    std::string src((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    Analysis a;
+    a.set_module_paths({dir.string()});
+    a.analyze(file_uri(p.generic_string()), src);
+    auto pos = offset_to_position(src, src.rfind("answer"));
+    auto defs = a.definition(pos);
+    REQUIRE(!defs.empty());
+    CHECK(defs[0].uri == file_uri(p.generic_string()));
+    CHECK(defs[0].range.start.line == 2);
+}
+
+TEST_CASE("Analysis definition follows aliased module call") {
+    auto dir = std::filesystem::temp_directory_path() / "yona_yls_alias_fqn";
+    write_mod(dir, "Orig/Mod.yona", "module Orig\\Mod\nexport answer\nanswer = 42\n");
+    Analysis a;
+    a.set_module_paths({dir.string()});
+    const std::string src = "import Orig\\Mod as O in O.answer";
+    a.analyze("file:///tmp/use.yona", src);
+    auto pos = offset_to_position(src, src.rfind("answer"));
+    auto defs = a.definition(pos);
+    REQUIRE(!defs.empty());
+    CHECK(defs[0].uri.find("Orig") != std::string::npos);
+    CHECK(defs[0].uri.find("Mod.yona") != std::string::npos);
+}
+
+TEST_CASE("Analysis local binding shadows imported name") {
+    auto dir = std::filesystem::temp_directory_path() / "yona_yls_import_shadow";
+    write_mod(dir, "Orig/Mod.yona", "module Orig\\Mod\nexport answer\nanswer = 42\n");
+    Analysis a;
+    a.set_module_paths({dir.string()});
+    const std::string src = "import answer from Orig\\Mod in let answer = 1 in answer";
+    a.analyze("file:///tmp/use.yona", src);
+    auto pos = offset_to_position(src, src.rfind("answer"));
+    auto defs = a.definition(pos);
+    REQUIRE(!defs.empty());
+    CHECK(defs[0].uri == "file:///tmp/use.yona");
+    CHECK(defs[0].uri.find("Mod.yona") == std::string::npos);
+}
+
+TEST_CASE("Analysis document highlight marks local def and use") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src = "let answer = 42 in answer";
+    a.analyze("file:///tmp/t.yona", src);
+    auto hs = a.document_highlight(offset_to_position(src, src.rfind("answer")));
+    CHECK(hs.size() >= 2);
+    bool saw_write = false, saw_read = false;
+    for (const auto& h : hs) {
+        if (h.kind == 3)
+            saw_write = true;
+        if (h.kind == 2)
+            saw_read = true;
+    }
+    CHECK(saw_write);
+    CHECK(saw_read);
+}
+
+TEST_CASE("Analysis rename of an imported name does not edit the source module") {
+    auto dir = std::filesystem::temp_directory_path() / "yona_yls_import_rename";
+    write_mod(dir, "Orig/Mod.yona", "module Orig\\Mod\nexport answer\nanswer = 42\n");
+    Analysis a;
+    a.set_module_paths({dir.string()});
+    const std::string src = "import answer from Orig\\Mod in answer";
+    a.analyze("file:///tmp/use.yona", src);
+    Json edits;
+    auto old = a.rename(offset_to_position(src, src.rfind("answer")), "ans", edits);
+    REQUIRE(old);
+    CHECK(*old == "answer");
+    REQUIRE(edits.is_array());
+    for (const auto& file : edits.as_array()) {
+        auto uri = file.get("textDocument").get("uri").as_string();
+        CHECK(uri.find("Orig") == std::string::npos);
+        CHECK(uri.find("Mod.yona") == std::string::npos);
+    }
+}
+
+TEST_CASE("Server documentHighlight capability") {
+    Server srv;
+    RpcMessage init;
+    init.has_id = true;
+    init.id = 1;
+    init.method = "initialize";
+    init.params = Json::Object{};
+    auto cap = srv.handle(init);
+    CHECK(cap.get("capabilities").get("documentHighlightProvider").as_bool());
+}
+
+static bool has_completion_label(const std::vector<Json>& items, const std::string& label) {
+    for (const auto& it : items) {
+        if (it.get("label").as_string() == label)
+            return true;
+    }
+    return false;
+}
+
+static bool all_parse_diagnostics(const std::vector<LspDiagnostic>& diags) {
+    if (diags.empty())
+        return false;
+    for (const auto& d : diags) {
+        if (d.code != "E0301")
+            return false;
+    }
+    return true;
+}
+
+TEST_CASE("Analysis recovers hover from incomplete let body") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "let answer = 42 in");
+    CHECK(all_parse_diagnostics(a.diagnostics()));
+    auto hover = a.hover(Position{0, 5});
+    REQUIRE(hover);
+    CHECK(hover->contents.find("answer") != std::string::npos);
+}
+
+TEST_CASE("Analysis recovers hover after trailing binary op") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src = "let answer = 42 in answer +";
+    a.analyze("file:///tmp/t.yona", src);
+    CHECK(all_parse_diagnostics(a.diagnostics()));
+    auto hover = a.hover(offset_to_position(src, src.find("answer")));
+    REQUIRE(hover);
+    CHECK(hover->contents.find("answer") != std::string::npos);
+}
+
+TEST_CASE("Analysis recovers hover from incomplete if") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src = "let answer = 42 in if answer";
+    a.analyze("file:///tmp/t.yona", src);
+    CHECK(all_parse_diagnostics(a.diagnostics()));
+    auto hover = a.hover(offset_to_position(src, src.rfind("answer")));
+    REQUIRE(hover);
+    CHECK(hover->contents.find("answer") != std::string::npos);
+}
+
+TEST_CASE("Analysis recovers hover from incomplete do") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src = "do\n  let x = 1 in x";
+    a.analyze("file:///tmp/t.yona", src);
+    CHECK(all_parse_diagnostics(a.diagnostics()));
+    auto hover = a.hover(Position{1, 6});
+    REQUIRE(hover);
+    CHECK(hover->contents.find("x") != std::string::npos);
+}
+
+TEST_CASE("Analysis recovers hover from incomplete case") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src = "let answer = 42 in case answer of";
+    a.analyze("file:///tmp/t.yona", src);
+    CHECK(all_parse_diagnostics(a.diagnostics()));
+    auto hover = a.hover(offset_to_position(src, src.rfind("answer")));
+    REQUIRE(hover);
+    CHECK(hover->contents.find("answer") != std::string::npos);
+}
+
+TEST_CASE("Analysis recovery stays empty when nothing parses") {
+    Analysis a;
+    a.analyze("file:///tmp/t.yona", ")");
+    CHECK(has_parse_error(a.diagnostics()));
+    CHECK_FALSE(a.hover(Position{0, 0}));
+    CHECK(a.document_symbols().empty());
+    CHECK(a.definition(Position{0, 0}).empty());
+    CHECK(has_completion_label(a.completions(Position{0, 0}), "let"));
+}
+
+TEST_CASE("Analysis successful parse is unchanged by recovery") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/t.yona", "let answer = 42 in answer");
+    CHECK_FALSE(has_parse_error(a.diagnostics()));
+    auto hover = a.hover(Position{0, 5});
+    REQUIRE(hover);
+    CHECK(hover->contents.find("answer") != std::string::npos);
+    CHECK(has_completion_label(a.completions(Position{0, 0}), "answer"));
+}
+
+TEST_CASE("Analysis recovered prefix still defines highlights and completes") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src = "let answer = 42 in";
+    a.analyze("file:///tmp/t.yona", src);
+    CHECK(all_parse_diagnostics(a.diagnostics()));
+    auto defs = a.definition(Position{0, 5});
+    REQUIRE(!defs.empty());
+    auto hs = a.document_highlight(Position{0, 5});
+    CHECK(!hs.empty());
+    CHECK(has_completion_label(a.completions(Position{0, 18}), "answer"));
+    CHECK(has_completion_label(a.completions(Position{0, 18}), "let"));
+}
+
+TEST_CASE("Analysis recovers module incomplete function binding") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    const std::string src = "module Foo\nexport answer\nanswer = 1 +";
+    a.analyze("file:///tmp/Mod.yona", src);
+    CHECK(all_parse_diagnostics(a.diagnostics()));
+    auto hover = a.hover(offset_to_position(src, src.rfind("answer")));
+    REQUIRE(hover);
+    CHECK(hover->contents.find("answer") != std::string::npos);
 }

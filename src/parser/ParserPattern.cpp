@@ -206,38 +206,87 @@ unique_ptr<PatternNode> ParserImpl::parse_pattern_primary() {
 
     // Variable pattern or constructor pattern
     if (check(TokenType::YIDENTIFIER)) {
-        // Check for ADT constructor pattern (juxtaposition style, e.g., Some x)
+        // Capitalized names are constructors (prelude, same-module, or imported).
+        // Unknown arity (not yet in the registry) consumes primary patterns
+        // until a non-pattern token so `import … from Std\Json in case j of
+        // JsonObject pairs -> …` parses before codegen loads the .yonai.
         string peek_name(current().lexeme);
         if (!peek_name.empty() && isupper(peek_name[0])) {
             auto ctor_it = constructor_registry_.find(peek_name);
-            if (ctor_it != constructor_registry_.end()) {
-                advance(); // consume constructor name
-                // Named field pattern: Person { name = n, age = a }
-                if (check(TokenType::YLBRACE)) {
-                    advance(); // consume {
-                    vector<pair<NameExpr*, Pattern*>> named_fields;
-                    while (!check(TokenType::YRBRACE) && !is_at_end()) {
-                        skip_newlines();
-                        if (!check(TokenType::YIDENTIFIER)) break;
-                        string fname(advance().lexeme);
-                        expect(TokenType::YASSIGN, "Expected '=' after field name in pattern");
-                        auto pat = parse_pattern();
-                        if (pat) named_fields.push_back({new NameExpr(loc, fname), pat.release()});
-                        if (!match(TokenType::YCOMMA)) break;
-                        skip_newlines();
-                    }
-                    expect(TokenType::YRBRACE, "Expected '}' after named field pattern");
-                    return make_unique<RecordPattern>(loc, peek_name, named_fields);
+            advance(); // consume constructor name
+            // Named field pattern: Person { name = n, age = a }
+            if (check(TokenType::YLBRACE)) {
+                advance(); // consume {
+                vector<pair<NameExpr*, Pattern*>> named_fields;
+                while (!check(TokenType::YRBRACE) && !is_at_end()) {
+                    skip_newlines();
+                    if (!check(TokenType::YIDENTIFIER)) break;
+                    string fname(advance().lexeme);
+                    expect(TokenType::YASSIGN, "Expected '=' after field name in pattern");
+                    auto pat = parse_pattern();
+                    if (pat) named_fields.push_back({new NameExpr(loc, fname), pat.release()});
+                    if (!match(TokenType::YCOMMA)) break;
+                    skip_newlines();
                 }
-                // Positional pattern: Some x, Cons h t
-                int arity = ctor_it->second.arity;
+                expect(TokenType::YRBRACE, "Expected '}' after named field pattern");
+                return make_unique<RecordPattern>(loc, peek_name, named_fields);
+            }
+            // Parenthesized constructor: Person(x, y)
+            if (check(TokenType::YLPAREN)) {
+                advance(); // consume '('
                 vector<PatternNode*> sub_pats;
-                for (int j = 0; j < arity; j++) {
+                if (!check(TokenType::YRPAREN)) {
+                    do {
+                        if (check(TokenType::YIDENTIFIER) && peek(1).type == TokenType::YASSIGN) {
+                            advance(); // consume field name
+                            advance(); // consume '='
+                            auto pattern = parse_pattern();
+                            if (pattern)
+                                sub_pats.push_back(pattern.release());
+                        } else {
+                            auto pattern = parse_pattern();
+                            if (pattern)
+                                sub_pats.push_back(pattern.release());
+                        }
+                    } while (match(TokenType::YCOMMA));
+                }
+                expect(TokenType::YRPAREN, "Expected ')' after constructor pattern arguments");
+                return make_unique<ConstructorPattern>(loc, peek_name, sub_pats);
+            }
+            // Positional juxtaposition: Some x, Cons h t, JsonObject pairs
+            vector<PatternNode*> sub_pats;
+            auto pattern_start = [&]() {
+                if (is_at_end()) return false;
+                switch (current().type) {
+                case TokenType::YIDENTIFIER:
+                case TokenType::YUNDERSCORE:
+                case TokenType::YSYMBOL:
+                case TokenType::YINTEGER:
+                case TokenType::YBYTE:
+                case TokenType::YFLOAT:
+                case TokenType::YSTRING:
+                case TokenType::YLBRACKET:
+                case TokenType::YLPAREN:
+                case TokenType::YTRUE:
+                case TokenType::YFALSE:
+                    return true;
+                default:
+                    return false;
+                }
+            };
+            if (ctor_it != constructor_registry_.end()) {
+                for (int j = 0; j < ctor_it->second.arity; j++) {
                     auto sub = parse_pattern_primary();
                     if (sub) sub_pats.push_back(sub.release());
                 }
-                return make_unique<ConstructorPattern>(loc, peek_name, sub_pats);
+            } else {
+                while (pattern_start()) {
+                    auto sub = parse_pattern_primary();
+                    if (!sub) break;
+                    sub_pats.push_back(sub.release());
+                }
             }
+            return make_unique<ConstructorPattern>(loc, peek_name, sub_pats);
         }
 
         string name(advance().lexeme);

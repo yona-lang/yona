@@ -1,0 +1,10 @@
+import parse, JsonObject from Std\Json, fromChars from Std\String in
+let src = fromChars [123] ++ "\"method\":\"initialize\"" ++ fromChars [125] in
+case parse src of
+    Ok j ->
+        case j of
+            JsonObject _ -> "object"
+            _ -> "other"
+        end
+    Err e -> e
+end

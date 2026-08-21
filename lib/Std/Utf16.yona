@@ -1,0 +1,24 @@
+## UTF-8 byte offsets ↔ LSP UTF-16 positions.
+##
+## Matches the C++ `yls` mapper (`include/lsp/Utf16.h`): 0-based line,
+## UTF-16 code-unit column, CRLF as one line break, non-BMP scalars as
+## two units. The same functions are the documented C ABI in
+## `include/yona/runtime/utf16.h`.
+module Std\Utf16
+
+export offsetToLine, offsetToCharacter, positionToOffset
+
+## Line of the UTF-16 position for a UTF-8 byte offset.
+extern offsetToLine : String -> Int -> Int = "yona_utf8_offset_to_utf16_line"
+
+## Character (UTF-16 column) of the UTF-16 position for a UTF-8 byte offset.
+extern offsetToCharacter : String -> Int -> Int = "yona_utf8_offset_to_utf16_character"
+
+## UTF-8 byte offset for an LSP (line, character) position.
+##
+## ```
+## offsetToLine "ab\ncd" 4          # => 1
+## offsetToCharacter "ab\ncd" 4     # => 1
+## positionToOffset "ab\ncd" 1 1    # => 4
+## ```
+extern positionToOffset : String -> Int -> Int -> Int = "yona_utf16_position_to_utf8_offset"

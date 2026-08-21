@@ -1,0 +1,5 @@
+import parse, stringify from Std\Json in
+case parse "[1, \"x\", null, false]" of
+    Ok j -> stringify j
+    Err e -> e
+end

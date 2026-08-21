@@ -1,0 +1,77 @@
+## Recursive JSON values — object/array parse and stringify.
+##
+## `parse` returns `Result Json String`. `stringify` emits compact JSON.
+## `get` / `asString` / `asInt` work from expression programs (imported
+## constructors can be pattern-matched). Scalar helpers
+## (`stringifyString`, `parseInt`, …) stay available for fragments.
+## `yls-yona` uses `parse` / `stringify` / `get` for JSON-RPC bodies.
+##
+## Parse and stringify run in the C runtime (recursive ADT walk).
+module Std\Json
+
+export type Json
+export parse, stringify, get, asString, asInt
+export stringifyString, stringifyBool, stringifyFloat, null, parseInt, parseFloat
+
+## JSON value: null, bool, int, float, string, array, or object.
+## Objects preserve member order as a sequence of `(key, value)` pairs.
+type Json =
+    JsonNull
+  | JsonBool Bool
+  | JsonInt Int
+  | JsonFloat Float
+  | JsonString String
+  | JsonArray Seq
+  | JsonObject Seq
+
+## Parse one JSON value. Trailing non-whitespace is an error.
+##
+## ```
+## parse "{\"id\":1}"   # => Ok (JsonObject [("id", JsonInt 1)])
+## ```
+extern parse : String -> Result = "yona_Std_Json__parse"
+
+## Compact JSON text for `j`.
+##
+## ```
+## stringify (JsonInt 1)   # => "1"
+## ```
+extern stringify : Json -> String = "yona_Std_Json__stringify"
+
+extern stringifyString : String -> String = "yona_Std_Json__stringifyString"
+extern stringifyBool : Bool -> String = "yona_Std_Json__stringifyBool"
+extern stringifyFloat : Float -> String = "yona_Std_Json__stringifyFloat"
+extern null : String = "yona_Std_Json__null"
+extern parseInt : String -> Int = "yona_Std_Json__parseInt"
+extern parseFloat : String -> Float = "yona_Std_Json__parseFloat"
+
+## Look up `key` in a JSON object. `None` if `j` is not an object or the key is missing.
+get j key =
+    case j of
+        JsonObject pairs -> getPair pairs key
+        _ -> None
+    end
+
+getPair pairs key =
+    getPairAt pairs key 0 (length pairs)
+
+getPairAt pairs key i n =
+    if i >= n then None
+    else
+        case get pairs i of
+            (k, v) -> if k == key then Some v else getPairAt pairs key (i + 1) n
+        end
+
+## Unwrap a JSON string.
+asString j =
+    case j of
+        JsonString s -> Some s
+        _ -> None
+    end
+
+## Unwrap a JSON integer.
+asInt j =
+    case j of
+        JsonInt n -> Some n
+        _ -> None
+    end

@@ -1,0 +1,2 @@
+import stringify, JsonArray, JsonInt, JsonString, JsonNull, JsonBool from Std\Json in
+stringify (JsonArray [JsonInt 1, JsonString "x", JsonNull, JsonBool false])

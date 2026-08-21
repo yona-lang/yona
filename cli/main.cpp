@@ -11,6 +11,7 @@
 //   yonac -I lib main.yona            # compile with module search path
 //   yonac -Wall -Werror main.yona     # enable warnings, treat as errors
 //   yonac --explain E0100             # explain error code E0100
+//   yonac --emit-typed-core f.yona    # dump typed-core (no LLVM codegen)
 //   yonac --emit-accelerator-report f.yona -I lib  # JSON: Std\GPU + transparent sites
 //   yonac --no-accelerator-lowering f.yona         # keep host map/foldl closures
 //   yonac --strict-accelerator f.yona              # E0700 on unlowerable column lambdas
@@ -36,6 +37,7 @@
 #include "typechecker/LinearityChecker.h"
 #include "typechecker/RefinementChecker.h"
 #include "typechecker/TypeChecker.h"
+#include "typed_core/abi.h"
 #include "version.h"
 #include "yona_vulkan_link_cfg.h"
 #include <CLI/CLI.hpp>
@@ -228,6 +230,7 @@ int main(int argc, char *argv[]) {
   string output_file;
   bool emit_ir = false;
   bool emit_obj = false;
+  bool emit_typed_core = false;
   bool emit_accelerator_report = false;
   bool emit_accelerator_report_with_types = false;
   bool no_accelerator_lowering = false;
@@ -252,6 +255,9 @@ int main(int argc, char *argv[]) {
   app.add_option("-O", opt_level, "Optimization level (0-3, default 2)")->check(CLI::Range(0, 3));
   app.add_flag("--emit-ir", emit_ir, "Print LLVM IR instead of compiling");
   app.add_flag("--emit-obj", emit_obj, "Emit object file only (don't link)");
+  app.add_flag("--emit-typed-core", emit_typed_core,
+               "Print a typed-core dump (resolved names, types, effects, "
+               "linearity, spans) and exit without LLVM codegen");
   app.add_flag("--emit-accelerator-report", emit_accelerator_report,
                "Print JSON of Std\\GPU-shaped call sites and exit (no codegen): "
                "expression programs after typecheck; modules from AST scan by default");
@@ -273,6 +279,18 @@ int main(int argc, char *argv[]) {
 
   CLI11_PARSE(app, argc, argv);
 
+  if (emit_typed_core && emit_ir) {
+    cerr << "Error: --emit-typed-core cannot be combined with --emit-ir" << endl;
+    return 1;
+  }
+  if (emit_typed_core && emit_obj) {
+    cerr << "Error: --emit-typed-core cannot be combined with --emit-obj" << endl;
+    return 1;
+  }
+  if (emit_typed_core && emit_accelerator_report) {
+    cerr << "Error: --emit-typed-core cannot be combined with --emit-accelerator-report" << endl;
+    return 1;
+  }
   if (emit_accelerator_report && emit_ir) {
     cerr << "Error: --emit-accelerator-report cannot be combined with --emit-ir" << endl;
     return 1;
@@ -440,6 +458,26 @@ int main(int argc, char *argv[]) {
       add_module_path(c);
       break;
     }
+  }
+
+  if (emit_typed_core) {
+    vector<const char *> tc_paths;
+    tc_paths.reserve(codegen.module_paths_.size());
+    for (const auto &p : codegen.module_paths_)
+      tc_paths.push_back(p.c_str());
+    YonaTcModule *tc = yona_tc_analyze(source.c_str(), filename.c_str(),
+                                       tc_paths.empty() ? nullptr : tc_paths.data(), tc_paths.size());
+    if (!tc) {
+      cerr << "Error: typed-core analysis failed" << endl;
+      return 1;
+    }
+    char *text = yona_tc_pretty_print(tc);
+    if (text) {
+      cout << text;
+      yona_tc_string_free(text);
+    }
+    yona_tc_module_free(tc);
+    return 0;
   }
 
   llvm::Module *llvm_mod = nullptr;

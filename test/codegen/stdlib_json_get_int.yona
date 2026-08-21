@@ -1,0 +1,14 @@
+import parse, get as jsonGet, asInt from Std\Json, fromChars from Std\String in
+let src = fromChars [123] ++ "\"id\":7" ++ fromChars [125] in
+case parse src of
+    Ok j ->
+        case jsonGet j "id" of
+            Some v ->
+                case asInt v of
+                    Some n -> n
+                    None -> -1
+                end
+            None -> -2
+        end
+    Err e -> e
+end

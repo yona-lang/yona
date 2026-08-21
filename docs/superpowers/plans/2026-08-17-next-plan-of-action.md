@@ -264,14 +264,16 @@ Dedicated plan:
 
 ## Phase 4 — GitHub #7 architecture + thin typed-core slice
 
+**Status (2026-08-21):** thin slice landed on `feature/typed-core-abi`.
+
 **Prerequisite:** Phase 1 done; Phase 2 strongly preferred so effect facts exist.
 
 **Goal:** Versioned in-process C++ API (no LLVM headers in the consumer) + example backend that dumps resolved names/types/effects/linearity/spans.
 
 **Order inside this phase:**
-1. Architecture doc (ownership, versioning, compatibility) — closes first #7 checkbox
-2. Minimal traverse + textual summary example
-3. Producer/consumer tests for functions, ADTs, match, effects, generics, imports
+1. [x] Architecture doc (ownership, versioning, compatibility) — `docs/typed-core.md`
+2. [x] Minimal traverse + textual summary example — `src/typed_core/PrettyPrint.c` + `yonac --emit-typed-core`
+3. [x] Producer/consumer tests for functions, ADTs, match, effects, generics, imports — `test/typed_core_abi_test.cpp`
 
 **Defer:** wire format serialization.
 

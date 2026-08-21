@@ -1,0 +1,6 @@
+import parse, stringify from Std\Json, fromChars from Std\String in
+let src = fromChars [123] ++ "\"id\":1,\"method\":\"initialize\",\"ok\":true" ++ fromChars [125] in
+case parse src of
+    Ok j -> stringify j
+    Err e -> e
+end

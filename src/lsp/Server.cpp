@@ -114,6 +114,7 @@ Json Server::initialize(const Json& params) {
     caps["textDocumentSync"] = 1;
     caps["hoverProvider"] = true;
     caps["definitionProvider"] = true;
+    caps["documentHighlightProvider"] = true;
     caps["referencesProvider"] = true;
     caps["completionProvider"] = Json::Object{{"triggerCharacters", Json::Array{Json(".")}}};
     caps["documentSymbolProvider"] = true;
@@ -149,9 +150,21 @@ Json Server::hover(const Json& params) {
 Json Server::definition(const Json& params) {
     auto uri = params.get("textDocument").get("uri").as_string();
     Json::Array locs;
-    for (const auto& r : doc(uri).definition(pos_of(params)))
-        locs.push_back(loc_json(uri, r));
+    for (const auto& loc : doc(uri).definition(pos_of(params)))
+        locs.push_back(loc_json(loc.uri.empty() ? uri : loc.uri, loc.range));
     return locs;
+}
+
+Json Server::document_highlight(const Json& params) {
+    auto uri = params.get("textDocument").get("uri").as_string();
+    Json::Array items;
+    for (const auto& h : doc(uri).document_highlight(pos_of(params))) {
+        Json it;
+        it["range"] = range_json(h.range);
+        it["kind"] = h.kind;
+        items.push_back(std::move(it));
+    }
+    return items;
 }
 
 Json Server::references(const Json& params) {
@@ -282,6 +295,8 @@ Json Server::handle(const RpcMessage& msg) {
         return hover(msg.params);
     if (msg.method == "textDocument/definition")
         return definition(msg.params);
+    if (msg.method == "textDocument/documentHighlight")
+        return document_highlight(msg.params);
     if (msg.method == "textDocument/references")
         return references(msg.params);
     if (msg.method == "textDocument/completion")

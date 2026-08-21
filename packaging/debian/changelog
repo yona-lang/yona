@@ -1,3 +1,10 @@
+yona (0.1.5-1) noble; urgency=medium
+
+  * New upstream v0.1.5: GENFN isolation keeps sibling Stream.range
+    visible to naturals; importer String.length still hidden from Json.get.
+
+ -- Adam Kovari <adam@kovari.eu>  Fri, 21 Aug 2026 12:00:00 +0000
+
 yona (0.1.4-1) noble; urgency=medium
 
   * New upstream v0.1.4: let-if-else no longer consumes closing in as

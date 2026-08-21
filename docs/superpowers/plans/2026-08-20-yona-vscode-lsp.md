@@ -10,8 +10,24 @@ pattern bindings; JSON `\u` + surrogates; workspace roots +
 `didChangeWatchedFiles`; signature-help look-behind; Windows binary stdio;
 Codegen reused across `didChange`. Follow-up: LSP ranges are end-exclusive
 (`Range::contains` / `overlaps`); `yonac` and `yls` share
-`include/ModuleSource.h`. Marketplace publish and a Yona-written server
-remain later work.
+`include/ModuleSource.h`. Cross-file definition for imports and FQN calls,
+document highlight, and import-rename staying in the current buffer
+(2026-08-21). Incremental / partial AST recovery on parse failure
+(2026-08-21): hover, definition, highlight, and completion walk a recovered
+prefix (` 0`, ` in 0`, ` end`, ` then 0 else 0`, truncate last token/line)
+while published diagnostics stay the original parse errors. `IfExpr`
+construction is null-safe so incomplete `if` no longer SIGSEGV. `try`/`catch`
+consumes closing `end` (2026-08-21). Typed-core C ABI + `yonac --emit-typed-core`
+  (2026-08-21). Local VSIX packaging (`npm run vsix`, CI artifact, no tokens)
+  (2026-08-21). Marketplace CI publish on `v*` tags via `VSCE_PAT`
+  (2026-08-21). Open VSX publish is fully wired (`OVSX_PAT` is set;
+  `publish-openvsx` still skips if the secret is unset). A Yona-written
+  editor-default server remains later work. `yls-yona` now uses
+  `Std\Json.get` / `asString` / `asInt` (2026-08-21). GENFN remonomorphization
+  isolates importer names so `import length from Std\String` cannot shadow
+  `Std\Json.getPair`'s Prelude Array `length` (2026-08-21). Isolation
+  copies the GENFN mangled name before clearing that map so sibling
+  functions (`Std\Stream.range` from `naturals`) stay visible (2026-08-21).
 
 **Goal:** Ship a production-quality VS Code/Cursor extension and C++ `yls`
 language server covering Yona syntax and semantics, while evolving the
@@ -98,8 +114,8 @@ analysis, semantic indexing, or request dispatch.
 - [x] Fix zero-arity `perform Op ()` argument counting (landed on master).
 - [x] Fix recursive-function effect-row rest inference (landed on master).
 - [x] Fix GENFN calls to same-module plain-FN siblings (landed on master).
-- [ ] Fix `try`/`catch` closing-`end` consumption and reject trailing tokens
-  (not an `yls` v1 gate).
+- [x] Fix `try`/`catch` closing-`end` consumption and reject trailing tokens
+  (not an `yls` v1 gate; landed 2026-08-21).
 - [ ] Full `ctest` 360/360 — not a gate for `yls` v1 (pre-existing failures).
 
 ## Phase 1: Syntax extension
@@ -128,8 +144,9 @@ analysis, semantic indexing, or request dispatch.
   paths, parser, `TypeChecker`, `RefinementChecker`, and `LinearityChecker`.
 - [x] `yls` calls `check_module` and the two overlays `yonac` skips.
 - [x] Structured diagnostics via `publishDiagnostics` (stdout is JSON-RPC only).
-- [ ] Incremental / partial AST on expression parse failure (v1: parse
-  diagnostics only; hover/completion empty until the buffer parses).
+- [x] Incremental / partial AST on expression parse failure (2026-08-21):
+  keep original parse diagnostics; recover a walkable AST via suffixes and
+  truncation so hover/definition/highlight/completion work on the prefix.
 
 ### Server deliverables
 
@@ -147,9 +164,9 @@ analysis, semantic indexing, or request dispatch.
   + `pretty_print`). No symbol-doc comments yet.
 - [x] Hover, definition, references, rename (same-file name match).
 - [x] Document symbols and workspace symbols.
-- [ ] Cross-file import / `.yonai` use→def (v1 uses local names + FQN call
-  occurrences).
-- [ ] Cross-file rename safety and document highlight.
+- [x] Cross-file import / `.yonai` use→def (imports and FQN calls).
+- [x] Cross-file rename safety (imported names stay in the current file)
+  and document highlight.
 
 This semantic model is the first real consumer and implementation slice of
 typed-core issue #7. Its public API must not expose parser-private ownership or
@@ -176,21 +193,33 @@ LLVM types.
   (`scripts/ci/smoke-yls.py` after the matrix build).
 - [x] Grammar drift check on Linux CI.
 - [x] Site Tools page, CLI/`install` docs, changelog, todo-list, design spec.
-- [x] Tooling LSP item marked done for v1; Marketplace publish is later.
+- [x] Tooling LSP item marked done for v1; Marketplace CI publish is on
+  `v*` tags (`VSCE_PAT`). Open VSX publish is fully wired (`OVSX_PAT`).
+- [x] Local VSIX packaging: `package` / `vsix` scripts, README install-from-vsix,
+  LICENSE, CI `vscode-extension` job (artifact only). Human still publishes.
+- [x] Marketplace CI publish on Release `v*` tags (`publish-marketplace` +
+  `VSCE_PAT`). Open VSX (`ovsx publish --packagePath`) is wired with
+  `OVSX_PAT` and still skips if that secret is unset (2026-08-21).
 
 ## Deferred Yona-written server prerequisites
 
-- [ ] Implement the planned recursive `Std\Json.Json` ADT with object/array
-  parse and stringify support.
-- [ ] Add pipe-safe `Std\IO.readExact(fd, n)` using stream `read`, not
-  seek-based `File.readBytes`/`pread`.
-- [ ] Expose UTF-8 to UTF-16 offset conversion.
-- [ ] Expose typed-core through a stable C ABI or separately versioned wire
-  format.
-- [ ] Add `Std\Process.getArgs`.
+- [x] Implement the planned recursive `Std\Json.Json` ADT with object/array
+  parse and stringify support. (`lib/Std/Json.yona` + C ABI
+  `include/yona/runtime/json.h`, 2026-08-21)
+- [x] Add pipe-safe `Std\IO.readExact(fd, n)` using stream `read`, not
+  seek-based `File.readBytes`/`pread`. (`yona_Std_IO__readExact`, 2026-08-21)
+- [x] Expose UTF-8 to UTF-16 offset conversion. (`Std\Utf16` +
+  `include/yona/runtime/utf16.h`, 2026-08-21)
+- [x] Expose typed-core through a stable C ABI (`include/typed_core/abi.h`,
+  2026-08-21). Separately versioned wire format remains deferred.
+- [x] Add `Std\Process.getArgs`.
 
 File watching can remain editor-driven. A Yona server rewrite is a separate
 project and must preserve this server's protocol conformance suite.
+
+**2026-08-21:** `yls-yona` (`tools/yls/main.yona`) is a transport-only stdio
+slice (`initialize` / `didOpen` / `shutdown` / `exit`). C++ `yls` remains
+the editor default. Hover/definition still need `yona_lib` typed-core.
 
 ## Verification gate
 
@@ -199,8 +228,8 @@ project and must preserve this server's protocol conformance suite.
 - [x] `./out/build/x64-debug-linux/tests` — 391/391 passed (2026-08-20, after
   rebase onto `a9b57ba`).
 - [x] Focused `yls` unit and subprocess protocol tests pass
-  (`--source-file='*lsp_test.cpp'` 27/27 after exclusive-end + shared
-  `is_module_source`; `scripts/ci/smoke-yls.py`).
+  (`--source-file='*lsp_test.cpp'` 41/41 after parse recovery;
+  `scripts/ci/smoke-yls.py`).
 - [x] Extension compile, lint, and unit tests pass (`editors/vscode`).
 - [ ] `./scripts/format.sh` — `clang-format` not installed on this host.
 - [x] IDE diagnostics report no newly introduced errors.

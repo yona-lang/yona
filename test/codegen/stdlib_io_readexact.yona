@@ -1,0 +1,9 @@
+import writeFile, openFile, closeFileHandle, Read from Std\File, readExact, readExactBytes, stdinFd from Std\IO, isOk from Std\Result in
+do
+    wrote = writeFile "/tmp/yona_readexact_prereq.txt" "frame!"
+    h = openFile "/tmp/yona_readexact_prereq.txt" Read
+    bytes = readExactBytes h 6
+    closed = closeFileHandle h
+    emptyOk = isOk (readExact stdinFd 0)
+    if emptyOk then bytes else "not-ok"
+end

@@ -1,0 +1,5 @@
+import asString, JsonString from Std\Json in
+case asString (JsonString "hello") of
+    Some s -> s
+    None -> "none"
+end

@@ -17,9 +17,13 @@ the same way `yonac` does.
 
 ## Features
 
-Diagnostics, hover, definition, references, completion, document/workspace
-symbols, semantic tokens, rename, signature help, inlay hints, call
-hierarchy (prepare), and explain-code-action.
+Diagnostics, hover, definition (imports and `Module.fn` calls resolve to
+the source `.yona` / `.yonai`), references, document highlight, completion,
+document/workspace symbols, semantic tokens, rename (imported names stay
+in the current file), signature help, inlay hints, call hierarchy
+(prepare), and explain-code-action. On parse failure, published diagnostics
+stay the original parse errors; hover, definition, highlight, and
+completion walk a recovered prefix when one exists.
 
 ## Grammar
 

@@ -1,0 +1,14 @@
+import parse, get as jsonGet, asString from Std\Json, fromChars from Std\String in
+let src = fromChars [123] ++ "\"method\":\"initialize\"" ++ fromChars [125] in
+case parse src of
+    Ok j ->
+        case jsonGet j "method" of
+            Some v ->
+                case asString v of
+                    Some s -> s
+                    None -> "not-string"
+                end
+            None -> "missing"
+        end
+    Err e -> e
+end

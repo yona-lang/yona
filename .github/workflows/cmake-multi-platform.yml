@@ -57,6 +57,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
 
     - name: Check TextMate grammar sync
       if: runner.os == 'Linux'
@@ -81,6 +83,17 @@ jobs:
           YLS="${YLS}.exe"
         fi
         "$PY" scripts/ci/smoke-yls.py "$YLS"
+
+    - name: Smoke yls-yona
+      if: success()
+      shell: bash
+      run: |
+        PY="$(command -v python3 || command -v python)"
+        YLSY="out/build/${{ matrix.build_dir }}/yls-yona"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          YLSY="${YLSY}.exe"
+        fi
+        "$PY" scripts/ci/smoke-yls-yona.py "$YLSY"
 
     - name: Report embedded LLD
       if: success()
@@ -154,6 +167,8 @@ jobs:
     if: always()
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
 
     - name: Download all test results
       uses: actions/download-artifact@v4
@@ -181,3 +196,36 @@ jobs:
           exit 0
         fi
         python3 scripts/ci/summarize-junit.py --table "${files[@]}"
+
+  # Package only. Marketplace / Open VSX publish lives in release.yml (v* tags).
+  vscode-extension:
+    name: VS Code extension
+    runs-on: ubuntu-26.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Check TextMate grammar sync
+      run: ./scripts/check-yona-grammar.sh
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+        cache: npm
+        cache-dependency-path: editors/vscode/package-lock.json
+
+    - name: Test and package VSIX
+      working-directory: editors/vscode
+      run: |
+        npm ci
+        npm run lint
+        npm test
+        npm run vsix
+
+    - name: Upload VSIX
+      uses: actions/upload-artifact@v4
+      with:
+        name: yona-vscode-vsix
+        path: editors/vscode/*.vsix
+        if-no-files-found: error

@@ -2,13 +2,13 @@
 
 ## Bugs (open)
 
-None currently tracked here. The `in` terminator vs membership parse cluster
-(`nested_let`, `perform`/`handle` RHS, `stdlib_math`) is fixed — `stop_at_in`
-is now threaded through `let`, `perform` args, `raise`, and `with` the same
-way as `if`/`lambda`.
+The `in` terminator vs membership parse cluster (`nested_let`, `perform`/
+`handle` RHS, `stdlib_math`) is fixed — `stop_at_in` is now threaded through
+`let`, `perform` args, `raise`, and `with` the same way as `if`/`lambda`.
 
 Fixed Phase 0 / platform / import-`LINEAR` / LinearityChecker `WithExpr` +
-`FunctionExpr` walk bugs are archived under Completed Milestones.
+`FunctionExpr` walk bugs, plus the 2026-08-21 `Std\Json.get` / nested-`try`
+fixes, are archived under Completed Milestones.
 
 ## Current Snapshot
 
@@ -81,7 +81,7 @@ already works.
 - [x] **[#8](https://github.com/yona-lang/yona/issues/79) Effect-row inference +** `.yonai` **propagation** — after #3. **Landed 2026-08-19:** closed sets + E0202; unify of effect rows; HOF rest vars; apply-union / wrap; handler subtraction; pretty-print `!{…}`; `.yonai` `FN … effects Fs.read`. **Follow-ups landed same day:** open HOF rest (`effects | hof`, `Effect: imported HOF open rest from .yonai is E0202`, `Interface files preserve exported HOF open rest`); sibling-aware module typecheck (`Interface files preserve sibling-wrapped FN effect rows`, wrap-before-sibling). HOF restore is the `apply f x = f x` shape (first param is the function). Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
 - [ ] **[#6](https://github.com/yona-lang/yona/issues/77) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
 - [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
-- [ ] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; full API after #8. Versioned in-process C++ API (no LLVM headers in the consumer). Defer wire format. **Seed landed 2026-08-20:** `include/typed_core/Query.h` + `yls` Analysis (first consumer). Still missing: example non-LLVM backend, versioned C ABI, `--emit-typed-core`.
+- [x] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; thin slice after #8. Versioned in-process C++ query types + C ABI (no LLVM headers in the consumer). Defer wire format. **Seed 2026-08-20:** `include/typed_core/Query.h` + `yls`. **2026-08-21:** `include/typed_core/abi.h` (`YONA_TYPED_CORE_ABI_VERSION`), example pretty-print backend, `yonac --emit-typed-core`, `docs/typed-core.md`.
 - [ ] **[#4](https://github.com/yona-lang/yona/issues/75) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
 - [ ] **`Linear FileHandle` (and other resources) for real** — today `.yonai`
   marks `openFile` / `spawn` / sockets / channel ends as bare `LINEAR`
@@ -293,9 +293,19 @@ with **async**, **task groups**, and **channels**, not compete with them.
   Site: [Editor and language server](../site/src/content/docs/guides/editor.md).
   Review fixes (2026-08-20): `#`/`##` module detection, pattern-binding
   index, JSON `\u` decode, workspace roots + watched-file refresh,
-  juxtaposition signature help, Windows binary stdio. Remaining:
-  Marketplace / Open VSX publish, incremental parse, Yona rewrite of `yls`
-  after #7 + `Std\Json`.
+  juxtaposition signature help, Windows binary stdio. Cross-file
+  go-to-definition for imports and FQN calls, document highlight, and
+  import-rename staying in the current file (2026-08-21). Incremental /
+  partial AST recovery on parse failure (2026-08-21): hover and related
+  queries walk a recovered prefix; published diagnostics stay the original
+  parse errors.   Local VSIX packaging is in (`npm run vsix`, CI artifact).
+  Marketplace CI publishes on `v*` tags (`VSCE_PAT`). Open VSX publish is
+  fully wired (`publish-openvsx` + repository secret `OVSX_PAT`, publisher
+  `yona-lang`, extension 0.1.5); the job still no-ops if the secret is
+  unset. Stdlib prereqs for a Yona `yls` landed 2026-08-21: recursive
+  `Std\Json`, `Std\IO.readExact`, `Std\Utf16`. `yls-yona` uses
+  `Std\Json.get` / `asString` / `asInt`. Remaining: Yona rewrite of `yls`
+  as the editor default.
 - [ ] **Documentation extraction / generation (think first, don't scrape).** Public Learn/Guides/Reference in `site/src/content/docs/` stay handwritten. `scripts/gendocs.py` is a regex walk of `lib/Std/*.yona` `##` comments and misses `.yonai`/C modules, types, effects, and exports. Design a compiler-aware extractor (`yonac --emit-docs` or successor) so API reference cannot drift from source; until then, keep `##` comments + handwritten site pages updated in the same change (see `keep-docs-up-to-date`).
 
 
@@ -341,7 +351,38 @@ with **async**, **task groups**, and **channels**, not compete with them.
 - [x] AFN as the body of a `let`-bound function auto-awaits (not a Promise pointer)
 - [x] Invalid UTF-8 is a lex error; `tokenize()` recovery advances one byte (no `brk` loop)
 - [x] `with` parser null-body SIGSEGV: `parse_expr_until_in()` for resource, null checks before `WithExpr` ctor
+- [x] `try`/`catch` consumes closing `end` (nested `do`/`let`/`case`, multi-arm
+  `catch`); missing `end` and trailing tokens are parse errors, not SIGSEGV
 - [x] VS Code extension + C++ `yls` (stdio LSP) + shared TextMate grammar + `typed_core/Query.h`
+- [x] Typed-core C ABI + `yonac --emit-typed-core` + pretty-print backend (`docs/typed-core.md`)
+- [x] **2026-08-21:** Imported `Std\Json.get` / ADT helpers SIGSEGV from
+  expression programs. Repro: `import parse, get as jsonGet, asString from
+  Std\Json in case parse src of Ok j -> case jsonGet j "method" of Some v
+  -> asString v`. `yonac` failed LLVM verify (`ptr` vs `i64` on the
+  unwrapped string) or rejected `JsonObject pairs` at parse time. GENFN
+  call sites now propagate `return_subtypes` / `return_adt_name`;
+  capitalized pattern names are constructors even before the `.yonai` is
+  loaded.
+- [x] **2026-08-21:** `Std\Json.get` returned `None` on a multi-key object
+  when the same program `import length from Std\String` and also called
+  `readExact`. Repro: `import parse, get as jsonGet, asString from
+  Std\Json, stdinFd, readExact from Std\IO, length from Std\String in
+  case readExact stdinFd 75 of Ok body -> case parse body of Ok j ->
+  jsonGet j "method"`. GENFN remonomorphization isolates importer names
+  so Prelude Array `length`/`get` in `getPair` are not replaced by
+  `Std\String`.
+- [x] **2026-08-21:** Nested `try` whose inner `catch` re-raises printed
+  `()` instead of the outer handler. Repro: `try (try raise 1 catch _ ->
+  raise 2 end) catch _ -> 3 end`. `codegen_try_catch` marks merge
+  unreachable when every catch arm terminates.
+- [x] **2026-08-21:** `Std\Stream.naturals` remonomorphize could not see
+  sibling `range` after GENFN name isolation (`undefined function
+  'range'`). Isolation cleared `extern_functions` while still holding a
+  reference into that map, so the CAF path lost the module prefix.
+  Isolation now takes the mangled name by value. Importer `length` from
+  `Std\String` stays hidden for `Std\Json.get`. Fixtures:
+  `stdlib_naturals_caf`, `stream_pipeline`,
+  `stdlib_json_get_import_length`.
 
 
 

@@ -1,0 +1,22 @@
+import parse, get as jsonGet, asString, asInt from Std\Json, fromChars from Std\String in
+let src = fromChars [123] ++ "\"id\":1,\"method\":\"initialize\"" ++ fromChars [125] in
+case parse src of
+    Ok j ->
+        case jsonGet j "method" of
+            Some mv ->
+                case asString mv of
+                    Some m ->
+                        case jsonGet j "id" of
+                            Some iv ->
+                                case asInt iv of
+                                    Some n -> m
+                                    None -> "id-not-int"
+                                end
+                            None -> "missing-id"
+                        end
+                    None -> "method-not-string"
+                end
+            None -> "missing-method"
+        end
+    Err e -> e
+end

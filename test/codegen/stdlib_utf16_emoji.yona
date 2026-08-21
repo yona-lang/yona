@@ -1,0 +1,3 @@
+import offsetToCharacter, positionToOffset from Std\Utf16 in
+let s = "a😀b" in
+(offsetToCharacter s 5, positionToOffset s 0 3)

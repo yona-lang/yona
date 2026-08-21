@@ -362,3 +362,159 @@ jobs:
         run: |
           chmod +x dist/ci/*.sh
           bash dist/ci/launchpad-upload.sh "${GITHUB_REF_NAME#v}"
+
+  # VS Code extension: build on the same v* tag as compiler tarballs, then
+  # publish. Do not add Marketplace/Open VSX publish to the PR matrix.
+  vscode-vsix:
+    name: VS Code extension VSIX
+    permissions:
+      contents: read
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: Test and package VSIX
+        working-directory: editors/vscode
+        run: |
+          set -euo pipefail
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          PKG_VER="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VER" != "$PKG_VER" ]; then
+            echo "::error::editors/vscode version ${PKG_VER} does not match tag ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          npm ci
+          npm run lint
+          npm test
+          npm run vsix
+
+      - name: Stage VSIX
+        run: |
+          mkdir -p staged-vsix
+          cp editors/vscode/yona-*.vsix staged-vsix/
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: yona-vscode-vsix
+          path: staged-vsix/
+          if-no-files-found: error
+
+  publish-marketplace:
+    name: Publish Marketplace
+    needs: vscode-vsix
+    permissions:
+      contents: read
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: Download VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: yona-vscode-vsix
+          path: staged-vsix
+
+      - name: Install vsce
+        working-directory: editors/vscode
+        run: npm ci
+
+      - name: Publish to Visual Studio Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VSCE_PAT}" ]; then
+            echo "::error::VSCE_PAT is unset. Add a Marketplace PAT for publisher yona-lang."
+            exit 1
+          fi
+          shopt -s nullglob
+          vsixs=(staged-vsix/yona-*.vsix)
+          if [ "${#vsixs[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one staged VSIX, found ${#vsixs[@]}"
+            exit 1
+          fi
+          editors/vscode/node_modules/.bin/vsce publish --packagePath "${vsixs[0]}"
+
+  # Do not reference secrets in job-level if: (GitHub rejects the workflow).
+  openvsx-gate:
+    name: Open VSX credentials
+    permissions:
+      contents: read
+    runs-on: ubuntu-26.04
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - id: check
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -n "${OVSX_PAT}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "OVSX_PAT is not set; publish-openvsx will be skipped."
+            echo "Namespace yona-lang is claimed. Create a token at"
+            echo "https://open-vsx.org/user-settings/tokens and add repository secret OVSX_PAT."
+          fi
+
+  publish-openvsx:
+    name: Publish Open VSX
+    needs: [vscode-vsix, openvsx-gate]
+    if: needs.openvsx-gate.outputs.present == 'true'
+    permissions:
+      contents: read
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: Download VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: yona-vscode-vsix
+          path: staged-vsix
+
+      - name: Install ovsx
+        working-directory: editors/vscode
+        run: npm ci
+
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OVSX_PAT}" ]; then
+            echo "OVSX_PAT is not set; skipping Open VSX publish."
+            exit 0
+          fi
+          shopt -s nullglob
+          vsixs=(staged-vsix/yona-*.vsix)
+          if [ "${#vsixs[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one staged VSIX, found ${#vsixs[@]}"
+            exit 1
+          fi
+          editors/vscode/node_modules/.bin/ovsx publish --packagePath "${vsixs[0]}"
