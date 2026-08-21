@@ -202,14 +202,14 @@ jobs:
     name: VS Code extension
     runs-on: ubuntu-26.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         persist-credentials: false
 
     - name: Check TextMate grammar sync
       run: ./scripts/check-yona-grammar.sh
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v5
       with:
         node-version: "22"
         cache: npm

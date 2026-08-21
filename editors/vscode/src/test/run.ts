@@ -32,6 +32,14 @@ function testPackagingMetadata(): void {
   assert.ok(pkg.scripts?.package?.includes("vsce"), "package script must run vsce");
   assert.ok(pkg.scripts?.vsix?.includes("vsce") || pkg.scripts?.vsix?.includes("package"),
     "vsix script must produce a VSIX");
+  // out/ is gitignored; lint is --noEmit. CI and a clean clone run npm test
+  // next, so the test script itself must emit JS before node out/test/run.js.
+  const testScript = pkg.scripts?.test ?? "";
+  assert.ok(
+    /(?:^|[;&]\s*)(?:npm run compile|tsc(?:\s|$))/.test(testScript) &&
+      !/--noEmit/.test(testScript),
+    "test script must compile TypeScript (not --noEmit) before running out/test/run.js",
+  );
   assert.ok(pkg.devDependencies?.["@vscode/vsce"], "@vscode/vsce is required to package locally");
   assert.ok(pkg.devDependencies?.ovsx, "ovsx is required so a human can publish to Open VSX later");
   assert.ok(fs.existsSync(path.join(root, "README.md")), "README.md required for vsce");

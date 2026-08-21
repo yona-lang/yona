@@ -81,7 +81,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "tsc --noEmit -p ./",
-    "test": "node ./out/test/run.js",
+    "test": "npm run compile && node ./out/test/run.js",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package",
     "vsix": "vsce package",
