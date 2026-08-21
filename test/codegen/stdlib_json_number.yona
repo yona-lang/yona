@@ -1,0 +1,5 @@
+import parse, stringify from Std\Json in
+case parse "42" of
+    Ok j -> stringify j
+    Err e -> e
+end

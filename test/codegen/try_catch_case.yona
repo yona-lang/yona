@@ -1,0 +1,4 @@
+case try raise 1 catch _ -> 2 end of
+    2 -> 20
+    _ -> 0
+end

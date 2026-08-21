@@ -1,0 +1,2 @@
+import parse from Std\Json, isErr from Std\Result, fromChars from Std\String in
+isErr (parse (fromChars [123]))

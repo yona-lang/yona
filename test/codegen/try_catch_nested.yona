@@ -1,0 +1,4 @@
+try
+    try raise 1 catch _ -> 2 end
+catch _ -> 3
+end

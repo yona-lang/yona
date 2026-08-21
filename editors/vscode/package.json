@@ -5,10 +5,25 @@
   "version": "0.1.4",
   "publisher": "yona-lang",
   "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yona-lang/yona.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yona-lang/yona/issues"
+  },
+  "homepage": "https://github.com/yona-lang/yona/tree/HEAD/editors/vscode",
+  "keywords": [
+    "yona",
+    "language-server",
+    "lsp"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Programming Languages"],
+  "categories": [
+    "Programming Languages"
+  ],
   "activationEvents": [
     "onLanguage:yona"
   ],
@@ -17,8 +32,14 @@
     "languages": [
       {
         "id": "yona",
-        "aliases": ["Yona", "yona"],
-        "extensions": [".yona", ".yonai"],
+        "aliases": [
+          "Yona",
+          "yona"
+        ],
+        "extensions": [
+          ".yona",
+          ".yonai"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -45,7 +66,11 @@
         },
         "yona.trace.server": {
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Trace communication between VS Code and yls (vscode-languageclient)."
         }
@@ -57,7 +82,11 @@
     "watch": "tsc -watch -p ./",
     "lint": "tsc --noEmit -p ./",
     "test": "node ./out/test/run.js",
-    "package": "npm run compile"
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package",
+    "vsix": "vsce package",
+    "publish:marketplace": "vsce publish",
+    "publish:ovsx": "ovsx publish"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
@@ -65,6 +94,8 @@
   "devDependencies": {
     "@types/node": "^22.15.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2",
+    "ovsx": "^0.10.12",
     "typescript": "^5.8.3"
   }
 }

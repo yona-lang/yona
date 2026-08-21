@@ -154,6 +154,9 @@ FN yona_Std_IO__isTty 1 INT -> BOOL
 FN yona_Std_IO__write 2 INT INT -> PROMISE
 FN yona_Std_IO__readLineFrom 1 INT -> PROMISE
 FN yona_Std_IO__readStdin 0 -> STRING
+FN yona_Std_IO__readExactBytes 2 INT INT -> STRING
+FN yona_Std_IO__readExact 2 INT INT -> ADT retadt Result
+FN yona_Std_IO__writeBytes 2 INT STRING -> UNIT
 GENFN_BEGIN yona_Std_IO__stderrFd stderrFd
 stderrFd = 2
 GENFN_END

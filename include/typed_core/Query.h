@@ -54,6 +54,16 @@ struct Hover {
     Range range;
 };
 
+struct Location {
+    std::string uri;
+    Range range;
+};
+
+struct DocumentHighlight {
+    Range range;
+    int kind = 2; // LSP: 1 Text, 2 Read, 3 Write
+};
+
 struct Symbol {
     std::string name;
     std::string kind;

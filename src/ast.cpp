@@ -554,8 +554,10 @@ MainNode::~MainNode() { delete node; }
 void MainNode::print(std::ostream &os) const { os << "main = " << *node; }
 
 IfExpr::IfExpr(SourceContext token, ExprNode *condition, ExprNode *thenExpr, ExprNode *elseExpr)
-    : ExprNode(token), condition(condition->with_parent<ExprNode>(this)), thenExpr(thenExpr->with_parent<ExprNode>(this)),
-      elseExpr(elseExpr->with_parent<ExprNode>(this)) {}
+    : ExprNode(token),
+      condition(condition ? condition->with_parent<ExprNode>(this) : nullptr),
+      thenExpr(thenExpr ? thenExpr->with_parent<ExprNode>(this) : nullptr),
+      elseExpr(elseExpr ? elseExpr->with_parent<ExprNode>(this) : nullptr) {}
 
 IfExpr::~IfExpr() {
   delete condition;

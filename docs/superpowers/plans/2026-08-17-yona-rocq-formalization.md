@@ -71,7 +71,7 @@ The kernel every later feature builds on. Features: Int/Float/Bool/String/Symbol
 ### Phase 3 — Executable verified checker + differential testing
 
 - [ ] `infer : env -> term -> option scheme` extracted to OCaml (MetaRocq verified extraction).
-- [ ] Compiler side: `yonac --emit-typed-core` JSON dump of resolved AST + inferred types for the core fragment — seed of issue [#7](https://github.com/yona-lang/yona/issues/78).
+- [ ] Compiler side: JSON dump of resolved AST + inferred types for the core fragment (feeds the extracted checker). **Textual** `yonac --emit-typed-core` landed 2026-08-21 (`docs/typed-core.md`); JSON wire format still deferred per #7.
 - [ ] Harness runs every `test/codegen/*.yona` fixture through both checkers; disagreement = bug in one of them. QuickChick fuzzes random terms for agreement.
 
 ### Phase 4 — Type-system extensions (one module each)

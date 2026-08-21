@@ -1,0 +1,4 @@
+do
+    try 1 catch _ -> 0 end
+    42
+end

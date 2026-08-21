@@ -33,6 +33,7 @@ the result. For a one-liner, use `yona -e`.
 | `-o, --output <file>` | Output file name |
 | `--emit-ir` | Print LLVM IR to stdout instead of compiling |
 | `--emit-obj` | Emit an object file only; do not link |
+| `--emit-typed-core` | Print a typed-core dump (resolved names, types, effects, linearity, spans) and exit without LLVM codegen |
 
 Default output names when `-o` is omitted:
 
@@ -81,7 +82,7 @@ The compiler transparently lowers recognized `Std\IntArray` / `Std\FloatArray` `
 | `--no-accelerator-lowering` | Keep IntArray/FloatArray map/filter/foldl on the host closure path; do not rewrite recognized kernels to the `Std\GPU` ABI |
 | `--strict-accelerator` | Error (E0700) on IntArray/FloatArray map/filter/foldl lambdas outside the fixed `Std\GPU` kernel library, instead of silently falling back to the host path |
 
-`--emit-accelerator-report` cannot be combined with `--emit-ir` or `--emit-obj`, and `--emit-accelerator-report-with-types` requires `--emit-accelerator-report`.
+`--emit-accelerator-report` cannot be combined with `--emit-ir` or `--emit-obj`, and `--emit-accelerator-report-with-types` requires `--emit-accelerator-report`. `--emit-typed-core` cannot be combined with `--emit-ir`, `--emit-obj`, or `--emit-accelerator-report`.
 
 ### Linking
 

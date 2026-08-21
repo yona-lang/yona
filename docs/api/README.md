@@ -1,6 +1,6 @@
 # Yona Standard Library API Reference
 
-403 public functions across 36 modules.
+413 public functions across 37 modules.
 
 | Module | Functions | Types | Description |
 |--------|-----------|-------|-------------|
@@ -18,8 +18,8 @@
 | [Std.GPU](GPU.md) | 43 | 7 | Std\GPU — accelerated columnar execution. |
 | [Std.Http](Http.md) | 11 | 3 | HTTP client and server — built on Std\Net and Std\String. |
 | [Std.IntArray](IntArray.md) | 15 | 0 | Contiguous unboxed array of `Int` values. |
-| [Std.IO](IO.md) | 16 | 0 | Std\IO — non-blocking console and handle-based byte I/O. |
-| [Std.Json](Json.md) | 7 | 0 | Json -- JSON serialization helpers. |
+| [Std.IO](IO.md) | 19 | 0 | Std\IO — non-blocking console and handle-based byte I/O. |
+| [Std.Json](Json.md) | 11 | 1 | Recursive JSON values — object/array parse and stringify. |
 | [Std.List](List.md) | 29 | 0 | Sequence (list) operations — map, filter, fold, sort, and more. |
 | [Std.Log](Log.md) | 6 | 0 | Log -- leveled logging to stderr. |
 | [Std.Math](Math.md) | 21 | 1 | Math — polymorphic numeric operations and float math. |
@@ -40,4 +40,5 @@
 | [Std.Time](Time.md) | 6 | 0 | Time -- timestamps, sleeping, and elapsed time measurement. |
 | [Std.Tuple](Tuple.md) | 9 | 0 | Operations on 2-tuples (pairs). |
 | [Std.Types](Types.md) | 5 | 0 | Types -- runtime type conversions. |
+| [Std.Utf16](Utf16.md) | 3 | 0 | UTF-8 byte offsets ↔ LSP UTF-16 positions. |
 

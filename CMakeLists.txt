@@ -240,6 +240,8 @@ list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/seq\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/hamt\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/exceptions\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/closures\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/utf16\\.c$")
+list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/json\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_device\\.c$")
 list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_compute\\.c$")
@@ -408,6 +410,8 @@ set(YONA_EMBEDDED_RUNTIME_SOURCES
 	"${PROJECT_SOURCE_DIR}/src/runtime/hamt.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/exceptions.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/closures.c"
+	"${PROJECT_SOURCE_DIR}/src/runtime/utf16.c"
+	"${PROJECT_SOURCE_DIR}/src/runtime/json.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_device.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_compute.c"
@@ -640,6 +644,15 @@ set_target_properties(tests PROPERTIES
 	VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 	VS_DEBUGGER_COMMAND_ARGUMENTS "--reporters=xml"
 )
+add_test(NAME smoke_yls_yona
+	COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/ci/smoke-yls-yona.py"
+		"${CMAKE_CURRENT_BINARY_DIR}/yls-yona${CMAKE_EXECUTABLE_SUFFIX}")
+set_tests_properties(smoke_yls_yona PROPERTIES
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	LABELS "unit"
+	ENVIRONMENT "${_ctest_env}"
+)
+
 endif() # BUILD_TESTING
 
 # Removed temporary test executables - tests are now using doctest

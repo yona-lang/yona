@@ -21,10 +21,31 @@ function testWhichRejectsShellMetacharacters(): void {
   assert.strictEqual(which("yls;id"), undefined);
 }
 
+function testPackagingMetadata(): void {
+  const root = path.join(__dirname, "..", "..");
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as {
+    publisher?: string;
+    scripts?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  assert.strictEqual(pkg.publisher, "yona-lang");
+  assert.ok(pkg.scripts?.package?.includes("vsce"), "package script must run vsce");
+  assert.ok(pkg.scripts?.vsix?.includes("vsce") || pkg.scripts?.vsix?.includes("package"),
+    "vsix script must produce a VSIX");
+  assert.ok(pkg.devDependencies?.["@vscode/vsce"], "@vscode/vsce is required to package locally");
+  assert.ok(pkg.devDependencies?.ovsx, "ovsx is required so a human can publish to Open VSX later");
+  assert.ok(fs.existsSync(path.join(root, "README.md")), "README.md required for vsce");
+  assert.ok(
+    fs.existsSync(path.join(root, "LICENSE")) || fs.existsSync(path.join(root, "LICENSE.txt")),
+    "LICENSE required for vsce"
+  );
+}
+
 function main(): void {
   testResolvePrefersConfigured();
   testGrammarHasRequiredTokens();
   testWhichRejectsShellMetacharacters();
+  testPackagingMetadata();
   console.log("vscode extension unit tests passed");
 }
 

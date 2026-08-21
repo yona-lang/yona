@@ -1,0 +1,5 @@
+import parse, stringify from Std\Json in
+case parse "\"\\uD83D\\uDE00\"" of
+    Ok j -> stringify j
+    Err e -> e
+end

@@ -399,6 +399,10 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
                     if (runtime_heap && typed_val->getType()->isPointerTy())
                         emit_rc_inc(typed_val, ftype);
                     TypedValue bound{typed_val, ftype};
+                    if (ctor_it->second.type_name == "Result" ||
+                        ctor_it->second.type_name == "Option")
+                        bound.boxed_heap = (ftype == CType::INT || ftype == CType::ADT ||
+                                            ftype == CType::STRING || scrutinee.boxed_heap);
                     // For function-typed fields, propagate the recorded
                     // return CType (and ADT name) so call sites generate
                     // the correct closure invocation.
@@ -457,7 +461,12 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
                                         is_heap_type(scrutinee.subtypes[fi]);
                     if (runtime_heap && typed_val->getType()->isPointerTy())
                         emit_rc_inc(typed_val, ftype);
-                    named_values_[(*id)->name->value] = {typed_val, ftype};
+                    TypedValue bound{typed_val, ftype};
+                    if (ctor_it->second.type_name == "Result" ||
+                        ctor_it->second.type_name == "Option")
+                        bound.boxed_heap = (ftype == CType::INT || ftype == CType::ADT ||
+                                            ftype == CType::STRING || scrutinee.boxed_heap);
+                    named_values_[(*id)->name->value] = bound;
                 }
             } else if (sub_pat->get_type() == AST_TUPLE_PATTERN) {
                 bind_tuple_pattern_fields(static_cast<TuplePattern*>(sub_pat), field_val);

@@ -20,18 +20,19 @@
 | `Std\Http` | 13 | HTTP client/server — Method/Request/Response ADTs, get, post, serve |
 | `Std\GPU` | 10 | Accelerated columnar buffers with CPU/SIMD fallback |
 
-### C runtime modules (14)
+### C runtime modules (15)
 
 | Module | Functions | Description |
 |--------|-----------|-------------|
 | `Std\String` | 27 | String operations (split, join, trim, replace, repeat) |
 | `Std\Encoding` | 7 | base64, hex, URL, HTML escape |
 | `Std\Types` | 5 | Type conversions (intToString, toFloat) |
-| `Std\IO` | 7 | Console I/O (print, println, readLine) |
+| `Std\IO` | 18 | Console I/O (print, println, readLine, readStdin, readExact) |
+| `Std\Utf16` | 3 | UTF-8 byte offsets ↔ LSP UTF-16 positions |
 | `Std\File` | 9 | File I/O via io_uring (readFile, writeFile, readFileBytes) |
 | `Std\Process` | 16 | getenv, getcwd, exit, getArgs, run, execArgs, … |
 | `Std\Random` | 4 | int, float, choice, shuffle |
-| `Std\Json` | 7 | JSON stringify/parse |
+| `Std\Json` | 8 | Recursive `Json` ADT, parse/stringify, scalar helpers |
 | `Std\Crypto` | 4 | sha256, randomBytes, uuid4 |
 | `Std\Log` | 6 | Structured logging with levels |
 | `Std\Net` | 12 | TCP/UDP via io_uring |

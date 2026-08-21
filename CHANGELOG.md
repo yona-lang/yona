@@ -3,6 +3,32 @@
 ## Unreleased
 
 ### Added
+- **`yls-yona` transport slice** — Yona-written LSP stdio server
+  (`tools/yls/main.yona`, CMake `yls-yona`). Speaks `Content-Length`
+  framing via `Std\IO.readExact` / `writeBytes`, JSON-RPC via
+  `Std\Json.parse`/`stringify`/`get`, and `initialize` / `initialized` /
+  `shutdown` / `exit` / `textDocument/didOpen`. Unknown methods return
+  JSON null. Capabilities are transport-only (`textDocumentSync`); hover
+  and definition still need C++ `yls`. The editor default is unchanged.
+  Smoke: `scripts/ci/smoke-yls-yona.py`.
+- **`Std\Json` recursive ADT** — `JsonNull` / `JsonBool` / `JsonInt` /
+  `JsonFloat` / `JsonString` / `JsonArray` / `JsonObject` (objects keep
+  member order). `parse` returns `Result Json String`; `stringify` emits
+  compact JSON. C ABI in `include/yona/runtime/json.h` (depth 64, 16 MiB
+  cap, `\u` surrogate pairs). Scalar helpers (`stringifyString`, …) stay.
+- **`Std\IO.readExact(fd, n)`** — pipe-safe stream `read()` loop (not
+  seek/`pread`). Returns `Ok` bytes or `Err` (`unexpected eof` /
+  `negative count`). Accepts a raw fd (`stdinFd`) or `FileHandle`. Needed
+  for LSP `Content-Length` framing on stdin.
+- **`Std\Utf16`** — `offsetToLine`, `offsetToCharacter`, `positionToOffset`.
+  Matches the C++ `yls` UTF-16 mapper (CRLF as one break, non-BMP as two
+  units). Documented C ABI: `include/yona/runtime/utf16.h`.
+- **Typed-core C ABI** (`include/typed_core/abi.h`, version 1): in-process
+  query of resolved names, inferred types, effect rows, linearity, and
+  source spans with no LLVM types in the public header. Example non-LLVM
+  backend `yona_tc_pretty_print` dumps a deterministic textual summary.
+  `yonac --emit-typed-core` prints that dump and exits without LLVM codegen.
+  Architecture: `docs/typed-core.md`.
 - `yona` is a Yona-written runner (shebang `#!/usr/bin/env yona`): compile a
   file, stdin, or `-e` expression via sibling `yonac`, then exec the result.
   No arguments on a TTY starts the C++ REPL (`yona-repl`).
@@ -13,8 +39,10 @@
   during the build; `tools/yona` is the first consumer.
 - **`yls` language server** and a VS Code / Cursor extension at
   `editors/vscode`. `yls --stdio` publishes parse/type/refinement/linearity
-  diagnostics, hover, definition, references, completion, symbols, semantic
-  tokens, rename, signature help, inlay hints, call hierarchy, and explain
+  diagnostics, hover, definition (including imported names and FQN calls
+  to the source `.yona` / `.yonai`), references, document highlight,
+  completion, symbols, semantic tokens, rename (local aliases only for
+  imports), signature help, inlay hints, call hierarchy, and explain
   code actions. The TextMate grammar is shared with the site
   (`site/grammars/yona.tmLanguage.json`). Query types live in
   `include/typed_core/Query.h` (no LLVM headers). `yls` treats `#`/`##`
@@ -26,9 +54,46 @@
   treat LSP ranges as end-exclusive. `yonac` and `yls` share
   `is_module_source` in `include/ModuleSource.h`. Windows stdio is binary so
   `Content-Length` stays in sync. The extension setting is
-  `yona.trace.server` (vscode-languageclient).
+  `yona.trace.server` (vscode-languageclient). On parse failure, `yls`
+  keeps the original parse diagnostics and recovers a partial AST (suffixes
+  such as ` 0` / ` in 0` / ` end` / ` then 0 else 0`, or truncating the
+  last token/line) so hover, definition, highlight, and completion still
+  work on the prefix that parsed. Incomplete `if` no longer crashes the
+  server (`IfExpr` allows a null then/else while the parser reports E0301).
+  Go-to-definition on `Module.fn` works in the defining file, resolves
+  `import Pkg\\Mod as M in M.fn`, and does not treat a later local binding
+  as the imported name.
+- VS Code extension local VSIX packaging (`npm run vsix` / `npm run package`
+  in `editors/vscode`, `@vscode/vsce` + `ovsx`). PR/push CI builds the
+  `.vsix` artifact and does not publish.
+- Release CI publishes the VS Code extension to the Visual Studio
+  Marketplace and Open VSX on `v*` tags (`vsce` / `ovsx publish
+  --packagePath`, publisher `yona-lang`, secrets `VSCE_PAT` and
+  `OVSX_PAT`). Both jobs still no-op if their secret is unset so a
+  missing token does not fail the release.
+
 
 ### Fixed
+- Imported `Std\Json.get` / `asString` / `asInt` from expression programs
+  no longer fail LLVM verify (`ptr` vs `i64`) or reject `JsonObject`
+  patterns. GENFN call sites now keep `return_subtypes`; capitalized
+  names in patterns are constructors even when the `.yonai` is loaded
+  after parse. Remonomorphizing a GENFN no longer lets the importer's
+  `length` / `get` (e.g. `import length from Std\String`) shadow Prelude
+  Array methods used by `Std\Json.getPair`, which made `jsonGet` return
+  `None` on multi-key objects in `yls-yona`. `yls-yona` uses those
+  helpers instead of raw-text field scans.
+- `Std\String.fromChars` now reads sequence elements (`yona_rt_seq_get`)
+  instead of the flat header word, so `[123]` is `{` and not a leading NUL.
+- Nested `try` whose inner `catch` re-raises now reaches the outer handler
+  (`try (try raise 1 catch _ -> raise 2 end) catch _ -> 3 end` prints `3`,
+  not `()`). `codegen_try_catch` no longer returns the try-body value when
+  every catch arm terminates.
+- `try`/`catch` now consumes its closing `end`, so a nested `try` no longer
+  steals `do`/`case`/`let` terminators. Missing `end` or `catch` is a parse
+  error (previously leftover `end` was ignored, and `try 42 end` SIGSEGV'd).
+  Trailing tokens after an expression are rejected. Multiple catch arms
+  (`catch p -> e` / one `catch` with several clauses) are kept.
 - Nested `let`, `perform`/`raise` as a let-binding RHS, and `with` bodies
   no longer swallow a terminator `in` as membership. `let y = let z = 1 in
   z * 2 in y` and `let plan = \() -> perform Fs.read "x" in plan ()` parse

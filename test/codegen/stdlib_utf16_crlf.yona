@@ -1,0 +1,3 @@
+import offsetToLine, offsetToCharacter from Std\Utf16 in
+let s = "a\r\nb" in
+(offsetToLine s 3, offsetToCharacter s 3)

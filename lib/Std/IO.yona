@@ -3,7 +3,8 @@
 ## Every operation that can block on a slow device submits through
 ## io_uring (on Linux) or the thread pool (for reads), returns a
 ## `Promise`, and auto-awaits at the use site. Synchronous calls:
-## `isTty`, `flush`, and `readStdin` (stdin to EOF).
+## `isTty`, `flush`, `readStdin` (stdin to EOF), and `readExact`
+## (pipe-safe exact-length read for LSP-style framing).
 ##
 ## Trivial programs stay trivial: `println "hello"` is still one line.
 ## The non-blocking machinery is invisible until you put several I/O
@@ -25,8 +26,9 @@ module Std\IO
 export stdinFd, stdoutFd, stderrFd
 export print, println, eprint, eprintln
 export putStr, putStrLn, write
-export readLine, readLineFrom, readStdin
+export readLine, readLineFrom, readStdin, readExact, readExactBytes
 export flush, isTty, isatty
+export writeBytes
 
 ## File descriptor numbers, exposed as Int so any Std\File handle call
 ## that expects `FileHandle` can be wrapped — `FileHandle stdoutFd`
@@ -49,6 +51,18 @@ extern io    yona_Std_IO__writeStr    : Int -> String -> ()     = "yona_Std_IO__
 extern io    yona_Std_IO__writeLine   : Int -> String -> ()     = "yona_Std_IO__writeLine"
 extern async yona_Std_IO__readLineFd  : Int -> Option           = "yona_Std_IO__readLineFd"
 extern       yona_Std_IO__readStdin    : () -> String           = "yona_Std_IO__readStdin"
+## Stream `read` of up to `n` bytes (may be short at EOF). Pipe-safe.
+extern       readExactBytes : Int -> Int -> String = "yona_Std_IO__readExactBytes"
+## Read exactly `n` bytes from `fd` with stream `read` (not seek/`pread`).
+## Safe on pipes and sockets — required for LSP `Content-Length` framing
+## on stdin. `fd` may be a raw descriptor (`stdinFd`) or a `FileHandle`.
+##
+## ```
+## readExact stdinFd 16
+## ```
+extern       readExact : Int -> Int -> Result      = "yona_Std_IO__readExact"
+## Synchronous write (no Promise/await). Use for pipe-safe LSP framing.
+extern       writeBytes : Int -> String -> ()      = "yona_Std_IO__writeBytes"
 extern       yona_Std_IO__isTty       : Int -> Bool             = "yona_Std_IO__isTty"
 extern       yona_Std_IO__flushFd     : Int -> Bool             = "yona_Std_IO__flushFd"
 

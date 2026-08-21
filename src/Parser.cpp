@@ -77,6 +77,11 @@ ParserImpl::parse_expression(string_view source, string_view filename) {
 
     auto expr = parse_expr();
 
+    skip_newlines();
+    if (!is_at_end()) {
+        error(ParseError::Type::UNEXPECTED_TOKEN, "Unexpected token after expression");
+    }
+
     if (!expr || !errors_.empty()) {
         return unexpected(std::move(errors_));
     }

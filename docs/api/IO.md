@@ -4,8 +4,9 @@ Std\IO — non-blocking console and handle-based byte I/O.
 
 Every operation that can block on a slow device submits through
 io_uring (on Linux) or the thread pool (for reads), returns a
-`Promise`, and auto-awaits at the use site. The only synchronous
-calls are pure syscalls that never block — `isTty`, `flush`.
+`Promise`, and auto-awaits at the use site. Synchronous calls:
+`isTty`, `flush`, `readStdin` (stdin to EOF), and `readExact`
+(pipe-safe exact-length read for LSP-style framing).
 
 Trivial programs stay trivial: `println "hello"` is still one line.
 The non-blocking machinery is invisible until you put several I/O
@@ -81,6 +82,20 @@ Read one line from an arbitrary fd. Same semantics as `readLine`.
 Read stdin to EOF as a string. Used when the program source *is*
 stdin (`yona -` or a pipe); a file script still inherits stdin.
 
+### `readExact : Int -> Int -> Result`
+
+Read exactly `n` bytes from `fd` with stream `read` (not seek/`pread`).
+Safe on pipes and sockets — required for LSP `Content-Length` framing
+on stdin. `fd` may be a raw descriptor (`stdinFd`) or a `FileHandle`.
+
+```
+readExact stdinFd 16
+```
+
+### `readExactBytes : Int -> Int -> String`
+
+Stream `read` of up to `n` bytes (may be short at EOF). Pipe-safe.
+
 ### `flush : Int -> Bool`
 
 Force pending writes on `fd` to disk / device (`fsync`). Most
@@ -94,3 +109,7 @@ Useful for turning off colored output or prompting prefixes.
 ### `isatty : Int -> Bool`
 
 Alias for `isTty`, following the libc spelling.
+
+### `writeBytes : Int -> String -> ()`
+
+Synchronous write (no Promise/await). Use for pipe-safe LSP framing.

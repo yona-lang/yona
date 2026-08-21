@@ -54,7 +54,7 @@ static string ir_function_body(const string &ir, const string &fn_name) {
 }
 
 static string compile_and_run(const string &code, const char *run_env_key = nullptr, const char *run_env_val = nullptr,
-                              const char *artifact_suffix = nullptr) {
+                              const char *artifact_suffix = nullptr, const char *stdin_data = nullptr) {
   parser::Parser parser;
 
   Codegen codegen("test_module");
@@ -107,6 +107,8 @@ static string compile_and_run(const string &code, const char *run_env_key = null
   if (!yona::test::link::link_objs_to_exe(objs, exe_path, extra_libs))
     return "LINK_ERROR";
 
+  if (stdin_data)
+    return yona::test::link::popen_read_all_with_stdin(exe_path, stdin_data);
   if (run_env_key && run_env_val)
     return yona::test::link::popen_read_all_run_with_env(exe_path, run_env_key, run_env_val);
   return yona::test::link::popen_read_all(exe_path);
@@ -230,6 +232,21 @@ TEST_SUITE("Codegen IR") {
     CHECK(ir_contains(raising_ir, "call void @yona_rt_frame_push"));
   }
 
+  TEST_CASE("nested try success uses inner result") {
+    CHECK(compile_and_run("try (try 1 catch _ -> 2 end) catch _ -> 3 end",
+                          nullptr, nullptr, "nested_try_success") == "1");
+  }
+
+  TEST_CASE("nested try inner catch does not escape") {
+    CHECK(compile_and_run("try (try raise 1 catch _ -> 2 end) catch _ -> 3 end",
+                          nullptr, nullptr, "nested_try_inner_catch") == "2");
+  }
+
+  TEST_CASE("nested try inner catch reraise reaches outer") {
+    CHECK(compile_and_run("try (try raise 1 catch _ -> raise 2 end) catch _ -> 3 end",
+                          nullptr, nullptr, "nested_try_reraise") == "3");
+  }
+
   TEST_CASE("Explicit @borrow on foldl fn param eliminates rc_inc") {
     auto ir = compile_to_ir("let foldl @borrow fn acc seq = case seq of [] -> acc; "
                             "[h|t] -> foldl fn (fn acc h) t end in "
@@ -324,11 +341,14 @@ TEST_SUITE("Codegen E2E") {
       SUBCASE(test_name.c_str()) {
         const char *env_k = nullptr;
         const char *env_v = nullptr;
+        const char *stdin_data = nullptr;
         if (test_name == "gpu_backend_flags" || test_name == "gpu_vulkan_last_note") {
           env_k = "YONA_GPU_DISABLE_VULKAN";
           env_v = "1";
         }
-        string actual = compile_and_run(source, env_k, env_v, test_name.c_str());
+        if (test_name == "stdlib_json_get_import_length")
+          stdin_data = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"capabilities\":{}}}";
+        string actual = compile_and_run(source, env_k, env_v, test_name.c_str(), stdin_data);
         CHECK_MESSAGE(actual == expected, "Test '", test_name, "': expected '", expected, "' but got '", actual, "'");
       }
     }

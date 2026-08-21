@@ -37,8 +37,9 @@ public:
 
     std::vector<LspDiagnostic> diagnostics() const;
     std::optional<HoverInfo> hover(Position pos) const;
-    std::vector<Range> definition(Position pos) const;
+    std::vector<typed_core::Location> definition(Position pos) const;
     std::vector<Range> references(Position pos, bool include_decl) const;
+    std::vector<typed_core::DocumentHighlight> document_highlight(Position pos) const;
     std::vector<SymbolInfo> document_symbols() const;
     std::vector<Json> completions(Position pos) const;
     std::vector<std::uint32_t> semantic_tokens() const;

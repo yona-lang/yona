@@ -13,6 +13,8 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -44,6 +46,105 @@ Json range_json(const Range& r) {
     return o;
 }
 
+std::optional<std::filesystem::path> find_module_file(const std::string& fqn,
+                                                      const std::vector<std::string>& roots) {
+    if (fqn.empty())
+        return std::nullopt;
+    std::filesystem::path rel;
+    std::string part;
+    for (char c : fqn) {
+        if (c == '\\' || c == '/') {
+            if (part == ".." || part == ".")
+                return std::nullopt;
+            if (!part.empty()) {
+                rel /= part;
+                part.clear();
+            }
+        } else {
+            part += c;
+        }
+    }
+    if (part == ".." || part == ".")
+        return std::nullopt;
+    if (!part.empty())
+        rel /= part;
+    if (rel.empty() || !rel.is_relative())
+        return std::nullopt;
+    for (const auto& root : roots) {
+        auto base = std::filesystem::path(root) / rel;
+        auto yona = base;
+        yona += ".yona";
+        if (std::filesystem::exists(yona))
+            return yona;
+        auto yonai = base;
+        yonai += ".yonai";
+        if (std::filesystem::exists(yonai))
+            return yonai;
+    }
+    return std::nullopt;
+}
+
+std::string rtrim_copy(std::string s) {
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+        s.pop_back();
+    return s;
+}
+
+std::string drop_last_token(std::string s) {
+    s = rtrim_copy(std::move(s));
+    if (s.empty())
+        return s;
+    if (is_ident_char(static_cast<unsigned char>(s.back()))) {
+        while (!s.empty() && is_ident_char(static_cast<unsigned char>(s.back())))
+            s.pop_back();
+    } else {
+        while (!s.empty() && !std::isspace(static_cast<unsigned char>(s.back())) &&
+               !is_ident_char(static_cast<unsigned char>(s.back())))
+            s.pop_back();
+    }
+    return rtrim_copy(std::move(s));
+}
+
+std::string drop_last_line(std::string s) {
+    s = rtrim_copy(std::move(s));
+    auto nl = s.find_last_of('\n');
+    if (nl == std::string::npos)
+        return {};
+    return s.substr(0, nl);
+}
+
+constexpr const char* kRecoverSuffixes[] = {
+    " 0",
+    " in 0",
+    " 0 in 0",
+    " end",
+    " 0 end",
+    "\nend",
+    " then 0 else 0",
+    " else 0",
+    " of _ -> 0 end",
+    " -> 0 end",
+    " = 0",
+};
+
+Range range_of_yonai_export(std::string_view text, std::string_view name) {
+    if (name.empty())
+        return Range{};
+    std::string needle = "__" + std::string(name) + " ";
+    auto p = text.find(needle);
+    if (p == std::string_view::npos) {
+        needle = "__" + std::string(name) + "\r";
+        p = text.find(needle);
+    }
+    if (p == std::string_view::npos)
+        return Range{};
+    auto off = p + 2;
+    Range r;
+    r.start = offset_to_position(text, off);
+    r.end = offset_to_position(text, off + name.size());
+    return r;
+}
+
 } // namespace
 
 struct Occurrence {
@@ -52,6 +153,8 @@ struct Occurrence {
     bool is_def = false;
     std::string kind;
     std::string type;
+    std::string origin_module;
+    std::string origin_name;
 };
 
 struct Analysis::Impl {
@@ -63,6 +166,8 @@ struct Analysis::Impl {
     std::shared_ptr<ast::AstNode> root;
     std::vector<Occurrence> occs;
     std::vector<SymbolInfo> symbols;
+    bool recovered = false;
+    std::vector<compiler::DiagnosticEngine::Record> kept_parse_records;
 
     void reset() {
         diag = compiler::DiagnosticEngine();
@@ -75,7 +180,11 @@ struct Analysis::Impl {
         root.reset();
         occs.clear();
         symbols.clear();
+        recovered = false;
+        kept_parse_records.clear();
     }
+
+    ast::AstNode* try_recover_ast(std::string_view text, std::string_view uri, bool is_mod);
 
     void add_occ(const std::string& name, const SourceLocation& loc, std::string_view text,
                  bool is_def, const std::string& kind, compiler::typechecker::TypeChecker* tc,
@@ -100,6 +209,41 @@ struct Analysis::Impl {
             s.selection = o.range;
             s.type = o.type;
             symbols.push_back(std::move(s));
+        }
+    }
+
+    void mark_origin(const std::string& module, const std::string& export_name) {
+        if (occs.empty() || module.empty())
+            return;
+        occs.back().origin_module = module;
+        occs.back().origin_name = export_name;
+    }
+
+    std::string resolve_module_alias(const std::string& name) const {
+        for (const auto& o : occs) {
+            if (o.is_def && o.name == name && !o.origin_module.empty())
+                return o.origin_module;
+        }
+        return name;
+    }
+
+    void propagate_origins() {
+        std::unordered_map<std::string, std::pair<std::string, std::string>> env;
+        for (auto& o : occs) {
+            if (o.is_def) {
+                if (!o.origin_module.empty())
+                    env[o.name] = {o.origin_module, o.origin_name};
+                else
+                    env.erase(o.name);
+                continue;
+            }
+            if (!o.origin_module.empty())
+                continue;
+            auto it = env.find(o.name);
+            if (it != env.end()) {
+                o.origin_module = it->second.first;
+                o.origin_name = it->second.second;
+            }
         }
     }
 
@@ -372,20 +516,39 @@ void Analysis::Impl::walk(ast::AstNode* node, std::string_view text, compiler::t
     }
     case ast::AST_FUNCTIONS_IMPORT: {
         auto* fi = static_cast<ast::FunctionsImport*>(node);
+        std::string mod = fi->fromFqn ? fi->fromFqn->to_string() : "";
+        if (fi->fromFqn)
+            walk(fi->fromFqn, text, tc);
         for (auto* al : fi->aliases) {
             if (!al)
                 continue;
-            if (al->alias)
+            const std::string exported = al->name ? al->name->value : "";
+            if (al->alias) {
                 add_occ(al->alias->value, al->alias->source_context, text, true, "function", tc, al);
-            else if (al->name)
+                mark_origin(mod, exported.empty() ? al->alias->value : exported);
+            } else if (al->name) {
                 add_occ(al->name->value, al->name->source_context, text, true, "function", tc, al);
+                mark_origin(mod, al->name->value);
+            }
         }
         return;
     }
     case ast::AST_MODULE_IMPORT: {
         auto* mi = static_cast<ast::ModuleImport*>(node);
-        if (mi->name)
+        std::string mod = mi->fqn ? mi->fqn->to_string() : "";
+        if (mi->fqn)
+            walk(mi->fqn, text, tc);
+        if (mi->name) {
             add_occ(mi->name->value, mi->name->source_context, text, true, "namespace", tc, mi);
+            mark_origin(mod, "");
+        }
+        return;
+    }
+    case ast::AST_FQN_EXPR: {
+        auto* f = static_cast<ast::FqnExpr*>(node);
+        auto fqn = f->to_string();
+        add_occ(fqn, f->source_context, text, false, "namespace", tc, f);
+        mark_origin(fqn, "");
         return;
     }
     case ast::AST_TUPLE_EXPR: {
@@ -534,10 +697,25 @@ void Analysis::Impl::walk(ast::AstNode* node, std::string_view text, compiler::t
     }
     case ast::AST_MODULE_CALL: {
         auto* mc = static_cast<ast::ModuleCall*>(node);
-        if (mc->funName)
+        std::string mod;
+        if (auto* f = std::get_if<ast::FqnExpr*>(&mc->fqn)) {
+            if (*f) {
+                mod = (*f)->to_string();
+                walk(*f, text, tc);
+            }
+        } else if (auto* e = std::get_if<ast::ExprNode*>(&mc->fqn)) {
+            if (*e) {
+                if (auto* id = dynamic_cast<ast::IdentifierExpr*>(*e)) {
+                    if (id->name)
+                        mod = resolve_module_alias(id->name->value);
+                }
+                walk(*e, text, tc);
+            }
+        }
+        if (mc->funName) {
             add_occ(mc->funName->value, mc->funName->source_context, text, false, "function", tc, node);
-        if (auto* e = std::get_if<ast::ExprNode*>(&mc->fqn))
-            walk(*e, text, tc);
+            mark_origin(mod, mc->funName->value);
+        }
         return;
     }
     case ast::AST_NAME_CALL: {
@@ -588,6 +766,51 @@ void Analysis::Impl::walk(ast::AstNode* node, std::string_view text, compiler::t
     }
 }
 
+ast::AstNode* Analysis::Impl::try_recover_ast(std::string_view text, std::string_view uri, bool is_mod) {
+    std::vector<std::string> bases;
+    auto add_base = [&](std::string s) {
+        if (s.empty())
+            return;
+        if (std::find(bases.begin(), bases.end(), s) != bases.end())
+            return;
+        bases.push_back(std::move(s));
+    };
+    add_base(std::string(text));
+    add_base(rtrim_copy(std::string(text)));
+    add_base(drop_last_token(std::string(text)));
+    add_base(drop_last_line(std::string(text)));
+
+    auto take = [&](auto&& result) -> ast::AstNode* {
+        if (!result.has_value())
+            return nullptr;
+        root = std::shared_ptr<ast::AstNode>(result.value().release());
+        return root.get();
+    };
+
+    const std::string uri_str(uri);
+    for (const auto& base : bases) {
+        if (base != text) {
+            if (is_mod) {
+                if (auto* n = take(parser->parse_module(base, uri_str)))
+                    return n;
+            } else if (auto* n = take(parser->parse_expression(base, uri_str))) {
+                return n;
+            }
+        }
+        for (auto* suf : kRecoverSuffixes) {
+            std::string cand = base;
+            cand += suf;
+            if (is_mod) {
+                if (auto* n = take(parser->parse_module(cand, uri_str)))
+                    return n;
+            } else if (auto* n = take(parser->parse_expression(cand, uri_str))) {
+                return n;
+            }
+        }
+    }
+    return nullptr;
+}
+
 Analysis::Analysis() : impl_(std::make_unique<Impl>()) {}
 Analysis::~Analysis() = default;
 Analysis::Analysis(Analysis&&) noexcept = default;
@@ -611,6 +834,7 @@ void Analysis::analyze(std::string uri, std::string text) {
 
     const bool is_mod = yona::is_module_source(text_);
     ast::AstNode* root = nullptr;
+    bool parse_ok = false;
     if (is_mod) {
         auto result = impl_->parser->parse_module(text_, uri_);
         if (!result.has_value()) {
@@ -619,7 +843,7 @@ void Analysis::analyze(std::string uri, std::string text) {
         } else {
             impl_->root = std::shared_ptr<ast::AstNode>(result.value().release());
             root = impl_->root.get();
-            impl_->checker->check_module(static_cast<ast::ModuleDecl*>(root));
+            parse_ok = true;
         }
     } else {
         auto result = impl_->parser->parse_expression(text_, uri_);
@@ -629,21 +853,34 @@ void Analysis::analyze(std::string uri, std::string text) {
         } else {
             impl_->root = std::shared_ptr<ast::AstNode>(result.value().release());
             root = impl_->root.get();
-            impl_->checker->check(root);
+            parse_ok = true;
         }
     }
+    if (!parse_ok) {
+        impl_->kept_parse_records = impl_->diag.records();
+        root = impl_->try_recover_ast(text_, uri_, is_mod);
+        impl_->recovered = root != nullptr;
+    }
     if (root) {
-        compiler::typechecker::RefinementChecker refine(impl_->diag, impl_->checker.get());
-        refine.check(root);
-        compiler::typechecker::LinearityChecker lin(impl_->diag, impl_->checker.get());
-        lin.check(root);
+        if (parse_ok) {
+            if (is_mod)
+                impl_->checker->check_module(static_cast<ast::ModuleDecl*>(root));
+            else
+                impl_->checker->check(root);
+            compiler::typechecker::RefinementChecker refine(impl_->diag, impl_->checker.get());
+            refine.check(root);
+            compiler::typechecker::LinearityChecker lin(impl_->diag, impl_->checker.get());
+            lin.check(root);
+        }
         impl_->walk(root, text_, impl_->checker.get());
+        impl_->propagate_origins();
     }
 }
 
 std::vector<LspDiagnostic> Analysis::diagnostics() const {
     std::vector<LspDiagnostic> out;
-    for (const auto& rec : impl_->diag.records()) {
+    const auto& recs = impl_->recovered ? impl_->kept_parse_records : impl_->diag.records();
+    for (const auto& rec : recs) {
         LspDiagnostic d;
         d.range = source_to_range(text_, rec.loc);
         d.severity = rec.level == compiler::DiagLevel::Error ? 1
@@ -686,14 +923,74 @@ std::optional<HoverInfo> Analysis::hover(Position pos) const {
     return h;
 }
 
-std::vector<Range> Analysis::definition(Position pos) const {
+std::vector<typed_core::Location> Analysis::definition(Position pos) const {
     auto* o = find_at(impl_->occs, pos);
     if (!o)
         return {};
-    std::vector<Range> out;
+    auto local_defs = [&](const std::string& name, const std::string& origin) {
+        std::vector<typed_core::Location> out;
+        for (const auto& c : impl_->occs) {
+            if (c.is_def && c.name == name && c.origin_module == origin)
+                out.push_back({uri_, c.range});
+        }
+        return out;
+    };
+
+    if (!o->origin_module.empty()) {
+        auto file = find_module_file(o->origin_module, impl_->module_paths);
+        if (file) {
+            auto target_uri = file_uri(file->generic_string());
+            if (target_uri == uri_) {
+                auto here = local_defs(o->origin_name.empty() ? o->name : o->origin_name, "");
+                if (!here.empty())
+                    return here;
+            } else {
+                std::ifstream in(*file);
+                std::string target((std::istreambuf_iterator<char>(in)),
+                                   std::istreambuf_iterator<char>());
+                if (file->extension() == ".yonai") {
+                    auto r = range_of_yonai_export(target, o->origin_name);
+                    return {{target_uri, r}};
+                }
+                Analysis other;
+                other.set_module_paths(impl_->module_paths);
+                other.analyze(target_uri, std::move(target));
+                std::vector<typed_core::Location> out;
+                if (o->origin_name.empty()) {
+                    for (const auto& c : other.impl_->occs) {
+                        if (c.is_def && c.kind == "namespace") {
+                            out.push_back({target_uri, c.range});
+                            break;
+                        }
+                    }
+                    if (out.empty())
+                        out.push_back({target_uri, Range{}});
+                    return out;
+                }
+                for (const auto& c : other.impl_->occs) {
+                    if (c.is_def && c.name == o->origin_name && c.origin_module.empty())
+                        out.push_back({target_uri, c.range});
+                }
+                if (!out.empty())
+                    return out;
+            }
+        }
+    }
+    return local_defs(o->name, o->origin_module);
+}
+
+std::vector<typed_core::DocumentHighlight> Analysis::document_highlight(Position pos) const {
+    auto* o = find_at(impl_->occs, pos);
+    if (!o)
+        return {};
+    std::vector<typed_core::DocumentHighlight> out;
     for (const auto& c : impl_->occs) {
-        if (c.is_def && c.name == o->name)
-            out.push_back(c.range);
+        if (c.name != o->name || c.origin_module != o->origin_module)
+            continue;
+        typed_core::DocumentHighlight h;
+        h.range = c.range;
+        h.kind = c.is_def ? 3 : 2;
+        out.push_back(h);
     }
     return out;
 }
@@ -704,7 +1001,7 @@ std::vector<Range> Analysis::references(Position pos, bool include_decl) const {
         return {};
     std::vector<Range> out;
     for (const auto& c : impl_->occs) {
-        if (c.name != o->name)
+        if (c.name != o->name || c.origin_module != o->origin_module)
             continue;
         if (!include_decl && c.is_def)
             continue;
@@ -790,7 +1087,7 @@ std::optional<std::string> Analysis::rename(Position pos, std::string_view new_n
         return std::nullopt;
     Json::Array changes;
     for (const auto& c : impl_->occs) {
-        if (c.name != o->name)
+        if (c.name != o->name || c.origin_module != o->origin_module)
             continue;
         Json edit;
         edit["range"] = range_json(c.range);

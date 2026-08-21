@@ -1199,44 +1199,17 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                                 auto* func_ast = reparsed->functions[0];
                                 reparsed->functions.clear();
                                 imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-                                auto saved_externs = imports_.extern_functions;
-                                std::vector<std::string> scoped_cafs;
-                                auto sep = ext_it->second.rfind("__");
-                                std::string module_prefix = (sep == std::string::npos)
-                                    ? "" : ext_it->second.substr(0, sep + 2);
-                                if (!module_prefix.empty()) {
-                                    for (const auto& [dep_mangled, dep_meta] : imports_.meta) {
-                                        if (dep_mangled.rfind(module_prefix, 0) != 0) continue;
-                                        auto dep_sep = dep_mangled.rfind("__");
-                                        if (dep_sep == std::string::npos) continue;
-                                        std::string dep_name = dep_mangled.substr(dep_sep + 2);
-                                        imports_.extern_functions.emplace(dep_name, dep_mangled);
-                                        if (dep_meta.param_types.empty() &&
-                                            compiled_functions_.find(dep_name) == compiled_functions_.end()) {
-                                            auto* ret_ty = llvm_type(dep_meta.return_type);
-                                            auto* fn_type = llvm::FunctionType::get(ret_ty, {}, false);
-                                            auto* fn = module_->getFunction(dep_mangled);
-                                            if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage,
-                                                                           dep_mangled, module_.get());
-                                            compiled_functions_[dep_name] =
-                                                compiled_function_from_meta(fn, dep_meta, dep_meta.return_type);
-                                            scoped_cafs.push_back(dep_name);
-                                        }
-                                    }
-                                }
+                                GenfnNameIsolation iso(*this, ext_it->second);
+                                register_sibling_genfns(ext_it->second);
                                 codegen_function_def(func_ast, node->name->value);
                                 auto local_def_it = deferred_functions_.find(node->name->value);
                                 if (local_def_it == deferred_functions_.end()) {
-                                    imports_.extern_functions = std::move(saved_externs);
-                                    for (const auto& scoped_caf : scoped_cafs)
-                                        compiled_functions_.erase(scoped_caf);
+                                    iso.restore();
                                     return it->second;
                                 }
                                 auto local_cf = compile_function(node->name->value,
                                                                  local_def_it->second, {});
-                                imports_.extern_functions = std::move(saved_externs);
-                                for (const auto& scoped_caf : scoped_cafs)
-                                    compiled_functions_.erase(scoped_caf);
+                                iso.restore();
                                 std::vector<llvm::Value*> local_args;
                                 if (local_cf.closure_env) local_args.push_back(local_cf.closure_env);
                                 auto* local_call = local_cf.fn->getReturnType()->isVoidTy()
@@ -1292,39 +1265,14 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                         auto* func_ast = reparsed->functions[0];
                         reparsed->functions.clear();
                         imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-                        auto saved_externs = imports_.extern_functions;
-                        std::vector<std::string> scoped_cafs;
-                        auto sep = ext_it->second.rfind("__");
-                        std::string module_prefix = (sep == std::string::npos)
-                            ? "" : ext_it->second.substr(0, sep + 2);
-                        if (!module_prefix.empty()) {
-                            for (const auto& [dep_mangled, dep_meta] : imports_.meta) {
-                                if (dep_mangled.rfind(module_prefix, 0) != 0) continue;
-                                auto dep_sep = dep_mangled.rfind("__");
-                                if (dep_sep == std::string::npos) continue;
-                                std::string dep_name = dep_mangled.substr(dep_sep + 2);
-                                imports_.extern_functions.emplace(dep_name, dep_mangled);
-                                if (dep_meta.param_types.empty() &&
-                                    compiled_functions_.find(dep_name) == compiled_functions_.end()) {
-                                    auto* ret_ty = llvm_type(dep_meta.return_type);
-                                    auto* fn_type = llvm::FunctionType::get(ret_ty, {}, false);
-                                    auto* fn = module_->getFunction(dep_mangled);
-                                    if (!fn) fn = Function::Create(fn_type, Function::ExternalLinkage,
-                                                                   dep_mangled, module_.get());
-                                    compiled_functions_[dep_name] =
-                                        compiled_function_from_meta(fn, dep_meta, dep_meta.return_type);
-                                    scoped_cafs.push_back(dep_name);
-                                }
-                            }
-                        }
+                        GenfnNameIsolation iso(*this, ext_it->second);
+                        register_sibling_genfns(ext_it->second);
                         codegen_function_def(func_ast, node->name->value);
                         auto local_def_it = deferred_functions_.find(node->name->value);
                         if (local_def_it != deferred_functions_.end()) {
                             auto local_cf = compile_function(node->name->value,
                                                              local_def_it->second, {});
-                            imports_.extern_functions = std::move(saved_externs);
-                            for (const auto& scoped_caf : scoped_cafs)
-                                compiled_functions_.erase(scoped_caf);
+                            iso.restore();
                             std::vector<llvm::Value*> local_args;
                             if (local_cf.closure_env) local_args.push_back(local_cf.closure_env);
                             auto* local_call = local_cf.fn->getReturnType()->isVoidTy()
@@ -1338,9 +1286,7 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                             if (!local_cf.return_subtypes.empty()) result.subtypes = local_cf.return_subtypes;
                             return result;
                         }
-                        imports_.extern_functions = std::move(saved_externs);
-                        for (const auto& scoped_caf : scoped_cafs)
-                            compiled_functions_.erase(scoped_caf);
+                        iso.restore();
                     }
                 }
             }
@@ -1638,6 +1584,13 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     builder_->SetInsertPoint(merge_bb);
 
     if (catch_results.empty()) {
+        if (!try_end_bb) {
+            // Try body and every catch arm terminate (raise/return). Do not
+            // leave merge as a live success continuation: the parent would
+            // treat the try as producing try_val (UNIT from raise).
+            builder_->CreateUnreachable();
+            return {UndefValue::get(i64_ty), CType::UNIT};
+        }
         return try_val;
     }
 

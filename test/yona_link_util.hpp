@@ -355,6 +355,7 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
         {"/tmp/yona_binary_seek.bin", "yona_binary_seek.bin"},
         {"/tmp/yona_test_write.txt", "yona_test_write.txt"},
         {"/tmp/yona_test_file.txt", "yona_test_file.txt"},
+        {"/tmp/yona_readexact_prereq.txt", "yona_readexact_prereq.txt"},
     };
     for (const auto& r : repl) {
         const std::string to = path_for_yona_literal(base / r.rel);
@@ -396,6 +397,28 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
 
 inline std::string popen_read_all(const std::filesystem::path& exe) {
     std::string cmd = qpath(exe) + err_null();
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return "RUN_ERROR";
+    std::string result;
+    std::array<char, 256> buffer{};
+    while (fgets(buffer.data(), (int)buffer.size(), pipe) != nullptr) result += buffer.data();
+    pclose(pipe);
+    if (!result.empty() && (result.back() == '\n' || result.back() == '\r')) result.pop_back();
+    return result;
+}
+
+/** Run `exe` with `input` on stdin (codegen fixtures that call `readExact`). */
+inline std::string popen_read_all_with_stdin(const std::filesystem::path& exe, const std::string& input) {
+    namespace fs = std::filesystem;
+    fs::path in = scratch_root() / "yona_codegen_stdin.bin";
+    {
+        std::ofstream out(in.string(), std::ios::binary);
+        out << input;
+    }
+    std::string cmd = qpath(exe) + " < " + qpath(in) + err_null();
+#ifdef _WIN32
+    cmd = wrap_for_cmd_c(cmd);
+#endif
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe) return "RUN_ERROR";
     std::string result;
