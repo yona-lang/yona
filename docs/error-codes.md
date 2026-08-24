@@ -135,10 +135,12 @@ Direct `perform` without a handler still warns via `-Wunhandled-effect`.
 
 ### E0203 — Effect-freedom requirement not satisfied
 
-`yonac --require-effect-free` requires a closed empty effect row. Known
-operations, open row variables, and imports without row facts are rejected;
-`.yonai` records a proven empty export row as `effects -`. This gate does not prove termination or exhaustive
-pattern matching.
+`yonac --require-effect-free` requires both a closed empty effect row and an
+exhaustive `case` for every registered finite ADT. Known operations, open row
+variables, imports without row facts, and missing ADT constructors are rejected;
+`.yonai` records a proven empty export row as `effects -`. Ordinary compilation
+remains non-fatal: `--Wincomplete-patterns` warns about missing constructors.
+This gate does not prove termination, overlap freedom, or non-ADT coverage.
 
 ## Parse Errors (E03xx)
 

@@ -63,7 +63,7 @@ Compiling a module additionally writes an interface file next to the object file
 | `--Wno-refinement` | Skip refinement checking (E0500 nonempty / nonzero proofs) |
 | `--Wno-linear` | Skip linearity checking (E0600 / E0601 / E0602) |
 | `--Wno-linear-leak` | Disable E0602 resource-leak warnings (`-Wlinear-leak`, on by default) |
-| `--require-effect-free` | Require a closed empty effect row; reject known, open, or imported-unknown rows (E0203); does not prove termination or exhaustive matches |
+| `--require-effect-free` | Require a closed empty effect row and exhaustive registered finite-ADT `case`s; reject known, open, imported-unknown rows, or missing constructors (E0203). It does not prove termination, overlap freedom, or non-ADT coverage. |
 
 The individual warning flags and which group enables them are listed on the [error codes](/reference/error-codes/) page.
 

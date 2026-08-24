@@ -77,16 +77,11 @@ Formal specification (Rocq, parallel research track):
 API (#7) until the audit (#3) and effect-row story (#8) are honest about what
 already works.
 
-- [x] **[#3](https://github.com/yona-lang/yona/issues/74) Type-system status audit** — `docs/type-system-status.md` (2026-08-18). Next: #8. Follow-ups from the audit: [#9](https://github.com/yona-lang/yona/issues/80) effect decls, [#10](https://github.com/yona-lang/yona/issues/81) blocking E0500/E0600, [#11](https://github.com/yona-lang/yona/issues/82) `-Wincomplete-patterns`.
-- [x] **[#10](https://github.com/yona-lang/yona/issues/81) Blocking E0500/E0600; emit E0602; check modules** — **Landed 2026-08-24:** `yonac` exits non-zero on E0500/E0600/E0601 for expression programs and modules; `--Wno-refinement` / `--Wno-linear` skip those checkers. Leaks emit **E0602** (`-Wlinear-leak`, default on) instead of `-Wunhandled-effect`.
-- [x] **[#11](https://github.com/yona-lang/yona/issues/82) ADT case-exhaustiveness diagnostic** — **Landed 2026-08-24:** `--Wincomplete-patterns` (and `--Wall`) emits structured warnings for missing constructors in finite ADT cases; wildcard arms close coverage and guarded arms do not. `--Werror` fails the build. Overlap analysis and non-ADT coverage remain separate follow-ups.
-- [x] **[#8](https://github.com/yona-lang/yona/issues/79) Effect-row inference +** `.yonai` **propagation** — after #3. **Landed 2026-08-19:** closed sets + E0202; unify of effect rows; HOF rest vars; apply-union / wrap; handler subtraction; pretty-print `!{…}`; `.yonai` `FN … effects Fs.read`. **Follow-ups landed same day:** open HOF rest (`effects | hof`, `Effect: imported HOF open rest from .yonai is E0202`, `Interface files preserve exported HOF open rest`); sibling-aware module typecheck (`Interface files preserve sibling-wrapped FN effect rows`, wrap-before-sibling). HOF restore is the `apply f x = f x` shape (first param is the function). Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
-- [x] **[#6](https://github.com/yona-lang/yona/issues/77) Opaque exported types** — **Landed 2026-08-24:** `export type T opaque` writes an `ADT … opaque` interface without public `CTOR` rows. Clients can pass opaque values through exported smart constructors/observers but cannot construct or pattern-match hidden constructors. Generic exported functions carry constructor metadata only in a private recompilation scope; transparent `export type T` remains unchanged. Plan `docs/superpowers/plans/2026-08-24-opaque-exported-types.md`.
-- [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — **effect-freedom slice landed:** `yonac --require-effect-free` rejects known/open rows and imports with unknown rows (E0203); closed empty export rows persist as `.yonai` `effects -`. It deliberately does **not** yet prove termination or exhaustive pattern matching, so #5 remains open.
+- [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — `yonac --require-effect-free` rejects known/open/unknown effect rows and incomplete matches over registered finite ADTs (E0203); closed empty export rows persist as `.yonai` `effects -`. #5 remains open for termination, overlap freedom, and non-ADT coverage.
   - [x] Closed-empty-row effect-freedom gate + `.yonai` `effects -` propagation (2026-08-24)
   - [x] Finite-ADT case exhaustiveness warnings (`--Wincomplete-patterns`, 2026-08-24)
-  - [ ] Termination and exhaustive-pattern obligations for a full totality claim
-- [x] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; thin slice after #8. Versioned in-process C++ query types + C ABI (no LLVM headers in the consumer). Defer wire format. **Seed 2026-08-20:** `include/typed_core/Query.h` + `yls`. **2026-08-21:** `include/typed_core/abi.h` (`YONA_TYPED_CORE_ABI_VERSION`), example pretty-print backend, `yonac --emit-typed-core`, `docs/typed-core.md`.
+  - [x] Strict finite-ADT exhaustiveness in `--require-effect-free` (2026-08-24)
+  - [ ] Termination, overlap freedom, and non-ADT coverage for a full totality claim
 - [ ] **[#4](https://github.com/yona-lang/yona/issues/75) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
 - [ ] **`Linear FileHandle` (and other resources) for real** — today `.yonai`
   marks `openFile` / `spawn` / sockets / channel ends as bare `LINEAR`
@@ -138,7 +133,7 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
 
 ### Suggested next steps (rolling)
 
-- [ ] **Next language work: [#5](https://github.com/yona-lang/yona/issues/76) totality obligations** — add termination and exhaustive-pattern obligations beyond the landed closed-empty-row effect-freedom gate. Follow with **`Linear FileHandle` for real** or #7 typed-core API. Formal spec track: Phase 0 of
+- [ ] **Next language work: [#5](https://github.com/yona-lang/yona/issues/76) totality obligations** — add termination, overlap, and non-ADT coverage beyond the landed effect-freedom and finite-ADT exhaustiveness gates. Follow with **`Linear FileHandle` for real**. Formal spec track: Phase 0 of
   [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
 
 High leverage after the audit: `&T` **/ borrow types**
@@ -317,6 +312,13 @@ with **async**, **task groups**, and **channels**, not compete with them.
 
 ## Completed Milestones (Condensed)
 
+- [x] Type-system safety series: #3 audit; #8 effect rows and `.yonai`
+  propagation; #10 blocking E0500/E0600/E0601 plus E0602 leak diagnostics;
+  #11 finite-ADT `--Wincomplete-patterns`; #6 opaque exports; and #7 typed-core
+  C++/C ABI. See `docs/type-system-status.md` for evidence and remaining work.
+- [x] #5 slices: closed-empty effect rows and strict finite-ADT case
+  exhaustiveness under `--require-effect-free` (E0203). Termination, overlap,
+  and non-ADT coverage remain active work.
 - [x] Full frontend + LLVM codegen pipeline (modules, generics, traits, ADTs)
 - [x] Effects + async + structured concurrency foundations
 - [x] Persistent collections + RC/arena/perceus optimizations

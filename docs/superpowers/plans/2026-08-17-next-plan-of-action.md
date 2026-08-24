@@ -254,7 +254,12 @@ Dedicated plan:
 
 **Prerequisite:** Phase 2 (#8) so “empty effect row” is real.
 
-**Goal:** Annotation or flag that accepts structural recursion + empty effects and rejects general recursion / escaping effects with located diagnostics; facts in `.yonai`.
+**Goal:** Opt-in gate requiring closed empty effects plus exhaustive matches over
+registered finite ADTs, with located diagnostics and facts in `.yonai`.
+
+**Status (2026-08-24):** The CLI flag `--require-effect-free` now enforces
+closed empty rows and finite-ADT case exhaustiveness (E0203), including module
+function bodies. Termination, overlap freedom, and non-ADT coverage remain open.
 
 **Before coding:** design doc required by #5; then implementation plan.
 
@@ -362,9 +367,9 @@ Linearity leftovers (`WithExpr` / `FunctionExpr`) can land beside #8.
 
 Plan saved to `docs/superpowers/plans/2026-08-17-next-plan-of-action.md`.
 
-**Next:** [#6](https://github.com/yona-lang/yona/issues/77) opaque types
-or [#5](https://github.com/yona-lang/yona/issues/76) totality / empty-row
-gate; Track G remaining is full arbitrary-lambda SPIR-V / research /
+**Next:** [#5](https://github.com/yona-lang/yona/issues/76) remaining totality
+work (termination, overlap, and non-ADT coverage) or `Linear FileHandle` for
+real; Track G remaining is full arbitrary-lambda SPIR-V / research /
 macOS-Windows bench re-capture.
 
 [#10](https://github.com/yona-lang/yona/issues/81) (blocking E0500/E0600,

@@ -287,7 +287,11 @@ end
 ```
 
 A `_` or variable arm makes any match exhaustive. Heed these warnings: a
-non-exhaustive match that falls off the end aborts at runtime.
+non-exhaustive match that falls off the end aborts at runtime. For code checked
+with `yonac --require-effect-free`, missing constructors in registered finite
+ADTs are instead E0203 errors; ordinary compilation keeps them as the opt-in
+`--Wincomplete-patterns` warning. The strict gate does not prove termination,
+overlap freedom, or coverage for non-ADT patterns.
 
 ## Where to next
 

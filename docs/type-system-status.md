@@ -112,9 +112,10 @@ not *fail* on type errors — rows are collected non-blocking.
 
 **Closed empty rows are an effect-freedom fact.** Exported functions write
 `.yonai` `effects -`, while a missing `effects` field remains unknown. `yonac
---require-effect-free` accepts only closed empty rows and emits E0203 for known,
-open, or imported-unknown rows. It does **not** prove termination or pattern-match
-exhaustiveness; those remaining totality obligations keep
+--require-effect-free` accepts only closed empty rows and exhaustive matches
+over registered finite ADTs; it emits E0203 for known, open, or imported-unknown
+rows and missing ADT constructors. It does **not** prove termination, overlap
+freedom, or non-ADT coverage; those remaining totality obligations keep
 [#5](https://github.com/yona-lang/yona/issues/76) open.
 
 [`docs/row-polymorphism.md`](row-polymorphism.md) is **record** field rows
@@ -242,7 +243,9 @@ in non-final `do` steps and `let _ = …`
 `--Wincomplete-patterns` warning (also enabled by `--Wall`) for constructors
 missing from a closed ADT `case`. A wildcard arm is exhaustive; a guarded arm
 does not prove coverage. `--Werror` promotes the warning to a failing build.
-Overlap analysis and non-ADT coverage remain unimplemented.
+`--require-effect-free` makes the same finite-ADT obligation E0203, including
+inside module function bodies. Overlap analysis and non-ADT coverage remain
+unimplemented.
 
 **Stale:** [`docs/pattern-matching.md`](pattern-matching.md) and
 [`docs/error-codes.md`](error-codes.md) describe `-Wincomplete-patterns` for

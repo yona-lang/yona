@@ -74,8 +74,10 @@ The compiler warns when an `Option`/`Result`/other ADT value is silently
 discarded in a `do` block or bound to `_` (`-Wunmatched-adt`, enabled by
 `--Wall`). It also warns for a finite-ADT `case` that misses constructors
 (`--Wincomplete-patterns`, also enabled by `--Wall`). A wildcard arm closes
-coverage; a guarded arm does not. Overlap analysis and non-ADT coverage are
-still incomplete.
+coverage; a guarded arm does not. `--require-effect-free` turns missing
+constructors in those finite-ADT cases into E0203 errors, alongside its
+closed-empty effect-row requirement. It does not prove termination, overlap
+freedom, or non-ADT coverage.
 
 ## Traits <span class="yona-status yona-status--stable">Stable</span>
 
