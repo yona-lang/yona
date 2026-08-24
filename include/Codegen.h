@@ -161,6 +161,16 @@ public:
     bool emit_object_file(const std::string& output_path);
     bool emit_interface_file(const std::string& output_path);
 
+    struct FiniteCaseCoverage {
+        std::string adt_name;
+        std::vector<std::string> missing;
+    };
+
+    /// Missing constructors for a case over a registered finite ADT. A
+    /// wildcard/identifier arm, a complete constructor set, or a non-ADT case
+    /// returns std::nullopt. Guarded arms do not establish coverage.
+    std::optional<FiniteCaseCoverage> finite_case_coverage(ast::CaseExpr* node) const;
+
     /// After `compile_module`, type-check the module as a unit (`check_module`)
     /// so exported wrappers see private siblings, then copy inferred latent
     /// effect rows onto FN metadata for `.yonai` emission.

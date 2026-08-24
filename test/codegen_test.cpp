@@ -1325,6 +1325,10 @@ TEST_SUITE("Diagnostics") {
     codegen.load_prelude(&parser);
     auto parsed = parser.parse_expression(source, "incomplete-case.yona");
     REQUIRE(parsed.has_value());
+    auto coverage = codegen.finite_case_coverage(static_cast<CaseExpr*>(parsed.value().get()));
+    REQUIRE(coverage.has_value());
+    CHECK(coverage->adt_name == "Option");
+    CHECK(coverage->missing == vector<string>{"None"});
     REQUIRE(codegen.compile(parsed.value().get()) != nullptr);
 
     REQUIRE(diag.warning_count() == 1);
@@ -1345,6 +1349,7 @@ TEST_SUITE("Diagnostics") {
     codegen.load_prelude(&parser);
     auto parsed = parser.parse_expression(source, "complete-case.yona");
     REQUIRE(parsed.has_value());
+    CHECK_FALSE(codegen.finite_case_coverage(static_cast<CaseExpr*>(parsed.value().get())).has_value());
     REQUIRE(codegen.compile(parsed.value().get()) != nullptr);
 
     CHECK(diag.warning_count() == 0);
@@ -1363,6 +1368,9 @@ TEST_SUITE("Diagnostics") {
     codegen.load_prelude(&parser);
     auto parsed = parser.parse_expression(source, "guarded-case.yona");
     REQUIRE(parsed.has_value());
+    auto coverage = codegen.finite_case_coverage(static_cast<CaseExpr*>(parsed.value().get()));
+    REQUIRE(coverage.has_value());
+    CHECK(coverage->missing == vector<string>{"None", "Some"});
     REQUIRE(codegen.compile(parsed.value().get()) != nullptr);
 
     REQUIRE(diag.warning_count() == 1);

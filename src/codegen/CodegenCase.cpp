@@ -527,6 +527,72 @@ static LType* common_phi_type(LType* a, LType* b, LLVMContext& ctx) {
     return LType::getInt64Ty(ctx);
 }
 
+std::optional<Codegen::FiniteCaseCoverage> Codegen::finite_case_coverage(CaseExpr* node) const {
+    if (!node) return std::nullopt;
+
+    std::string adt_type_name;
+    bool has_wildcard = false;
+    std::unordered_set<std::string> covered_ctors;
+    auto identify_adt = [&](const auto& self, PatternNode* pat) -> void {
+        if (!pat || !adt_type_name.empty()) return;
+        std::string ctor_name;
+        if (pat->get_type() == AST_CONSTRUCTOR_PATTERN)
+            ctor_name = static_cast<ConstructorPattern*>(pat)->constructor_name;
+        else if (pat->get_type() == AST_RECORD_PATTERN)
+            ctor_name = static_cast<RecordPattern*>(pat)->recordType;
+        else if (pat->get_type() == AST_OR_PATTERN) {
+            for (const auto& alternative : static_cast<OrPattern*>(pat)->patterns)
+                self(self, alternative.get());
+            return;
+        }
+        if (!ctor_name.empty()) {
+            auto it = types_.adt_constructors.find(ctor_name);
+            if (it != types_.adt_constructors.end()) adt_type_name = it->second.type_name;
+        }
+    };
+    auto collect = [&](const auto& self, PatternNode* pat) -> void {
+        if (!pat || has_wildcard) return;
+        if (pat->get_type() == AST_CONSTRUCTOR_PATTERN) {
+            auto* cp = static_cast<ConstructorPattern*>(pat);
+            covered_ctors.insert(cp->constructor_name);
+            if (adt_type_name.empty()) {
+                auto it = types_.adt_constructors.find(cp->constructor_name);
+                if (it != types_.adt_constructors.end()) adt_type_name = it->second.type_name;
+            }
+        } else if (pat->get_type() == AST_RECORD_PATTERN) {
+            auto* rp = static_cast<RecordPattern*>(pat);
+            covered_ctors.insert(rp->recordType);
+            if (adt_type_name.empty()) {
+                auto it = types_.adt_constructors.find(rp->recordType);
+                if (it != types_.adt_constructors.end()) adt_type_name = it->second.type_name;
+            }
+        } else if (pat->get_type() == AST_UNDERSCORE_PATTERN) {
+            has_wildcard = true;
+        } else if (pat->get_type() == AST_PATTERN_VALUE) {
+            auto* pv = static_cast<PatternValue*>(pat);
+            has_wildcard = std::get_if<IdentifierExpr*>(&pv->expr) != nullptr;
+        } else if (pat->get_type() == AST_OR_PATTERN) {
+            for (const auto& alternative : static_cast<OrPattern*>(pat)->patterns)
+                self(self, alternative.get());
+        }
+    };
+
+    for (auto* clause : node->clauses) {
+        if (!clause) continue;
+        identify_adt(identify_adt, clause->pattern);
+        if (!clause->guard) collect(collect, clause->pattern);
+    }
+    if (adt_type_name.empty() || has_wildcard) return std::nullopt;
+
+    std::vector<std::string> missing;
+    for (const auto& [name, info] : types_.adt_constructors)
+        if (info.type_name == adt_type_name && covered_ctors.count(name) == 0)
+            missing.push_back(name);
+    std::sort(missing.begin(), missing.end());
+    if (missing.empty()) return std::nullopt;
+    return FiniteCaseCoverage{std::move(adt_type_name), std::move(missing)};
+}
+
 TypedValue Codegen::codegen_case(CaseExpr* node) {
     set_debug_loc(node->source_context);
     auto scrutinee = auto_await(codegen(node->expr));
@@ -573,75 +639,16 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
     // warning: a catch-all remains optional unless the caller promotes
     // warnings with --Werror.
     if (scrutinee.type == CType::ADT) {
-        std::string adt_type_name = scrutinee.adt_type_name;
-        bool has_wildcard = false;
-        std::unordered_set<std::string> covered_ctors;
-
-        for (auto* clause : node->clauses) {
-            // A guard may reject a value after its pattern matched, so it
-            // cannot establish coverage for either a constructor or `_`.
-            if (clause->guard) continue;
-            auto* pat = clause->pattern;
-            if (pat->get_type() == AST_CONSTRUCTOR_PATTERN) {
-                auto* cp = static_cast<ConstructorPattern*>(pat);
-                covered_ctors.insert(cp->constructor_name);
-                if (adt_type_name.empty()) {
-                    auto it = types_.adt_constructors.find(cp->constructor_name);
-                    if (it != types_.adt_constructors.end())
-                        adt_type_name = it->second.type_name;
-                }
-            } else if (pat->get_type() == AST_RECORD_PATTERN) {
-                auto* rp = static_cast<RecordPattern*>(pat);
-                covered_ctors.insert(rp->recordType);
-                if (adt_type_name.empty()) {
-                    auto it = types_.adt_constructors.find(rp->recordType);
-                    if (it != types_.adt_constructors.end())
-                        adt_type_name = it->second.type_name;
-                }
-            } else if (pat->get_type() == AST_UNDERSCORE_PATTERN) {
-                has_wildcard = true;
-            } else if (pat->get_type() == AST_PATTERN_VALUE) {
-                auto* pv = static_cast<PatternValue*>(pat);
-                has_wildcard = std::get_if<IdentifierExpr*>(&pv->expr) != nullptr;
-            } else if (pat->get_type() == AST_OR_PATTERN) {
-                auto* op = static_cast<OrPattern*>(pat);
-                for (const auto& alternative : op->patterns) {
-                    if (!alternative) continue;
-                    if (alternative->get_type() == AST_UNDERSCORE_PATTERN) {
-                        has_wildcard = true;
-                        break;
-                    }
-                    if (alternative->get_type() == AST_CONSTRUCTOR_PATTERN) {
-                        auto* cp = static_cast<ConstructorPattern*>(alternative.get());
-                        covered_ctors.insert(cp->constructor_name);
-                        if (adt_type_name.empty()) {
-                            auto it = types_.adt_constructors.find(cp->constructor_name);
-                            if (it != types_.adt_constructors.end())
-                                adt_type_name = it->second.type_name;
-                        }
-                    }
-                }
-            }
-        }
-
-        if (!adt_type_name.empty() && !has_wildcard) {
-            std::vector<std::string> missing;
-            for (auto& [name, info] : types_.adt_constructors) {
-                if (info.type_name == adt_type_name && covered_ctors.count(name) == 0)
-                    missing.push_back(name);
-            }
-            std::sort(missing.begin(), missing.end());
-            if (!missing.empty() && diag_) {
-                std::string message = "non-exhaustive pattern match on " + adt_type_name +
+        if (auto coverage = finite_case_coverage(node); coverage && diag_) {
+                std::string message = "non-exhaustive pattern match on " + coverage->adt_name +
                                       " — missing constructor" +
-                                      (missing.size() == 1 ? " " : "s ");
-                for (size_t i = 0; i < missing.size(); ++i) {
+                                      (coverage->missing.size() == 1 ? " " : "s ");
+                for (size_t i = 0; i < coverage->missing.size(); ++i) {
                     if (i) message += ", ";
-                    message += missing[i];
+                    message += coverage->missing[i];
                 }
                 diag_->warning(node->source_context, message,
                                compiler::WarningFlag::IncompletePatterns);
-            }
         }
     }
 
