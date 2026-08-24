@@ -27,7 +27,7 @@ Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 | Type-level `&T` / lifetimes | missing | missing | missing | missing | missing | missing | **design-only** |
 | GENFN + borrow bitmask | n/a | implemented | missing | implemented | implemented | implemented | **implemented** |
 | `-Wunmatched-adt` | n/a | n/a | implemented | n/a | n/a | implemented | **implemented** |
-| Case exhaustiveness (`--Wincomplete-patterns`) | n/a | n/a | missing | implemented | n/a | implemented | **partial** (finite ADTs; no overlap/non-ADT analysis) |
+| Case exhaustiveness (`--Wincomplete-patterns`) | n/a | n/a | missing | implemented | n/a | implemented | **partial** (finite ADTs + `Bool`; limited unreachable-arm diagnostics) |
 
 `MonoType` tags are `Var | Con | App | Arrow | MTuple | MRecord | ERow`
 ([`include/typechecker/InferType.h`](../include/typechecker/InferType.h)).
@@ -112,10 +112,12 @@ not *fail* on type errors — rows are collected non-blocking.
 
 **Closed empty rows are an effect-freedom fact.** Exported functions write
 `.yonai` `effects -`, while a missing `effects` field remains unknown. `yonac
---require-effect-free` accepts only closed empty rows and exhaustive matches
-over registered finite ADTs; it emits E0203 for known, open, or imported-unknown
-rows and missing ADT constructors. It does **not** prove termination, overlap
-freedom, or non-ADT coverage; those remaining totality obligations keep
+--require-effect-free` accepts only closed empty rows, exhaustive matches over
+registered finite ADTs and `Bool`, and direct recursion with a conservative
+structural-descent proof. It emits E0203 for known, open, or imported-unknown
+rows, missing alternatives, unproven direct recursion, and mutual recursion.
+It does **not** prove general termination, complete overlap freedom, or arbitrary
+non-ADT coverage; those remaining totality obligations keep
 [#5](https://github.com/yona-lang/yona/issues/76) open.
 
 [`docs/row-polymorphism.md`](row-polymorphism.md) is **record** field rows
@@ -238,14 +240,16 @@ in non-final `do` steps and `let _ = …`
 **Positive:** `let r = Option does not warn`.
 **Negative:** `discarded Option in do warns`; `let _ = Option warns`.
 
-**Case exhaustiveness — finite ADTs implemented.**
+**Case exhaustiveness — finite ADTs and `Bool` implemented.**
 [`CodegenCase.cpp`](../src/codegen/CodegenCase.cpp) emits a structured
 `--Wincomplete-patterns` warning (also enabled by `--Wall`) for constructors
 missing from a closed ADT `case`. A wildcard arm is exhaustive; a guarded arm
 does not prove coverage. `--Werror` promotes the warning to a failing build.
-`--require-effect-free` makes the same finite-ADT obligation E0203, including
-inside module function bodies. Overlap analysis and non-ADT coverage remain
-unimplemented.
+`--require-effect-free` makes the same finite-domain obligation E0203, including
+inside module function bodies, and requires direct structural descent for a
+self-call; mutual-recursion cycles are rejected. `--Woverlapping-patterns`
+reports arms definitely shadowed by an earlier unguarded arm. General overlap,
+termination, and arbitrary non-ADT coverage remain unimplemented.
 
 **Stale:** [`docs/pattern-matching.md`](pattern-matching.md) and
 [`docs/error-codes.md`](error-codes.md) describe `-Wincomplete-patterns` for
@@ -273,7 +277,7 @@ missing constructors.
 | [linear-types.md](linear-types.md) | (if still claiming E0602 unused) | E0602 is `-Wlinear-leak` |
 | [refinement-types.md](refinement-types.md) | Signature aliases checked | Syntax only |
 | [design-borrow-types.md](design-borrow-types.md) | Nothing in `.yonai` | `borrow` bitmask exists |
-| [pattern-matching.md](pattern-matching.md) | `--Wincomplete-patterns` | Finite ADT constructors only; no overlap analysis |
+| [pattern-matching.md](pattern-matching.md) | `--Wincomplete-patterns` | Finite ADTs + `Bool`; limited unreachable-arm diagnostics |
 
 ---
 

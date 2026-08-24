@@ -13,6 +13,10 @@
 - `yonac --require-effect-free` also rejects incomplete matches over registered
   finite ADTs with E0203. This applies to expression programs and module
   function bodies; wildcard arms satisfy coverage and guarded arms do not.
+- `--Woverlapping-patterns` now reports definitely unreachable case arms (and
+  `--Werror` promotes it). `--require-effect-free` also checks `Bool` cases,
+  accepts direct structural recursion through an unguarded constructor match,
+  and rejects unproven direct or mutual recursion with E0203.
 
 ### Changed
 - Repeated `yonac -I <path>` options now each consume one module directory,
@@ -21,7 +25,9 @@
   accepts only closed empty effect rows and exhaustive registered finite-ADT
   matches (E0203 otherwise). Exported empty rows are preserved as `.yonai`
   `effects -`; interfaces without a row remain unknown and are rejected by the
-  gate. It does not yet prove termination, overlap freedom, or non-ADT coverage.
+  gate. It deliberately remains conservative: it does not prove general
+  termination or arbitrary non-ADT coverage, and overlap warnings only cover
+  arms definitely unreachable after an earlier unguarded arm.
 - `yonac` now exits non-zero on refinement **E0500** and linearity **E0600** /
   **E0601** (expression programs and modules). Previously those diagnostics
   were emitted on expressions and ignored, and module compile skipped both

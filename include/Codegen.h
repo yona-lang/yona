@@ -166,10 +166,16 @@ public:
         std::vector<std::string> missing;
     };
 
+    struct CasePatternAnalysis {
+        std::vector<size_t> unreachable_clauses;
+        std::optional<FiniteCaseCoverage> incomplete;
+    };
+
     /// Missing constructors for a case over a registered finite ADT. A
     /// wildcard/identifier arm, a complete constructor set, or a non-ADT case
     /// returns std::nullopt. Guarded arms do not establish coverage.
     std::optional<FiniteCaseCoverage> finite_case_coverage(ast::CaseExpr* node) const;
+    CasePatternAnalysis analyze_case_patterns(ast::CaseExpr* node) const;
 
     /// After `compile_module`, type-check the module as a unit (`check_module`)
     /// so exported wrappers see private siblings, then copy inferred latent

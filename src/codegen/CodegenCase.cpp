@@ -527,12 +527,15 @@ static LType* common_phi_type(LType* a, LType* b, LLVMContext& ctx) {
     return LType::getInt64Ty(ctx);
 }
 
-std::optional<Codegen::FiniteCaseCoverage> Codegen::finite_case_coverage(CaseExpr* node) const {
-    if (!node) return std::nullopt;
+Codegen::CasePatternAnalysis Codegen::analyze_case_patterns(CaseExpr* node) const {
+    CasePatternAnalysis result;
+    if (!node) return result;
 
     std::string adt_type_name;
     bool has_wildcard = false;
     std::unordered_set<std::string> covered_ctors;
+    std::unordered_set<std::string> covered_atoms;
+    bool saw_bool = false, saw_unit = false;
     auto identify_adt = [&](const auto& self, PatternNode* pat) -> void {
         if (!pat || !adt_type_name.empty()) return;
         std::string ctor_name;
@@ -555,6 +558,10 @@ std::optional<Codegen::FiniteCaseCoverage> Codegen::finite_case_coverage(CaseExp
         if (pat->get_type() == AST_CONSTRUCTOR_PATTERN) {
             auto* cp = static_cast<ConstructorPattern*>(pat);
             covered_ctors.insert(cp->constructor_name);
+            if (cp->constructor_name == "True" || cp->constructor_name == "False") {
+                saw_bool = true;
+                covered_atoms.insert(cp->constructor_name);
+            }
             if (adt_type_name.empty()) {
                 auto it = types_.adt_constructors.find(cp->constructor_name);
                 if (it != types_.adt_constructors.end()) adt_type_name = it->second.type_name;
@@ -570,27 +577,56 @@ std::optional<Codegen::FiniteCaseCoverage> Codegen::finite_case_coverage(CaseExp
             has_wildcard = true;
         } else if (pat->get_type() == AST_PATTERN_VALUE) {
             auto* pv = static_cast<PatternValue*>(pat);
-            has_wildcard = std::get_if<IdentifierExpr*>(&pv->expr) != nullptr;
+            if (std::get_if<IdentifierExpr*>(&pv->expr)) {
+                has_wildcard = true;
+            } else if (auto* literal = std::get_if<LiteralExpr<void*>*>(&pv->expr)) {
+                auto literal_type = (*literal)->get_type();
+                if (literal_type == AST_TRUE_LITERAL_EXPR) { saw_bool = true; covered_atoms.insert("True"); }
+                if (literal_type == AST_FALSE_LITERAL_EXPR) { saw_bool = true; covered_atoms.insert("False"); }
+                if (literal_type == AST_UNIT_EXPR) { saw_unit = true; covered_atoms.insert("()"); }
+            }
         } else if (pat->get_type() == AST_OR_PATTERN) {
             for (const auto& alternative : static_cast<OrPattern*>(pat)->patterns)
                 self(self, alternative.get());
         }
     };
 
-    for (auto* clause : node->clauses) {
+    for (size_t index = 0; index < node->clauses.size(); ++index) {
+        auto* clause = node->clauses[index];
         if (!clause) continue;
         identify_adt(identify_adt, clause->pattern);
-        if (!clause->guard) collect(collect, clause->pattern);
+        if (!clause->guard) {
+            bool before_wildcard = has_wildcard;
+            std::unordered_set<std::string> before_ctors = covered_ctors;
+            std::unordered_set<std::string> before_atoms = covered_atoms;
+            collect(collect, clause->pattern);
+            if (before_wildcard || (before_ctors == covered_ctors && before_atoms == covered_atoms && !has_wildcard))
+                result.unreachable_clauses.push_back(index);
+        }
     }
-    if (adt_type_name.empty() || has_wildcard) return std::nullopt;
+    if (has_wildcard) return result;
 
     std::vector<std::string> missing;
-    for (const auto& [name, info] : types_.adt_constructors)
-        if (info.type_name == adt_type_name && covered_ctors.count(name) == 0)
-            missing.push_back(name);
+    if (!adt_type_name.empty()) {
+        for (const auto& [name, info] : types_.adt_constructors)
+            if (info.type_name == adt_type_name && covered_ctors.count(name) == 0)
+                missing.push_back(name);
+    } else if (saw_bool) {
+        adt_type_name = "Bool";
+        for (const auto& value : {"False", "True"})
+            if (!covered_atoms.count(value)) missing.push_back(value);
+    } else if (saw_unit && !covered_atoms.count("()")) {
+        adt_type_name = "Unit";
+        missing.push_back("()");
+    }
     std::sort(missing.begin(), missing.end());
-    if (missing.empty()) return std::nullopt;
-    return FiniteCaseCoverage{std::move(adt_type_name), std::move(missing)};
+    if (!adt_type_name.empty() && !missing.empty())
+        result.incomplete = FiniteCaseCoverage{std::move(adt_type_name), std::move(missing)};
+    return result;
+}
+
+std::optional<Codegen::FiniteCaseCoverage> Codegen::finite_case_coverage(CaseExpr* node) const {
+    return analyze_case_patterns(node).incomplete;
 }
 
 TypedValue Codegen::codegen_case(CaseExpr* node) {
@@ -638,8 +674,15 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
     // Exhaustiveness check for finite ADT scrutinees. This is deliberately a
     // warning: a catch-all remains optional unless the caller promotes
     // warnings with --Werror.
-    if (scrutinee.type == CType::ADT) {
-        if (auto coverage = finite_case_coverage(node); coverage && diag_) {
+    if (diag_) {
+        auto analysis = analyze_case_patterns(node);
+        for (size_t index : analysis.unreachable_clauses) {
+            if (index < node->clauses.size() && node->clauses[index])
+                diag_->warning(node->clauses[index]->source_context,
+                               "unreachable pattern: an earlier unguarded arm already covers it",
+                               compiler::WarningFlag::OverlappingPatterns);
+        }
+        if (auto coverage = analysis.incomplete) {
                 std::string message = "non-exhaustive pattern match on " + coverage->adt_name +
                                       " — missing constructor" +
                                       (coverage->missing.size() == 1 ? " " : "s ");
@@ -668,9 +711,13 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
     for (size_t i = 0; i < node->clauses.size(); i++) {
         auto* clause = node->clauses[i];
         auto* pat = clause->pattern;
+        const bool catch_all = !clause->guard &&
+            (pat->get_type() == AST_UNDERSCORE_PATTERN ||
+             (pat->get_type() == AST_PATTERN_VALUE &&
+              std::get_if<IdentifierExpr*>(&static_cast<PatternValue*>(pat)->expr) != nullptr));
         auto arm_named_values = named_values_;
         auto body_bb = BasicBlock::Create(*context_, "case.body." + std::to_string(i), fn);
-        auto next_bb = (i + 1 < node->clauses.size())
+        auto next_bb = (!catch_all && i + 1 < node->clauses.size())
             ? BasicBlock::Create(*context_, "case.next." + std::to_string(i+1), fn)
             : merge_bb;
 
@@ -848,6 +895,12 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
         if (arm_exit) builder_->CreateBr(merge_bb);
         results.push_back({body_tv, arm_exit ? arm_exit : builder_->GetInsertBlock()});
         transfer_branch_end(arm_exit);
+
+        // Later arms cannot be reached after an unguarded catch-all.  Besides
+        // avoiding useless IR, stopping here keeps dead blocks out of PHI
+        // construction (which otherwise dereferences a block without a
+        // terminator). Diagnostics were emitted before code generation.
+        if (catch_all) break;
 
         if (i + 1 < node->clauses.size() && next_bb != merge_bb)
             builder_->SetInsertPoint(next_bb);

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Complete Yona's conservative totality checks with overlap diagnostics, Bool/Unit exhaustiveness, and structurally decreasing direct recursion under `--require-effect-free`.
+**Goal:** Complete Yona's conservative totality checks with overlap diagnostics, Bool exhaustiveness, and structurally decreasing direct recursion under `--require-effect-free`.
 
-**Architecture:** Keep pattern-domain reasoning in a single analysis API owned by `Codegen`, consumed by both the warning path and the strict CLI gate. Add a dedicated AST-based termination analyzer in the CLI, deliberately accepting only direct calls whose recursive arguments are structurally bound descendants of a function parameter.
+**Architecture:** Keep pattern-domain reasoning in a single analysis API owned by `Codegen`, consumed by both the warning path and the strict CLI gate. Add a module-local call graph plus AST-based termination analyzer in the CLI: reject multi-function cycles and accept only direct calls whose recursive arguments are structurally bound descendants of a function parameter.
 
 **Tech Stack:** C++23, LLVM codegen, doctest, CLI11, Markdown/Astro documentation.
 
@@ -12,8 +12,8 @@
 
 - Preserve normal compilation: strict totality diagnostics occur only under `--require-effect-free`.
 - `--Wall` enables `--Woverlapping-patterns` and `--Wincomplete-patterns`; `--Werror` promotes either warning.
-- Claim finite non-ADT coverage only for Bool and Unit; symbols, numeric values, strings, collections, tuples, and records stay open.
-- Accept only direct, structurally decreasing self-recursion; reject mutual, higher-order, numeric, and original-argument recursion in strict mode.
+- Claim finite non-ADT coverage only for Bool; symbols, numeric values, strings, collections, tuples, and records stay open.
+- Reject every multi-function recursion cycle; accept only direct, structurally decreasing self-recursion; reject higher-order, numeric, and original-argument recursion in strict mode.
 - Update `CHANGELOG.md`, `docs/`, `docs/todo-list.md`, and `site/src/content/docs/` with the same change.
 
 ---
@@ -30,7 +30,7 @@
 - Produces `Codegen::analyze_case_patterns(ast::CaseExpr*) const`.
 - Existing `finite_case_coverage` delegates to the new analysis so warnings and strict errors share the exact coverage result.
 
-- [ ] **Step 1: Write failing direct-analysis tests**
+- [x] **Step 1: Write direct-analysis tests**
 
 Add tests for a wildcard followed by `Some x`, duplicate `Some` arms, an
 `or` arm that is shadowed, `True` without `False`, and a complete Bool case:
@@ -43,22 +43,23 @@ CHECK(analysis.incomplete->adt_name == "Bool");
 CHECK(analysis.incomplete->missing == vector<string>{"False"});
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Verify focused analysis tests**
 
 Run: `./out/build/x64-debug-linux/tests -ts='Diagnostics'`
 
-Expected: compile failure because `analyze_case_patterns` is absent.
+Expected: the shared analysis identifies unreachable and missing Bool arms.
 
-- [ ] **Step 3: Implement normalized top-level coverage atoms**
+- [x] **Step 3: Implement normalized top-level coverage atoms**
 
 In `CodegenCase.cpp`, classify each unguarded top-level pattern as `Any`, an
-ADT constructor name, `True`, `False`, or `Unit`; flatten `OrPattern` into
+ADT constructor name, `True`, or `False`; flatten `OrPattern` into
 atoms. Treat every guarded clause as contributing no atoms. Determine a clause
 as unreachable only when every one of its atoms is already covered by `Any` or
-the matching atom. Determine Bool/Unit incompleteness from their complete atom
-sets; retain existing registered-ADT constructor analysis.
+the matching atom. Determine Bool incompleteness from its complete atom set;
+retain existing registered-ADT constructor analysis. Unit remains outside this
+slice until a type-directed Unit scrutinee check exists.
 
-- [ ] **Step 4: Route existing finite-ADT coverage through the shared result**
+- [x] **Step 4: Route existing finite-ADT coverage through the shared result**
 
 Implement:
 
@@ -71,11 +72,11 @@ Codegen::finite_case_coverage(ast::CaseExpr* node) const {
 
 Keep the existing ADT diagnostic spelling and sorted missing constructors.
 
-- [ ] **Step 5: Verify direct diagnostics**
+- [x] **Step 5: Verify direct diagnostics**
 
 Run: `cmake --build --preset build-debug-linux --target tests && ./out/build/x64-debug-linux/tests -ts='Diagnostics'`
 
-Expected: Diagnostics suite passes, including old ADT wildcard/guarded cases and the new Bool/Unit/overlap cases.
+Expected: Diagnostics suite passes, including old ADT wildcard/guarded cases and the new Bool/overlap cases.
 
 - [ ] **Step 6: Commit Task 1**
 
@@ -84,7 +85,7 @@ git add include/Codegen.h src/codegen/CodegenCase.cpp test/codegen_test.cpp
 git commit -m "feat: analyze finite case coverage and overlaps"
 ```
 
-### Task 2: Emit overlap warnings and enforce Bool/Unit strict coverage
+### Task 2: Emit overlap warnings and enforce Bool strict coverage
 
 **Files:**
 - Modify: `src/codegen/CodegenCase.cpp`
@@ -94,7 +95,7 @@ git commit -m "feat: analyze finite case coverage and overlaps"
 **Interfaces:**
 - Consumes `Codegen::analyze_case_patterns`.
 - Emits `WarningFlag::OverlappingPatterns` for unreachable unguarded clauses.
-- `collect_incomplete_cases` uses the shared incomplete result for ADT, Bool, and Unit E0203 diagnostics.
+- `collect_incomplete_cases` uses the shared incomplete result for ADT and Bool E0203 diagnostics.
 
 - [ ] **Step 1: Write failing CLI tests**
 
@@ -135,8 +136,8 @@ Do not diagnose guarded clauses or partially overlapping alternatives.
 - [ ] **Step 4: Preserve strict diagnostic behavior**
 
 Keep `collect_incomplete_cases` unchanged except for consuming
-`finite_case_coverage`; its E0203 message must say `Bool`/`Unit` and list the
-missing atom just as it lists a missing ADT constructor.
+`finite_case_coverage`; its E0203 message must say `Bool` and list the missing
+atom just as it lists a missing ADT constructor.
 
 - [ ] **Step 5: Verify warning and strict modes**
 
@@ -181,7 +182,22 @@ Run: `./out/build/x64-debug-linux/tests -tc='yonac --require-effect-free *recurs
 
 Expected: recursive fixtures currently compile because the strict gate has no termination analysis.
 
-- [ ] **Step 3: Collect structural descendants per function body**
+- [ ] **Step 3: Build the module-local recursion graph**
+
+Walk each `ModuleDecl::functions` body and collect calls whose callee is a
+module-local function name. Run a strongly connected component pass. For every
+component with more than one function, emit E0203 at each participating
+function declaration:
+
+```cpp
+diag.error(function->source_context, ErrorCode::E0203,
+           "`--require-effect-free` cannot prove mutual recursion involving '" +
+           function->name + "'");
+```
+
+Pass only singleton components with a self-edge to the structural checker.
+
+- [ ] **Step 4: Collect structural descendants per function body**
 
 In `cli/main.cpp`, add a small lexical analyzer that receives a function's
 parameter names, enters each unguarded `CaseExpr` clause, and records names
@@ -189,7 +205,7 @@ bound by a constructor subpattern or `[head | tail]` pattern as descendants of
 the matched parameter. Recurse through `let`, `if`, `do`, nested case bodies,
 and applications while preserving lexical scope.
 
-- [ ] **Step 4: Reject unproven recursive calls**
+- [ ] **Step 5: Reject unproven recursive calls**
 
 When visiting `ApplyExpr`, recognize a direct call whose callee identifier is
 the current function name. Require at least one argument to be a recorded
@@ -201,16 +217,15 @@ diag.error(apply->source_context, ErrorCode::E0203,
            function->name + "'");
 ```
 
-Treat every cross-function recursive cycle as unproven, including a function
-calling another module-local function that leads back to it.
+The call-graph pass has already rejected every cross-function recursive cycle.
 
-- [ ] **Step 5: Verify strict recursion behavior**
+- [ ] **Step 6: Verify strict recursion behavior**
 
 Run: `cmake --build --preset build-debug-linux --target yonac tests && ./out/build/x64-debug-linux/tests -tc='yonac --require-effect-free *recursion*'`
 
 Expected: structural list recursion passes; original-argument, numeric, and mutual recursion fail with E0203.
 
-- [ ] **Step 6: Commit Task 3**
+- [ ] **Step 7: Commit Task 3**
 
 ```bash
 git add cli/main.cpp test/yona_script_test.cpp
@@ -231,14 +246,14 @@ git commit -m "feat: require structural recursion in totality mode"
 
 - [ ] **Step 1: Document the exact proof boundary**
 
-State that strict mode requires closed effects, finite ADT/Bool/Unit coverage,
+State that strict mode requires closed effects, finite ADT/Bool coverage,
 and direct structural recursion. State that guarded arms, symbols, scalar
 domains, collections, product patterns, mutual recursion, higher-order
 recursion, and numeric decreases are not proven.
 
 - [ ] **Step 2: Update the roadmap without stale checkboxes**
 
-Move #5 overlap, Bool/Unit coverage, and structural-recursion completion into
+Move #5 overlap, Bool coverage, and structural-recursion completion into
 Completed Milestones. Keep #5 open only for domains and termination models not
 covered by this conservative checker.
 

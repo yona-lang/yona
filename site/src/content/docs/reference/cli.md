@@ -60,10 +60,11 @@ Compiling a module additionally writes an interface file next to the object file
 | `--Werror` | Treat warnings as errors |
 | `-w` | Suppress all warnings |
 | `--Wincomplete-patterns` | Warn when a finite ADT `case` misses constructors (also enabled by `--Wall`) |
+| `--Woverlapping-patterns` | Warn when a case arm is definitely unreachable after an earlier unguarded arm (also enabled by `--Wall`) |
 | `--Wno-refinement` | Skip refinement checking (E0500 nonempty / nonzero proofs) |
 | `--Wno-linear` | Skip linearity checking (E0600 / E0601 / E0602) |
 | `--Wno-linear-leak` | Disable E0602 resource-leak warnings (`-Wlinear-leak`, on by default) |
-| `--require-effect-free` | Require a closed empty effect row and exhaustive registered finite-ADT `case`s; reject known, open, imported-unknown rows, or missing constructors (E0203). It does not prove termination, overlap freedom, or non-ADT coverage. |
+| `--require-effect-free` | Require a closed empty effect row, exhaustive registered finite-ADT and `Bool` `case`s, and conservative direct structural recursion; reject known/open/imported-unknown rows, missing alternatives, unproven direct recursion, or mutual recursion (E0203). It does not prove general termination or arbitrary non-ADT coverage. |
 
 The individual warning flags and which group enables them are listed on the [error codes](/reference/error-codes/) page.
 

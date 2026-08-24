@@ -135,12 +135,16 @@ Direct `perform` without a handler still warns via `-Wunhandled-effect`.
 
 ### E0203 — Effect-freedom requirement not satisfied
 
-`yonac --require-effect-free` requires both a closed empty effect row and an
-exhaustive `case` for every registered finite ADT. Known operations, open row
-variables, imports without row facts, and missing ADT constructors are rejected;
-`.yonai` records a proven empty export row as `effects -`. Ordinary compilation
-remains non-fatal: `--Wincomplete-patterns` warns about missing constructors.
-This gate does not prove termination, overlap freedom, or non-ADT coverage.
+`yonac --require-effect-free` requires a closed empty effect row, exhaustive
+registered finite-ADT and `Bool` cases, and a conservative termination proof.
+Known operations, open row variables, imports without row facts, missing
+alternatives, unproven direct recursion, and mutual-recursion cycles are
+rejected; `.yonai` records a proven empty export row as `effects -`. A direct
+self-call is accepted only when it receives a variable destructured from an
+unguarded constructor arm (or a lexical alias of that variable). Ordinary
+compilation remains non-fatal: `--Wincomplete-patterns` warns about missing
+alternatives. The gate does not prove general termination or arbitrary non-ADT
+coverage.
 
 ## Parse Errors (E03xx)
 
@@ -223,8 +227,8 @@ Warnings are controlled via `-Wall`, `-Wextra`, `-w`, and `--Werror`.
 | Flag | Name | `-Wall` | `-Wextra` |
 |------|------|---------|-----------|
 | `-Wunused-variable` | Unused variable binding | yes | yes |
-| `--Wincomplete-patterns` | Non-exhaustive finite-ADT pattern match | yes | yes |
-| `-Woverlapping-patterns` | Overlapping case patterns | yes | yes |
+| `--Wincomplete-patterns` | Non-exhaustive finite-ADT or `Bool` pattern match | yes | yes |
+| `--Woverlapping-patterns` | Definitely unreachable arm after an earlier unguarded arm | yes | yes |
 | `-Wunhandled-effect` | `perform` without matching `handle` | yes | yes |
 | `-Wlinear-leak` | Unconsumed `Linear` value at scope exit (**E0602**; on by default) | yes | yes |
 | `-Wshadow` | Variable shadowing | no | yes |

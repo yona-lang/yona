@@ -75,9 +75,11 @@ discarded in a `do` block or bound to `_` (`-Wunmatched-adt`, enabled by
 `--Wall`). It also warns for a finite-ADT `case` that misses constructors
 (`--Wincomplete-patterns`, also enabled by `--Wall`). A wildcard arm closes
 coverage; a guarded arm does not. `--require-effect-free` turns missing
-constructors in those finite-ADT cases into E0203 errors, alongside its
-closed-empty effect-row requirement. It does not prove termination, overlap
-freedom, or non-ADT coverage.
+alternatives in those finite-ADT and `Bool` cases into E0203 errors, alongside
+its closed-empty effect-row requirement and conservative direct structural
+recursion check. Mutual recursion is rejected. `--Woverlapping-patterns` warns
+about an arm definitely shadowed by an earlier unguarded arm. The strict gate
+does not prove general termination or arbitrary non-ADT coverage.
 
 ## Traits <span class="yona-status yona-status--stable">Stable</span>
 

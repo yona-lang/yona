@@ -347,6 +347,22 @@ TEST_CASE("yonac --require-effect-free rejects guarded finite ADT cases") {
     CHECK(r.out.find("Some") != std::string::npos);
 }
 
+TEST_CASE("yonac warns for overlapping patterns and rejects incomplete Bool in strict mode") {
+    auto overlap = write_temp_yona("overlapping_patterns",
+                                   "case true of _ -> 1; true -> 2 end\n");
+    auto warning = run_yonac_ir(overlap, {"--Woverlapping-patterns"});
+    CHECK(warning.status == 0);
+    CHECK(warning.out.find("unreachable pattern") != std::string::npos);
+    auto werror = run_yonac_ir(overlap, {"--Woverlapping-patterns", "--Werror"});
+    CHECK(werror.status != 0);
+
+    auto incomplete = write_temp_yona("incomplete_bool", "case true of true -> 1 end\n");
+    auto strict = run_yonac_ir(incomplete, {"--require-effect-free"});
+    CHECK(strict.status != 0);
+    CHECK(strict.out.find("E0203") != std::string::npos);
+    CHECK(strict.out.find("False") != std::string::npos);
+}
+
 TEST_CASE("yonac --require-effect-free rejects incomplete module finite ADT cases") {
     auto src = write_temp_yona("effect_free_module_incomplete_case",
         "module Test\\StrictCase\n"
@@ -358,6 +374,34 @@ TEST_CASE("yonac --require-effect-free rejects incomplete module finite ADT case
     CHECK(r.status != 0);
     CHECK(r.out.find("E0203") != std::string::npos);
     CHECK(r.out.find("Second") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free requires structural recursion") {
+    auto structural = write_temp_yona("effect_free_structural_recursion",
+        "module Test\\StructuralRecursion\n"
+        "export sum\n"
+        "type Nat = Zero | Succ Nat\n"
+        "sum n = case n of Zero -> 0; Succ rest -> let next = rest in sum next end\n");
+    auto structural_result = run_yonac_ir(structural, {"--require-effect-free"});
+    CHECK(structural_result.status == 0);
+
+    auto direct = write_temp_yona("effect_free_direct_recursion",
+        "module Test\\DirectRecursion\n"
+        "export loop\n"
+        "loop n = loop n\n");
+    auto direct_result = run_yonac_ir(direct, {"--require-effect-free"});
+    CHECK(direct_result.status != 0);
+    CHECK(direct_result.out.find("E0203") != std::string::npos);
+
+    auto mutual = write_temp_yona("effect_free_mutual_recursion",
+        "module Test\\MutualRecursion\n"
+        "export even\n"
+        "even n = odd n\n"
+        "odd n = even n\n");
+    auto mutual_result = run_yonac_ir(mutual, {"--require-effect-free"});
+    CHECK(mutual_result.status != 0);
+    CHECK(mutual_result.out.find("E0203") != std::string::npos);
+    CHECK(mutual_result.out.find("mutual recursion") != std::string::npos);
 }
 
 TEST_CASE("yonac --require-effect-free rejects imported functions without effect rows") {

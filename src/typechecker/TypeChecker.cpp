@@ -216,9 +216,14 @@ void TypeChecker::check_module(ast::ModuleDecl* mod) {
     auto infer_all = [&]() {
         for (auto* func : mod->functions) {
             if (!func) continue;
-            auto* ty = infer(func, env, 0);
-            if (!ty) continue;
             auto pit = prelim.find(func->name);
+            if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var)
+                recursive_self_vars_.push_back(pit->second->var_id);
+            auto* ty = infer(func, env, 0);
+            if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var &&
+                !recursive_self_vars_.empty() && recursive_self_vars_.back() == pit->second->var_id)
+                recursive_self_vars_.pop_back();
+            if (!ty) continue;
             if (pit != prelim.end())
                 unifier_.unify(pit->second, ty, func->source_context,
                                "in module function '" + func->name + "'");

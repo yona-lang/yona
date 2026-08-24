@@ -33,7 +33,6 @@ Extend the shared coverage analysis to domains whose complete set is known
 without type-level range reasoning:
 
 - `Bool`: `True` and `False`;
-- `Unit`: `()`.
 
 The first release deliberately makes no exhaustive claims for symbols,
 integers, floats, strings, byte values, tuples, sequences, dictionaries, sets,
@@ -44,13 +43,15 @@ E0203 under `--require-effect-free`.
 
 ### 3. Structural self-recursion
 
-Under `--require-effect-free`, permit a function to call itself only when each
-recursive call passes a value structurally extracted from one of its own
-parameters by an unguarded constructor or non-empty sequence pattern. The
-analysis is per function body and follows lexical aliases of those destructured
-values. Calls through another function, mutual recursion, recursive closure
-captures, numeric decrement, and calls with the original parameter are not
-proven terminating and therefore produce E0203.
+Under `--require-effect-free`, build a module-local call graph before checking
+function bodies. Reject every multi-function strongly connected component:
+mutual recursion is deliberately outside this first proof system. For a direct
+self-cycle, permit calls only when each recursive call passes a value
+structurally extracted from one of its own parameters by an unguarded
+constructor or non-empty sequence pattern. The analysis follows lexical aliases
+of those destructured values. Recursive closure captures, numeric decrement,
+and calls with the original parameter are not proven terminating and therefore
+produce E0203.
 
 This is a conservative syntactic termination check, not a general termination
 prover. It does not change normal compilation or introduce annotations.
@@ -60,8 +61,8 @@ prover. It does not change normal compilation or introduce annotations.
 - Default compilation behavior is preserved.
 - `--Wall` enables overlap and incompleteness warnings; `--Werror` promotes
   them.
-- `--require-effect-free` requires closed empty effects, exhaustive proven
-  finite matches, and structurally terminating direct recursion.
+- `--require-effect-free` requires closed empty effects, exhaustive proven finite
+  ADT and Bool matches, and structurally terminating direct recursion.
 - Existing ADT coverage stays finite and constructor-based. Guards do not
   establish exhaustiveness or termination facts.
 

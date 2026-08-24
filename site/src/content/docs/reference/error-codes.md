@@ -145,13 +145,14 @@ A direct `perform` without a handler still warns via `-Wunhandled-effect`.
 
 ### E0203 — Effect-freedom requirement not satisfied
 
-`yonac --require-effect-free` accepts only a closed empty effect row and
-exhaustive `case` expressions over registered finite ADTs. Known operations,
-open row variables, imports without row facts, and missing ADT constructors are
-rejected; a proven empty exported row is recorded in `.yonai` as `effects -`.
-Ordinary compilation remains non-fatal: `--Wincomplete-patterns` warns about
-missing constructors. The flag does not prove termination, overlap freedom, or
-non-ADT coverage.
+`yonac --require-effect-free` accepts only a closed empty effect row, exhaustive
+registered finite-ADT and `Bool` `case` expressions, and direct recursion with
+a conservative structural-descent proof. Known operations, open row variables,
+imports without row facts, missing alternatives, unproven direct recursion, and
+mutual recursion are rejected; a proven empty exported row is recorded in
+`.yonai` as `effects -`. Ordinary compilation remains non-fatal:
+`--Wincomplete-patterns` warns about missing alternatives. The flag does not
+prove general termination or arbitrary non-ADT coverage.
 
 ## Parse errors (E03xx)
 
@@ -315,8 +316,8 @@ Warnings are controlled via `--Wall`, `--Wextra`, `-w`, and `--Werror` (see the 
 | Flag | Name | `--Wall` | `--Wextra` |
 |------|------|----------|------------|
 | `-Wunused-variable` | Unused variable binding | yes | yes |
-| `--Wincomplete-patterns` | Non-exhaustive finite-ADT pattern match | yes | yes |
-| `-Woverlapping-patterns` | Overlapping case patterns | yes | yes |
+| `--Wincomplete-patterns` | Non-exhaustive finite-ADT or `Bool` pattern match | yes | yes |
+| `--Woverlapping-patterns` | Definitely unreachable arm after an earlier unguarded arm | yes | yes |
 | `-Wunhandled-effect` | `perform` without matching `handle` | yes | yes |
 | `-Wlinear-leak` | Unconsumed `Linear` value at scope exit (`E0602`; on by default) | yes | yes |
 | `-Wshadow` | Variable shadowing | no | yes |

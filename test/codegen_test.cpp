@@ -1377,6 +1377,30 @@ TEST_SUITE("Diagnostics") {
     CHECK(diag.records().back().message.find("None, Some") != string::npos);
   }
 
+  TEST_CASE("Case analysis finds shadowed and missing Bool arms") {
+    const string source = "case true of true -> 1; true -> 2 end";
+    parser::Parser parser;
+    Codegen codegen("bool_case");
+    auto parsed = parser.parse_expression(source, "bool-case.yona");
+    REQUIRE(parsed.has_value());
+    auto analysis = codegen.analyze_case_patterns(static_cast<CaseExpr*>(parsed.value().get()));
+    CHECK(analysis.unreachable_clauses == vector<size_t>{1});
+    REQUIRE(analysis.incomplete.has_value());
+    CHECK(analysis.incomplete->adt_name == "Bool");
+    CHECK(analysis.incomplete->missing == vector<string>{"False"});
+  }
+
+  TEST_CASE("Case analysis treats both Bool arms as exhaustive") {
+    const string source = "case true of true -> 1; false -> 0 end";
+    parser::Parser parser;
+    Codegen codegen("complete_bool_case");
+    auto parsed = parser.parse_expression(source, "bool-complete.yona");
+    REQUIRE(parsed.has_value());
+    auto analysis = codegen.analyze_case_patterns(static_cast<CaseExpr*>(parsed.value().get()));
+    CHECK(analysis.unreachable_clauses.empty());
+    CHECK_FALSE(analysis.incomplete.has_value());
+  }
+
   TEST_CASE("Parser errors route through DiagnosticEngine") {
     DiagnosticEngine diag;
     string source = "let x = in 42";
