@@ -27,7 +27,7 @@ Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 | Type-level `&T` / lifetimes | missing | missing | missing | missing | missing | missing | **design-only** |
 | GENFN + borrow bitmask | n/a | implemented | missing | implemented | implemented | implemented | **implemented** |
 | `-Wunmatched-adt` | n/a | n/a | implemented | n/a | n/a | implemented | **implemented** |
-| Case exhaustiveness (`-Wincomplete-patterns`) | n/a | n/a | missing | partial | missing | missing | **partial** |
+| Case exhaustiveness (`--Wincomplete-patterns`) | n/a | n/a | missing | implemented | n/a | implemented | **partial** (finite ADTs; no overlap/non-ADT analysis) |
 
 `MonoType` tags are `Var | Con | App | Arrow | MTuple | MRecord | ERow`
 ([`include/typechecker/InferType.h`](../include/typechecker/InferType.h)).
@@ -237,10 +237,12 @@ in non-final `do` steps and `let _ = …`
 **Positive:** `let r = Option does not warn`.
 **Negative:** `discarded Option in do warns`; `let _ = Option warns`.
 
-**Case exhaustiveness — partial.** Codegen prints `non-exhaustive…` on
-`std::cerr` ([`src/codegen/CodegenCase.cpp`](../src/codegen/CodegenCase.cpp));
-not `DiagnosticEngine`. Flags **`-Wincomplete-patterns`** and
-**`-Woverlapping-patterns`** are listed for `-Wall` and **never emitted**.
+**Case exhaustiveness — finite ADTs implemented.**
+[`CodegenCase.cpp`](../src/codegen/CodegenCase.cpp) emits a structured
+`--Wincomplete-patterns` warning (also enabled by `--Wall`) for constructors
+missing from a closed ADT `case`. A wildcard arm is exhaustive; a guarded arm
+does not prove coverage. `--Werror` promotes the warning to a failing build.
+Overlap analysis and non-ADT coverage remain unimplemented.
 
 **Stale:** [`docs/pattern-matching.md`](pattern-matching.md) and
 [`docs/error-codes.md`](error-codes.md) describe `-Wincomplete-patterns` for
@@ -268,7 +270,7 @@ missing constructors.
 | [linear-types.md](linear-types.md) | (if still claiming E0602 unused) | E0602 is `-Wlinear-leak` |
 | [refinement-types.md](refinement-types.md) | Signature aliases checked | Syntax only |
 | [design-borrow-types.md](design-borrow-types.md) | Nothing in `.yonai` | `borrow` bitmask exists |
-| [pattern-matching.md](pattern-matching.md) | `-Wincomplete-patterns` | Never emitted |
+| [pattern-matching.md](pattern-matching.md) | `--Wincomplete-patterns` | Finite ADT constructors only; no overlap analysis |
 
 ---
 

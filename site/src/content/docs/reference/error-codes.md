@@ -312,7 +312,7 @@ Warnings are controlled via `--Wall`, `--Wextra`, `-w`, and `--Werror` (see the 
 | Flag | Name | `--Wall` | `--Wextra` |
 |------|------|----------|------------|
 | `-Wunused-variable` | Unused variable binding | yes | yes |
-| `-Wincomplete-patterns` | Non-exhaustive pattern match | yes | yes |
+| `--Wincomplete-patterns` | Non-exhaustive finite-ADT pattern match | yes | yes |
 | `-Woverlapping-patterns` | Overlapping case patterns | yes | yes |
 | `-Wunhandled-effect` | `perform` without matching `handle` | yes | yes |
 | `-Wlinear-leak` | Unconsumed `Linear` value at scope exit (`E0602`; on by default) | yes | yes |

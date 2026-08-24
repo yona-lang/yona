@@ -289,3 +289,47 @@ TEST_CASE("yonac leak warning is E0602 not unhandled-effect") {
     CHECK(r.out.find("E0602") != std::string::npos);
     CHECK(r.out.find("unhandled-effect") == std::string::npos);
 }
+
+TEST_CASE("yonac --Wno-linear permits a linear use-after-consume") {
+    auto src = write_temp_yona(
+        "e0600_uac_allow",
+        "let makeHandle x = Linear x, conn = makeHandle 0, conn2 = conn, conn3 = conn in conn3\n");
+    auto r = run_yonac_ir(src, {"--Wno-linear"});
+    CHECK(r.status == 0);
+    CHECK(r.out.find("E0600") == std::string::npos);
+}
+
+TEST_CASE("yonac --Wincomplete-patterns warns without failing") {
+    auto src = write_temp_yona("incomplete_patterns", "case Some 1 of Some x -> x end\n");
+    auto r = run_yonac_ir(src, {"--Wincomplete-patterns"});
+    CHECK(r.status == 0);
+    CHECK(r.out.find("Wincomplete-patterns") != std::string::npos);
+    CHECK(r.out.find("None") != std::string::npos);
+}
+
+TEST_CASE("yonac --Werror promotes incomplete pattern warnings") {
+    auto src = write_temp_yona("incomplete_patterns_werror", "case Some 1 of Some x -> x end\n");
+    auto r = run_yonac_ir(src, {"--Werror", "--Wincomplete-patterns"});
+    CHECK(r.status != 0);
+    CHECK(r.out.find("Wincomplete-patterns") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free accepts a pure expression") {
+    auto src = write_temp_yona("effect_free_pure", "let add x y = x + y in add 20 22\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free"});
+    CHECK(r.status == 0);
+    CHECK(r.out.find("E0203") == std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free rejects imported functions without effect rows") {
+    fs::path modules = yona::test::link::scratch_root() / "unknown_effect_rows";
+    fs::create_directories(modules / "Test");
+    {
+        std::ofstream iface(modules / "Test" / "Unknown.yonai");
+        iface << "FN yona_Test_Unknown__f 0 -> INT\n";
+    }
+    auto src = write_temp_yona("effect_free_unknown_import", "import f from Test\\Unknown in f\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free", "-I", modules.string()});
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0203") != std::string::npos);
+}

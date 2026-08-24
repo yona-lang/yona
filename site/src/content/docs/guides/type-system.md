@@ -72,10 +72,10 @@ Empty`), and types may be recursive and polymorphic. The prelude types
 
 The compiler warns when an `Option`/`Result`/other ADT value is silently
 discarded in a `do` block or bound to `_` (`-Wunmatched-adt`, enabled by
-`-Wall`). Full compile-time exhaustiveness checking of `case` expressions
-is not finished: a `case` that misses a constructor is today reported with
-a runtime "non-exhaustive match" message rather than a compile-time
-warning. Write a catch-all arm or match every constructor.
+`--Wall`). It also warns for a finite-ADT `case` that misses constructors
+(`--Wincomplete-patterns`, also enabled by `--Wall`). A wildcard arm closes
+coverage; a guarded arm does not. Overlap analysis and non-ADT coverage are
+still incomplete.
 
 ## Traits <span class="yona-status yona-status--stable">Stable</span>
 

@@ -7,7 +7,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
-#include <iostream>
+#include <algorithm>
 
 namespace yona::compiler::codegen {
 using namespace llvm;
@@ -569,14 +569,18 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
         }
     }
 
-    // Exhaustiveness check for ADT scrutinees
+    // Exhaustiveness check for finite ADT scrutinees. This is deliberately a
+    // warning: a catch-all remains optional unless the caller promotes
+    // warnings with --Werror.
     if (scrutinee.type == CType::ADT) {
-        // Find the ADT type name from the first constructor pattern
-        std::string adt_type_name;
+        std::string adt_type_name = scrutinee.adt_type_name;
         bool has_wildcard = false;
         std::unordered_set<std::string> covered_ctors;
 
         for (auto* clause : node->clauses) {
+            // A guard may reject a value after its pattern matched, so it
+            // cannot establish coverage for either a constructor or `_`.
+            if (clause->guard) continue;
             auto* pat = clause->pattern;
             if (pat->get_type() == AST_CONSTRUCTOR_PATTERN) {
                 auto* cp = static_cast<ConstructorPattern*>(pat);
@@ -586,19 +590,57 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
                     if (it != types_.adt_constructors.end())
                         adt_type_name = it->second.type_name;
                 }
-            } else if (pat->get_type() == AST_UNDERSCORE_PATTERN ||
-                       pat->get_type() == AST_PATTERN_VALUE) {
+            } else if (pat->get_type() == AST_RECORD_PATTERN) {
+                auto* rp = static_cast<RecordPattern*>(pat);
+                covered_ctors.insert(rp->recordType);
+                if (adt_type_name.empty()) {
+                    auto it = types_.adt_constructors.find(rp->recordType);
+                    if (it != types_.adt_constructors.end())
+                        adt_type_name = it->second.type_name;
+                }
+            } else if (pat->get_type() == AST_UNDERSCORE_PATTERN) {
                 has_wildcard = true;
+            } else if (pat->get_type() == AST_PATTERN_VALUE) {
+                auto* pv = static_cast<PatternValue*>(pat);
+                has_wildcard = std::get_if<IdentifierExpr*>(&pv->expr) != nullptr;
+            } else if (pat->get_type() == AST_OR_PATTERN) {
+                auto* op = static_cast<OrPattern*>(pat);
+                for (const auto& alternative : op->patterns) {
+                    if (!alternative) continue;
+                    if (alternative->get_type() == AST_UNDERSCORE_PATTERN) {
+                        has_wildcard = true;
+                        break;
+                    }
+                    if (alternative->get_type() == AST_CONSTRUCTOR_PATTERN) {
+                        auto* cp = static_cast<ConstructorPattern*>(alternative.get());
+                        covered_ctors.insert(cp->constructor_name);
+                        if (adt_type_name.empty()) {
+                            auto it = types_.adt_constructors.find(cp->constructor_name);
+                            if (it != types_.adt_constructors.end())
+                                adt_type_name = it->second.type_name;
+                        }
+                    }
+                }
             }
         }
 
         if (!adt_type_name.empty() && !has_wildcard) {
-            // Check all constructors of this ADT are covered
+            std::vector<std::string> missing;
             for (auto& [name, info] : types_.adt_constructors) {
-                if (info.type_name == adt_type_name && covered_ctors.count(name) == 0) {
-                    std::cerr << "Warning: non-exhaustive pattern match on " << adt_type_name
-                              << " — missing constructor " << name << "\n";
+                if (info.type_name == adt_type_name && covered_ctors.count(name) == 0)
+                    missing.push_back(name);
+            }
+            std::sort(missing.begin(), missing.end());
+            if (!missing.empty() && diag_) {
+                std::string message = "non-exhaustive pattern match on " + adt_type_name +
+                                      " — missing constructor" +
+                                      (missing.size() == 1 ? " " : "s ");
+                for (size_t i = 0; i < missing.size(); ++i) {
+                    if (i) message += ", ";
+                    message += missing[i];
                 }
+                diag_->warning(node->source_context, message,
+                               compiler::WarningFlag::IncompletePatterns);
             }
         }
     }

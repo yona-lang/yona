@@ -158,7 +158,7 @@ Update `docs/todo-list.md` Bugs section checkboxes when fixed.
 
 ## Phase 1 — GitHub #3: Type-system status audit
 
-**Status (2026-08-18):** **Done.** `docs/type-system-status.md` (`d7abcba`); [#3](https://github.com/yona-lang/yona/issues/74) closed. Follow-ups #9 effect decls, #10 blocking E0500/E0600, #11 `-Wincomplete-patterns`.
+**Status (2026-08-18):** **Done.** `docs/type-system-status.md` (`d7abcba`); [#3](https://github.com/yona-lang/yona/issues/74) closed. Follow-ups #9 effect decls and #10 blocking E0500/E0600 landed; #11 finite-ADT `--Wincomplete-patterns` landed 2026-08-24.
 
 **Goal:** Deliver `docs/type-system-status.md` so later issues do not invent features that already exist (or depend on fiction).
 

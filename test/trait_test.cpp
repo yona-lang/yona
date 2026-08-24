@@ -291,6 +291,7 @@ TEST_CASE("Constrained instance - show (Some 42) resolves through Show Option + 
     string mod_source = R"(
 module Test\ShowOpt2
 
+export type Option
 export showOpt
 
 type Option a = Some a | None
@@ -326,6 +327,7 @@ TEST_CASE("Constrained instance - None case") {
     string mod_source = R"(
 module Test\ShowNone
 
+export type Option
 export showNone
 
 type Option a = Some a | None

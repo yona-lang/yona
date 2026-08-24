@@ -283,7 +283,7 @@ case color of
     Red   -> "red"
     Green -> "green"
 end
-# Warning: non-exhaustive pattern match on Color — missing constructor Blue
+# `--Wincomplete-patterns` warning: non-exhaustive pattern match on Color — missing constructor Blue
 ```
 
 A `_` or variable arm makes any match exhaustive. Heed these warnings: a

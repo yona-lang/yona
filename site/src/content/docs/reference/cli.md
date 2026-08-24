@@ -59,6 +59,7 @@ Compiling a module additionally writes an interface file next to the object file
 | `--Wextra` | Enable all warnings (adds shadowing, missing signatures, unused imports) |
 | `--Werror` | Treat warnings as errors |
 | `-w` | Suppress all warnings |
+| `--Wincomplete-patterns` | Warn when a finite ADT `case` misses constructors (also enabled by `--Wall`) |
 | `--Wno-refinement` | Skip refinement checking (E0500 nonempty / nonzero proofs) |
 | `--Wno-linear` | Skip linearity checking (E0600 / E0601 / E0602) |
 | `--Wno-linear-leak` | Disable E0602 resource-leak warnings (`-Wlinear-leak`, on by default) |

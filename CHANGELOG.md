@@ -6,8 +6,14 @@
 - `export type T opaque` exports an ADT's nominal type without exposing its
   constructors. Public smart constructors and observers remain callable,
   including generic exports that use the hidden representation internally.
+- `--Wincomplete-patterns` (also enabled by `--Wall`) reports missing
+  constructors in finite ADT `case` expressions. A wildcard arm satisfies the
+  check; guarded arms do not. `--Werror` now correctly makes these diagnostics
+  fail compilation.
 
 ### Changed
+- Repeated `yonac -I <path>` options now each consume one module directory,
+  rather than swallowing the input source as another include path.
 - `yonac --require-effect-free` establishes the first #5 effect-freedom gate:
   it accepts only closed empty effect rows (E0203 otherwise). Exported empty
   rows are preserved as `.yonai` `effects -`; interfaces without a row remain

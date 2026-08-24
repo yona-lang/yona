@@ -283,6 +283,7 @@ int main(int argc, char *argv[]) {
   bool flag_wextra = false;
   bool flag_werror = false;
   bool flag_w = false;
+  bool flag_incomplete_patterns = false;
   bool flag_no_refinement = false;
   bool flag_no_linear = false;
   bool flag_no_linear_leak = false;
@@ -290,6 +291,7 @@ int main(int argc, char *argv[]) {
   bool flag_debug = false;
   int opt_level = 2;
   vector<string> include_paths;
+  string last_include_path;
   string sysroot_path;
   string explain_code;
   string linker_mode_opt;
@@ -297,7 +299,9 @@ int main(int argc, char *argv[]) {
   app.set_version_flag("--version", YONA_VERSION_STRING);
   app.add_option("input", input_file, "Input .yona file, or - to read stdin");
   app.add_option("-o,--output", output_file, "Output file");
-  app.add_option("-I,--include", include_paths, "Module search paths (for .yonai files)");
+  app.add_option("-I,--include", last_include_path, "Module search paths (for .yonai files)")
+      ->take_last()
+      ->each([&include_paths](string path) { include_paths.push_back(std::move(path)); });
   app.add_option("--sysroot", sysroot_path, "Yona distribution root (used to find lib/ and runtime objects)");
   app.add_option("--linker-mode", linker_mode_opt, "Linker mode: auto|bundled|system|inprocess (also via YONAC_LINKER_MODE)");
   app.add_option("-O", opt_level, "Optimization level (0-3, default 2)")->check(CLI::Range(0, 3));
@@ -322,6 +326,8 @@ int main(int argc, char *argv[]) {
   app.add_flag("--Wextra", flag_wextra, "Enable all warnings");
   app.add_flag("--Werror", flag_werror, "Treat warnings as errors");
   app.add_flag("-w", flag_w, "Suppress all warnings");
+  app.add_flag("--Wincomplete-patterns", flag_incomplete_patterns,
+               "Warn when a finite ADT case misses constructors");
   app.add_flag("--Wno-refinement", flag_no_refinement,
                "Skip refinement checking (E0500 nonempty/nonzero proofs)");
   app.add_flag("--Wno-linear", flag_no_linear,
@@ -428,6 +434,8 @@ int main(int argc, char *argv[]) {
     diag.enable_wall();
   if (flag_wextra)
     diag.enable_wextra();
+  if (flag_incomplete_patterns)
+    diag.enable_warning(WarningFlag::IncompletePatterns);
   if (flag_werror)
     diag.set_warnings_as_errors(true);
   if (flag_no_linear_leak)
@@ -639,7 +647,7 @@ int main(int argc, char *argv[]) {
   }
   // Codegen may still produce a verifiable module after E0104/etc.; do not
   // link a binary that would return the wrong result with exit 0.
-  if (codegen.error_count_ > 0)
+  if (codegen.error_count_ > 0 || diag.has_errors())
     return 1;
 
   // Print summary if there were warnings

@@ -944,6 +944,9 @@ fetch path = perform Fs.read path
     Codegen mod_codegen("fx_effects_mod");
     auto mod = mod_codegen.compile_module(mod_result.value().get());
     REQUIRE(mod != nullptr);
+    DiagnosticEngine module_diag;
+    typechecker::TypeChecker module_checker(module_diag);
+    mod_codegen.populate_interface_effect_rows(mod_result.value().get(), module_checker);
     fs::path iface = yona_lib / "Test" / "Fx.yonai";
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
@@ -1051,6 +1054,9 @@ apply f x = f x
     Codegen mod_codegen("hof_effects_mod");
     auto mod = mod_codegen.compile_module(mod_result.value().get());
     REQUIRE(mod != nullptr);
+    DiagnosticEngine module_diag;
+    typechecker::TypeChecker module_checker(module_diag);
+    mod_codegen.populate_interface_effect_rows(mod_result.value().get(), module_checker);
     fs::path iface = yona_lib / "Test" / "Hof.yonai";
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
@@ -1092,6 +1098,9 @@ wrap = \() -> readSecret ()
     Codegen mod_codegen("wrap_effects_mod");
     auto mod = mod_codegen.compile_module(mod_result.value().get());
     REQUIRE(mod != nullptr);
+    DiagnosticEngine module_diag;
+    typechecker::TypeChecker module_checker(module_diag);
+    mod_codegen.populate_interface_effect_rows(mod_result.value().get(), module_checker);
     fs::path iface = yona_lib / "Test" / "Wrap.yonai";
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
@@ -1149,6 +1158,9 @@ readSecret = \() -> perform Fs.read "/etc/shadow"
     Codegen mod_codegen("wrap_first_effects_mod");
     auto mod = mod_codegen.compile_module(mod_result.value().get());
     REQUIRE(mod != nullptr);
+    DiagnosticEngine module_diag;
+    typechecker::TypeChecker module_checker(module_diag);
+    mod_codegen.populate_interface_effect_rows(mod_result.value().get(), module_checker);
     fs::path iface = yona_lib / "Test" / "WrapFirst.yonai";
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
@@ -1298,6 +1310,63 @@ TEST_SUITE("Diagnostics") {
     CHECK(DiagnosticEngine::flag_name(WarningFlag::OverlappingPatterns) == "overlapping-patterns");
     CHECK(DiagnosticEngine::flag_name(WarningFlag::UnmatchedAdt) == "unmatched-adt");
     CHECK(DiagnosticEngine::flag_name(WarningFlag::LinearLeak) == "linear-leak");
+  }
+
+  TEST_CASE("Non-exhaustive ADT cases emit -Wincomplete-patterns") {
+    const string source = "case Some 1 of Some x -> x end";
+    DiagnosticEngine diag;
+    diag.set_source(source, "incomplete-case.yona");
+    diag.enable_warning(WarningFlag::IncompletePatterns);
+
+    parser::Parser parser;
+    Codegen codegen("incomplete_case", &diag);
+    if (fs::exists(yona::test::lib_dir()))
+      codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    codegen.load_prelude(&parser);
+    auto parsed = parser.parse_expression(source, "incomplete-case.yona");
+    REQUIRE(parsed.has_value());
+    REQUIRE(codegen.compile(parsed.value().get()) != nullptr);
+
+    REQUIRE(diag.warning_count() == 1);
+    CHECK(diag.records().back().message.find("non-exhaustive pattern match on Option") != string::npos);
+    CHECK(diag.records().back().message.find("None") != string::npos);
+  }
+
+  TEST_CASE("Wildcard case arm satisfies ADT exhaustiveness") {
+    const string source = "case Some 1 of Some x -> x; _ -> 0 end";
+    DiagnosticEngine diag;
+    diag.set_source(source, "complete-case.yona");
+    diag.enable_warning(WarningFlag::IncompletePatterns);
+
+    parser::Parser parser;
+    Codegen codegen("complete_case", &diag);
+    if (fs::exists(yona::test::lib_dir()))
+      codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    codegen.load_prelude(&parser);
+    auto parsed = parser.parse_expression(source, "complete-case.yona");
+    REQUIRE(parsed.has_value());
+    REQUIRE(codegen.compile(parsed.value().get()) != nullptr);
+
+    CHECK(diag.warning_count() == 0);
+  }
+
+  TEST_CASE("Guarded constructor arm does not satisfy ADT exhaustiveness") {
+    const string source = "case Some 1 of Some x if x > 0 -> x end";
+    DiagnosticEngine diag;
+    diag.set_source(source, "guarded-case.yona");
+    diag.enable_warning(WarningFlag::IncompletePatterns);
+
+    parser::Parser parser;
+    Codegen codegen("guarded_case", &diag);
+    if (fs::exists(yona::test::lib_dir()))
+      codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    codegen.load_prelude(&parser);
+    auto parsed = parser.parse_expression(source, "guarded-case.yona");
+    REQUIRE(parsed.has_value());
+    REQUIRE(codegen.compile(parsed.value().get()) != nullptr);
+
+    REQUIRE(diag.warning_count() == 1);
+    CHECK(diag.records().back().message.find("None, Some") != string::npos);
   }
 
   TEST_CASE("Parser errors route through DiagnosticEngine") {
