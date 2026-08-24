@@ -321,6 +321,45 @@ TEST_CASE("yonac --require-effect-free accepts a pure expression") {
     CHECK(r.out.find("E0203") == std::string::npos);
 }
 
+TEST_CASE("yonac --require-effect-free rejects incomplete finite ADT cases") {
+    auto src = write_temp_yona("effect_free_incomplete_case", "case Some 1 of Some x -> x end\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free"});
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0203") != std::string::npos);
+    CHECK(r.out.find("None") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free accepts wildcard finite ADT cases") {
+    auto src = write_temp_yona("effect_free_wildcard_case",
+                               "case Some 1 of Some x -> x; _ -> 0 end\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free"});
+    CHECK(r.status == 0);
+    CHECK(r.out.find("E0203") == std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free rejects guarded finite ADT cases") {
+    auto src = write_temp_yona("effect_free_guarded_case",
+                               "case Some 1 of Some x if x > 0 -> x end\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free"});
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0203") != std::string::npos);
+    CHECK(r.out.find("None") != std::string::npos);
+    CHECK(r.out.find("Some") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free rejects incomplete module finite ADT cases") {
+    auto src = write_temp_yona("effect_free_module_incomplete_case",
+        "module Test\\StrictCase\n"
+        "export type Choice\n"
+        "export choose\n"
+        "type Choice = First Int | Second Int\n"
+        "choose value = case value of First x -> x end\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free"});
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0203") != std::string::npos);
+    CHECK(r.out.find("Second") != std::string::npos);
+}
+
 TEST_CASE("yonac --require-effect-free rejects imported functions without effect rows") {
     fs::path modules = yona::test::link::scratch_root() / "unknown_effect_rows";
     fs::create_directories(modules / "Test");

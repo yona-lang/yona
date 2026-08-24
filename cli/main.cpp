@@ -27,6 +27,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -237,8 +238,193 @@ static bool run_overlay_checkers(ast::AstNode *root, DiagnosticEngine &diag, typ
   return !diag.has_errors();
 }
 
+static string format_missing_constructors(const vector<string> &missing) {
+  string names;
+  for (size_t i = 0; i < missing.size(); ++i) {
+    if (i) names += ", ";
+    names += missing[i];
+  }
+  return names;
+}
+
+static bool collect_incomplete_cases(ast::AstNode *node, Codegen &codegen,
+                                     DiagnosticEngine &diag) {
+  if (!node) return true;
+
+  bool ok = true;
+  const auto walk = [&](ast::AstNode *child) {
+    if (!collect_incomplete_cases(child, codegen, diag)) ok = false;
+  };
+
+  switch (node->get_type()) {
+  case ast::AST_MAIN:
+    walk(static_cast<ast::MainNode *>(node)->node);
+    break;
+  case ast::AST_MODULE_DECL: {
+    auto *module = static_cast<ast::ModuleDecl *>(node);
+    for (auto *function : module->functions) walk(function);
+    for (auto *trait : module->trait_declarations)
+      for (const auto &method : trait->methods) walk(method.default_impl);
+    for (auto *instance : module->instance_declarations)
+      for (auto *method : instance->methods) walk(method);
+    for (auto *external : module->extern_declarations) walk(external->body);
+    break;
+  }
+  case ast::AST_FUNCTION_EXPR: {
+    auto *function = static_cast<ast::FunctionExpr *>(node);
+    for (auto *body : function->bodies) {
+      if (auto *guarded = dynamic_cast<ast::BodyWithGuards *>(body)) {
+        walk(guarded->guard);
+        walk(guarded->expr);
+      } else if (auto *plain = dynamic_cast<ast::BodyWithoutGuards *>(body)) {
+        walk(plain->expr);
+      }
+    }
+    break;
+  }
+  case ast::AST_CASE_EXPR: {
+    auto *case_expr = static_cast<ast::CaseExpr *>(node);
+    if (auto coverage = codegen.finite_case_coverage(case_expr)) {
+      diag.error(case_expr->source_context, ErrorCode::E0203,
+                 "`--require-effect-free` requires an exhaustive match on " +
+                     coverage->adt_name + "; missing constructor" +
+                     (coverage->missing.size() == 1 ? " " : "s ") +
+                     format_missing_constructors(coverage->missing));
+      ok = false;
+    }
+    walk(case_expr->expr);
+    for (auto *clause : case_expr->clauses) {
+      if (!clause) continue;
+      walk(clause->guard);
+      walk(clause->body);
+    }
+    break;
+  }
+  case ast::AST_LET_EXPR: {
+    auto *let_expr = static_cast<ast::LetExpr *>(node);
+    for (auto *alias : let_expr->aliases) {
+      if (auto *value = dynamic_cast<ast::ValueAlias *>(alias)) walk(value->expr);
+      else if (auto *lambda = dynamic_cast<ast::LambdaAlias *>(alias)) walk(lambda->lambda);
+      else if (auto *pattern = dynamic_cast<ast::PatternAlias *>(alias)) walk(pattern->expr);
+    }
+    walk(let_expr->expr);
+    break;
+  }
+  case ast::AST_IMPORT_EXPR:
+    walk(static_cast<ast::ImportExpr *>(node)->expr);
+    break;
+  case ast::AST_IF_EXPR: {
+    auto *if_expr = static_cast<ast::IfExpr *>(node);
+    walk(if_expr->condition);
+    walk(if_expr->thenExpr);
+    walk(if_expr->elseExpr);
+    break;
+  }
+  case ast::AST_DO_EXPR:
+    for (auto *step : static_cast<ast::DoExpr *>(node)->steps) walk(step);
+    break;
+  case ast::AST_WITH_EXPR: {
+    auto *with = static_cast<ast::WithExpr *>(node);
+    walk(with->contextExpr);
+    walk(with->bodyExpr);
+    break;
+  }
+  case ast::AST_HANDLE_EXPR: {
+    auto *handle = static_cast<ast::HandleExpr *>(node);
+    walk(handle->body);
+    for (auto *clause : handle->clauses)
+      if (clause) walk(clause->body);
+    break;
+  }
+  case ast::AST_TRY_CATCH_EXPR: {
+    auto *try_catch = static_cast<ast::TryCatchExpr *>(node);
+    walk(try_catch->tryExpr);
+    for (auto *catch_pattern : try_catch->catchExpr->patterns) {
+      if (!catch_pattern) continue;
+      std::visit([&](auto &body) {
+        using Body = std::remove_cvref_t<decltype(body)>;
+        if constexpr (std::is_same_v<Body, ast::PatternWithoutGuards *>) {
+          walk(body->expr);
+        } else {
+          for (auto *guarded : body) {
+            walk(guarded->guard);
+            walk(guarded->expr);
+          }
+        }
+      }, catch_pattern->pattern);
+    }
+    break;
+  }
+  case ast::AST_APPLY_EXPR: {
+    auto *apply = static_cast<ast::ApplyExpr *>(node);
+    walk(apply->call);
+    for (const auto &argument : apply->args)
+      std::visit([&](auto *argument_node) { walk(argument_node); }, argument);
+    if (apply->named_args)
+      for (const auto &[_, argument] : *apply->named_args)
+        std::visit([&](auto *argument_node) { walk(argument_node); }, argument);
+    break;
+  }
+  case ast::AST_TUPLE_EXPR:
+    for (auto *value : static_cast<ast::TupleExpr *>(node)->values) walk(value);
+    break;
+  case ast::AST_DICT_EXPR:
+    for (const auto &[key, value] : static_cast<ast::DictExpr *>(node)->values) {
+      walk(key);
+      walk(value);
+    }
+    break;
+  case ast::AST_VALUES_SEQUENCE_EXPR:
+    for (auto *value : static_cast<ast::ValuesSequenceExpr *>(node)->values) walk(value);
+    break;
+  case ast::AST_RANGE_SEQUENCE_EXPR: {
+    auto *range = static_cast<ast::RangeSequenceExpr *>(node);
+    walk(range->start);
+    walk(range->end);
+    walk(range->step);
+    break;
+  }
+  case ast::AST_SET_EXPR:
+    for (auto *value : static_cast<ast::SetExpr *>(node)->values) walk(value);
+    break;
+  case ast::AST_RECORD_INSTANCE_EXPR:
+    for (const auto &[_, value] : static_cast<ast::RecordInstanceExpr *>(node)->items) walk(value);
+    break;
+  case ast::AST_RECORD_LITERAL_EXPR:
+    for (const auto &[_, value] : static_cast<ast::RecordLiteralExpr *>(node)->fields) walk(value);
+    break;
+  case ast::AST_FIELD_UPDATE_EXPR:
+    for (const auto &[_, value] : static_cast<ast::FieldUpdateExpr *>(node)->updates) walk(value);
+    break;
+  case ast::AST_BINARY_OP_EXPR:
+  case ast::AST_ADD_EXPR: case ast::AST_SUBTRACT_EXPR: case ast::AST_MULTIPLY_EXPR:
+  case ast::AST_DIVIDE_EXPR: case ast::AST_MODULO_EXPR: case ast::AST_POWER_EXPR:
+  case ast::AST_EQ_EXPR: case ast::AST_NEQ_EXPR: case ast::AST_LT_EXPR: case ast::AST_LTE_EXPR:
+  case ast::AST_GT_EXPR: case ast::AST_GTE_EXPR: case ast::AST_LOGICAL_AND_EXPR:
+  case ast::AST_LOGICAL_OR_EXPR: case ast::AST_PIPE_RIGHT_EXPR: case ast::AST_PIPE_LEFT_EXPR:
+  case ast::AST_IN_EXPR: case ast::AST_CONS_LEFT_EXPR: case ast::AST_CONS_RIGHT_EXPR:
+  case ast::AST_JOIN_EXPR: case ast::AST_REMOVE_EXPR: case ast::AST_LEFT_SHIFT_EXPR:
+  case ast::AST_RIGHT_SHIFT_EXPR: case ast::AST_ZEROFILL_RIGHT_SHIFT_EXPR:
+  case ast::AST_BITWISE_AND_EXPR: case ast::AST_BITWISE_OR_EXPR: case ast::AST_BITWISE_XOR_EXPR: {
+    auto *binary = static_cast<ast::BinaryOpExpr *>(node);
+    walk(binary->left);
+    walk(binary->right);
+    break;
+  }
+  case ast::AST_LOGICAL_NOT_OP_EXPR:
+    walk(static_cast<ast::LogicalNotOpExpr *>(node)->expr);
+    break;
+  case ast::AST_BINARY_NOT_OP_EXPR:
+    walk(static_cast<ast::BinaryNotOpExpr *>(node)->expr);
+    break;
+  default:
+    break;
+  }
+  return ok;
+}
+
 static bool require_effect_free(ast::AstNode *root, DiagnosticEngine &diag,
-                                typechecker::TypeChecker &tc) {
+                                typechecker::TypeChecker &tc, Codegen &codegen) {
   bool ok = true;
   if (auto *mod = dynamic_cast<ast::ModuleDecl *>(root)) {
     for (auto *func : mod->functions) {
@@ -260,6 +446,7 @@ static bool require_effect_free(ast::AstNode *root, DiagnosticEngine &diag,
                "rebuild its interface to record `effects -`");
     ok = false;
   }
+  if (!collect_incomplete_cases(root, codegen, diag)) ok = false;
   return ok;
 }
 
@@ -582,12 +769,14 @@ int main(int argc, char *argv[]) {
       return 0;
     }
     type_checker.check_module(result.value().get());
-    if (flag_require_effect_free &&
-        !require_effect_free(result.value().get(), diag, type_checker))
-      return 1;
     if (!run_overlay_checkers(result.value().get(), diag, type_checker, flag_no_refinement, flag_no_linear))
       return 1;
     llvm_mod = codegen.compile_module(result.value().get());
+    // compile_module registers declarations local to this module, allowing the
+    // strict totality gate to cover both prelude/imported and local finite ADTs.
+    if (flag_require_effect_free &&
+        !require_effect_free(result.value().get(), diag, type_checker, codegen))
+      return 1;
     if (llvm_mod)
       codegen.populate_interface_effect_rows(result.value().get(), type_checker);
   } else {
@@ -614,7 +803,7 @@ int main(int argc, char *argv[]) {
     type_checker.set_import_type_source(&codegen.import_types_);
     auto *checked_type = type_checker.check(parse_result.node.get());
     if (flag_require_effect_free) {
-      bool gate_ok = require_effect_free(parse_result.node.get(), diag, type_checker);
+      bool gate_ok = require_effect_free(parse_result.node.get(), diag, type_checker, codegen);
       if (!type_checker.is_effect_free(checked_type) && !type_checker.has_unknown_effect_rows()) {
         diag.error(parse_result.node->source_context, ErrorCode::E0203,
                    "`--require-effect-free` requires a closed empty effect row");
