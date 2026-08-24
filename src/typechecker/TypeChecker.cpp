@@ -1805,7 +1805,11 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
         uf_.add_var(v->var_id, level);
         return v;
     };
-    auto linear = [&]() { return arena_.make_app("Linear", {fresh()}); };
+    auto linear = [&](const std::string& payload_adt = "") {
+        return arena_.make_app("Linear", {payload_adt.empty()
+            ? fresh()
+            : arena_.make_app(payload_adt, {})});
+    };
     // SEQ/SET/DICT/ADT/FUNCTION are structural in `.yonai`. INT and other
     // scalars are often monomorphized placeholders for polymorphic params.
     auto from_tag = [&](const std::string& tag) -> MonoTypePtr {
@@ -1816,6 +1820,40 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
         if (tag == "ADT") return arena_.make_app("ADT", {fresh()});
         return fresh();
     };
+    auto from_descriptor = [&](const std::string& text) -> MonoTypePtr {
+        std::function<MonoTypePtr(const std::string&)> parse;
+        parse = [&](const std::string& value) -> MonoTypePtr {
+            auto open = value.find('(');
+            if (open == std::string::npos || !value.ends_with(')')) return from_tag(value);
+            std::string name = value.substr(0, open);
+            std::vector<std::string> parts;
+            std::string part;
+            int depth = 0;
+            for (size_t i = open + 1; i + 1 < value.size(); ++i) {
+                char c = value[i];
+                if (c == '(') ++depth;
+                else if (c == ')') --depth;
+                if (c == ',' && depth == 0) { parts.push_back(part); part.clear(); }
+                else part += c;
+            }
+            if (!part.empty()) parts.push_back(part);
+            std::vector<MonoTypePtr> args;
+            for (const auto& nested : parts) args.push_back(parse(nested));
+            if (name == "TUPLE") return arena_.make_tuple(args);
+            if (name == "FUNCTION" && args.size() == 2) return arena_.make_arrow(args[0], args[1]);
+            if (name == "LINEAR" && args.size() == 1) return arena_.make_app("Linear", args);
+            if (name == "ADT" && parts.size() == 1)
+                return arena_.make_app(parts[0], {});
+            if (name == "Seq" || name == "SET" || name == "Set" || name == "DICT" || name == "Dict")
+                return arena_.make_app(name == "SET" ? "Set" : name == "DICT" ? "Dict" : name, args);
+            // An atom inside ADT(...) is a named type, while unknown wrappers
+            // remain named applications so future interface constructs retain shape.
+            return arena_.make_app(name, args);
+        };
+        if (text.starts_with("ADT(") && text.ends_with(')'))
+            return arena_.make_app(text.substr(4, text.size() - 5), {});
+        return parse(text);
+    };
     MonoTypePtr ret;
     if (!sig.tuple_elem_linear.empty()) {
         std::vector<MonoTypePtr> elems;
@@ -1823,8 +1861,10 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
         for (char is_lin : sig.tuple_elem_linear)
             elems.push_back(is_lin ? linear() : fresh());
         ret = arena_.make_tuple(elems);
+    } else if (!sig.return_descriptor.empty()) {
+        ret = from_descriptor(sig.return_descriptor);
     } else if (sig.return_linear) {
-        ret = linear();
+        ret = linear(sig.return_linear_adt_name);
     } else {
         ret = from_tag(sig.return_tag);
     }
@@ -1832,7 +1872,10 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
     for (int i = sig.arity - 1; i >= 0; i--) {
         bool is_lin = i < (int)sig.param_linear.size() && sig.param_linear[(size_t)i];
         std::string tag = (i < (int)sig.param_tags.size()) ? sig.param_tags[(size_t)i] : "";
-        fn = arena_.make_arrow(is_lin ? linear() : from_tag(tag), fn);
+        std::string descriptor = (i < (int)sig.param_descriptors.size())
+            ? sig.param_descriptors[(size_t)i] : "";
+        fn = arena_.make_arrow(!descriptor.empty() ? from_descriptor(descriptor)
+                                                    : is_lin ? linear() : from_tag(tag), fn);
     }
     return fn;
 }

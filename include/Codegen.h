@@ -450,7 +450,10 @@ private:
     };
     struct ModuleFunctionMeta {
         std::vector<CType> param_types;
+        /// Lossless `.yonai` source descriptors. CType remains the C ABI view.
+        std::vector<std::string> param_type_descriptors;
         CType return_type;
+        std::string return_type_descriptor;
         ast::ExternPromiseKind extern_promise = ast::ExternPromiseKind::Sync;
         CType promise_inner_type = CType::INT; // inner `B` for `Promise B` / AFN IO NAT rows
         std::string return_adt_name;  // for ADT returns from extern decls: the type name

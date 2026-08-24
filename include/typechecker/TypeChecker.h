@@ -38,6 +38,11 @@ struct ImportedFnSig {
     /// means unconstrained — generics are snapshotted as INT in `.yonai`.
     std::vector<std::string> param_tags;
     std::string return_tag;
+    /// Recursive `.yonai` descriptors (`ADT(FileHandle)`, `TUPLE(...)`, …).
+    std::vector<std::string> param_descriptors;
+    std::string return_descriptor;
+    /// Named payload for a `LINEAR` return, carried by `.yonai` `retadt`.
+    std::string return_linear_adt_name;
 };
 
 /// Loads imported function signatures from `.yonai` (implemented by Codegen).

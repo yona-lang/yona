@@ -25,6 +25,36 @@ using LType = llvm::Type;
 static CType yona_type_to_ctype(const types::Type& t);
 static std::string yona_type_adt_name(const types::Type& t);
 static std::pair<std::vector<CType>, CType> uncurry_type_signature(const types::Type& t);
+static std::string ctype_to_string(CType ct);
+static CType string_to_ctype(const std::string& s);
+
+/// Compact recursive type grammar used by `.yonai` function signatures.
+/// Existing scalar tags stay valid; wrappers use `NAME(payload)`, e.g.
+/// `LINEAR(ADT(FileHandle))`. The C ABI still uses CType separately.
+static std::string interface_type(CType type, const std::string& adt_name = {}) {
+    if (type == CType::ADT && !adt_name.empty()) return "ADT(" + adt_name + ")";
+    return ctype_to_string(type);
+}
+
+static void parse_interface_type(const std::string& text, CType& type,
+                                 std::string& adt_name, bool& linear) {
+    linear = false;
+    std::string inner = text;
+    if (inner.starts_with("LINEAR(") && inner.ends_with(')')) {
+        linear = true;
+        inner = inner.substr(7, inner.size() - 8);
+    } else if (inner == "LINEAR") {
+        linear = true; // Legacy marker-only interface.
+        type = CType::INT;
+        return;
+    }
+    if (inner.starts_with("ADT(") && inner.ends_with(')')) {
+        type = CType::ADT;
+        adt_name = inner.substr(4, inner.size() - 5);
+    } else {
+        type = string_to_ctype(inner);
+    }
+}
 
 static std::string trim_trailing_doc_comments(std::string source) {
     while (!source.empty() && (source.back() == '\n' || source.back() == '\r' ||
@@ -176,7 +206,9 @@ static std::vector<bool> borrowed_mask_to_params(const std::string& mask, size_t
 Codegen::ModuleFunctionMeta Codegen::module_meta_from_compiled(const CompiledFunction& cf) const {
     ModuleFunctionMeta meta;
     meta.param_types = cf.param_types;
+    for (auto type : cf.param_types) meta.param_type_descriptors.push_back(interface_type(type));
     meta.return_type = cf.return_type;
+    meta.return_type_descriptor = interface_type(cf.return_type, cf.return_adt_name);
     meta.extern_promise = cf.extern_promise;
     meta.promise_inner_type = cf.promise_inner_type;
     meta.return_adt_name = cf.return_adt_name;
@@ -304,9 +336,10 @@ bool Codegen::emit_interface_file(const std::string& path) {
         out << mangled << " " << meta.param_types.size();
         for (size_t i = 0; i < meta.param_types.size(); i++) {
             if (i < meta.param_linear.size() && meta.param_linear[i])
-                out << " LINEAR";
+                out << " LINEAR(" << interface_type(meta.param_types[i]) << ")";
             else
-                out << " " << ctype_to_string(meta.param_types[i]);
+                out << " " << (i < meta.param_type_descriptors.size() && !meta.param_type_descriptors[i].empty()
+                    ? meta.param_type_descriptors[i] : interface_type(meta.param_types[i]));
         }
         CType printed_ret = is_promise_row ? meta.promise_inner_type : meta.return_type;
         out << " -> ";
@@ -314,10 +347,12 @@ bool Codegen::emit_interface_file(const std::string& path) {
             out << "TUPLE";
             for (char lin : meta.tuple_elem_linear)
                 out << (lin ? " LINEAR" : " INT");
-        } else if (meta.return_linear && printed_ret == CType::INT) {
-            out << "LINEAR";
+        } else if (meta.return_linear) {
+            out << "LINEAR(" << (meta.return_type_descriptor.empty()
+                ? interface_type(printed_ret, meta.return_adt_name) : meta.return_type_descriptor) << ")";
         } else {
-            out << ctype_to_string(printed_ret);
+            out << (meta.return_type_descriptor.empty()
+                ? interface_type(printed_ret, meta.return_adt_name) : meta.return_type_descriptor);
             if (!is_promise_row && meta.return_type == CType::ADT && !meta.return_adt_name.empty())
                 out << " retadt " << meta.return_adt_name;
         }
@@ -522,25 +557,29 @@ bool Codegen::load_interface_file(const std::string& path) {
             for (int i = 0; i < param_count; i++) {
                 std::string type_str;
                 iss >> type_str;
-                if (type_str == "LINEAR") {
-                    meta.param_types.push_back(CType::INT);
-                    meta.param_linear[(size_t)i] = 1;
-                } else {
-                    meta.param_types.push_back(string_to_ctype(type_str));
-                }
+                CType parsed_type = CType::INT;
+                std::string parsed_adt;
+                bool parsed_linear = false;
+                parse_interface_type(type_str, parsed_type, parsed_adt, parsed_linear);
+                meta.param_types.push_back(parsed_type);
+                meta.param_type_descriptors.push_back(type_str);
+                meta.param_linear[(size_t)i] = parsed_linear;
             }
             std::string arrow;
             iss >> arrow; // "->"
             std::string ret_str;
             iss >> ret_str;
-            if (ret_str == "LINEAR") {
-                meta.return_linear = true;
-                ret_str = "INT";
-            }
+            CType parsed_ret = CType::INT;
+            std::string parsed_ret_adt;
+            bool parsed_return_linear = false;
+            parse_interface_type(ret_str, parsed_ret, parsed_ret_adt, parsed_return_linear);
+            meta.return_linear = parsed_return_linear;
+            if (!parsed_ret_adt.empty()) meta.return_adt_name = parsed_ret_adt;
             const bool is_promise_row = ext_kind != ast::ExternPromiseKind::Sync;
-            meta.return_type = is_promise_row ? CType::PROMISE : string_to_ctype(ret_str);
+            meta.return_type = is_promise_row ? CType::PROMISE : parsed_ret;
+            meta.return_type_descriptor = ret_str;
             meta.extern_promise = ext_kind;
-            if (is_promise_row) meta.promise_inner_type = string_to_ctype(ret_str);
+            if (is_promise_row) meta.promise_inner_type = parsed_ret;
             meta.borrowed_params.assign((size_t)param_count, false);
             std::string trailing;
             while (iss >> trailing) {
@@ -693,6 +732,12 @@ typechecker::ImportedFnSig Codegen::sig_from_meta(const ModuleFunctionMeta& meta
     for (auto ct : meta.param_types)
         sig.param_tags.push_back(ctype_to_string(ct));
     sig.return_tag = ctype_to_string(meta.return_type);
+    sig.param_descriptors = meta.param_type_descriptors;
+    sig.return_descriptor = meta.return_type_descriptor;
+    if (meta.return_linear && !sig.return_descriptor.empty() &&
+        !sig.return_descriptor.starts_with("LINEAR("))
+        sig.return_descriptor = "LINEAR(" + sig.return_descriptor + ")";
+    sig.return_linear_adt_name = meta.return_linear ? meta.return_adt_name : "";
     if (!sig.tuple_elem_linear.empty())
         sig.return_linear = false;
     return sig;

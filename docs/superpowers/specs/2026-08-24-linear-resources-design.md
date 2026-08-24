@@ -39,7 +39,11 @@ after extracting them from the typed payload ADT.
 
 ## Compiler and interface requirements
 
-`.yonai` must preserve both the `LINEAR` outer marker and the inner ADT type.
+`.yonai` must first gain recursive type descriptors so it can preserve both the
+`LINEAR` outer marker and the inner ADT type (for example
+`LINEAR(ADT(FileHandle))`). The interface loader and `ImportedFnSig` must carry
+the descriptor into the type checker; marker-only `LINEAR` metadata is not a
+sound basis for typed resource ownership.
 The linearity checker treats each returned wrapper as a resource obligation;
 using it after a consuming transition is E0600 and dropping it is E0602. The
 existing `with` cleanup path discharges the final obligation. Leaks become

@@ -7,6 +7,7 @@
 #include "typechecker/UnionFind.h"
 #include "typechecker/Unification.h"
 #include "typechecker/TypeEnv.h"
+#include "Codegen.h"
 #include "Diagnostic.h"
 
 using namespace yona::compiler::typechecker;
@@ -2115,6 +2116,36 @@ static bool imported_linear_leaks(const std::string& source) {
 TEST_CASE("LinearityChecker: imported openFile creates obligation") {
     CHECK(imported_linear_leaks(
         "import openFile from Std\\File in let h = openFile \"f\" Read in h"));
+}
+
+TEST_CASE("TypeChecker: imported Linear return preserves its ADT payload") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "yona_yonai_linear_payload";
+    fs::create_directories(dir / "Test");
+    {
+        std::ofstream out(dir / "Test" / "Resource.yonai");
+        out << "ADT FileHandle 1 0\n"
+               "FN yona_Test_Resource__open 1 UNIT -> LINEAR(ADT(FileHandle))\n";
+    }
+    yona::parser::Parser parser;
+    auto parsed = parser.parse_expression("import open from Test\\Resource in open ()", "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    checker.add_module_path(dir.string());
+    yona::compiler::codegen::Codegen codegen("linear_payload");
+    codegen.module_paths_.push_back(dir.string());
+    checker.set_import_type_source(&codegen.import_types_);
+    auto* ty = checker.check(parsed.value().get());
+    REQUIRE(ty != nullptr);
+    ty = checker.zonk(ty);
+    REQUIRE(ty->tag == MonoType::App);
+    REQUIRE(ty->type_name == "Linear");
+    REQUIRE(ty->args.size() == 1);
+    CHECK(ty->args[0]->tag == MonoType::App);
+    CHECK(ty->args[0]->type_name == "FileHandle");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
 }
 
 TEST_CASE("LinearityChecker: wildcard openFile creates obligation") {

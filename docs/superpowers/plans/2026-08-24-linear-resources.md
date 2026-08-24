@@ -18,6 +18,45 @@
 
 ---
 
+### Task 0: Preserve nested resource types in `.yonai`
+
+**Files:**
+- Modify: `include/Codegen.h`, `include/typechecker/TypeChecker.h`
+- Modify: `src/codegen/CodegenModule.cpp`, `src/typechecker/TypeChecker.cpp`
+- Test: `test/codegen_test.cpp`, `test/type_checker_test.cpp`
+
+**Interfaces:**
+- Produces recursive `.yonai` type descriptors such as `LINEAR(ADT(FileHandle))`.
+- Produces `ImportedFnSig` payload descriptors used to construct `Linear FileHandle`, not `Linear _`.
+
+- [ ] **Step 1: Write failing interface round-trip tests**
+
+Add an interface fixture with a function returning `Linear FileHandle`; assert
+that import inference rejects passing it where `Linear Process` is required.
+
+- [ ] **Step 2: Add recursive descriptor serialization and parsing**
+
+Replace marker-only `LINEAR` handling with recursive `LINEAR(...)`, `ADT(...)`,
+and `TUPLE(...)` descriptors. Keep parsing legacy bare `LINEAR` as
+`LINEAR(INT)` while checked-in interfaces migrate.
+
+- [ ] **Step 3: Construct precise imported MonoTypes**
+
+Extend `ModuleFunctionMeta` and `ImportedFnSig` with parameter/return payload
+descriptors; make `mono_from_import_sig` map `ADT(FileHandle)` to the named
+ADT inside `Linear`.
+
+- [ ] **Step 4: Verify and commit**
+
+Run: `cmake --build --preset build-debug-linux --target tests && ./out/build/x64-debug-linux/tests -tc='*yonai*|*LinearityChecker*'`
+
+```bash
+git add include/Codegen.h include/typechecker/TypeChecker.h src/codegen/CodegenModule.cpp src/typechecker/TypeChecker.cpp test
+git commit -m "feat: preserve nested interface types"
+```
+
+---
+
 ### Task 1: Encode precise linear resource types in interfaces
 
 **Files:**
