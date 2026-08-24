@@ -154,8 +154,8 @@ TEST_CASE("yona shebang script is executable") {
 
 TEST_CASE("yona getArgs uses the script path") {
     auto src = write_temp_yona("script_args",
-                               "import getArgs from Std\\Process, tail from Std\\List in\n"
-                               "tail getArgs\n");
+                               "import getArgs from Std\\Process in\n"
+                               "case getArgs of [_|t] -> t; [] -> [] end\n");
     auto r = run_yona({src.string(), "foo", "bar"});
     CHECK(r.status == 0);
     CHECK(r.out == "[foo, bar]");
@@ -232,4 +232,60 @@ TEST_CASE("yonac - reads stdin") {
 TEST_CASE("yonac -e is rejected") {
     auto r = run_cmd(yona::test::link::qpath(tool("yonac")) + " -e \"1 + 2\"" + yona::test::link::err_null());
     CHECK(r.status != 0);
+}
+
+static CmdResult run_yonac_ir(const fs::path& src, const std::vector<std::string>& extra = {}) {
+    std::ostringstream cmd;
+    cmd << yona::test::link::qpath(tool("yonac")) << " --sysroot "
+        << yona::test::link::qpath(bin_dir()) << " -I "
+        << yona::test::link::qpath(yona::test::lib_dir()) << " --emit-ir";
+    for (const auto& a : extra)
+        cmd << " " << shell_quote(a);
+    cmd << " " << yona::test::link::qpath(src) << " 2>&1";
+    return run_cmd(cmd.str());
+}
+
+TEST_CASE("yonac fails E0500 on unproven head") {
+    auto src = write_temp_yona(
+        "e0500_head",
+        "import head from Std\\List in let f x = x in let xs = f [1, 2] in head xs\n");
+    auto r = run_yonac_ir(src);
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0500") != std::string::npos);
+}
+
+TEST_CASE("yonac --Wno-refinement allows unproven head") {
+    auto src = write_temp_yona(
+        "e0500_head_allow",
+        "import head from Std\\List in let f x = x in let xs = f [1, 2] in head xs\n");
+    auto r = run_yonac_ir(src, {"--Wno-refinement"});
+    CHECK(r.status == 0);
+}
+
+TEST_CASE("yonac fails E0600 on use-after-consume") {
+    auto src = write_temp_yona(
+        "e0600_uac",
+        "let makeHandle x = Linear x, conn = makeHandle 0, conn2 = conn, conn3 = conn in conn3\n");
+    auto r = run_yonac_ir(src);
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0600") != std::string::npos);
+}
+
+TEST_CASE("yonac fails E0600 in a module function") {
+    auto src = write_temp_yona(
+        "e0600_mod",
+        "module Test\\LinFail\n\nexport bad\n\n"
+        "bad x =\n"
+        "  let makeHandle y = Linear y, conn = makeHandle x, conn2 = conn, conn3 = conn in conn3\n");
+    auto r = run_yonac_ir(src);
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0600") != std::string::npos);
+}
+
+TEST_CASE("yonac leak warning is E0602 not unhandled-effect") {
+    auto src = write_temp_yona("e0602_leak", "let conn = Linear 0 in 42\n");
+    auto r = run_yonac_ir(src);
+    CHECK(r.status == 0);
+    CHECK(r.out.find("E0602") != std::string::npos);
+    CHECK(r.out.find("unhandled-effect") == std::string::npos);
 }

@@ -131,11 +131,15 @@ void LinearityChecker::warn_unconsumed(const LinearEnv& env) {
     for (auto& name : env.live_vars()) {
         auto it = env.created_at.find(name);
         SourceLocation loc = (it != env.created_at.end()) ? it->second : SourceLocation::unknown();
-        diag_.warning(loc,
-                      "linear value '" + name + "' not consumed — possible resource leak; "
-                      "use `case " + name + " of Linear fd -> close fd end` to release",
-                      WarningFlag::UnhandledEffect); // reuse existing warning flag for now
+        warn_leak(name, loc);
     }
+}
+
+void LinearityChecker::warn_leak(const std::string& name, const SourceLocation& loc) {
+    diag_.warning(loc, ErrorCode::E0602,
+                  "linear value '" + name + "' not consumed — possible resource leak; "
+                  "use `case " + name + " of Linear fd -> close fd end` to release",
+                  WarningFlag::LinearLeak);
 }
 
 void LinearityChecker::check_node(AstNode* node, LinearEnv& env) {
@@ -162,6 +166,9 @@ void LinearityChecker::check_node(AstNode* node, LinearEnv& env) {
             break;
         case AST_FUNCTION_EXPR:
             check_function(static_cast<FunctionExpr*>(node), env);
+            break;
+        case AST_MODULE_DECL:
+            check_module(static_cast<ModuleDecl*>(node), env);
             break;
         case AST_IMPORT_EXPR:
             check_node(static_cast<ImportExpr*>(node)->expr, env);
@@ -368,10 +375,7 @@ void LinearityChecker::check_with(WithExpr* node, LinearEnv& env) {
         auto it = body_env.created_at.find(live);
         SourceLocation loc = (it != body_env.created_at.end())
             ? it->second : node->source_context;
-        diag_.warning(loc,
-                      "linear value '" + live + "' not consumed — possible resource leak; "
-                      "use `case " + live + " of Linear fd -> close fd end` to release",
-                      WarningFlag::UnhandledEffect);
+        warn_leak(live, loc);
     }
 }
 
@@ -404,6 +408,17 @@ void LinearityChecker::check_function(FunctionExpr* node, LinearEnv& /*outer*/) 
     }
 
     warn_unconsumed(fn_env);
+}
+
+void LinearityChecker::check_module(ModuleDecl* node, LinearEnv& env) {
+    if (!node) return;
+    for (auto* fn : node->functions)
+        check_function(fn, env);
+    for (auto* inst : node->instance_declarations) {
+        if (!inst) continue;
+        for (auto* method : inst->methods)
+            check_function(method, env);
+    }
 }
 
 } // namespace yona::compiler::typechecker

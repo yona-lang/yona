@@ -182,10 +182,10 @@ obligation automatically. Details and examples are in
 [Memory and linearity](/guides/memory/).
 
 Honest limitations: `Linear` is a prelude ADT tracked by a dedicated
-checker, not a first-class linear arrow in the HM core; the diagnostics do
-not currently fail compilation; leak detection is a warning; and the
-checker runs on expression programs but not yet inside module top-level
-compilation.
+checker, not a first-class linear arrow in the HM core. Use-after-consume
+(**E0600**) and branch inconsistency (**E0601**) fail compilation on
+expression programs and modules (`--Wno-linear` skips). Resource leaks are
+**E0602** warnings (`-Wlinear-leak`, on by default).
 
 ### `@borrow` parameters <span class="yona-status yona-status--stable">Stable</span>
 
@@ -221,22 +221,21 @@ first [7, 8]                         # => 7
 Facts flow from pattern matches (`[h|t]` proves non-empty) and literals (a
 non-zero literal divisor is accepted). Honest limitations: refinement
 syntax like `{ x : Int | x > 0 }` parses but predicates are not enforced at
-function signatures, refinements are erased before codegen, they do not
-appear in `.yonai`, and the checker is non-blocking and skipped for module
-compilation.
+function signatures, refinements are erased before codegen, and they do not
+appear in `.yonai`. `yonac` **exits non-zero** on E0500 (`--Wno-refinement`
+skips the checker) for both expression programs and modules.
 
 ## What is checked where
 
 Yona has two compilation entry points, and they differ in which passes run:
 
 - **Expression programs** (a `.yona` file whose top level is an
-  expression, or `yona -e` / `yonac -`): parse → HM type checking → the non-blocking
-  refinement and linearity checkers → codegen. All diagnostics described on
-  this page can appear.
+  expression, or `yona -e` / `yonac -`): parse → HM type checking →
+  refinement and linearity checkers (fail the compile on E0500/E0600/E0601) →
+  codegen. All diagnostics described on this page can appear.
 - **Module compilation** (a `.yona` file declaring `module …`): parse → HM
-  type checking → codegen, producing a native object file plus a `.yonai`
-  interface. The refinement and linearity checkers are currently **skipped**
-  for module top levels.
+  type checking → the same refinement and linearity checkers → codegen,
+  producing a native object file plus a `.yonai` interface.
 
 The `.yonai` interface is the contract at module boundaries. It carries
 each export's arity and types, effect rows (including open rests), inferred

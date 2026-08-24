@@ -27,7 +27,7 @@ helper x = x * 2
 ### Structure
 
 - **Module name**: FQN with backslash-separated packages (`Std\List`, `Data\Collections\Map`)
-- **Exports**: `export` statements listing public functions; `export type Name` exports a type and all its constructors
+- **Exports**: `export` statements listing public functions; `export type Name` exports a type and all its constructors; `export type Name opaque` exports only its nominal type, so clients use public smart constructors and observers
 - **Body**: ADT type declarations and function definitions
 - **Terminator**: EOF (no `end` keyword needed)
 

@@ -1,8 +1,8 @@
 # Refinement Types
 
-**Status (2026-08-18):** **partial.** `{ n : Int | pred }` parses. **E0500**
+**Status (2026-08-24):** **partial.** `{ n : Int | pred }` parses. **E0500**
 covers `head`/`tail` nonempty and `/` nonzero in `RefinementChecker`
-(non-blocking; skipped on modules). Signature aliases (`NonEmpty`, `Port`,
+(`yonac` exits non-zero; `--Wno-refinement` skips). Signature aliases (`NonEmpty`, `Port`,
 `NonZero`) are **syntax only** — not enforced. No `.yonai` predicates.
 Evidence: [type-system-status.md](type-system-status.md) §5.
 

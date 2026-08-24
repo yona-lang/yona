@@ -133,6 +133,13 @@ end
 
 Direct `perform` without a handler still warns via `-Wunhandled-effect`.
 
+### E0203 — Effect-freedom requirement not satisfied
+
+`yonac --require-effect-free` requires a closed empty effect row. Known
+operations, open row variables, and imports without row facts are rejected;
+`.yonai` records a proven empty export row as `effects -`. This gate does not prove termination or exhaustive
+pattern matching.
+
 ## Parse Errors (E03xx)
 
 ### E0300 — Unexpected token
@@ -208,6 +215,8 @@ The pipe operator (`|>` or `<|`) requires a function on the receiving side.
 ## Warning Flags
 
 Warnings are controlled via `-Wall`, `-Wextra`, `-w`, and `--Werror`.
+`--Wno-refinement` skips E0500; `--Wno-linear` skips E0600/E0601/E0602;
+`--Wno-linear-leak` disables only E0602.
 
 | Flag | Name | `-Wall` | `-Wextra` |
 |------|------|---------|-----------|
@@ -215,6 +224,7 @@ Warnings are controlled via `-Wall`, `-Wextra`, `-w`, and `--Werror`.
 | `-Wincomplete-patterns` | Non-exhaustive pattern match | yes | yes |
 | `-Woverlapping-patterns` | Overlapping case patterns | yes | yes |
 | `-Wunhandled-effect` | `perform` without matching `handle` | yes | yes |
+| `-Wlinear-leak` | Unconsumed `Linear` value at scope exit (**E0602**; on by default) | yes | yes |
 | `-Wshadow` | Variable shadowing | no | yes |
 | `-Wmissing-signature` | Function without type annotation | no | yes |
 | `-Wunused-import` | Imported name not used | no | yes |

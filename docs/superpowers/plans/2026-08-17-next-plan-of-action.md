@@ -367,6 +367,9 @@ or [#5](https://github.com/yona-lang/yona/issues/76) totality / empty-row
 gate; Track G remaining is full arbitrary-lambda SPIR-V / research /
 macOS-Windows bench re-capture.
 
+[#10](https://github.com/yona-lang/yona/issues/81) (blocking E0500/E0600,
+E0602 leaks, checkers on modules) landed 2026-08-24.
+
 Linearity `WithExpr` / `FunctionExpr` walks and the kernel-library increment
 (`x - k` / `x < k`) landed 2026-08-19 beside Track G. Effect-row #8 (including
 open-row `.yonai` and E0202 origins) landed the same day.

@@ -30,6 +30,7 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
 
     vector<string> exports;
     vector<string> exported_types;
+    vector<string> opaque_exported_types;
     vector<string> exported_traits;
     vector<ReExport> re_exports;
     vector<FunctionDeclaration*> function_declarations;
@@ -49,7 +50,16 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
                 if (!check(TokenType::YIDENTIFIER)) {
                     error(ParseError::Type::INVALID_SYNTAX, "Expected type name after 'export type'");
                 } else {
-                    exported_types.push_back(string(advance().lexeme));
+                    string type_name(advance().lexeme);
+                    bool opaque = check(TokenType::YIDENTIFIER) && current().lexeme == "opaque";
+                    if (opaque) advance();
+                    if (std::find(exported_types.begin(), exported_types.end(), type_name) != exported_types.end()) {
+                        error(ParseError::Type::INVALID_SYNTAX,
+                              "Type '" + type_name + "' is exported more than once");
+                    } else {
+                        exported_types.push_back(type_name);
+                        if (opaque) opaque_exported_types.push_back(type_name);
+                    }
                 }
             } else if (match(TokenType::YTRAIT)) {
                 // export trait TraitName
@@ -155,6 +165,7 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
             fqn.release(),
             exports,
             exported_types,
+            opaque_exported_types,
             exported_traits,
             re_exports,
             functions,
@@ -178,6 +189,7 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
         fqn.release(),
         exports,
         exported_types,
+        opaque_exported_types,
         exported_traits,
         re_exports,
         functions,

@@ -606,6 +606,11 @@ static std::pair<std::vector<CType>, CType> uncurry_type_signature(const types::
 
 Module* Codegen::compile_module(ModuleDecl* mod) {
     imports_.interface_symbols.clear();
+    interface_export_filter_active_ = true;
+    interface_exported_types_.clear();
+    interface_opaque_types_.clear();
+    interface_exported_types_.insert(mod->exported_types.begin(), mod->exported_types.end());
+    interface_opaque_types_.insert(mod->opaque_exported_types.begin(), mod->opaque_exported_types.end());
 
     // Build the module FQN string
     std::string fqn;
@@ -733,11 +738,21 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
 
     // Expand exported types: add all constructors of exported types to export_set
     for (auto* adt : mod->adt_declarations) {
-        if (exported_type_set.count(adt->name) > 0) {
+        if (exported_type_set.count(adt->name) > 0 &&
+            interface_opaque_types_.count(adt->name) == 0) {
             for (auto* ctor : adt->variants) {
                 export_set.insert(ctor->name);
             }
         }
+    }
+
+    // Existing modules may export constructors directly without `export type`.
+    // Their ADT metadata is still required by importers; the opaque form only
+    // suppresses constructors that are hidden by an opaque type export.
+    for (const auto& name : export_set) {
+        auto ctor = types_.adt_constructors.find(name);
+        if (ctor != types_.adt_constructors.end())
+            interface_exported_types_.insert(ctor->second.type_name);
     }
 
     // Load re-export source modules so their functions are available

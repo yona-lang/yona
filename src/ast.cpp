@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <utility>
 #include <variant>
 #include <numeric>
@@ -316,6 +317,7 @@ void BodyWithoutGuards::print(std::ostream &os) const { os << " = " << *expr; }
 
 ModuleDecl::ModuleDecl(SourceContext token, FqnExpr *fqn, const vector<string> &exports,
                        const vector<string> &exported_types,
+                       const vector<string> &opaque_exported_types,
                        const vector<string> &exported_traits,
                        const vector<ReExport> &re_exports,
                        const vector<FunctionExpr *> &functions, const vector<FunctionDeclaration *> &function_declarations,
@@ -324,6 +326,7 @@ ModuleDecl::ModuleDecl(SourceContext token, FqnExpr *fqn, const vector<string> &
                        const vector<InstanceDeclNode *> &instance_declarations,
                        const vector<ExternDeclExpr *> &extern_declarations)
     : AstNode(token), fqn(fqn->with_parent<FqnExpr>(this)), exports(exports), exported_types(exported_types),
+      opaque_exported_types(opaque_exported_types),
       exported_traits(exported_traits), re_exports(re_exports),
       functions(nodes_with_parent(std::move(functions), this)), functionDeclarations(nodes_with_parent(std::move(function_declarations), this)),
       extern_declarations(extern_declarations),
@@ -362,7 +365,10 @@ void ModuleDecl::print(std::ostream &os) const {
   }
 
   for (const auto& t : exported_types) {
-    os << "export type " << t << endl;
+    os << "export type " << t;
+    if (std::find(opaque_exported_types.begin(), opaque_exported_types.end(), t) != opaque_exported_types.end())
+      os << " opaque";
+    os << endl;
   }
 
   for (const auto& t : exported_traits) {

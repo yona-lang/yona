@@ -1469,6 +1469,19 @@ TEST_CASE("Effect row: recursive pure function does not keep an unsound open res
     CHECK(!checker.has_errors());
 }
 
+TEST_CASE("Effect row: closed empty row is an effect-freedom fact") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+
+    yona::parser::Parser parser;
+    std::istringstream stream("let f x = x + 1 in f");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node != nullptr);
+    auto* t = checker.check(result.node.get());
+    REQUIRE(t != nullptr);
+    CHECK(checker.is_effect_free(t));
+}
+
 TEST_CASE("Effect row: recursive HOF still threads the parameter rest") {
     yona::compiler::DiagnosticEngine diag;
     diag.enable_warning(WarningFlag::UnhandledEffect);
@@ -1492,6 +1505,12 @@ TEST_CASE("Error code: E0202 string and explanation") {
     CHECK(error_code_str(ErrorCode::E0202) == "E0202");
     CHECK(parse_error_code("E0202").value_or(ErrorCode::E0100) == ErrorCode::E0202);
     CHECK(!error_explanation(ErrorCode::E0202).empty());
+}
+
+TEST_CASE("Error code: E0203 string and explanation") {
+    CHECK(error_code_str(ErrorCode::E0203) == "E0203");
+    CHECK(parse_error_code("E0203").value_or(ErrorCode::E0100) == ErrorCode::E0203);
+    CHECK(!error_explanation(ErrorCode::E0203).empty());
 }
 
 // ===== Error Code Tests =====
@@ -1873,6 +1892,27 @@ TEST_CASE("RefinementChecker: let _ = Option warns") {
     CHECK(diag.warning_count() >= 1);
 }
 
+TEST_CASE("RefinementChecker: module function head on unknown seq is E0500") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    RefinementChecker rc(diag, &tc);
+
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(
+        "module Test\\RefineMod\n\nexport bad\n\nbad xs = head xs\n",
+        "RefineMod.yona");
+    REQUIRE(result.has_value());
+    tc.check_module(result.value().get());
+    rc.check(result.value().get());
+    CHECK(rc.has_errors());
+    bool saw_e0500 = false;
+    for (auto& rec : diag.records()) {
+        if (rec.code && *rec.code == ErrorCode::E0500)
+            saw_e0500 = true;
+    }
+    CHECK(saw_e0500);
+}
+
 TEST_CASE("RefinementChecker: let r = Option does not warn unmatched-adt") {
     DiagnosticEngine diag;
     diag.enable_warning(WarningFlag::UnmatchedAdt);
@@ -1942,10 +1982,18 @@ static void register_linear_adt(yona::compiler::typechecker::TypeChecker& tc) {
     tc.register_adt("Linear", {"a"}, {{"Linear", 1}});
 }
 
+static bool diag_has_code(const yona::compiler::DiagnosticEngine& diag,
+                          yona::compiler::ErrorCode code) {
+    for (auto& rec : diag.records()) {
+        if (rec.code && *rec.code == code)
+            return true;
+    }
+    return false;
+}
+
 TEST_CASE("LinearityChecker: Linear constructor creates obligation") {
     // let conn = Linear 0 in conn — constructor path (no TypeChecker)
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
@@ -1954,12 +2002,12 @@ TEST_CASE("LinearityChecker: Linear constructor creates obligation") {
     REQUIRE(result.node);
     lc.check(result.node.get());
     CHECK(diag.warning_count() > 0);
+    CHECK(diag_has_code(diag, yona::compiler::ErrorCode::E0602));
 }
 
 TEST_CASE("LinearityChecker: user-defined Linear-returning function creates obligation") {
     // Non-stdlib producer: makeHandle : a -> Linear a
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
     yona::compiler::typechecker::TypeChecker tc(diag);
     register_linear_adt(tc);
     yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
@@ -1977,7 +2025,7 @@ TEST_CASE("LinearityChecker: user-defined Linear-returning function creates obli
 TEST_CASE("LinearityChecker: tuple of Linear from user function is tracked") {
     // channel-shaped producer without a C++ name allowlist
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::TypeChecker tc(diag);
     register_linear_adt(tc);
     yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
@@ -1995,7 +2043,7 @@ TEST_CASE("LinearityChecker: tuple of Linear from user function is tracked") {
 TEST_CASE("LinearityChecker: non-producer function no warning") {
     // let x = someFunc 42 in x — not a producer, no warning
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
@@ -2026,7 +2074,7 @@ TEST_CASE("LinearityChecker: use after consume is error") {
 
 TEST_CASE("LinearityChecker: transfer via alias is OK") {
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::TypeChecker tc(diag);
     register_linear_adt(tc);
     yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
@@ -2046,7 +2094,7 @@ TEST_CASE("LinearityChecker: transfer via alias is OK") {
 static bool imported_linear_leaks(const std::string& source) {
     using yona::compiler::codegen::Codegen;
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::TypeChecker tc(diag);
     yona::parser::Parser parser;
     Codegen codegen("lin_import");
@@ -2086,7 +2134,7 @@ TEST_CASE("LinearityChecker: imported non-linear File function has no leak") {
 
 TEST_CASE("LinearityChecker: extern Linear return creates obligation") {
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::TypeChecker tc(diag);
     register_linear_adt(tc);
     yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
@@ -2105,7 +2153,7 @@ TEST_CASE("LinearityChecker: with binds Linear and discharges at exit") {
     // `with` is the Closeable cleanup path: track the binding, then consume it
     // when the with scope ends (no leak warning for the resource name).
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
@@ -2120,7 +2168,7 @@ TEST_CASE("LinearityChecker: with binds Linear and discharges at exit") {
 TEST_CASE("LinearityChecker: with body unconsumed Linear warns") {
     // Walking the with body is required to see the inner leak.
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
@@ -2150,7 +2198,7 @@ TEST_CASE("LinearityChecker: with use-after-consume in body is error") {
 TEST_CASE("LinearityChecker: FunctionExpr body unconsumed Linear warns") {
     // Nested lambda / local fn must be walked; otherwise this stays silent.
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
@@ -2163,7 +2211,7 @@ TEST_CASE("LinearityChecker: FunctionExpr body unconsumed Linear warns") {
 
 TEST_CASE("LinearityChecker: named local fn body unconsumed Linear warns") {
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::LinearityChecker lc(diag);
 
     yona::parser::Parser parser;
@@ -2176,7 +2224,7 @@ TEST_CASE("LinearityChecker: named local fn body unconsumed Linear warns") {
 
 TEST_CASE("LinearityChecker: Linear function parameter must be consumed") {
     yona::compiler::DiagnosticEngine diag;
-    diag.enable_warning(yona::compiler::WarningFlag::UnhandledEffect);
+    diag.enable_warning(yona::compiler::WarningFlag::LinearLeak);
     yona::compiler::typechecker::TypeChecker tc(diag);
     register_linear_adt(tc);
     yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
@@ -2191,6 +2239,26 @@ TEST_CASE("LinearityChecker: Linear function parameter must be consumed") {
     REQUIRE(!tc.has_direct_errors());
     lc.check(result.node.get());
     CHECK(diag.warning_count() > 0);
+}
+
+TEST_CASE("LinearityChecker: module function use-after-consume is E0600") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    register_linear_adt(tc);
+    yona::compiler::typechecker::LinearityChecker lc(diag, &tc);
+
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(
+        "module Test\\LinMod\n\nexport bad\n\n"
+        "bad x =\n"
+        "  let makeHandle y = Linear y, conn = makeHandle x, conn2 = conn, conn3 = conn in conn3\n",
+        "LinMod.yona");
+    REQUIRE(result.has_value());
+    tc.check_module(result.value().get());
+    REQUIRE(!tc.has_direct_errors());
+    lc.check(result.value().get());
+    CHECK(lc.has_errors());
+    CHECK(diag_has_code(diag, yona::compiler::ErrorCode::E0600));
 }
 
 TEST_CASE("Error code: E0600/E0601/E0602/E0603 strings") {

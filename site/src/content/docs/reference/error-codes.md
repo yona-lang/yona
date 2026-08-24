@@ -143,6 +143,13 @@ end
 
 A direct `perform` without a handler still warns via `-Wunhandled-effect`.
 
+### E0203 — Effect-freedom requirement not satisfied
+
+`yonac --require-effect-free` accepts only a closed empty effect row. Known
+operations, open row variables, and imports without row facts are rejected; a
+proven empty exported row is recorded in `.yonai` as `effects -`. The flag does not prove termination or
+exhaustive pattern matching.
+
 ## Parse errors (E03xx)
 
 ### E0300 — Unexpected token
@@ -270,11 +277,11 @@ else
 
 ### E0602 — Resource leak
 
-A linear value went out of scope without being consumed. This likely means a resource (file, socket, process) is leaked.
+A linear value went out of scope without being consumed. This likely means a resource (file, socket, process) is leaked. Emitted as **E0602** under `-Wlinear-leak` (on by default; `--Wno-linear-leak` suppresses; `--Werror` promotes it).
 
 ```yona
 let conn = Linear (tcpConnect host port) in
-42   # Error: conn never consumed
+42   # Warning E0602: conn never consumed
 ```
 
 **Fix:** consume the value via pattern match before the end of its scope.
@@ -308,6 +315,7 @@ Warnings are controlled via `--Wall`, `--Wextra`, `-w`, and `--Werror` (see the 
 | `-Wincomplete-patterns` | Non-exhaustive pattern match | yes | yes |
 | `-Woverlapping-patterns` | Overlapping case patterns | yes | yes |
 | `-Wunhandled-effect` | `perform` without matching `handle` | yes | yes |
+| `-Wlinear-leak` | Unconsumed `Linear` value at scope exit (`E0602`; on by default) | yes | yes |
 | `-Wshadow` | Variable shadowing | no | yes |
 | `-Wmissing-signature` | Function without type annotation | no | yes |
 | `-Wunused-import` | Imported name not used | no | yes |

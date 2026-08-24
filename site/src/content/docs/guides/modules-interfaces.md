@@ -38,6 +38,9 @@ Export forms:
 
 - `export f, g` — export functions by name.
 - `export type Name` — export a type and **all** of its constructors.
+- `export type Name opaque` — export only the nominal type. Its constructors
+  are omitted from the `.yonai` interface, so importers must use public smart
+  constructors and observers.
 - `export f, g from Other\Module` — re-export: importers see `f` and `g` as if
   this module defined them. Re-exports compile to thin forwarding wrappers, so
   both object files must be present when linking from foreign code.

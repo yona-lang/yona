@@ -1,9 +1,9 @@
 # Linear Types
 
-**Status (2026-08-19):** **partial.** `Linear` is a Prelude ADT. Use-after-consume
-is **E0600** via `LinearityChecker` (non-blocking; skipped on modules).
-**E0602** is documented but never emitted (leaks use `-Wunhandled-effect`).
-Not an HM type. Producers are **type-directed** (`Linear _` or a product of
+**Status (2026-08-24):** **partial.** `Linear` is a Prelude ADT. Use-after-consume
+is **E0600** via `LinearityChecker` (`yonac` exits non-zero on expressions and
+modules). **E0602** resource leaks use `-Wlinear-leak` (on by default; not
+`-Wunhandled-effect`). Not an HM type. Producers are **type-directed** (`Linear _` or a product of
 Linear) — there is no C++ name allowlist. `.yonai` may mark FN/IO/AFN returns
 as `LINEAR` (CType stays INT/TUPLE). `WithExpr` and `FunctionExpr` bodies are
 walked: `with` binds then discharges the resource via Closeable; lambdas /
@@ -48,7 +48,7 @@ Instead of a special type system construct, `Linear` is a plain ADT because:
 | **Transfer** | `let y = x` where `x` is linear transfers the obligation (x consumed, y live) |
 | **No aliasing** | After transfer, the old name cannot be used |
 | **Branch consistency** | Both branches of if/case must consume the same linear values |
-| **Scope exit** | Warning if a linear value is live at scope exit (resource leak) |
+| **Scope exit** | **E0602** (`-Wlinear-leak`) if a linear value is live at scope exit (resource leak) |
 
 ## Error Examples
 
@@ -74,7 +74,7 @@ else
 
 ```yona
 let conn = Linear (tcpConnect "host" 8080) in
-42    -- WARNING: linear value 'conn' not consumed — possible resource leak
+42    -- E0602: linear value 'conn' not consumed — possible resource leak
 ```
 
 ## Stdlib Integration
@@ -120,7 +120,8 @@ end
 The `with` expression handles resource cleanup at **codegen** (Closeable) and
 **LinearityChecker** discharges the bound Linear at with-exit (so the
 idiomatic `with h = openFile … in …` does not leak-warn). Nested Linears
-created inside the body are still tracked.
+created inside the body are still tracked. Module function bodies are
+walked the same way as expression programs.
 
 ```yona
 -- Recommended pattern for simple resource usage
@@ -170,11 +171,12 @@ The `LinearityChecker` is a flow-sensitive AST walker (similar to the Refinement
 2. Tracks a `LinearEnv` mapping variable names to `Live` or `Consumed` status
 3. Pattern match on `Linear x` consumes the value
 4. `let y = x` transfers the obligation (x consumed, y live)
-5. At scope exit, warns about live (unconsumed) values
+5. At scope exit, emits **E0602** (`-Wlinear-leak`) for live (unconsumed) values
 6. At each use, errors if the value is already consumed
 7. In if/case, checks that both branches consume the same set
 8. Walks `WithExpr` (bind Linear from the resource expr; discharge at exit via
    Closeable) and `FunctionExpr` bodies (fresh scope; Linear params from the
-   zonked function type). Still skipped on module top-levels as a whole unit.
+   zonked function type). Module top-level functions and instance methods are
+   walked the same way (`yonac` fails the compile on E0600/E0601).
 
 The checker is a compile-time-only pass. Codegen is unchanged — RC handles the actual memory management.

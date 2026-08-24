@@ -5,10 +5,10 @@ Evidence-based matrix for GitHub
 Design docs are **not** treated as implementation evidence.
 Classifications: `implemented` | `partial` | `design-only` | `missing`.
 
-Pipeline (expression programs): parse → `TypeChecker` → **non-blocking**
-`RefinementChecker` + `LinearityChecker` → codegen
-([`cli/main.cpp`](../cli/main.cpp)).
-**Module compile skips both post-HM checkers.**
+Pipeline (expression programs **and** modules): parse → `TypeChecker` →
+**blocking** `RefinementChecker` + `LinearityChecker` → codegen
+([`cli/main.cpp`](../cli/main.cpp)). `--Wno-refinement` / `--Wno-linear`
+skip those overlays. Leaks are **E0602** (`-Wlinear-leak`, default on).
 
 Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 
@@ -21,8 +21,8 @@ Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 | Algebraic effects (`perform` / `handle`) | partial | partial | partial | partial | partial | partial | **partial** |
 | Effect rows (inference, union, `.yonai`) | missing | missing | partial | missing | partial | partial | **partial** |
 | Record row polymorphism | implemented | implemented | implemented | implemented | partial | implemented | **implemented** |
-| Linear types (`Linear a`) | implemented | implemented | partial | implemented | missing | partial | **partial** |
-| Refinement types / E0500 | implemented | implemented | partial | implemented | missing | partial | **partial** |
+| Linear types (`Linear a`) | implemented | implemented | partial | implemented | missing | implemented | **partial** |
+| Refinement types / E0500 | implemented | implemented | partial | implemented | missing | implemented | **partial** |
 | `@borrow` | implemented | implemented | implemented | implemented | implemented | implemented | **implemented** |
 | Type-level `&T` / lifetimes | missing | missing | missing | missing | missing | missing | **design-only** |
 | GENFN + borrow bitmask | n/a | implemented | missing | implemented | implemented | implemented | **implemented** |
@@ -110,9 +110,12 @@ stays a fresh var. HOF restore is the first-param-is-function shape.
 serializing `\x f -> f x` (function not first). Module compile still does
 not *fail* on type errors — rows are collected non-blocking.
 
-**Empty effect row is not a totality fact.** Open rest still means "unknown",
-not "pure". Totality [#5](https://github.com/yona-lang/yona/issues/76)
-stays blocked.
+**Closed empty rows are an effect-freedom fact.** Exported functions write
+`.yonai` `effects -`, while a missing `effects` field remains unknown. `yonac
+--require-effect-free` accepts only closed empty rows and emits E0203 for known,
+open, or imported-unknown rows. It does **not** prove termination or pattern-match
+exhaustiveness; those remaining totality obligations keep
+[#5](https://github.com/yona-lang/yona/issues/76) open.
 
 [`docs/row-polymorphism.md`](row-polymorphism.md) is **record** field rows
 (`{ name : t | r }`), not effect rows. Do not cite it as #8 evidence.
@@ -148,14 +151,14 @@ This is **not** [#8](https://github.com/yona-lang/yona/issues/79).
 |-------|--------|----------|
 | Parser | implemented | Ordinary constructor `Linear` |
 | AST | implemented | ADT, no linear node |
-| Typechecker | partial | [`src/typechecker/LinearityChecker.cpp`](../src/typechecker/LinearityChecker.cpp). Not part of `MonoType`. Does not walk `FunctionExpr` bodies. **Skipped on modules.** CLI does **not** abort on E0600/E0601. |
+| Typechecker | partial | [`src/typechecker/LinearityChecker.cpp`](../src/typechecker/LinearityChecker.cpp). Not part of `MonoType`. Walks `FunctionExpr` bodies, `WithExpr`, and module functions / instance methods. CLI **aborts** on E0600/E0601 (`--Wno-linear` skips). |
 | Codegen | implemented | RC ADT, no linear IR |
 | `.yonai` | missing | No consume/obligation metadata |
 | Tests | partial | Unit tests below; codegen `closure_captures_linear.yona` |
 
 **Diagnostics:** **E0600** use-after-consume; **E0601** branch inconsistency
-(defined, tested as strings); **E0602** explained but **never emitted** —
-leaks use **`-Wunhandled-effect`**.
+(defined, tested as strings); **E0602** resource leak via `-Wlinear-leak`
+(default on; `--Wno-linear-leak` suppresses).
 
 **Positive:** `TEST_CASE("LinearEnv: create and consume")`;
 `LinearityChecker: transfer via alias is OK`.
@@ -172,7 +175,7 @@ that linear values cannot be captured in closures; the capture fixture compiles.
 |-------|--------|----------|
 | Parser | implemented | `{ var : T \| pred }` ([`src/parser/ParserType.cpp`](../src/parser/ParserType.cpp)) |
 | AST | implemented | `RefinedType` / `RefinePredicate` ([`include/types.h`](../include/types.h)) |
-| Typechecker | partial | [`src/typechecker/RefinementChecker.cpp`](../src/typechecker/RefinementChecker.cpp) only. No `MonoType` refinement. Aliases `NonEmpty` / `Port` / `NonZero` parse; **not** enforced at signatures. `register_refined_type` unused by CLI. Intra-function default walk skipped. **Non-blocking; skipped on modules.** |
+| Typechecker | partial | [`src/typechecker/RefinementChecker.cpp`](../src/typechecker/RefinementChecker.cpp) only. No `MonoType` refinement. Aliases `NonEmpty` / `Port` / `NonZero` parse; **not** enforced at signatures. `register_refined_type` unused by CLI. Walks module function bodies. **Blocking** (`yonac` exits non-zero; `--Wno-refinement` skips). |
 | Codegen | implemented | Erase to base type ([`src/Codegen.cpp`](../src/Codegen.cpp)) |
 | `.yonai` | missing | No predicates |
 | Tests | partial | Unit E0500 tests; codegen `seq_head_tail.yona` is **runtime**, not a `yonac` failure |
@@ -247,8 +250,7 @@ missing constructors.
 
 ## Known limitations (not new features)
 
-- Linear / refinement diagnostics do not fail `yonac` (post-HM, non-blocking).
-- Module path never runs those checkers.
+- Linear leaks are **E0602** warnings (`-Wlinear-leak`), not hard errors.
 - Effect ops used in production source are untyped except by handler clauses /
   test registration.
 - `perform` result is codegen’d as `Int`.
@@ -263,7 +265,7 @@ missing constructors.
 | [effects.md](effects.md) | CPS transformation; `export effect` | Identity resume; no `effect` parse |
 | [type-checker-design.md](type-checker-design.md) | Effects `[done]` | Closed latent sets + E0202 only; no `effect` decl in grammar |
 | [row-polymorphism.md](row-polymorphism.md) | (if read as effect rows) | Record rows only |
-| [linear-types.md](linear-types.md) | E0602; no linear closures | E0602 unused; capture fixture exists |
+| [linear-types.md](linear-types.md) | (if still claiming E0602 unused) | E0602 is `-Wlinear-leak` |
 | [refinement-types.md](refinement-types.md) | Signature aliases checked | Syntax only |
 | [design-borrow-types.md](design-borrow-types.md) | Nothing in `.yonai` | `borrow` bitmask exists |
 | [pattern-matching.md](pattern-matching.md) | `-Wincomplete-patterns` | Never emitted |
@@ -300,12 +302,12 @@ flowchart TD
 | Work | Issue / note | Independent? |
 |------|----------------|--------------|
 | Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yona/issues/79) | Done 2026-08-19 (closed FN rows, `effects | hof`, sibling-aware `check_module`) |
-| Opaque exported types | [#6](https://github.com/yona-lang/yona/issues/77) | After audit; parallel with #8 |
+| Opaque exported types | [#6](https://github.com/yona-lang/yona/issues/77) | Done 2026-08-24 (`export type T opaque`; hidden constructor interface rows) |
 | Totality / empty row | [#5](https://github.com/yona-lang/yona/issues/76) | After #8 |
 | Typed-core | [#7](https://github.com/yona-lang/yona/issues/78) | Arch after audit; API after #8 |
 | CTE | [#4](https://github.com/yona-lang/yona/issues/75) | After #5 |
 | Parse `effect` decls + register ops | [#9](https://github.com/yona-lang/yona/issues/80) | Yes (does not replace #8) |
-| Blocking E0500/E0600; emit E0602; run checkers on modules | [#10](https://github.com/yona-lang/yona/issues/81) | Yes |
+| Blocking E0500/E0600; emit E0602; run checkers on modules | [#10](https://github.com/yona-lang/yona/issues/81) | Done 2026-08-24 |
 | Diagnostic case exhaustiveness | [#11](https://github.com/yona-lang/yona/issues/82) | Yes |
 | `&T` | [todo-list](todo-list.md); [design-borrow-types.md](design-borrow-types.md) | After audit; large |
 

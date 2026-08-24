@@ -31,7 +31,9 @@ const char* color_green()   { return stderr_is_tty() ? "\033[1;32m" : ""; }
 
 } // anonymous namespace
 
-DiagnosticEngine::DiagnosticEngine() = default;
+DiagnosticEngine::DiagnosticEngine() {
+    enable_warning(WarningFlag::LinearLeak);
+}
 
 void DiagnosticEngine::enable_wall() {
     enable_warning(WarningFlag::UnusedVariable);
@@ -39,6 +41,7 @@ void DiagnosticEngine::enable_wall() {
     enable_warning(WarningFlag::OverlappingPatterns);
     enable_warning(WarningFlag::UnhandledEffect);
     enable_warning(WarningFlag::UnmatchedAdt);
+    enable_warning(WarningFlag::LinearLeak);
 }
 
 void DiagnosticEngine::enable_wextra() {
@@ -91,18 +94,27 @@ void DiagnosticEngine::error(const SourceLocation& loc, ErrorCode code, const st
 }
 
 void DiagnosticEngine::warning(const SourceLocation& loc, const std::string& message, WarningFlag flag) {
+    emit_warning(loc, std::nullopt, message, flag);
+}
+
+void DiagnosticEngine::warning(const SourceLocation& loc, ErrorCode code, const std::string& message, WarningFlag flag) {
+    emit_warning(loc, code, message, flag);
+}
+
+void DiagnosticEngine::emit_warning(const SourceLocation& loc, std::optional<ErrorCode> code,
+                                    const std::string& message, WarningFlag flag) {
     if (suppress_warnings_) return;
     if (enabled_warnings_.find(flag) == enabled_warnings_.end()) return;
 
-    std::string flag_str = flag_name(flag);
+    std::string flag_str = code ? error_code_str(*code) : flag_name(flag);
 
     if (warnings_as_errors_) {
         ++error_count_;
-        records_.push_back({DiagLevel::Error, loc, std::nullopt, message});
+        records_.push_back({DiagLevel::Error, loc, code, message});
         emit(DiagLevel::Error, loc, message, flag_str);
     } else {
         ++warning_count_;
-        records_.push_back({DiagLevel::Warning, loc, std::nullopt, message});
+        records_.push_back({DiagLevel::Warning, loc, code, message});
         emit(DiagLevel::Warning, loc, message, flag_str);
     }
 }
@@ -122,6 +134,7 @@ std::string DiagnosticEngine::flag_name(WarningFlag f) {
         case WarningFlag::OverlappingPatterns:return "overlapping-patterns";
         case WarningFlag::UnhandledEffect:   return "unhandled-effect";
         case WarningFlag::UnmatchedAdt:    return "unmatched-adt";
+        case WarningFlag::LinearLeak:      return "linear-leak";
     }
     return "unknown";
 }
@@ -228,6 +241,7 @@ std::string error_code_str(ErrorCode code) {
         case ErrorCode::E0200: return "E0200";
         case ErrorCode::E0201: return "E0201";
         case ErrorCode::E0202: return "E0202";
+        case ErrorCode::E0203: return "E0203";
         case ErrorCode::E0300: return "E0300";
         case ErrorCode::E0301: return "E0301";
         case ErrorCode::E0302: return "E0302";
@@ -257,6 +271,7 @@ std::optional<ErrorCode> parse_error_code(const std::string& str) {
     if (str == "E0200") return ErrorCode::E0200;
     if (str == "E0201") return ErrorCode::E0201;
     if (str == "E0202") return ErrorCode::E0202;
+    if (str == "E0203") return ErrorCode::E0203;
     if (str == "E0300") return ErrorCode::E0300;
     if (str == "E0301") return ErrorCode::E0301;
     if (str == "E0302") return ErrorCode::E0302;
@@ -445,6 +460,18 @@ std::string error_explanation(ErrorCode code) {
                 "      Fs.read p resume -> resume p\n"
                 "      return val -> val\n"
                 "  end\n";
+
+        case ErrorCode::E0203:
+            return
+                "Effect-freedom requirement not satisfied [E0203]\n"
+                "\n"
+                "`yonac --require-effect-free` accepts only closed empty effect rows.\n"
+                "A known operation or an open row variable means the compiler cannot prove\n"
+                "the expression is effect-free. This check does not prove termination or\n"
+                "pattern-match exhaustiveness.\n"
+                "\n"
+                "Fix: handle the operation, use a function with a closed empty row, or\n"
+                "compile without `--require-effect-free`.\n";
 
         case ErrorCode::E0300:
             return

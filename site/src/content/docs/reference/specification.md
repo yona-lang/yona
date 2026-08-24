@@ -561,8 +561,10 @@ end
 
 A module is a **top-level declaration** — not an expression — and extends to
 end of file. `export` statements name exported functions; `export type T`
-exports a type with all its constructors; `export f from Other\Module`
-re-exports. Module names are backslash-separated paths (`Std\List`).
+exports a type with all its constructors. `export type T opaque` exports only
+the nominal type, hiding its constructors from importers; `export f from
+Other\Module` re-exports. Module names are backslash-separated paths
+(`Std\List`).
 
 Imports are expressions:
 

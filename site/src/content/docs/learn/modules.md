@@ -48,6 +48,7 @@ handling one group of names:
 ```yona
 export area, perimeter        # functions
 export type Shape             # a type AND all of its constructors
+export type Token opaque      # a type without exposing constructors
 export scale from Data\Xform  # re-export from another module
 ```
 
@@ -57,6 +58,9 @@ The three forms, precisely:
 - **Types:** `export type Shape` exports the type together with all its
   constructors (`Circle`, `Rect`), so importers can construct values and
   pattern-match on them.
+- **Opaque types:** `export type Token opaque` exports only the nominal type.
+  Importers can pass it to public functions but cannot name or match its
+  constructors; expose smart constructors and observers instead.
 - **Re-exports:** `export f, g from Other\Mod` republishes names defined in
   another module as if they were defined here. Importers depend only on the
   re-exporting module. The re-exporting module may also use those names in

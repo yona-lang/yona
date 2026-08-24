@@ -963,6 +963,74 @@ fetch path = perform Fs.read path
     CHECK(checker.has_direct_errors());
   }
 
+  TEST_CASE("Opaque exported ADTs omit constructors from their interface") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_opaque";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser parser;
+    auto mod_result = parser.parse_module(R"(
+module Test\Token
+
+export type Token opaque
+export make, value
+
+type Token = MkToken Int
+make n = MkToken n
+value (MkToken n) = n
+)", "Token.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen codegen("opaque_token_mod");
+    REQUIRE(codegen.compile_module(mod_result.value().get()) != nullptr);
+    fs::path mod_obj = yona::test::link::scratch_root() / "opaque_token_mod.o";
+    REQUIRE(codegen.emit_object_file(mod_obj.string()));
+    fs::path iface = yona_lib / "Test" / "Token.yonai";
+    REQUIRE(codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("ADT Token 1 1 opaque") != string::npos);
+    CHECK(yonai.find("CTOR MkToken") == string::npos);
+
+    parser::Parser client_parser;
+    auto client_result = client_parser.parse_expression(
+        R"(import make, value from Test\Token in value (make 7))", "client.yona");
+    REQUIRE(client_result.has_value());
+    Codegen client_codegen("opaque_token_client");
+    client_codegen.module_paths_.push_back(yona_lib.string());
+    REQUIRE(client_codegen.compile(client_result.value().get()) != nullptr);
+    CHECK(client_codegen.error_count_ == 0);
+    fs::path client_obj = yona::test::link::scratch_root() / "opaque_token_client.o";
+    REQUIRE(client_codegen.emit_object_file(client_obj.string()));
+    vector<fs::path> objects = {mod_obj, client_obj};
+    REQUIRE(yona::test::link::append_runtime_objects(objects));
+    fs::path exe = yona::test::link::scratch_root() /
+                   ("opaque_token_client" + yona::test::link::exe_suffix());
+    REQUIRE(yona::test::link::link_objs_to_exe(objects, exe));
+    CHECK(yona::test::link::popen_read_all(exe) == "7");
+
+    parser::Parser hidden_ctor_parser;
+    auto hidden_ctor_result = hidden_ctor_parser.parse_expression(
+        R"(import Test\Token in MkToken 7)", "hidden-ctor.yona");
+    REQUIRE(hidden_ctor_result.has_value());
+    Codegen hidden_ctor_codegen("opaque_hidden_ctor");
+    hidden_ctor_codegen.module_paths_.push_back(yona_lib.string());
+    REQUIRE(hidden_ctor_codegen.compile(hidden_ctor_result.value().get()) != nullptr);
+    CHECK(hidden_ctor_codegen.error_count_ > 0);
+
+    auto transparent_result = parser.parse_module(R"(
+module Test\Transparent
+export type Transparent
+type Transparent = Visible Int
+)", "Transparent.yona");
+    REQUIRE(transparent_result.has_value());
+    Codegen transparent_codegen("transparent_token_mod");
+    REQUIRE(transparent_codegen.compile_module(transparent_result.value().get()) != nullptr);
+    fs::path transparent_iface = yona_lib / "Test" / "Transparent.yonai";
+    REQUIRE(transparent_codegen.emit_interface_file(transparent_iface.string()));
+    CHECK(read_file(transparent_iface).find("CTOR Visible") != string::npos);
+  }
+
   TEST_CASE("Interface files preserve exported HOF open rest") {
     namespace fs = std::filesystem;
     REQUIRE(yona::test::link::ensure_runtime_objects());
@@ -1229,6 +1297,7 @@ TEST_SUITE("Diagnostics") {
     CHECK(DiagnosticEngine::flag_name(WarningFlag::IncompletePatterns) == "incomplete-patterns");
     CHECK(DiagnosticEngine::flag_name(WarningFlag::OverlappingPatterns) == "overlapping-patterns");
     CHECK(DiagnosticEngine::flag_name(WarningFlag::UnmatchedAdt) == "unmatched-adt");
+    CHECK(DiagnosticEngine::flag_name(WarningFlag::LinearLeak) == "linear-leak");
   }
 
   TEST_CASE("Parser errors route through DiagnosticEngine") {

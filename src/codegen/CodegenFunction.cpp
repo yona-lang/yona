@@ -284,6 +284,59 @@ void Codegen::collect_free_vars(AstNode* node, const std::unordered_set<std::str
     }
 }
 
+void Codegen::bind_parameter_pattern(PatternNode* pat, const TypedValue& value) {
+    if (!pat || !value.val) return;
+    auto i64_ty = LType::getInt64Ty(*context_);
+
+    if (pat->get_type() == AST_TUPLE_PATTERN && value.type == CType::TUPLE) {
+        auto* tuple = static_cast<TuplePattern*>(pat);
+        Value* tuple_ptr = value.val;
+        if (!tuple_ptr->getType()->isPointerTy())
+            tuple_ptr = builder_->CreateIntToPtr(tuple_ptr, PointerType::get(*context_, 0));
+        for (size_t i = 0; i < tuple->patterns.size(); ++i) {
+            auto* field = tuple->patterns[i];
+            if (field->get_type() != AST_PATTERN_VALUE) continue;
+            auto* pv = static_cast<PatternValue*>(field);
+            auto* id = std::get_if<IdentifierExpr*>(&pv->expr);
+            if (!id) continue;
+            auto* gep = builder_->CreateGEP(i64_ty, tuple_ptr,
+                {ConstantInt::get(i64_ty, i + 2)}, "param_tuple_gep");
+            auto* element = builder_->CreateLoad(i64_ty, gep, "param_tuple_elem");
+            CType field_type = i < value.subtypes.size() ? value.subtypes[i] : CType::INT;
+            named_values_[(*id)->name->value] = {element, field_type};
+        }
+        return;
+    }
+
+    if (pat->get_type() != AST_CONSTRUCTOR_PATTERN || value.type != CType::ADT) return;
+    auto* ctor_pat = static_cast<ConstructorPattern*>(pat);
+    auto ctor_it = types_.adt_constructors.find(ctor_pat->constructor_name);
+    if (ctor_it == types_.adt_constructors.end()) return;
+    const auto& ctor = ctor_it->second;
+    bool heap_layout = ctor.is_recursive || value.val->getType()->isPointerTy();
+    Value* adt_ptr = value.val;
+    if (heap_layout && !adt_ptr->getType()->isPointerTy())
+        adt_ptr = builder_->CreateIntToPtr(adt_ptr, PointerType::get(*context_, 0));
+
+    for (size_t i = 0; i < ctor_pat->sub_patterns.size(); ++i) {
+        auto* field = ctor_pat->sub_patterns[i];
+        if (field->get_type() != AST_PATTERN_VALUE) continue;
+        auto* pv = static_cast<PatternValue*>(field);
+        auto* id = std::get_if<IdentifierExpr*>(&pv->expr);
+        if (!id) continue;
+        CType field_type = i < ctor.field_types.size() ? ctor.field_types[i] : CType::INT;
+        Value* field_value = heap_layout
+            ? builder_->CreateCall(rt_.adt_get_field_, {adt_ptr, ConstantInt::get(i64_ty, i)})
+            : builder_->CreateExtractValue(value.val, {static_cast<unsigned>(i + 1)});
+        if (heap_layout && (field_type == CType::ADT || field_type == CType::SEQ ||
+                            field_type == CType::STRING || field_type == CType::FUNCTION ||
+                            field_type == CType::SET || field_type == CType::DICT ||
+                            field_type == CType::CHANNEL || field_type == CType::TUPLE))
+            field_value = builder_->CreateIntToPtr(field_value, PointerType::get(*context_, 0));
+        named_values_[(*id)->name->value] = {field_value, field_type};
+    }
+}
+
 // ===== Functions (deferred compilation) =====
 
 TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& name) {
@@ -950,36 +1003,8 @@ Codegen::CompiledFunction Codegen::compile_function(
         }
         named_values_[pname] = param_tv;
 
-        // Destructure complex patterns (tuples, sequences) into element variables
-        if (i < def.ast->patterns.size()) {
-            auto* pat = def.ast->patterns[i];
-            if (ct == CType::TUPLE && pat->get_type() == AST_TUPLE_PATTERN) {
-                auto* tp = static_cast<TuplePattern*>(pat);
-                auto i64_local = LType::getInt64Ty(*context_);
-                for (size_t ti = 0; ti < tp->patterns.size(); ti++) {
-                    auto* elem_pat = tp->patterns[ti];
-                    if (elem_pat->get_type() == AST_PATTERN_VALUE) {
-                        auto* pv = static_cast<PatternValue*>(elem_pat);
-                        if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr)) {
-                            CType et = (ti < st.size()) ? st[ti] : CType::INT;
-                            Value* elem;
-                            if (arg.getType()->isPointerTy()) {
-                                auto* gep = builder_->CreateGEP(i64_local, &arg,
-                                    {ConstantInt::get(i64_local, ti + 2)}, "param_tuple_gep"); // +2 for tuple header
-                                elem = builder_->CreateLoad(i64_local, gep, "param_tuple_elem");
-                            } else {
-                                // i64 (ptrtoint'd tuple): inttoptr then GEP+load
-                                auto* ptr = builder_->CreateIntToPtr(&arg, PointerType::get(*context_, 0));
-                                auto* gep = builder_->CreateGEP(i64_local, ptr,
-                                    {ConstantInt::get(i64_local, ti + 2)}, "param_tuple_gep"); // +2 for tuple header
-                                elem = builder_->CreateLoad(i64_local, gep, "param_tuple_elem");
-                            }
-                            named_values_[(*id)->name->value] = {elem, et};
-                        }
-                    }
-                }
-            }
-        }
+        if (i < def.ast->patterns.size())
+            bind_parameter_pattern(def.ast->patterns[i], param_tv);
 
         // Emit parameter debug info (only for user params, not captures)
         if (debug_.enabled && debug_.scope && debug_.builder && i < def.param_names.size()) {
@@ -1250,35 +1275,8 @@ Codegen::CompiledFunction Codegen::compile_function(
                 arg.setName(pname);
                 named_values_[pname] = {&arg, ct, st};
 
-                // Destructure complex patterns (same as first pass)
-                if (i < def.ast->patterns.size()) {
-                    auto* pat = def.ast->patterns[i];
-                    if (ct == CType::TUPLE && pat->get_type() == AST_TUPLE_PATTERN) {
-                        auto* tp = static_cast<TuplePattern*>(pat);
-                        auto i64_local = LType::getInt64Ty(*context_);
-                        for (size_t ti = 0; ti < tp->patterns.size(); ti++) {
-                            auto* elem_pat = tp->patterns[ti];
-                            if (elem_pat->get_type() == AST_PATTERN_VALUE) {
-                                auto* pv = static_cast<PatternValue*>(elem_pat);
-                                if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr)) {
-                                    CType et = (ti < st.size()) ? st[ti] : CType::INT;
-                                    Value* elem;
-                                    if (arg.getType()->isPointerTy()) {
-                                        auto* gep = builder_->CreateGEP(i64_local, &arg,
-                                            {ConstantInt::get(i64_local, ti + 2)}, "param_tuple_gep"); // +2 for tuple header
-                                        elem = builder_->CreateLoad(i64_local, gep, "param_tuple_elem");
-                                    } else {
-                                        auto* ptr = builder_->CreateIntToPtr(&arg, PointerType::get(*context_, 0));
-                                        auto* gep = builder_->CreateGEP(i64_local, ptr,
-                                            {ConstantInt::get(i64_local, ti + 2)}, "param_tuple_gep"); // +2 for tuple header
-                                        elem = builder_->CreateLoad(i64_local, gep, "param_tuple_elem");
-                                    }
-                                    named_values_[(*id)->name->value] = {elem, et};
-                                }
-                            }
-                        }
-                    }
-                }
+                if (i < def.ast->patterns.size())
+                    bind_parameter_pattern(def.ast->patterns[i], named_values_[pname]);
 
                 i++;
             }

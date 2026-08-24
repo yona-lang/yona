@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+- `export type T opaque` exports an ADT's nominal type without exposing its
+  constructors. Public smart constructors and observers remain callable,
+  including generic exports that use the hidden representation internally.
+
+### Changed
+- `yonac --require-effect-free` establishes the first #5 effect-freedom gate:
+  it accepts only closed empty effect rows (E0203 otherwise). Exported empty
+  rows are preserved as `.yonai` `effects -`; interfaces without a row remain
+  unknown and are rejected by the gate. This does not yet prove termination or
+  exhaustive matches.
+- `yonac` now exits non-zero on refinement **E0500** and linearity **E0600** /
+  **E0601** (expression programs and modules). Previously those diagnostics
+  were emitted on expressions and ignored, and module compile skipped both
+  checkers. Opt out with `--Wno-refinement` or `--Wno-linear`.
+- Linear resource leaks emit **E0602** (`-Wlinear-leak`, on by default)
+  instead of `-Wunhandled-effect`. Suppress with `--Wno-linear-leak`;
+  `--Werror` still promotes them to errors.
+
 ## v0.1.6 (2026-08-21)
 
 ### Fixed

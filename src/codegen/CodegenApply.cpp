@@ -602,6 +602,7 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
             reparsed->functions.clear();
             imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
             GenfnNameIsolation iso(*this, mangled);
+            install_private_genfn_ctors(mangled);
             int errors_before = error_count_;
             register_sibling_genfns(mangled);
             codegen_function_def(func_ast, fn_name);

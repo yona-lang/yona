@@ -668,7 +668,7 @@ func1 x = x + 1
 func2 a b = a * b
 ```
 
-Modules end at EOF (no `end` keyword). The `export` keyword is a standalone statement that can appear multiple times. `export type Name` exports a type and all its constructors.
+Modules end at EOF (no `end` keyword). The `export` keyword is a standalone statement that can appear multiple times. `export type Name` exports a type and all its constructors; `export type Name opaque` exports only the nominal type and hides its constructors from importers.
 
 ### Re-exports
 

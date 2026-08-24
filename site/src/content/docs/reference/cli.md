@@ -55,10 +55,14 @@ Compiling a module additionally writes an interface file next to the object file
 
 | Option | Description |
 |--------|-------------|
-| `--Wall` | Enable common warnings (unused variables, incomplete/overlapping patterns, unhandled effects) |
+| `--Wall` | Enable common warnings (unused variables, incomplete/overlapping patterns, unhandled effects, linear leaks) |
 | `--Wextra` | Enable all warnings (adds shadowing, missing signatures, unused imports) |
 | `--Werror` | Treat warnings as errors |
 | `-w` | Suppress all warnings |
+| `--Wno-refinement` | Skip refinement checking (E0500 nonempty / nonzero proofs) |
+| `--Wno-linear` | Skip linearity checking (E0600 / E0601 / E0602) |
+| `--Wno-linear-leak` | Disable E0602 resource-leak warnings (`-Wlinear-leak`, on by default) |
+| `--require-effect-free` | Require a closed empty effect row; reject known, open, or imported-unknown rows (E0203); does not prove termination or exhaustive matches |
 
 The individual warning flags and which group enables them are listed on the [error codes](/reference/error-codes/) page.
 

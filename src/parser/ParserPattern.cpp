@@ -136,6 +136,11 @@ unique_ptr<PatternNode> ParserImpl::parse_pattern_primary() {
         }
 
         expect(TokenType::YRPAREN, "Expected ')' after tuple pattern");
+        // Parentheses group a pattern; only a comma creates a tuple.  Keeping
+        // a single grouped constructor as a TuplePattern prevents normal
+        // function-parameter destructuring from seeing its bound fields.
+        if (elements.size() == 1)
+            return unique_ptr<PatternNode>(elements.front());
         return make_unique<TuplePattern>(loc, elements);
     }
 

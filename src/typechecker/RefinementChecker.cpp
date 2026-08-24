@@ -199,6 +199,15 @@ void RefinementChecker::check_node(AstNode* node, FactEnv& facts) {
         case AST_APPLY_EXPR:
             check_apply(static_cast<ApplyExpr*>(node), facts);
             break;
+        case AST_FUNCTION_EXPR:
+            check_function(static_cast<FunctionExpr*>(node), facts);
+            break;
+        case AST_MODULE_DECL:
+            check_module(static_cast<ModuleDecl*>(node), facts);
+            break;
+        case AST_IMPORT_EXPR:
+            check_node(static_cast<ImportExpr*>(node)->expr, facts);
+            break;
         case AST_DO_EXPR: {
             auto* doex = static_cast<DoExpr*>(node);
             for (size_t i = 0; i < doex->steps.size(); ++i) {
@@ -532,6 +541,30 @@ void RefinementChecker::check_if(IfExpr* node, FactEnv& facts) {
 
     check_node(node->thenExpr, then_facts);
     check_node(node->elseExpr, else_facts);
+}
+
+void RefinementChecker::check_function(FunctionExpr* node, FactEnv& /*outer*/) {
+    if (!node) return;
+    FactEnv fn_facts;
+    for (auto* body : node->bodies) {
+        if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
+            check_node(bwg->expr, fn_facts);
+        } else if (auto* g = dynamic_cast<BodyWithGuards*>(body)) {
+            check_node(g->guard, fn_facts);
+            check_node(g->expr, fn_facts);
+        }
+    }
+}
+
+void RefinementChecker::check_module(ModuleDecl* node, FactEnv& facts) {
+    if (!node) return;
+    for (auto* fn : node->functions)
+        check_function(fn, facts);
+    for (auto* inst : node->instance_declarations) {
+        if (!inst) continue;
+        for (auto* method : inst->methods)
+            check_function(method, facts);
+    }
 }
 
 } // namespace yona::compiler::typechecker

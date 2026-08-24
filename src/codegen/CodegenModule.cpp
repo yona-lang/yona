@@ -185,6 +185,7 @@ Codegen::ModuleFunctionMeta Codegen::module_meta_from_compiled(const CompiledFun
     meta.tuple_elem_linear = cf.tuple_elem_linear;
     meta.param_linear = cf.param_linear;
     meta.effect_ops = cf.effect_ops;
+    meta.effect_row_known = cf.effect_row_known;
     meta.effect_open_rest = cf.effect_open_rest;
     meta.effect_hof = cf.effect_hof;
     return meta;
@@ -205,6 +206,7 @@ Codegen::CompiledFunction Codegen::compiled_function_from_meta(llvm::Function* f
     cf.tuple_elem_linear = meta.tuple_elem_linear;
     cf.param_linear = meta.param_linear;
     cf.effect_ops = meta.effect_ops;
+    cf.effect_row_known = meta.effect_row_known;
     cf.effect_open_rest = meta.effect_open_rest;
     cf.effect_hof = meta.effect_hof;
     return cf;
@@ -221,6 +223,10 @@ bool Codegen::emit_interface_file(const std::string& path) {
         adts[info.type_name].push_back(&info);
 
     for (auto& [type_name, ctors] : adts) {
+        if (interface_export_filter_active_ &&
+            interface_exported_types_.count(type_name) == 0)
+            continue;
+        const bool opaque = interface_opaque_types_.count(type_name) != 0;
         int max_arity = 0;
         bool is_recursive = false;
         for (auto* c : ctors) {
@@ -228,7 +234,9 @@ bool Codegen::emit_interface_file(const std::string& path) {
             if (c->is_recursive) is_recursive = true;
         }
         out << "ADT " << type_name << " " << ctors.size() << " " << max_arity
-            << (is_recursive ? " recursive" : "") << "\n";
+            << (is_recursive ? " recursive" : "")
+            << (opaque ? " opaque" : "") << "\n";
+        if (opaque) continue;
         for (auto* ctor : ctors) {
             for (auto& [cname, cinfo] : types_.adt_constructors) {
                 if (&cinfo == ctor) {
@@ -316,13 +324,17 @@ bool Codegen::emit_interface_file(const std::string& path) {
         auto borrow_mask = borrowed_params_to_mask(meta.borrowed_params, meta.param_types.size());
         if (borrow_mask.find('1') != std::string::npos)
             out << " borrow " << borrow_mask;
-        if (!meta.effect_ops.empty() || meta.effect_open_rest) {
+        if (meta.effect_row_known) {
             out << " effects ";
-            for (size_t i = 0; i < meta.effect_ops.size(); i++) {
-                if (i) out << ",";
-                out << meta.effect_ops[i];
+            if (meta.effect_ops.empty() && !meta.effect_open_rest) {
+                out << "-";
+            } else {
+                for (size_t i = 0; i < meta.effect_ops.size(); i++) {
+                    if (i) out << ",";
+                    out << meta.effect_ops[i];
+                }
+                if (meta.effect_open_rest) out << "|";
             }
-            if (meta.effect_open_rest) out << "|";
             if (meta.effect_hof) out << " hof";
         }
         out << "\n";
@@ -344,6 +356,27 @@ bool Codegen::emit_interface_file(const std::string& path) {
         // fail while reparsing GENFN bodies.
         if (source.find("raw_") != std::string::npos)
             continue;
+        // Opaque constructors remain unavailable to importers, but an
+        // exported generic function may need one when it is recompiled at a
+        // different call-site type. Keep this metadata scoped to that GENFN.
+        for (const auto& [ctor_name, ctor] : types_.adt_constructors) {
+            if (interface_opaque_types_.count(ctor.type_name) == 0) continue;
+            out << "GENFN_CTOR " << mangled << " " << ctor_name << " "
+                << ctor.type_name << " " << ctor.tag << " " << ctor.arity << " "
+                << ctor.total_variants << " " << ctor.max_arity
+                << (ctor.is_recursive ? " recursive" : "");
+            for (size_t i = 0; i < ctor.field_types.size(); ++i) {
+                out << " field:" << ctype_to_string(ctor.field_types[i]);
+                if (ctor.field_types[i] == CType::FUNCTION &&
+                    i < ctor.field_fn_return_types.size()) {
+                    out << ":" << ctype_to_string(ctor.field_fn_return_types[i]);
+                    if (i < ctor.field_fn_return_adt_names.size() &&
+                        !ctor.field_fn_return_adt_names[i].empty())
+                        out << ":" << ctor.field_fn_return_adt_names[i];
+                }
+            }
+            out << "\n";
+        }
         out << "GENFN_BEGIN " << mangled << " " << local_name << "\n";
         out << trim_trailing_doc_comments(source) << "\n";
         out << "GENFN_END\n";
@@ -361,6 +394,7 @@ bool Codegen::load_interface_file(const std::string& path) {
     int current_total_variants = 0;
     int current_max_arity = 0;
     bool current_is_recursive = false;
+    bool current_is_opaque = false;
     std::vector<std::string> current_ctor_names;
     std::string last_instance_key;  // tracks most recently registered INSTANCE
     std::string last_trait_name;    // tracks most recently registered TRAIT
@@ -382,11 +416,14 @@ bool Codegen::load_interface_file(const std::string& path) {
 
             iss >> current_adt >> current_total_variants >> current_max_arity;
             std::string recursive_flag;
-            if (iss >> recursive_flag && recursive_flag == "recursive")
-                current_is_recursive = true;
-            else
-                current_is_recursive = false;
+            current_is_recursive = false;
+            current_is_opaque = false;
+            while (iss >> recursive_flag) {
+                if (recursive_flag == "recursive") current_is_recursive = true;
+                if (recursive_flag == "opaque") current_is_opaque = true;
+            }
         } else if (keyword == "CTOR") {
+            if (current_is_opaque) continue;
             std::string name;
             int tag, arity;
             iss >> name >> tag >> arity;
@@ -518,6 +555,7 @@ bool Codegen::load_interface_file(const std::string& path) {
                 } else if (trailing == "LINEAR") {
                     meta.tuple_elem_linear.push_back(1);
                 } else if (trailing == "effects") {
+                    meta.effect_row_known = true;
                     std::string ops;
                     if (iss >> ops) {
                         if (ops == "|") {
@@ -558,6 +596,32 @@ bool Codegen::load_interface_file(const std::string& path) {
             }
             if (source.find("yona_") == std::string::npos)
                 imports_.imported_sources[mangled] = {source, local_name};
+        } else if (keyword == "GENFN_CTOR") {
+            std::string mangled, ctor_name, type_name;
+            int tag = 0, arity = 0, total_variants = 0, max_arity = 0;
+            iss >> mangled >> ctor_name >> type_name >> tag >> arity >> total_variants >> max_arity;
+            std::string flag;
+            bool is_recursive = false;
+            std::vector<CType> field_types, fn_return_types;
+            std::vector<std::string> fn_return_adt_names;
+            while (iss >> flag) {
+                if (flag == "recursive") is_recursive = true;
+                if (flag.rfind("field:", 0) == 0) {
+                    std::vector<std::string> parts;
+                    std::stringstream fields(flag.substr(6));
+                    std::string part;
+                    while (std::getline(fields, part, ':')) parts.push_back(part);
+                    field_types.push_back(parts.empty() ? CType::INT : string_to_ctype(parts[0]));
+                    fn_return_types.push_back(parts.size() > 1 ? string_to_ctype(parts[1]) : CType::INT);
+                    fn_return_adt_names.push_back(parts.size() > 2 ? parts[2] : "");
+                }
+            }
+            if (!mangled.empty() && !ctor_name.empty()) {
+                imports_.private_genfn_ctors[mangled].push_back(
+                    {ctor_name, {type_name, tag, arity, total_variants, max_arity,
+                                 is_recursive, {}, field_types, fn_return_types,
+                                 fn_return_adt_names}});
+            }
         }
     }
     return true;
@@ -883,6 +947,7 @@ void Codegen::register_yona_module_decls(ast::ModuleDecl* mod) {
 Codegen::GenfnNameIsolation::GenfnNameIsolation(Codegen& cg, std::string mangled)
     : cg(cg) {
     saved_externs = cg.imports_.extern_functions;
+    saved_adt_constructors = cg.types_.adt_constructors;
     cg.imports_.extern_functions.clear();
     auto sep = mangled.rfind("__");
     std::string module_prefix = (sep == std::string::npos) ? "" : mangled.substr(0, sep + 2);
@@ -929,6 +994,14 @@ void Codegen::GenfnNameIsolation::restore() {
     for (auto& [name, tv] : hidden_nvs)
         cg.named_values_[name] = tv;
     cg.imports_.extern_functions = std::move(saved_externs);
+    cg.types_.adt_constructors = std::move(saved_adt_constructors);
+}
+
+void Codegen::install_private_genfn_ctors(const std::string& mangled) {
+    auto it = imports_.private_genfn_ctors.find(mangled);
+    if (it == imports_.private_genfn_ctors.end()) return;
+    for (const auto& [name, info] : it->second)
+        types_.adt_constructors[name] = info;
 }
 
 void Codegen::register_sibling_genfns(const std::string& mangled) {
@@ -948,6 +1021,7 @@ void Codegen::register_sibling_genfns(const std::string& mangled) {
             || imports_.extern_functions.count(ifs.local_name)
             || saved_nv.count(ifs.local_name))
             continue;
+        install_private_genfn_ctors(dep_mangled);
         auto reparsed = reparse_genfn(ifs.local_name, ifs.source_text);
         if (!reparsed || reparsed->functions.empty()) continue;
         auto* func_ast = reparsed->functions[0];
@@ -1018,6 +1092,7 @@ TypedValue Codegen::materialize_imported_function_value(const std::string& name)
             reparsed->functions.clear();
             imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
             GenfnNameIsolation iso(*this, mangled);
+            install_private_genfn_ctors(mangled);
             register_sibling_genfns(mangled);
             codegen_function_def(func_ast, name);
             auto def_it = deferred_functions_.find(name);
@@ -1443,12 +1518,14 @@ void Codegen::populate_interface_effect_rows(ast::ModuleDecl* mod,
         auto it = imports_.meta.find(mangled);
         if (it != imports_.meta.end()) {
             it->second.effect_ops = row.ops;
+            it->second.effect_row_known = true;
             it->second.effect_open_rest = row.open_rest;
             it->second.effect_hof = row.hof;
         }
         auto cf_it = compiled_functions_.find(func->name);
         if (cf_it != compiled_functions_.end()) {
             cf_it->second.effect_ops = row.ops;
+            cf_it->second.effect_row_known = true;
             cf_it->second.effect_open_rest = row.open_rest;
             cf_it->second.effect_hof = row.hof;
         }

@@ -78,9 +78,12 @@ API (#7) until the audit (#3) and effect-row story (#8) are honest about what
 already works.
 
 - [x] **[#3](https://github.com/yona-lang/yona/issues/74) Type-system status audit** — `docs/type-system-status.md` (2026-08-18). Next: #8. Follow-ups from the audit: [#9](https://github.com/yona-lang/yona/issues/80) effect decls, [#10](https://github.com/yona-lang/yona/issues/81) blocking E0500/E0600, [#11](https://github.com/yona-lang/yona/issues/82) `-Wincomplete-patterns`.
+- [x] **[#10](https://github.com/yona-lang/yona/issues/81) Blocking E0500/E0600; emit E0602; check modules** — **Landed 2026-08-24:** `yonac` exits non-zero on E0500/E0600/E0601 for expression programs and modules; `--Wno-refinement` / `--Wno-linear` skip those checkers. Leaks emit **E0602** (`-Wlinear-leak`, default on) instead of `-Wunhandled-effect`.
 - [x] **[#8](https://github.com/yona-lang/yona/issues/79) Effect-row inference +** `.yonai` **propagation** — after #3. **Landed 2026-08-19:** closed sets + E0202; unify of effect rows; HOF rest vars; apply-union / wrap; handler subtraction; pretty-print `!{…}`; `.yonai` `FN … effects Fs.read`. **Follow-ups landed same day:** open HOF rest (`effects | hof`, `Effect: imported HOF open rest from .yonai is E0202`, `Interface files preserve exported HOF open rest`); sibling-aware module typecheck (`Interface files preserve sibling-wrapped FN effect rows`, wrap-before-sibling). HOF restore is the `apply f x = f x` shape (first param is the function). Empty-row totality is **#5**; parsed `effect` decls are **#9**. Plan `docs/superpowers/plans/2026-08-19-effect-row-inference.md`.
-- [ ] **[#6](https://github.com/yona-lang/yona/issues/77) Opaque exported types** — after #3; parallelizable with #8. `export type T opaque` (syntax TBD); hide constructors across modules.
-- [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — after #8 (empty row must be real). Annotation or flag; facts in `.yonai`. Does **not** evaluate at compile time.
+- [x] **[#6](https://github.com/yona-lang/yona/issues/77) Opaque exported types** — **Landed 2026-08-24:** `export type T opaque` writes an `ADT … opaque` interface without public `CTOR` rows. Clients can pass opaque values through exported smart constructors/observers but cannot construct or pattern-match hidden constructors. Generic exported functions carry constructor metadata only in a private recompilation scope; transparent `export type T` remains unchanged. Plan `docs/superpowers/plans/2026-08-24-opaque-exported-types.md`.
+- [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — **effect-freedom slice landed:** `yonac --require-effect-free` rejects known/open rows and imports with unknown rows (E0203); closed empty export rows persist as `.yonai` `effects -`. It deliberately does **not** yet prove termination or exhaustive pattern matching, so #5 remains open.
+  - [x] Closed-empty-row effect-freedom gate + `.yonai` `effects -` propagation (2026-08-24)
+  - [ ] Termination and exhaustive-pattern obligations for a full totality claim
 - [x] **[#7](https://github.com/yona-lang/yona/issues/78) Typed-core API** — arch doc after #3; thin slice after #8. Versioned in-process C++ query types + C ABI (no LLVM headers in the consumer). Defer wire format. **Seed 2026-08-20:** `include/typed_core/Query.h` + `yls`. **2026-08-21:** `include/typed_core/abi.h` (`YONA_TYPED_CORE_ABI_VERSION`), example pretty-print backend, `yonac --emit-typed-core`, `docs/typed-core.md`.
 - [ ] **[#4](https://github.com/yona-lang/yona/issues/75) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
 - [ ] **`Linear FileHandle` (and other resources) for real** — today `.yonai`
@@ -91,16 +94,19 @@ already works.
   `spawn : String -> Linear Process`, same for TCP/UDP and channel ends.
   Consume with `with` or `case Linear h -> …`; `Closeable` on the payload,
   no parallel raw-`Int` handle path. `.yonai` must carry `LINEAR` **and**
-  the inner ADT. Linearity leaks / use-after-consume must fail the build
-  (not warn) on expression programs **and** module bodies — blocked on
-  [#10](https://github.com/yona-lang/yona/issues/81). Update
+  the inner ADT. Use-after-consume is already a failing **E0600** on
+  expression programs **and** module bodies ([#10](https://github.com/yona-lang/yona/issues/81),
+  2026-08-24). Leaks emit **E0602** warnings (`-Wlinear-leak`); promoting
+  leaks to hard errors (and dropping the raw-`Int` handle path) still
+  belongs here. Update
   `docs/linear-types.md`, `docs/api/File.md` / Process / Net / Channel,
   and the site Memory + type-system pages in the same change. Evidence:
   codegen fixtures that typecheck `Linear FileHandle` and reject a leak.
 
-Default series: `#3 → #8 → #5 → #7 → #4`, with **#6** beside #8 after the audit.
-`Linear FileHandle` can proceed beside #10 (interface + stdlib) but must not
-claim “done” until leaks are errors in modules.
+Default series: `#3 → #8 → #5 → #7 → #4`; **#6** landed after the audit.
+`Linear FileHandle` can proceed on stdlib / `.yonai` payload types; use-after-consume
+already fails modules (#10). Do not claim “done” until leaks are errors and the
+raw-`Int` handle path is gone.
 
 ### Formal specification (Rocq)
 
@@ -130,11 +136,7 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
 
 ### Suggested next steps (rolling)
 
-- [ ] **Next language work:** [#6](https://github.com/yona-lang/yona/issues/77)
-  opaque types, or [#5](https://github.com/yona-lang/yona/issues/76)
-  totality / empty-row gate now that #8 rows are real, or **`Linear FileHandle`
-  for real** (stdlib + `.yonai` payload types; hard errors with #10). Formal
-  spec track: Phase 0 of
+- [ ] **Next language work: [#5](https://github.com/yona-lang/yona/issues/76) totality obligations** — add termination and exhaustive-pattern obligations beyond the landed closed-empty-row effect-freedom gate. Follow with **`Linear FileHandle` for real** or #7 typed-core API. Formal spec track: Phase 0 of
   [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
 
 High leverage after the audit: `&T` **/ borrow types**

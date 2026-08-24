@@ -65,12 +65,15 @@ static std::string mangle_module_fn(const std::string& module_fqn, const std::st
 struct YonaiFnEffects {
     int arity = 0;
     std::vector<std::string> effect_ops;
+    bool known = false;
     bool open_rest = false;
     bool hof = false;
 };
 
 static void parse_effects_token(const std::string& tok, YonaiFnEffects& row) {
     std::string ops = tok;
+    row.known = true;
+    if (ops == "-") return;
     if (ops == "|") {
         row.open_rest = true;
         return;
@@ -135,7 +138,7 @@ static std::optional<YonaiFnEffects> lookup_yonai_fn_effects(
                 if (iss >> extra && extra == "hof")
                     row.hof = true;
             }
-            if (!row.effect_ops.empty() || row.open_rest) return row;
+            if (row.known) return row;
         }
     }
     return std::nullopt;
@@ -176,8 +179,31 @@ TypeChecker::EffectRowInfo TypeChecker::effect_row_info(MonoTypePtr type) {
     return info;
 }
 
+bool TypeChecker::is_effect_free(MonoTypePtr type) {
+    if (!type) return false;
+    auto row = effect_row_info(zonk(type));
+    return row.ops.empty() && !row.open_rest;
+}
+
 void TypeChecker::check_module(ast::ModuleDecl* mod) {
     if (!mod) return;
+
+    // Constructors must be visible while checking the module that declares
+    // them: smart constructors and destructor-style functions commonly use
+    // them in their own definitions.  Imported ADTs are registered by the
+    // caller, but a module's declarations have not crossed that boundary yet.
+    for (auto* adt : mod->adt_declarations) {
+        if (!adt) continue;
+        std::vector<std::pair<std::string, int>> constructors;
+        constructors.reserve(adt->variants.size());
+        for (auto* ctor : adt->variants) {
+            if (!ctor) continue;
+            constructors.emplace_back(
+                ctor->name, static_cast<int>(ctor->field_type_names.size()));
+        }
+        register_adt(adt->name, adt->type_params, constructors);
+    }
+
     auto env = root_env_->child();
     std::unordered_map<std::string, MonoTypePtr> prelim;
     for (auto* func : mod->functions) {
@@ -693,12 +719,13 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr* node,
         uf_.add_var(param_var->var_id, level);
         param_types.push_back(param_var);
 
-        // Bind pattern variable name
-        if (pat->get_type() == AST_PATTERN_VALUE) {
-            auto* pv = static_cast<PatternValue*>(pat);
-            if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
-                fn_env->bind((*id)->name->value, param_var);
-        }
+        // A function parameter is a pattern, not just an identifier.  Infer it
+        // in the function scope so nested bindings (for example `Some x` or
+        // `Pair left right`) are visible to the body, then constrain it to the
+        // parameter's fresh type variable.
+        auto* pattern_type = infer_pattern(pat, fn_env, level);
+        unifier_.unify(param_var, pattern_type, pat->source_context,
+                       "in function parameter pattern");
     }
 
     // Infer body type, collecting latent performs / applied rows not covered by a handle
@@ -1564,7 +1591,8 @@ MonoTypePtr TypeChecker::infer_perform(PerformExpr* node, std::shared_ptr<TypeEn
             // Escape into the enclosing function's effect row (E0202 at apply).
             latent_effect_stack_.back().known.push_back({op_key, node->source_context});
         } else {
-            diag_.warning(node->source_context,
+            unhandled_effect_locations_.push_back(node->source_context);
+            diag_.warning(node->source_context, ErrorCode::E0200,
                           "effect operation '" + op_key + "' may not be handled; "
                           "ensure a 'handle...with' block provides a handler for " + node->effect_name,
                           WarningFlag::UnhandledEffect);
@@ -1702,7 +1730,7 @@ void TypeChecker::bind_import_name(std::shared_ptr<TypeEnv> env, const std::stri
     if (import_src_)
         lin = import_src_->imported_function_sig(module_fqn, func_name);
 
-    if (row && (!row->effect_ops.empty() || row->open_rest)) {
+    if (row && row->known) {
         auto fresh = [this, level]() {
             auto* v = arena_.fresh_var(level);
             uf_.add_var(v->var_id, level);
@@ -1754,9 +1782,13 @@ void TypeChecker::bind_import_name(std::shared_ptr<TypeEnv> env, const std::stri
         return;
     }
     if (lin) {
+        if (require_effect_free_)
+            has_unknown_effect_rows_ = true;
         env->bind_scheme(bind_name, generalize(mono_from_import_sig(*lin, level), -1));
         return;
     }
+    if (require_effect_free_)
+        has_unknown_effect_rows_ = true;
     auto* v = arena_.fresh_var(level);
     uf_.add_var(v->var_id, level);
     env->bind(bind_name, v);

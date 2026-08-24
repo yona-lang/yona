@@ -221,6 +221,11 @@ private:
     std::unique_ptr<llvm::IRBuilder<>> builder_;
     llvm::TargetMachine* target_machine_ = nullptr;
     typechecker::TypeChecker* type_checker_ = nullptr;
+    /// ADTs exported by the module currently being emitted. Interface files
+    /// never expose private ADTs; opaque exports omit their constructor rows.
+    std::unordered_set<std::string> interface_exported_types_;
+    std::unordered_set<std::string> interface_opaque_types_;
+    bool interface_export_filter_active_ = false;
 
     // Scope: variable name → typed value
     std::unordered_map<std::string, TypedValue> named_values_;
@@ -253,6 +258,8 @@ private:
         std::vector<char> tuple_elem_linear;
         std::vector<char> param_linear;
         std::vector<std::string> effect_ops;
+        /// The exporter inferred an effect row, including a closed empty row.
+        bool effect_row_known = false;
         bool effect_open_rest = false;
         bool effect_hof = false;
     };
@@ -442,6 +449,7 @@ private:
         std::vector<char> param_linear;
         /// Closed latent effect ops from the exporter (`Fs.read`). Empty if none.
         std::vector<std::string> effect_ops;
+        bool effect_row_known = false;
         /// Open rest var (`effects |` / `effects Fs.read|`). Distinct from a missing field.
         bool effect_open_rest = false;
         /// First parameter is a function that shares this row (`effects … hof`).
@@ -477,6 +485,10 @@ private:
         /// without making them public imports.
         std::unordered_set<std::string> private_genfn_symbols;
         std::unordered_map<std::string, ImportedFunctionSource> imported_sources;
+        /// Constructor metadata needed only while recompiling an exported
+        /// generic function. Opaque ADT constructors never enter the public
+        /// constructor registry.
+        std::unordered_map<std::string, std::vector<std::pair<std::string, AdtInfo>>> private_genfn_ctors;
         std::vector<std::unique_ptr<ast::FunctionExpr>> imported_ast_nodes;  // ownership
         std::unordered_map<std::string, ModuleFunctionMeta> meta;            // function metadata
     } imports_;
@@ -653,6 +665,9 @@ private:
                                       llvm::BasicBlock* body_bb, llvm::BasicBlock* next_bb);
     bool codegen_pattern_typed(TypedPattern* pat, const TypedValue& scrutinee,
                                 llvm::BasicBlock* body_bb, llvm::BasicBlock* next_bb);
+    /// Bind fields from a function parameter pattern after the caller has
+    /// selected the matching function clause.
+    void bind_parameter_pattern(PatternNode* pat, const TypedValue& value);
 
     /// Box a value as a sum type: creates a 2-tuple (type_tag, value).
     TypedValue box_as_sum(const TypedValue& value);
@@ -778,6 +793,7 @@ private:
         std::unordered_map<std::string, std::string> saved_externs;
         std::unordered_map<std::string, CompiledFunction> hidden_cfs;
         std::unordered_map<std::string, TypedValue> hidden_nvs;
+        std::unordered_map<std::string, AdtInfo> saved_adt_constructors;
         std::vector<std::string> scoped_cafs;
         bool restored = false;
         /// `mangled` is taken by value: the constructor clears
@@ -791,6 +807,7 @@ private:
     /// Register same-module GENFN siblings as deferred functions so a
     /// remonomorphized export can call unexported helpers.
     void register_sibling_genfns(const std::string& mangled);
+    void install_private_genfn_ctors(const std::string& mangled);
     /// Build a first-class closure for an imported name used as a value.
     TypedValue materialize_imported_function_value(const std::string& name);
     TypedValue dummy_typed_value(CType ct);

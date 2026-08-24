@@ -1201,6 +1201,7 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                                 reparsed->functions.clear();
                                 imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
                                 GenfnNameIsolation iso(*this, mangled);
+                                install_private_genfn_ctors(mangled);
                                 register_sibling_genfns(mangled);
                                 codegen_function_def(func_ast, node->name->value);
                                 auto local_def_it = deferred_functions_.find(node->name->value);
@@ -1268,6 +1269,7 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr* node) {
                         reparsed->functions.clear();
                         imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
                         GenfnNameIsolation iso(*this, mangled);
+                        install_private_genfn_ctors(mangled);
                         register_sibling_genfns(mangled);
                         codegen_function_def(func_ast, node->name->value);
                         auto local_def_it = deferred_functions_.find(node->name->value);

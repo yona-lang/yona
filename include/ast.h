@@ -761,6 +761,7 @@ public:
   FqnExpr *fqn;
   vector<string> exports;            // direct exports (functions defined in this module)
   vector<string> exported_types;     // type names exported via "export type Name"
+  vector<string> opaque_exported_types; // subset exported via "export type Name opaque"
   vector<string> exported_traits;    // trait names exported via "export trait Name"
   vector<ReExport> re_exports;       // re-exported symbols from other modules
   vector<FunctionExpr *> functions;
@@ -772,6 +773,7 @@ public:
 
   explicit ModuleDecl(SourceContext token, FqnExpr *fqn, const vector<string> &exports,
                       const vector<string> &exported_types,
+                      const vector<string> &opaque_exported_types,
                       const vector<string> &exported_traits,
                       const vector<ReExport> &re_exports,
                       const vector<FunctionExpr *> &functions, const vector<FunctionDeclaration *> &function_declarations,

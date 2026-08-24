@@ -113,6 +113,20 @@ public:
     };
     EffectRowInfo effect_row_info(MonoTypePtr type);
 
+    /// True only for a known, closed empty effect row. This is the semantic
+    /// fact consumed by --require-effect-free; a missing interface row is not
+    /// treated as pure.
+    bool is_effect_free(MonoTypePtr type);
+
+    /// Locations of direct top-level `perform`s with no covering handler.
+    /// Kept independently of warning configuration for strict tooling modes.
+    const std::vector<SourceLocation>& unhandled_effect_locations() const {
+        return unhandled_effect_locations_;
+    }
+
+    void set_require_effect_free(bool value) { require_effect_free_ = value; }
+    bool has_unknown_effect_rows() const { return has_unknown_effect_rows_; }
+
 private:
     /// Main recursive inference. Returns inferred monotype.
     MonoTypePtr infer(ast::AstNode* node, std::shared_ptr<TypeEnv> env, int level);
@@ -225,6 +239,9 @@ private:
         MonoTypePtr rest = nullptr;
     };
     std::vector<CollectedRow> latent_effect_stack_;
+    std::vector<SourceLocation> unhandled_effect_locations_;
+    bool require_effect_free_ = false;
+    bool has_unknown_effect_rows_ = false;
 
     /// Type vars of `let`-bound functions currently being inferred. A
     /// recursive self-application must not inject its own apply-rest into

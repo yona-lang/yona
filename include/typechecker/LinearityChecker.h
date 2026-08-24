@@ -6,7 +6,7 @@
 /// Tracks values of type `Linear a` (a built-in ADT) through the program.
 /// A Linear value must be pattern-matched exactly once:
 ///   - Error if used after consumption (use-after-consume)
-///   - Warning if it goes out of scope without being consumed (resource leak)
+///   - Warning [E0602] (`-Wlinear-leak`) if it goes out of scope without being consumed
 ///   - Error if branches disagree on consumption (branch inconsistency)
 ///
 /// The `Linear` ADT is the mechanism — wrapping a resource handle in `Linear`
@@ -83,9 +83,11 @@ private:
     void check_apply(ast::ApplyExpr* node, LinearEnv& env);
     void check_with(ast::WithExpr* node, LinearEnv& env);
     void check_function(ast::FunctionExpr* node, LinearEnv& env);
+    void check_module(ast::ModuleDecl* node, LinearEnv& env);
 
-    /// Warn about any live linear variables going out of scope.
+    /// Warn about any live linear variables going out of scope (E0602).
     void warn_unconsumed(const LinearEnv& env);
+    void warn_leak(const std::string& name, const SourceLocation& loc);
 
     /// Zonked inferred type of \p expr, or nullptr.
     const MonoType* type_of_expr(ast::AstNode* expr);

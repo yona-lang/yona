@@ -23,6 +23,7 @@ enum class WarningFlag {
     OverlappingPatterns,
     UnhandledEffect,
     UnmatchedAdt,
+    LinearLeak,
 };
 
 /// Structured error codes for --explain support.
@@ -41,6 +42,7 @@ enum class ErrorCode {
     E0200,  ///< Unhandled effect operation (codegen)
     E0201,  ///< Effect argument count mismatch
     E0202,  ///< Unhandled latent effect at application
+    E0203,  ///< Effect-freedom requirement not satisfied
 
     // Parse errors (E03xx)
     E0300,  ///< Unexpected token
@@ -96,6 +98,7 @@ public:
     void error(const SourceLocation& loc, const std::string& message);
     void error(const SourceLocation& loc, ErrorCode code, const std::string& message);
     void warning(const SourceLocation& loc, const std::string& message, WarningFlag flag);
+    void warning(const SourceLocation& loc, ErrorCode code, const std::string& message, WarningFlag flag);
     void note(const SourceLocation& loc, const std::string& message);
 
     /// One emitted diagnostic (errors, warnings, notes) for tests and tooling.
@@ -118,6 +121,8 @@ public:
 private:
     void emit(DiagLevel level, const SourceLocation& loc, const std::string& message,
               const std::string& flag_str = "");
+    void emit_warning(const SourceLocation& loc, std::optional<ErrorCode> code,
+                      const std::string& message, WarningFlag flag);
     std::string get_source_line(int line) const;
 
     std::unordered_set<WarningFlag> enabled_warnings_;

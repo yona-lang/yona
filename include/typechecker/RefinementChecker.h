@@ -113,6 +113,8 @@ private:
     void check_case(ast::CaseExpr* node, FactEnv& facts);
     void check_apply(ast::ApplyExpr* node, const FactEnv& facts);
     void check_if(ast::IfExpr* node, FactEnv& facts);
+    void check_function(ast::FunctionExpr* node, FactEnv& facts);
+    void check_module(ast::ModuleDecl* node, FactEnv& facts);
 
     /// If \p tc was provided and \p expr has a named-sum type (App other than Seq/Set/Dict),
     /// emit \c WarningFlag::UnmatchedAdt (enable with \c -Wall or \c enable_warning).

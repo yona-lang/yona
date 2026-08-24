@@ -10,7 +10,10 @@
 //   yonac module.yona                 # compile module to .o + .yonai
 //   yonac -I lib main.yona            # compile with module search path
 //   yonac -Wall -Werror main.yona     # enable warnings, treat as errors
-//   yonac --explain E0100             # explain error code E0100
+//   yonac --Wno-refinement f.yona     # skip E0500
+//   yonac --Wno-linear f.yona         # skip E0600/E0601/E0602
+//   yonac --Wno-linear-leak f.yona    # keep E0600/E0601, hide E0602
+//   yonac --require-effect-free f.yona # reject non-empty or open effect rows
 //   yonac --emit-typed-core f.yona    # dump typed-core (no LLVM codegen)
 //   yonac --emit-accelerator-report f.yona -I lib  # JSON: Std\GPU + transparent sites
 //   yonac --no-accelerator-lowering f.yona         # keep host map/foldl closures
@@ -219,6 +222,47 @@ static filesystem::path canonical_if_exists(const filesystem::path &p) {
   return ec ? p : c;
 }
 
+static bool run_overlay_checkers(ast::AstNode *root, DiagnosticEngine &diag, typechecker::TypeChecker &tc,
+                                 bool skip_refinement, bool skip_linear) {
+  if (root) {
+    if (!skip_refinement) {
+      typechecker::RefinementChecker refinement_checker(diag, &tc);
+      refinement_checker.check(root);
+    }
+    if (!skip_linear) {
+      typechecker::LinearityChecker linearity_checker(diag, &tc);
+      linearity_checker.check(root);
+    }
+  }
+  return !diag.has_errors();
+}
+
+static bool require_effect_free(ast::AstNode *root, DiagnosticEngine &diag,
+                                typechecker::TypeChecker &tc) {
+  bool ok = true;
+  if (auto *mod = dynamic_cast<ast::ModuleDecl *>(root)) {
+    for (auto *func : mod->functions) {
+      if (!func || tc.is_effect_free(tc.type_of(func))) continue;
+      diag.error(func->source_context, ErrorCode::E0203,
+                 "`--require-effect-free` requires '" + func->name +
+                     "' to have a closed empty effect row");
+      ok = false;
+    }
+  }
+  for (const auto &loc : tc.unhandled_effect_locations()) {
+    diag.error(loc, ErrorCode::E0203,
+               "`--require-effect-free` rejects an unhandled effect operation");
+    ok = false;
+  }
+  if (tc.has_unknown_effect_rows()) {
+    diag.error(SourceLocation::unknown(), ErrorCode::E0203,
+               "`--require-effect-free` cannot prove an imported function's effect row; "
+               "rebuild its interface to record `effects -`");
+    ok = false;
+  }
+  return ok;
+}
+
 static vector<filesystem::path> discover_sysroots(const char *argv0, const string &sysroot_opt) {
   return yona::toolchain::discover_sysroots(argv0, sysroot_opt);
 }
@@ -239,6 +283,10 @@ int main(int argc, char *argv[]) {
   bool flag_wextra = false;
   bool flag_werror = false;
   bool flag_w = false;
+  bool flag_no_refinement = false;
+  bool flag_no_linear = false;
+  bool flag_no_linear_leak = false;
+  bool flag_require_effect_free = false;
   bool flag_debug = false;
   int opt_level = 2;
   vector<string> include_paths;
@@ -274,6 +322,14 @@ int main(int argc, char *argv[]) {
   app.add_flag("--Wextra", flag_wextra, "Enable all warnings");
   app.add_flag("--Werror", flag_werror, "Treat warnings as errors");
   app.add_flag("-w", flag_w, "Suppress all warnings");
+  app.add_flag("--Wno-refinement", flag_no_refinement,
+               "Skip refinement checking (E0500 nonempty/nonzero proofs)");
+  app.add_flag("--Wno-linear", flag_no_linear,
+               "Skip linearity checking (E0600/E0601/E0602)");
+  app.add_flag("--Wno-linear-leak", flag_no_linear_leak,
+               "Disable E0602 resource-leak warnings (-Wlinear-leak)");
+  app.add_flag("--require-effect-free", flag_require_effect_free,
+               "Require a closed empty effect row (does not prove termination)");
   app.add_flag("-g,--debug", flag_debug, "Emit DWARF debug information");
   app.add_option("--explain", explain_code, "Show detailed explanation for an error code (e.g., E0100)");
 
@@ -374,6 +430,8 @@ int main(int argc, char *argv[]) {
     diag.enable_wextra();
   if (flag_werror)
     diag.set_warnings_as_errors(true);
+  if (flag_no_linear_leak)
+    diag.disable_warning(WarningFlag::LinearLeak);
 
   // Codegen
   string module_name = is_module ? "yona_module" : "yona_program";
@@ -500,7 +558,10 @@ int main(int argc, char *argv[]) {
       return 0;
     }
     typechecker::TypeChecker type_checker(diag);
+    type_checker.set_require_effect_free(flag_require_effect_free);
     codegen.load_prelude(&parser, &type_checker);
+    for (auto &p : codegen.module_paths_)
+      type_checker.add_module_path(p);
     type_checker.set_import_type_source(&codegen.import_types_);
     auto result = parser.parse_module(source, filename);
     if (!result.has_value()) {
@@ -512,12 +573,19 @@ int main(int argc, char *argv[]) {
       emit_accelerator_diagnostic_report_for_module(std::cout, result.value().get(), filename);
       return 0;
     }
+    type_checker.check_module(result.value().get());
+    if (flag_require_effect_free &&
+        !require_effect_free(result.value().get(), diag, type_checker))
+      return 1;
+    if (!run_overlay_checkers(result.value().get(), diag, type_checker, flag_no_refinement, flag_no_linear))
+      return 1;
     llvm_mod = codegen.compile_module(result.value().get());
     if (llvm_mod)
       codegen.populate_interface_effect_rows(result.value().get(), type_checker);
   } else {
     parser::Parser parser;
     typechecker::TypeChecker type_checker(diag);
+    type_checker.set_require_effect_free(flag_require_effect_free);
     codegen.load_prelude(&parser, &type_checker); // registers everything
     for (auto& p : codegen.module_paths_)
       type_checker.add_module_path(p);
@@ -536,7 +604,17 @@ int main(int argc, char *argv[]) {
     }
 
     type_checker.set_import_type_source(&codegen.import_types_);
-    type_checker.check(parse_result.node.get());
+    auto *checked_type = type_checker.check(parse_result.node.get());
+    if (flag_require_effect_free) {
+      bool gate_ok = require_effect_free(parse_result.node.get(), diag, type_checker);
+      if (!type_checker.is_effect_free(checked_type) && !type_checker.has_unknown_effect_rows()) {
+        diag.error(parse_result.node->source_context, ErrorCode::E0203,
+                   "`--require-effect-free` requires a closed empty effect row");
+        gate_ok = false;
+      }
+      if (!gate_ok)
+        return 1;
+    }
     if (type_checker.has_direct_errors()) {
       return 1;
     }
@@ -549,13 +627,8 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    // Refinement checking (non-blocking)
-    typechecker::RefinementChecker refinement_checker(diag, &type_checker);
-    refinement_checker.check(parse_result.node.get());
-
-    // Linearity checking (non-blocking)
-    typechecker::LinearityChecker linearity_checker(diag, &type_checker);
-    linearity_checker.check(parse_result.node.get());
+    if (!run_overlay_checkers(parse_result.node.get(), diag, type_checker, flag_no_refinement, flag_no_linear))
+      return 1;
 
     llvm_mod = codegen.compile(parse_result.node.get());
   }
