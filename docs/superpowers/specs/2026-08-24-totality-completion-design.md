@@ -33,12 +33,11 @@ Extend the shared coverage analysis to domains whose complete set is known
 without type-level range reasoning:
 
 - `Bool`: `True` and `False`;
-- `Unit`: `()`; and
-- symbols only when the arms themselves establish a closed finite set through
-  a wildcard/identifier arm (otherwise the symbol universe is open).
+- `Unit`: `()`.
 
-The first release deliberately makes no exhaustive claims for integers, floats,
-strings, byte values, tuples, sequences, dictionaries, sets, or records. A
+The first release deliberately makes no exhaustive claims for symbols,
+integers, floats, strings, byte values, tuples, sequences, dictionaries, sets,
+or records: their domain is open or requires product-space reasoning. A
 wildcard/identifier arm remains universally exhaustive. Missing finite-domain
 alternatives retain `--Wincomplete-patterns` in ordinary compilation and become
 E0203 under `--require-effect-free`.
