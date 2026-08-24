@@ -90,7 +90,7 @@ Run: `cmake --build --preset build-debug-linux --target tests && ./out/build/x64
 Expected: all Diagnostics tests pass, including the new helper assertions and
 the existing warning/wildcard/guarded behavior.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add include/Codegen.h src/codegen/CodegenCase.cpp test/codegen_test.cpp
@@ -157,7 +157,7 @@ Run: `cmake --build --preset build-debug-linux --target yonac tests && ./out/bui
 Expected: pure and wildcard cases pass; unknown effects, incomplete cases,
 guarded cases, and module cases fail with E0203.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add cli/main.cpp test/yona_script_test.cpp
@@ -202,13 +202,13 @@ Expected: every strict-gate description says finite-ADT coverage is enforced
 only by `--require-effect-free`; every general warning description remains
 non-fatal unless `--Werror` is set.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run: `ctest --preset unit-tests-linux --output-on-failure && git diff --check`
 
 Expected: 2/2 CTest targets pass and the diff has no whitespace errors.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```bash
 git add CHANGELOG.md docs site/src/content/docs
