@@ -314,7 +314,25 @@ std::string error_explanation(ErrorCode code) {
                 "  if true then 1 else \"no\"\n"
                 "\n"
                 "  -- Fix: return the same type from both branches\n"
-                "  if true then 1 else 0\n";
+                "  if true then 1 else 0\n"
+                "\n"
+                "Constructor patterns:\n"
+                "\n"
+                "  A constructor pattern must match its declared field shape. A constructor\n"
+                "  with one tuple field is different from a constructor with two fields.\n"
+                "\n"
+                "  type Box = Box (Int, Int)\n"
+                "\n"
+                "  -- Box has one declared field: the tuple (Int, Int).\n"
+                "  -- Write this:\n"
+                "  case value of Box ((value, _)) -> value end\n"
+                "\n"
+                "  -- Not this (which supplies two constructor fields):\n"
+                "  case value of Box (value, _) -> value end\n"
+                "\n"
+                "When a mismatch is in a constructor pattern, the diagnostic names the\n"
+                "constructor, field number, and declared field shape. Use those details to\n"
+                "add or remove tuple parentheses, then make the field pattern match that type.\n";
 
         case ErrorCode::E0101:
             return

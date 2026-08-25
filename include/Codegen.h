@@ -283,9 +283,15 @@ private:
     // Escape analysis: returns true if `name` appears in a "storing"
     // position in the AST — returned, captured in a closure, inserted
     // into a collection, or passed as an ADT constructor field.
+    struct BorrowInferenceContext {
+        std::string function_name;
+        const std::vector<bool>* recursive_borrowed_params = nullptr;
+    };
     bool has_escaping_use(ast::AstNode* node, const std::string& name,
-                          bool is_return_position = false);
-    std::vector<bool> infer_borrowed_params(const DeferredFunction& def,
+                          bool is_return_position = false,
+                          const BorrowInferenceContext* context = nullptr);
+    std::vector<bool> infer_borrowed_params(const std::string& function_name,
+                                            const DeferredFunction& def,
                                             const std::vector<CType>& param_ctypes);
     std::unordered_map<std::string, CompiledFunction> compiled_functions_;
 
@@ -427,6 +433,13 @@ private:
         std::vector<std::pair<std::string, std::string>> constraints;
     };
     struct AdtInfo {
+        struct FieldShape {
+            CType type = CType::INT;
+            std::vector<FieldShape> tuple_elements;
+            CType function_return_type = CType::INT;
+            std::string function_return_adt_name;
+        };
+
         std::string type_name;
         int tag, arity, total_variants, max_arity;
         bool is_recursive = false;
@@ -440,7 +453,14 @@ private:
         // For function-typed fields whose return type is an ADT, the
         // type name (e.g. "Stream"). Same length as field_fn_return_types.
         std::vector<std::string> field_fn_return_adt_names;
+        // Full recursive shapes for fields declared as tuples. `field_types`
+        // is the ABI view; this retains element types for pattern binding.
+        std::vector<FieldShape> field_shapes;
     };
+
+    static AdtInfo::FieldShape field_shape_from_field_type(const ast::FieldType& field_type);
+    static std::string encode_field_shape(const AdtInfo::FieldShape& shape);
+    static AdtInfo::FieldShape decode_field_shape(const std::string& text);
     struct CFFISignature {
         CType return_type;
         std::vector<CType> param_types;

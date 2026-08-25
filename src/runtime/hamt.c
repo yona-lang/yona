@@ -515,21 +515,31 @@ void yona_rt_hamt_print_set(hamt_node_t* node) {
 
 /* ===== Collect keys to seq (for iteration/generators) ===== */
 
-typedef struct { int64_t* seq; int64_t idx; } collect_ctx_t;
+typedef struct {
+    int64_t* seq;
+    int64_t idx;
+    int keys_are_heap;
+} collect_ctx_t;
 
 static void hamt_collect_key(int64_t key, int64_t val, void* ctx) {
     (void)val;
     collect_ctx_t* cc = (collect_ctx_t*)ctx;
-    cc->seq[2 + cc->idx] = key; /* SEQ_HDR_SIZE = 2 */
+    if (cc->keys_are_heap && key)
+        yona_rt_rc_inc((void*)(intptr_t)key);
+    yona_rt_seq_set(cc->seq, cc->idx, key);
     cc->idx++;
 }
 
 int64_t* yona_rt_hamt_keys(hamt_node_t* node) {
     extern int64_t* yona_rt_seq_alloc(int64_t count);
+    extern void yona_rt_seq_set(int64_t* seq, int64_t index, int64_t value);
+    extern void yona_rt_seq_set_heap(int64_t* seq, int64_t flag);
     int64_t sz = yona_rt_hamt_size(node);
     int64_t* seq = yona_rt_seq_alloc(sz);
+    const int keys_are_heap = node && (hamt_aux_flags(node) & HAMT_FLAG_KEY_HEAP);
+    yona_rt_seq_set_heap(seq, keys_are_heap);
     if (sz > 0) {
-        collect_ctx_t ctx = {seq, 0};
+        collect_ctx_t ctx = {seq, 0, keys_are_heap};
         hamt_iterate_impl(node, hamt_collect_key, &ctx);
     }
     return seq;

@@ -37,7 +37,7 @@ TypedValue Codegen::codegen_perform(PerformExpr* node) {
             builder_->SetInsertPoint(cancel_bb);
             // Raise :Cancelled
             int64_t sym_id = intern_symbol("Cancelled");
-            auto* msg = builder_->CreateGlobalStringPtr("task cancelled", "cancel_msg");
+            auto* msg = builder_->CreateGlobalString("task cancelled", "cancel_msg");
             builder_->CreateCall(rt_.raise_, {ConstantInt::get(i64_ty, sym_id), msg});
             builder_->CreateUnreachable();
             builder_->SetInsertPoint(continue_bb);
@@ -63,7 +63,7 @@ TypedValue Codegen::codegen_perform(PerformExpr* node) {
         if (compiling_unhandled_perform_ok_ && rt_.raise_) {
             int64_t sym_id = intern_symbol("UnhandledEffect");
             std::string msg_str = "unhandled effect operation: " + op_key;
-            auto* msg = builder_->CreateGlobalStringPtr(msg_str, "unhandled_effect_msg");
+            auto* msg = builder_->CreateGlobalString(msg_str, "unhandled_effect_msg");
             builder_->CreateCall(rt_.raise_, {ConstantInt::get(i64_ty, sym_id), msg});
             /* raise is noreturn; keep a dummy value so case/PHI CFGs stay valid. */
             return {ConstantInt::get(i64_ty, 0), CType::UNIT};

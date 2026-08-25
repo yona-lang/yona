@@ -27,6 +27,8 @@ extern void* yona_rt_rc_alloc_string(size_t bytes);
 extern void yona_rt_rc_inc(void* ptr);
 extern void yona_rt_rc_dec(void* ptr);
 extern int64_t* yona_rt_seq_alloc(int64_t count);
+extern void yona_rt_seq_set(int64_t* seq, int64_t index, int64_t value);
+extern void yona_rt_seq_set_heap(int64_t* seq, int64_t flag);
 
 /* ===== Generic io_uring completer ===== */
 
@@ -395,9 +397,10 @@ int64_t* yona_platform_list_dir(const char* path) {
         size_t len = strlen(entry->d_name);
         char* name = (char*)yona_rt_rc_alloc_string(len + 1);
         memcpy(name, entry->d_name, len + 1);
-        seq[1 + i] = (int64_t)(intptr_t)name;
+        yona_rt_seq_set(seq, i, (int64_t)(intptr_t)name);
         i++;
     }
+    yona_rt_seq_set_heap(seq, 1);
     closedir(dir); return seq;
 }
 

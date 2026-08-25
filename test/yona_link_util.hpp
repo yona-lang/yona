@@ -195,8 +195,8 @@ inline bool compile_c_file(const std::filesystem::path& src, const std::filesyst
     return sh(cmd.str()) == 0;
 }
 
-/* True if any .c/.h under dir is newer than `than` (compiled_runtime.c #includes
- * seq/hamt/async/…; platform TUs include yona/runtime/*.h). */
+/* True if any .c/.h under dir is newer than `than` (compiled_runtime.c includes
+ * seq/hamt/async/…; platform TUs include headers below yona/runtime). */
 inline bool runtime_tree_newer_than(const std::filesystem::path& dir,
                                     const std::filesystem::file_time_type& than) {
     namespace fs = std::filesystem;

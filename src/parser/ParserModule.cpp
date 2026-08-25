@@ -537,9 +537,11 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                     types.push_back(parse_field_type());
                 } else if (check(TokenType::YIDENTIFIER)) {
                     string tname(current().lexeme);
+                    bool head_is_ctor = !tname.empty() && isupper(tname[0]);
                     advance();
-                    while ((check(TokenType::YIDENTIFIER) && islower(current().lexeme[0])
-                            && !check(TokenType::YARROW)) ||
+                    FieldType field = FieldType::simple(tname);
+                    while ((head_is_ctor && check(TokenType::YIDENTIFIER) &&
+                            !check(TokenType::YARROW)) ||
                            (check(TokenType::YLPAREN) && !check(TokenType::YARROW))) {
                         if (check(TokenType::YLPAREN)) {
                             // Type application argument: `Option (a, Stream a)`.
@@ -548,27 +550,28 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                             // matters for codegen.
                             consume_type_atom();
                         } else {
-                            tname += " ";
-                            tname += string(current().lexeme);
+                            field.type_arguments.push_back(FieldType::simple(string(current().lexeme)));
                             advance();
                         }
                     }
-                    types.push_back(FieldType::simple(tname));
+                    types.push_back(std::move(field));
                 }
 
-                // Tuple inside parentheses: `(a, Stream a)`. We don't preserve
-                // tuple structure in FieldType (the codegen doesn't use it),
-                // but we MUST consume the trailing types so the constructor
-                // parser advances past the closing ')'.
+                // A parenthesized comma-separated type is a single tuple
+                // field, not several constructor fields. Keep its full shape:
+                // codegen needs it to bind constructor patterns with the
+                // original scalar and function element types.
                 while (match(TokenType::YCOMMA)) {
                     if (check(TokenType::YLPAREN) || check(TokenType::YIDENTIFIER)) {
-                        (void)parse_field_type();  // discard — only head name matters
+                        types.push_back(parse_field_type());
                     } else {
                         break;
                     }
                 }
 
+                bool saw_arrow = false;
                 while (match(TokenType::YARROW)) {
+                    saw_arrow = true;
                     if (check(TokenType::YLPAREN)) {
                         types.push_back(parse_field_type());
                     } else if (check(TokenType::YIDENTIFIER)) {
@@ -595,6 +598,16 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                     return types.empty() ? FieldType::simple("()") : types[0];
                 }
 
+                // Commas without an arrow form a tuple. Function types use
+                // arrows and are handled below after their result is known.
+                if (!saw_arrow) {
+                    FieldType ft;
+                    ft.name = "Tuple";
+                    ft.is_tuple_type = true;
+                    ft.tuple_types = std::move(types);
+                    return ft;
+                }
+
                 FieldType ft;
                 ft.name = "Fn";
                 ft.is_function_type = true;
@@ -606,22 +619,23 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                 string tname(current().lexeme);
                 bool head_is_ctor = !tname.empty() && isupper(tname[0]);
                 advance();
+                FieldType result = FieldType::simple(tname);
                 // Type application: `Stream a`, `Option (Step a)`, ...
                 // Only valid when the head is a type constructor (uppercase).
                 // Lowercase heads are type variables and never take arguments.
                 // We must NOT consume a following `(` after a lowercase head,
                 // because that paren begins a separate field type.
                 while (head_is_ctor &&
-                       ((check(TokenType::YIDENTIFIER) && islower(current().lexeme[0])
-                         && !check(TokenType::YARROW)) ||
+                       (check(TokenType::YIDENTIFIER) && !check(TokenType::YARROW) ||
                         check(TokenType::YLPAREN))) {
                     if (check(TokenType::YLPAREN)) {
                         consume_type_atom();
                     } else {
-                        advance();  // consume the lowercase type variable
+                        result.type_arguments.push_back(FieldType::simple(string(current().lexeme)));
+                        advance();
                     }
                 }
-                return FieldType::simple(tname);
+                return result;
             }
             return FieldType::simple("Int");
         };

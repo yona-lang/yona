@@ -195,13 +195,15 @@ void TypeChecker::check_module(ast::ModuleDecl* mod) {
     for (auto* adt : mod->adt_declarations) {
         if (!adt) continue;
         std::vector<std::pair<std::string, int>> constructors;
+        std::vector<std::vector<ast::FieldType>> field_types;
         constructors.reserve(adt->variants.size());
         for (auto* ctor : adt->variants) {
             if (!ctor) continue;
             constructors.emplace_back(
                 ctor->name, static_cast<int>(ctor->field_type_names.size()));
+            field_types.push_back(ctor->field_type_names);
         }
-        register_adt(adt->name, adt->type_params, constructors);
+        register_adt(adt->name, adt->type_params, constructors, field_types);
     }
 
     auto env = root_env_->child();
@@ -213,25 +215,25 @@ void TypeChecker::check_module(ast::ModuleDecl* mod) {
         env->bind(func->name, v);
         prelim[func->name] = v;
     }
-    auto infer_all = [&]() {
-        for (auto* func : mod->functions) {
-            if (!func) continue;
-            auto pit = prelim.find(func->name);
-            if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var)
-                recursive_self_vars_.push_back(pit->second->var_id);
-            auto* ty = infer(func, env, 0);
-            if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var &&
-                !recursive_self_vars_.empty() && recursive_self_vars_.back() == pit->second->var_id)
-                recursive_self_vars_.pop_back();
-            if (!ty) continue;
-            if (pit != prelim.end())
-                unifier_.unify(pit->second, ty, func->source_context,
-                               "in module function '" + func->name + "'");
-            env->bind_scheme(func->name, generalize(unifier_.resolve(ty), -1));
-        }
-    };
-    infer_all();
-    infer_all();
+    // The preliminary variables make forward and mutually recursive references
+    // available during this single pass. Re-inferring every body produces no
+    // additional type information, but does repeat every diagnostic and mutates
+    // inference state a second time.
+    for (auto* func : mod->functions) {
+        if (!func) continue;
+        auto pit = prelim.find(func->name);
+        if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var)
+            recursive_self_vars_.push_back(pit->second->var_id);
+        auto* ty = infer(func, env, 0);
+        if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var &&
+            !recursive_self_vars_.empty() && recursive_self_vars_.back() == pit->second->var_id)
+            recursive_self_vars_.pop_back();
+        if (!ty) continue;
+        if (pit != prelim.end())
+            unifier_.unify(pit->second, ty, func->source_context,
+                           "in module function '" + func->name + "'");
+        env->bind_scheme(func->name, generalize(unifier_.resolve(ty), -1));
+    }
 }
 
 MonoTypePtr TypeChecker::check(AstNode* node) {
@@ -1315,12 +1317,90 @@ MonoTypePtr TypeChecker::infer_pattern(PatternNode* pat, std::shared_ptr<TypeEnv
                     uf_.add_var(v->var_id, level);
                     type_arg_vars.push_back(v);
                 }
-                // Bind sub-patterns — each gets the corresponding type arg
+                auto field_type = [&](const ast::FieldType& field,
+                                      const std::unordered_map<std::string, MonoTypePtr>& params,
+                                      const auto& self) -> MonoTypePtr {
+                    if (field.is_tuple_type) {
+                        std::vector<MonoTypePtr> elements;
+                        for (const auto& element : field.tuple_types)
+                            elements.push_back(self(element, params, self));
+                        return arena_.make_tuple(elements);
+                    }
+                    if (field.is_function_type) {
+                        MonoTypePtr result = field.return_types.empty()
+                            ? arena_.make_con(TyCon::Unit)
+                            : self(field.return_types.front(), params, self);
+                        for (auto it = field.param_types.rbegin(); it != field.param_types.rend(); ++it)
+                            result = arena_.make_arrow(self(*it, params, self), result);
+                        return result;
+                    }
+                    if (auto it = params.find(field.name); it != params.end()) return it->second;
+                    if (field.name == "Int") return arena_.make_con(TyCon::Int);
+                    if (field.name == "Float") return arena_.make_con(TyCon::Float);
+                    if (field.name == "Bool") return arena_.make_con(TyCon::Bool);
+                    if (field.name == "String") return arena_.make_con(TyCon::String);
+                    if (field.name == "Symbol") return arena_.make_con(TyCon::Symbol);
+                    if (field.name == "()" || field.name == "Unit") return arena_.make_con(TyCon::Unit);
+                    std::vector<MonoTypePtr> arguments;
+                    for (const auto& argument : field.type_arguments)
+                        arguments.push_back(self(argument, params, self));
+                    return arena_.make_app(field.name, arguments);
+                };
+                std::unordered_map<std::string, MonoTypePtr> params;
+                for (size_t i = 0; i < info.type_params.size() && i < type_arg_vars.size(); ++i)
+                    params[info.type_params[i]] = type_arg_vars[i];
+
+                // Constructor fields and tuple elements are distinct levels
+                // of structure. `Box (Int, Int)` declares one tuple field,
+                // so its pattern is `Box ((a, b))`, not `Box (a, b)`.
+                // Infer malformed sub-patterns to keep their bindings usable
+                // while reporting the structural error only once.
+                if (!info.field_types.empty() &&
+                    cp->sub_patterns.size() != info.field_types.size()) {
+                    for (auto* sub_pattern : cp->sub_patterns)
+                        infer_pattern(sub_pattern, env, level);
+
+                    const auto actual_count = cp->sub_patterns.size();
+                    const auto declared_count = info.field_types.size();
+                    std::string message = "constructor pattern '" + cp->constructor_name +
+                        "' has " + std::to_string(actual_count) +
+                        (actual_count == 1 ? " field" : " fields") +
+                        ", but constructor declares " + std::to_string(declared_count) +
+                        (declared_count == 1 ? " field" : " fields");
+                    if (declared_count == 1)
+                        message += " of type " + info.field_types[0].to_string();
+                    diag_.error(pat->source_context, ErrorCode::E0100, message);
+
+                    if (declared_count == 1 && info.field_types[0].is_tuple_type) {
+                        diag_.note(pat->source_context,
+                                   "match the tuple field with " + cp->constructor_name +
+                                   " ((first, second)); " + cp->constructor_name +
+                                   " (first, second) supplies two constructor fields");
+                    }
+                    return arena_.make_app(info.adt_name, type_arg_vars);
+                }
+
+                // Bind sub-patterns against their declared field type. Older
+                // interfaces have no field shape, so retain the generic
+                // fallback for compatibility.
                 for (size_t i = 0; i < cp->sub_patterns.size(); i++) {
                     auto* sub_type = infer_pattern(cp->sub_patterns[i], env, level);
-                    if (i < type_arg_vars.size())
-                        unifier_.unify(sub_type, type_arg_vars[i], pat->source_context,
-                                       "in constructor pattern '" + cp->constructor_name + "'");
+                    MonoTypePtr expected;
+                    if (i < info.field_types.size())
+                        expected = field_type(info.field_types[i], params, field_type);
+                    else if (i < type_arg_vars.size())
+                        expected = type_arg_vars[i];
+                    if (expected && !unifier_.unify(
+                            sub_type, expected, pat->source_context,
+                            "in field " + std::to_string(i + 1) + " of constructor pattern '" +
+                            cp->constructor_name + "'") && !info.field_types.empty()) {
+                        const auto& declared =
+                            info.field_types[std::min(i, info.field_types.size() - 1)];
+                        diag_.note(pat->source_context,
+                                   "'" + cp->constructor_name + "' declares field " +
+                                   std::to_string(i + 1) + " as " +
+                                   declared.to_string());
+                    }
                 }
                 return arena_.make_app(info.adt_name, type_arg_vars);
             }
@@ -1468,9 +1548,13 @@ MonoTypePtr TypeChecker::infer_cons(ConsLeftExpr* node, std::shared_ptr<TypeEnv>
 
 void TypeChecker::register_adt(const std::string& type_name,
                                 const std::vector<std::string>& type_params,
-                                const std::vector<std::pair<std::string, int>>& constructors) {
-    for (auto& [ctor_name, arity] : constructors) {
-        constructor_registry_[ctor_name] = {type_name, arity, type_params};
+                                const std::vector<std::pair<std::string, int>>& constructors,
+                                const std::vector<std::vector<ast::FieldType>>& field_types) {
+    for (size_t constructor_index = 0; constructor_index < constructors.size(); ++constructor_index) {
+        const auto& [ctor_name, arity] = constructors[constructor_index];
+        const auto& fields = constructor_index < field_types.size()
+            ? field_types[constructor_index] : std::vector<ast::FieldType>{};
+        constructor_registry_[ctor_name] = {type_name, arity, type_params, fields};
 
         // Register constructor as a function in root env:
         // For arity 0: constructor is a value of type ADT
@@ -1488,6 +1572,34 @@ void TypeChecker::register_adt(const std::string& type_name,
             ? arena_.make_app(type_name, {})
             : arena_.make_app(type_name, param_vars);
 
+        auto field_type = [&](const ast::FieldType& field, const auto& self) -> MonoTypePtr {
+            if (field.is_tuple_type) {
+                std::vector<MonoTypePtr> elements;
+                for (const auto& element : field.tuple_types)
+                    elements.push_back(self(element, self));
+                return arena_.make_tuple(elements);
+            }
+            if (field.is_function_type) {
+                MonoTypePtr result = field.return_types.empty()
+                    ? arena_.make_con(TyCon::Unit) : self(field.return_types.front(), self);
+                for (auto it = field.param_types.rbegin(); it != field.param_types.rend(); ++it)
+                    result = arena_.make_arrow(self(*it, self), result);
+                return result;
+            }
+            for (size_t i = 0; i < type_params.size(); ++i)
+                if (field.name == type_params[i]) return param_vars[i];
+            if (field.name == "Int") return arena_.make_con(TyCon::Int);
+            if (field.name == "Float") return arena_.make_con(TyCon::Float);
+            if (field.name == "Bool") return arena_.make_con(TyCon::Bool);
+            if (field.name == "String") return arena_.make_con(TyCon::String);
+            if (field.name == "Symbol") return arena_.make_con(TyCon::Symbol);
+            if (field.name == "()" || field.name == "Unit") return arena_.make_con(TyCon::Unit);
+            std::vector<MonoTypePtr> arguments;
+            for (const auto& argument : field.type_arguments)
+                arguments.push_back(self(argument, self));
+            return arena_.make_app(field.name, arguments);
+        };
+
         if (arity == 0) {
             root_env_->bind_scheme(ctor_name, TypeScheme(quant_vars, result_type));
         } else {
@@ -1496,7 +1608,9 @@ void TypeChecker::register_adt(const std::string& type_name,
             MonoTypePtr fn_type = result_type;
             for (int i = arity - 1; i >= 0; i--) {
                 MonoTypePtr arg_type;
-                if (i < (int)param_vars.size())
+                if (i < static_cast<int>(fields.size()))
+                    arg_type = field_type(fields[i], field_type);
+                else if (i < (int)param_vars.size())
                     arg_type = param_vars[i];
                 else {
                     arg_type = arena_.fresh_var(0);
@@ -1935,15 +2049,8 @@ MonoTypePtr TypeChecker::from_ast_type(const yona::compiler::types::Type& t, int
     }
     if (std::holds_alternative<std::shared_ptr<NamedType>>(t)) {
         auto& nt = std::get<std::shared_ptr<NamedType>>(t);
-        if (nt->name == "Linear") {
-            MonoTypePtr inner;
-            if (!std::holds_alternative<std::nullptr_t>(nt->type))
-                inner = from_ast_type(nt->type, level);
-            else {
-                inner = arena_.fresh_var(level);
-                uf_.add_var(inner->var_id, level);
-            }
-            return arena_.make_app("Linear", {inner});
+        if (!std::holds_alternative<std::nullptr_t>(nt->type)) {
+            return arena_.make_app(nt->name, {from_ast_type(nt->type, level)});
         }
         return arena_.make_app(nt->name, {});
     }

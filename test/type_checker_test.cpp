@@ -453,6 +453,117 @@ TEST_CASE("Inference: lambda") {
     CHECK(check_expr_str("let f = \\x -> x + 1 in f 5") == "Int");
 }
 
+TEST_CASE("Parser retains all parameters after a parameterized signature") {
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\Annotated
+
+check : String -> Bool -> String
+check message condition = if condition then message else ""
+)", "annotated.yona");
+    REQUIRE(result.has_value());
+    REQUIRE(result.value()->functions.size() == 1);
+    CHECK(result.value()->functions[0]->patterns.size() == 2);
+}
+
+TEST_CASE("Constructor pattern preserves a declared tuple as one field") {
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\PatternDiagnostic
+
+export run
+
+type Box = Box (Int, Int)
+
+run _ =
+    case Box (1, 2) of
+        Box (first, second) -> first + second
+    end
+)", "pattern_diagnostic.yona");
+    REQUIRE(result.has_value());
+
+    checker.check_module(result.value().get());
+
+    size_t mismatch_count = 0;
+    size_t correction_note_count = 0;
+    for (const auto& record : diag.records()) {
+        if (record.code == ErrorCode::E0100 &&
+            record.message.find("constructor pattern 'Box' has 2 fields") != std::string::npos &&
+            record.message.find("declares 1 field of type (Int, Int)") != std::string::npos)
+            ++mismatch_count;
+        if (record.level == DiagLevel::Note &&
+            record.message.find("Box ((first, second))") != std::string::npos &&
+            record.message.find("Box (first, second)") != std::string::npos)
+            ++correction_note_count;
+    }
+    CHECK(mismatch_count == 1);
+    CHECK(correction_note_count == 1);
+    CHECK(diag.error_count() == 1);
+    CHECK(diag.records().size() == 2);
+}
+
+TEST_CASE("Nested tuple constructor pattern reports its element mismatch") {
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\NestedPatternDiagnostic
+
+export run
+
+type Box = Box (Int, Int)
+
+run _ =
+    case Box (1, 2) of
+        Box (("wrong", _)) -> 1
+    end
+)", "nested_pattern_diagnostic.yona");
+    REQUIRE(result.has_value());
+
+    checker.check_module(result.value().get());
+
+    size_t mismatch_count = 0;
+    size_t tuple_parentheses_note_count = 0;
+    for (const auto& record : diag.records()) {
+        if (record.code == ErrorCode::E0100 &&
+            record.message.find("field 1 of constructor pattern 'Box'") != std::string::npos &&
+            record.message.find("String") != std::string::npos &&
+            record.message.find("Int") != std::string::npos)
+            ++mismatch_count;
+        if (record.level == DiagLevel::Note &&
+            record.message.find("tuple field; match it with") != std::string::npos)
+            ++tuple_parentheses_note_count;
+    }
+    CHECK(mismatch_count == 1);
+    CHECK(tuple_parentheses_note_count == 0);
+    CHECK(diag.error_count() == 1);
+    CHECK(diag.records().size() == 2);
+}
+
+TEST_CASE("ADT constructor fields preserve parameterized sequence element types") {
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\ParameterizedField
+
+export run
+
+type Box = Box (Seq String)
+
+run : Unit -> Box
+run _ = Box ["value"]
+)", "parameterized_field.yona");
+    REQUIRE(result.has_value());
+
+    checker.check_module(result.value().get());
+
+    CHECK_FALSE(checker.has_direct_errors());
+    CHECK_FALSE(diag.has_errors());
+}
+
 // ===== Case Expression + Pattern Inference =====
 
 TEST_CASE("Inference: case with integer patterns") {
@@ -1521,6 +1632,13 @@ TEST_CASE("Error code: E0100 string representation") {
     CHECK(error_code_str(ErrorCode::E0103) == "E0103");
     CHECK(error_code_str(ErrorCode::E0200) == "E0200");
     CHECK(error_code_str(ErrorCode::E0202) == "E0202");
+}
+
+TEST_CASE("Error code: E0100 explains constructor-pattern tuple fixes") {
+    const auto explanation = error_explanation(ErrorCode::E0100);
+    CHECK(explanation.find("constructor pattern") != std::string::npos);
+    CHECK(explanation.find("Box ((value, _))") != std::string::npos);
+    CHECK(explanation.find("declared field shape") != std::string::npos);
 }
 
 TEST_CASE("Error code: parse_error_code round-trips") {

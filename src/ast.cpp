@@ -1394,7 +1394,20 @@ void TypeDefinition::print(std::ostream &os) const {
 
 // FieldType implementation
 string FieldType::to_string() const {
-    if (!is_function_type) return name;
+    if (is_tuple_type) {
+        string result = "(";
+        for (size_t i = 0; i < tuple_types.size(); i++) {
+            if (i > 0) result += ", ";
+            result += tuple_types[i].to_string();
+        }
+        return result + ")";
+    }
+    if (!is_function_type) {
+        string result = name;
+        for (const auto& argument : type_arguments)
+            result += " " + argument.to_string();
+        return result;
+    }
     string result = "(";
     for (size_t i = 0; i < param_types.size(); i++) {
         if (i > 0) result += " -> ";

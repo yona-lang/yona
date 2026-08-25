@@ -505,10 +505,29 @@ std::expected<Token, LexError> Lexer::scan_string_body() {
             // If it's a segment after interpolation, return YSTRING_PART
             return make_token(in_string_interp_ > 0 ? TokenType::YSTRING_PART : TokenType::YSTRING, std::move(value));
         } else if (ch == '{') {
-            skip_char(); // consume '{'
-            in_string_interp_++;
-            // Emit the string part before the interpolation
-            return make_token(TokenType::YSTRING_PART, std::move(value));
+            // Braces have two literal forms inside strings.  `{{` escapes a
+            // single opening brace, while the empty pair `{}` is retained as
+            // text for placeholder-oriented APIs such as Std\Format.  Every
+            // other opening brace starts Yona interpolation.
+            if (current_ + 1 < source_.size() && source_[current_ + 1] == '{') {
+                skip_char();
+                skip_char();
+                value += '{';
+            } else if (current_ + 1 < source_.size() && source_[current_ + 1] == '}') {
+                skip_char();
+                skip_char();
+                value += "{}";
+            } else {
+                skip_char(); // consume '{'
+                in_string_interp_++;
+                // Emit the string part before the interpolation
+                return make_token(TokenType::YSTRING_PART, std::move(value));
+            }
+        } else if (ch == '}' && current_ + 1 < source_.size() &&
+                   source_[current_ + 1] == '}') {
+            skip_char();
+            skip_char();
+            value += '}';
         } else if (ch == '\\') {
             skip_char();
             auto escaped = parse_escape_sequence();

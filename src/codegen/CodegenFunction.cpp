@@ -695,6 +695,7 @@ Codegen::CompiledFunction Codegen::compile_function(
     // instead of relying on caller's arg types (which may be wrong).
     std::vector<CType> annotated_ctypes;
     std::vector<std::string> annotated_adt_names;
+    std::string annotated_return_adt_name;
     CType annotated_ret = CType::INT;
     bool has_annotated_ret = false;
     if (def.ast->type_signature.has_value()) {
@@ -712,6 +713,9 @@ Codegen::CompiledFunction Codegen::compile_function(
                 annotated_adt_names.push_back("");
             current_type = &ft->returnType;
         }
+        if (std::holds_alternative<std::shared_ptr<types::NamedType>>(*current_type))
+            annotated_return_adt_name =
+                std::get<std::shared_ptr<types::NamedType>>(*current_type)->name;
     }
 
     // Build parameter types from type annotation or actual argument types.
@@ -900,7 +904,7 @@ Codegen::CompiledFunction Codegen::compile_function(
 
     // Borrow inference must run before preliminary registration so recursive
     // calls see the same ownership contract as non-recursive calls.
-    std::vector<bool> borrowed = infer_borrowed_params(def, param_ctypes);
+    std::vector<bool> borrowed = infer_borrowed_params(name, def, param_ctypes);
     auto param_is_borrowed = [&](size_t pi) {
         return pi < borrowed.size() && borrowed[pi];
     };
@@ -1282,6 +1286,12 @@ Codegen::CompiledFunction Codegen::compile_function(
             }
 
             body_tv = {};
+            // The first specialization was erased. Its LLVM Values are now
+            // invalid, so no ownership/transfer state from that discarded
+            // body may participate in the regenerated function.
+            transferred_values_.clear();
+            closure_consumed_flags_.clear();
+            arm_drop_stack_.clear();
             if (!def.ast->bodies.empty()) {
                 auto* body = def.ast->bodies[0];
                 if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
@@ -1399,8 +1409,11 @@ Codegen::CompiledFunction Codegen::compile_function(
     cf.param_types = param_ctypes;
     cf.borrowed_params = borrowed;
     cf.capture_names = def.free_vars;
-    if (body_tv && ret_ctype == CType::ADT && !body_tv.adt_type_name.empty())
-        cf.return_adt_name = body_tv.adt_type_name;
+    if (ret_ctype == CType::ADT) {
+        cf.return_adt_name = !annotated_return_adt_name.empty()
+            ? annotated_return_adt_name
+            : body_tv ? body_tv.adt_type_name : "";
+    }
     if (body_tv && !body_tv.subtypes.empty())
         cf.return_subtypes = body_tv.subtypes;
     // Propagate io-promise-ness from the body so a Yona wrapper like

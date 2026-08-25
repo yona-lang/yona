@@ -1,57 +1,78 @@
 # Std.Test
 
-Simple test assertions — returns `(:pass, name)` or `(:fail, message)`.
+Yona-native test cases, reports, and assertions.
 
-Each assertion returns a symbol-tagged tuple so test runners can
-collect results programmatically.
+Test programs build a sequence of named `TestCase` values, call `run`, and
+print `render report`. Assertions stay pure: failures are returned as data
+so a suite runs every case and reports all failures in declaration order.
+
+```yona
+import testCase, check, equalBy, run, render from Std\Test,
+println from Std\IO
+in
+let intEqual a b = a == b,
+cases = [
+testCase "truth" (\_ -> check "true is accepted" true),
+testCase "comparison" (\_ -> equalBy "two equals two" intEqual 2 2)
+]
+in do
+println (render (run cases))
+0
+end
+```
+
+The report contains one line per case followed by
+`SUMMARY 2 passed, 0 failed`.
+
+## Types
+
+### TestResult
+
+`type TestResult = Pass String | Fail String`
+
+A single assertion result. `Pass` and `Fail` both retain a useful message.
+
+### TestCase
+
+`type TestCase = TestCase { name: String, thunk: (() -> TestResult) }`
+
+A named deferred assertion. The thunk is evaluated only by `run`.
+
+### TestReport
+
+`type TestReport = TestReport { passed: Int, failed: Int, lines: Seq String }`
+
+Aggregate counts and stable output lines in execution order.
 
 ## Functions
 
-### `assertEqual : Int -> Int -> (a, b)`
+### `pass : String -> TestResult`
 
-Asserts that `expected` equals `actual`.
+Construct a successful assertion result.
 
-```
-assertEqual 42 42   # => (:pass, "assertEqual")
-assertEqual 1 2     # => (:fail, "assertEqual: expected equal values")
-```
+### `fail : String -> TestResult`
 
-### `assertNotEqual : Int -> Int -> (a, b)`
+Construct a failed assertion result.
 
-Asserts that `expected` does not equal `actual`.
+### `check : String -> Bool -> TestResult`
 
-```
-assertNotEqual 1 2   # => (:pass, "assertNotEqual")
-```
+Pass when `condition` is true, otherwise fail with `message`.
 
-### `assertTrue : Int -> (a, b)`
+### `equalBy : String -> (a -> a -> Bool) -> a -> a -> TestResult`
 
-Asserts that `value` is true.
+Compare `expected` and `actual` with an explicit equality predicate.
 
-```
-assertTrue (1 > 0)   # => (:pass, "assertTrue")
-```
+The caller supplies equality so opaque values, floats, byte arrays, and
+user ADTs can choose the comparison contract appropriate to that API.
 
-### `assertFalse : Int -> (a, b)`
+### `testCase : String -> (() -> TestResult) -> TestCase`
 
-Asserts that `value` is false.
+Name a deferred assertion for inclusion in a suite.
 
-```
-assertFalse (1 > 2)   # => (:pass, "assertFalse")
-```
+### `run : Seq TestCase -> TestReport`
 
-### `assertGreater : Int -> Int -> (a, b)`
+Execute all cases, retaining a stable line per case and all failures.
 
-Asserts that `a > b`.
+### `render : TestReport -> String`
 
-```
-assertGreater 5 3   # => (:pass, "assertGreater")
-```
-
-### `assertLess : Int -> Int -> (a, b)`
-
-Asserts that `a < b`.
-
-```
-assertLess 3 5   # => (:pass, "assertLess")
-```
+Render a report as stable line-oriented text suitable for fixtures and CI.

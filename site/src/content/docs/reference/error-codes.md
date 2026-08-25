@@ -20,10 +20,25 @@ Two types that should be compatible are not.
 ```
 
 Common causes:
+
 - Operator applied to incompatible types (`Int + String`)
 - If branches return different types (`if true then 1 else "no"`)
 - Function called with the wrong argument type
 - Sequence with mixed element types (`[1, "two", 3]`)
+
+Constructor diagnostics include the constructor name, declared field shape,
+and the specific field mismatch. A tuple annotation is one constructor field,
+so preserve that nesting in the pattern:
+
+```yona
+type Box = Box (Int, Int)
+
+# Error: two constructor fields were written for one tuple field
+case Box (1, 2) of Box (first, second) -> first end
+
+# Fix: match the single field with a tuple subpattern
+case Box (1, 2) of Box ((first, second)) -> first end
+```
 
 ### E0101 — Infinite type
 

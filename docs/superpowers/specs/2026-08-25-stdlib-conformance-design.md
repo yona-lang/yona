@@ -27,7 +27,7 @@ pass : String -> TestResult
 fail : String -> TestResult
 check : String -> Bool -> TestResult
 equalBy : String -> (a -> a -> Bool) -> a -> a -> TestResult
-case : String -> (() -> TestResult) -> TestCase
+testCase : String -> (() -> TestResult) -> TestCase
 run : [TestCase] -> TestReport
 render : TestReport -> String
 ```
@@ -47,10 +47,12 @@ FAIL <case name>: <message>
 SUMMARY <passed> passed, <failed> failed
 ```
 
-Individual test programs call `println (render (run cases))`. A non-zero exit
-is a host responsibility: the C++ fixture adapter treats any `FAIL` line or a
-nonzero process status as failure. This avoids adding effectful process exit
-to a pure assertion API.
+Individual test programs sequence `println (render (run cases))` in a `do`
+block. The compiler prints the block's final value, so fixtures conventionally
+finish with `0` and include that final line in their expected output. A
+non-zero exit is a host responsibility: the C++ fixture adapter treats any
+`FAIL` line or a nonzero process status as failure. This avoids adding
+effectful process exit to a pure assertion API.
 
 ## Test layout and discovery
 

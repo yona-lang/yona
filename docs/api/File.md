@@ -104,7 +104,7 @@ import fromSeq from Std\ByteArray in
 writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 ```
 
-### `openFile : String -> FileMode -> Linear FileHandle`
+### `openFile : String -> FileMode -> Linear(Adt(Filehandle))`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
 It returns an owning `Linear FileHandle`, not a raw descriptor. Match the
@@ -119,21 +119,21 @@ end
 
 The mode is a `FileMode` ADT (Prelude): `Read`, `Write`, `ReadWrite`, `Append`.
 
-### `closeFileHandle : FileHandle -> ()`
+### `closeFileHandle : Int -> ()`
 
 Close a file handle.
 
-### `readBytes : FileHandle -> Int -> ByteArray`
+### `readBytes : Int -> Int -> ByteArray`
 
 Read up to `count` bytes from a file handle. Async (io_uring).
 Returns a byte buffer.
 
-### `writeBytes : FileHandle -> ByteArray -> Int`
+### `writeBytes : Int -> Int -> Int`
 
 Write bytes to a file handle. Async (io_uring).
 Returns the number of bytes written.
 
-### `seek : FileHandle -> Int -> Whence -> Int`
+### `seek : Int -> Int -> a -> Int`
 
 Seek to a position in a file. `whence` is a `Whence` ADT (Prelude):
 `SeekSet` (absolute), `SeekCur` (relative to current), `SeekEnd` (relative to end).
@@ -146,19 +146,19 @@ case openFile "data.bin" Read of
 end
 ```
 
-### `tell : FileHandle -> Int`
+### `tell : Int -> Int`
 
 Returns the current position in a file handle.
 
-### `flush : FileHandle -> Bool`
+### `flush : Int -> Bool`
 
 Flush buffered writes for a file handle. Returns `true` on success.
 
-### `truncate : FileHandle -> Int -> Bool`
+### `truncate : Int -> Int -> Bool`
 
 Truncate a file to the given length. Returns `true` on success.
 
-### `readChunks : FileHandle -> Int -> Iterator ByteArray`
+### `readChunks : Int -> Int -> Iterator a`
 
 Read data from a file handle in chunks of `chunkSize` bytes.
 Returns a handle for chunked reading.

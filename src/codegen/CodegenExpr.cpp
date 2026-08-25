@@ -6,6 +6,7 @@
 //
 
 #include "Codegen.h"
+#include <llvm/IR/Dominators.h>
 #include "analysis/BorrowEscapeAnalysis.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
@@ -417,6 +418,15 @@ void Codegen::transfer_scope_exit() {
         for (auto& b : scope.branches) {
             if (!b.exit_bb) continue;
             if (b.transfers.count(v)) continue;
+            // Ordinal filtering rejects values introduced after the scope,
+            // but a pre-scope block can still sit on only one control-flow
+            // path. Require actual dominance before inserting a compensating
+            // drop in this sibling exit block.
+            if (auto* inst = llvm::dyn_cast<llvm::Instruction>(v)) {
+                llvm::DominatorTree dominators(*b.exit_bb->getParent());
+                if (!dominators.dominates(inst, b.exit_bb->getTerminator()))
+                    continue;
+            }
             auto saved_ip = builder_->saveIP();
             builder_->SetInsertPoint(b.exit_bb->getTerminator());
             emit_rc_dec(v, CType::SEQ);
@@ -525,7 +535,8 @@ static bool contains_raise_expr(AstNode* node) {
 }
 
 bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
-                                bool is_return_position) {
+                                bool is_return_position,
+                                const BorrowInferenceContext* context) {
     if (!node) return false;
     auto ty = node->get_type();
 
@@ -546,6 +557,18 @@ bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
         auto* e = static_cast<TupleExpr*>(node);
         for (auto* v : e->values)
             if (count_identifier_refs(v, name) > 0) return true;
+        return false;
+    }
+    if (ty == AST_RECORD_INSTANCE_EXPR) {
+        auto* e = static_cast<RecordInstanceExpr*>(node);
+        for (auto& [field, value] : e->items)
+            if (count_identifier_refs(value, name) > 0) return true;
+        return false;
+    }
+    if (ty == AST_RECORD_LITERAL_EXPR) {
+        auto* e = static_cast<RecordLiteralExpr*>(node);
+        for (auto& [field, value] : e->fields)
+            if (count_identifier_refs(value, name) > 0) return true;
         return false;
     }
 
@@ -574,19 +597,29 @@ bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
         return false;
     }
 
-    // Binary ops: neither side is a storage position, but pass through.
+    if (ty == AST_REMOVE_EXPR) {
+        // Set difference consumes its left operand.  Borrow inference runs
+        // before concrete collection types are always available, therefore
+        // a left-hand parameter must conservatively satisfy the owning ABI.
+        // The right operand is borrowed by both sequence and set difference.
+        auto* e = static_cast<RemoveExpr*>(node);
+        if (count_identifier_refs(e->left, name) > 0) return true;
+        return has_escaping_use(e->right, name, false, context);
+    }
+
+    // Other binary ops neither store nor consume their operands.
     if (dynamic_cast<BinaryOpExpr*>(node)) {
         auto* b = static_cast<BinaryOpExpr*>(node);
-        return has_escaping_use(b->left, name, false)
-            || has_escaping_use(b->right, name, false);
+        return has_escaping_use(b->left, name, false, context)
+            || has_escaping_use(b->right, name, false, context);
     }
 
     // If-expression: both branches are in the same return position.
     if (ty == AST_IF_EXPR) {
         auto* e = static_cast<IfExpr*>(node);
-        return has_escaping_use(e->condition, name, false)
-            || has_escaping_use(e->thenExpr, name, is_return_position)
-            || has_escaping_use(e->elseExpr, name, is_return_position);
+        return has_escaping_use(e->condition, name, false, context)
+            || has_escaping_use(e->thenExpr, name, is_return_position, context)
+            || has_escaping_use(e->elseExpr, name, is_return_position, context);
     }
 
     // Let: aliases are non-return; the body inherits return position.
@@ -594,15 +627,19 @@ bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
         auto* e = static_cast<LetExpr*>(node);
         for (auto* a : e->aliases) {
             if (auto* va = dynamic_cast<ValueAlias*>(a)) {
-                if (has_escaping_use(va->expr, name, false)) return true;
+                if (has_escaping_use(va->expr, name, false, context)) return true;
                 if (va->identifier->name->value == name) return false;
             } else if (auto* la = dynamic_cast<LambdaAlias*>(a)) {
-                if (has_escaping_use(la->lambda, name, false)) return true;
+                if (has_escaping_use(la->lambda, name, false, context)) return true;
                 if (la->name->value == name) return false;
             }
         }
-        return has_escaping_use(e->expr, name, is_return_position);
+        return has_escaping_use(e->expr, name, is_return_position, context);
     }
+
+    if (ty == AST_IMPORT_EXPR)
+        return has_escaping_use(static_cast<ImportExpr*>(node)->expr,
+                                name, is_return_position, context);
 
     // Case: if the name IS the scrutinee, it may be consumed by
     // seq_tail_consume in a head-tail pattern — that's an ownership
@@ -611,7 +648,7 @@ bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
         auto* e = static_cast<CaseExpr*>(node);
         if (count_identifier_refs(e->expr, name) > 0) return true;
         for (auto* clause : e->clauses)
-            if (has_escaping_use(clause->body, name, is_return_position))
+            if (has_escaping_use(clause->body, name, is_return_position, context))
                 return true;
         return false;
     }
@@ -624,17 +661,35 @@ bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
         std::string callee_name;
         if (auto* nc = dynamic_cast<NameCall*>(e->call))
             callee_name = nc->name->value;
+        // Juxtaposition is left-associative: `f x y` is represented as an
+        // outer application whose callee is the inner `f x` application.
+        // A parameter forwarded by that inner call is still an ownership
+        // boundary, even though it is not an argument of the outer node.
+        // Traverse expression callees before deciding that the parameter is
+        // safe to borrow.
+        if (auto* ec = dynamic_cast<ExprCall*>(e->call)) {
+            if (has_escaping_use(ec->expr, name, false, context)) return true;
+        }
         auto cf_it = callee_name.empty()
             ? compiled_functions_.end()
             : compiled_functions_.find(callee_name);
+        const std::vector<bool>* callee_borrowed = nullptr;
+        if (context && callee_name == context->function_name)
+            callee_borrowed = context->recursive_borrowed_params;
+        else if (cf_it != compiled_functions_.end())
+            callee_borrowed = &cf_it->second.borrowed_params;
         for (size_t ai = 0; ai < e->args.size(); ai++) {
-            auto* arg_expr = std::get_if<ExprNode*>(&e->args[ai]);
-            if (!arg_expr || !*arg_expr) continue;
-            if (has_escaping_use(*arg_expr, name, false)) return true;
-            if (count_identifier_refs(*arg_expr, name) == 0) continue;
-            if (cf_it == compiled_functions_.end()) return true;
-            if (ai >= cf_it->second.borrowed_params.size()
-                || !cf_it->second.borrowed_params[ai])
+            AstNode* arg = nullptr;
+            if (auto* expr = std::get_if<ExprNode*>(&e->args[ai]))
+                arg = *expr;
+            else if (auto* value = std::get_if<ValueExpr*>(&e->args[ai]))
+                arg = *value;
+            if (!arg) continue;
+            if (has_escaping_use(arg, name, false, context)) return true;
+            if (compiler::analysis::count_identifier_value_refs(arg, name) == 0)
+                continue;
+            if (!callee_borrowed || ai >= callee_borrowed->size()
+                || !(*callee_borrowed)[ai])
                 return true;
         }
         return false;
@@ -645,7 +700,8 @@ bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
         auto* e = static_cast<DoExpr*>(node);
         for (size_t i = 0; i < e->steps.size(); i++) {
             bool last = (i == e->steps.size() - 1);
-            if (has_escaping_use(e->steps[i], name, last && is_return_position))
+            if (has_escaping_use(e->steps[i], name, last && is_return_position,
+                                 context))
                 return true;
         }
         return false;
@@ -656,7 +712,8 @@ bool Codegen::has_escaping_use(AstNode* node, const std::string& name,
     return count_identifier_refs(node, name) > 0;
 }
 
-std::vector<bool> Codegen::infer_borrowed_params(const DeferredFunction& def,
+std::vector<bool> Codegen::infer_borrowed_params(const std::string& function_name,
+                                                  const DeferredFunction& def,
                                                   const std::vector<CType>& param_ctypes) {
     std::vector<bool> borrowed(def.param_names.size(), false);
     if (def.ast->bodies.empty()) return borrowed;
@@ -666,16 +723,30 @@ std::vector<bool> Codegen::infer_borrowed_params(const DeferredFunction& def,
     if (!bwg) return borrowed;
     if (contains_raise_expr(bwg->expr)) return borrowed;
 
-    for (size_t pi = 0; pi < def.param_names.size(); pi++) {
-        if (pi >= param_ctypes.size()) continue;
-        if (!is_heap_type(param_ctypes[pi])) continue;
-        if (pi < def.ast->param_borrow.size() && def.ast->param_borrow[pi]) {
+    // Start with the greatest possible borrow contract. Recursive forwarding
+    // is safe only while the destination parameter is also borrowed; removing
+    // an unsafe parameter can therefore make another parameter unsafe. Iterate
+    // to the greatest fixed point instead of depending on compilation order.
+    for (size_t pi = 0; pi < def.param_names.size(); pi++)
+        if (pi < param_ctypes.size() && is_heap_type(param_ctypes[pi]))
             borrowed[pi] = true;
-            continue;
+
+    bool changed;
+    do {
+        changed = false;
+        BorrowInferenceContext context{function_name, &borrowed};
+        auto next = borrowed;
+        for (size_t pi = 0; pi < def.param_names.size(); pi++) {
+            if (!borrowed[pi]) continue;
+            if (pi < def.ast->param_borrow.size() && def.ast->param_borrow[pi])
+                continue;
+            if (has_escaping_use(bwg->expr, def.param_names[pi], true, &context)) {
+                next[pi] = false;
+                changed = true;
+            }
         }
-        if (!has_escaping_use(bwg->expr, def.param_names[pi], true))
-            borrowed[pi] = true;
-    }
+        borrowed = std::move(next);
+    } while (changed);
     return borrowed;
 }
 

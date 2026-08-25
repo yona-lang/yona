@@ -220,23 +220,31 @@ int64_t yona_Std_Net__close(int64_t fd) { close((int)fd); return 0; }
 extern const char* yona_Std_Http__buildRequest(const char* method, const char* host,
                                                 const char* path, const char* body);
 extern int64_t* yona_Std_Http__parseUrl(const char* url);
+extern int64_t yona_rt_adt_get_field(void* node, int64_t index);
 extern void* rc_alloc(int64_t type_tag, size_t payload_bytes);
 #define RC_TYPE_STRING 6
 
 int64_t yona_Std_Http__httpGet(const char* url) {
     int64_t* parsed = yona_Std_Http__parseUrl(url);
-    const char* host = (const char*)(intptr_t)parsed[1];
-    int64_t port = parsed[2];
-    const char* path = (const char*)(intptr_t)parsed[3];
+    const char* host = (const char*)(intptr_t)yona_rt_adt_get_field(parsed, 0);
+    int64_t port = yona_rt_adt_get_field(parsed, 1);
+    const char* path = (const char*)(intptr_t)yona_rt_adt_get_field(parsed, 2);
 
     struct addrinfo hints, *ai;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     char port_str[8]; snprintf(port_str, sizeof(port_str), "%" PRId64, port);
-    if (getaddrinfo(host, port_str, &hints, &ai) != 0) return 0;
+    if (getaddrinfo(host, port_str, &hints, &ai) != 0) {
+        yona_rt_rc_dec(parsed);
+        return 0;
+    }
     int fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-    if (fd < 0) { freeaddrinfo(ai); return 0; }
+    if (fd < 0) {
+        freeaddrinfo(ai);
+        yona_rt_rc_dec(parsed);
+        return 0;
+    }
 
     struct sockaddr_storage addr_buf;
     memcpy(&addr_buf, ai->ai_addr, ai->ai_addrlen);
@@ -249,10 +257,15 @@ int64_t yona_Std_Http__httpGet(const char* url) {
         sqe.addr = (unsigned long)&addr_buf;
         sqe.off = (uint64_t)addr_len;
         uint64_t id = ring_submit_sqe(&sqe);
-        if (ring_await(id) < 0) { close(fd); return 0; }
+        if (ring_await(id) < 0) {
+            close(fd);
+            yona_rt_rc_dec(parsed);
+            return 0;
+        }
     }
 
     const char* req = yona_Std_Http__buildRequest("GET", host, path, NULL);
+    yona_rt_rc_dec(parsed);
     {
         struct io_uring_sqe sqe; memset(&sqe, 0, sizeof(sqe));
         sqe.opcode = IORING_OP_SEND;
@@ -262,6 +275,7 @@ int64_t yona_Std_Http__httpGet(const char* url) {
         uint64_t id = ring_submit_sqe(&sqe);
         ring_await(id);
     }
+    yona_rt_rc_dec((void*)req);
 
     size_t buf_size = 16384;
     size_t total = 0;
@@ -280,6 +294,7 @@ int64_t yona_Std_Http__httpGet(const char* url) {
             size_t new_size = buf_size * 2;
             char* new_buf = (char*)rc_alloc(RC_TYPE_STRING, new_size);
             memcpy(new_buf, buf, total);
+            yona_rt_rc_dec(buf);
             buf = new_buf; buf_size = new_size;
         }
     }

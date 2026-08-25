@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- `Std\Test` now provides pure `TestResult`, `TestCase`, and `TestReport` ADTs
+  plus `pass`, `fail`, `check`, `equalBy`, `testCase`, `run`, and deterministic
+  `render`. The initial Yona-native framework fixture covers full and empty
+  reports without stopping after the first failure.
 - `Std\File.openFile` now materializes the documented `Linear FileHandle`
   wrapper at runtime. Imported calls can be consumed with `case Linear file ->
   …`; the interface retains the nested payload as `LINEAR(ADT(FileHandle))`.
@@ -22,6 +26,14 @@
   and rejects unproven direct or mutual recursion with E0203.
 
 ### Changed
+- Constructor patterns now preserve a declared tuple field as one field:
+  `Box ((first, second))` matches `type Box = Box (Int, Int)`, while the spread
+  form `Box (first, second)` receives a concrete shape correction. E0100 now
+  reports constructor, field, declared shape, parsed shape, and one focused fix
+  without duplicate diagnostics.
+- Empty `{}` inside a string remains literal for placeholder APIs such as
+  `Std\Format.format`; `{{` and `}}` escape literal braces adjacent to normal
+  `{name}` / `{(expression)}` interpolation.
 - Parser recovery after an invalid case-pattern binding now skips the malformed
   arm rather than emitting repeated follow-on E0301 diagnostics for its arrow
   and body.
@@ -43,6 +55,22 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
+- Recursive ownership analysis now sees through import wrappers, distinguishes
+  closure call targets from forwarded values, and computes recursive borrow
+  contracts to a fixed point. This removes the `Std\Test` use-after-free,
+  nested-case dominance failures, and the unnecessary recursive `foldl` DUP.
+- ADT patterns preserve tuple, parameterized collection, named-record, and
+  callable field metadata through typechecking, codegen, and `.yonai` fallback;
+  failed speculative private-GENFN recompilation no longer leaks diagnostics.
+- Runtime sequence users now honor the canonical two-word header in
+  `Std\String.join`, `Std\Format.format`, HTTP URL parsing, and all platform
+  `listDir` implementations. URL parsing uses an ownership-aware internal ADT.
+- Heap-valued set extraction and union/intersection/difference now retain and
+  release elements correctly, propagate HAMT flags, and transfer the consumed
+  left operand exactly once from generated code.
+- Project-owned LLVM 22 deprecations, incomplete enum switches, and a nested
+  comment warning have been removed. The remaining doctest/libstdc++ warning is
+  tracked in `docs/todo-list.md`.
 - Module interfaces now serialize bare `Seq`, `Set`, and `Dict` extern type
   annotations as collection ABI tags rather than as nominal ADTs. This keeps
   imported `Std\Regex.find`, `findAll`, and `split` results usable as sequences.

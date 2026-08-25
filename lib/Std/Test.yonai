@@ -1,176 +1,184 @@
-ADT FileHandle 1 1
-CTOR FileHandle 0 1 fields _0:INT
-ADT FileMode 4 0
-CTOR Read 0 0
-CTOR ReadWrite 2 0
-CTOR Write 1 0
-CTOR Append 3 0
-ADT Iterator 1 1 recursive
-CTOR Iterator 0 1 fields _0:FUNCTION:ADT:Option
-ADT Linear 1 1
-CTOR Linear 0 1 fields _0:INT
-ADT Option 2 1
-CTOR Some 0 1 fields _0:INT
-CTOR None 1 0
-ADT Result 2 1
-CTOR Ok 0 1 fields _0:INT
-CTOR Err 1 1 fields _0:INT
-ADT Type 18 1
-CTOR TSum 16 0
-CTOR TAdt 15 1 fields _0:STRING
-CTOR TInt 0 0
-CTOR TFloat 1 0
-CTOR TBool 2 0
-CTOR TString 3 0
-CTOR TSymbol 4 0
-CTOR TUnit 5 0
-CTOR TSeq 6 0
-CTOR TIntArray 13 0
-CTOR TSet 7 0
-CTOR TDict 8 0
-CTOR TFunction 10 0
-CTOR TTuple 9 0
-CTOR TPromise 11 0
-CTOR TByteArray 12 0
-CTOR TFloatArray 14 0
-CTOR TRecord 17 0
-ADT Whence 3 0
-CTOR SeekEnd 2 0
-CTOR SeekSet 0 0
-CTOR SeekCur 1 0
-TRAIT Closeable a 1
-  METHOD close
-TRAIT Show a 1
-  METHOD show
-TRAIT Eq a 1
-  METHOD eq
-TRAIT Ord a 1
-  METHOD compare
-TRAIT Hash a 1
-  METHOD hash
+ADT TestCase 1 2 recursive
+CTOR TestCase 0 2 fields name:STRING thunk:FUNCTION:ADT:TestResult
+ADT TestReport 1 3
+CTOR TestReport 0 3 fields passed:INT failed:INT lines:SEQ
+ADT TestResult 2 1
+CTOR Pass 0 1 fields _0:STRING
+CTOR Fail 1 1 fields _0:STRING
 TRAIT Array a 2
   METHOD length
   METHOD get
-INSTANCE Show Float
-  IMPL show yona_Prelude__Show_Float__show
-INSTANCE Closeable Int
-  IMPL close Closeable_Int__close
+TRAIT Hash a 1
+  METHOD hash
+TRAIT Ord a 1
+  METHOD compare
+TRAIT Eq a 1
+  METHOD eq
+TRAIT Show a 1
+  METHOD show
+TRAIT Closeable a 1
+  METHOD close
+INSTANCE Hash Bool
+  IMPL hash yona_Prelude__Hash_Bool__hash
+INSTANCE Hash String
+  IMPL hash yona_Prelude__Hash_String__hash
+INSTANCE Hash Float
+  IMPL hash yona_Prelude__Hash_Float__hash
+INSTANCE Array Seq
+  IMPL get yona_Prelude__Array_Seq__get
+  IMPL length yona_Prelude__Array_Seq__length
+INSTANCE Hash Int
+  IMPL hash yona_Prelude__Hash_Int__hash
+INSTANCE Ord Float
+  IMPL compare yona_Prelude__Ord_Float__compare
+INSTANCE Ord Int
+  IMPL compare yona_Prelude__Ord_Int__compare
+INSTANCE Array FloatArray
+  IMPL get yona_Prelude__Array_FloatArray__get
+  IMPL length yona_Prelude__Array_FloatArray__length
 INSTANCE Closeable FileHandle
   IMPL close yona_Std_File__closeFileHandle
+INSTANCE Eq Symbol
+  IMPL eq yona_Prelude__Eq_Symbol__eq
 INSTANCE Ord String
   IMPL compare yona_Prelude__Ord_String__compare
-INSTANCE Eq Bool
-  IMPL eq yona_Prelude__Eq_Bool__eq
 INSTANCE Show Int
   IMPL show yona_Prelude__Show_Int__show
-INSTANCE Show String
-  IMPL show yona_Prelude__Show_String__show
-INSTANCE Eq String
-  IMPL eq yona_Prelude__Eq_String__eq
+INSTANCE Array String
+  IMPL get yona_Prelude__Array_String__get
+  IMPL length yona_Prelude__Array_String__length
+INSTANCE Hash Symbol
+  IMPL hash yona_Prelude__Hash_Symbol__hash
 INSTANCE Show Bool
   IMPL show yona_Prelude__Show_Bool__show
+INSTANCE Closeable Int
+  IMPL close Closeable_Int__close
+INSTANCE Eq String
+  IMPL eq yona_Prelude__Eq_String__eq
+INSTANCE Array IntArray
+  IMPL get yona_Prelude__Array_IntArray__get
+  IMPL length yona_Prelude__Array_IntArray__length
+INSTANCE Array ByteArray
+  IMPL get yona_Prelude__Array_ByteArray__get
+  IMPL length yona_Prelude__Array_ByteArray__length
+INSTANCE Eq Bool
+  IMPL eq yona_Prelude__Eq_Bool__eq
 INSTANCE Ord Bool
   IMPL compare yona_Prelude__Ord_Bool__compare
+INSTANCE Show String
+  IMPL show yona_Prelude__Show_String__show
+INSTANCE Eq Float
+  IMPL eq yona_Prelude__Eq_Float__eq
+INSTANCE Show Float
+  IMPL show yona_Prelude__Show_Float__show
 INSTANCE Show Symbol
   IMPL show yona_Prelude__Show_Symbol__show
 INSTANCE Eq Int
   IMPL eq yona_Prelude__Eq_Int__eq
-INSTANCE Array FloatArray
-  IMPL length yona_Prelude__Array_FloatArray__length
-  IMPL get yona_Prelude__Array_FloatArray__get
-INSTANCE Eq Float
-  IMPL eq yona_Prelude__Eq_Float__eq
-INSTANCE Eq Symbol
-  IMPL eq yona_Prelude__Eq_Symbol__eq
-INSTANCE Ord Int
-  IMPL compare yona_Prelude__Ord_Int__compare
-INSTANCE Ord Float
-  IMPL compare yona_Prelude__Ord_Float__compare
-INSTANCE Hash Int
-  IMPL hash yona_Prelude__Hash_Int__hash
-INSTANCE Hash Float
-  IMPL hash yona_Prelude__Hash_Float__hash
-INSTANCE Hash String
-  IMPL hash yona_Prelude__Hash_String__hash
-INSTANCE Hash Bool
-  IMPL hash yona_Prelude__Hash_Bool__hash
-INSTANCE Hash Symbol
-  IMPL hash yona_Prelude__Hash_Symbol__hash
-INSTANCE Array ByteArray
-  IMPL length yona_Prelude__Array_ByteArray__length
-  IMPL get yona_Prelude__Array_ByteArray__get
-INSTANCE Array IntArray
-  IMPL length yona_Prelude__Array_IntArray__length
-  IMPL get yona_Prelude__Array_IntArray__get
-INSTANCE Array Seq
-  IMPL length yona_Prelude__Array_Seq__length
-  IMPL get yona_Prelude__Array_Seq__get
-INSTANCE Array String
-  IMPL length yona_Prelude__Array_String__length
-  IMPL get yona_Prelude__Array_String__get
-FN yona_Std_Test__assertFalse 1 INT -> TUPLE
-FN yona_Prelude__Array_Seq__length 1 INT -> INT
-FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
+FN yona_Std_Test__run 1 SEQ -> ADT(TestReport) retadt TestReport effects |
+FN yona_Std_Test__testCase 2 STRING FUNCTION -> ADT(TestCase) retadt TestCase effects -
+FN yona_Std_Test__equalBy 4 INT FUNCTION INT INT -> ADT borrow 0100 effects |
+FN yona_Std_Test__pass 1 STRING -> ADT(TestResult) retadt TestResult effects -
+FN yona_Std_Test__check 2 STRING BOOL -> ADT(TestResult) retadt TestResult effects -
+FN yona_Std_Test__fail 1 STRING -> ADT(TestResult) retadt TestResult effects -
+FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
+FN yona_Prelude__Array_IntArray__length 1 INT -> INT
+FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
+FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
+FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
+FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
+FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
+FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
+FN Closeable_Int__close 1 INT -> UNIT
+FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
+FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
+FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
+FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
+FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
+FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
+FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
 FN yona_Prelude__Hash_Int__hash 1 INT -> INT
-FN yona_Prelude__Show_String__show 1 STRING -> STRING
+FN yona_Prelude__Array_Seq__length 1 INT -> INT
 FN yona_Prelude__Show_Int__show 1 INT -> STRING
-FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
+FN yona_Prelude__Hash_String__hash 1 STRING -> INT
+FN yona_Prelude__Show_String__show 1 STRING -> STRING
 FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
 FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
-FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
-FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
-FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
-FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
-FN yona_Prelude__Hash_String__hash 1 STRING -> INT
-FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
-FN yona_Std_Test__assertTrue 1 INT -> TUPLE
-FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
-FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
-FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
-FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
-FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
-FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
-FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
-FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
-FN yona_Std_Test__assertEqual 2 INT INT -> TUPLE
-FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
-FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_IntArray__length 1 INT -> INT
-FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_String__length 1 STRING -> INT
-FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
-FN yona_Std_Test__assertGreater 2 INT INT -> TUPLE
 FN yona_Prelude__Array_String__get 2 STRING INT -> INT
-FN Closeable_Int__close 1 INT -> UNIT
-FN yona_Std_Test__assertNotEqual 2 INT INT -> TUPLE
-FN yona_Std_Test__assertLess 2 INT INT -> TUPLE
-GENFN_BEGIN yona_Std_Test__assertEqual assertEqual
-assertEqual expected actual =
-    if expected == actual then (:pass, "assertEqual")
-    else (:fail, "assertEqual: expected equal values")
+FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
+FN yona_Std_Test__render 1 ADT -> STRING effects -
+FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
+FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
+FN yona_Prelude__Array_String__length 1 STRING -> INT
+FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
+FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
+GENFN_CTOR yona_Std_Test__runCases TestReport TestReport 0 3 1 3 fieldname:passed field:INT shape:INT fieldname:failed field:INT shape:INT fieldname:lines field:SEQ shape:SEQ
+GENFN_CTOR yona_Std_Test__runCases Pass TestResult 0 1 2 1 field:STRING shape:STRING
+GENFN_CTOR yona_Std_Test__runCases Fail TestResult 1 1 2 1 field:STRING shape:STRING
+GENFN_CTOR yona_Std_Test__runCases TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING shape:STRING fieldname:thunk field:FUNCTION:ADT:TestResult shape:Fn(ADT(TestResult))
+GENFN_BEGIN yona_Std_Test__runCases runCases
+runCases : Seq TestCase -> Int -> Int -> Seq String -> TestReport
+runCases cases passed failed lines =
+    import reverse from Std\List in
+    case cases of
+        [] -> TestReport { passed = passed, failed = failed, lines = reverse lines }
+        [TestCase { name = name, thunk = thunk } | rest] ->
+            case thunk () of
+                Pass _ -> runCases rest (passed + 1) failed (("PASS " ++ name) :: lines)
+                Fail message ->
+                    let reportLine = "FAIL " ++ name ++ ": " ++ message in
+                    runCases rest passed (failed + 1) (reportLine :: lines)
+            end
+    end
 GENFN_END
-GENFN_BEGIN yona_Std_Test__assertNotEqual assertNotEqual
-assertNotEqual expected actual =
-    if expected != actual then (:pass, "assertNotEqual")
-    else (:fail, "assertNotEqual: expected different values")
+GENFN_CTOR yona_Std_Test__render TestReport TestReport 0 3 1 3 fieldname:passed field:INT shape:INT fieldname:failed field:INT shape:INT fieldname:lines field:SEQ shape:SEQ
+GENFN_BEGIN yona_Std_Test__render render
+render : TestReport -> String
+render report =
+    import join from Std\String, intToString from Std\Types in
+    case report of
+        TestReport { passed = passedCount, failed = failedCount, lines = reportLines } ->
+            let summary = "SUMMARY " ++ intToString passedCount ++ " passed, " ++
+                    intToString failedCount ++ " failed" in
+            case reportLines of
+                [] -> summary
+                _ -> join "\n" reportLines ++ "\n" ++ summary
+            end
+    end
 GENFN_END
-GENFN_BEGIN yona_Std_Test__assertGreater assertGreater
-assertGreater a b =
-    if a > b then (:pass, "assertGreater")
-    else (:fail, "assertGreater: expected first > second")
+GENFN_CTOR yona_Std_Test__run TestReport TestReport 0 3 1 3 fieldname:passed field:INT shape:INT fieldname:failed field:INT shape:INT fieldname:lines field:SEQ shape:SEQ
+GENFN_CTOR yona_Std_Test__run TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING shape:STRING fieldname:thunk field:FUNCTION:ADT:TestResult shape:Fn(ADT(TestResult))
+GENFN_BEGIN yona_Std_Test__run run
+run : Seq TestCase -> TestReport
+run cases = runCases cases 0 0 []
 GENFN_END
-GENFN_BEGIN yona_Std_Test__assertTrue assertTrue
-assertTrue value =
-    if value then (:pass, "assertTrue")
-    else (:fail, "assertTrue: expected true")
+GENFN_CTOR yona_Std_Test__testCase TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING shape:STRING fieldname:thunk field:FUNCTION:ADT:TestResult shape:Fn(ADT(TestResult))
+GENFN_BEGIN yona_Std_Test__testCase testCase
+testCase : String -> (() -> TestResult) -> TestCase
+testCase name thunk = TestCase { name = name, thunk = thunk }
 GENFN_END
-GENFN_BEGIN yona_Std_Test__assertFalse assertFalse
-assertFalse value =
-    if value then (:fail, "assertFalse: expected false")
-    else (:pass, "assertFalse")
+GENFN_CTOR yona_Std_Test__check Pass TestResult 0 1 2 1 field:STRING shape:STRING
+GENFN_CTOR yona_Std_Test__check Fail TestResult 1 1 2 1 field:STRING shape:STRING
+GENFN_BEGIN yona_Std_Test__check check
+check : String -> Bool -> TestResult
+check message condition =
+    if condition then Pass message else Fail message
 GENFN_END
-GENFN_BEGIN yona_Std_Test__assertLess assertLess
-assertLess a b =
-    if a < b then (:pass, "assertLess")
-    else (:fail, "assertLess: expected first < second")
+GENFN_CTOR yona_Std_Test__equalBy Pass TestResult 0 1 2 1 field:STRING shape:STRING
+GENFN_CTOR yona_Std_Test__equalBy Fail TestResult 1 1 2 1 field:STRING shape:STRING
+GENFN_BEGIN yona_Std_Test__equalBy equalBy
+equalBy : String -> (a -> a -> Bool) -> a -> a -> TestResult
+equalBy message equals expected actual =
+    if equals expected actual then Pass message else Fail message
+GENFN_END
+GENFN_CTOR yona_Std_Test__fail Pass TestResult 0 1 2 1 field:STRING shape:STRING
+GENFN_CTOR yona_Std_Test__fail Fail TestResult 1 1 2 1 field:STRING shape:STRING
+GENFN_BEGIN yona_Std_Test__fail fail
+fail : String -> TestResult
+fail message = Fail message
+GENFN_END
+GENFN_CTOR yona_Std_Test__pass Pass TestResult 0 1 2 1 field:STRING shape:STRING
+GENFN_BEGIN yona_Std_Test__pass pass
+pass : String -> TestResult
+pass message = Pass message
 GENFN_END

@@ -286,9 +286,15 @@ DIType* Codegen::di_type_for(CType ct) {
         case CType::DICT:
         case CType::ADT:
         case CType::PROMISE:
+        case CType::BYTE_ARRAY:
+        case CType::INT_ARRAY:
+        case CType::FLOAT_ARRAY:
+        case CType::CHANNEL:
             return debug_.builder->createPointerType(
                 debug_.builder->createBasicType("Opaque", 8, dwarf::DW_ATE_unsigned), 64);
         case CType::TUPLE:
+        case CType::SUM:
+        case CType::RECORD:
             return debug_.builder->createBasicType("Tuple", 64, dwarf::DW_ATE_signed);
     }
     return debug_.builder->createBasicType("Unknown", 64, dwarf::DW_ATE_signed);
@@ -310,7 +316,7 @@ void Codegen::init_target() {
     Triple triple(triple_str);
     module_->setTargetTriple(triple);
     std::string err;
-    auto target = TargetRegistry::lookupTarget(triple_str, err);
+    auto target = TargetRegistry::lookupTarget(triple, err);
     if (!target) { std::cerr << "Target error: " << err << "\n"; return; }
     TargetOptions opt;
     target_machine_ = target->createTargetMachine(triple, "generic", "", opt, Reloc::PIC_);
@@ -322,20 +328,20 @@ LType* Codegen::llvm_type(CType ct) {
         case CType::INT:    return LType::getInt64Ty(*context_);
         case CType::FLOAT:  return LType::getDoubleTy(*context_);
         case CType::BOOL:   return LType::getInt1Ty(*context_);
-        case CType::STRING: return PointerType::get(LType::getInt8Ty(*context_), 0);
-        case CType::SEQ:    return PointerType::get(LType::getInt64Ty(*context_), 0);
+        case CType::STRING: return PointerType::get(*context_, 0);
+        case CType::SEQ:    return PointerType::get(*context_, 0);
         case CType::TUPLE:  return LType::getInt64Ty(*context_); // ptrtoint'd boxed ptr
         case CType::UNIT:   return LType::getInt64Ty(*context_);
-        case CType::FUNCTION: return PointerType::get(LType::getInt8Ty(*context_), 0);
+        case CType::FUNCTION: return PointerType::get(*context_, 0);
         case CType::SYMBOL: return LType::getInt64Ty(*context_); // interned symbol ID
-        case CType::SET:    return PointerType::get(LType::getInt64Ty(*context_), 0);
-        case CType::DICT:   return PointerType::get(LType::getInt64Ty(*context_), 0);
-        case CType::PROMISE: return PointerType::get(LType::getInt8Ty(*context_), 0);
+        case CType::SET:    return PointerType::get(*context_, 0);
+        case CType::DICT:   return PointerType::get(*context_, 0);
+        case CType::PROMISE: return PointerType::get(*context_, 0);
         case CType::ADT:    return LType::getInt64Ty(*context_); // overridden per-ADT
-        case CType::BYTE_ARRAY:  return PointerType::get(LType::getInt8Ty(*context_), 0);
-        case CType::INT_ARRAY: return PointerType::get(LType::getInt64Ty(*context_), 0);
-        case CType::FLOAT_ARRAY: return PointerType::get(LType::getDoubleTy(*context_), 0);
-        case CType::CHANNEL: return PointerType::get(LType::getInt8Ty(*context_), 0);
+        case CType::BYTE_ARRAY:  return PointerType::get(*context_, 0);
+        case CType::INT_ARRAY: return PointerType::get(*context_, 0);
+        case CType::FLOAT_ARRAY: return PointerType::get(*context_, 0);
+        case CType::CHANNEL: return PointerType::get(*context_, 0);
         case CType::SUM:    return LType::getInt64Ty(*context_); // boxed tagged value (2-tuple)
         case CType::RECORD: return LType::getInt64Ty(*context_); // boxed tuple (ptrtoint'd)
     }
@@ -347,8 +353,8 @@ void Codegen::declare_runtime() {
     auto f64 = LType::getDoubleTy(*context_);
     auto vd = LType::getVoidTy(*context_);
     auto i1 = LType::getInt1Ty(*context_);
-    auto ptr = PointerType::get(LType::getInt8Ty(*context_), 0);
-    auto i64p = PointerType::get(i64, 0);
+    auto ptr = PointerType::get(*context_, 0);
+    auto i64p = PointerType::get(*context_, 0);
 
     auto decl = [&](const char* name, LType* ret, std::vector<LType*> args) {
         return Function::Create(llvm::FunctionType::get(ret, args, false),
@@ -406,10 +412,10 @@ void Codegen::declare_runtime() {
 
     // Async runtime: promise = async_call(fn_ptr, arg), result = async_await(promise)
     // fn_ptr type: i64 (*)(i64) — function pointer taking and returning i64
-    auto fn_ptr_ty = PointerType::get(llvm::FunctionType::get(i64, {i64}, false), 0);
+    auto fn_ptr_ty = PointerType::get(*context_, 0);
     auto promise_ptr = ptr; // opaque pointer to yona_promise_t
     rt_.async_call_    = decl("yona_rt_async_call", promise_ptr, {fn_ptr_ty, i64});
-    auto thunk_ptr_ty = PointerType::get(llvm::FunctionType::get(i64, {}, false), 0);
+    auto thunk_ptr_ty = PointerType::get(*context_, 0);
     rt_.async_call_thunk_ = decl("yona_rt_async_call_thunk", promise_ptr, {thunk_ptr_ty});
     rt_.async_await_       = decl("yona_rt_async_await", i64, {promise_ptr});
     rt_.async_await_keep_ = decl("yona_rt_async_await_keep", i64, {promise_ptr});
@@ -730,9 +736,20 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                 }
             }
 
+            std::vector<AdtInfo::FieldShape> field_shapes;
+            field_shapes.reserve(ctor->field_type_names.size());
+            for (size_t fi = 0; fi < ctor->field_type_names.size(); ++fi) {
+                auto shape = field_shape_from_field_type(ctor->field_type_names[fi]);
+                ftypes[fi] = shape.type;
+                fn_rets[fi] = shape.function_return_type;
+                fn_ret_adt_names[fi] = shape.function_return_adt_name;
+                field_shapes.push_back(std::move(shape));
+            }
+
             types_.adt_constructors[ctor->name] = {adt->name, static_cast<int>(ci), arity,
                                               static_cast<int>(adt->variants.size()), max_arity, is_recursive,
-                                              ctor->field_names, ftypes, fn_rets, fn_ret_adt_names};
+                                              ctor->field_names, ftypes, fn_rets, fn_ret_adt_names,
+                                              field_shapes};
         }
     }
 
@@ -954,8 +971,12 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         codegen_function_def(func, fn_name);
 
         // Store source text for exported generic functions (.yonai emission)
-        if (export_set.count(fn_name) && !func->type_signature.has_value() &&
-            !func->source_text.empty()) {
+        // Every source-defined export needs its source in the interface.  The
+        // importing compiler may have to monomorphize it locally, including
+        // when it has an explicit type signature; omitting annotated exports
+        // left callers with only a lossy ABI row and could silently drop
+        // arguments during recompilation.
+        if (export_set.count(fn_name) && !func->source_text.empty()) {
             std::string mangled = mangle_name(fqn, fn_name);
             imports_.function_source[mangled] = func->source_text;
             imports_.interface_symbols.insert(mangled);
@@ -1544,7 +1565,7 @@ void Codegen::codegen_print_value(const TypedValue& tv) {
         case CType::STRING: builder_->CreateCall(rt_.print_string_, {v}); break;
         case CType::SEQ:    builder_->CreateCall(rt_.print_seq_, {v}); break;
         case CType::TUPLE: {
-            builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr("(")});
+            builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString("(")});
             if (!tv.subtypes.empty()) {
                 // Boxed tuple (i64 = ptrtoint'd ptr to i64 array): GEP + load
                 auto i64_ty_local = LType::getInt64Ty(*context_);
@@ -1553,7 +1574,7 @@ void Codegen::codegen_print_value(const TypedValue& tv) {
                     tuple_ptr = builder_->CreateIntToPtr(tuple_ptr, PointerType::get(*context_, 0));
                 for (unsigned i = 0; i < tv.subtypes.size(); i++) {
                     if (i > 0)
-                        builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr(", ")});
+                        builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString(", ")});
                     auto* gep = builder_->CreateGEP(i64_ty_local, tuple_ptr,
                         {ConstantInt::get(i64_ty_local, i + 2)}); // +2 for tuple header
                     auto* elem = builder_->CreateLoad(i64_ty_local, gep);
@@ -1574,13 +1595,13 @@ void Codegen::codegen_print_value(const TypedValue& tv) {
                     codegen_print_value({typed, et});
                 }
             }
-            builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr(")")});
+            builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString(")")});
             break;
         }
         case CType::SET:    builder_->CreateCall(rt_.print_set_, {tv.val}); break;
         case CType::DICT:   builder_->CreateCall(rt_.print_dict_, {tv.val}); break;
-        case CType::UNIT:     builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr("()")}); break;
-        case CType::FUNCTION: builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr("<function>")}); break;
+        case CType::UNIT:     builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString("()")}); break;
+        case CType::FUNCTION: builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString("<function>")}); break;
         case CType::SYMBOL: {
             // Symbol is an interned i64 ID. Look up the string for printing.
             if (auto* ci = dyn_cast<ConstantInt>(tv.val)) {
@@ -1592,12 +1613,12 @@ void Codegen::codegen_print_value(const TypedValue& tv) {
                 // Runtime symbol value — need a table lookup.
                 // Emit a GEP into the symbol names table (emitted at finalization).
                 // For now, emit a placeholder.
-                builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr(":<dynamic>")});
+                builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString(":<dynamic>")});
             }
             break;
         }
         case CType::ADT: {
-            builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalStringPtr("<adt>")});
+            builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString("<adt>")});
             break;
         }
         case CType::BYTE_ARRAY: {
@@ -1913,7 +1934,7 @@ TypedValue Codegen::codegen(AstNode* node) {
                             ftype == CType::BYTE_ARRAY || ftype == CType::PROMISE)
                             return {builder_->CreateIntToPtr(val, PointerType::get(*context_, 0)), ftype};
                         if (ftype == CType::SEQ || ftype == CType::SET || ftype == CType::DICT)
-                            return {builder_->CreateIntToPtr(val, PointerType::get(LType::getInt64Ty(*context_), 0)), ftype};
+                            return {builder_->CreateIntToPtr(val, PointerType::get(*context_, 0)), ftype};
                         if (ftype == CType::FLOAT)
                             return {builder_->CreateBitCast(val, LType::getDoubleTy(*context_)), ftype};
                         if (ftype == CType::BOOL)
@@ -1997,7 +2018,7 @@ int64_t Codegen::intern_symbol(const std::string& name) {
     if (it != symbols_.ids.end()) return it->second;
     int64_t id = static_cast<int64_t>(symbols_.strings.size());
     symbols_.ids[name] = id;
-    symbols_.strings.push_back(builder_->CreateGlobalStringPtr(name, "sym." + name));
+    symbols_.strings.push_back(builder_->CreateGlobalString(name, "sym." + name));
     return id;
 }
 

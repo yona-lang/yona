@@ -16,6 +16,7 @@
 #include <map>
 #include <optional>
 #include <unordered_set>
+#include <cctype>
 
 namespace yona::compiler::codegen {
 using namespace llvm;
@@ -56,6 +57,61 @@ static void parse_interface_type(const std::string& text, CType& type,
     }
 }
 
+// Field shapes preserve information that CType alone loses, notably tuple
+// element types and the return type of a callable ADT field.  The compact
+// spelling is deliberately token-safe for `.yonai`: `T(Int,Fn(ADT(Result)))`.
+std::string Codegen::encode_field_shape(const AdtInfo::FieldShape& shape) {
+    if (!shape.tuple_elements.empty()) {
+        std::string encoded = "T(";
+        for (size_t i = 0; i < shape.tuple_elements.size(); ++i) {
+            if (i != 0) encoded += ',';
+            encoded += encode_field_shape(shape.tuple_elements[i]);
+        }
+        return encoded + ')';
+    }
+    if (shape.type == CType::FUNCTION)
+        return "Fn(" + interface_type(shape.function_return_type,
+                                      shape.function_return_adt_name) + ')';
+    return interface_type(shape.type);
+}
+
+static std::vector<std::string> split_shape_arguments(const std::string& text) {
+    std::vector<std::string> parts;
+    size_t start = 0;
+    int depth = 0;
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '(') ++depth;
+        else if (text[i] == ')') --depth;
+        else if (text[i] == ',' && depth == 0) {
+            parts.push_back(text.substr(start, i - start));
+            start = i + 1;
+        }
+    }
+    parts.push_back(text.substr(start));
+    return parts;
+}
+
+Codegen::AdtInfo::FieldShape Codegen::decode_field_shape(const std::string& text) {
+    AdtInfo::FieldShape shape;
+    if (text.starts_with("T(") && text.ends_with(')')) {
+        shape.type = CType::TUPLE;
+        for (const auto& part : split_shape_arguments(text.substr(2, text.size() - 3)))
+            shape.tuple_elements.push_back(decode_field_shape(part));
+        return shape;
+    }
+    if (text.starts_with("Fn(") && text.ends_with(')')) {
+        shape.type = CType::FUNCTION;
+        bool linear = false;
+        parse_interface_type(text.substr(3, text.size() - 4), shape.function_return_type,
+                             shape.function_return_adt_name, linear);
+        return shape;
+    }
+    bool linear = false;
+    std::string ignored_adt_name;
+    parse_interface_type(text, shape.type, ignored_adt_name, linear);
+    return shape;
+}
+
 static std::string trim_trailing_doc_comments(std::string source) {
     while (!source.empty() && (source.back() == '\n' || source.back() == '\r' ||
                               source.back() == ' ' || source.back() == '\t'))
@@ -79,6 +135,20 @@ static std::string trim_trailing_doc_comments(std::string source) {
     return source;
 }
 
+static bool contains_identifier(const std::string& source, const std::string& identifier) {
+    size_t pos = source.find(identifier);
+    while (pos != std::string::npos) {
+        const bool left_boundary = pos == 0 ||
+            (!std::isalnum(static_cast<unsigned char>(source[pos - 1])) && source[pos - 1] != '_');
+        const size_t end = pos + identifier.size();
+        const bool right_boundary = end == source.size() ||
+            (!std::isalnum(static_cast<unsigned char>(source[end])) && source[end] != '_');
+        if (left_boundary && right_boundary) return true;
+        pos = source.find(identifier, pos + 1);
+    }
+    return false;
+}
+
 std::string Codegen::ctype_to_type_name(CType ct) {
     switch (ct) {
         case CType::INT: return "Int";
@@ -98,6 +168,8 @@ std::string Codegen::ctype_to_type_name(CType ct) {
         case CType::INT_ARRAY: return "IntArray";
         case CType::FLOAT_ARRAY: return "FloatArray";
         case CType::CHANNEL: return "Channel";
+        case CType::SUM: return "Sum";
+        case CType::RECORD: return "Record";
     }
     return "Int";
 }
@@ -186,6 +258,46 @@ static CType string_to_ctype(const std::string& s) {
     if (s == "SUM") return CType::SUM;
     if (s == "RECORD") return CType::RECORD;
     return CType::INT;
+}
+
+Codegen::AdtInfo::FieldShape
+Codegen::field_shape_from_field_type(const ast::FieldType& field_type) {
+    auto ctype_for_name = [](std::string name) {
+        auto space = name.find(' ');
+        if (space != std::string::npos) name.resize(space);
+        if (name == "Int" || name == "a" || name == "b" || name == "e" || name == "s") return CType::INT;
+        if (name == "Float") return CType::FLOAT;
+        if (name == "String") return CType::STRING;
+        if (name == "Bool") return CType::BOOL;
+        if (name == "Symbol") return CType::SYMBOL;
+        if (name == "Seq") return CType::SEQ;
+        if (name == "Set") return CType::SET;
+        if (name == "Dict") return CType::DICT;
+        if (name == "Channel") return CType::CHANNEL;
+        if (name == "()" || name == "Unit") return CType::UNIT;
+        return CType::ADT;
+    };
+
+    AdtInfo::FieldShape shape;
+    if (field_type.is_tuple_type) {
+        shape.type = CType::TUPLE;
+        for (const auto& element : field_type.tuple_types)
+            shape.tuple_elements.push_back(field_shape_from_field_type(element));
+        return shape;
+    }
+    if (field_type.is_function_type || field_type.name == "Fn" || field_type.name == "fn" ||
+        field_type.name == "Function") {
+        shape.type = CType::FUNCTION;
+        if (!field_type.return_types.empty()) {
+            auto result = field_shape_from_field_type(field_type.return_types.front());
+            shape.function_return_type = result.type;
+            if (result.type == CType::ADT)
+                shape.function_return_adt_name = field_type.return_types.front().name;
+        }
+        return shape;
+    }
+    shape.type = ctype_for_name(field_type.name);
+    return shape;
 }
 
 static std::string borrowed_params_to_mask(const std::vector<bool>& borrowed, size_t param_count) {
@@ -394,16 +506,21 @@ bool Codegen::emit_interface_file(const std::string& path) {
         // fail while reparsing GENFN bodies.
         if (source.find("raw_") != std::string::npos)
             continue;
-        // Opaque constructors remain unavailable to importers, but an
-        // exported generic function may need one when it is recompiled at a
-        // different call-site type. Keep this metadata scoped to that GENFN.
+        // Reparsed generic bodies need every constructor they reference,
+        // including private ADTs. Keep this metadata scoped to the GENFN so
+        // it enables monomorphization without exporting the ADT itself.
         for (const auto& [ctor_name, ctor] : types_.adt_constructors) {
-            if (interface_opaque_types_.count(ctor.type_name) == 0) continue;
+            if (!contains_identifier(source, ctor_name)) continue;
             out << "GENFN_CTOR " << mangled << " " << ctor_name << " "
                 << ctor.type_name << " " << ctor.tag << " " << ctor.arity << " "
                 << ctor.total_variants << " " << ctor.max_arity
                 << (ctor.is_recursive ? " recursive" : "");
             for (size_t i = 0; i < ctor.field_types.size(); ++i) {
+                // Record syntax must survive a GENFN reparse too. Field names
+                // are intentionally scoped to this source dependency rather
+                // than promoted to a public CTOR interface entry.
+                if (i < ctor.field_names.size())
+                    out << " fieldname:" << ctor.field_names[i];
                 out << " field:" << ctype_to_string(ctor.field_types[i]);
                 if (ctor.field_types[i] == CType::FUNCTION &&
                     i < ctor.field_fn_return_types.size()) {
@@ -412,6 +529,8 @@ bool Codegen::emit_interface_file(const std::string& path) {
                         !ctor.field_fn_return_adt_names[i].empty())
                         out << ":" << ctor.field_fn_return_adt_names[i];
                 }
+                if (i < ctor.field_shapes.size())
+                    out << " shape:" << encode_field_shape(ctor.field_shapes[i]);
             }
             out << "\n";
         }
@@ -645,10 +764,14 @@ bool Codegen::load_interface_file(const std::string& path) {
             std::string flag;
             bool is_recursive = false;
             std::vector<CType> field_types, fn_return_types;
+            std::vector<std::string> field_names;
             std::vector<std::string> fn_return_adt_names;
+            std::vector<AdtInfo::FieldShape> field_shapes;
             while (iss >> flag) {
                 if (flag == "recursive") is_recursive = true;
-                if (flag.rfind("field:", 0) == 0) {
+                if (flag.rfind("fieldname:", 0) == 0) {
+                    field_names.push_back(flag.substr(10));
+                } else if (flag.rfind("field:", 0) == 0) {
                     std::vector<std::string> parts;
                     std::stringstream fields(flag.substr(6));
                     std::string part;
@@ -656,13 +779,26 @@ bool Codegen::load_interface_file(const std::string& path) {
                     field_types.push_back(parts.empty() ? CType::INT : string_to_ctype(parts[0]));
                     fn_return_types.push_back(parts.size() > 1 ? string_to_ctype(parts[1]) : CType::INT);
                     fn_return_adt_names.push_back(parts.size() > 2 ? parts[2] : "");
+                } else if (flag.rfind("shape:", 0) == 0) {
+                    field_shapes.push_back(decode_field_shape(flag.substr(6)));
                 }
+            }
+            while (field_shapes.size() < field_types.size()) {
+                size_t i = field_shapes.size();
+                AdtInfo::FieldShape fallback;
+                fallback.type = field_types[i];
+                if (fallback.type == CType::FUNCTION && i < fn_return_types.size()) {
+                    fallback.function_return_type = fn_return_types[i];
+                    fallback.function_return_adt_name = i < fn_return_adt_names.size()
+                        ? fn_return_adt_names[i] : "";
+                }
+                field_shapes.push_back(std::move(fallback));
             }
             if (!mangled.empty() && !ctor_name.empty()) {
                 imports_.private_genfn_ctors[mangled].push_back(
                     {ctor_name, {type_name, tag, arity, total_variants, max_arity,
-                                 is_recursive, {}, field_types, fn_return_types,
-                                 fn_return_adt_names}});
+                                 is_recursive, field_names, field_types, fn_return_types,
+                                 fn_return_adt_names, field_shapes}});
             }
         }
     }
@@ -889,50 +1025,13 @@ void Codegen::register_yona_module_decls(ast::ModuleDecl* mod) {
             std::vector<CType> ftypes;
             std::vector<CType> fn_rets;
             std::vector<std::string> fn_ret_adt_names;
+            std::vector<AdtInfo::FieldShape> field_shapes;
             for (auto& ft : ctor->field_type_names) {
-                if (ft.is_function_type) {
-                    ftypes.push_back(CType::FUNCTION);
-                    // Capture the function's return CType (and ADT name if
-                    // applicable) so callable fields know what they yield.
-                    if (!ft.return_types.empty()) {
-                        const auto& ret = ft.return_types[0];
-                        CType ret_ct = name_to_ctype(ret.name);
-                        // The parser concatenates type-application args into
-                        // the head string (e.g. "Stream a" for `Stream a`).
-                        // The leading word is what determines the CType.
-                        std::string head = ret.name;
-                        auto sp = head.find(' ');
-                        if (sp != std::string::npos) head = head.substr(0, sp);
-                        ret_ct = name_to_ctype(head);
-                        fn_rets.push_back(ret_ct);
-                        fn_ret_adt_names.push_back(ret_ct == CType::ADT ? head : "");
-                    } else {
-                        fn_rets.push_back(CType::INT);
-                        fn_ret_adt_names.push_back("");
-                    }
-                }
-                else if (ft.name == "Int") { ftypes.push_back(CType::INT); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
-                else if (ft.name == "Float") { ftypes.push_back(CType::FLOAT); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
-                else if (ft.name == "String") { ftypes.push_back(CType::STRING); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
-                else if (ft.name == "Bool") { ftypes.push_back(CType::BOOL); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
-                else if (ft.name == "Symbol") { ftypes.push_back(CType::SYMBOL); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
-                else if (ft.name == "Channel") { ftypes.push_back(CType::CHANNEL); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
-                else if (ft.name == adt->name) { ftypes.push_back(CType::ADT); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
-                else if (ft.name == "()") {
-                    ftypes.push_back(CType::FUNCTION);
-                    if (!ft.return_types.empty()) {
-                        std::string head = ft.return_types[0].name;
-                        auto sp = head.find(' ');
-                        if (sp != std::string::npos) head = head.substr(0, sp);
-                        CType ret_ct = name_to_ctype(head);
-                        fn_rets.push_back(ret_ct);
-                        fn_ret_adt_names.push_back(ret_ct == CType::ADT ? head : "");
-                    } else {
-                        fn_rets.push_back(CType::INT);
-                        fn_ret_adt_names.push_back("");
-                    }
-                }
-                else { ftypes.push_back(CType::INT); fn_rets.push_back(CType::INT); fn_ret_adt_names.push_back(""); }
+                auto shape = field_shape_from_field_type(ft);
+                ftypes.push_back(shape.type);
+                fn_rets.push_back(shape.function_return_type);
+                fn_ret_adt_names.push_back(shape.function_return_adt_name);
+                field_shapes.push_back(std::move(shape));
             }
             AdtInfo info;
             info.type_name = adt->name;
@@ -945,6 +1044,7 @@ void Codegen::register_yona_module_decls(ast::ModuleDecl* mod) {
             info.field_types = ftypes;
             info.field_fn_return_types = fn_rets;
             info.field_fn_return_adt_names = fn_ret_adt_names;
+            info.field_shapes = std::move(field_shapes);
             types_.adt_constructors[ctor->name] = info;
         }
     }
@@ -1134,13 +1234,16 @@ TypedValue Codegen::materialize_imported_function_value(const std::string& name)
         for (auto ct : meta_it->second.param_types)
             dummy_args.push_back(dummy_typed_value(ct));
         int errors_before = error_count_;
+        // The parser needs private constructor metadata before it sees the
+        // exported source. Keep it inside the same isolation scope as the
+        // later compilation so it cannot leak into the importing module.
+        GenfnNameIsolation iso(*this, mangled);
+        install_private_genfn_ctors(mangled);
         auto reparsed = reparse_genfn(genfn_it->second.local_name, genfn_it->second.source_text);
         if (reparsed && !reparsed->functions.empty()) {
             auto* func_ast = reparsed->functions[0];
             reparsed->functions.clear();
             imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-            GenfnNameIsolation iso(*this, mangled);
-            install_private_genfn_ctors(mangled);
             register_sibling_genfns(mangled);
             codegen_function_def(func_ast, name);
             auto def_it = deferred_functions_.find(name);

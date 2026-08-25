@@ -27,6 +27,7 @@ extern int64_t yona_win_register_io_ctx(void* ctx);
 extern const char* yona_Std_Http__buildRequest(const char* method, const char* host,
 					       const char* path, const char* body);
 extern int64_t* yona_Std_Http__parseUrl(const char* url);
+extern int64_t yona_rt_adt_get_field(void* node, int64_t index);
 
 #define RC_TYPE_STRING 6
 #define RC_TYPE_BYTE_ARRAY 8
@@ -465,20 +466,26 @@ int64_t yona_Std_Http__httpGet(const char* url) {
 	net_ensure_wsa();
 	if (!url) return yona_io_register_direct_result((void*)(intptr_t)0);
 	int64_t* parsed = yona_Std_Http__parseUrl(url);
-	const char* host = (const char*)(intptr_t)parsed[1];
-	int64_t port = parsed[2];
-	const char* path = (const char*)(intptr_t)parsed[3];
-	if (!host || !path) return yona_io_register_direct_result((void*)(intptr_t)0);
+	const char* host = (const char*)(intptr_t)yona_rt_adt_get_field(parsed, 0);
+	int64_t port = yona_rt_adt_get_field(parsed, 1);
+	const char* path = (const char*)(intptr_t)yona_rt_adt_get_field(parsed, 2);
+	if (!host || !path) {
+		yona_rt_rc_dec(parsed);
+		return yona_io_register_direct_result((void*)(intptr_t)0);
+	}
 
 	int64_t connect_id = yona_Std_Net__tcpConnect(host, port);
 	SOCKET sock = (SOCKET)(intptr_t)yona_rt_io_await(connect_id);
 	if (sock == INVALID_SOCKET || sock == 0) {
+		yona_rt_rc_dec(parsed);
 		return yona_io_register_direct_result((void*)(intptr_t)0);
 	}
 
 	const char* req = yona_Std_Http__buildRequest("GET", host, path, NULL);
+	yona_rt_rc_dec(parsed);
 	int64_t send_id = yona_Std_Net__send((int64_t)(intptr_t)sock, req);
 	int64_t sent = yona_rt_io_await(send_id);
+	yona_rt_rc_dec((void*)req);
 	if (sent <= 0) {
 		closesocket(sock);
 		return yona_io_register_direct_result((void*)(intptr_t)0);
@@ -504,6 +511,7 @@ int64_t yona_Std_Http__httpGet(const char* url) {
 			while (total + n + 1 > new_size) new_size *= 2;
 			char* new_buf = (char*)rc_alloc(RC_TYPE_STRING, new_size);
 			memcpy(new_buf, buf, total);
+			yona_rt_rc_dec(buf);
 			buf = new_buf;
 			buf_size = new_size;
 		}

@@ -620,7 +620,7 @@ void* yona_rt_byte_array_from_seq(int64_t* seq) {
     buf[0] = len;
     uint8_t* data = (uint8_t*)(buf + 1);
     for (int64_t i = 0; i < len; i++)
-        data[i] = (uint8_t)(seq[i + 1] & 0xFF);
+        data[i] = (uint8_t)(yona_rt_seq_get(seq, i) & 0xFF);
     return buf;
 }
 
@@ -630,7 +630,7 @@ int64_t* yona_rt_byte_array_to_seq(void* bytes) {
     int64_t* seq = yona_rt_seq_alloc(len);
     uint8_t* data = (uint8_t*)((int64_t*)bytes + 1);
     for (int64_t i = 0; i < len; i++)
-        seq[i + 1] = (int64_t)data[i];
+        yona_rt_seq_set(seq, i, (int64_t)data[i]);
     return seq;
 }
 
@@ -1241,37 +1241,97 @@ int64_t* yona_rt_set_elements(int64_t* set) {
     if (tag == RC_TYPE_DICT) return yona_rt_hamt_keys((hamt_node_t*)set);
     int64_t count = set[0];
     int64_t* seq = yona_rt_seq_alloc(count);
-    for (int64_t i = 0; i < count; i++) seq[2 + i] = set[2 + i];
+    const int64_t elements_are_heap = set[1] != 0;
+    yona_rt_seq_set_heap(seq, elements_are_heap);
+    for (int64_t i = 0; i < count; i++) {
+        int64_t elem = set[2 + i];
+        if (elements_are_heap && elem)
+            yona_rt_rc_inc((void*)(intptr_t)elem);
+        yona_rt_seq_set(seq, i, elem);
+    }
     return seq;
 }
 
+static int yona_rt_set_keys_are_heap(int64_t* set) {
+    if (!set) return 0;
+    int64_t* header = set - RC_HEADER_SIZE;
+    if (DECODE_TAG(header[1]) == RC_TYPE_DICT)
+        return (hamt_aux_flags((hamt_node_t*)set) & HAMT_FLAG_KEY_HEAP) != 0;
+    return set[1] != 0;
+}
+
+static int yona_rt_set_is_hamt(int64_t* set) {
+    if (!set) return 0;
+    return DECODE_TAG((set - RC_HEADER_SIZE)[1]) == RC_TYPE_DICT;
+}
+
+static hamt_node_t* yona_rt_hamt_put_consuming(hamt_node_t* set, int64_t elem) {
+    hamt_node_t* result = yona_rt_hamt_put(set, elem, 1);
+    if (set && result != set)
+        yona_rt_rc_dec(set);
+    return result;
+}
+
 int64_t* yona_rt_set_union(int64_t* a, int64_t* b) {
+    const int a_was_flat = a && !yona_rt_set_is_hamt(a);
     hamt_node_t* ha = set_ensure_hamt(a);
+    int64_t result_flags = HAMT_FLAG_IS_SET;
+    if (yona_rt_set_keys_are_heap(a) || yona_rt_set_keys_are_heap(b))
+        result_flags |= HAMT_FLAG_KEY_HEAP;
+    hamt_or_aux_flags(ha, result_flags);
     int64_t* be = yona_rt_set_elements(b);
-    for (int64_t i = 0; i < be[0]; i++)
-        ha = yona_rt_hamt_put(ha, be[2 + i], 1);
+    const int result_keys_are_heap = (result_flags & HAMT_FLAG_KEY_HEAP) != 0;
+    for (int64_t i = 0; i < yona_rt_seq_length(be); i++) {
+        int64_t e = yona_rt_seq_get(be, i);
+        if (yona_rt_hamt_contains(ha, e))
+            continue;
+        if (result_keys_are_heap && e)
+            yona_rt_rc_inc((void*)(intptr_t)e);
+        ha = yona_rt_hamt_put_consuming(ha, e);
+    }
+    yona_rt_rc_dec(be);
+    if (a_was_flat)
+        yona_rt_rc_dec(a);
     return (int64_t*)ha;
 }
 
 int64_t* yona_rt_set_intersection(int64_t* a, int64_t* b) {
     hamt_node_t* r = yona_rt_hamt_empty();
-    hamt_or_aux_flags(r, HAMT_FLAG_IS_SET);
+    int64_t result_flags = HAMT_FLAG_IS_SET;
+    if (yona_rt_set_keys_are_heap(a))
+        result_flags |= HAMT_FLAG_KEY_HEAP;
+    hamt_or_aux_flags(r, result_flags);
     int64_t* ae = yona_rt_set_elements(a);
-    for (int64_t i = 0; i < ae[0]; i++) {
-        int64_t e = ae[2 + i];
-        if (yona_rt_set_contains(b, e)) r = yona_rt_hamt_put(r, e, 1);
+    yona_rt_rc_dec(a);
+    for (int64_t i = 0; i < yona_rt_seq_length(ae); i++) {
+        int64_t e = yona_rt_seq_get(ae, i);
+        if (yona_rt_set_contains(b, e)) {
+            if ((result_flags & HAMT_FLAG_KEY_HEAP) && e)
+                yona_rt_rc_inc((void*)(intptr_t)e);
+            r = yona_rt_hamt_put_consuming(r, e);
+        }
     }
+    yona_rt_rc_dec(ae);
     return (int64_t*)r;
 }
 
 int64_t* yona_rt_set_difference(int64_t* a, int64_t* b) {
     hamt_node_t* r = yona_rt_hamt_empty();
-    hamt_or_aux_flags(r, HAMT_FLAG_IS_SET);
+    int64_t result_flags = HAMT_FLAG_IS_SET;
+    if (yona_rt_set_keys_are_heap(a))
+        result_flags |= HAMT_FLAG_KEY_HEAP;
+    hamt_or_aux_flags(r, result_flags);
     int64_t* ae = yona_rt_set_elements(a);
-    for (int64_t i = 0; i < ae[0]; i++) {
-        int64_t e = ae[2 + i];
-        if (!yona_rt_set_contains(b, e)) r = yona_rt_hamt_put(r, e, 1);
+    yona_rt_rc_dec(a);
+    for (int64_t i = 0; i < yona_rt_seq_length(ae); i++) {
+        int64_t e = yona_rt_seq_get(ae, i);
+        if (!yona_rt_set_contains(b, e)) {
+            if ((result_flags & HAMT_FLAG_KEY_HEAP) && e)
+                yona_rt_rc_inc((void*)(intptr_t)e);
+            r = yona_rt_hamt_put_consuming(r, e);
+        }
     }
+    yona_rt_rc_dec(ae);
     return (int64_t*)r;
 }
 
@@ -1753,7 +1813,7 @@ const char* yona_Std_String__join(const char* sep, int64_t* seq) {
     /* Calculate total length */
     size_t total = 0;
     for (int64_t i = 0; i < n; i++) {
-        const char* part = (const char*)seq[i + 1];
+        const char* part = (const char*)(intptr_t)yona_rt_seq_get(seq, i);
         total += strlen(part);
         if (i > 0) total += seplen;
     }
@@ -1761,7 +1821,7 @@ const char* yona_Std_String__join(const char* sep, int64_t* seq) {
     char* w = r;
     for (int64_t i = 0; i < n; i++) {
         if (i > 0) { memcpy(w, sep, seplen); w += seplen; }
-        const char* part = (const char*)seq[i + 1];
+        const char* part = (const char*)(intptr_t)yona_rt_seq_get(seq, i);
         size_t plen = strlen(part);
         memcpy(w, part, plen);
         w += plen;
@@ -2659,9 +2719,11 @@ const char* yona_Std_Http__getHeader(const char* name, const char* response) {
     return r;
 }
 
-/* Parse URL into (host, port, path) — returns seq of 3 elements [host, port, path] */
+/* Parse URL into a mixed-field ADT payload: (host, port, path).
+ * A Seq cannot represent this safely: its single heap flag applies to every
+ * element, while only host and path are reference-counted strings. */
 int64_t* yona_Std_Http__parseUrl(const char* url) {
-    int64_t* result = yona_rt_seq_alloc(3);
+    int64_t* result = (int64_t*)yona_rt_adt_alloc(0, 3);
     int port = 80;
     const char* host_start = url;
     const char* path_start = "/";
@@ -2695,9 +2757,10 @@ int64_t* yona_Std_Http__parseUrl(const char* url) {
     char* path = (char*)rc_alloc(RC_TYPE_STRING, path_len + 1);
     memcpy(path, path_start, path_len + 1);
 
-    result[1] = (int64_t)(intptr_t)host;
-    result[2] = (int64_t)port;
-    result[3] = (int64_t)(intptr_t)path;
+    yona_rt_adt_set_field(result, 0, (int64_t)(intptr_t)host);
+    yona_rt_adt_set_field(result, 1, (int64_t)port);
+    yona_rt_adt_set_field(result, 2, (int64_t)(intptr_t)path);
+    yona_rt_adt_set_heap_mask(result, 5); /* host and path are heap values */
     return result;
 }
 
@@ -2729,20 +2792,21 @@ int64_t yona_Std_Random__choice(int64_t* seq) {
     yona_random_init();
     int64_t len = seq[0];
     if (len <= 0) return 0;
-    return seq[1 + (int64_t)(rand() % len)];
+    return yona_rt_seq_get(seq, (int64_t)(rand() % len));
 }
 
 int64_t* yona_Std_Random__shuffle(int64_t* seq) {
     yona_random_init();
     int64_t len = seq[0];
     int64_t* result = yona_rt_seq_alloc(len);
-    memcpy(result + 1, seq + 1, len * sizeof(int64_t));
+    for (int64_t i = 0; i < len; i++)
+        yona_rt_seq_set(result, i, yona_rt_seq_get(seq, i));
     /* Fisher-Yates shuffle */
     for (int64_t i = len - 1; i > 0; i--) {
         int64_t j = (int64_t)(rand() % (i + 1));
-        int64_t tmp = result[1 + i];
-        result[1 + i] = result[1 + j];
-        result[1 + j] = tmp;
+        int64_t tmp = yona_rt_seq_get(result, i);
+        yona_rt_seq_set(result, i, yona_rt_seq_get(result, j));
+        yona_rt_seq_set(result, j, tmp);
     }
     return result;
 }
@@ -2929,7 +2993,7 @@ double yona_Std_FloatMath__pi(void)        { return 3.14159265358979323846; }
 /* Simple placeholder format: replace {} with arguments in order.
  * Takes a format string and a sequence of string arguments. */
 const char* yona_Std_Format__format(const char* fmt, int64_t* args) {
-    int64_t argc = args[0];
+    int64_t argc = yona_rt_seq_length(args);
     int64_t argi = 0;
     size_t flen = strlen(fmt);
 
@@ -2937,7 +3001,7 @@ const char* yona_Std_Format__format(const char* fmt, int64_t* args) {
     size_t out_size = 0;
     for (size_t i = 0; i < flen; i++) {
         if (fmt[i] == '{' && i + 1 < flen && fmt[i+1] == '}' && argi < argc) {
-            const char* arg = (const char*)(intptr_t)args[argi + 1];
+            const char* arg = (const char*)(intptr_t)yona_rt_seq_get(args, argi);
             out_size += strlen(arg);
             argi++;
             i++; /* skip } */
@@ -2952,7 +3016,7 @@ const char* yona_Std_Format__format(const char* fmt, int64_t* args) {
     size_t j = 0;
     for (size_t i = 0; i < flen; i++) {
         if (fmt[i] == '{' && i + 1 < flen && fmt[i+1] == '}' && argi < argc) {
-            const char* arg = (const char*)(intptr_t)args[argi + 1];
+            const char* arg = (const char*)(intptr_t)yona_rt_seq_get(args, argi);
             size_t alen = strlen(arg);
             memcpy(r + j, arg, alen);
             j += alen;
@@ -3096,7 +3160,8 @@ int64_t* yona_Std_List__tail(int64_t* seq) { return yona_rt_seq_tail(seq); }
 int64_t* yona_Std_List__reverse(int64_t* seq) {
     int64_t len = yona_rt_seq_length(seq);
     int64_t* r = yona_rt_seq_alloc(len);
-    for (int64_t i = 0; i < len; i++) r[i + 1] = yona_rt_seq_get(seq, len - 1 - i);
+    for (int64_t i = 0; i < len; i++)
+        yona_rt_seq_set(r, i, yona_rt_seq_get(seq, len - 1 - i));
     return r;
 }
 
@@ -3197,7 +3262,7 @@ int64_t* yona_Std_List__map(int64_t* fn, int64_t* seq) {
     int64_t* result = yona_rt_seq_alloc(len);
     for (int64_t i = 0; i < len; i++) {
         int64_t elem = yona_rt_seq_get(seq, i);
-        result[i + 1] = f(fn, elem);
+        yona_rt_seq_set(result, i, f(fn, elem));
     }
     return result;
 }
@@ -3211,7 +3276,7 @@ int64_t* yona_Std_List__filter(int64_t* fn, int64_t* seq) {
     for (int64_t i = 0; i < len; i++) {
         int64_t elem = yona_rt_seq_get(seq, i);
         if (f(fn, elem)) {
-            result[count + 1] = elem;
+            yona_rt_seq_set(result, count, elem);
             count++;
         }
     }

@@ -212,7 +212,7 @@ let x = 6 in "result is {(x * 7)}"        # "result is 42"
 "{a} + {b} = {(a + b)}"                   # "1 + 2 = 3"
 ```
 
-Simple variable references use `{name}`. For expressions with operators, wrap in parentheses: `{(expr)}`. Non-string values are auto-converted.
+Simple variable references use `{name}`. For expressions with operators, wrap in parentheses: `{(expr)}`. Non-string values are auto-converted. Empty braces (`{}`) remain literal for placeholder-based APIs such as `Std\Format.format`; use `{{` or `}}` for a literal brace next to interpolation.
 
 ### Zero-Argument Functions
 

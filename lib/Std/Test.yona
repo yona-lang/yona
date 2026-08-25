@@ -1,62 +1,95 @@
-## Simple test assertions — returns `(:pass, name)` or `(:fail, message)`.
+## Yona-native test cases, reports, and assertions.
 ##
-## Each assertion returns a symbol-tagged tuple so test runners can
-## collect results programmatically.
+## Test programs build a sequence of named `TestCase` values, call `run`, and
+## print `render report`. Assertions stay pure: failures are returned as data
+## so a suite runs every case and reports all failures in declaration order.
+##
+## ```yona
+## import testCase, check, equalBy, run, render from Std\Test,
+##        println from Std\IO
+## in
+## let intEqual a b = a == b,
+##     cases = [
+##         testCase "truth" (\_ -> check "true is accepted" true),
+##         testCase "comparison" (\_ -> equalBy "two equals two" intEqual 2 2)
+##     ]
+## in do
+##     println (render (run cases))
+##     0
+## end
+## ```
+##
+## The report contains one line per case followed by
+## `SUMMARY 2 passed, 0 failed`.
 module Std\Test
 
-export assertEqual, assertNotEqual, assertTrue, assertFalse, assertGreater, assertLess
+export type TestResult
+export type TestCase
+export type TestReport
+export pass, fail, check, equalBy, testCase, run, render
 
-## Asserts that `expected` equals `actual`.
-##
-## ```
-## assertEqual 42 42   # => (:pass, "assertEqual")
-## assertEqual 1 2     # => (:fail, "assertEqual: expected equal values")
-## ```
-assertEqual expected actual =
-    if expected == actual then (:pass, "assertEqual")
-    else (:fail, "assertEqual: expected equal values")
+## A single assertion result. `Pass` and `Fail` both retain a useful message.
+type TestResult = Pass String | Fail String
 
-## Asserts that `expected` does not equal `actual`.
-##
-## ```
-## assertNotEqual 1 2   # => (:pass, "assertNotEqual")
-## ```
-assertNotEqual expected actual =
-    if expected != actual then (:pass, "assertNotEqual")
-    else (:fail, "assertNotEqual: expected different values")
+## A named deferred assertion. The thunk is evaluated only by `run`.
+type TestCase = TestCase { name: String, thunk: (() -> TestResult) }
 
-## Asserts that `value` is true.
-##
-## ```
-## assertTrue (1 > 0)   # => (:pass, "assertTrue")
-## ```
-assertTrue value =
-    if value then (:pass, "assertTrue")
-    else (:fail, "assertTrue: expected true")
+## Aggregate counts and stable output lines in execution order.
+type TestReport = TestReport { passed: Int, failed: Int, lines: Seq String }
 
-## Asserts that `value` is false.
-##
-## ```
-## assertFalse (1 > 2)   # => (:pass, "assertFalse")
-## ```
-assertFalse value =
-    if value then (:fail, "assertFalse: expected false")
-    else (:pass, "assertFalse")
+## Construct a successful assertion result.
+pass : String -> TestResult
+pass message = Pass message
 
-## Asserts that `a > b`.
-##
-## ```
-## assertGreater 5 3   # => (:pass, "assertGreater")
-## ```
-assertGreater a b =
-    if a > b then (:pass, "assertGreater")
-    else (:fail, "assertGreater: expected first > second")
+## Construct a failed assertion result.
+fail : String -> TestResult
+fail message = Fail message
 
-## Asserts that `a < b`.
+## Pass when `condition` is true, otherwise fail with `message`.
+check : String -> Bool -> TestResult
+check message condition =
+    if condition then Pass message else Fail message
+
+## Compare `expected` and `actual` with an explicit equality predicate.
 ##
-## ```
-## assertLess 3 5   # => (:pass, "assertLess")
-## ```
-assertLess a b =
-    if a < b then (:pass, "assertLess")
-    else (:fail, "assertLess: expected first < second")
+## The caller supplies equality so opaque values, floats, byte arrays, and
+## user ADTs can choose the comparison contract appropriate to that API.
+equalBy : String -> (a -> a -> Bool) -> a -> a -> TestResult
+equalBy message equals expected actual =
+    if equals expected actual then Pass message else Fail message
+
+## Name a deferred assertion for inclusion in a suite.
+testCase : String -> (() -> TestResult) -> TestCase
+testCase name thunk = TestCase { name = name, thunk = thunk }
+
+## Execute all cases, retaining a stable line per case and all failures.
+run : Seq TestCase -> TestReport
+run cases = runCases cases 0 0 []
+
+runCases : Seq TestCase -> Int -> Int -> Seq String -> TestReport
+runCases cases passed failed lines =
+    import reverse from Std\List in
+    case cases of
+        [] -> TestReport { passed = passed, failed = failed, lines = reverse lines }
+        [TestCase { name = name, thunk = thunk } | rest] ->
+            case thunk () of
+                Pass _ -> runCases rest (passed + 1) failed (("PASS " ++ name) :: lines)
+                Fail message ->
+                    let reportLine = "FAIL " ++ name ++ ": " ++ message in
+                    runCases rest passed (failed + 1) (reportLine :: lines)
+            end
+    end
+
+## Render a report as stable line-oriented text suitable for fixtures and CI.
+render : TestReport -> String
+render report =
+    import join from Std\String, intToString from Std\Types in
+    case report of
+        TestReport { passed = passedCount, failed = failedCount, lines = reportLines } ->
+            let summary = "SUMMARY " ++ intToString passedCount ++ " passed, " ++
+                    intToString failedCount ++ " failed" in
+            case reportLines of
+                [] -> summary
+                _ -> join "\n" reportLines ++ "\n" ++ summary
+            end
+    end

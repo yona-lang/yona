@@ -1,6 +1,6 @@
 # Yona Standard Library API Reference
 
-413 public functions across 37 modules.
+414 public functions across 37 modules.
 
 | Module | Functions | Types | Description |
 |--------|-----------|-------|-------------|
@@ -36,7 +36,7 @@
 | [Std.Set](Set.md) | 9 | 0 | Set — persistent set backed by a Hash Array Mapped Trie (HAMT). |
 | [Std.String](String.md) | 27 | 0 | String -- string manipulation and conversion. |
 | [Std.Task](Task.md) | 1 | 0 | Task spawning for concurrent execution. |
-| [Std.Test](Test.md) | 6 | 0 | Simple test assertions — returns `(:pass, name)` or `(:fail, message)`. |
+| [Std.Test](Test.md) | 7 | 3 | Yona-native test cases, reports, and assertions. |
 | [Std.Time](Time.md) | 6 | 0 | Time -- timestamps, sleeping, and elapsed time measurement. |
 | [Std.Tuple](Tuple.md) | 9 | 0 | Operations on 2-tuples (pairs). |
 | [Std.Types](Types.md) | 5 | 0 | Types -- runtime type conversions. |

@@ -188,6 +188,19 @@ unique_ptr<compiler::types::Type> ParserImpl::parse_primary_type() {
         string type_name(peek().lexeme);
         advance();
 
+        // Type applications use juxtaposition: `Seq String`, `Option Int`,
+        // and `Linear FileHandle`.  Parse an argument at primary precedence
+        // so a following function arrow remains part of the outer signature.
+        unique_ptr<compiler::types::Type> type_argument;
+        if (check(TokenType::YIDENTIFIER) || check(TokenType::YLPAREN)) {
+            type_argument = parse_product_type();
+            if (!type_argument) {
+                error(ParseError::Type::INVALID_SYNTAX,
+                      "Expected type argument after '" + type_name + "'");
+                return nullptr;
+            }
+        }
+
         static const unordered_map<string, compiler::types::BuiltinType> builtin_types = {
             {"Bool", compiler::types::Bool},
             {"Byte", compiler::types::Byte},
@@ -212,12 +225,30 @@ unique_ptr<compiler::types::Type> ParserImpl::parse_primary_type() {
 
         auto it = builtin_types.find(type_name);
         if (it != builtin_types.end()) {
+            if (type_argument) {
+                error(ParseError::Type::INVALID_SYNTAX,
+                      "Built-in type '" + type_name + "' does not accept a type argument");
+                return nullptr;
+            }
             return make_unique<compiler::types::Type>(it->second);
+        }
+
+        if (type_name == "Seq" || type_name == "Set") {
+            if (!type_argument) {
+                return make_unique<compiler::types::Type>(
+                    type_name == "Seq" ? compiler::types::Seq : compiler::types::Set);
+            }
+            auto collection = make_shared<compiler::types::SingleItemCollectionType>();
+            collection->kind = type_name == "Seq"
+                ? compiler::types::SingleItemCollectionType::Seq
+                : compiler::types::SingleItemCollectionType::Set;
+            collection->valueType = *type_argument;
+            return make_unique<compiler::types::Type>(collection);
         }
 
         auto named_type = make_shared<compiler::types::NamedType>();
         named_type->name = type_name;
-        named_type->type = nullptr;
+        named_type->type = type_argument ? *type_argument : compiler::types::Type(nullptr);
         return make_unique<compiler::types::Type>(named_type);
     }
 

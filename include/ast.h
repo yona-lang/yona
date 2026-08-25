@@ -2058,8 +2058,11 @@ public:
 struct FieldType {
     string name;                         // "Int", "a", "Fn", etc.
     bool is_function_type = false;
+    bool is_tuple_type = false;
     vector<FieldType> param_types;       // function parameter types
     vector<FieldType> return_types;      // 0 or 1 element (vector avoids heap alloc)
+    vector<FieldType> tuple_types;       // tuple element types when is_tuple_type
+    vector<FieldType> type_arguments;    // named type application arguments
 
     static FieldType simple(string n) { FieldType ft; ft.name = std::move(n); return ft; }
     string to_string() const;

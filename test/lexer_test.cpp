@@ -84,6 +84,36 @@ TEST_CASE("StringLiterals") {
     });
 }
 
+TEST_CASE("Empty braces remain literal for formatting placeholders") {
+    LexerTest fixture;
+    fixture.TestTokenValues(R"("{}")", {
+        {TokenType::YSTRING, string("{}")}
+    });
+}
+
+TEST_CASE("Doubled braces escape literal braces") {
+    LexerTest fixture;
+    fixture.TestTokenValues(R"("{{value}}")", {
+        {TokenType::YSTRING, string("{value}")}
+    });
+}
+
+TEST_CASE("Brace escapes coexist with interpolation") {
+    Lexer lexer(R"("{{{name}}}")");
+    auto result = lexer.tokenize();
+
+    REQUIRE(result.has_value());
+    const auto& tokens = result.value();
+    REQUIRE(tokens.size() == 4);
+    CHECK(tokens[0].type == TokenType::YSTRING_PART);
+    CHECK(get<string>(tokens[0].value) == "{");
+    CHECK(tokens[1].type == TokenType::YIDENTIFIER);
+    CHECK(get<string_view>(tokens[1].value) == "name");
+    CHECK(tokens[2].type == TokenType::YSTRING);
+    CHECK(get<string>(tokens[2].value) == "}");
+    CHECK(tokens[3].type == TokenType::YEOF_TOKEN);
+}
+
 TEST_CASE("Identifiers") {
     LexerTest fixture;
     fixture.TestTokens("foo bar_baz x' _test", {

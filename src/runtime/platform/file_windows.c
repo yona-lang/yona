@@ -29,6 +29,8 @@ extern void* yona_rt_byte_array_from_string(const char* s);
 extern void yona_rt_rc_inc(void* ptr);
 extern void yona_rt_rc_dec(void* ptr);
 extern int64_t* yona_rt_seq_alloc(int64_t count);
+extern void yona_rt_seq_set(int64_t* seq, int64_t index, int64_t value);
+extern void yona_rt_seq_set_heap(int64_t* seq, int64_t flag);
 extern void* yona_rt_rc_alloc_string_len(size_t bytes, size_t str_len);
 extern void* rc_alloc(int64_t type_tag, size_t payload_bytes);
 
@@ -679,9 +681,10 @@ int64_t* yona_platform_list_dir(const char* path) {
 		size_t len = strlen(fd.cFileName);
 		char* name = (char*)yona_rt_rc_alloc_string(len + 1);
 		memcpy(name, fd.cFileName, len + 1);
-		seq[1 + i] = (int64_t)(intptr_t)name;
+		yona_rt_seq_set(seq, i, (int64_t)(intptr_t)name);
 		i++;
 	} while (FindNextFileA(h, &fd));
+	yona_rt_seq_set_heap(seq, 1);
 	FindClose(h);
 	return seq;
 }

@@ -392,20 +392,18 @@ Codegen::resolve_apply_function(const std::string& fn_name, const std::vector<Ty
 
 TypedValue Codegen::codegen_higher_order_call(const std::string& fn_name, const std::vector<TypedValue>& all_args) {
     auto var_it = named_values_.find(fn_name);
-    // Filter out Unit arguments (thunk calls: t () → call with 0 args)
+    // Keep Unit arguments. `f()` is syntax for applying the Unit value, and
+    // a closure such as `\_ -> ...` has one Unit-compatible parameter.  The
+    // old blanket removal emitted a call with too few ABI arguments.
     std::vector<LType*> arg_types;
     std::vector<Value*> vals;
     for (auto& a : all_args) {
-        if (a.type == CType::UNIT) continue; // skip unit args for thunk calls
         arg_types.push_back(a.val->getType());
         vals.push_back(a.val);
     }
-    // For return type inference, ignore the synthetic Unit arg that `f()`
-    // inserts at parse time — it doesn't reflect the callee's actual return.
-    CType first_nonunit = CType::INT;
-    for (auto& a : all_args) { if (a.type != CType::UNIT) { first_nonunit = a.type; break; } }
+    CType first_arg = all_args.empty() ? CType::INT : all_args.front().type;
     CType ret_ctype = (!var_it->second.subtypes.empty()) ? var_it->second.subtypes[0]
-                                                         : first_nonunit;
+                                                         : first_arg;
     auto ret_llvm = llvm_type(ret_ctype);
     auto var_val = var_it->second.val;
 
@@ -425,7 +423,6 @@ TypedValue Codegen::codegen_higher_order_call(const std::string& fn_name, const 
             std::vector<Value*> call_vals = {var_val}; // env = closure
             size_t param_idx = 1; // skip env param
             for (auto& a : all_args) {
-                if (a.type == CType::UNIT) continue;
                 Value* arg_val = a.val;
                 if (param_idx < known_fn->arg_size()) {
                     auto* expected = known_fn->getArg(param_idx)->getType();
@@ -545,7 +542,7 @@ TypedValue Codegen::codegen_higher_order_call(const std::string& fn_name, const 
             }
         }
 
-        // No args case (thunk: t ())
+        // Genuine zero-argument closure call.
         auto* fn_i64 = builder_->CreateLoad(i64_ty, current_closure, "closure_fn_i64");
         auto* fn_ptr_val = builder_->CreateIntToPtr(fn_i64, ptr_ty, "closure_fn_ptr");
         auto* thunk_ret_ty = llvm_type(ret_ctype);
@@ -596,13 +593,15 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
     }
     if (genfn_it != imports_.imported_sources.end()) {
         auto& ifs = genfn_it->second;
+        // Reparse in an isolated defining-module scope, with any private ADT
+        // constructors installed before parsing their expression syntax.
+        GenfnNameIsolation iso(*this, mangled);
+        install_private_genfn_ctors(mangled);
         auto reparsed = reparse_genfn(ifs.local_name, ifs.source_text);
         if (reparsed && !reparsed->functions.empty()) {
             auto* func_ast = reparsed->functions[0];
             reparsed->functions.clear();
             imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
-            GenfnNameIsolation iso(*this, mangled);
-            install_private_genfn_ctors(mangled);
             int errors_before = error_count_;
             register_sibling_genfns(mangled);
             codegen_function_def(func_ast, fn_name);
@@ -1386,12 +1385,17 @@ TypedValue Codegen::codegen_apply(ApplyExpr* node) {
             case CType::FLOAT_ARRAY: ctor_name = "TFloatArray"; break;
             case CType::SUM:         ctor_name = "TSum"; break;
             case CType::RECORD:      ctor_name = "TRecord"; break;
+            case CType::CHANNEL: {
+                ctor_name = "TAdt";
+                auto* str = builder_->CreateGlobalString("Channel", "type_adt_name");
+                return codegen_adt_construct("TAdt", {{str, CType::STRING}});
+            }
             case CType::ADT: {
                 // TAdt String — construct with the ADT type name as a String field
                 ctor_name = "TAdt";
                 std::string adt_name = !all_args[0].adt_type_name.empty()
                     ? all_args[0].adt_type_name : "Unknown";
-                auto* str = builder_->CreateGlobalStringPtr(adt_name, "type_adt_name");
+                auto* str = builder_->CreateGlobalString(adt_name, "type_adt_name");
                 std::vector<TypedValue> ctor_args;
                 ctor_args.push_back({str, CType::STRING});
                 return codegen_adt_construct("TAdt", ctor_args);

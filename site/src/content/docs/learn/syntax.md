@@ -146,10 +146,13 @@ Strings are written in double quotes and support the usual escapes
 Strings interpolate expressions in braces: `{name}` for a plain variable,
 `{(expr)}` — with parentheses — for anything containing operators or
 application. Non-string values are converted automatically.
+Empty braces (`{}`) remain ordinary text for formatting placeholders. Double
+a brace (`{{` or `}}`) when it must be literal next to an interpolation.
 
 ```yona
 let name = "World" in "Hello {name}!"   # => "Hello World!"
 let x = 6 in "result is {(x * 7)}"      # => "result is 42"
+let name = "Yona" in "{{{name}}}"       # => "{Yona}"
 ```
 
 ### Characters and booleans

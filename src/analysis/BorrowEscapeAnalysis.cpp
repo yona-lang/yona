@@ -7,7 +7,8 @@
 namespace yona::compiler::analysis {
 using namespace yona::ast;
 
-int count_identifier_refs(AstNode* node, const std::string& name) {
+static int count_identifier_refs_impl(AstNode* node, const std::string& name,
+                                      bool include_call_targets) {
     if (!node) return 0;
     auto ty = node->get_type();
 
@@ -16,73 +17,91 @@ int count_identifier_refs(AstNode* node, const std::string& name) {
 
     if (dynamic_cast<BinaryOpExpr*>(static_cast<AstNode*>(node))) {
         auto* b = static_cast<BinaryOpExpr*>(node);
-        return count_identifier_refs(b->left, name) + count_identifier_refs(b->right, name);
+        return count_identifier_refs_impl(b->left, name, include_call_targets)
+            + count_identifier_refs_impl(b->right, name, include_call_targets);
     }
 
     if (ty == AST_IF_EXPR) {
         auto* e = static_cast<IfExpr*>(node);
-        return count_identifier_refs(e->condition, name) + count_identifier_refs(e->thenExpr, name)
-            + count_identifier_refs(e->elseExpr, name);
+        return count_identifier_refs_impl(e->condition, name, include_call_targets)
+            + count_identifier_refs_impl(e->thenExpr, name, include_call_targets)
+            + count_identifier_refs_impl(e->elseExpr, name, include_call_targets);
     }
     if (ty == AST_LET_EXPR) {
         auto* e = static_cast<LetExpr*>(node);
         int c = 0;
         for (auto* a : e->aliases) {
             if (auto* va = dynamic_cast<ValueAlias*>(a)) {
-                c += count_identifier_refs(va->expr, name);
+                c += count_identifier_refs_impl(va->expr, name, include_call_targets);
                 if (va->identifier->name->value == name) return c;
             } else if (auto* la = dynamic_cast<LambdaAlias*>(a)) {
-                c += count_identifier_refs(la->lambda, name);
+                c += count_identifier_refs_impl(la->lambda, name, include_call_targets);
                 if (la->name->value == name) return c;
             }
         }
-        return c + count_identifier_refs(e->expr, name);
+        return c + count_identifier_refs_impl(e->expr, name, include_call_targets);
+    }
+    if (ty == AST_IMPORT_EXPR) {
+        // Imports only extend the lexical environment; ownership and last-use
+        // analysis must see through them to the wrapped expression.
+        return count_identifier_refs_impl(static_cast<ImportExpr*>(node)->expr,
+                                          name, include_call_targets);
     }
     if (ty == AST_CASE_EXPR) {
         auto* e = static_cast<CaseExpr*>(node);
-        int c = count_identifier_refs(e->expr, name);
+        int c = count_identifier_refs_impl(e->expr, name, include_call_targets);
         for (auto* clause : e->clauses)
-            c += count_identifier_refs(clause->body, name);
+            c += count_identifier_refs_impl(clause->body, name, include_call_targets);
         return c;
     }
     if (ty == AST_APPLY_EXPR) {
         auto* e = static_cast<ApplyExpr*>(node);
         int c = 0;
         if (auto* nc = dynamic_cast<NameCall*>(e->call)) {
-            c += (nc->name->value == name) ? 1 : 0;
+            c += include_call_targets && nc->name->value == name ? 1 : 0;
         } else if (auto* ec = dynamic_cast<ExprCall*>(e->call)) {
-            if (ec->expr) c += count_identifier_refs(ec->expr, name);
+            if (ec->expr)
+                c += count_identifier_refs_impl(ec->expr, name,
+                                                include_call_targets);
         }
         for (auto& arg : e->args) {
             if (std::holds_alternative<ExprNode*>(arg))
-                c += count_identifier_refs(std::get<ExprNode*>(arg), name);
+                c += count_identifier_refs_impl(std::get<ExprNode*>(arg), name,
+                                                include_call_targets);
             else
-                c += count_identifier_refs(std::get<ValueExpr*>(arg), name);
+                c += count_identifier_refs_impl(std::get<ValueExpr*>(arg), name,
+                                                include_call_targets);
         }
         return c;
     }
     if (ty == AST_TUPLE_EXPR) {
         auto* e = static_cast<TupleExpr*>(node);
         int c = 0;
-        for (auto* v : e->values) c += count_identifier_refs(v, name);
+        for (auto* v : e->values)
+            c += count_identifier_refs_impl(v, name, include_call_targets);
         return c;
     }
     if (ty == AST_VALUES_SEQUENCE_EXPR) {
         auto* e = static_cast<ValuesSequenceExpr*>(node);
         int c = 0;
-        for (auto* v : e->values) c += count_identifier_refs(v, name);
+        for (auto* v : e->values)
+            c += count_identifier_refs_impl(v, name, include_call_targets);
         return c;
     }
     if (ty == AST_SEQ_GENERATOR_EXPR) {
         auto* g = static_cast<SeqGeneratorExpr*>(node);
         auto* ext = static_cast<ValueCollectionExtractorExpr*>(g->collectionExtractor);
-        int c = count_identifier_refs(ext->collection, name);
+        int c = count_identifier_refs_impl(ext->collection, name,
+                                           include_call_targets);
         std::string var;
         if (auto* id = std::get_if<IdentifierExpr*>(&ext->expr))
             var = (*id)->name->value;
         if (var != name) {
-            c += count_identifier_refs(g->reducerExpr, name);
-            if (ext->condition) c += count_identifier_refs(ext->condition, name);
+            c += count_identifier_refs_impl(g->reducerExpr, name,
+                                            include_call_targets);
+            if (ext->condition)
+                c += count_identifier_refs_impl(ext->condition, name,
+                                                include_call_targets);
         }
         return c;
     }
@@ -98,16 +117,26 @@ int count_identifier_refs(AstNode* node, const std::string& name) {
         int c = 0;
         for (auto* body : f->bodies)
             if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body))
-                c += count_identifier_refs(bwg->expr, name);
+                c += count_identifier_refs_impl(bwg->expr, name,
+                                                include_call_targets);
         return c;
     }
     if (ty == AST_DO_EXPR) {
         auto* e = static_cast<DoExpr*>(node);
         int c = 0;
-        for (auto* s : e->steps) c += count_identifier_refs(s, name);
+        for (auto* s : e->steps)
+            c += count_identifier_refs_impl(s, name, include_call_targets);
         return c;
     }
     return 0;
+}
+
+int count_identifier_refs(AstNode* node, const std::string& name) {
+    return count_identifier_refs_impl(node, name, true);
+}
+
+int count_identifier_value_refs(AstNode* node, const std::string& name) {
+    return count_identifier_refs_impl(node, name, false);
 }
 
 bool heap_param_may_escape(AstNode* node, const std::string& name, bool is_return_position) {
@@ -154,6 +183,16 @@ bool heap_param_may_escape(AstNode* node, const std::string& name, bool is_retur
         return false;
     }
 
+    if (ty == AST_REMOVE_EXPR) {
+        // Set difference follows the Perceus callee-owns ABI for its left
+        // operand.  At this syntax-only stage the operand may still be
+        // polymorphic, so conservatively require ownership whenever the
+        // parameter is used on the left.  The right operand is borrowed.
+        auto* e = static_cast<RemoveExpr*>(node);
+        if (count_identifier_refs(e->left, name) > 0) return true;
+        return heap_param_may_escape(e->right, name, false);
+    }
+
     if (dynamic_cast<BinaryOpExpr*>(node)) {
         auto* b = static_cast<BinaryOpExpr*>(node);
         return heap_param_may_escape(b->left, name, false) || heap_param_may_escape(b->right, name, false);
@@ -179,6 +218,10 @@ bool heap_param_may_escape(AstNode* node, const std::string& name, bool is_retur
         }
         return heap_param_may_escape(e->expr, name, is_return_position);
     }
+
+    if (ty == AST_IMPORT_EXPR)
+        return heap_param_may_escape(static_cast<ImportExpr*>(node)->expr,
+                                     name, is_return_position);
 
     if (ty == AST_CASE_EXPR) {
         auto* e = static_cast<CaseExpr*>(node);

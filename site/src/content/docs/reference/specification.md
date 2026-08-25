@@ -169,10 +169,13 @@ effects require an order must use `do`.
 
 Within a string literal, `{name}` interpolates a variable and `{(expr)}`
 interpolates a parenthesized expression; non-string values are converted to
-their textual form:
+their textual form. An empty pair, `{}`, remains literal so it can be used by
+placeholder-based APIs such as `Std\Format.format`. Write `{{` or `}}` for a
+literal opening or closing brace next to interpolation:
 
 ```yona
 let x = 6 in "the answer is {(x * 7)}"    # "the answer is 42"
+let x = 42 in "{{{x}}}"                   # "{42}"
 ```
 
 ### 3.3 `do`

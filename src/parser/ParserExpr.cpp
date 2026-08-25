@@ -11,6 +11,7 @@ bool ParserImpl::could_be_argument(TokenType type) const {
         case TokenType::YINTEGER:
         case TokenType::YFLOAT:
         case TokenType::YSTRING:
+        case TokenType::YSTRING_PART:
         case TokenType::YCHARACTER:
         case TokenType::YBYTE:
         case TokenType::YTRUE:
@@ -34,6 +35,7 @@ bool ParserImpl::could_start_expr(TokenType type) const {
         case TokenType::YINTEGER:
         case TokenType::YFLOAT:
         case TokenType::YSTRING:
+        case TokenType::YSTRING_PART:
         case TokenType::YCHARACTER:
         case TokenType::YTRUE:
         case TokenType::YFALSE:

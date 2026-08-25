@@ -206,10 +206,11 @@ TEST_SUITE("Codegen IR") {
     auto ir = compile_to_ir("let foldl fn acc seq = case seq of [] -> acc; "
                             "[h|t] -> foldl fn (fn acc h) t end in "
                             "foldl (\\a b -> a + b) 0 [1,2,3]");
-    // fn is borrowed (not returned, not captured) → no rc_inc call
-    // instruction in the foldl function body. The declaration may
-    // still exist, so check for the "call" form specifically.
-    CHECK(!ir_contains(ir, "call void @yona_rt_rc_inc"));
+    auto foldl_body = ir_function_body(ir, "foldl");
+    REQUIRE(!foldl_body.empty());
+    // The top-level caller and runtime support may legitimately retain other
+    // heap values. The recursively forwarded closure itself remains borrowed.
+    CHECK(!ir_contains(foldl_body, "call void @yona_rt_rc_inc"));
   }
 
   TEST_CASE("Borrowed heap params are excluded from owned cleanup paths") {
@@ -369,8 +370,133 @@ TEST_CASE("print nested seq") {
         "[[1, 2], [3]]");
 }
 
+TEST_CASE("ADT patterns preserve nested tuple field and function types") {
+  REQUIRE(yona::test::link::ensure_runtime_objects());
+  auto module_root = yona::test::link::scratch_root() / "yona_adt_pattern_types";
+  fs::create_directories(module_root / "Test");
+
+  parser::Parser module_parser;
+  auto module_result = module_parser.parse_module(R"YT(
+module Test\AdtPatternTypes
+
+export runThunk, renderBox
+
+type Thunk = Thunk (() -> Int)
+type Box = Box (Int, Int, Seq String)
+
+runThunk : Unit -> Int
+runThunk _ =
+    case Thunk (\() -> 42) of
+        Thunk deferred -> deferred ()
+    end
+
+renderBox : Unit -> String
+renderBox _ =
+    import intToString from Std\Types in
+    case Box (42, 0, ["ignored"]) of
+        Box ((value, _, _)) -> intToString value
+    end
+)YT", "adt_pattern_types.yona");
+  REQUIRE(module_result.has_value());
+
+  DiagnosticEngine module_diag;
+  Codegen module_codegen("adt_pattern_types_module", &module_diag);
+  module_codegen.module_paths_.push_back(yona::test::lib_dir().string());
+  REQUIRE(module_codegen.compile_module(module_result.value().get()) != nullptr);
+  CHECK_FALSE(module_diag.has_errors());
+  auto module_object = yona::test::link::scratch_root() / "adt_pattern_types_module.o";
+  REQUIRE(module_codegen.emit_object_file(module_object.string()));
+  REQUIRE(module_codegen.emit_interface_file((module_root / "Test" / "AdtPatternTypes.yonai").string()));
+
+  parser::Parser expression_parser;
+  std::istringstream expression_stream(
+      "import runThunk, renderBox from Test\\AdtPatternTypes in "
+      "if runThunk () == 42 then renderBox () else \"wrong\"");
+  auto expression_result = expression_parser.parse_input(expression_stream);
+  REQUIRE(expression_result.node != nullptr);
+
+  DiagnosticEngine expression_diag;
+  Codegen expression_codegen("adt_pattern_types_expression", &expression_diag);
+  expression_codegen.module_paths_.push_back(module_root.string());
+  expression_codegen.module_paths_.push_back(yona::test::lib_dir().string());
+  REQUIRE(expression_codegen.compile(expression_result.node.get()) != nullptr);
+  CHECK_FALSE(expression_diag.has_errors());
+  auto expression_object = yona::test::link::scratch_root() / "adt_pattern_types_expression.o";
+  REQUIRE(expression_codegen.emit_object_file(expression_object.string()));
+
+  std::vector<fs::path> objects = {module_object, expression_object};
+  REQUIRE(yona::test::link::append_runtime_objects(objects));
+  auto executable = yona::test::link::scratch_root() /
+      ("adt_pattern_types" + yona::test::link::exe_suffix());
+  REQUIRE(yona::test::link::link_objs_to_exe(objects, executable));
+  CHECK(yona::test::link::popen_read_all(executable) == "42");
+}
+
+TEST_CASE("Imported GENFN source preserves private record constructor fields") {
+  REQUIRE(yona::test::link::ensure_runtime_objects());
+  auto module_root = yona::test::link::scratch_root() / "yona_private_record_genfn";
+  fs::create_directories(module_root / "Test");
+
+  parser::Parser module_parser;
+  auto module_result = module_parser.parse_module(R"YT(
+module Test\PrivateRecordGenfn
+
+export run
+
+type Holder = Holder { thunk: (() -> Int) }
+
+run : Unit -> Int
+run _ =
+    case Holder { thunk = \() -> 7 } of
+        Holder { thunk = fn } -> fn ()
+    end
+)YT", "private_record_genfn.yona");
+  REQUIRE(module_result.has_value());
+
+  Codegen module_codegen("private_record_genfn_module");
+  module_codegen.module_paths_.push_back(yona::test::lib_dir().string());
+  REQUIRE(module_codegen.compile_module(module_result.value().get()) != nullptr);
+  auto module_object = yona::test::link::scratch_root() / "private_record_genfn_module.o";
+  REQUIRE(module_codegen.emit_object_file(module_object.string()));
+  REQUIRE(module_codegen.emit_interface_file((module_root / "Test" / "PrivateRecordGenfn.yonai").string()));
+
+  parser::Parser expression_parser;
+  std::istringstream expression_stream("import run from Test\\PrivateRecordGenfn in run ()");
+  auto expression_result = expression_parser.parse_input(expression_stream);
+  REQUIRE(expression_result.node != nullptr);
+
+  DiagnosticEngine expression_diag;
+  Codegen expression_codegen("private_record_genfn_expression", &expression_diag);
+  expression_codegen.module_paths_.push_back(module_root.string());
+  expression_codegen.module_paths_.push_back(yona::test::lib_dir().string());
+  REQUIRE(expression_codegen.compile(expression_result.node.get()) != nullptr);
+  CHECK_FALSE(expression_diag.has_errors());
+  auto expression_object = yona::test::link::scratch_root() / "private_record_genfn_expression.o";
+  REQUIRE(expression_codegen.emit_object_file(expression_object.string()));
+
+  std::vector<fs::path> objects = {module_object, expression_object};
+  REQUIRE(yona::test::link::append_runtime_objects(objects));
+  auto executable = yona::test::link::scratch_root() /
+      ("private_record_genfn" + yona::test::link::exe_suffix());
+  REQUIRE(yona::test::link::link_objs_to_exe(objects, executable));
+  CHECK(yona::test::link::popen_read_all(executable) == "7");
+}
+
 TEST_CASE("print set of seq") {
   CHECK(compile_and_run("{[1, 2]}", nullptr, nullptr, "tc_print_set_of_seq") == "{[1, 2]}");
+}
+
+TEST_CASE("Set difference transfers its consumed left operand") {
+  auto ir = compile_to_ir(
+      "let difference left right = left -- right in difference {1, 2} {2}");
+  CHECK(ir_contains(ir, "call ptr @yona_rt_set_difference(ptr %left, ptr %right)"));
+  CHECK(ir_contains(ir, "call void @yona_rt_frame_transfer(ptr %left)"));
+  CHECK_FALSE(ir_contains(ir, "call void @yona_rt_rc_dec(ptr %set2)"));
+  CHECK(ir_contains(ir, "call void @yona_rt_rc_dec(ptr %set4)"));
+
+  CHECK(compile_and_run(
+            "let difference left right = left -- right in difference {1, 2} {2}",
+            nullptr, nullptr, "set_difference_transfer") == "{1}");
 }
 
 TEST_CASE("print dict of seq") {
@@ -815,6 +941,177 @@ greet name = "Hello " ++ name
     CHECK(result == "10"); // %g format: 10.0 prints as "10"
   }
 
+  TEST_CASE("Type signatures accept parameterized collection types") {
+    parser::Parser parser;
+    auto module_result = parser.parse_module(R"(
+module Test\TypedSeq
+
+export isEmpty
+
+isEmpty : Seq Int -> Bool
+isEmpty values = case values of
+    [] -> true
+    [_ | _] -> false
+end
+)", "typed_seq.yona");
+    REQUIRE(module_result.has_value());
+
+    DiagnosticEngine diag;
+    Codegen codegen("typed_seq", &diag);
+    auto module = codegen.compile_module(module_result.value().get());
+    REQUIRE(module != nullptr);
+    CHECK_FALSE(diag.has_errors());
+
+    auto interface_path = yona::test::link::scratch_root() / "TypedSeq.yonai";
+    REQUIRE(codegen.emit_interface_file(interface_path.string()));
+    const auto interface_text = read_file(interface_path);
+    CHECK(interface_text.find("FN yona_Test_TypedSeq__isEmpty 1 SEQ -> BOOL") !=
+          std::string::npos);
+  }
+
+  TEST_CASE("Std String join reads sequence elements after the runtime header") {
+    CHECK(compile_and_run(
+        R"(import join from Std\String in join "," ["alpha", "beta", "gamma"])" ,
+        nullptr, nullptr, "std_string_join_seq_header") == "alpha,beta,gamma");
+  }
+
+  TEST_CASE("Std Format reads string arguments after the sequence header") {
+    CHECK(compile_and_run(
+        R"(import format from Std\Format in format "{}" ["ok"])" ,
+        nullptr, nullptr, "std_format_string_seq_header") == "ok");
+  }
+
+  TEST_CASE("Std Format renders converted integer arguments") {
+    CHECK(compile_and_run(
+        R"(import format from Std\Format, intToString from Std\Types in
+format "answer: {}" [intToString 42])" ,
+        nullptr, nullptr, "std_format_integer") == "answer: 42");
+  }
+
+  TEST_CASE("Std Format replaces repeated placeholders in order") {
+    CHECK(compile_and_run(
+        R"(import format from Std\Format in format "{} + {} = {}" ["one", "two", "three"])" ,
+        nullptr, nullptr, "std_format_repeated_placeholders") ==
+        "one + two = three");
+  }
+
+  TEST_CASE("Std Test renders an empty report") {
+    CHECK(compile_and_run(
+        R"(import run, render from Std\Test in render (run []))",
+        nullptr, nullptr, "std_test_empty_report") ==
+        "SUMMARY 0 passed, 0 failed");
+  }
+
+  TEST_CASE("Std Test executes every case and renders its report") {
+    CHECK(compile_and_run(R"(
+import testCase, check, run, render from Std\Test in
+let cases = [
+    testCase "first" (\_ -> check "first passed" true),
+    testCase "second" (\_ -> check "second passed" true)
+]
+in render (run cases)
+)", nullptr, nullptr, "std_test_framework") ==
+        "PASS first\nPASS second\nSUMMARY 2 passed, 0 failed");
+  }
+
+  TEST_CASE("Imported annotated functions receive every application argument") {
+    namespace fs = std::filesystem;
+    REQUIRE(yona::test::link::ensure_runtime_objects());
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_annotated_arity";
+
+    parser::Parser module_parser;
+    auto module_result = module_parser.parse_module(R"(
+module Test\AnnotatedArity
+
+export select
+
+select : String -> Bool -> String
+select message condition = if condition then message else "no"
+)", "annotated_arity.yona");
+    REQUIRE(module_result.has_value());
+
+    Codegen module_codegen("annotated_arity_module");
+    REQUIRE(module_codegen.compile_module(module_result.value().get()) != nullptr);
+    fs::path module_object = yona::test::link::scratch_root() / "annotated_arity_module.o";
+    REQUIRE(module_codegen.emit_object_file(module_object.string()));
+    fs::create_directories(yona_lib / "Test");
+    REQUIRE(module_codegen.emit_interface_file((yona_lib / "Test" / "AnnotatedArity.yonai").string()));
+
+    parser::Parser expression_parser;
+    std::istringstream expression_source(
+        "import select from Test\\AnnotatedArity in "
+        "let invoke = \\_ -> select \"yes\" true in invoke ()");
+    auto expression_result = expression_parser.parse_input(expression_source);
+    REQUIRE(expression_result.node != nullptr);
+
+    Codegen expression_codegen("annotated_arity_expression");
+    expression_codegen.module_paths_.push_back(yona_lib.string());
+    REQUIRE(expression_codegen.compile(expression_result.node.get()) != nullptr);
+    fs::path expression_object = yona::test::link::scratch_root() / "annotated_arity_expression.o";
+    REQUIRE(expression_codegen.emit_object_file(expression_object.string()));
+
+    fs::path executable = yona::test::link::scratch_root() /
+        ("annotated_arity" + yona::test::link::exe_suffix());
+    std::vector<fs::path> objects = {module_object, expression_object};
+    REQUIRE(yona::test::link::append_runtime_objects(objects));
+    REQUIRE(yona::test::link::link_objs_to_exe(objects, executable));
+    CHECK(yona::test::link::popen_read_all(executable) == "yes");
+  }
+
+  TEST_CASE("Annotated ADT case functions heap-box non-recursive results") {
+    namespace fs = std::filesystem;
+    REQUIRE(yona::test::link::ensure_runtime_objects());
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_adt_case_result";
+
+    parser::Parser module_parser;
+    auto module_result = module_parser.parse_module(R"(
+module Test\AdtCaseResult
+
+export run, value
+export type Report
+
+type Report = Report { number: Int }
+
+run : Seq Int -> Report
+run values = case values of
+    [] -> Report { number = 0 }
+    [_ | rest] -> run rest
+end
+
+value : Report -> Int
+value report = case report of
+    Report { number = number } -> number
+end
+)", "adt_case_result.yona");
+    REQUIRE(module_result.has_value());
+
+    Codegen module_codegen("adt_case_result_module");
+    REQUIRE(module_codegen.compile_module(module_result.value().get()) != nullptr);
+    fs::path module_object = yona::test::link::scratch_root() / "adt_case_result_module.o";
+    REQUIRE(module_codegen.emit_object_file(module_object.string()));
+    fs::create_directories(yona_lib / "Test");
+    REQUIRE(module_codegen.emit_interface_file((yona_lib / "Test" / "AdtCaseResult.yonai").string()));
+
+    parser::Parser expression_parser;
+    std::istringstream expression_source(
+        "import run, value from Test\\AdtCaseResult in value (run [])");
+    auto expression_result = expression_parser.parse_input(expression_source);
+    REQUIRE(expression_result.node != nullptr);
+
+    Codegen expression_codegen("adt_case_result_expression");
+    expression_codegen.module_paths_.push_back(yona_lib.string());
+    REQUIRE(expression_codegen.compile(expression_result.node.get()) != nullptr);
+    fs::path expression_object = yona::test::link::scratch_root() / "adt_case_result_expression.o";
+    REQUIRE(expression_codegen.emit_object_file(expression_object.string()));
+
+    fs::path executable = yona::test::link::scratch_root() /
+        ("adt_case_result" + yona::test::link::exe_suffix());
+    std::vector<fs::path> objects = {module_object, expression_object};
+    REQUIRE(yona::test::link::append_runtime_objects(objects));
+    REQUIRE(yona::test::link::link_objs_to_exe(objects, executable));
+    CHECK(yona::test::link::popen_read_all(executable) == "0");
+  }
+
   TEST_CASE("Interface files preserve inferred borrow metadata") {
     namespace fs = std::filesystem;
     REQUIRE(yona::test::link::ensure_runtime_objects());
@@ -845,8 +1142,8 @@ returnSeq xs = xs
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
-    CHECK(yonai.find("FN yona_Test_BorrowMeta__ignoreSeq 1 ADT -> INT borrow 1") != string::npos);
-    CHECK(yonai.find("FN yona_Test_BorrowMeta__returnSeq 1 ADT -> ADT borrow") == string::npos);
+    CHECK(yonai.find("FN yona_Test_BorrowMeta__ignoreSeq 1 SEQ -> INT borrow 1") != string::npos);
+    CHECK(yonai.find("FN yona_Test_BorrowMeta__returnSeq 1 SEQ -> SEQ borrow") == string::npos);
 
     {
       parser::Parser p2;
@@ -898,6 +1195,55 @@ returnSeq xs = xs
     REQUIRE(yona::test::link::link_objs_to_exe(objs, exe_path));
 
     CHECK(yona::test::link::popen_read_all(exe_path) == "1");
+  }
+
+  TEST_CASE("Set difference owns its left parameter and borrows its right parameter") {
+    namespace fs = std::filesystem;
+    auto module_root = yona::test::link::scratch_root() / "yona_set_difference_borrow";
+    fs::create_directories(module_root / "Test");
+
+    parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\SetDifferenceBorrow
+
+export difference
+
+difference : Set Int -> Set Int -> Set Int
+difference left right = left -- right
+)", "set_difference_borrow.yona");
+    REQUIRE(result.has_value());
+
+    Codegen codegen("set_difference_borrow_module");
+    REQUIRE(codegen.compile_module(result.value().get()) != nullptr);
+    auto interface_path = module_root / "Test" / "SetDifferenceBorrow.yonai";
+    REQUIRE(codegen.emit_interface_file(interface_path.string()));
+
+    const auto interface_text = read_file(interface_path);
+    CHECK(interface_text.find(
+              "FN yona_Test_SetDifferenceBorrow__difference 2 SET SET -> SET borrow 01") !=
+          string::npos);
+  }
+
+  TEST_CASE("Import wrappers preserve owned parameter escape metadata") {
+    namespace fs = std::filesystem;
+    parser::Parser parser;
+    auto module_result = parser.parse_module(R"(
+module Test\ImportBorrowMeta
+
+export returnSeq
+
+returnSeq : Seq Int -> Seq Int
+returnSeq values = import identity from Prelude in values
+)", "import_borrow_meta.yona");
+    REQUIRE(module_result.has_value());
+
+    Codegen codegen("import_borrow_meta");
+    REQUIRE(codegen.compile_module(module_result.value().get()) != nullptr);
+    fs::path iface = yona::test::link::scratch_root() / "ImportBorrowMeta.yonai";
+    REQUIRE(codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("FN yona_Test_ImportBorrowMeta__returnSeq 1 SEQ -> SEQ borrow") == string::npos);
   }
 
   TEST_CASE("Interface NAT rows serialize FloatArray as FLOAT_ARRAY") {

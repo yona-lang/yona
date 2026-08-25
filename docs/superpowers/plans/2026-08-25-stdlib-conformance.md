@@ -30,19 +30,19 @@
 
 **Interfaces:**
 - Produces `TestResult = Pass String | Fail String`, `TestCase`, and `TestReport`.
-- Produces `pass`, `fail`, `check`, `equalBy`, `case`, `run`, and `render` from `Std\Test`.
+- Produces `pass`, `fail`, `check`, `equalBy`, `testCase`, `run`, and `render` from `Std\Test`.
 
-- [ ] **Step 1: Add the failing Yona framework fixture**
+- [x] **Step 1: Add the failing Yona framework fixture**
 
 Create `test/stdlib/framework/Test_test.yona`:
 
 ```yona
-import case, check, equalBy, run, render from Std\Test in
+import testCase, check, equalBy, run, render from Std\Test in
 let intEqual a b = a == b,
     cases = [
-        case "truth" (\_ -> check "true is accepted" true),
-        case "comparator" (\_ -> equalBy "two equals two" intEqual 2 2),
-        case "all cases run" (\_ -> check "later case ran" true)
+        testCase "truth" (\_ -> check "true is accepted" true),
+        testCase "comparator" (\_ -> equalBy "two equals two" intEqual 2 2),
+        testCase "all cases run" (\_ -> check "later case ran" true)
     ]
 in println (render (run cases))
 ```
@@ -56,13 +56,13 @@ PASS all cases run
 SUMMARY 3 passed, 0 failed
 ```
 
-- [ ] **Step 2: Verify red**
+- [x] **Step 2: Verify red**
 
 Run: `./out/build/x64-debug-linux/tests -tc='Fixture-based codegen tests' -sc=Test_test`
 
 Expected: the fixture is not discovered yet, and direct compilation fails because `Std\Test.case`/`run`/`render` do not exist.
 
-- [ ] **Step 3: Implement the exact `Std\Test` ADTs and combinators**
+- [x] **Step 3: Implement the exact `Std\Test` ADTs and combinators**
 
 Replace tuple/symbol results with:
 
@@ -76,12 +76,12 @@ fail message = Fail message
 check message value = if value then Pass message else Fail message
 equalBy message equals expected actual =
     if equals expected actual then Pass message else Fail message
-case name body = TestCase name body
+testCase name body = TestCase name body
 ```
 
 Implement `run` with `Std\List.foldl`: call every thunk exactly once, retain failures in declaration order, and return counts plus rendered failure details. Implement `render` with stable `PASS`, `FAIL`, and `SUMMARY` lines. Retain compatibility aliases only when they can be expressed using `check`/`equalBy`; otherwise remove the old assertion API because this is a breaking cleanup.
 
-- [ ] **Step 4: Make generated interface metadata match the new API**
+- [x] **Step 4: Make generated interface metadata match the new API**
 
 Compile `lib/Std/Test.yona` with `yonac`, replace `lib/Std/Test.yonai`, and run `python3 scripts/gendocs.py`.
 
@@ -166,10 +166,10 @@ For every pure module, add named tests for normal operation, empty/singleton
 input, boundary behavior, and composition. Examples that must appear:
 
 ```yona
-case "Option.map preserves None" (\_ -> check "None remains None" (map (\x -> x + 1) None == None))
-case "Result.flatMap keeps error" (\_ -> check "Err is unchanged" (isErr (flatMap (\x -> Ok (x + 1)) (Err "bad"))))
-case "Dict.put preserves old map" (\_ -> check "persistent update" (get "a" old == Some 1 && get "a" updated == Some 2))
-case "Set union deduplicates" (\_ -> check "one member" (size (union {1} {1}) == 1))
+testCase "Option.map preserves None" (\_ -> check "None remains None" (map (\x -> x + 1) None == None))
+testCase "Result.flatMap keeps error" (\_ -> check "Err is unchanged" (isErr (flatMap (\x -> Ok (x + 1)) (Err "bad"))))
+testCase "Dict.put preserves old map" (\_ -> check "persistent update" (get "a" old == Some 1 && get "a" updated == Some 2))
+testCase "Set union deduplicates" (\_ -> check "one member" (size (union {1} {1}) == 1))
 ```
 
 - [ ] **Step 2: Run each group before changing library code**

@@ -83,7 +83,8 @@ public:
 
     /// Register ADT definitions for constructor type inference.
     void register_adt(const std::string& type_name, const std::vector<std::string>& type_params,
-                       const std::vector<std::pair<std::string, int>>& constructors);
+                      const std::vector<std::pair<std::string, int>>& constructors,
+                      const std::vector<std::vector<ast::FieldType>>& field_types = {});
 
     /// Register a trait method (binds as polymorphic with constraint).
     void register_trait_method(const std::string& trait_name, const std::string& method_name,
@@ -204,11 +205,12 @@ private:
     /// Root environment with builtins.
     std::shared_ptr<TypeEnv> root_env_;
 
-    /// ADT constructor registry: constructor name → (ADT name, arity, type param names)
+    /// ADT constructor registry, including declared field shapes when known.
     struct ConstructorInfo {
         std::string adt_name;
         int arity;
         std::vector<std::string> type_params; ///< from the ADT definition
+        std::vector<ast::FieldType> field_types;
     };
     std::unordered_map<std::string, ConstructorInfo> constructor_registry_;
 

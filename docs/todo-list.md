@@ -2,13 +2,18 @@
 
 ## Bugs (open)
 
-The `in` terminator vs membership parse cluster (`nested_let`, `perform`/
-`handle` RHS, `stdlib_math`) is fixed — `stop_at_in` is now threaded through
-`let`, `perform` args, `raise`, and `with` the same way as `if`/`lambda`.
+No known functional bugs remain after the 2026-08-25 compiler/runtime closure
+pass. The fixes and their focused regressions are summarized under Completed
+Milestones.
 
-Fixed Phase 0 / platform / import-`LINEAR` / LinearityChecker `WithExpr` +
-`FunctionExpr` walk bugs, plus the 2026-08-21 `Std\Json.get` / nested-`try`
-fixes, are archived under Completed Milestones.
+## Build warnings
+
+- [ ] **Doctest 2.4.12 triggers a C++20 `<ciso646>` warning with Clang and
+  libstdc++ 16** — every test translation unit reports the warning from the
+  third-party `doctest.h` include chain. Project-owned LLVM deprecations,
+  incomplete enum switches, the nested-comment warning, and corrupt Ninja
+  dependency-log warning are fixed. Prefer upgrading doctest or carrying the
+  upstream compatibility fix; do not globally suppress preprocessor warnings.
 
 ## Current Snapshot
 
@@ -39,6 +44,22 @@ fixes, are archived under Completed Milestones.
 
 
 ## Active Priorities
+
+### Immediate: standard-library conformance suite
+
+Program of record:
+[2026-08-25-stdlib-conformance.md](./superpowers/plans/2026-08-25-stdlib-conformance.md).
+The manifest will enforce suite presence; unchecked rollout groups do not yet
+claim exhaustive coverage of every documented function.
+
+- [x] Pure-Yona `Std\Test` ADTs, functional assertions, deterministic reports,
+  empty/non-empty rendering, and the first framework fixture
+- [ ] Recursive `test/stdlib` fixture discovery plus a complete public-module
+  coverage manifest
+- [ ] Pure functions, values, persistent collections, and format contracts
+- [ ] Arrays, codecs, parsing, path, JSON, regex, types, and UTF-16 contracts
+- [ ] Portable file/process/time/random/channel/task/parallel/stream/log contracts
+- [ ] Capability-probed network, HTTP, and Vulkan/GPU contracts
 
 
 
@@ -313,6 +334,21 @@ with **async**, **task groups**, and **channels**, not compete with them.
 
 ## Completed Milestones (Condensed)
 
+- [x] **2026-08-25 compiler/runtime bug closure:** ADT field-shape typing and
+  actionable single-shot E0100 diagnostics; imported/private GENFN fallback;
+  parameterized signatures; recursive borrow/transfer inference; nested-case
+  dominance; canonical Seq access in Format/String/HTTP/listDir; heap-safe set
+  extraction and algebra; and consumed set-difference codegen. Focused parser,
+  typechecker, IR, runtime-RC, platform-source, and end-to-end regressions cover
+  every repaired path.
+- [x] `Std\Test.equalBy` has an explicit fully polymorphic contract in source,
+  GENFN metadata, generated API docs, and the public site; the framework fixture
+  exercises the same imported API with both `Int` and `String` comparators.
+- [x] **2026-08-25 build-warning cleanup:** migrated project code from
+  deprecated LLVM pointer/global-string/target APIs, completed enum switches,
+  fixed the test-helper nested-comment warning, and rebuilt corrupt Ninja
+  dependency metadata. The remaining doctest/libstdc++ warning is tracked under
+  Build warnings.
 - [x] Type-system safety series: #3 audit; #8 effect rows and `.yonai`
   propagation; #10 blocking E0500/E0600/E0601 plus E0602 leak diagnostics;
   #11 finite-ADT `--Wincomplete-patterns`; #6 opaque exports; and #7 typed-core

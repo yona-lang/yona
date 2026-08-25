@@ -393,8 +393,12 @@ TypedValue Codegen::codegen_remove(RemoveExpr* node) {
         return builder_->CreateIntToPtr(tv.val, ptr_ty);
     };
     if (left.type == CType::SET || right.type == CType::SET) {
-        return {builder_->CreateCall(rt_.set_difference_, {as_ptr(left), as_ptr(right)}, "set_diff"),
-                CType::SET, left.subtypes};
+        auto* result = builder_->CreateCall(rt_.set_difference_,
+                                             {as_ptr(left), as_ptr(right)},
+                                             "set_diff");
+        mark_transferred(left.val, TransferDomain::Map);
+        emit_frame_transfer(left.val);
+        return {result, CType::SET, left.subtypes};
     }
     return {builder_->CreateCall(rt_.seq_difference_, {as_ptr(left), as_ptr(right)}, "seq_diff"),
             CType::SEQ, left.subtypes};
@@ -549,8 +553,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr* node) {
 
             builder_->SetInsertPoint(loop_bb);
             // PHI for the growing seq (starts empty, grows via snoc)
-            auto* seq_phi = builder_->CreatePHI(
-                PointerType::get(i64_ty, 0), 2, "iter_seq");
+            auto* seq_phi = builder_->CreatePHI(ptr_ty, 2, "iter_seq");
             seq_phi->addIncoming(empty_seq, loop_bb->getSinglePredecessor()
                 ? loop_bb->getSinglePredecessor() : loop_bb);
 
@@ -558,8 +561,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr* node) {
             auto* closure_fn_gep = builder_->CreateGEP(i64_ty, next_fn,
                 {ConstantInt::get(i64_ty, 0)}, "closure_fn_gep");
             auto* closure_fn_raw = builder_->CreateLoad(i64_ty, closure_fn_gep, "closure_fn_raw");
-            auto* closure_fn = builder_->CreateIntToPtr(closure_fn_raw,
-                PointerType::get(llvm::FunctionType::get(i64_ty, {ptr_ty}, false), 0));
+            auto* closure_fn = builder_->CreateIntToPtr(closure_fn_raw, ptr_ty);
             auto* option_val = builder_->CreateCall(
                 llvm::FunctionType::get(i64_ty, {ptr_ty}, false),
                 closure_fn, {next_fn}, "iter_next_result");
@@ -598,8 +600,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr* node) {
 
             builder_->SetInsertPoint(done_bb);
             // Result is the final seq from the PHI
-            auto* result_phi = builder_->CreatePHI(
-                PointerType::get(i64_ty, 0), 2, "iter_result");
+            auto* result_phi = builder_->CreatePHI(ptr_ty, 2, "iter_result");
             for (auto it = llvm::pred_begin(done_bb); it != llvm::pred_end(done_bb); ++it)
                 result_phi->addIncoming(seq_phi, *it);
 
