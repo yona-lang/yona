@@ -1497,6 +1497,12 @@ static CType yona_type_to_ctype(const types::Type& t) {
         return CType::TUPLE;
     if (std::holds_alternative<std::shared_ptr<types::NamedType>>(t)) {
         auto& nt = std::get<std::shared_ptr<types::NamedType>>(t);
+        // Bare collection annotations (`Seq`, `Set`, `Dict`) parse as named
+        // types, while bracketed collection annotations use collection nodes.
+        // Both spellings must retain their collection C ABI in `.yonai`.
+        if (nt->name == "Seq") return CType::SEQ;
+        if (nt->name == "Set") return CType::SET;
+        if (nt->name == "Dict") return CType::DICT;
         if (nt->name == "Channel") return CType::CHANNEL;
         if (nt->name == "FloatArray") return CType::FLOAT_ARRAY;
         if (nt->name == "IntArray") return CType::INT_ARRAY;

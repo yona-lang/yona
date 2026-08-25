@@ -42,6 +42,11 @@
   instead of `-Wunhandled-effect`. Suppress with `--Wno-linear-leak`;
   `--Werror` still promotes them to errors.
 
+### Fixed
+- Module interfaces now serialize bare `Seq`, `Set`, and `Dict` extern type
+  annotations as collection ABI tags rather than as nominal ADTs. This keeps
+  imported `Std\Regex.find`, `findAll`, and `split` results usable as sequences.
+
 ## v0.1.6 (2026-08-21)
 
 ### Fixed

@@ -927,6 +927,33 @@ extern native nop : FloatArray -> Int = "yona_Test_NatFloatArr__nop"
     CHECK(yonai.find("NAT yona_Test_NatFloatArr__nop 1 INT -> INT") == string::npos);
   }
 
+  TEST_CASE("Interface extern Seq annotations serialize as SEQ") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_extern_seq";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p;
+    string mod_source = R"(
+module Test\ExternSeq
+
+export values
+
+extern values : String -> Seq = "yona_Test_ExternSeq__values"
+)";
+    auto mod_result = p.parse_module(mod_source, "extern_seq.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("extern_seq_mod");
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+    fs::path iface = yona_lib / "Test" / "ExternSeq.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("FN yona_Test_ExternSeq__values 1 STRING -> SEQ") != string::npos);
+    CHECK(yonai.find("ADT retadt Seq") == string::npos);
+  }
+
   TEST_CASE("Interface files preserve exported FN effect rows") {
     namespace fs = std::filesystem;
     REQUIRE(yona::test::link::ensure_runtime_objects());
@@ -1714,11 +1741,6 @@ TEST_SUITE("Regex") {
     SUBCASE("replaceAll") {
       CHECK(run_expr(R"YT(import replaceAll, compile from Std\Regex in replaceAll (compile "[0-9]+") "abc 42 def 99" "NUM")YT") == "abc NUM def NUM");
     }
-
-    // TODO: split/find return SEQ from C but module metadata infers ADT.
-    // The extern return type (Seq) doesn't propagate through the wrapper
-    // function's return type inference. Needs module_meta_ to use the
-    // extern declaration's type annotation instead of body inference.
 
     SUBCASE("find match") {
       CHECK(run_expr(R"YT(import find, compile from Std\Regex in
