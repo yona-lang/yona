@@ -1,0 +1,5 @@
+import openFile, closeFileHandle, Read from Std\File in
+case openFile "/tmp/yona_linear_file_case.txt" Read of
+    Linear h ->
+        let _ = closeFileHandle h in 7
+end

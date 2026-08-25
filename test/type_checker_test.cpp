@@ -2148,6 +2148,33 @@ TEST_CASE("TypeChecker: imported Linear return preserves its ADT payload") {
     fs::remove_all(dir, ec);
 }
 
+TEST_CASE("TypeChecker: imported Linear payloads remain distinct") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "yona_yonai_linear_payload_distinct";
+    fs::create_directories(dir / "Test");
+    {
+        std::ofstream out(dir / "Test" / "Resource.yonai");
+        out << "ADT FileHandle 1 0\n"
+               "ADT Process 1 0\n"
+               "FN yona_Test_Resource__open 1 UNIT -> LINEAR(ADT(FileHandle))\n"
+               "FN yona_Test_Resource__needProcess 1 LINEAR(ADT(Process)) -> UNIT\n";
+    }
+    yona::parser::Parser parser;
+    auto parsed = parser.parse_expression(
+        "import open, needProcess from Test\\Resource in needProcess (open ())", "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    checker.add_module_path(dir.string());
+    yona::compiler::codegen::Codegen codegen("linear_payload_distinct");
+    codegen.module_paths_.push_back(dir.string());
+    checker.set_import_type_source(&codegen.import_types_);
+    checker.check(parsed.value().get());
+    CHECK(diag.error_count() > 0);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
 TEST_CASE("LinearityChecker: wildcard openFile creates obligation") {
     CHECK(imported_linear_leaks(
         "import Std\\File in let h = openFile \"f\" Read in h"));

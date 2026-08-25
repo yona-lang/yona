@@ -60,4 +60,13 @@ TEST_CASE("unregistered zero-arity constructor still parses") {
     CHECK(cp->sub_patterns.empty());
 }
 
+TEST_CASE("invalid case binding recovers at the current arm boundary") {
+    Parser parser;
+    parser.register_prelude_constructors();
+    auto result = parser.parse_expression(
+        "case Linear 1 of Linear handle -> handle; _ -> 0 end", "<test>");
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().size() <= 2);
+}
+
 } // ImportedCtorParser

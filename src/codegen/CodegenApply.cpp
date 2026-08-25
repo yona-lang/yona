@@ -794,8 +794,15 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
         ext_result = builder_->CreateIntToPtr(ext_result,
             PointerType::get(*context_, 0), "adt_ptr_conv");
     }
-    TypedValue result{ext_result, ret_ctype};
-    if (ret_ctype == CType::ADT && meta_it != imports_.meta.end() &&
+    const bool return_linear = meta_it != imports_.meta.end() && meta_it->second.return_linear;
+    if (return_linear && ext_result->getType()->isIntegerTy())
+        ext_result = builder_->CreateIntToPtr(ext_result,
+            PointerType::get(*context_, 0), "linear_return_ptr");
+    TypedValue result{ext_result, return_linear ? CType::ADT : ret_ctype};
+    if (return_linear) {
+        result.adt_type_name = "Linear";
+        result.subtypes = {meta_it->second.return_type};
+    } else if (ret_ctype == CType::ADT && meta_it != imports_.meta.end() &&
         !meta_it->second.return_adt_name.empty())
         result.adt_type_name = meta_it->second.return_adt_name;
     return result;

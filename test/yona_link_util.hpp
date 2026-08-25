@@ -356,6 +356,7 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
         {"/tmp/yona_test_write.txt", "yona_test_write.txt"},
         {"/tmp/yona_test_file.txt", "yona_test_file.txt"},
         {"/tmp/yona_readexact_prereq.txt", "yona_readexact_prereq.txt"},
+        {"/tmp/yona_linear_file_case.txt", "yona_linear_file_case.txt"},
     };
     for (const auto& r : repl) {
         const std::string to = path_for_yona_literal(base / r.rel);

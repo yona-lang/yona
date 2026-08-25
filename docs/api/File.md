@@ -104,34 +104,36 @@ import fromSeq from Std\ByteArray in
 writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 ```
 
-### `openFile : String -> FileMode -> Linear a`
+### `openFile : String -> FileMode -> Linear FileHandle`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
-Returns a file descriptor (Int).
+It returns an owning `Linear FileHandle`, not a raw descriptor. Match the
+wrapper once to access the opaque handle and close it:
 
 ```yona
 import openFile, closeFileHandle from Std\File in
-let fd = openFile "data.txt" Read in
-closeFileHandle fd
+case openFile "data.txt" Read of
+    Linear file -> closeFileHandle file
+end
 ```
 
 The mode is a `FileMode` ADT (Prelude): `Read`, `Write`, `ReadWrite`, `Append`.
 
-### `closeFileHandle : Int -> ()`
+### `closeFileHandle : FileHandle -> ()`
 
-Close a file descriptor.
+Close a file handle.
 
-### `readBytes : Int -> Int -> ByteArray`
+### `readBytes : FileHandle -> Int -> ByteArray`
 
-Read up to `count` bytes from a file descriptor. Async (io_uring).
+Read up to `count` bytes from a file handle. Async (io_uring).
 Returns a byte buffer.
 
-### `writeBytes : Int -> Int -> Int`
+### `writeBytes : FileHandle -> ByteArray -> Int`
 
-Write bytes to a file descriptor. Async (io_uring).
+Write bytes to a file handle. Async (io_uring).
 Returns the number of bytes written.
 
-### `seek : Int -> Int -> a -> Int`
+### `seek : FileHandle -> Int -> Whence -> Int`
 
 Seek to a position in a file. `whence` is a `Whence` ADT (Prelude):
 `SeekSet` (absolute), `SeekCur` (relative to current), `SeekEnd` (relative to end).
@@ -139,23 +141,24 @@ Returns the new position.
 
 ```yona
 import openFile, seek, tell from Std\File in
-let fd = openFile "data.bin" "r" in
-seek fd 100 "set"
+case openFile "data.bin" Read of
+    Linear file -> seek file 100 SeekSet
+end
 ```
 
-### `tell : Int -> Int`
+### `tell : FileHandle -> Int`
 
-Returns the current position in a file descriptor.
+Returns the current position in a file handle.
 
-### `flush : Int -> Bool`
+### `flush : FileHandle -> Bool`
 
-Flush buffered writes for a file descriptor. Returns `true` on success.
+Flush buffered writes for a file handle. Returns `true` on success.
 
-### `truncate : Int -> Int -> Bool`
+### `truncate : FileHandle -> Int -> Bool`
 
 Truncate a file to the given length. Returns `true` on success.
 
-### `readChunks : Int -> Int -> Iterator a`
+### `readChunks : FileHandle -> Int -> Iterator ByteArray`
 
-Read data from a file descriptor in chunks of `chunkSize` bytes.
+Read data from a file handle in chunks of `chunkSize` bytes.
 Returns a handle for chunked reading.

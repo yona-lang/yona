@@ -313,6 +313,9 @@ TEST_SUITE("Codegen E2E") {
         auto p = yona::test::link::scratch_root() / "yona_iter_gen_lines_test.txt";
         std::ofstream(p) << "abcde\nfghij\nklmn\n";
         paths.push_back(p);
+        auto linear_file = yona::test::link::scratch_root() / "yona_linear_file_case.txt";
+        std::ofstream(linear_file) << "linear resource fixture\n";
+        paths.push_back(linear_file);
 #if !defined(__linux__)
         auto rel = yona::test::link::scratch_root() / "yona_stub_os_release.txt";
         std::ofstream(rel) << "NAME=Stub\nVERSION=1\n";

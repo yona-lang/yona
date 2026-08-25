@@ -82,12 +82,13 @@ let conn = Linear (tcpConnect "host" 8080) in
 ### Producer Functions
 
 These stdlib functions return `LINEAR` (or a tuple of Linear) in `.yonai`.
-The checker tracks them because their inferred type is `Linear _`, not
-because their names are hardcoded:
+The interface preserves the payload type — for example `openFile` returns
+`LINEAR(ADT(FileHandle))` — so the checker tracks an inferred
+`Linear FileHandle`, not a name-based special case:
 
 | Module | Function | Creates |
 |--------|----------|---------|
-| **File** | `openFile` | File handle |
+| **File** | `openFile` | `FileHandle` |
 | **Net** | `tcpConnect` | Socket handle |
 | **Net** | `tcpListen` | Server socket |
 | **Net** | `tcpAccept` | Client socket |

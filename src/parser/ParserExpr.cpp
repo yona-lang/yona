@@ -1037,7 +1037,7 @@ unique_ptr<ExprNode> ParserImpl::parse_case_expr() {
 
     size_t last_pos = current_;
     while (!check(TokenType::YEND) && !is_at_end()) {
-        skip_newlines();
+        while (check(TokenType::YNEWLINE) || check(TokenType::YSEMICOLON)) advance();
         if (check(TokenType::YEND)) break;
         auto clause = parse_case_clause();
         if (clause) clauses.push_back(clause.release());
@@ -1059,7 +1059,17 @@ unique_ptr<CaseClause> ParserImpl::parse_case_clause() {
     auto pattern = parse_pattern();
 
     if (!pattern) {
-        error(ParseError::Type::INVALID_PATTERN, "Expected pattern in case clause");
+        // parse_pattern already reported the primary error. Consume the rest
+        // of this malformed arm so the outer case loop does not reinterpret
+        // its arrow/body as several more case patterns.
+        while (!is_at_end() && !check(TokenType::YARROW) &&
+               !check(TokenType::YNEWLINE) && !check(TokenType::YSEMICOLON) &&
+               !check(TokenType::YEND))
+            advance();
+        if (match(TokenType::YARROW))
+            while (!is_at_end() && !check(TokenType::YNEWLINE) &&
+                   !check(TokenType::YSEMICOLON) && !check(TokenType::YEND))
+                advance();
         return nullptr;
     }
 

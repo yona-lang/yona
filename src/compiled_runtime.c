@@ -2238,13 +2238,16 @@ int64_t yona_Std_File__writeFileBytes(const char* path, void* bytes) {
 
 /* ===== Std\File — handle-based binary I/O ===== */
 
-/* Helper: extract fd from FileHandle ADT (passed as i64 pointer-as-int) */
+/* Helper: extract fd from FileHandle or its owning Linear wrapper.
+ * Linear is an ADT with one heap field, so its field 0 points at FileHandle. */
 static int fh_fd(int64_t handle_i64) {
     int64_t* handle = (int64_t*)(intptr_t)handle_i64;
+    if (handle && handle[1] == 1 && (handle[2] & 1) != 0)
+        handle = (int64_t*)(intptr_t)handle[3];
     return (int)handle[3]; /* ADT_HDR_SIZE=3, field 0 = fd */
 }
 
-/* openFile: open file and return FileHandle ADT wrapping the fd.
+/* openFile: open file and return Linear(FileHandle) wrapping the fd.
  * mode is a FileMode ADT: Read=0, Write=1, ReadWrite=2, Append=3.
  * Returns FileHandle ADT: [tag=0, num_fields=1, heap_mask=0, fd] */
 int64_t yona_Std_File__openFile(const char* path, int64_t mode_i64) {
@@ -2266,7 +2269,13 @@ int64_t yona_Std_File__openFile(const char* path, int64_t mode_i64) {
     adt[1] = 1;         /* num_fields */
     adt[2] = 0;         /* heap_mask = 0 (fd is not heap) */
     adt[3] = (int64_t)fd;
-    return (int64_t)(intptr_t)adt;
+    /* Linear owns the FileHandle pointer through its heap mask. */
+    int64_t* linear = (int64_t*)rc_alloc(RC_TYPE_ADT, 4 * sizeof(int64_t));
+    linear[0] = 0;      /* tag = Linear */
+    linear[1] = 1;
+    linear[2] = 1;      /* field 0 is heap-owned */
+    linear[3] = (int64_t)(intptr_t)adt;
+    return (int64_t)(intptr_t)linear;
 }
 
 /* closeFileHandle: extract fd from FileHandle ADT and close it */

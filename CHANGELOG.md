@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- `Std\File.openFile` now materializes the documented `Linear FileHandle`
+  wrapper at runtime. Imported calls can be consumed with `case Linear file ->
+  …`; the interface retains the nested payload as `LINEAR(ADT(FileHandle))`.
 - `export type T opaque` exports an ADT's nominal type without exposing its
   constructors. Public smart constructors and observers remain callable,
   including generic exports that use the hidden representation internally.
@@ -19,6 +22,9 @@
   and rejects unproven direct or mutual recursion with E0203.
 
 ### Changed
+- Parser recovery after an invalid case-pattern binding now skips the malformed
+  arm rather than emitting repeated follow-on E0301 diagnostics for its arrow
+  and body.
 - Repeated `yonac -I <path>` options now each consume one module directory,
   rather than swallowing the input source as another include path.
 - `yonac --require-effect-free` establishes the #5 effect-freedom gate: it

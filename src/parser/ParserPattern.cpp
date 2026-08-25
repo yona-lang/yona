@@ -282,12 +282,13 @@ unique_ptr<PatternNode> ParserImpl::parse_pattern_primary() {
             if (ctor_it != constructor_registry_.end()) {
                 for (int j = 0; j < ctor_it->second.arity; j++) {
                     auto sub = parse_pattern_primary();
-                    if (sub) sub_pats.push_back(sub.release());
+                    if (!sub) return nullptr;
+                    sub_pats.push_back(sub.release());
                 }
             } else {
                 while (pattern_start()) {
                     auto sub = parse_pattern_primary();
-                    if (!sub) break;
+                    if (!sub) return nullptr;
                     sub_pats.push_back(sub.release());
                 }
             }

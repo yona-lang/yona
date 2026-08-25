@@ -351,7 +351,10 @@ bool Codegen::emit_interface_file(const std::string& path) {
             out << "LINEAR(" << (meta.return_type_descriptor.empty()
                 ? interface_type(printed_ret, meta.return_adt_name) : meta.return_type_descriptor) << ")";
         } else {
-            out << (meta.return_type_descriptor.empty()
+            // Async/native rows store `PROMISE` as their ABI return type, but
+            // their interface spelling is the promised inner value. A
+            // descriptor for the ABI return must not replace that row.
+            out << ((is_promise_row || meta.return_type_descriptor.empty())
                 ? interface_type(printed_ret, meta.return_adt_name) : meta.return_type_descriptor);
             if (!is_promise_row && meta.return_type == CType::ADT && !meta.return_adt_name.empty())
                 out << " retadt " << meta.return_adt_name;

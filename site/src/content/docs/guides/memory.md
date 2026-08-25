@@ -180,7 +180,8 @@ end
 ### Which stdlib values are linear
 
 Resource constructors return `Linear`-wrapped handles, recorded in their
-module interfaces: `openFile` (file handles), `tcpConnect` / `tcpListen` /
+module interfaces. For example, `openFile` returns `Linear FileHandle`, while
+`tcpConnect` / `tcpListen` /
 `tcpAccept` / `udpBind` (sockets), `Std\Process.spawn` (process handles),
 and `Std\Channel.channel`, which returns a tuple of two linear endpoints —
 `(Linear (Sender a), Linear (Receiver a))`.

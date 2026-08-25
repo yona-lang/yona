@@ -29,24 +29,24 @@
 - Produces recursive `.yonai` type descriptors such as `LINEAR(ADT(FileHandle))`.
 - Produces `ImportedFnSig` payload descriptors used to construct `Linear FileHandle`, not `Linear _`.
 
-- [ ] **Step 1: Write failing interface round-trip tests**
+- [x] **Step 1: Write failing interface round-trip tests**
 
 Add an interface fixture with a function returning `Linear FileHandle`; assert
 that import inference rejects passing it where `Linear Process` is required.
 
-- [ ] **Step 2: Add recursive descriptor serialization and parsing**
+- [x] **Step 2: Add recursive descriptor serialization and parsing**
 
 Replace marker-only `LINEAR` handling with recursive `LINEAR(...)`, `ADT(...)`,
 and `TUPLE(...)` descriptors. Keep parsing legacy bare `LINEAR` as
 `LINEAR(INT)` while checked-in interfaces migrate.
 
-- [ ] **Step 3: Construct precise imported MonoTypes**
+- [x] **Step 3: Construct precise imported MonoTypes**
 
 Extend `ModuleFunctionMeta` and `ImportedFnSig` with parameter/return payload
 descriptors; make `mono_from_import_sig` map `ADT(FileHandle)` to the named
 ADT inside `Linear`.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `cmake --build --preset build-debug-linux --target tests && ./out/build/x64-debug-linux/tests -tc='*yonai*|*LinearityChecker*'`
 
