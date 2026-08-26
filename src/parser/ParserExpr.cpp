@@ -74,8 +74,8 @@ unique_ptr<ExprNode> ParserImpl::parse_juxtaposition_apply(unique_ptr<ExprNode> 
     args.push_back(arg.release());
 
     if (auto id = dynamic_cast<IdentifierExpr*>(func.get())) {
-        auto name_copy = new NameExpr(loc, id->name->value);
-        auto name_call = new NameCall(loc, name_copy);
+        auto name_copy = new NameExpr(id->source_context, id->name->value);
+        auto name_call = new NameCall(id->source_context, name_copy);
         return make_unique<ApplyExpr>(loc, name_call, args);
     } else {
         auto expr_call = new ExprCall(loc, func.release());
@@ -735,8 +735,8 @@ unique_ptr<ExprNode> ParserImpl::parse_infix_expr(unique_ptr<ExprNode> left, Pre
             CallExpr* call_expr = nullptr;
 
             if (auto id = dynamic_cast<IdentifierExpr*>(left.get())) {
-                auto name_copy = new NameExpr(loc, id->name->value);
-                call_expr = new NameCall(loc, name_copy);
+                auto name_copy = new NameExpr(id->source_context, id->name->value);
+                call_expr = new NameCall(id->source_context, name_copy);
             } else {
                 call_expr = new ExprCall(loc, left.release());
             }

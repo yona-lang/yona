@@ -251,6 +251,33 @@ run _ = measure "x"
     CHECK(actions[0].get("command").get("arguments").as_array().at(0).as_string() == "E0106");
 }
 
+TEST_CASE("LSP imported interface contract preserves UTF-16 navigation") {
+    Analysis a;
+    a.set_module_paths({"lib"});
+    const std::string source =
+        "import identity from Prelude in let marker = \"\xF0\x9F\x98\x80\" in identity 2";
+    a.analyze("file:///tmp/imported-trait.yona", source);
+
+    CHECK(a.diagnostics().empty());
+    bool has_compare_completion = false;
+    for (const auto& item : a.completions(Position{0, 0}))
+        has_compare_completion = has_compare_completion || item.get("label").as_string() == "identity";
+    CHECK(has_compare_completion);
+    CHECK(a.hover(offset_to_position(source, source.find("identity"))).has_value());
+    const auto use = offset_to_position(source, source.rfind("identity"));
+    CHECK(use.line == 0);
+    CHECK(use.character > 32); // The preceding emoji occupies two UTF-16 code units.
+    CHECK(a.hover(use).has_value());
+    auto definition = a.definition(use);
+    CHECK(definition.size() == 1);
+    if (!definition.empty())
+        CHECK(definition[0].uri.find("Prelude") != std::string::npos);
+    auto signature = a.signature_help(use);
+    REQUIRE(signature);
+    CHECK(signature->get("signatures").as_array().at(0).get("label").as_string().find("identity") !=
+          std::string::npos);
+}
+
 TEST_CASE("Server initialize and hover") {
     Server srv;
     RpcMessage init;
