@@ -5,6 +5,19 @@ description: Syntax highlighting and semantic features for Yona in VS Code and o
 
 Yona ships a TextMate grammar and a language server named **`yls`**.
 
+## Zed
+
+Install the **Yona** extension from Zed's Extensions panel, then install the
+Yona toolchain so `yls` is on `PATH`. The extension starts `yls --stdio` and
+uses the official Tree-sitter grammar. To select a particular server binary:
+
+```json
+{ "lsp": { "yls": { "binary": { "path": "/absolute/path/to/yls" } } } }
+```
+
+The marketplace submission is tracked at
+https://github.com/zed-industries/extensions/pull/7348 until Zed merges it.
+
 ## VS Code / Cursor
 
 The extension lives in the compiler repository at `editors/vscode`.

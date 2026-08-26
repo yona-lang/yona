@@ -10,9 +10,10 @@
 **Architecture:** Extend the editor-neutral typed occurrence model with a
 stable semantic identity and trait metadata, then make existing LSP queries
 consume it. Keep VS Code and Zed transport-only clients. Zed requires a
-Tree-sitter grammar, so the repository will ship a small, generated grammar at
-the repository root (the public grammar repository is this repository), while
-the existing TextMate grammar remains the VS Code/site syntax highlighter.
+Tree-sitter grammar, so the implementation will publish a dedicated
+`yona-lang/tree-sitter-yona` grammar repository and a dedicated
+`yona-lang/zed-yona` extension repository, while the existing TextMate grammar
+remains the VS Code/site syntax highlighter.
 
 **Tech Stack:** C++23, existing parser/typechecker, doctest, LSP 3.17,
 Tree-sitter, Rust/WASI Zed Extension API, TypeScript, CMake/Ninja, Python 3.
@@ -38,11 +39,8 @@ include/typed_core/Query.h             # semantic identity + trait relationships
 src/lsp/Analysis.cpp                   # trait-aware index and query behavior
 src/lsp/Server.cpp                     # semantic-token legend/capabilities
 test/lsp_test.cpp                      # protocol-level trait regressions
-grammar.js                             # root Tree-sitter grammar used by Zed
-src/parser.c                           # generated Tree-sitter parser
-queries/{highlights,brackets,outline,indents}.scm
-test/tree-sitter/*.yona                # grammar corpus fixtures
-editors/zed/{extension.toml,Cargo.toml,src/lib.rs,languages/yona/*}
+editors/tree-sitter-yona/              # publishable Tree-sitter grammar source
+editors/zed/                           # publishable Zed extension source
 scripts/check-zed-extension.py         # manifest/grammar/discovery package smoke
 .github/workflows/cmake-multi-platform.yml
 docs/superpowers/specs/2026-08-26-trait-lsp-zed-design.md
@@ -209,8 +207,8 @@ incomplete buffers preserve the same identity and UTF-16 ranges.
 - Create: `scripts/check-zed-extension.py`
 - Modify: `.github/workflows/cmake-multi-platform.yml`
 
-**Consumes:** the root repository's pinned commit as the Zed Tree-sitter
-grammar repository and `yls --stdio` as the server command.
+**Consumes:** the pinned `yona-lang/tree-sitter-yona` revision and `yls --stdio`
+as the server command.
 
 **Produces:** a locally installable/publishable Zed extension with deterministic
 server discovery: configured `YONA_LSP_PATH`, `yls` in `PATH`, then
@@ -243,8 +241,8 @@ server discovery: configured `YONA_LSP_PATH`, `yls` in `PATH`, then
 
 - [ ] **Step 4: Implement the Zed manifest and Rust host.**
 
-  Use this exact manifest shape, replacing `GRAMMAR_REV` with the commit that
-  contains the grammar:
+  Use this exact manifest shape, replacing `GRAMMAR_REV` with the published
+  grammar commit:
 
   ```toml
   id = "yona"
@@ -253,10 +251,10 @@ server discovery: configured `YONA_LSP_PATH`, `yls` in `PATH`, then
   schema_version = 1
   authors = ["Yona contributors"]
   description = "Yona language support powered by yls"
-  repository = "https://github.com/yona-lang/yona"
+  repository = "https://github.com/yona-lang/zed-yona"
 
   [grammars.yona]
-  repository = "https://github.com/yona-lang/yona"
+  repository = "https://github.com/yona-lang/tree-sitter-yona"
   rev = "GRAMMAR_REV"
 
   [language_servers.yls]
@@ -345,8 +343,8 @@ with the finished roadmap item removed.
   all requested documentation, roadmap, and changelog records.
 - **Corrected design constraint:** Zed cannot consume a TextMate grammar;
   its documented requirement is a Tree-sitter grammar. The plan therefore
-  uses the existing public Yona repository as the grammar repository and
-  preserves TextMate only for VS Code/site highlighting.
+  uses a dedicated public Tree-sitter grammar repository and preserves
+  TextMate only for VS Code/site highlighting.
 - **No placeholders:** every created artifact, interface, test target, and
   verification command is named. `GRAMMAR_REV` is resolved only after the
   grammar commit exists, so the checked-in manifest receives an immutable

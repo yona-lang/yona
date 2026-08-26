@@ -6,8 +6,8 @@
 
 Make Yona's foundational trait system fully visible through the editor-neutral
 `yls` language server, preserve VS Code as a thin `yls --stdio` client, and
-ship a first-class Zed extension that uses the same server and canonical
-TextMate grammar.
+ship a first-class Zed extension that uses the same server and a dedicated
+Tree-sitter grammar.
 
 ## Scope
 
@@ -55,10 +55,11 @@ Yona traits or construct diagnostics. Its tests assert capability negotiation,
 server discovery, grammar synchronization, and forwarding of the new semantic
 features.
 
-`editors/zed` is a standalone Zed extension package. It declares Yona file
-types, uses the generated/canonical grammar, launches `yls --stdio`, exposes a
-configurable server path, and supplies a deterministic fallback discovery
-order: configured path, `PATH`, then `$YONA_HOME/bin/yls`. Its manifest and
+`yona-lang/tree-sitter-yona` is the standalone parser and query repository
+required by Zed. `yona-lang/zed-yona` is the standalone Zed extension package.
+It declares Yona file types, pins the grammar repository revision, launches
+`yls --stdio`, exposes a configurable server path, and supplies deterministic
+discovery: configured Zed `lsp.yls.binary.path`, then `PATH`. Its manifest and
 CI checks validate the package structure without requiring a running GUI.
 
 ## Testing

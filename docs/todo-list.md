@@ -335,7 +335,7 @@ with **async**, **task groups**, and **channels**, not compete with them.
   `Std\Json.get` / `asString` / `asInt`. Remaining: Yona rewrite of `yls`
   as the editor default. Windows `yls-yona` stdio smoke (2026-08-21):
   `readExact`/`writeBytes` now `_setmode` CRT 0/1/2 to binary.
-- [ ] **Foundational-trait LSP parity and first-class VS Code + Zed support** —
+- [x] **Foundational-trait LSP parity and first-class VS Code + Zed support** —
   audit `yls` against `Eq`, `Ord`, `Hash`, `Show`, collection/algebra traits,
   witness-directed `From` / `TryFrom` / `Parse`, `Send` / `Shareable`, and the
   `Ordering`, conversion-error, and parsing-error ADTs. Add typed hover and
@@ -345,9 +345,11 @@ with **async**, **task groups**, and **channels**, not compete with them.
   and code actions. Cover source plus imported `.yonai` contracts, incomplete
   buffers, UTF-16 ranges, and incremental edits with protocol-level tests.
   Keep `editors/vscode` as a thin, fully tested `yls --stdio` client and add a
-  first-class `editors/zed` extension using the same server and canonical
-  TextMate grammar, with binary discovery/settings, packaging or registry
-  metadata, CI smoke/package checks, and synchronized editor documentation.
+  first-class `editors/zed` extension using the same server and dedicated
+  Tree-sitter grammar, with binary discovery/settings, package smoke checks,
+  and synchronized editor documentation. Published 2026-08-26:
+  `yona-lang/tree-sitter-yona`, `yona-lang/zed-yona`; registry PR #7348 is
+  awaiting Zed review.
 - [ ] **Documentation extraction / generation (think first, don't scrape).** Public Learn/Guides/Reference in `site/src/content/docs/` stay handwritten. `scripts/gendocs.py` is a regex walk of `lib/Std/*.yona` `##` comments and misses `.yonai`/C modules, types, effects, and exports. Design a compiler-aware extractor (`yonac --emit-docs` or successor) so API reference cannot drift from source; until then, keep `##` comments + handwritten site pages updated in the same change (see `keep-docs-up-to-date`).
 
 

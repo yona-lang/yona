@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- Trait-aware `yls` symbols, navigation, completion, semantic tokens, and
+  safe instance-explanation actions. The public `tree-sitter-yona` grammar
+  and `zed-yona` extension provide first-class Zed support backed by the same
+  `yls --stdio` server as VS Code.
 - The Prelude now provides coherent foundational `Eq`, `Ord`, `Hash`, `Show`,
   `Array`, `Sized`, `Iterable`, `Foldable`, `Semigroup`, `Monoid`, `From`,
   `TryFrom`, `Parse`, `Send`, and `Shareable` traits. Operators dispatch

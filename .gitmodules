@@ -1,0 +1,6 @@
+[submodule "editors/tree-sitter-yona"]
+	path = editors/tree-sitter-yona
+	url = https://github.com/yona-lang/tree-sitter-yona.git
+[submodule "editors/zed"]
+	path = editors/zed
+	url = https://github.com/yona-lang/zed-yona.git
