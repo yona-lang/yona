@@ -974,6 +974,7 @@ void Analysis::analyze(std::string uri, std::string text) {
                 impl_->checker->check_module(static_cast<ast::ModuleDecl*>(root));
             else
                 impl_->checker->check(root);
+            impl_->checker->solve_constraints();
             compiler::typechecker::RefinementChecker refine(impl_->diag, impl_->checker.get());
             refine.check(root);
             compiler::typechecker::LinearityChecker lin(impl_->diag, impl_->checker.get());
@@ -1037,7 +1038,10 @@ std::vector<typed_core::Location> Analysis::definition(Position pos) const {
     auto local_defs = [&](const std::string& name, const std::string& origin) {
         std::vector<typed_core::Location> out;
         for (const auto& c : impl_->occs) {
-            if (c.is_def && c.name == name && c.origin_module == origin)
+            const bool trait_member = o->kind == "method" || c.kind == "method";
+            const bool same_identity = trait_member ? c.semantic_id == o->semantic_id
+                                                    : c.name == name;
+            if (c.is_def && same_identity && c.origin_module == origin)
                 out.push_back({uri_, c.range});
         }
         return out;
@@ -1092,7 +1096,9 @@ std::vector<typed_core::DocumentHighlight> Analysis::document_highlight(Position
         return {};
     std::vector<typed_core::DocumentHighlight> out;
     for (const auto& c : impl_->occs) {
-        if (c.name != o->name || c.origin_module != o->origin_module)
+        const bool trait_member = o->kind == "method" || c.kind == "method";
+        const bool same_identity = trait_member ? c.semantic_id == o->semantic_id : c.name == o->name;
+        if (!same_identity || c.origin_module != o->origin_module)
             continue;
         typed_core::DocumentHighlight h;
         h.range = c.range;
@@ -1108,7 +1114,9 @@ std::vector<Range> Analysis::references(Position pos, bool include_decl) const {
         return {};
     std::vector<Range> out;
     for (const auto& c : impl_->occs) {
-        if (c.name != o->name || c.origin_module != o->origin_module)
+        const bool trait_member = o->kind == "method" || c.kind == "method";
+        const bool same_identity = trait_member ? c.semantic_id == o->semantic_id : c.name == o->name;
+        if (!same_identity || c.origin_module != o->origin_module)
             continue;
         if (!include_decl && c.is_def)
             continue;
@@ -1135,7 +1143,8 @@ std::vector<Json> Analysis::completions(Position pos) const {
             return;
         Json it;
         it["label"] = name;
-        it["kind"] = kind == "function" ? 3 : kind == "keyword" ? 14 : 6;
+        it["kind"] = kind == "function" ? 3 : kind == "method" ? 2 :
+                     kind == "interface" ? 8 : kind == "keyword" ? 14 : 6;
         if (!detail.empty())
             it["detail"] = detail;
         items.push_back(std::move(it));
@@ -1161,6 +1170,8 @@ std::vector<std::uint32_t> Analysis::semantic_tokens() const {
     for (const auto& o : sorted) {
         std::uint32_t type = 8; // variable
         if (o.kind == "function")
+            type = 0;
+        else if (o.kind == "method")
             type = 0;
         else if (o.kind == "type" || o.kind == "class")
             type = 1;
@@ -1194,7 +1205,9 @@ std::optional<std::string> Analysis::rename(Position pos, std::string_view new_n
         return std::nullopt;
     Json::Array changes;
     for (const auto& c : impl_->occs) {
-        if (c.name != o->name || c.origin_module != o->origin_module)
+        const bool trait_member = o->kind == "method" || c.kind == "method";
+        const bool same_identity = trait_member ? c.semantic_id == o->semantic_id : c.name == o->name;
+        if (!same_identity || c.origin_module != o->origin_module)
             continue;
         Json edit;
         edit["range"] = range_json(c.range);
@@ -1280,12 +1293,16 @@ std::vector<Json> Analysis::outgoing_calls(std::string_view name) const {
 std::vector<Json> Analysis::code_actions(Range range) const {
     std::vector<Json> out;
     for (const auto& d : diagnostics()) {
-        if (!d.range.overlaps(range))
+        const bool point_diagnostic = d.range.start == d.range.end;
+        if (!d.range.overlaps(range) && !(point_diagnostic && range.contains(d.range.start)))
             continue;
         if (d.code.empty())
             continue;
         Json act;
-        act["title"] = "Explain " + d.code;
+        const bool trait_instance_diagnostic = d.code == "E0105" || d.code == "E0106" ||
+                                               d.message.find("instance") != std::string::npos;
+        act["title"] = trait_instance_diagnostic ? "Explain trait instance " + d.code
+                                                  : "Explain " + d.code;
         act["kind"] = "quickfix";
         act["command"] = Json::Object{
             {"title", Json("Explain " + d.code)},

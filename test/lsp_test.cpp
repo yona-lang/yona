@@ -177,6 +177,80 @@ end
     CHECK(method_hover->contents.find("a -> a -> Bool") != std::string::npos);
 }
 
+TEST_CASE("LSP trait operations use trait-specific kinds and identities") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/traits.yona", R"(
+module Test\Traits
+
+trait Eq a
+    eq : a -> a -> Bool
+end
+
+instance Eq Int
+    eq left right = left == right
+end
+)");
+
+    auto items = a.completions(Position{0, 0});
+    int eq_kind = 0;
+    int method_kind = 0;
+    for (const auto& item : items) {
+        if (item.get("label").as_string() == "Eq")
+            eq_kind = item.get("kind").as_int();
+        if (item.get("label").as_string() == "eq")
+            method_kind = item.get("kind").as_int();
+    }
+    CHECK(eq_kind == 8);     // LSP Interface
+    CHECK(method_kind == 2); // LSP Method
+
+    auto signature = a.signature_help(Position{4, 5});
+    REQUIRE(signature);
+    CHECK(signature->get("signatures").as_array().at(0).get("label").as_string() ==
+          "eq : a -> a -> Bool");
+
+    auto tokens = a.semantic_tokens();
+    bool saw_method_function_token = false;
+    std::size_t line = 0;
+    std::size_t column = 0;
+    for (std::size_t i = 0; i < tokens.size(); i += 5) {
+        line += tokens[i];
+        column = tokens[i] == 0 ? column + tokens[i + 1] : tokens[i + 1];
+        if (line == 4 && column == 4 && tokens[i + 3] == 0)
+            saw_method_function_token = true;
+    }
+    CHECK(saw_method_function_token);
+
+    Json edits;
+    auto renamed = a.rename(Position{4, 5}, "same", edits);
+    REQUIRE(renamed);
+    CHECK(*renamed == "eq");
+    CHECK(edits.as_array().at(0).get("edits").as_array().size() == 1);
+}
+
+TEST_CASE("LSP trait diagnostics offer an explicit instance explanation") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/missing.yona", R"(
+module Test\Missing
+
+trait Measure a
+    measure : a -> Int
+end
+
+run _ = measure "x"
+)");
+
+    auto diagnostics = a.diagnostics();
+    REQUIRE(diagnostics.size() == 1);
+    CHECK(diagnostics[0].code == "E0106");
+    auto actions = a.code_actions(Range{{0, 0}, {100, 1000}});
+    REQUIRE(actions.size() == 1);
+    CHECK(actions[0].get("title").as_string() == "Explain trait instance E0106");
+    CHECK(actions[0].get("command").get("command").as_string() == "yona.explain");
+    CHECK(actions[0].get("command").get("arguments").as_array().at(0).as_string() == "E0106");
+}
+
 TEST_CASE("Server initialize and hover") {
     Server srv;
     RpcMessage init;
