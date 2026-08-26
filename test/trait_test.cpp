@@ -8,11 +8,14 @@
 #include <vector>
 #include "Parser.h"
 #include "Codegen.h"
+#include "Diagnostic.h"
 #include "repo_paths.h"
+#include "typechecker/TypeChecker.h"
 #include "yona_link_util.hpp"
 
 using namespace std;
 using namespace yona;
+using namespace yona::compiler;
 using namespace yona::compiler::codegen;
 namespace fs = std::filesystem;
 
@@ -170,6 +173,38 @@ end
     CHECK(mod->trait_declarations[0]->methods[1].name == "neq");
     CHECK(mod->instance_declarations.size() == 1);
     CHECK(mod->instance_declarations[0]->methods.size() == 2);
+}
+
+TEST_CASE("Duplicate visible trait instances are rejected coherently") {
+    parser::Parser parser;
+    auto parsed = parser.parse_module(R"(
+module Test\DuplicateInstance
+
+trait Label a
+    label : a -> String
+end
+
+instance Label Int
+    label value = "first"
+end
+
+instance Label Int
+    label value = "second"
+end
+)", "duplicate_instance.yona");
+    REQUIRE(parsed.has_value());
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    checker.check_module(parsed.value().get());
+
+    size_t coherence_errors = 0;
+    for (const auto& record : diag.records())
+        if (record.code == ErrorCode::E0400 &&
+            record.message.find("duplicate visible trait instance") != std::string::npos)
+            ++coherence_errors;
+    CHECK(coherence_errors == 1);
+    CHECK(diag.error_count() == 1);
 }
 
 TEST_CASE("Trait method static dispatch - Int instance") {
@@ -382,6 +417,41 @@ end
     REQUIRE(mod != nullptr);
     CHECK(mod->trait_declarations[0]->methods.size() == 2);
     CHECK(mod->instance_declarations[0]->methods.size() == 2);
+}
+
+TEST_CASE("Cross-module multi-parameter dispatch selects every instance head") {
+    string mod_source = R"(
+module Test\MultiHeadDispatch
+
+export convertInt, convertFloat
+export trait Into
+
+trait Into target source
+    into : target -> source -> target
+end
+
+instance Into String Int
+    into _ _ = "int"
+end
+
+
+instance Into String Float
+    into _ _ = "float"
+end
+
+
+convertInt : Int -> String
+convertInt value = into "" value
+convertFloat : Float -> String
+convertFloat value = into "" value
+)";
+    string expr_source = R"(
+import convertInt, convertFloat from Test\MultiHeadDispatch in
+convertInt 1 ++ ":" ++ convertFloat 1.0
+)";
+    auto result = compile_and_run_trait(
+        mod_source, expr_source, "Test/MultiHeadDispatch");
+    CHECK(result == "int:float");
 }
 
 TEST_CASE("Parse default method in trait") {
@@ -636,10 +706,20 @@ static string compile_and_run_derive(const string& mod_source, const string& exp
         mod_codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
     for (auto& dir : {"lib", "../lib", "../../lib", "../../../lib"})
         if (fs::exists(dir)) { mod_codegen.module_paths_.push_back(fs::canonical(dir).string()); break; }
-    mod_codegen.load_prelude(&p1);
+    DiagnosticEngine mod_diag;
+    typechecker::TypeChecker mod_checker(mod_diag);
+    mod_codegen.load_prelude(&p1, &mod_checker);
+    for (const auto& path : mod_codegen.module_paths_)
+        mod_checker.add_module_path(path);
+    mod_checker.set_import_type_source(&mod_codegen.import_types_);
 
     auto mod_result = p1.parse_module(mod_source, "derive_test.yona");
     if (!mod_result.has_value()) return "MOD_PARSE_ERROR";
+
+    mod_checker.check_module(mod_result.value().get());
+    if (!mod_checker.solve_constraints() || mod_checker.has_errors())
+        return "MOD_TYPE_ERROR";
+    mod_codegen.set_type_checker(&mod_checker);
 
     auto mod = mod_codegen.compile_module(mod_result.value().get());
     if (!mod) return "MOD_CODEGEN_ERROR";
@@ -654,17 +734,26 @@ static string compile_and_run_derive(const string& mod_source, const string& exp
     string iface = (trait_lib / mod_name).string() + ".yonai";
     if (!mod_codegen.emit_interface_file(iface)) return "IFACE_EMIT_ERROR";
 
-    parser::Parser p2;
-    istringstream stream(expr_source);
-    auto expr_result = p2.parse_input(stream);
-    if (!expr_result.node) return "EXPR_PARSE_ERROR";
-
     Codegen expr_codegen("trait_test");
     expr_codegen.module_paths_.push_back(trait_lib.string());
     if (fs::exists(yona::test::lib_dir()))
         expr_codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
     for (auto& dir : {"lib", "../lib", "../../lib", "../../../lib"})
         if (fs::exists(dir)) { expr_codegen.module_paths_.push_back(fs::canonical(dir).string()); break; }
+    parser::Parser p2;
+    DiagnosticEngine expr_diag;
+    typechecker::TypeChecker expr_checker(expr_diag);
+    expr_codegen.load_prelude(&p2, &expr_checker);
+    for (const auto& path : expr_codegen.module_paths_)
+        expr_checker.add_module_path(path);
+    expr_checker.set_import_type_source(&expr_codegen.import_types_);
+    istringstream stream(expr_source);
+    auto expr_result = p2.parse_input(stream);
+    if (!expr_result.node) return "EXPR_PARSE_ERROR";
+    expr_checker.check(expr_result.node.get());
+    if (!expr_checker.solve_constraints() || expr_checker.has_errors())
+        return "EXPR_TYPE_ERROR";
+    expr_codegen.set_type_checker(&expr_checker);
     auto expr_mod = expr_codegen.compile(expr_result.node.get());
     if (!expr_mod) return "EXPR_CODEGEN_ERROR";
 
@@ -770,6 +859,105 @@ import Test\DeriveEq2 in eqTest Red Blue
     CHECK(result == "0");
 }
 
+TEST_CASE("Equality operators dispatch through a derived Eq instance") {
+    string mod_source = R"(
+module Test\DerivedEqOperator
+
+export type Box
+export same, different
+
+type Box = Box String | Empty
+    deriving Eq
+
+same a b = if a == b then 1 else 0
+different a b = if a != b then 1 else 0
+)";
+    string expr_source = R"(
+import Test\DerivedEqOperator in
+same (Box "same") (Box "same") +
+different (Box "left") (Box "right") +
+different Empty (Box "value")
+)";
+    auto result = compile_and_run_derive(mod_source, expr_source,
+                                         "Test/DerivedEqOperator");
+    CHECK(result == "3");
+}
+
+TEST_CASE("Equality remains valid for nested heap fields inside a callback") {
+    string mod_source = R"(
+module Test\NestedEqCallback
+
+export type Envelope
+export evaluate
+
+type Envelope = Envelope String
+    deriving Eq
+
+evaluate : (Envelope -> Int) -> Int
+evaluate callback = callback (Envelope "alpha-beta")
+)";
+    string expr_source = R"(
+import Test\NestedEqCallback in
+evaluate (\actual -> if actual == Envelope "alpha-beta" then 1 else 0)
+)";
+    auto result = compile_and_run_derive(mod_source, expr_source,
+                                         "Test/NestedEqCallback");
+    CHECK(result == "1");
+}
+
+TEST_CASE("Derived equality specializes every parameter of a generic ADT") {
+    string mod_source = R"(
+module Test\GenericEqOperator
+
+export type Pair
+export same
+
+type Pair a b = First a | Second b
+    deriving Eq
+
+same : Pair (Int, String) -> Pair (Int, String) -> Bool
+same left right = left == right
+)";
+    string expr_source = R"(
+import Test\GenericEqOperator in
+let left = "same" ++ "", right = "same" ++ "" in
+(if same (Second left) (Second right) then 1 else 0) +
+(if same (First 42) (First 42) then 2 else 0) +
+(if same (First 42) (Second "42") then 0 else 4)
+)";
+    auto result = compile_and_run_derive(mod_source, expr_source,
+                                         "Test/GenericEqOperator");
+    CHECK(result == "7");
+}
+
+TEST_CASE("Ordering operators and compare dispatch through a derived Ord instance") {
+    string mod_source = R"(
+module Test\DerivedOrdOperator
+
+export type Priority
+export checkOrder
+
+type Priority = Low | Normal String | High
+    deriving Eq, Ord
+
+checkOrder _ =
+    if Low < Normal "a" &&
+       Normal "a" < Normal "b" &&
+       High >= Normal "z"
+    then case compare High Low of
+        Greater -> 1
+        _ -> 0
+    end
+    else 0
+)";
+    string expr_source = R"(
+import checkOrder from Test\DerivedOrdOperator in checkOrder ()
+)";
+    auto result = compile_and_run_derive(mod_source, expr_source,
+                                         "Test/DerivedOrdOperator");
+    CHECK(result == "1");
+}
+
 TEST_CASE("Derive Hash for enum type") {
     string mod_source = R"(
 module Test\DeriveHash1
@@ -778,7 +966,7 @@ export type Color
 export hashTest
 
 type Color = Red | Green | Blue
-    deriving Hash
+    deriving Eq, Hash
 
 hashTest c = hash c
 )";
@@ -787,6 +975,54 @@ import Test\DeriveHash1 in hashTest Green
 )";
     auto result = compile_and_run_derive(mod_source, expr_source, "Test/DeriveHash1");
     CHECK(result == "1");
+}
+
+TEST_CASE("Derived Hash folds every field and agrees for equal values") {
+    string mod_source = R"(
+module Test\DeriveHashFields
+
+export type Pair
+export hashPair, samePair
+
+type Pair = Pair Int Int
+    deriving Eq, Hash
+
+hashPair value = hash value
+samePair left right = left == right
+)";
+    string expr_source = R"(
+import Test\DeriveHashFields in
+let first = Pair 4 9, equal = Pair 4 9, changed = Pair 4 10 in
+if samePair first equal &&
+   hashPair first == hashPair equal &&
+   hashPair first != hashPair changed
+then 1 else 0
+)";
+    auto result = compile_and_run_derive(mod_source, expr_source,
+                                         "Test/DeriveHashFields");
+    CHECK(result == "1");
+}
+
+TEST_CASE("Structural derives reject non-lawful function fields once") {
+    parser::Parser parser;
+    auto parsed = parser.parse_module(R"(
+module Test\InvalidDerive
+
+type CallbackBox = CallbackBox (Int -> Int)
+    deriving Eq
+)", "invalid_derive.yona");
+    REQUIRE(parsed.has_value());
+
+    DiagnosticEngine diagnostics;
+    typechecker::TypeChecker checker(diagnostics);
+    checker.check_module(parsed.value().get());
+    CHECK(checker.has_errors());
+    size_t derive_errors = 0;
+    for (const auto& record : diagnostics.records())
+        if (record.code == ErrorCode::E0400 &&
+            record.message.find("cannot derive Eq") != string::npos)
+            ++derive_errors;
+    CHECK(derive_errors == 1);
 }
 
 } // TEST_SUITE

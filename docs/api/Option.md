@@ -5,14 +5,6 @@ Optional values — represents a value that may or may not exist.
 Use `Some value` to wrap a value, `None` for absence. Chain operations
 with `flatMap`, filter with predicates, or provide defaults with `unwrapOr`.
 
-## Types
-
-### Option
-
-`type Option a = Some a | None`
-
-An optional value: either `Some value` or `None`.
-
 ## Functions
 
 ### `isSome : Option a -> Bool`
@@ -51,7 +43,7 @@ map (\x -> x * 2) (Some 5)   # => Some 10
 map (\x -> x * 2) None       # => None
 ```
 
-### `flatMap : (a -> b) -> Option a -> c`
+### `flatMap : (a -> Option b) -> Option a -> Option b`
 
 Applies `fn` which itself returns an Option, flattening the result.
 Useful for chaining operations that may fail.
@@ -70,7 +62,7 @@ filter (\x -> x > 3) (Some 5)   # => Some 5
 filter (\x -> x > 3) (Some 1)   # => None
 ```
 
-### `orElse : a -> Option a -> Option a`
+### `orElse : Option a -> Option a -> Option a`
 
 Returns this option if it contains a value, otherwise returns `alternative`.
 
@@ -79,7 +71,7 @@ orElse (Some 99) None        # => Some 99
 orElse (Some 99) (Some 42)   # => Some 42
 ```
 
-### `toResult : a -> Option a -> (b, c)`
+### `toResult : Int -> Option a -> (b, c)`
 
 Converts to a Result: `Some v` becomes `(:ok, v)`, `None` becomes `(:err, err)`.
 
@@ -88,7 +80,7 @@ toResult "missing" (Some 42)   # => (:ok, 42)
 toResult "missing" None        # => (:err, "missing")
 ```
 
-### `zip : Option a -> Option a -> Option a`
+### `zip : Option a -> Option b -> Option (a, b)`
 
 Combines two options into an option of a pair. Returns `None` if either is empty.
 
@@ -97,7 +89,7 @@ zip (Some 1) (Some 2)   # => Some (1, 2)
 zip (Some 1) None       # => None
 ```
 
-### `fold : a -> (b -> c) -> Option b -> a`
+### `fold : b -> (a -> b) -> Option a -> b`
 
 Eliminates an option: returns `onNone` if empty, applies `onSome` if present.
 

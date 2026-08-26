@@ -188,19 +188,6 @@ unique_ptr<compiler::types::Type> ParserImpl::parse_primary_type() {
         string type_name(peek().lexeme);
         advance();
 
-        // Type applications use juxtaposition: `Seq String`, `Option Int`,
-        // and `Linear FileHandle`.  Parse an argument at primary precedence
-        // so a following function arrow remains part of the outer signature.
-        unique_ptr<compiler::types::Type> type_argument;
-        if (check(TokenType::YIDENTIFIER) || check(TokenType::YLPAREN)) {
-            type_argument = parse_product_type();
-            if (!type_argument) {
-                error(ParseError::Type::INVALID_SYNTAX,
-                      "Expected type argument after '" + type_name + "'");
-                return nullptr;
-            }
-        }
-
         static const unordered_map<string, compiler::types::BuiltinType> builtin_types = {
             {"Bool", compiler::types::Bool},
             {"Byte", compiler::types::Byte},
@@ -223,9 +210,51 @@ unique_ptr<compiler::types::Type> ParserImpl::parse_primary_type() {
             {"Unit", compiler::types::Unit}
         };
 
+        // Type application is left-associative: `Dict key value` applies two
+        // independent arguments to Dict. Nested applications must be grouped,
+        // as in `Seq (Option value)`. Parsing the old form recursively made the
+        // first argument consume every following identifier (`Dict (key value)`)
+        // and silently erased all but `key` from generated interfaces.
+        auto parse_argument_atom = [&]() -> unique_ptr<compiler::types::Type> {
+            if (check(TokenType::YLPAREN))
+                return parse_product_type();
+            if (!check(TokenType::YIDENTIFIER))
+                return nullptr;
+
+            string argument_name(current().lexeme);
+            advance();
+            if (const auto builtin = builtin_types.find(argument_name);
+                builtin != builtin_types.end())
+                return make_unique<compiler::types::Type>(builtin->second);
+
+            if (argument_name == "Seq" || argument_name == "Set" ||
+                argument_name == "Dict") {
+                const auto builtin = argument_name == "Seq" ? compiler::types::Seq
+                    : argument_name == "Set" ? compiler::types::Set
+                    : compiler::types::Dict;
+                return make_unique<compiler::types::Type>(builtin);
+            }
+
+            auto named = make_shared<compiler::types::NamedType>();
+            named->name = argument_name;
+            named->type = compiler::types::Type(nullptr);
+            return make_unique<compiler::types::Type>(named);
+        };
+
+        vector<compiler::types::Type> type_arguments;
+        while (check(TokenType::YIDENTIFIER) || check(TokenType::YLPAREN)) {
+            auto argument = parse_argument_atom();
+            if (!argument) {
+                error(ParseError::Type::INVALID_SYNTAX,
+                      "Expected type argument after '" + type_name + "'");
+                return nullptr;
+            }
+            type_arguments.push_back(*argument);
+        }
+
         auto it = builtin_types.find(type_name);
         if (it != builtin_types.end()) {
-            if (type_argument) {
+            if (!type_arguments.empty()) {
                 error(ParseError::Type::INVALID_SYNTAX,
                       "Built-in type '" + type_name + "' does not accept a type argument");
                 return nullptr;
@@ -234,21 +263,55 @@ unique_ptr<compiler::types::Type> ParserImpl::parse_primary_type() {
         }
 
         if (type_name == "Seq" || type_name == "Set") {
-            if (!type_argument) {
+            if (type_arguments.empty()) {
                 return make_unique<compiler::types::Type>(
                     type_name == "Seq" ? compiler::types::Seq : compiler::types::Set);
+            }
+            if (type_arguments.size() != 1) {
+                error(ParseError::Type::INVALID_SYNTAX,
+                      "Type '" + type_name + "' expects exactly one type argument");
+                return nullptr;
             }
             auto collection = make_shared<compiler::types::SingleItemCollectionType>();
             collection->kind = type_name == "Seq"
                 ? compiler::types::SingleItemCollectionType::Seq
                 : compiler::types::SingleItemCollectionType::Set;
-            collection->valueType = *type_argument;
+            collection->valueType = type_arguments.front();
             return make_unique<compiler::types::Type>(collection);
+        }
+
+        if (type_name == "Dict") {
+            if (type_arguments.empty())
+                return make_unique<compiler::types::Type>(compiler::types::Dict);
+            if (type_arguments.size() == 1) {
+                if (const auto* product =
+                        std::get_if<shared_ptr<compiler::types::ProductType>>(
+                            &type_arguments.front());
+                    product && (*product)->types.size() == 2)
+                    type_arguments = (*product)->types;
+            }
+            if (type_arguments.size() != 2) {
+                error(ParseError::Type::INVALID_SYNTAX,
+                      "Type 'Dict' expects exactly two type arguments");
+                return nullptr;
+            }
+            auto dictionary = make_shared<compiler::types::DictCollectionType>();
+            dictionary->keyType = type_arguments[0];
+            dictionary->valueType = type_arguments[1];
+            return make_unique<compiler::types::Type>(dictionary);
         }
 
         auto named_type = make_shared<compiler::types::NamedType>();
         named_type->name = type_name;
-        named_type->type = type_argument ? *type_argument : compiler::types::Type(nullptr);
+        if (type_arguments.empty()) {
+            named_type->type = compiler::types::Type(nullptr);
+        } else if (type_arguments.size() == 1) {
+            named_type->type = type_arguments.front();
+        } else {
+            auto product = make_shared<compiler::types::ProductType>();
+            product->types = std::move(type_arguments);
+            named_type->type = product;
+        }
         return make_unique<compiler::types::Type>(named_type);
     }
 

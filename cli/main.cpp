@@ -193,6 +193,9 @@ static vector<filesystem::path> embedded_runtime_sources(const filesystem::path 
       root / "src" / "runtime" / "gpu_vulkan_compute.c",
       root / "src" / "runtime" / "gpu_vulkan_ops.c",
       root / "src" / "runtime" / "gpu_cpu.c",
+#ifdef YONAC_EXE_LINK_PCRE2
+      root / "src" / "runtime" / "regex.c",
+#endif
 #ifdef _WIN32
       root / "src" / "runtime" / "platform" / "async_win32.c",
       root / "src" / "runtime" / "platform" / "channel_win32.c",
@@ -951,8 +954,11 @@ int main(int argc, char *argv[]) {
       return 0;
     }
     type_checker.check_module(result.value().get());
+    if (!type_checker.solve_constraints() || type_checker.has_errors())
+      return 1;
     if (!run_overlay_checkers(result.value().get(), diag, type_checker, flag_no_refinement, flag_no_linear))
       return 1;
+    codegen.set_type_checker(&type_checker);
     llvm_mod = codegen.compile_module(result.value().get());
     // compile_module registers declarations local to this module, allowing the
     // strict totality gate to cover both prelude/imported and local finite ADTs.
@@ -999,9 +1005,10 @@ int main(int argc, char *argv[]) {
     }
     codegen.set_type_checker(&type_checker);
 
+    if (!type_checker.solve_constraints() || type_checker.has_errors())
+      return 1;
+
     if (emit_accelerator_report) {
-      if (!type_checker.solve_constraints() || type_checker.has_errors())
-        return 1;
       emit_accelerator_diagnostic_report(std::cout, parse_result.node.get(), &type_checker, filename);
       return 0;
     }
@@ -1037,11 +1044,15 @@ int main(int argc, char *argv[]) {
     diag.error(SourceLocation::unknown(), compiler::ErrorCode::E0400, "failed to emit object file");
     return 1;
   }
+  if (codegen.error_count_ > 0 || diag.has_errors())
+    return 1;
 
   // For modules, also emit interface file (.yonai)
   if (is_module) {
     auto yonai_path = filesystem::path(output_file).replace_extension(".yonai");
-    codegen.emit_interface_file(yonai_path.string());
+    if (!codegen.emit_interface_file(yonai_path.string()) ||
+        codegen.error_count_ > 0 || diag.has_errors())
+      return 1;
     return 0;
   }
 
@@ -1101,6 +1112,9 @@ int main(int argc, char *argv[]) {
       filesystem::path src_dir_p = root / "src";
       filesystem::path inc_dir_p = root / "include";
       string i_flags = " -I" + q_cmd_path(src_dir_p) + " -I" + q_cmd_path(inc_dir_p) + yona_runtime_vulkan_cflags();
+#ifdef YONAC_EXE_LINK_PCRE2
+      i_flags += " -DYONA_EMBEDDED_PCRE2=1";
+#endif
 
       vector<string> plat_pf;
       vector<string> plat_obj_paths;
@@ -1270,6 +1284,9 @@ int main(int argc, char *argv[]) {
     for (const auto &a : yona::toolchain::inprocess_lld_after_input_args())
       lld_args.push_back(a);
 #endif
+#ifdef YONAC_EXE_LINK_PCRE2
+    lld_args.push_back("-lpcre2-8");
+#endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {
       string vk_dir = yona_posix_vulkan_lib_dir();
@@ -1331,6 +1348,9 @@ int main(int argc, char *argv[]) {
     link_cmd += " -lpthread -Wl,-U,_yona_regex_free_code";
 #else
     link_cmd += " -lm -lpthread -rdynamic";
+#endif
+#ifdef YONAC_EXE_LINK_PCRE2
+    link_cmd += " -lpcre2-8";
 #endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {

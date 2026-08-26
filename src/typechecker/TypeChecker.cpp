@@ -196,17 +196,145 @@ void TypeChecker::check_module(ast::ModuleDecl* mod) {
         if (!adt) continue;
         std::vector<std::pair<std::string, int>> constructors;
         std::vector<std::vector<ast::FieldType>> field_types;
+        std::vector<std::vector<std::string>> field_names;
         constructors.reserve(adt->variants.size());
         for (auto* ctor : adt->variants) {
             if (!ctor) continue;
             constructors.emplace_back(
                 ctor->name, static_cast<int>(ctor->field_type_names.size()));
             field_types.push_back(ctor->field_type_names);
+            field_names.push_back(ctor->field_names);
         }
-        register_adt(adt->name, adt->type_params, constructors, field_types);
+        register_adt(adt->name, adt->type_params, constructors, field_types,
+                     field_names);
+        for (const auto& trait_name : adt->derive_traits) {
+            bool lawful = true;
+            if (trait_name == "Eq" || trait_name == "Ord" ||
+                trait_name == "Hash" || trait_name == "Show" ||
+                trait_name == "Send" || trait_name == "Shareable") {
+                for (auto* ctor : adt->variants) {
+                    for (size_t field_index = 0;
+                         field_index < ctor->field_type_names.size();
+                         ++field_index) {
+                        const auto& field = ctor->field_type_names[field_index];
+                        const bool unsupported = field.is_function_type ||
+                            field.name == "Function" || field.name == "Promise" ||
+                            field.name == "Channel" || field.name == "Linear" ||
+                            field.name == "ByteArray" || field.name == "IntArray" ||
+                            field.name == "FloatArray";
+                        if (!unsupported) continue;
+                        diag_.error(
+                            adt->source_context, ErrorCode::E0400,
+                            "cannot derive " + trait_name + " for '" + adt->name +
+                            "': field " + ctor->name + "." +
+                            std::to_string(field_index + 1) + " has non-lawful type '" +
+                            (field.is_function_type ? "Function" : field.name) + "'");
+                        ++error_count_;
+                        lawful = false;
+                        break;
+                    }
+                    if (!lawful) break;
+                }
+            }
+            if ((trait_name == "Ord" || trait_name == "Hash") &&
+                std::find(adt->derive_traits.begin(), adt->derive_traits.end(),
+                          "Eq") == adt->derive_traits.end()) {
+                bool explicit_eq = false;
+                for (auto* instance : mod->instance_declarations)
+                    if (instance && instance->trait_name == "Eq" &&
+                        instance->type_name == adt->name) {
+                        explicit_eq = true;
+                        break;
+                    }
+                if (!explicit_eq) {
+                    diag_.error(adt->source_context, ErrorCode::E0400,
+                                "deriving " + trait_name + " for '" + adt->name +
+                                "' requires Eq; add `deriving Eq, " + trait_name + "`");
+                    ++error_count_;
+                    lawful = false;
+                }
+            }
+            if (lawful) {
+                if (trait_name == "Send" || trait_name == "Shareable") {
+                    std::vector<std::pair<std::string, std::string>> constraints;
+                    for (const auto& parameter : adt->type_params)
+                        constraints.emplace_back(trait_name, parameter);
+                    register_instance(trait_name, adt->name, adt->type_params,
+                                      std::move(constraints), {adt->name});
+                } else {
+                    register_instance(trait_name, adt->name);
+                }
+            }
+        }
+    }
+
+    for (auto* trait : mod->trait_declarations) {
+        if (!trait) continue;
+        register_trait(trait->name, trait->type_params);
+        for (const auto& [superclass, _] : trait->superclasses)
+            register_trait_superclass(trait->name, superclass);
+        for (const auto& method : trait->methods) {
+            std::unordered_map<std::string, MonoTypePtr> variables;
+            auto* method_type = from_ast_type_impl(method.type_signature, 0, variables);
+            std::vector<MonoTypePtr> trait_arguments;
+            for (const auto& parameter : trait->type_params) {
+                auto found = variables.find(parameter);
+                if (found == variables.end()) {
+                    auto* variable = arena_.fresh_var(0);
+                    uf_.add_var(variable->var_id, 0);
+                    found = variables.emplace(parameter, variable).first;
+                }
+                trait_arguments.push_back(found->second);
+            }
+            register_trait_method(trait->name, method.name, method_type);
+            if (auto scheme = root_env_->lookup(method.name);
+                scheme && !trait_arguments.empty()) {
+                auto quantified = scheme->quantified_vars;
+                for (auto* argument : trait_arguments) {
+                    auto* resolved = unifier_.resolve(argument);
+                    if (resolved && resolved->tag == MonoType::Var &&
+                        std::find(quantified.begin(), quantified.end(),
+                                  resolved->var_id) == quantified.end())
+                        quantified.push_back(resolved->var_id);
+                }
+                root_env_->bind_scheme(method.name,
+                    TypeScheme(std::move(quantified),
+                               {Constraint(trait->name, std::move(trait_arguments))},
+                               scheme->body));
+            }
+        }
+    }
+
+    std::unordered_set<std::string> local_instance_keys;
+    for (auto* instance : mod->instance_declarations) {
+        if (!instance) continue;
+        std::string key = instance->trait_name;
+        for (const auto& type_name : instance->type_names)
+            key += ":" + type_name;
+        if (instance->type_names.empty()) key += ":" + instance->type_name;
+        if (!local_instance_keys.insert(key).second) {
+            diag_.error(instance->source_context, ErrorCode::E0400,
+                        "duplicate visible trait instance '" + key +
+                        "'; instance selection must be coherent");
+            ++error_count_;
+            continue;
+        }
+        register_instance(instance->trait_name, instance->type_name,
+                          instance->type_params,
+                          {instance->constraints.begin(), instance->constraints.end()},
+                          instance->type_names);
     }
 
     auto env = root_env_->child();
+    // Module-level externs are declarations in the same lexical scope as the
+    // module's Yona definitions.  The expression form handles its own nested
+    // body, but module declarations have no body and therefore must be bound
+    // explicitly before any function is inferred.
+    for (auto* ext : mod->extern_declarations) {
+        if (!ext) continue;
+        auto* declared = from_ast_type(ext->declared_type, 0);
+        env->bind_scheme(ext->name, generalize(declared, -1));
+    }
     std::unordered_map<std::string, MonoTypePtr> prelim;
     for (auto* func : mod->functions) {
         if (!func || func->name.empty()) continue;
@@ -224,11 +352,25 @@ void TypeChecker::check_module(ast::ModuleDecl* mod) {
         auto pit = prelim.find(func->name);
         if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var)
             recursive_self_vars_.push_back(pit->second->var_id);
-        auto* ty = infer(func, env, 0);
+        auto* inferred = infer(func, env, 0);
         if (pit != prelim.end() && pit->second && pit->second->tag == MonoType::Var &&
             !recursive_self_vars_.empty() && recursive_self_vars_.back() == pit->second->var_id)
             recursive_self_vars_.pop_back();
-        if (!ty) continue;
+        if (!inferred) continue;
+        // A parameterless module definition is a value (a CAF), whereas an
+        // expression lambda with no written parameters is a Unit thunk.  The
+        // shared FunctionExpr inference deliberately produces Unit -> a for
+        // the latter; unwrap it only at the module declaration boundary.
+        auto* ty = unifier_.resolve(inferred);
+        if (func->patterns.empty() && ty && ty->tag == MonoType::Arrow &&
+            unifier_.resolve(ty->param_type)->tag == MonoType::Con &&
+            unifier_.resolve(ty->param_type)->con == TyCon::Unit)
+            ty = ty->return_type;
+        if (func->type_signature.has_value()) {
+            auto* declared = from_ast_type(*func->type_signature, 0);
+            unifier_.unify(ty, declared, func->source_context,
+                           "against the declared type of '" + func->name + "'");
+        }
         if (pit != prelim.end())
             unifier_.unify(pit->second, ty, func->source_context,
                            "in module function '" + func->name + "'");
@@ -243,6 +385,13 @@ MonoTypePtr TypeChecker::check(AstNode* node) {
 MonoTypePtr TypeChecker::type_of(AstNode* node) const {
     auto it = type_map_.find(node);
     return (it != type_map_.end()) ? it->second : nullptr;
+}
+
+std::optional<TypeChecker::SelectedTraitInstance>
+TypeChecker::selected_trait_instance(const ApplyExpr* application) const {
+    const auto found = selected_trait_instances_.find(application);
+    if (found == selected_trait_instances_.end()) return std::nullopt;
+    return found->second;
 }
 
 void TypeChecker::record(AstNode* node, MonoTypePtr type) {
@@ -359,6 +508,62 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
         case AST_FIELD_ACCESS_EXPR: {
             auto* fa = static_cast<FieldAccessExpr*>(node);
             auto* obj_type = infer(fa->identifier, env, level);
+            auto* resolved_object = unifier_.resolve(obj_type);
+
+            // Named-record ADTs retain their nominal identity. Resolve their
+            // declared field directly instead of forcing the nominal App type
+            // to unify with an unrelated structural open row.
+            if (resolved_object && resolved_object->tag == MonoType::App) {
+                for (const auto& [_, constructor] : constructor_registry_) {
+                    if (constructor.adt_name != resolved_object->type_name)
+                        continue;
+                    const auto field = std::find(
+                        constructor.field_names.begin(), constructor.field_names.end(),
+                        fa->name->value);
+                    if (field == constructor.field_names.end()) continue;
+                    const size_t field_index = static_cast<size_t>(
+                        std::distance(constructor.field_names.begin(), field));
+                    if (field_index >= constructor.field_types.size()) break;
+
+                    std::function<MonoTypePtr(const ast::FieldType&)> declared_type;
+                    declared_type = [&](const ast::FieldType& value) -> MonoTypePtr {
+                        if (value.is_tuple_type) {
+                            std::vector<MonoTypePtr> elements;
+                            for (const auto& element : value.tuple_types)
+                                elements.push_back(declared_type(element));
+                            return arena_.make_tuple(elements);
+                        }
+                        if (value.is_function_type) {
+                            MonoTypePtr function_result = value.return_types.empty()
+                                ? arena_.make_con(TyCon::Unit)
+                                : declared_type(value.return_types.front());
+                            for (auto it = value.param_types.rbegin();
+                                 it != value.param_types.rend(); ++it)
+                                function_result = arena_.make_arrow(
+                                    declared_type(*it), function_result);
+                            return function_result;
+                        }
+                        for (size_t i = 0; i < constructor.type_params.size(); ++i)
+                            if (value.name == constructor.type_params[i] &&
+                                i < resolved_object->args.size())
+                                return resolved_object->args[i];
+                        if (value.name == "Int") return arena_.make_con(TyCon::Int);
+                        if (value.name == "Float") return arena_.make_con(TyCon::Float);
+                        if (value.name == "Bool") return arena_.make_con(TyCon::Bool);
+                        if (value.name == "String") return arena_.make_con(TyCon::String);
+                        if (value.name == "Symbol") return arena_.make_con(TyCon::Symbol);
+                        if (value.name == "()" || value.name == "Unit")
+                            return arena_.make_con(TyCon::Unit);
+                        std::vector<MonoTypePtr> arguments;
+                        for (const auto& argument : value.type_arguments)
+                            arguments.push_back(declared_type(argument));
+                        return arena_.make_app(value.name, arguments);
+                    };
+                    result = declared_type(constructor.field_types[field_index]);
+                    break;
+                }
+                if (result) break;
+            }
             // Constrain obj to be a record with this field
             auto* field_var = arena_.fresh_var(level);
             uf_.add_var(field_var->var_id, level);
@@ -407,24 +612,51 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
         case AST_IMPORT_EXPR: {
             auto* imp = static_cast<ImportExpr*>(node);
             auto import_env = env->child();
+            auto saved_boundaries = concurrency_boundaries_;
             for (auto* clause : imp->clauses) {
                 if (auto* fi = dynamic_cast<FunctionsImport*>(clause)) {
                     std::string mod_fqn = fqn_to_string(fi->fromFqn);
+                    if (import_src_)
+                        for (const auto& instance :
+                             import_src_->imported_instances(mod_fqn))
+                            register_instance(
+                                instance.trait_name, instance.type_names.front(),
+                                instance.type_params, instance.constraints,
+                                instance.type_names);
                     for (auto* fa : fi->aliases) {
                         std::string src_name = fa->name->value;
                         std::string bind_name = (fa->alias && !fa->alias->value.empty())
                             ? fa->alias->value : src_name;
                         bind_import_name(import_env, mod_fqn, src_name, bind_name, level);
+                        if (mod_fqn == "Std\\Task" && src_name == "spawn")
+                            concurrency_boundaries_[bind_name] =
+                                ConcurrencyBoundary::TaskSpawn;
+                        else if (mod_fqn == "Std\\Channel" && src_name == "send")
+                            concurrency_boundaries_[bind_name] =
+                                ConcurrencyBoundary::ChannelSend;
                     }
                 } else if (auto* mi = dynamic_cast<ModuleImport*>(clause)) {
                     if (import_src_ && mi->fqn) {
                         std::string mod = mi->fqn->to_string();
+                        for (const auto& instance :
+                             import_src_->imported_instances(mod))
+                            register_instance(
+                                instance.trait_name, instance.type_names.front(),
+                                instance.type_params, instance.constraints,
+                                instance.type_names);
                         for (auto& name : import_src_->imported_module_exports(mod))
                             bind_import_name(import_env, mod, name, name, level);
+                        if (mod == "Std\\Task")
+                            concurrency_boundaries_["spawn"] =
+                                ConcurrencyBoundary::TaskSpawn;
+                        else if (mod == "Std\\Channel")
+                            concurrency_boundaries_["send"] =
+                                ConcurrencyBoundary::ChannelSend;
                     }
                 }
             }
             result = infer(imp->expr, import_env, level);
+            concurrency_boundaries_ = std::move(saved_boundaries);
             break;
         }
 
@@ -444,8 +676,29 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
         case AST_SEQ_GENERATOR_EXPR: {
             auto* gen = static_cast<SeqGeneratorExpr*>(node);
             auto gen_env = env->child();
+            if (gen->is_parallel)
+                capture_frames_.push_back({gen_env.get(), {}, {}});
             bind_collection_extractor(gen->collectionExtractor, gen_env, level);
             auto* body_type = infer(gen->reducerExpr, gen_env, level);
+            if (gen->is_parallel) {
+                auto captures = std::move(capture_frames_.back().types);
+                capture_frames_.pop_back();
+                require_trait("Send", body_type, gen->source_context,
+                              "result of a parallel comprehension iteration");
+                require_captures_shareable(
+                    captures, gen->source_context,
+                    "value shared with a parallel comprehension iteration");
+                if (auto* extractor = dynamic_cast<ValueCollectionExtractorExpr*>(
+                        gen->collectionExtractor)) {
+                    auto* source = extractor->collection
+                        ? zonk(type_of(extractor->collection)) : nullptr;
+                    if (source && source->tag == MonoType::App &&
+                        !source->args.empty())
+                        require_trait("Shareable", source->args.front(),
+                                      gen->source_context,
+                                      "element of a parallel comprehension source");
+                }
+            }
             result = arena_.make_app("Seq", {body_type});
             break;
         }
@@ -472,7 +725,13 @@ MonoTypePtr TypeChecker::infer(AstNode* node, std::shared_ptr<TypeEnv> env, int 
         case AST_SET_EXPR: {
             auto* se = static_cast<SetExpr*>(node);
             if (se->values.empty()) {
-                result = arena_.make_app("Set", {arena_.fresh_var(level)});
+                // `{}` is the shared empty literal for persistent sets and
+                // dictionaries. Keep its kind context-polymorphic; the first
+                // consuming operation (`put`, union, etc.) selects the
+                // concrete collection type. Codegen uses their common HAMT
+                // empty representation.
+                result = arena_.fresh_var(level);
+                uf_.add_var(result->var_id, level);
             } else {
                 auto* elem_type = infer(se->values[0], env, level);
                 for (size_t i = 1; i < se->values.size(); i++) {
@@ -632,7 +891,13 @@ MonoTypePtr TypeChecker::infer_identifier(IdentifierExpr* node,
         error_count_++;
         return arena_.fresh_var(level);
     }
-    return instantiate(*scheme, level);
+    auto* inferred = instantiate(*scheme, level);
+    for (auto& frame : capture_frames_) {
+        if (env->bound_through(node->name->value, frame.local_root)) continue;
+        if (frame.names.insert(node->name->value).second)
+            frame.types.push_back(inferred);
+    }
+    return inferred;
 }
 
 // ===== Let Binding =====
@@ -707,6 +972,10 @@ MonoTypePtr TypeChecker::infer_let(LetExpr* node, std::shared_ptr<TypeEnv> env, 
                            "in recursive function '" + prelim.la->name->value + "'");
             auto scheme = generalize(fn_type, level);
             child_env->bind_scheme(prelim.la->name->value, scheme);
+            if (const auto captures = function_capture_types_.find(prelim.la->lambda);
+                captures != function_capture_types_.end())
+                named_function_capture_types_[prelim.la->name->value] =
+                    captures->second;
         }
     }
 
@@ -719,11 +988,25 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr* node,
                                          std::shared_ptr<TypeEnv> env, int level) {
     auto fn_env = env->child();
 
-    // Create fresh type variables for parameters
+    MonoTypePtr declared_cursor = nullptr;
+    if (node->type_signature.has_value())
+        declared_cursor = from_ast_type(*node->type_signature, level);
+
+    // Seed annotated parameters before checking the body. This is essential
+    // for nominal record field access: `f : Request -> String; f r = r.path`
+    // must bind `r` as Request while `.path` is inferred, not only unify the
+    // completed function with its signature afterward.
     std::vector<MonoTypePtr> param_types;
     for (auto* pat : node->patterns) {
-        auto* param_var = arena_.fresh_var(level);
-        uf_.add_var(param_var->var_id, level);
+        MonoTypePtr param_var = nullptr;
+        auto* resolved_declared = unifier_.resolve(declared_cursor);
+        if (resolved_declared && resolved_declared->tag == MonoType::Arrow) {
+            param_var = resolved_declared->param_type;
+            declared_cursor = resolved_declared->return_type;
+        } else {
+            param_var = arena_.fresh_var(level);
+            uf_.add_var(param_var->var_id, level);
+        }
         param_types.push_back(param_var);
 
         // A function parameter is a pattern, not just an identifier.  Infer it
@@ -734,6 +1017,11 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr* node,
         unifier_.unify(param_var, pattern_type, pat->source_context,
                        "in function parameter pattern");
     }
+
+    // Capture types are retained as compile-time metadata for concurrency
+    // boundaries. Sequential closures remain unrestricted; spawn and parallel
+    // constructs later require each captured value to be Shareable.
+    capture_frames_.push_back({fn_env.get(), {}, {}});
 
     // Infer body type, collecting latent performs / applied rows not covered by a handle
     latent_effect_stack_.emplace_back();
@@ -746,6 +1034,12 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr* node,
         }
     }
     if (!body_type) body_type = arena_.make_con(TyCon::Unit);
+    if (declared_cursor)
+        unifier_.unify(body_type, declared_cursor, node->source_context,
+                       "against the declared function result type");
+
+    function_capture_types_[node] = capture_frames_.back().types;
+    capture_frames_.pop_back();
 
     CollectedRow collected = std::move(latent_effect_stack_.back());
     latent_effect_stack_.pop_back();
@@ -834,11 +1128,16 @@ void TypeChecker::check_param_borrow_annotations(FunctionExpr* node) {
 MonoTypePtr TypeChecker::infer_apply(ApplyExpr* node, std::shared_ptr<TypeEnv> env, int level) {
     // Infer callee
     MonoTypePtr callee_type = nullptr;
+    size_t constraint_begin = deferred_constraints_.size();
+    size_t constraint_end = constraint_begin;
     if (auto* nc = dynamic_cast<NameCall*>(node->call)) {
         auto scheme = env->lookup(nc->name->value);
-        if (scheme)
+        if (scheme) {
             callee_type = instantiate(*scheme, level);
-        else {
+            constraint_end = deferred_constraints_.size();
+            for (size_t i = constraint_begin; i < constraint_end; ++i)
+                deferred_constraints_[i].origin = node;
+        } else {
             std::string msg = "undefined function '" + nc->name->value + "'";
             auto names = env->all_names();
             std::string best;
@@ -924,7 +1223,93 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr* node, std::shared_ptr<TypeEnv> e
             result_type = result_var;
     }
 
+    std::string concurrency_callee;
+    std::optional<ConcurrencyBoundary> concurrency_boundary;
+    for (ApplyExpr* current = node; current;) {
+        if (auto* named = dynamic_cast<NameCall*>(current->call)) {
+            concurrency_callee = named->name->value;
+            if (const auto found = concurrency_boundaries_.find(concurrency_callee);
+                found != concurrency_boundaries_.end())
+                concurrency_boundary = found->second;
+            break;
+        }
+        if (auto* expression = dynamic_cast<ExprCall*>(current->call)) {
+            current = dynamic_cast<ApplyExpr*>(expression->expr);
+            continue;
+        }
+        break;
+    }
+    if (concurrency_boundary)
+        enforce_concurrency_boundary(node, concurrency_callee,
+                                     concurrency_boundary);
+
     return unifier_.resolve(result_type);
+}
+
+void TypeChecker::require_trait(const std::string& trait_name, MonoTypePtr type,
+                                const SourceLocation& loc,
+                                std::string context) {
+    if (!type) return;
+    deferred_constraints_.emplace_back(
+        trait_name, unifier_.resolve(type), loc, std::move(context));
+}
+
+void TypeChecker::require_captures_shareable(
+        const std::vector<MonoTypePtr>& captures, const SourceLocation& loc,
+        const std::string& context) {
+    for (auto* capture : captures)
+        if (auto* resolved = unifier_.resolve(capture);
+            resolved && resolved->tag != MonoType::Arrow)
+            require_trait("Shareable", resolved, loc, context);
+}
+
+void TypeChecker::enforce_concurrency_boundary(
+        ApplyExpr* node, const std::string& callee_name,
+        std::optional<ConcurrencyBoundary> boundary) {
+    if (!boundary) return;
+    std::vector<AstNode*> arguments;
+    std::vector<ApplyExpr*> chain;
+    for (ApplyExpr* current = node; current;) {
+        chain.push_back(current);
+        if (auto* expression = dynamic_cast<ExprCall*>(current->call))
+            current = dynamic_cast<ApplyExpr*>(expression->expr);
+        else
+            break;
+    }
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+        for (auto& argument : (*it)->args)
+            arguments.push_back(std::holds_alternative<ExprNode*>(argument)
+                ? static_cast<AstNode*>(std::get<ExprNode*>(argument))
+                : static_cast<AstNode*>(std::get<ValueExpr*>(argument)));
+    }
+
+    if (*boundary == ConcurrencyBoundary::ChannelSend && arguments.size() == 2) {
+        require_trait("Send", type_of(arguments[1]), node->source_context,
+                      "value sent through Std\\Channel.send");
+        return;
+    }
+    if (*boundary != ConcurrencyBoundary::TaskSpawn || arguments.size() != 1)
+        return;
+
+    auto* thunk_type = zonk(type_of(arguments.front()));
+    if (thunk_type && thunk_type->tag == MonoType::Arrow)
+        require_trait("Send", thunk_type->return_type, node->source_context,
+                      "result returned from Std\\Task.spawn");
+
+    std::vector<MonoTypePtr> captures;
+    if (auto* function = dynamic_cast<FunctionExpr*>(arguments.front())) {
+        if (const auto found = function_capture_types_.find(function);
+            found != function_capture_types_.end())
+            captures = found->second;
+    } else if (auto* identifier = dynamic_cast<IdentifierExpr*>(arguments.front())) {
+        if (const auto found = named_function_capture_types_.find(
+                identifier->name->value);
+            found != named_function_capture_types_.end())
+            captures = found->second;
+    }
+    require_captures_shareable(
+        captures, node->source_context,
+        "value captured by the closure passed to Std\\Task.spawn");
 }
 
 bool TypeChecker::is_effect_handled(const std::string& op_key) const {
@@ -1052,6 +1437,45 @@ MonoTypePtr TypeChecker::infer_binary(BinaryOpExpr* node,
     auto* right_type = infer(node->right, env, level);
 
     std::string name = op_name(node->get_type());
+
+    // Equality and ordering are trait-governed source operations. Keep the
+    // ordinary operator scheme for operand/result unification, but record the
+    // semantic obligation here so every frontend mode validates it before
+    // LLVM lowering. `!=` shares Eq.eq and the relational operators share
+    // Ord.compare; there is deliberately no second operator-specific contract.
+    if (name == "==" || name == "!=") {
+        deferred_constraints_.push_back(
+            {"Eq", left_type, node->source_context, "required by operator '" + name + "'"});
+    } else if (name == "<" || name == ">" || name == "<=" || name == ">=") {
+        deferred_constraints_.push_back(
+            {"Ord", left_type, node->source_context, "required by operator '" + name + "'"});
+    }
+
+    if (name == "++") {
+        auto* left = unifier_.resolve(left_type);
+        auto* right = unifier_.resolve(right_type);
+        const auto is_string = [](MonoTypePtr type) {
+            return type && type->tag == MonoType::Con &&
+                   type->con == TyCon::String;
+        };
+        if (is_string(left) || is_string(right)) {
+            auto* string = arena_.make_con(TyCon::String);
+            unifier_.unify(left_type, string, node->source_context,
+                           "in operator ++ (both operands must be String or both Seq)");
+            unifier_.unify(right_type, string, node->source_context,
+                           "in operator ++ (both operands must be String or both Seq)");
+            return string;
+        }
+        auto* element = arena_.fresh_var(level);
+        uf_.add_var(element->var_id, level);
+        auto* sequence = arena_.make_app("Seq", {element});
+        unifier_.unify(left_type, sequence, node->source_context,
+                       "in operator ++ (left sequence)");
+        unifier_.unify(right_type, sequence, node->source_context,
+                       "in operator ++ (right sequence)");
+        return unifier_.resolve(sequence);
+    }
+
     auto scheme = env->lookup(name);
     if (!scheme) {
         // Fallback: assume left_type -> left_type -> left_type
@@ -1193,8 +1617,10 @@ MonoTypePtr TypeChecker::instantiate(const TypeScheme& scheme, int level) {
 
     // Record deferred constraints (substituted)
     for (auto& c : scheme.constraints) {
-        auto* subst_type = substitute(c.type, subst);
-        deferred_constraints_.push_back({c.trait_name, subst_type, {}, ""});
+        std::vector<MonoTypePtr> arguments;
+        for (auto* type : c.types) arguments.push_back(substitute(type, subst));
+        deferred_constraints_.emplace_back(
+            c.trait_name, std::move(arguments), SourceLocation{}, "");
     }
 
     return substitute(scheme.body, subst);
@@ -1299,6 +1725,8 @@ MonoTypePtr TypeChecker::infer_pattern(PatternNode* pat, std::shared_ptr<TypeEnv
 
         case AST_TUPLE_PATTERN: {
             auto* tp = static_cast<TuplePattern*>(pat);
+            if (tp->patterns.empty())
+                return arena_.make_con(TyCon::Unit);
             std::vector<MonoTypePtr> elem_types;
             for (auto* sub : tp->patterns)
                 elem_types.push_back(infer_pattern(sub, env, level));
@@ -1503,10 +1931,16 @@ void TypeChecker::bind_collection_extractor(CollectionExtractorExpr* ce,
         uf_.add_var(elem_type->var_id, level);
         if (vce->collection) {
             auto* col_type = infer(vce->collection, env, level);
-            // Collection should be Seq(elem_type) — unify
-            auto* expected = arena_.make_app("Seq", {elem_type});
-            unifier_.unify(col_type, expected, ce->source_context,
-                           "in generator collection");
+            auto* resolved = unifier_.resolve(col_type);
+            if (resolved && resolved->tag == MonoType::App &&
+                resolved->type_name == "Iterator" && !resolved->args.empty()) {
+                unifier_.unify(resolved->args.front(), elem_type,
+                               ce->source_context, "in iterator generator");
+            } else {
+                auto* expected = arena_.make_app("Seq", {elem_type});
+                unifier_.unify(col_type, expected, ce->source_context,
+                               "in generator collection");
+            }
         }
         // Bind the iteration variable
         if (auto* id = std::get_if<IdentifierExpr*>(&vce->expr))
@@ -1549,12 +1983,17 @@ MonoTypePtr TypeChecker::infer_cons(ConsLeftExpr* node, std::shared_ptr<TypeEnv>
 void TypeChecker::register_adt(const std::string& type_name,
                                 const std::vector<std::string>& type_params,
                                 const std::vector<std::pair<std::string, int>>& constructors,
-                                const std::vector<std::vector<ast::FieldType>>& field_types) {
+                                const std::vector<std::vector<ast::FieldType>>& field_types,
+                                const std::vector<std::vector<std::string>>& field_names) {
+    adt_type_params_[type_name] = type_params;
     for (size_t constructor_index = 0; constructor_index < constructors.size(); ++constructor_index) {
         const auto& [ctor_name, arity] = constructors[constructor_index];
         const auto& fields = constructor_index < field_types.size()
             ? field_types[constructor_index] : std::vector<ast::FieldType>{};
-        constructor_registry_[ctor_name] = {type_name, arity, type_params, fields};
+        const auto& names = constructor_index < field_names.size()
+            ? field_names[constructor_index] : std::vector<std::string>{};
+        constructor_registry_[ctor_name] = {
+            type_name, arity, type_params, fields, names};
 
         // Register constructor as a function in root env:
         // For arity 0: constructor is a value of type ADT
@@ -1626,6 +2065,11 @@ void TypeChecker::register_adt(const std::string& type_name,
 
 // ===== Trait Registration =====
 
+void TypeChecker::register_trait(const std::string& trait_name,
+                                 std::vector<std::string> type_params) {
+    trait_type_params_[trait_name] = std::move(type_params);
+}
+
 void TypeChecker::register_trait_method(const std::string& trait_name,
                                          const std::string& method_name,
                                          MonoTypePtr method_type) {
@@ -1652,30 +2096,229 @@ void TypeChecker::register_trait_method(const std::string& trait_name,
     root_env_->bind_scheme(method_name, TypeScheme(qvars, constraints, method_type));
 }
 
-void TypeChecker::register_instance(const std::string& trait_name, const std::string& type_name) {
-    trait_instances_[trait_name].push_back(type_name);
+void TypeChecker::register_trait_method_descriptor(
+        const std::string& trait_name, const std::string& method_name,
+        const std::string& descriptor) {
+    ImportedFnSig signature;
+    signature.return_descriptor = descriptor;
+    std::unordered_map<std::string, MonoTypePtr> variables;
+    auto* method_type = mono_from_import_sig(signature, 0, &variables);
+    register_trait_method(trait_name, method_name, method_type);
+    if (const auto parameters = trait_type_params_.find(trait_name);
+        parameters != trait_type_params_.end()) {
+        std::vector<MonoTypePtr> arguments;
+        for (const auto& parameter : parameters->second) {
+            auto found = variables.find(parameter);
+            if (found == variables.end()) {
+                auto* variable = arena_.fresh_var(0);
+                uf_.add_var(variable->var_id, 0);
+                found = variables.emplace(parameter, variable).first;
+            }
+            arguments.push_back(found->second);
+        }
+        if (auto scheme = root_env_->lookup(method_name); scheme && !arguments.empty()) {
+            auto quantified = scheme->quantified_vars;
+            for (auto* argument : arguments) {
+                auto* resolved = unifier_.resolve(argument);
+                if (resolved && resolved->tag == MonoType::Var &&
+                    std::find(quantified.begin(), quantified.end(), resolved->var_id) ==
+                        quantified.end())
+                    quantified.push_back(resolved->var_id);
+            }
+            root_env_->bind_scheme(method_name,
+                TypeScheme(std::move(quantified),
+                           {Constraint(trait_name, std::move(arguments))},
+                           scheme->body));
+        }
+    }
+}
+
+void TypeChecker::register_builtin_function(const std::string& function_name,
+                                             MonoTypePtr function_type) {
+    std::vector<TypeId> quantified;
+    collect_free_vars(function_type, -1, quantified);
+    root_env_->bind_scheme(function_name, TypeScheme(quantified, function_type));
+}
+
+void TypeChecker::register_trait_superclass(
+        const std::string& trait_name, const std::string& superclass_name) {
+    auto& superclasses = trait_superclasses_[trait_name];
+    if (std::find(superclasses.begin(), superclasses.end(), superclass_name) ==
+        superclasses.end()) {
+        superclasses.push_back(superclass_name);
+        std::sort(superclasses.begin(), superclasses.end());
+    }
+}
+
+void TypeChecker::register_instance(
+        const std::string& trait_name, const std::string& type_name,
+        std::vector<std::string> type_params,
+        std::vector<std::pair<std::string, std::string>> constraints,
+        std::vector<std::string> type_names) {
+    auto& instances = trait_instances_[trait_name];
+    if (type_names.empty()) type_names.push_back(type_name);
+    const auto duplicate = std::find_if(
+        instances.begin(), instances.end(), [&](const InstanceContract& instance) {
+            return instance.type_names == type_names &&
+                   instance.type_params == type_params &&
+                   instance.constraints == constraints;
+        });
+    if (duplicate != instances.end()) return;
+    instances.push_back({type_name, std::move(type_names),
+                         std::move(type_params), std::move(constraints)});
+    std::sort(instances.begin(), instances.end(),
+              [](const InstanceContract& left, const InstanceContract& right) {
+                  return left.type_names < right.type_names;
+              });
 }
 
 bool TypeChecker::solve_constraints() {
     bool all_ok = true;
-    for (auto& dc : deferred_constraints_) {
-        auto* resolved = zonk(dc.type);
-        if (resolved->tag == MonoType::Var) continue; // unsolved var
+    std::unordered_set<std::string> reported;
+    std::vector<DeferredConstraint> worklist = deferred_constraints_;
+    for (size_t work_index = 0; work_index < worklist.size(); ++work_index) {
+        const auto& dc = worklist[work_index];
+        std::vector<MonoTypePtr> resolved;
+        std::vector<std::string> type_names;
+        std::vector<std::string> type_heads;
+        bool unresolved = false;
+        for (auto* argument : dc.types) {
+            auto* concrete = zonk(argument);
+            if (concrete->tag == MonoType::Var) unresolved = true;
+            resolved.push_back(concrete);
+            type_names.push_back(pretty_print(concrete));
+            type_heads.push_back(concrete->tag == MonoType::App
+                ? concrete->type_name
+                : concrete->tag == MonoType::MTuple && concrete->elements.empty()
+                    ? "Unit"
+                : concrete->tag == MonoType::MTuple ? "Tuple"
+                : pretty_print(concrete));
+            if (type_names.back() == "()") type_heads.back() = "Unit";
+        }
+        if (unresolved || resolved.empty()) continue;
 
-        std::string type_name = pretty_print(resolved);
+        std::string application = dc.trait_name;
+        for (const auto& name : type_names) application += " " + name;
+        const std::string obligation_key = application + ":" + dc.context;
+        const bool first_report = reported.insert(obligation_key).second;
 
         auto it = trait_instances_.find(dc.trait_name);
         if (it == trait_instances_.end()) {
-            diag_.error(dc.loc, ErrorCode::E0106, "no instances for trait '" + dc.trait_name + "'");
+            std::string message = "no instances for trait '" + dc.trait_name + "'";
+            if (!dc.context.empty()) message += " (" + dc.context + ")";
+            if (first_report)
+                diag_.error(dc.loc, ErrorCode::E0106, message);
             all_ok = false;
             continue;
         }
-        bool found = false;
-        for (auto& inst : it->second)
-            if (inst == type_name) { found = true; break; }
-        if (!found) {
-            diag_.error(dc.loc, ErrorCode::E0105, "no instance for '" + dc.trait_name + " " + type_name + "'");
+        struct Match {
+            const InstanceContract* instance;
+            std::unordered_map<std::string, MonoTypePtr> parameters;
+        };
+        std::vector<Match> matches;
+        for (const auto& instance : it->second) {
+            const auto& heads = instance.type_names;
+            if (heads.size() != resolved.size()) continue;
+            std::unordered_map<std::string, MonoTypePtr> parameters;
+            if (!resolved.empty() && resolved.front()->tag == MonoType::App) {
+                for (size_t i = 0;
+                     i < instance.type_params.size() &&
+                     i < resolved.front()->args.size(); ++i)
+                    parameters[instance.type_params[i]] =
+                        zonk(resolved.front()->args[i]);
+            } else if (!resolved.empty() &&
+                       resolved.front()->tag == MonoType::MTuple) {
+                for (size_t i = 0;
+                     i < instance.type_params.size() &&
+                     i < resolved.front()->elements.size(); ++i)
+                    parameters[instance.type_params[i]] =
+                        zonk(resolved.front()->elements[i]);
+            }
+            bool compatible = true;
+            for (size_t i = 0; i < heads.size(); ++i) {
+                const bool parameter = std::find(instance.type_params.begin(),
+                                                 instance.type_params.end(),
+                                                 heads[i]) !=
+                    instance.type_params.end();
+                if (parameter) {
+                    if (const auto found = parameters.find(heads[i]);
+                        found != parameters.end()) {
+                        auto* bound = zonk(found->second);
+                        if (bound->tag == MonoType::Var) {
+                            parameters[heads[i]] = resolved[i];
+                        } else if (resolved[i]->tag != MonoType::Var &&
+                                   pretty_print(bound) != type_names[i]) {
+                            compatible = false;
+                            break;
+                        }
+                    }
+                    parameters[heads[i]] = resolved[i];
+                } else if (heads[i] != type_names[i] && heads[i] != type_heads[i]) {
+                    compatible = false;
+                    break;
+                }
+            }
+            if (compatible) matches.push_back({&instance, std::move(parameters)});
+        }
+        if (matches.empty()) {
+            std::string message = "no instance for '" + application + "'";
+            if (!dc.context.empty()) message += " (" + dc.context + ")";
+            if (first_report)
+                diag_.error(dc.loc, ErrorCode::E0105, message);
+            if (first_report && dc.trait_name == "Eq") {
+                diag_.note(dc.loc,
+                    "add `deriving Eq` to a value ADT, define an `instance Eq " +
+                    type_heads.front() + "`, or pass an explicit comparator such as Std\\Test.equalBy");
+            } else if (first_report && dc.trait_name == "Ord") {
+                diag_.note(dc.loc,
+                    "add `deriving Ord` (and Eq), define an `instance Ord " +
+                    type_heads.front() + "`, or call an explicit comparison function");
+            } else if (first_report && dc.trait_name == "Send") {
+                diag_.note(dc.loc,
+                    "move only values with a `Send` instance across this boundary; "
+                    "immutable ADTs may add `deriving Send`, native arrays may move but not "
+                    "be shared, and Linear resources or promises must remain on their owning task");
+            } else if (first_report && dc.trait_name == "Shareable") {
+                diag_.note(dc.loc,
+                    "capture only immutable values with a `Shareable` instance; "
+                    "immutable ADTs may add `deriving Send, Shareable`, synchronized channel "
+                    "endpoints are shareable, and mutable native arrays require a snapshot");
+            }
             all_ok = false;
+            continue;
+        }
+        if (matches.size() > 1) {
+            if (first_report)
+                diag_.error(dc.loc, ErrorCode::E0400,
+                            "ambiguous visible instances for '" + application +
+                            "'; remove the duplicate import or instance");
+            all_ok = false;
+            continue;
+        }
+
+        const auto& match = matches.front();
+        const auto& instance = *match.instance;
+        if (dc.origin)
+            selected_trait_instances_[dc.origin] = {
+                dc.trait_name, instance.type_names};
+        if (const auto superclasses = trait_superclasses_.find(dc.trait_name);
+            superclasses != trait_superclasses_.end()) {
+            for (const auto& superclass : superclasses->second)
+                worklist.emplace_back(superclass, resolved.front(), dc.loc,
+                                      "superclass of " + application);
+        }
+        for (const auto& [required_trait, parameter] : instance.constraints) {
+            const auto bound = match.parameters.find(parameter);
+            if (bound == match.parameters.end()) {
+                diag_.error(dc.loc, ErrorCode::E0400,
+                            "malformed instance contract for '" + application +
+                            "': constraint parameter '" +
+                            parameter + "' is not declared");
+                all_ok = false;
+                continue;
+            }
+            worklist.emplace_back(required_trait, bound->second, dc.loc,
+                                  "required by " + application);
         }
     }
     return all_ok;
@@ -1850,6 +2493,38 @@ void TypeChecker::bind_import_name(std::shared_ptr<TypeEnv> env, const std::stri
         lin = import_src_->imported_function_sig(module_fqn, func_name);
 
     if (row && row->known) {
+        // Effect metadata augments the function contract; it must not replace
+        // the structural parameter/return descriptors from the same `.yonai`
+        // row. Rebuilding every parameter as a fresh variable made an imported
+        // `(a -> b) -> Option a -> Option b` look like
+        // `(x -> y) -> x -> y`, so the callback's `Int` use forced the Option
+        // argument itself to Int.
+        if (lin) {
+            std::vector<LatentEffect> effects;
+            for (auto& op : row->effect_ops)
+                effects.push_back({op, SourceLocation::unknown()});
+            MonoTypePtr rest = nullptr;
+            if (row->open_rest) {
+                rest = arena_.fresh_var(level);
+                uf_.add_var(rest->var_id, level);
+            }
+            std::function<MonoTypePtr(MonoTypePtr, bool)> attach_effects;
+            attach_effects = [&](MonoTypePtr type, bool first_parameter) -> MonoTypePtr {
+                type = unifier_.resolve(type);
+                if (!type || type->tag != MonoType::Arrow) return type;
+                MonoTypePtr param = type->param_type;
+                if (row->hof && first_parameter) {
+                    auto* resolved_param = unifier_.resolve(param);
+                    if (resolved_param && resolved_param->tag == MonoType::Arrow)
+                        param = attach_effects(resolved_param, false);
+                }
+                return arena_.make_arrow(
+                    param, attach_effects(type->return_type, false), effects, rest);
+            };
+            auto* exact = attach_effects(mono_from_import_sig(*lin, level), true);
+            env->bind_scheme(bind_name, generalize(exact, level - 1));
+            return;
+        }
         auto fresh = [this, level]() {
             auto* v = arena_.fresh_var(level);
             uf_.add_var(v->var_id, level);
@@ -1913,7 +2588,9 @@ void TypeChecker::bind_import_name(std::shared_ptr<TypeEnv> env, const std::stri
     env->bind(bind_name, v);
 }
 
-MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int level) {
+MonoTypePtr TypeChecker::mono_from_import_sig(
+        const ImportedFnSig& sig, int level,
+        std::unordered_map<std::string, MonoTypePtr>* output_descriptor_variables) {
     auto fresh = [this, level]() {
         auto* v = arena_.fresh_var(level);
         uf_.add_var(v->var_id, level);
@@ -1924,16 +2601,30 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
             ? fresh()
             : arena_.make_app(payload_adt, {})});
     };
-    // SEQ/SET/DICT/ADT/FUNCTION are structural in `.yonai`. INT and other
-    // scalars are often monomorphized placeholders for polymorphic params.
+    // Collection/function tags are structural. Legacy generic interfaces use
+    // INT as the placeholder for a type variable, so INT must remain fresh
+    // until interfaces serialize VAR descriptors. Other scalar tags are exact.
     auto from_tag = [&](const std::string& tag) -> MonoTypePtr {
+        if (tag == "STRING") return arena_.make_con(TyCon::String);
+        if (tag == "BOOL") return arena_.make_con(TyCon::Bool);
+        if (tag == "FLOAT") return arena_.make_con(TyCon::Float);
+        if (tag == "CHAR") return arena_.make_con(TyCon::Char);
+        if (tag == "BYTE") return arena_.make_con(TyCon::Byte);
+        if (tag == "SYMBOL") return arena_.make_con(TyCon::Symbol);
+        if (tag == "UNIT") return arena_.make_con(TyCon::Unit);
         if (tag == "SEQ") return arena_.make_app("Seq", {fresh()});
         if (tag == "SET") return arena_.make_app("Set", {fresh()});
         if (tag == "DICT") return arena_.make_app("Dict", {fresh(), fresh()});
+        if (tag == "BYTE_ARRAY") return arena_.make_con(TyCon::ByteArray);
+        if (tag == "INT_ARRAY") return arena_.make_app("IntArray", {});
+        if (tag == "FLOAT_ARRAY") return arena_.make_app("FloatArray", {});
+        if (tag == "CHANNEL") return arena_.make_app("Channel", {fresh()});
+        if (tag == "PROMISE") return arena_.make_app("Promise", {fresh()});
         if (tag == "FUNCTION") return arena_.make_arrow(fresh(), fresh());
         if (tag == "ADT") return arena_.make_app("ADT", {fresh()});
         return fresh();
     };
+    std::unordered_map<std::string, MonoTypePtr> descriptor_variables;
     auto from_descriptor = [&](const std::string& text) -> MonoTypePtr {
         std::function<MonoTypePtr(const std::string&)> parse;
         parse = [&](const std::string& value) -> MonoTypePtr {
@@ -1953,19 +2644,35 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
             if (!part.empty()) parts.push_back(part);
             std::vector<MonoTypePtr> args;
             for (const auto& nested : parts) args.push_back(parse(nested));
+            if (name == "VAR" && parts.size() == 1) {
+                auto found = descriptor_variables.find(parts[0]);
+                if (found != descriptor_variables.end()) return found->second;
+                auto* variable = fresh();
+                descriptor_variables[parts[0]] = variable;
+                return variable;
+            }
             if (name == "TUPLE") return arena_.make_tuple(args);
             if (name == "FUNCTION" && args.size() == 2) return arena_.make_arrow(args[0], args[1]);
             if (name == "LINEAR" && args.size() == 1) return arena_.make_app("Linear", args);
-            if (name == "ADT" && parts.size() == 1)
-                return arena_.make_app(parts[0], {});
+            if (name == "ADT" && !parts.empty()) {
+                std::vector<MonoTypePtr> type_arguments;
+                for (size_t i = 1; i < parts.size(); ++i)
+                    type_arguments.push_back(parse(parts[i]));
+                if (type_arguments.empty()) {
+                    if (const auto declared = adt_type_params_.find(parts[0]);
+                        declared != adt_type_params_.end()) {
+                        for (size_t i = 0; i < declared->second.size(); ++i)
+                            type_arguments.push_back(fresh());
+                    }
+                }
+                return arena_.make_app(parts[0], type_arguments);
+            }
             if (name == "Seq" || name == "SET" || name == "Set" || name == "DICT" || name == "Dict")
                 return arena_.make_app(name == "SET" ? "Set" : name == "DICT" ? "Dict" : name, args);
             // An atom inside ADT(...) is a named type, while unknown wrappers
             // remain named applications so future interface constructs retain shape.
             return arena_.make_app(name, args);
         };
-        if (text.starts_with("ADT(") && text.ends_with(')'))
-            return arena_.make_app(text.substr(4, text.size() - 5), {});
         return parse(text);
     };
     MonoTypePtr ret;
@@ -1991,10 +2698,19 @@ MonoTypePtr TypeChecker::mono_from_import_sig(const ImportedFnSig& sig, int leve
         fn = arena_.make_arrow(!descriptor.empty() ? from_descriptor(descriptor)
                                                     : is_lin ? linear() : from_tag(tag), fn);
     }
+    if (output_descriptor_variables)
+        *output_descriptor_variables = descriptor_variables;
     return fn;
 }
 
 MonoTypePtr TypeChecker::from_ast_type(const yona::compiler::types::Type& t, int level) {
+    std::unordered_map<std::string, MonoTypePtr> variables;
+    return from_ast_type_impl(t, level, variables);
+}
+
+MonoTypePtr TypeChecker::from_ast_type_impl(
+        const yona::compiler::types::Type& t, int level,
+        std::unordered_map<std::string, MonoTypePtr>& variables) {
     using yona::compiler::types::BuiltinType;
     using yona::compiler::types::FunctionType;
     using yona::compiler::types::NamedType;
@@ -2036,35 +2752,61 @@ MonoTypePtr TypeChecker::from_ast_type(const yona::compiler::types::Type& t, int
     }
     if (std::holds_alternative<std::shared_ptr<FunctionType>>(t)) {
         auto& ft = std::get<std::shared_ptr<FunctionType>>(t);
-        return arena_.make_arrow(from_ast_type(ft->argumentType, level),
-                                 from_ast_type(ft->returnType, level));
+        return arena_.make_arrow(from_ast_type_impl(ft->argumentType, level, variables),
+                                 from_ast_type_impl(ft->returnType, level, variables));
     }
     if (std::holds_alternative<std::shared_ptr<ProductType>>(t)) {
         auto& pt = std::get<std::shared_ptr<ProductType>>(t);
         std::vector<MonoTypePtr> elems;
         elems.reserve(pt->types.size());
         for (auto& e : pt->types)
-            elems.push_back(from_ast_type(e, level));
+            elems.push_back(from_ast_type_impl(e, level, variables));
         return arena_.make_tuple(elems);
     }
     if (std::holds_alternative<std::shared_ptr<NamedType>>(t)) {
         auto& nt = std::get<std::shared_ptr<NamedType>>(t);
+        if (!nt->name.empty() &&
+            std::islower(static_cast<unsigned char>(nt->name.front())) &&
+            std::holds_alternative<std::nullptr_t>(nt->type)) {
+            if (const auto found = variables.find(nt->name); found != variables.end())
+                return found->second;
+            auto* variable = arena_.fresh_var(level);
+            uf_.add_var(variable->var_id, level);
+            variables[nt->name] = variable;
+            return variable;
+        }
         if (!std::holds_alternative<std::nullptr_t>(nt->type)) {
-            return arena_.make_app(nt->name, {from_ast_type(nt->type, level)});
+            // Surface syntax writes multi-parameter applications as
+            // `Result (a, e)`.  The product here is argument punctuation,
+            // not a single tuple argument: normalize it to the same n-ary
+            // App representation used by constructor schemes and `.yonai`.
+            const auto params = adt_type_params_.find(nt->name);
+            if (const auto* product =
+                    std::get_if<std::shared_ptr<ProductType>>(&nt->type);
+                product && params != adt_type_params_.end() &&
+                params->second.size() > 1 &&
+                (*product)->types.size() == params->second.size()) {
+                std::vector<MonoTypePtr> arguments;
+                arguments.reserve((*product)->types.size());
+                for (const auto& argument : (*product)->types)
+                    arguments.push_back(from_ast_type_impl(argument, level, variables));
+                return arena_.make_app(nt->name, arguments);
+            }
+            return arena_.make_app(nt->name, {from_ast_type_impl(nt->type, level, variables)});
         }
         return arena_.make_app(nt->name, {});
     }
     if (std::holds_alternative<std::shared_ptr<PromiseType>>(t)) {
         auto& pr = std::get<std::shared_ptr<PromiseType>>(t);
-        return from_ast_type(pr->valueType, level); // auto-await: Promise T ~ T
+        return from_ast_type_impl(pr->valueType, level, variables); // auto-await: Promise T ~ T
     }
     if (std::holds_alternative<std::shared_ptr<RefinedType>>(t)) {
         auto& rt = std::get<std::shared_ptr<RefinedType>>(t);
-        return from_ast_type(rt->base_type, level);
+        return from_ast_type_impl(rt->base_type, level, variables);
     }
     if (std::holds_alternative<std::shared_ptr<SingleItemCollectionType>>(t)) {
         auto& col = std::get<std::shared_ptr<SingleItemCollectionType>>(t);
-        auto* elem = from_ast_type(col->valueType, level);
+        auto* elem = from_ast_type_impl(col->valueType, level, variables);
         const char* name = (col->kind == SingleItemCollectionType::Seq) ? "Seq" : "Set";
         return arena_.make_app(name, {elem});
     }

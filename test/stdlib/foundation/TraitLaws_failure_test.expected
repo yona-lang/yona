@@ -1,0 +1,4 @@
+FAIL Broken Eq reflexive: not reflexive for sample
+PASS Broken Eq symmetric
+PASS Broken Eq transitive
+SUMMARY 2 passed, 1 failed

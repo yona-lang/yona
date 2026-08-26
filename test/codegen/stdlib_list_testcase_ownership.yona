@@ -1,0 +1,16 @@
+import testCase, check, run, render from Std\Test,
+       map, filter, foldl, length as listLength, take, reverse, sum, product from Std\List in
+let cases = [
+    testCase "map filter" (\_ ->
+        check "ordered" (filter (\x -> x > 3) (map (\x -> x * 2) [1, 2, 3]) == [4, 6])),
+    testCase "folds" (\_ ->
+        check "identities" (foldl (\a b -> a + b) 7 [] == 7 && sum [1, 2, 3] == 6 && product [2, 3, 4] == 24)),
+    testCase "allocate afterward" (\_ -> check "take" (take 2 [1, 2, 3] == [1, 2])),
+    testCase "manual reverse afterward" (\_ ->
+        let actual = reverse [1, 2, 3] in
+        check "manual reverse" (listLength actual == 3 &&
+            case actual of [3, 2, 1] -> true; _ -> false end)),
+    testCase "reverse afterward" (\_ ->
+        check "reverse" (reverse [1, 2, 3] == [3, 2, 1]))
+]
+in render (run cases)

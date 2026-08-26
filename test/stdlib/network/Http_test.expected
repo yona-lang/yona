@@ -1,0 +1,4 @@
+PASS Http response constructors set status and body
+PASS Http convenience responses use canonical statuses
+PASS Http parses a complete response
+SUMMARY 3 passed, 0 failed

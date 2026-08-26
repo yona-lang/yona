@@ -144,6 +144,10 @@ void Codegen::load_prelude(parser::Parser* parser,
 
     // 2. Auto-import ALL Prelude exports (same as wildcard `import Prelude in ...`)
     register_all_imports("Prelude");
+    // Trait operators are available without an explicit import, including in
+    // otherwise import-free expressions. Materialize their declarations now;
+    // waiting for `codegen_import` made `Ok 1 == Ok 1` fail to resolve Eq.
+    register_trait_externs();
 
     // 4. Register constructors in parser (if provided)
     if (parser) {
@@ -156,21 +160,31 @@ void Codegen::load_prelude(parser::Parser* parser,
     if (type_checker) {
         // Collect ADTs by type name
         std::unordered_map<std::string, std::vector<std::pair<std::string, int>>> adt_ctors;
-        std::unordered_map<std::string, std::vector<std::string>> adt_params;
+        std::unordered_map<std::string, std::vector<std::vector<ast::FieldType>>> adt_fields;
+        std::unordered_map<std::string, std::vector<std::vector<std::string>>> adt_field_names;
         for (auto& [name, info] : types_.adt_constructors) {
             adt_ctors[info.type_name].push_back({name, info.arity});
+            adt_fields[info.type_name].push_back(info.declared_field_types);
+            adt_field_names[info.type_name].push_back(info.field_names);
         }
         // Infer type params from arity (simple heuristic: one param per max arity)
         for (auto& [type_name, ctors] : adt_ctors) {
             int max_arity = 0;
             for (auto& [_, arity] : ctors) max_arity = std::max(max_arity, arity);
             std::vector<std::string> params;
-            for (int i = 0; i < max_arity; i++) {
-                params.push_back(std::string(1, 'a' + i));
+            const auto declared = types_.adt_type_params.find(type_name);
+            if (declared != types_.adt_type_params.end()) {
+                params = declared->second;
             }
-            // Special case: Result has 2 params
-            if (type_name == "Result") params = {"a", "e"};
-            type_checker->register_adt(type_name, params, ctors);
+            // Backward-compatible inference for stale interfaces. New
+            // interfaces always carry `params` and per-field contracts.
+            if (declared == types_.adt_type_params.end()) {
+                for (int i = 0; i < max_arity; i++)
+                    params.push_back(std::string(1, 'a' + i));
+                if (type_name == "Result") params = {"a", "e"};
+            }
+            type_checker->register_adt(type_name, params, ctors,
+                                       adt_fields[type_name], adt_field_names[type_name]);
         }
 
         // Register prelude functions as fully polymorphic in the type checker.
@@ -183,8 +197,9 @@ void Codegen::load_prelude(parser::Parser* parser,
             if (mangled.find(tc_prefix) != 0) continue;
             std::string local_name = mangled.substr(tc_prefix.size());
 
-            // Build polymorphic function type with fresh vars for all params + return.
-            // register_trait_method will generalize (quantify free vars).
+            // Build a polymorphic ordinary function. Prelude exports are not
+            // members of a synthetic `Prelude` trait: doing that creates an
+            // impossible trait obligation at every call site.
             auto* ret_var = arena.fresh_var(0);
             typechecker::MonoTypePtr fn_type = ret_var;
 
@@ -193,13 +208,23 @@ void Codegen::load_prelude(parser::Parser* parser,
                 fn_type = arena.make_arrow(param_var, fn_type);
             }
 
-            type_checker->register_trait_method("Prelude", local_name, fn_type);
+            type_checker->register_builtin_function(local_name, fn_type);
         }
 
         // Register trait methods as polymorphic functions so the type checker
         // accepts calls like `length arr` without an explicit import.
         for (auto& [trait_name, trait_info] : types_.traits) {
+            type_checker->register_trait(trait_name, trait_info.type_params);
+            for (const auto& [superclass, _] : trait_info.superclasses)
+                type_checker->register_trait_superclass(trait_name, superclass);
             for (auto& method_name : trait_info.method_names) {
+                if (const auto descriptor =
+                        trait_info.method_type_descriptors.find(method_name);
+                    descriptor != trait_info.method_type_descriptors.end()) {
+                    type_checker->register_trait_method_descriptor(
+                        trait_name, method_name, descriptor->second);
+                    continue;
+                }
                 auto* ret_var = arena.fresh_var(0);
                 typechecker::MonoTypePtr fn_type = ret_var;
                 // Trait methods have at least one parameter (the receiver)
@@ -209,6 +234,16 @@ void Codegen::load_prelude(parser::Parser* parser,
             }
         }
 
+        // Trait obligations are checked by the TypeChecker, so it must see the
+        // same concrete instance set that codegen will use for static dispatch.
+        for (const auto& [_, instance] : types_.trait_instances) {
+            if (!instance.trait_name.empty() && !instance.type_name.empty())
+                type_checker->register_instance(
+                    instance.trait_name, instance.type_name,
+                    instance.type_params, instance.constraints,
+                    instance.type_names);
+        }
+
         // Register typeOf as a built-in compile-time intrinsic: a -> Type
         // The codegen intercepts calls to typeOf and constructs a Type ADT
         // based on the argument's compile-time CType. Zero runtime cost.
@@ -216,7 +251,7 @@ void Codegen::load_prelude(parser::Parser* parser,
             auto* arg_var = arena.fresh_var(0);
             auto* type_adt = arena.make_app("Type", {});
             auto* fn_type = arena.make_arrow(arg_var, type_adt);
-            type_checker->register_trait_method("Prelude", "typeOf", fn_type);
+            type_checker->register_builtin_function("typeOf", fn_type);
         }
 
         // Std\GPU typed failure ops (design-gpu-async.md §6). Effect decls are
@@ -337,7 +372,7 @@ LType* Codegen::llvm_type(CType ct) {
         case CType::SET:    return PointerType::get(*context_, 0);
         case CType::DICT:   return PointerType::get(*context_, 0);
         case CType::PROMISE: return PointerType::get(*context_, 0);
-        case CType::ADT:    return LType::getInt64Ty(*context_); // overridden per-ADT
+        case CType::ADT:    return PointerType::get(*context_, 0);
         case CType::BYTE_ARRAY:  return PointerType::get(*context_, 0);
         case CType::INT_ARRAY: return PointerType::get(*context_, 0);
         case CType::FLOAT_ARRAY: return PointerType::get(*context_, 0);
@@ -448,6 +483,7 @@ void Codegen::declare_runtime() {
     rt_.closure_set_cap_ = decl("yona_rt_closure_set_cap", vd, {ptr, i64, i64});
     rt_.closure_get_cap_ = decl("yona_rt_closure_get_cap", i64, {ptr, i64});
     rt_.closure_set_heap_mask_ = decl("yona_rt_closure_set_heap_mask", vd, {ptr, i64});
+    rt_.closure_set_borrow_mask_ = decl("yona_rt_closure_set_borrow_mask", vd, {ptr, i64});
 
     // Tuple allocation with metadata
     rt_.tuple_alloc_ = decl("yona_rt_tuple_alloc", ptr, {i64});
@@ -592,6 +628,18 @@ std::string Codegen::mangle_name(const std::string& module_fqn, const std::strin
     return mangled;
 }
 
+std::string Codegen::mangle_trait_instance_method(
+        const InstanceDeclNode* instance, const std::string& method_name) {
+    std::string symbol = instance->trait_name;
+    const auto& heads = instance->type_names;
+    if (heads.empty()) {
+        symbol += "_" + instance->type_name;
+    } else {
+        for (const auto& head : heads) symbol += "_" + head;
+    }
+    return symbol + "__" + method_name;
+}
+
 Module* Codegen::compile(AstNode* node) {
     auto fn = codegen_main(node);
     if (!fn) return nullptr;
@@ -603,6 +651,11 @@ Module* Codegen::compile(AstNode* node) {
         return nullptr;
     }
     optimize();
+    err.clear();
+    if (verifyModule(*module_, &os)) {
+        std::cerr << "Module verification failed after optimization:\n" << err << "\n";
+        return nullptr;
+    }
     return module_.get();
 }
 
@@ -610,11 +663,63 @@ Module* Codegen::compile(AstNode* node) {
 static CType yona_type_to_ctype(const types::Type& t);
 static std::pair<std::vector<CType>, CType> uncurry_type_signature(const types::Type& t);
 
+static std::optional<CType> checked_type_to_ctype(
+        typechecker::TypeChecker& checker, typechecker::MonoTypePtr type) {
+    type = checker.zonk(type);
+    if (!type) return std::nullopt;
+    if (type->tag == typechecker::MonoType::Con) {
+        switch (type->con) {
+            case typechecker::TyCon::Int:
+            case typechecker::TyCon::Char:
+            case typechecker::TyCon::Byte: return CType::INT;
+            case typechecker::TyCon::Float: return CType::FLOAT;
+            case typechecker::TyCon::Bool: return CType::BOOL;
+            case typechecker::TyCon::String: return CType::STRING;
+            case typechecker::TyCon::Symbol: return CType::SYMBOL;
+            case typechecker::TyCon::Unit: return CType::UNIT;
+            case typechecker::TyCon::Seq: return CType::SEQ;
+            case typechecker::TyCon::Set: return CType::SET;
+            case typechecker::TyCon::Dict: return CType::DICT;
+            case typechecker::TyCon::Tuple: return CType::TUPLE;
+            case typechecker::TyCon::Function: return CType::FUNCTION;
+            case typechecker::TyCon::Promise: return CType::PROMISE;
+            case typechecker::TyCon::ByteArray: return CType::BYTE_ARRAY;
+        }
+    }
+    if (type->tag == typechecker::MonoType::Arrow) return CType::FUNCTION;
+    if (type->tag == typechecker::MonoType::MTuple) return CType::TUPLE;
+    if (type->tag == typechecker::MonoType::App) {
+        if (type->type_name == "Seq") return CType::SEQ;
+        if (type->type_name == "Set") return CType::SET;
+        if (type->type_name == "Dict") return CType::DICT;
+        if (type->type_name == "Promise") return CType::PROMISE;
+        if (type->type_name == "ByteArray") return CType::BYTE_ARRAY;
+        if (type->type_name == "IntArray") return CType::INT_ARRAY;
+        if (type->type_name == "FloatArray") return CType::FLOAT_ARRAY;
+        if (type->type_name == "Channel") return CType::CHANNEL;
+        return CType::ADT;
+    }
+    return std::nullopt;
+}
+
+static std::optional<CType> checked_function_result_ctype(
+        typechecker::TypeChecker& checker, typechecker::MonoTypePtr type) {
+    type = checker.zonk(type);
+    if (!type || type->tag != typechecker::MonoType::Arrow)
+        return std::nullopt;
+    auto* result = checker.zonk(type->return_type);
+    while (result && result->tag == typechecker::MonoType::Arrow)
+        result = checker.zonk(result->return_type);
+    return checked_type_to_ctype(checker, result);
+}
+
 Module* Codegen::compile_module(ModuleDecl* mod) {
     imports_.interface_symbols.clear();
     interface_export_filter_active_ = true;
     interface_exported_types_.clear();
     interface_opaque_types_.clear();
+    interface_trait_names_.clear();
+    interface_instance_keys_.clear();
     interface_exported_types_.insert(mod->exported_types.begin(), mod->exported_types.end());
     interface_opaque_types_.insert(mod->opaque_exported_types.begin(), mod->opaque_exported_types.end());
 
@@ -676,6 +781,7 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
 
     // Process ADT declarations: register constructors, detect recursion
     for (auto* adt : mod->adt_declarations) {
+        types_.adt_type_params[adt->name] = adt->type_params;
         int max_arity = 0;
         bool is_recursive = heap_adts.count(adt->name) > 0;
         for (auto* ctor : adt->variants) {
@@ -750,6 +856,8 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                                               static_cast<int>(adt->variants.size()), max_arity, is_recursive,
                                               ctor->field_names, ftypes, fn_rets, fn_ret_adt_names,
                                               field_shapes};
+            types_.adt_constructors[ctor->name].declared_field_types =
+                ctor->field_type_names;
         }
     }
 
@@ -819,8 +927,9 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         if (adt_it != types_.adt_constructors.end()) dai.is_recursive = adt_it->second.is_recursive;
 
         for (auto& trait_name : adt->derive_traits) {
+            const bool marker_trait = trait_name == "Send" || trait_name == "Shareable";
             auto* strategy = DeriveEngine::get_strategy(trait_name);
-            if (!strategy) {
+            if (!strategy && !marker_trait) {
                 if (diag_) {
                     auto available = DeriveEngine::all_derivable_traits();
                     std::string avail_str;
@@ -834,6 +943,26 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                 continue;
             }
 
+            // The source deriving clause is authoritative even when this
+            // compilation bootstrapped parser metadata from an older
+            // interface. Rebuild the complete instance contract once instead
+            // of appending constraints on every regeneration pass.
+            std::string instance_key = trait_name + ":" + adt->name;
+            TraitInstanceInfo derived_instance;
+            derived_instance.trait_name = trait_name;
+            derived_instance.type_name = adt->name;
+            derived_instance.type_names = {adt->name};
+            derived_instance.type_params = adt->type_params;
+            for (const auto& parameter : adt->type_params)
+                derived_instance.constraints.emplace_back(trait_name, parameter);
+            types_.trait_instances[instance_key] = std::move(derived_instance);
+            interface_instance_keys_.insert(instance_key);
+
+            // Marker traits are compile-time evidence only. Their instance
+            // contracts are serialized, but they intentionally generate no
+            // method, dictionary, symbol, or runtime call.
+            if (marker_trait) continue;
+
             // Generate and compile each method from the strategy
             for (auto& method_name : strategy->method_names) {
                 std::string method_source = strategy->generator(dai);
@@ -843,12 +972,19 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                 auto mod_result = reparse_genfn(method_name, method_source);
                 if (!mod_result) continue;
 
+                // A bootstrap compile of Prelude may already have an extern
+                // declaration for this derived symbol from the previous
+                // Prelude.yonai. The new source definition must replace that
+                // declaration or the emitted object contains no implementation.
+                compiled_functions_.erase(mangled);
+                deferred_functions_.erase(mangled);
+                // Keep a matching bootstrap declaration in the module.
+                // compile_function fills that canonical Function in place so
+                // any users created while loading the previous interface keep
+                // a valid LLVM use-list.
+
                 // Register the trait instance
-                std::string key = trait_name + ":" + adt->name;
-                auto& tii = types_.trait_instances[key];
-                tii.trait_name = trait_name;
-                tii.type_name = adt->name;
-                tii.type_names = {adt->name};
+                auto& tii = types_.trait_instances[instance_key];
                 tii.method_mangled_names[method_name] = mangled;
 
                 // Compile the reparsed function
@@ -857,6 +993,7 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
 
                 // Store GENFN source for cross-module monomorphization
                 imports_.imported_sources[mangled] = {method_source, method_name};
+                imports_.function_source[mangled] = method_source;
 
                 // Keep module alive (deferred functions hold AST pointers)
                 derived_modules.push_back(std::move(mod_result));
@@ -874,11 +1011,13 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
             trait->superclasses.begin(), trait->superclasses.end());
         for (auto& m : trait->methods) {
             ti.method_names.push_back(m.name);
+            ti.method_type_descriptors[m.name] = source_type_descriptor(m.type_signature);
             if (m.default_impl) {
                 ti.default_impls[m.name] = m.default_impl;
             }
         }
         types_.traits[trait->name] = ti;
+        interface_trait_names_.insert(trait->name);
     }
 
     // Register trait instances: mangle method names and register as deferred functions
@@ -889,10 +1028,31 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         std::string key = inst->trait_name;
         for (auto& tn : inst->type_names) key += ":" + tn;
         if (inst->type_names.empty()) key += ":" + inst->type_name;
+
+        // Drop stale interfaces produced before complete multi-parameter
+        // heads were serialized. They otherwise coexist with the current
+        // source instance (`Array:Seq` beside `Array:Seq:element`) and make
+        // deterministic selection ambiguous forever after regeneration.
+        if (const auto trait = types_.traits.find(inst->trait_name);
+            trait != types_.traits.end()) {
+            for (auto existing = types_.trait_instances.begin();
+                 existing != types_.trait_instances.end();) {
+                const auto& contract = existing->second;
+                const size_t head_arity = contract.type_names.empty()
+                    ? size_t{1} : contract.type_names.size();
+                if (contract.trait_name == inst->trait_name &&
+                    contract.type_name == inst->type_name &&
+                    head_arity < trait->second.type_params.size())
+                    existing = types_.trait_instances.erase(existing);
+                else
+                    ++existing;
+            }
+        }
         TraitInstanceInfo tii;
         tii.trait_name = inst->trait_name;
         tii.type_name = inst->type_name;
         tii.type_names = inst->type_names;
+        tii.type_params = inst->type_params;
         tii.constraints = std::vector<std::pair<std::string, std::string>>(
             inst->constraints.begin(), inst->constraints.end());
 
@@ -912,13 +1072,31 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         // Collect provided method names
         std::unordered_set<std::string> provided_methods;
         for (auto* method : inst->methods) {
-            // Mangle: TraitName_TypeName__methodName
-            std::string mangled = inst->trait_name + "_" + inst->type_name + "__" + method->name;
+            std::string mangled = mangle_trait_instance_method(inst, method->name);
             tii.method_mangled_names[method->name] = mangled;
             provided_methods.insert(method->name);
 
+            // A previous interface may have bootstrapped this exact symbol as
+            // an extern declaration. Source is authoritative: replace the
+            // stale declaration so rebuilding Prelude or another module emits
+            // the implementation described by the current source.
+            compiled_functions_.erase(mangled);
+            deferred_functions_.erase(mangled);
+            if (auto* stale = module_->getFunction(mangled);
+                stale && stale->isDeclaration() && stale->use_empty())
+                stale->eraseFromParent();
+
             // Register as deferred function
             codegen_function_def(method, mangled);
+            // Standalone consumers do not link a separately compiled Prelude
+            // object. Every Yona-defined instance body therefore needs GENFN
+            // source, including unconstrained concrete instances; only the
+            // primitive extern called by such a body is native.
+            if (!method->source_text.empty()) {
+                imports_.imported_sources[mangled] = {method->source_text, method->name};
+                imports_.function_source[mangled] = method->source_text;
+                imports_.private_genfn_symbols.insert(mangled);
+            }
         }
 
         // Phase 3: Fill in default implementations for missing methods
@@ -926,7 +1104,7 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
             for (auto& [method_name, default_fn] : trait_it->second.default_impls) {
                 if (provided_methods.find(method_name) == provided_methods.end()) {
                     // Method not provided by instance — use default from trait
-                    std::string mangled = inst->trait_name + "_" + inst->type_name + "__" + method_name;
+                    std::string mangled = mangle_trait_instance_method(inst, method_name);
                     tii.method_mangled_names[method_name] = mangled;
                     codegen_function_def(default_fn, mangled);
                 }
@@ -934,6 +1112,7 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         }
 
         types_.trait_instances[key] = tii;
+        interface_instance_keys_.insert(key);
     }
 
     // Process module-level extern declarations
@@ -995,11 +1174,18 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
             if (export_set.count(func->name))
                 work.push_back(func);
         }
-        std::unordered_set<std::string> visited;
+        // Instance GENFN bodies are public dictionary implementations even
+        // though their method names are not ordinary module exports. Include
+        // their private helper closure in the same dependency walk.
+        for (auto* instance : mod->instance_declarations)
+            for (auto* method : instance->methods)
+                if (method && !method->source_text.empty())
+                    work.push_back(method);
+        std::unordered_set<FunctionExpr*> visited;
         while (!work.empty()) {
             FunctionExpr* func = work.back();
             work.pop_back();
-            if (!visited.insert(func->name).second) continue;
+            if (!visited.insert(func).second) continue;
 
             std::unordered_set<std::string> bound, free;
             for (auto* pat : func->patterns) {
@@ -1054,7 +1240,12 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                 std::vector<CType> subtypes;
                 if (std::holds_alternative<std::shared_ptr<types::FunctionType>>(ft->argumentType)) {
                     auto arg_ft = std::get<std::shared_ptr<types::FunctionType>>(ft->argumentType);
-                    subtypes.push_back(yona_type_to_ctype(arg_ft->returnType));
+                    types::Type result_type = arg_ft->returnType;
+                    while (std::holds_alternative<std::shared_ptr<types::FunctionType>>(
+                               result_type))
+                        result_type = std::get<std::shared_ptr<types::FunctionType>>(
+                                          result_type)->returnType;
+                    subtypes.push_back(yona_type_to_ctype(result_type));
                 }
                 annotated_param_subtypes.push_back(std::move(subtypes));
                 current_type = &ft->returnType;
@@ -1065,11 +1256,37 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
             ? std::vector<InferredParamType>() // not needed when annotated
             : infer_param_types(func);
 
+        // The checked HM type is authoritative for parameter roles.  The AST
+        // heuristic remains useful for layout clues, but it cannot reliably
+        // see a higher-order parameter whose only use is inside a nested
+        // closure.  Preserve callable return tags as well so closure calls do
+        // not fall back to "same type as the first argument".
+        std::vector<std::optional<CType>> checked_param_types;
+        std::vector<std::vector<CType>> checked_param_subtypes;
+        if (!func->type_signature.has_value() && type_checker_) {
+            auto* checked = type_checker_->zonk(type_checker_->type_of(func));
+            for (size_t i = 0; i < func->patterns.size() && checked &&
+                 checked->tag == typechecker::MonoType::Arrow; ++i) {
+                auto* argument = type_checker_->zonk(checked->param_type);
+                checked_param_types.push_back(
+                    checked_type_to_ctype(*type_checker_, argument));
+                std::vector<CType> subtypes;
+                if (auto result = checked_function_result_ctype(
+                        *type_checker_, argument))
+                    subtypes.push_back(*result);
+                checked_param_subtypes.push_back(std::move(subtypes));
+                checked = type_checker_->zonk(checked->return_type);
+            }
+        }
+
         std::vector<TypedValue> typed_args;
         for (size_t i = 0; i < func->patterns.size(); i++) {
             CType ct;
             if (!annotated_param_types.empty() && i < annotated_param_types.size())
                 ct = annotated_param_types[i];
+            else if (i < checked_param_types.size() &&
+                     checked_param_types[i].has_value())
+                ct = *checked_param_types[i];
             else
                 ct = (i < inferred.size()) ? inferred[i].type : CType::INT;
             auto* dummy_val = ConstantInt::get(LType::getInt64Ty(*context_), 0);
@@ -1105,12 +1322,15 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                 std::vector<CType> subtypes =
                     (!annotated_param_subtypes.empty() && i < annotated_param_subtypes.size())
                         ? annotated_param_subtypes[i]
-                        : std::vector<CType>{};
+                        : (i < checked_param_subtypes.size()
+                            ? checked_param_subtypes[i]
+                            : std::vector<CType>{});
                 typed_args.push_back({ConstantPointerNull::get(ptr_type), CType::FUNCTION, subtypes});
             } else if (ct == CType::ADT) {
                 if (!annotated_param_adt_names.empty() && i < annotated_param_adt_names.size() &&
                     !annotated_param_adt_names[i].empty()) {
-                    typed_args.push_back({dummy_val, CType::ADT});
+                    typed_args.push_back({ConstantPointerNull::get(
+                        PointerType::get(*context_, 0)), CType::ADT});
                     typed_args.back().adt_type_name = annotated_param_adt_names[i];
                     continue;
                 }
@@ -1129,18 +1349,8 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                         TypedValue tv;
                         tv.type = CType::ADT;
                         tv.adt_type_name = ctor_it->second.type_name;
-                        if (ctor_it->second.is_recursive) {
-                            auto* ptr_type = PointerType::get(*context_, 0);
-                            tv.val = ConstantPointerNull::get(ptr_type);
-                        } else {
-                            auto tag_ty = LType::getInt64Ty(*context_);
-                            auto i64_ty = LType::getInt64Ty(*context_);
-                            std::vector<LType*> fields = {tag_ty};
-                            for (int f = 0; f < ctor_it->second.max_arity; f++)
-                                fields.push_back(i64_ty);
-                            auto* st = StructType::get(*context_, fields);
-                            tv.val = UndefValue::get(st);
-                        }
+                        tv.val = ConstantPointerNull::get(
+                            PointerType::get(*context_, 0));
                         typed_args.push_back(tv);
                     } else {
                         typed_args.push_back({dummy_val, ct});
@@ -1167,7 +1377,8 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                             TypedValue tv;
                             tv.type = CType::ADT;
                             tv.adt_type_name = cinfo.type_name;
-                            tv.val = ConstantInt::get(LType::getInt64Ty(*context_), 0);
+                            tv.val = ConstantPointerNull::get(
+                                PointerType::get(*context_, 0));
                             typed_args.push_back(tv);
                             found = true;
                             break;
@@ -1211,47 +1422,118 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         }
     }
 
-    // Non-blocking: sibling-aware effect rows for .yonai FN lines.
-    {
-        DiagnosticEngine fx_diag;
-        typechecker::TypeChecker fx_tc(fx_diag);
-        fx_tc.check_module(mod);
-        for (auto* func : mod->functions) {
-            if (!func || !export_set.count(func->name)) continue;
-            auto* ty = fx_tc.type_of(func);
-            if (!ty) continue;
-            auto row = fx_tc.effect_row_info(fx_tc.zonk(ty));
-            if (row.ops.empty() && !row.open_rest) continue;
-            std::string mangled = mangle_name(fqn, func->name);
-            auto meta_it = imports_.meta.find(mangled);
-            if (meta_it == imports_.meta.end()) continue;
-            meta_it->second.effect_ops = std::move(row.ops);
-            meta_it->second.effect_open_rest = row.open_rest;
-            meta_it->second.effect_hof = row.hof;
-        }
-    }
-
     // Third pass: compile trait instance methods with ExternalLinkage
     // so importing modules can call them via resolved trait dispatch.
     for (auto& [key, inst] : types_.trait_instances) {
+        if (!interface_instance_keys_.count(key)) continue;
         for (auto& [method_name, mangled] : inst.method_mangled_names) {
             auto cf_it = compiled_functions_.find(mangled);
             if (cf_it != compiled_functions_.end()) {
+                if (inst.trait_name == "Array" && !cf_it->second.param_types.empty()) {
+                    cf_it->second.borrowed_params.resize(
+                        cf_it->second.param_types.size(), false);
+                    cf_it->second.borrowed_params[0] = true;
+                }
                 cf_it->second.fn->setLinkage(Function::ExternalLinkage);
                 // Emit FN metadata for the .yonai file
-                if (imports_.meta.find(mangled) == imports_.meta.end()) {
-                    imports_.meta[mangled] = module_meta_from_compiled(cf_it->second);
+                auto meta = module_meta_from_compiled(cf_it->second);
+                if (const auto declared = deferred_functions_.find(mangled);
+                    declared != deferred_functions_.end() &&
+                    declared->second.ast->type_signature.has_value()) {
+                    auto [params, result] = uncurry_type_signature(
+                        *declared->second.ast->type_signature);
+                    meta.param_types = std::move(params);
+                    meta.return_type = result;
+                    meta.param_type_descriptors.clear();
+                    const types::Type* current =
+                        &*declared->second.ast->type_signature;
+                    while (std::holds_alternative<
+                               std::shared_ptr<types::FunctionType>>(*current)) {
+                        const auto& function = std::get<
+                            std::shared_ptr<types::FunctionType>>(*current);
+                        meta.param_type_descriptors.push_back(
+                            source_type_descriptor(function->argumentType));
+                        current = &function->returnType;
+                    }
+                    meta.return_type_descriptor = source_type_descriptor(*current);
                 }
+                imports_.meta[mangled] = std::move(meta);
                 imports_.interface_symbols.insert(mangled);
                 continue;
             }
             auto def_it = deferred_functions_.find(mangled);
             if (def_it != deferred_functions_.end()) {
+                // An annotated Yona instance is a source-level dictionary,
+                // not one concrete machine function. Compiling it here with
+                // placeholder arguments can erase both instance variables and
+                // method-local variables (for example Foldable's accumulator)
+                // and produce an invalid recursive ABI. Export its exact
+                // contract and GENFN source; selected concrete call sites
+                // perform the only valid monomorphization.
+                if (def_it->second.ast->type_signature.has_value()) {
+                    ModuleFunctionMeta meta;
+                    auto [params, result] = uncurry_type_signature(
+                        *def_it->second.ast->type_signature);
+                    meta.param_types = std::move(params);
+                    meta.return_type = result;
+                    const types::Type* current =
+                        &*def_it->second.ast->type_signature;
+                    while (std::holds_alternative<
+                               std::shared_ptr<types::FunctionType>>(*current)) {
+                        const auto& function = std::get<
+                            std::shared_ptr<types::FunctionType>>(*current);
+                        meta.param_type_descriptors.push_back(
+                            source_type_descriptor(function->argumentType));
+                        current = &function->returnType;
+                    }
+                    meta.return_type_descriptor = source_type_descriptor(*current);
+                    meta.borrowed_params = def_it->second.ast->param_borrow;
+                    meta.borrowed_params.resize(meta.param_types.size(), false);
+                    if ((inst.trait_name == "Eq" || inst.trait_name == "Ord") &&
+                        meta.borrowed_params.size() >= 2) {
+                        meta.borrowed_params[0] = true;
+                        meta.borrowed_params[1] = true;
+                    } else if ((inst.trait_name == "Hash" ||
+                                inst.trait_name == "Show") &&
+                               !meta.borrowed_params.empty()) {
+                        meta.borrowed_params[0] = true;
+                    }
+                    imports_.meta[mangled] = std::move(meta);
+                    imports_.interface_symbols.insert(mangled);
+                    continue;
+                }
+                // Array is an observational contract: indexing and length do
+                // not consume the collection. Preserve that law even for
+                // instance clauses reparsed from interfaces where an explicit
+                // @borrow marker is unavailable.
+                if (inst.trait_name == "Array" &&
+                    !def_it->second.ast->param_borrow.empty())
+                    def_it->second.ast->param_borrow[0] = true;
                 // Compile with inferred types, using correct LLVM types for ADTs
                 auto inferred = infer_param_types(def_it->second.ast);
+                std::vector<CType> annotated;
+                std::vector<bool> annotation_variables;
+                if (def_it->second.ast->type_signature.has_value()) {
+                    annotated = uncurry_type_signature(
+                        *def_it->second.ast->type_signature).first;
+                    const types::Type* current = &*def_it->second.ast->type_signature;
+                    while (std::holds_alternative<std::shared_ptr<types::FunctionType>>(*current)) {
+                        const auto& function =
+                            std::get<std::shared_ptr<types::FunctionType>>(*current);
+                        const auto* named = std::get_if<std::shared_ptr<types::NamedType>>(
+                            &function->argumentType);
+                        annotation_variables.push_back(
+                            named && *named && !(*named)->name.empty() &&
+                            std::islower(static_cast<unsigned char>((*named)->name.front())));
+                        current = &function->returnType;
+                    }
+                }
                 std::vector<TypedValue> typed_args;
                 for (size_t i = 0; i < def_it->second.param_names.size(); i++) {
-                    CType ct = (i < inferred.size()) ? inferred[i].type : CType::INT;
+                    CType ct = i < annotated.size() &&
+                            !(i < annotation_variables.size() && annotation_variables[i])
+                        ? annotated[i]
+                        : (i < inferred.size()) ? inferred[i].type : CType::INT;
                     TypedValue tv;
                     tv.type = ct;
                     if (ct == CType::ADT) {
@@ -1264,17 +1546,11 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                             auto ctor_it = types_.adt_constructors.find(ctor_name);
                             if (ctor_it != types_.adt_constructors.end()) {
                                 tv.adt_type_name = ctor_it->second.type_name;
-                                if (ctor_it->second.is_recursive) {
-                                    tv.val = ConstantPointerNull::get(PointerType::get(*context_, 0));
-                                } else {
-                                    std::vector<LType*> fields = {LType::getInt64Ty(*context_)};
-                                    for (int f = 0; f < ctor_it->second.max_arity; f++)
-                                        fields.push_back(LType::getInt64Ty(*context_));
-                                    auto* st = StructType::get(*context_, fields);
-                                    tv.val = UndefValue::get(st);
-                                }
+                                tv.val = ConstantPointerNull::get(
+                                    PointerType::get(*context_, 0));
                             } else {
-                                tv.val = ConstantInt::get(LType::getInt64Ty(*context_), 0);
+                                tv.val = ConstantPointerNull::get(
+                                    PointerType::get(*context_, 0));
                             }
                         } else {
                             // Try the instance type name
@@ -1282,20 +1558,22 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                             // Find any constructor for this type
                             for (auto& [cn, ci] : types_.adt_constructors) {
                                 if (ci.type_name == inst.type_name) {
-                                    if (ci.is_recursive) {
-                                        tv.val = ConstantPointerNull::get(PointerType::get(*context_, 0));
-                                    } else {
-                                        std::vector<LType*> fields = {LType::getInt64Ty(*context_)};
-                                        for (int f = 0; f < ci.max_arity; f++)
-                                            fields.push_back(LType::getInt64Ty(*context_));
-                                        auto* st = StructType::get(*context_, fields);
-                                        tv.val = UndefValue::get(st);
-                                    }
+                                    tv.val = ConstantPointerNull::get(
+                                        PointerType::get(*context_, 0));
                                     break;
                                 }
                             }
-                            if (!tv.val) tv.val = ConstantInt::get(LType::getInt64Ty(*context_), 0);
+                            if (!tv.val) tv.val = ConstantPointerNull::get(
+                                PointerType::get(*context_, 0));
                         }
+                    } else if (ct == CType::FLOAT) {
+                        tv.val = ConstantFP::get(LType::getDoubleTy(*context_), 0.0);
+                    } else if (ct == CType::BOOL) {
+                        tv.val = ConstantInt::get(LType::getInt1Ty(*context_), 0);
+                    } else if (ct == CType::STRING || ct == CType::SEQ ||
+                               ct == CType::SET || ct == CType::DICT ||
+                               ct == CType::FUNCTION || ct == CType::CHANNEL) {
+                        tv.val = ConstantPointerNull::get(PointerType::get(*context_, 0));
                     } else {
                         tv.val = ConstantInt::get(LType::getInt64Ty(*context_), 0);
                     }
@@ -1303,8 +1581,38 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
                 }
                 auto cf = compile_function(mangled, def_it->second, typed_args);
                 if (cf.fn) {
+                    if (inst.trait_name == "Array" && !cf.param_types.empty()) {
+                        cf.borrowed_params.resize(cf.param_types.size(), false);
+                        cf.borrowed_params[0] = true;
+                        compiled_functions_[mangled].borrowed_params = cf.borrowed_params;
+                    }
                     cf.fn->setLinkage(Function::ExternalLinkage);
-                    imports_.meta[mangled] = module_meta_from_compiled(cf);
+                    auto meta = module_meta_from_compiled(cf);
+                    // Placeholder compilation exists only to emit one native
+                    // body. Its inferred specialization must never narrow the
+                    // public generic contract. The source annotation is the
+                    // authoritative interface type for every Yona instance,
+                    // constrained or not.
+                    if (def_it->second.ast->type_signature.has_value()) {
+                        auto [params, result] = uncurry_type_signature(
+                            *def_it->second.ast->type_signature);
+                        meta.param_types = std::move(params);
+                        meta.return_type = result;
+                        meta.param_type_descriptors.clear();
+                        const types::Type* current =
+                            &*def_it->second.ast->type_signature;
+                        while (std::holds_alternative<
+                                   std::shared_ptr<types::FunctionType>>(*current)) {
+                            const auto& function = std::get<
+                                std::shared_ptr<types::FunctionType>>(*current);
+                            meta.param_type_descriptors.push_back(
+                                source_type_descriptor(function->argumentType));
+                            current = &function->returnType;
+                        }
+                        meta.return_type_descriptor =
+                            source_type_descriptor(*current);
+                    }
+                    imports_.meta[mangled] = std::move(meta);
                     imports_.interface_symbols.insert(mangled);
                 }
             }
@@ -1376,6 +1684,13 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
     // Clear builder insert point after module compilation
     builder_->ClearInsertionPoint();
 
+    // A diagnostic-producing lowering may intentionally leave the current
+    // function incomplete.  Verification and optimization are meaningful
+    // only for a successful module; running LLVM over recovery IR can assert
+    // before the CLI gets a chance to return the diagnostic status.
+    if (error_count_ > 0 || (diag_ && diag_->has_errors()))
+        return nullptr;
+
     finalize_debug_info();
 
     // Verify
@@ -1386,6 +1701,11 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         return nullptr;
     }
     optimize();
+    err.clear();
+    if (verifyModule(*module_, &os)) {
+        std::cerr << "Module verification failed after optimization:\n" << err << "\n";
+        return nullptr;
+    }
     return module_.get();
 }
 
@@ -1592,7 +1912,19 @@ void Codegen::codegen_print_value(const TypedValue& tv) {
                                  want->getIntegerBitWidth() < 64)
                             typed = builder_->CreateTrunc(typed, want);
                     }
-                    codegen_print_value({typed, et});
+                    TypedValue element{typed, et};
+                    if (i < tv.semantic_subtypes.size()) {
+                        const auto& identity = tv.semantic_subtypes[i];
+                        element.adt_type_name = identity.adt_name;
+                        element.semantic_subtypes = identity.arguments;
+                        element.adt_semantic_arguments = identity.arguments;
+                        for (const auto& argument : identity.arguments) {
+                            element.subtypes.push_back(argument.type);
+                            element.adt_type_arguments.push_back(argument.type);
+                            element.adt_type_argument_names.push_back(argument.adt_name);
+                        }
+                    }
+                    codegen_print_value(element);
                 }
             }
             builder_->CreateCall(rt_.print_string_, {builder_->CreateGlobalString(")")});
@@ -1667,9 +1999,41 @@ TypedValue Codegen::codegen(AstNode* node) {
         case AST_GT_EXPR:         return codegen_comparison(static_cast<GtExpr*>(node)->left, static_cast<GtExpr*>(node)->right, ">");
         case AST_LTE_EXPR:        return codegen_comparison(static_cast<LteExpr*>(node)->left, static_cast<LteExpr*>(node)->right, "<=");
         case AST_GTE_EXPR:        return codegen_comparison(static_cast<GteExpr*>(node)->left, static_cast<GteExpr*>(node)->right, ">=");
-        case AST_LOGICAL_AND_EXPR: { auto l = codegen(static_cast<LogicalAndExpr*>(node)->left); auto r = codegen(static_cast<LogicalAndExpr*>(node)->right); return {builder_->CreateAnd(l.val, r.val), CType::BOOL}; }
-        case AST_LOGICAL_OR_EXPR:  { auto l = codegen(static_cast<LogicalOrExpr*>(node)->left); auto r = codegen(static_cast<LogicalOrExpr*>(node)->right); return {builder_->CreateOr(l.val, r.val), CType::BOOL}; }
-        case AST_LOGICAL_NOT_OP_EXPR: { auto v = codegen(static_cast<LogicalNotOpExpr*>(node)->expr); return {builder_->CreateNot(v.val), CType::BOOL}; }
+        case AST_LOGICAL_AND_EXPR: {
+            auto l = codegen(static_cast<LogicalAndExpr*>(node)->left);
+            auto r = codegen(static_cast<LogicalAndExpr*>(node)->right);
+            if (!l || !r) return {};
+            auto normalize = [&](Value* value) -> Value* {
+                if (value->getType()->isIntegerTy(1)) return value;
+                if (value->getType()->isIntegerTy())
+                    return builder_->CreateICmpNE(
+                        value, ConstantInt::get(value->getType(), 0), "logical_bool");
+                return value;
+            };
+            return {builder_->CreateAnd(normalize(l.val), normalize(r.val)), CType::BOOL};
+        }
+        case AST_LOGICAL_OR_EXPR: {
+            auto l = codegen(static_cast<LogicalOrExpr*>(node)->left);
+            auto r = codegen(static_cast<LogicalOrExpr*>(node)->right);
+            if (!l || !r) return {};
+            auto normalize = [&](Value* value) -> Value* {
+                if (value->getType()->isIntegerTy(1)) return value;
+                if (value->getType()->isIntegerTy())
+                    return builder_->CreateICmpNE(
+                        value, ConstantInt::get(value->getType(), 0), "logical_bool");
+                return value;
+            };
+            return {builder_->CreateOr(normalize(l.val), normalize(r.val)), CType::BOOL};
+        }
+        case AST_LOGICAL_NOT_OP_EXPR: {
+            auto v = codegen(static_cast<LogicalNotOpExpr*>(node)->expr);
+            if (!v) return {};
+            Value* value = v.val;
+            if (!value->getType()->isIntegerTy(1) && value->getType()->isIntegerTy())
+                value = builder_->CreateICmpNE(
+                    value, ConstantInt::get(value->getType(), 0), "logical_bool");
+            return {builder_->CreateNot(value), CType::BOOL};
+        }
         case AST_PIPE_RIGHT_EXPR: {
             // x |> f          →  f x
             // x |> f a b      →  f a b x   (append lhs as the last argument
@@ -1732,7 +2096,7 @@ TypedValue Codegen::codegen(AstNode* node) {
                     eval.all_args.push_back(tv);
                     eval.arg_lambda_names.push_back(last_lambda_name_);
                 }
-                precompile_function_args(eval);
+                precompile_function_args(eval, fn_name);
                 wrap_function_args_in_closures(eval.all_args);
 
                 auto& all_args = eval.all_args;

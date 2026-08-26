@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Added
+- The Prelude now provides coherent foundational `Eq`, `Ord`, `Hash`, `Show`,
+  `Array`, `Sized`, `Iterable`, `Foldable`, `Semigroup`, `Monoid`, `From`,
+  `TryFrom`, `Parse`, `Send`, and `Shareable` traits. Operators dispatch
+  statically through `Eq`/`Ord`; immutable collections receive constrained
+  lifted instances; concurrency markers are checked and erased. Native arrays
+  may be moved through `Send`, while synchronized channel endpoints may also
+  be shared across spawned tasks.
+- `Std\Convert`, `Std\Iterator`, and `Std\TraitLaws` provide witness-directed
+  structured conversions, single-pass native collection adapters, and reusable
+  executable law suites with rendered counterexamples. The recursive stdlib
+  conformance manifest now covers all 40 public modules, with directly
+  addressable `stdlib-network` and `stdlib-gpu` CTest labels.
 - `Std\Test` now provides pure `TestResult`, `TestCase`, and `TestReport` ADTs
   plus `pass`, `fail`, `check`, `equalBy`, `testCase`, `run`, and deterministic
   `render`. The initial Yona-native framework fixture covers full and empty
@@ -26,6 +38,8 @@
   and rejects unproven direct or mutual recursion with E0203.
 
 ### Changed
+- FetchContent now uses doctest 2.5.3 and CLI11 2.7.2; the Windows
+  embedded-LLD fallback uses the latest tagged libxml2 release, 2.15.3.
 - Constructor patterns now preserve a declared tuple field as one field:
   `Box ((first, second))` matches `type Box = Box (Int, Int)`, while the spread
   form `Box (first, second)` receives a concrete shape correction. E0100 now
@@ -55,6 +69,24 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
+- Generic collection identity now survives empty-first nested literals,
+  Set/Dict runtime interfaces, recursive List filtering/sorting, explicit
+  imported trait-method callbacks, and higher-order law suites. Contextually
+  typed `{}` returns allocate the inferred Dict kind, and consuming `::`
+  preserves multi-use sequence bindings.
+- Generic imported functions and trait instances retain complete nested type
+  identities across sibling specialization, collection extraction, callbacks,
+  and LLVM optimization. This prevents Float/Bool ABI mismatches, invalid
+  lifted ADT dispatch, declaration use-list corruption, and heap-value iterator
+  ownership failures exposed by the foundational law matrix.
+- API generation now joins multiline Yona arrow signatures, so published
+  `Std\TraitLaws` contracts include every callback, sample, and result type.
+- The formatting script now fails fast with an actionable diagnostic when
+  `clang-format` is unavailable instead of printing a false success message.
+- Generic higher-order calls now compile deferred lambda arguments using the
+  callee signature instantiated at the call site. In particular, an
+  unannotated `String` comparator passed to imported `Std\Test.equalBy` now
+  uses text equality rather than integer pointer comparison.
 - Recursive ownership analysis now sees through import wrappers, distinguishes
   closure call targets from forwarded values, and computes recursive borrow
   contracts to a fixed point. This removes the `Std\Test` use-after-free,

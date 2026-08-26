@@ -35,17 +35,19 @@ int64_t yona_rt_closure2_create(int64_t (*fn)(int64_t, int64_t), int64_t capture
 }
 
 /* ===== General Closures (env-passing) ===== */
-/* Layout: int64_t array [fn_ptr, ret_type, arity, num_captures, heap_mask, cap0, cap1, ...]
+/* Layout: int64_t array
+ * [fn_ptr, ret_type, arity, num_captures, heap_mask, borrow_mask, cap0, ...]
  * The function takes (void* env, args...) where env is the closure itself.
  * Slot 0: function pointer (as int64_t)
  * Slot 1: return CType tag (INT=0, FLOAT=1, ..., ADT=12)
  * Slot 2: number of user arguments (excluding env)
  * Slot 3: number of captures
  * Slot 4: heap_mask — bitmask of which captures are heap-typed (for recursive rc_dec)
- * Captures are stored starting at index 5.
+ * Slot 5: borrow_mask — bit i is set when user parameter i is borrowed
+ * Captures are stored starting at index 6.
  */
 
-#define CLOSURE_HDR_SIZE 5  /* fn_ptr, ret_type, arity, num_captures, heap_mask */
+#define CLOSURE_HDR_SIZE 6
 
 void* yona_rt_closure_create(void* fn_ptr, int64_t ret_type, int64_t arity, int64_t num_captures) {
     int64_t* closure = (int64_t*)rc_alloc(RC_TYPE_CLOSURE, (CLOSURE_HDR_SIZE + num_captures) * sizeof(int64_t));
@@ -54,11 +56,16 @@ void* yona_rt_closure_create(void* fn_ptr, int64_t ret_type, int64_t arity, int6
     closure[2] = arity;
     closure[3] = num_captures;
     closure[4] = 0; /* heap_mask — set by codegen via closure_set_heap_mask */
+    closure[5] = 0; /* borrow_mask — owned parameters are the safe default */
     return closure;
 }
 
 void yona_rt_closure_set_heap_mask(void* closure, int64_t mask) {
     ((int64_t*)closure)[4] = mask;
+}
+
+void yona_rt_closure_set_borrow_mask(void* closure, int64_t mask) {
+    ((int64_t*)closure)[5] = mask;
 }
 
 void yona_rt_closure_set_cap(void* closure, int64_t idx, int64_t val) {

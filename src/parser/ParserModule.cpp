@@ -498,6 +498,17 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
         // the codegen uses that to pick a CType, and the type arguments are
         // consumed so the rest of the constructor parses correctly.
         std::function<FieldType()> parse_field_type = [&]() -> FieldType {
+            // Scalar/native type names have arity zero. Treating every
+            // uppercase identifier as an applied type makes the documented
+            // `Point Int Int` form collapse into one `Int Int` field.
+            const auto can_apply_type = [](const string& name) {
+                static const std::unordered_set<string> nullary_types = {
+                    "Int", "Float", "Bool", "String", "Symbol", "Byte",
+                    "Char", "Unit", "ByteArray", "IntArray", "FloatArray",
+                    "Channel", "FileHandle", "FileMode", "Whence", "Type"
+                };
+                return !nullary_types.contains(name);
+            };
             // Helper: consume one "atom" — a primary type without further
             // application. Used for arguments to a parameterized head type.
             std::function<void()> consume_type_atom = [&]() {
@@ -537,7 +548,8 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                     types.push_back(parse_field_type());
                 } else if (check(TokenType::YIDENTIFIER)) {
                     string tname(current().lexeme);
-                    bool head_is_ctor = !tname.empty() && isupper(tname[0]);
+                    bool head_is_ctor = !tname.empty() && isupper(tname[0]) &&
+                        can_apply_type(tname);
                     advance();
                     FieldType field = FieldType::simple(tname);
                     while ((head_is_ctor && check(TokenType::YIDENTIFIER) &&
@@ -617,7 +629,8 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                 return ft;
             } else if (check(TokenType::YIDENTIFIER)) {
                 string tname(current().lexeme);
-                bool head_is_ctor = !tname.empty() && isupper(tname[0]);
+                bool head_is_ctor = !tname.empty() && isupper(tname[0]) &&
+                    can_apply_type(tname);
                 advance();
                 FieldType result = FieldType::simple(tname);
                 // Type application: `Stream a`, `Option (Step a)`, ...
@@ -934,10 +947,46 @@ unique_ptr<InstanceDeclNode> ParserImpl::parse_instance_declaration() {
         }
     }
 
-    // Multi-param trait: collect remaining type names (uppercase identifiers before newline)
+    // Multi-parameter trait: collect every remaining type argument before the
+    // newline. Lowercase names are legitimate links to parameters introduced
+    // by an applied head, e.g. `Foldable (Seq element) element`.
     vector<string> type_names = {type_name};
-    while (check(TokenType::YIDENTIFIER) && isupper(peek().lexeme[0])) {
-        type_names.push_back(string(advance().lexeme));
+    while (check(TokenType::YIDENTIFIER) || check(TokenType::YLPAREN)) {
+        if (match(TokenType::YLPAREN)) {
+            if (!check(TokenType::YIDENTIFIER)) {
+                error(ParseError::Type::INVALID_SYNTAX,
+                      "Expected type head inside parentheses");
+                return nullptr;
+            }
+            string head(advance().lexeme);
+            if (match(TokenType::YCOMMA)) {
+                if (!check(TokenType::YIDENTIFIER)) {
+                    error(ParseError::Type::INVALID_SYNTAX,
+                          "Expected second tuple type in instance head");
+                    return nullptr;
+                }
+                string second(advance().lexeme);
+                if (islower(head[0]) &&
+                    find(type_params.begin(), type_params.end(), head) == type_params.end())
+                    type_params.push_back(head);
+                if (islower(second[0]) &&
+                    find(type_params.begin(), type_params.end(), second) == type_params.end())
+                    type_params.push_back(second);
+                head = "Tuple";
+            } else {
+                while (check(TokenType::YIDENTIFIER) && islower(peek().lexeme[0])) {
+                    string parameter(advance().lexeme);
+                    if (find(type_params.begin(), type_params.end(), parameter) == type_params.end())
+                        type_params.push_back(std::move(parameter));
+                }
+            }
+            if (!expect(TokenType::YRPAREN,
+                        "Expected ')' after parameterized instance head"))
+                return nullptr;
+            type_names.push_back(std::move(head));
+        } else {
+            type_names.push_back(string(advance().lexeme));
+        }
     }
 
     skip_newlines();
@@ -953,9 +1002,18 @@ unique_ptr<InstanceDeclNode> ParserImpl::parse_instance_declaration() {
             break;
         }
 
+        const size_t method_start = current_;
         auto func = parse_function();
         if (func) {
             methods.push_back(func.release());
+        }
+        if (current_ == method_start && !is_at_end()) {
+            error(ParseError::Type::INVALID_SYNTAX,
+                  "Could not parse instance method; skipping malformed declaration");
+            do {
+                advance();
+            } while (!check(TokenType::YNEWLINE) &&
+                     !check(TokenType::YEND) && !is_at_end());
         }
         skip_newlines();
     }

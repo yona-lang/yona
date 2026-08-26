@@ -1,0 +1,9 @@
+PASS Sequence iterators preserve order
+PASS Empty iterators stay empty
+PASS Iterator next advances shared state
+PASS Iterator fold is left associative
+PASS ByteArray adapters expose bytes
+PASS IntArray adapters preserve signed integers
+PASS FloatArray adapters preserve values
+PASS Heap tuple elements survive materialization
+SUMMARY 8 passed, 0 failed

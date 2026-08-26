@@ -325,8 +325,14 @@ unique_ptr<PatternNode> ParserImpl::parse_pattern_primary() {
             return make_unique<ConstructorPattern>(loc, name, sub_pats);
         }
 
-        // Check for @ pattern
-        if (match(TokenType::YAT)) {
+        // `@borrow` is a contextual marker in function parameter lists.  Do
+        // not consume it as the suffix of an as-pattern; the enclosing
+        // parameter parser must see the marker and associate it with the next
+        // parameter.  Other `name @ pattern` forms retain their usual meaning.
+        const bool next_is_borrow_marker =
+            check(TokenType::YAT) && check_ahead(TokenType::YIDENTIFIER) &&
+            peek(1).lexeme == "borrow";
+        if (!next_is_borrow_marker && match(TokenType::YAT)) {
             auto pattern = parse_pattern();
             auto id_expr = new IdentifierExpr(loc, new NameExpr(loc, name));
             return make_unique<AsDataStructurePattern>(loc, id_expr, pattern.release());

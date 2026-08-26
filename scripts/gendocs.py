@@ -568,12 +568,19 @@ def parse_module(path: Path) -> dict:
             name = fn.group(1)
             rest = fn.group(2)
             if rest.lstrip().startswith(":"):
+                # Yona permits long arrow signatures to continue on following
+                # indented lines. A trailing arrow is unambiguously incomplete;
+                # join continuations before recording the public contract.
+                signature_lines = [line.strip()]
+                while signature_lines[-1].endswith("->") and i + 1 < len(lines):
+                    i += 1
+                    signature_lines.append(lines[i].strip())
                 upsert_function(
                     functions,
                     by_name,
                     {
                         "name": name,
-                        "type_sig": line.strip(),
+                        "type_sig": " ".join(signature_lines),
                         "lhs": None,
                         "simple_rhs": None,
                         "doc": doc_buffer[:],

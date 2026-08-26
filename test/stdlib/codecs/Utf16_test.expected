@@ -1,0 +1,4 @@
+PASS Utf16 maps ASCII positions
+PASS Utf16 counts surrogate pairs
+PASS Utf16 handles CRLF lines
+SUMMARY 3 passed, 0 failed

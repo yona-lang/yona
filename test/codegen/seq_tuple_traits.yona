@@ -1,0 +1,2 @@
+import zip from Std\List in
+zip [1, 2] [3] == [(1, 3)]

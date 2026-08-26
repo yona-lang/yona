@@ -105,10 +105,15 @@ struct MonoType {
 
 using MonoTypePtr = const MonoType*;
 
-/// A trait constraint: e.g., Num a
+/// A trait constraint: e.g., `Eq a` or `Foldable collection element`.
 struct Constraint {
     std::string trait_name;
-    MonoTypePtr type;
+    std::vector<MonoTypePtr> types;
+
+    Constraint(std::string name, MonoTypePtr type)
+        : trait_name(std::move(name)), types{type} {}
+    Constraint(std::string name, std::vector<MonoTypePtr> arguments)
+        : trait_name(std::move(name)), types(std::move(arguments)) {}
 };
 
 /// Polymorphic type scheme: forall vars. constraints => body

@@ -78,12 +78,13 @@ parseResponse raw =
 send : String -> Int -> Request -> Response
 send host port req =
     import tcpConnect, send as netSend, recv, close from Std\Net in
-    do
-        fd = tcpConnect host port
-        netSend fd (formatRequest host req)
-        raw = recv fd 65536
-        close fd
-        parseResponse raw
+    case tcpConnect host port of
+        Linear fd -> do
+            netSend fd (formatRequest host req)
+            raw = recv fd 65536
+            close fd
+            parseResponse raw
+        end
     end
 
 ## HTTP GET shorthand.
@@ -140,27 +141,27 @@ serveLoop : Int -> (Request -> Response) -> Int
 serveLoop listener handler =
     import tcpAccept, send as netSend, recv, close from Std\Net in
     import split, indexOf, drop from Std\String in
-    do
-        client = tcpAccept listener
-        raw = recv client 65536
-        firstLine = case split "\r\n" raw of [h|_] -> h; _ -> "GET / HTTP/1.1" end
-        parts = split " " firstLine
-        method = case parts of [m|_] -> m; _ -> "GET" end
-        path = case parts of [_|[p|_]] -> p; _ -> "/" end
-        bodyStart = indexOf "\r\n\r\n" raw
-        body = if bodyStart >= 0 then drop (bodyStart + 4) raw else ""
-        methodVal = case method of "GET" -> GET; "POST" -> POST; "PUT" -> PUT; "DELETE" -> DELETE; _ -> GET end
-        req = Request { method = methodVal, path = path, headers = 0, body = body }
-        resp = handler req
-        netSend client (formatResponse resp)
-        close client
-        serveLoop listener handler
+    case tcpAccept listener of
+        Linear client -> do
+            raw = recv client 65536
+            firstLine = case split "\r\n" raw of [h|_] -> h; _ -> "GET / HTTP/1.1" end
+            parts = split " " firstLine
+            method = case parts of [m|_] -> m; _ -> "GET" end
+            path = case parts of [_|[p|_]] -> p; _ -> "/" end
+            bodyStart = indexOf "\r\n\r\n" raw
+            body = if bodyStart >= 0 then drop (bodyStart + 4) raw else ""
+            methodVal = case method of "GET" -> GET; "POST" -> POST; "PUT" -> PUT; "DELETE" -> DELETE; _ -> GET end
+            req = Request { method = methodVal, path = path, headers = 0, body = body }
+            resp = handler req
+            netSend client (formatResponse resp)
+            close client
+            serveLoop listener handler
+        end
     end
 
 serve : String -> Int -> (Request -> Response) -> Int
 serve host port handler =
     import tcpListen from Std\Net in
-    do
-        listener = tcpListen host port
-        serveLoop listener handler
+    case tcpListen host port of
+        Linear listener -> serveLoop listener handler
     end

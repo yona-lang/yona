@@ -1,4 +1,4 @@
 FN yona_Std_Crypto__sha256 1 STRING -> STRING
-FN yona_Std_Crypto__randomBytes 1 INT -> STRING
+FN yona_Std_Crypto__randomBytes 1 INT -> BYTE_ARRAY
 FN yona_Std_Crypto__randomHex 1 INT -> STRING
 FN yona_Std_Crypto__uuid4 0 -> STRING

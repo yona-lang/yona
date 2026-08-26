@@ -445,6 +445,11 @@ TEST_CASE("Inference: string concat") {
     CHECK(check_expr_str("\"a\" ++ \"b\"") == "String");
 }
 
+TEST_CASE("Inference: sequence join preserves its element type") {
+    CHECK(check_expr_str("[1, 2] ++ [3]") == "Seq Int");
+    CHECK(check_expr_str("[\"left\"] ++ [\"right\"]") == "Seq String");
+}
+
 TEST_CASE("Inference: nested let") {
     CHECK(check_expr_str("let x = 1 in let y = x + 1 in y") == "Int");
 }
@@ -464,6 +469,36 @@ check message condition = if condition then message else ""
     REQUIRE(result.has_value());
     REQUIRE(result.value()->functions.size() == 1);
     CHECK(result.value()->functions[0]->patterns.size() == 2);
+}
+
+TEST_CASE("Parser retains both Dict parameters in instance method signatures") {
+    yona::parser::Parser parser;
+    yona::compiler::codegen::Codegen bootstrap("dict_signature_bootstrap");
+    bootstrap.module_paths_.push_back("lib");
+    bootstrap.load_prelude(&parser);
+    auto result = parser.parse_module(R"(
+module Test\DictSignature
+
+trait Merge a
+    merge : a -> a -> a
+end
+
+instance Merge (Dict key value)
+    merge : Dict key value -> Dict key value -> Dict key value
+    merge left _ = left
+end
+)", "dict_signature.yona");
+    REQUIRE(result.has_value());
+    REQUIRE(result.value()->instance_declarations.size() == 1);
+    REQUIRE(result.value()->instance_declarations[0]->methods.size() == 1);
+    const auto& signature =
+        result.value()->instance_declarations[0]->methods[0]->type_signature;
+    REQUIRE(signature.has_value());
+    const auto* first_arrow = std::get_if<std::shared_ptr<
+        yona::compiler::types::FunctionType>>(&*signature);
+    REQUIRE(first_arrow != nullptr);
+    CHECK(std::holds_alternative<std::shared_ptr<
+          yona::compiler::types::DictCollectionType>>((*first_arrow)->argumentType));
 }
 
 TEST_CASE("Constructor pattern preserves a declared tuple as one field") {
@@ -564,6 +599,48 @@ run _ = Box ["value"]
     CHECK_FALSE(diag.has_errors());
 }
 
+TEST_CASE("Module checking binds extern declarations and types constant definitions as values") {
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\ExternConstant
+
+export backendName
+
+extern raw_backendName : Int -> String = "test_backend_name"
+
+backendName : String
+backendName = raw_backendName 0
+)", "extern_constant.yona");
+    REQUIRE(result.has_value());
+
+    checker.check_module(result.value().get());
+
+    CHECK_FALSE(checker.has_direct_errors());
+    CHECK_FALSE(diag.has_errors());
+}
+
+TEST_CASE("Unit parameter patterns match Unit function annotations") {
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    yona::parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\UnitParameter
+
+export available
+
+available : () -> Bool
+available () = true
+)", "unit_parameter.yona");
+    REQUIRE(result.has_value());
+
+    checker.check_module(result.value().get());
+
+    CHECK_FALSE(checker.has_direct_errors());
+    CHECK_FALSE(diag.has_errors());
+}
+
 // ===== Case Expression + Pattern Inference =====
 
 TEST_CASE("Inference: case with integer patterns") {
@@ -618,6 +695,11 @@ static bool check_has_error(const std::string& source) {
 
 TEST_CASE("Type error: adding string to int") {
     CHECK(check_has_error("1 + \"hello\""));
+}
+
+TEST_CASE("Type error: join rejects mixed strings and sequences") {
+    CHECK(check_has_error("\"left\" ++ [\"right\"]"));
+    CHECK(check_has_error("[\"left\"] ++ \"right\""));
 }
 
 TEST_CASE("Type error: if condition not bool") {
@@ -740,6 +822,100 @@ TEST_CASE("Trait error: abs applied to String") {
 
 TEST_CASE("Trait: no error on valid usage") {
     CHECK(check_with_traits("abs 42", false) != "ERROR");
+}
+
+TEST_CASE("Equality operator requires an Eq instance") {
+    yona::parser::Parser parser;
+    std::istringstream stream("(\\x -> x) == (\\y -> y)");
+    auto parsed = parser.parse_input(stream);
+    REQUIRE(parsed.node != nullptr);
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    CHECK(checker.check(parsed.node.get()) != nullptr);
+    CHECK_FALSE(checker.solve_constraints());
+
+    size_t missing_eq = 0;
+    for (const auto& record : diag.records()) {
+        if (record.code == yona::compiler::ErrorCode::E0105 ||
+            record.code == yona::compiler::ErrorCode::E0106) {
+            CHECK(record.message.find("Eq") != std::string::npos);
+            ++missing_eq;
+        }
+    }
+    CHECK(missing_eq == 1);
+}
+
+TEST_CASE("Ordering operator requires an Ord instance") {
+    yona::parser::Parser parser;
+    std::istringstream stream("(\\x -> x) < (\\y -> y)");
+    auto parsed = parser.parse_input(stream);
+    REQUIRE(parsed.node != nullptr);
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    CHECK(checker.check(parsed.node.get()) != nullptr);
+    CHECK_FALSE(checker.solve_constraints());
+
+    size_t missing_ord = 0;
+    for (const auto& record : diag.records()) {
+        if (record.code == yona::compiler::ErrorCode::E0105 ||
+            record.code == yona::compiler::ErrorCode::E0106) {
+            CHECK(record.message.find("Ord") != std::string::npos);
+            ++missing_ord;
+        }
+    }
+    CHECK(missing_ord == 1);
+}
+
+TEST_CASE("Lifted instance constraints are solved for concrete element types") {
+    yona::parser::Parser parser;
+    std::istringstream stream("[(\\x -> x)] == [(\\y -> y)]");
+    auto parsed = parser.parse_input(stream);
+    REQUIRE(parsed.node != nullptr);
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto& arena = checker.arena();
+    auto* element = arena.fresh_var(0);
+    checker.register_trait_method(
+        "Eq", "eq", arena.make_arrow(
+            element, arena.make_arrow(element, arena.make_con(
+                yona::compiler::typechecker::TyCon::Bool))));
+    checker.register_instance("Eq", "Seq", {"element"},
+                              {{"Eq", "element"}}, {"Seq"});
+
+    CHECK(checker.check(parsed.node.get()) != nullptr);
+    CHECK_FALSE(checker.solve_constraints());
+    size_t nested_missing = 0;
+    for (const auto& record : diag.records())
+        if ((record.code == yona::compiler::ErrorCode::E0105 ||
+             record.code == yona::compiler::ErrorCode::E0106) &&
+            record.message.find("Eq") != std::string::npos)
+            ++nested_missing;
+    CHECK(nested_missing == 1);
+}
+
+TEST_CASE("Trait superclass obligations are solved transitively") {
+    yona::parser::Parser parser;
+    std::istringstream stream("1 < 2");
+    auto parsed = parser.parse_input(stream);
+    REQUIRE(parsed.node != nullptr);
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    checker.register_instance("Ord", "Int");
+    checker.register_trait_superclass("Ord", "Eq");
+    CHECK(checker.check(parsed.node.get()) != nullptr);
+    CHECK_FALSE(checker.solve_constraints());
+
+    size_t missing_eq = 0;
+    for (const auto& record : diag.records())
+        if ((record.code == yona::compiler::ErrorCode::E0105 ||
+             record.code == yona::compiler::ErrorCode::E0106) &&
+            record.message.find("Eq") != std::string::npos)
+            ++missing_eq;
+    CHECK(missing_eq == 1);
 }
 
 // ===== Codegen Integration Test =====
@@ -2266,6 +2442,130 @@ TEST_CASE("TypeChecker: imported Linear return preserves its ADT payload") {
     fs::remove_all(dir, ec);
 }
 
+static std::vector<DiagnosticEngine::Record> concurrency_diagnostics(
+        const std::string& source) {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    yona::parser::Parser parser;
+    yona::compiler::codegen::Codegen bootstrap("concurrency_markers");
+    bootstrap.module_paths_.push_back("lib");
+    bootstrap.load_prelude(&parser, &checker);
+    checker.set_import_type_source(&bootstrap.import_types_);
+    std::istringstream input(source);
+    auto parsed = parser.parse_input(input);
+    if (!parsed.node) return diagnostics.records();
+    checker.check(parsed.node.get());
+    checker.solve_constraints();
+    return diagnostics.records();
+}
+
+TEST_CASE("Send and Shareable accept immutable spawn captures and results") {
+    const auto records = concurrency_diagnostics(R"(
+import spawn from Std\Task in
+let message = "immutable" in spawn (\_ -> if message == "immutable" then 1 else 0)
+)");
+    CHECK(std::none_of(records.begin(), records.end(), [](const auto& record) {
+        return record.level == DiagLevel::Error;
+    }));
+}
+
+TEST_CASE("Spawn rejects mutable native captures with actionable marker diagnostics") {
+    const auto records = concurrency_diagnostics(R"(
+import spawn from Std\Task, alloc from Std\ByteArray in
+let bytes = alloc 4 in spawn (\_ -> bytes)
+)");
+    CHECK(std::count_if(records.begin(), records.end(), [](const auto& record) {
+        return record.level == DiagLevel::Error &&
+            (record.message.find("Shareable ByteArray") != std::string::npos ||
+             record.message.find("Send ByteArray") != std::string::npos);
+    }) >= 1);
+    CHECK(std::any_of(records.begin(), records.end(), [](const auto& record) {
+        return record.level == DiagLevel::Note &&
+            record.message.find("mutable native arrays require a snapshot") != std::string::npos;
+    }));
+}
+
+TEST_CASE("Parallel comprehensions reject mutable captures and results") {
+    const auto records = concurrency_diagnostics(R"(
+import alloc from Std\ByteArray in
+let bytes = alloc 4 in [| bytes for value = [1, 2] ]
+)");
+    CHECK(std::any_of(records.begin(), records.end(), [](const auto& record) {
+        return record.level == DiagLevel::Error &&
+            (record.message.find("Shareable ByteArray") != std::string::npos ||
+             record.message.find("Send ByteArray") != std::string::npos);
+    }));
+}
+
+TEST_CASE("Channel send requires Send for its payload") {
+    const auto accepted = concurrency_diagnostics(R"(
+import channel, send from Std\Channel in case channel 1 of
+    (Linear sender, Linear receiver) -> send sender "immutable"
+end
+)");
+    CHECK(std::none_of(accepted.begin(), accepted.end(), [](const auto& record) {
+        return record.level == DiagLevel::Error;
+    }));
+
+    const auto moved_array = concurrency_diagnostics(R"(
+import channel, send from Std\Channel, alloc from Std\ByteArray in
+case channel 1 of
+    (Linear sender, Linear receiver) -> send sender (alloc 4)
+end
+)");
+    CHECK(std::none_of(moved_array.begin(), moved_array.end(), [](const auto& record) {
+        return record.level == DiagLevel::Error;
+    }));
+
+    const auto rejected = concurrency_diagnostics(R"(
+import channel, send from Std\Channel in
+case channel 1 of
+    (Linear sender, Linear receiver) -> send sender (\value -> value)
+end
+)");
+    CHECK(std::any_of(rejected.begin(), rejected.end(), [](const auto& record) {
+        return record.level == DiagLevel::Error &&
+            record.message.find("Send") != std::string::npos &&
+            record.message.find("->") != std::string::npos;
+    }));
+}
+
+TEST_CASE("Marker derivation is structural and emits no methods") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    yona::parser::Parser parser;
+    yona::compiler::codegen::Codegen bootstrap("marker_derive");
+    bootstrap.module_paths_.push_back("lib");
+    bootstrap.load_prelude(&parser, &checker);
+    auto parsed = parser.parse_module(R"(
+module Test\MarkerDerive
+type Packet value = Packet value deriving Send, Shareable
+)", "marker_derive.yona");
+    REQUIRE(parsed.has_value());
+    checker.check_module(parsed.value().get());
+    CHECK(!diagnostics.has_errors());
+}
+
+TEST_CASE("Shareable derivation rejects mutable native fields") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    yona::parser::Parser parser;
+    yona::compiler::codegen::Codegen bootstrap("marker_reject");
+    bootstrap.module_paths_.push_back("lib");
+    bootstrap.load_prelude(&parser, &checker);
+    auto parsed = parser.parse_module(R"(
+module Test\MarkerReject
+type MutablePacket = MutablePacket ByteArray deriving Send, Shareable
+)", "marker_reject.yona");
+    REQUIRE(parsed.has_value());
+    checker.check_module(parsed.value().get());
+    CHECK(std::any_of(diagnostics.records().begin(), diagnostics.records().end(),
+        [](const auto& record) {
+            return record.level == DiagLevel::Error &&
+                record.message.find("cannot derive Shareable") != std::string::npos;
+        }));
+}
+
 TEST_CASE("TypeChecker: imported Linear payloads remain distinct") {
     namespace fs = std::filesystem;
     auto dir = fs::temp_directory_path() / "yona_yonai_linear_payload_distinct";
@@ -2471,6 +2771,18 @@ TEST_CASE("@borrow accepted when parameter is only read") {
     yona::compiler::typechecker::TypeChecker tc(diag);
     yona::parser::Parser parser;
     std::istringstream stream("let f @borrow x = x + 1 in f 2");
+    auto result = parser.parse_input(stream);
+    REQUIRE(result.node);
+    tc.check(result.node.get());
+    CHECK(!tc.has_direct_errors());
+}
+
+TEST_CASE("consecutive @borrow parameters remain distinct identifiers") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker tc(diag);
+    yona::parser::Parser parser;
+    std::istringstream stream(
+        "let same @borrow left @borrow right = left == right in same 1 1");
     auto result = parser.parse_input(stream);
     REQUIRE(result.node);
     tc.check(result.node.get());

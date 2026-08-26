@@ -85,8 +85,8 @@ a module lacks an existing script and expected-output companion.
 |---|---|---|
 | Pure | `stdlib-pure` | Always run on every supported platform. |
 | Runtime | `stdlib-runtime` | Always run; uses isolated scratch files/processes. |
-| Network | `stdlib-network` | Required in capable CI; locally skipped only after a positive capability probe. |
-| GPU | `stdlib-gpu` | Required in Vulkan-capable CI; CPU fallback contracts always remain in the default suite. |
+| Network | `stdlib-network` | Deterministic public API contracts in every CI job; focused loopback runtime tests supplement capable hosts. |
+| GPU | `stdlib-gpu` | Portable fallback/probe contracts in every CI job; Vulkan-enabled builds add device-operation tests. |
 
 Tests use only isolated files beneath the harness scratch root. Process tests
 use deterministic commands supplied by the existing platform rewrite helper.

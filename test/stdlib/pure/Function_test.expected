@@ -1,0 +1,9 @@
+PASS identity returns input
+PASS constant ignores argument
+PASS compose is right to left
+PASS pipe is left to right
+PASS apply invokes function
+PASS flip swaps arguments
+PASS on projects both arguments
+PASS fix supports anonymous recursion
+SUMMARY 8 passed, 0 failed

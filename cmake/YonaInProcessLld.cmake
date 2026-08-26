@@ -18,7 +18,7 @@ if(YONA_ENABLE_INPROCESS_LLD)
 		FetchContent_Declare(
 			libxml2_src
 			GIT_REPOSITORY https://github.com/GNOME/libxml2.git
-			GIT_TAG v2.12.10
+			GIT_TAG v2.15.3
 		)
 		# Build a minimal static libxml2 usable by LLVMWindowsManifest.
 		set(_yona_saved_build_shared_libs "${BUILD_SHARED_LIBS}")

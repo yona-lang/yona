@@ -1,0 +1,7 @@
+import entries from Std\Dict, toSeq from Std\Iterator in
+let consume n = if n == 0 then "value" else
+        case toSeq (entries {1: "value"}) of
+            [(key, value) | _] -> consume (n - key)
+            _ -> "missing"
+        end
+in consume 256

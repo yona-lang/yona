@@ -1,0 +1,8 @@
+import run, render from Std\Test,
+       monoidLaws from Std\TraitLaws
+in render (run (monoidLaws "Dict"
+    (\value -> show value)
+    (\left right -> left == right)
+    (\left right -> combine left right)
+    (emptyLike {0: ""})
+    [emptyLike {0: ""}, {1: "a"}, {2: "b"}]))

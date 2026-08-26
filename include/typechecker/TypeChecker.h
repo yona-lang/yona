@@ -22,6 +22,7 @@
 #include "types.h"
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace yona::compiler::typechecker {
@@ -35,7 +36,8 @@ struct ImportedFnSig {
     std::vector<char> tuple_elem_linear;
     std::vector<char> param_linear;
     /// Structural `.yonai` tags (`SEQ`, `ADT`, `FUNCTION`, …). `INT`/empty
-    /// means unconstrained — generics are snapshotted as INT in `.yonai`.
+    /// may be unconstrained because legacy generic ABIs snapshot variables as
+    /// INT; the other scalar tags are exact.
     std::vector<std::string> param_tags;
     std::string return_tag;
     /// Recursive `.yonai` descriptors (`ADT(FileHandle)`, `TUPLE(...)`, …).
@@ -45,6 +47,16 @@ struct ImportedFnSig {
     std::string return_linear_adt_name;
 };
 
+/// Complete imported instance head. `type_names` are the concrete head
+/// constructors in declaration order; `type_params` and `constraints`
+/// describe a generic lifted instance such as `Eq a => Eq (Seq a)`.
+struct ImportedInstanceSig {
+    std::string trait_name;
+    std::vector<std::string> type_names;
+    std::vector<std::string> type_params;
+    std::vector<std::pair<std::string, std::string>> constraints;
+};
+
 /// Loads imported function signatures from `.yonai` (implemented by Codegen).
 class ImportTypeSource {
 public:
@@ -52,6 +64,8 @@ public:
     virtual std::optional<ImportedFnSig> imported_function_sig(
         const std::string& module_fqn, const std::string& name) = 0;
     virtual std::vector<std::string> imported_module_exports(
+        const std::string& module_fqn) = 0;
+    virtual std::vector<ImportedInstanceSig> imported_instances(
         const std::string& module_fqn) = 0;
 };
 
@@ -71,6 +85,13 @@ public:
     /// Resolve all union-find links in a type (zonk).
     MonoTypePtr zonk(MonoTypePtr type);
 
+    struct SelectedTraitInstance {
+        std::string trait_name;
+        std::vector<std::string> type_names;
+    };
+    std::optional<SelectedTraitInstance> selected_trait_instance(
+        const ast::ApplyExpr* application) const;
+
     /// Has errors? Includes both direct type checker errors and unifier errors.
     bool has_errors() const { return error_count_ > 0 || diag_.has_errors(); }
 
@@ -84,14 +105,30 @@ public:
     /// Register ADT definitions for constructor type inference.
     void register_adt(const std::string& type_name, const std::vector<std::string>& type_params,
                       const std::vector<std::pair<std::string, int>>& constructors,
-                      const std::vector<std::vector<ast::FieldType>>& field_types = {});
+                      const std::vector<std::vector<ast::FieldType>>& field_types = {},
+                      const std::vector<std::vector<std::string>>& field_names = {});
 
     /// Register a trait method (binds as polymorphic with constraint).
+    void register_trait(const std::string& trait_name,
+                        std::vector<std::string> type_params);
     void register_trait_method(const std::string& trait_name, const std::string& method_name,
                                 MonoTypePtr method_type);
+    void register_trait_method_descriptor(const std::string& trait_name,
+                                          const std::string& method_name,
+                                          const std::string& descriptor);
+    /// Register a polymorphic compiler/Prelude function without inventing a
+    /// trait obligation. This is distinct from `register_trait_method`:
+    /// ordinary imported functions are not members of a synthetic trait.
+    void register_builtin_function(const std::string& function_name,
+                                   MonoTypePtr function_type);
+    void register_trait_superclass(const std::string& trait_name,
+                                   const std::string& superclass_name);
 
     /// Register a trait instance for a concrete type.
-    void register_instance(const std::string& trait_name, const std::string& type_name);
+    void register_instance(const std::string& trait_name, const std::string& type_name,
+                           std::vector<std::string> type_params = {},
+                           std::vector<std::pair<std::string, std::string>> constraints = {},
+                           std::vector<std::string> type_names = {});
 
     /// Register an effect declaration with its operations.
     /// Each operation is (name, param_types, return_type).
@@ -211,23 +248,67 @@ private:
         int arity;
         std::vector<std::string> type_params; ///< from the ADT definition
         std::vector<ast::FieldType> field_types;
+        std::vector<std::string> field_names;
     };
     std::unordered_map<std::string, ConstructorInfo> constructor_registry_;
 
     /// Type map: AST node → inferred monotype.
     std::unordered_map<ast::AstNode*, MonoTypePtr> type_map_;
 
-    /// Trait instance registry: "TraitName" → set of concrete type names with instances.
-    std::unordered_map<std::string, std::vector<std::string>> trait_instances_;
+    struct InstanceContract {
+        std::string type_name;
+        std::vector<std::string> type_names;
+        std::vector<std::string> type_params;
+        std::vector<std::pair<std::string, std::string>> constraints;
+    };
+    /// Trait name → deterministic set of complete visible instance heads.
+    std::unordered_map<std::string, std::vector<InstanceContract>> trait_instances_;
+    std::unordered_map<std::string, std::vector<std::string>> trait_superclasses_;
+    std::unordered_map<std::string, std::vector<std::string>> trait_type_params_;
+    std::unordered_map<std::string, std::vector<std::string>> adt_type_params_;
 
     /// Deferred trait constraints gathered during inference.
     struct DeferredConstraint {
         std::string trait_name;
-        MonoTypePtr type;
+        std::vector<MonoTypePtr> types;
         SourceLocation loc;
         std::string context;
+        const ast::ApplyExpr* origin = nullptr;
+
+        DeferredConstraint(std::string name, MonoTypePtr type,
+                           SourceLocation source, std::string detail)
+            : trait_name(std::move(name)), types{type}, loc(std::move(source)),
+              context(std::move(detail)) {}
+        DeferredConstraint(std::string name, std::vector<MonoTypePtr> arguments,
+                           SourceLocation source, std::string detail)
+            : trait_name(std::move(name)), types(std::move(arguments)),
+              loc(std::move(source)), context(std::move(detail)) {}
     };
     std::vector<DeferredConstraint> deferred_constraints_;
+    std::unordered_map<const ast::ApplyExpr*, SelectedTraitInstance>
+        selected_trait_instances_;
+
+    enum class ConcurrencyBoundary { TaskSpawn, ChannelSend };
+    std::unordered_map<std::string, ConcurrencyBoundary> concurrency_boundaries_;
+    struct CaptureFrame {
+        const TypeEnv* local_root = nullptr;
+        std::vector<MonoTypePtr> types;
+        std::unordered_set<std::string> names;
+    };
+    std::vector<CaptureFrame> capture_frames_;
+    std::unordered_map<const ast::FunctionExpr*, std::vector<MonoTypePtr>>
+        function_capture_types_;
+    std::unordered_map<std::string, std::vector<MonoTypePtr>>
+        named_function_capture_types_;
+
+    void require_trait(const std::string& trait_name, MonoTypePtr type,
+                       const SourceLocation& loc, std::string context);
+    void require_captures_shareable(const std::vector<MonoTypePtr>& captures,
+                                    const SourceLocation& loc,
+                                    const std::string& context);
+    void enforce_concurrency_boundary(ast::ApplyExpr* node,
+                                      const std::string& callee_name,
+                                      std::optional<ConcurrencyBoundary> boundary);
 
     /// Effect operation registry: "Effect.op" → (param_types, return_type)
     struct EffectOpInfo {
@@ -262,8 +343,13 @@ private:
     void bind_import_name(std::shared_ptr<TypeEnv> env, const std::string& module_fqn,
                           const std::string& func_name, const std::string& bind_name,
                           int level);
-    MonoTypePtr mono_from_import_sig(const ImportedFnSig& sig, int level);
+    MonoTypePtr mono_from_import_sig(
+        const ImportedFnSig& sig, int level,
+        std::unordered_map<std::string, MonoTypePtr>* descriptor_variables = nullptr);
     MonoTypePtr from_ast_type(const yona::compiler::types::Type& t, int level);
+    MonoTypePtr from_ast_type_impl(
+        const yona::compiler::types::Type& t, int level,
+        std::unordered_map<std::string, MonoTypePtr>& variables);
 };
 
 } // namespace yona::compiler::typechecker

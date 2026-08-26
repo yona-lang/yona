@@ -37,6 +37,10 @@ public:
     /// Get local bindings (for error messages / debugging).
     const std::unordered_map<std::string, TypeScheme>& locals() const { return bindings_; }
 
+    /// Whether `name` is bound between this scope and `ancestor`, inclusive.
+    /// Used to distinguish a lambda/task's locals from captured outer values.
+    bool bound_through(const std::string& name, const TypeEnv* ancestor) const;
+
     /// Collect all visible names (for "did you mean?" suggestions).
     std::vector<std::string> all_names() const;
 

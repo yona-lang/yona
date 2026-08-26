@@ -441,13 +441,27 @@ std::pair<llvm::Type*, CType> Codegen::infer_return_type(AstNode* node) {
         }
         if (!root_name.empty()) {
             auto adt_it = types_.adt_constructors.find(root_name);
-            if (adt_it != types_.adt_constructors.end()) {
-                if (adt_it->second.is_recursive)
-                    return {PointerType::get(*context_, 0), CType::ADT};
-                auto tag_ty = i64_ty;
-                std::vector<LType*> fields = {tag_ty};
-                for (int f = 0; f < adt_it->second.max_arity; f++) fields.push_back(i64_ty);
-                return {StructType::get(*context_, fields), CType::ADT};
+            if (adt_it != types_.adt_constructors.end())
+                return {PointerType::get(*context_, 0), CType::ADT};
+            if (auto compiled = compiled_functions_.find(root_name);
+                compiled != compiled_functions_.end()) {
+                const auto& function = compiled->second;
+                auto* return_type = function.fn
+                    ? function.fn->getReturnType()
+                    : llvm_type(function.return_type);
+                return {return_type, function.return_type};
+            }
+            if (auto external = imports_.extern_functions.find(root_name);
+                external != imports_.extern_functions.end()) {
+                if (auto metadata = imports_.meta.find(external->second);
+                    metadata != imports_.meta.end()) {
+                    const auto& function = metadata->second;
+                    auto* return_type = function.return_type == CType::ADT &&
+                            !function.return_adt_name.empty()
+                        ? adt_llvm_type(function.return_adt_name)
+                        : llvm_type(function.return_type);
+                    return {return_type, function.return_type};
+                }
             }
         }
     }

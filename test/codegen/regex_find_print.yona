@@ -1,0 +1,1 @@
+import compile, find from Std\Regex in find (compile "[0-9]+") "a12b"

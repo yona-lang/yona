@@ -188,7 +188,7 @@ type Pair a b = Pair a b deriving (Show, Eq)
 show Green                    # => "Green"
 show (Pair 1 2)               # => "Pair(1, 2)"
 eq Red Red                    # => true
-compare Red Blue              # => -1 (declaration order defines Ord)
+compare Red Blue              # => Less (declaration order defines Ord)
 ```
 
 Semantics of the generated instances:

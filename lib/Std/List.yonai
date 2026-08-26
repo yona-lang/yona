@@ -1,272 +1,43 @@
-ADT FileHandle 1 1
-CTOR FileHandle 0 1 fields _0:INT
-ADT FileMode 4 0
-CTOR Read 0 0
-CTOR ReadWrite 2 0
-CTOR Write 1 0
-CTOR Append 3 0
-ADT Iterator 1 1 recursive
-CTOR Iterator 0 1 fields _0:FUNCTION:ADT:Option
-ADT Linear 1 1
-CTOR Linear 0 1 fields _0:INT
-ADT Option 2 1
-CTOR Some 0 1 fields _0:INT
-CTOR None 1 0
-ADT Result 2 1
-CTOR Ok 0 1 fields _0:INT
-CTOR Err 1 1 fields _0:INT
-ADT Type 18 1
-CTOR TSum 16 0
-CTOR TAdt 15 1 fields _0:STRING
-CTOR TInt 0 0
-CTOR TFloat 1 0
-CTOR TBool 2 0
-CTOR TString 3 0
-CTOR TSymbol 4 0
-CTOR TUnit 5 0
-CTOR TSeq 6 0
-CTOR TIntArray 13 0
-CTOR TSet 7 0
-CTOR TDict 8 0
-CTOR TFunction 10 0
-CTOR TTuple 9 0
-CTOR TPromise 11 0
-CTOR TByteArray 12 0
-CTOR TFloatArray 14 0
-CTOR TRecord 17 0
-ADT Whence 3 0
-CTOR SeekEnd 2 0
-CTOR SeekSet 0 0
-CTOR SeekCur 1 0
-TRAIT Closeable a 1
-  METHOD close
-TRAIT Show a 1
-  METHOD show
-TRAIT Eq a 1
-  METHOD eq
-TRAIT Ord a 1
-  METHOD compare
-TRAIT Hash a 1
-  METHOD hash
-TRAIT Array a 2
-  METHOD length
-  METHOD get
-INSTANCE Show Float
-  IMPL show yona_Prelude__Show_Float__show
-INSTANCE Closeable Int
-  IMPL close Closeable_Int__close
-INSTANCE Closeable FileHandle
-  IMPL close yona_Std_File__closeFileHandle
-INSTANCE Ord String
-  IMPL compare yona_Prelude__Ord_String__compare
-INSTANCE Eq Bool
-  IMPL eq yona_Prelude__Eq_Bool__eq
-INSTANCE Show Int
-  IMPL show yona_Prelude__Show_Int__show
-INSTANCE Show String
-  IMPL show yona_Prelude__Show_String__show
-INSTANCE Eq String
-  IMPL eq yona_Prelude__Eq_String__eq
-INSTANCE Show Bool
-  IMPL show yona_Prelude__Show_Bool__show
-INSTANCE Ord Bool
-  IMPL compare yona_Prelude__Ord_Bool__compare
-INSTANCE Show Symbol
-  IMPL show yona_Prelude__Show_Symbol__show
-INSTANCE Eq Int
-  IMPL eq yona_Prelude__Eq_Int__eq
-INSTANCE Array FloatArray
-  IMPL length yona_Prelude__Array_FloatArray__length
-  IMPL get yona_Prelude__Array_FloatArray__get
-INSTANCE Eq Float
-  IMPL eq yona_Prelude__Eq_Float__eq
-INSTANCE Eq Symbol
-  IMPL eq yona_Prelude__Eq_Symbol__eq
-INSTANCE Ord Int
-  IMPL compare yona_Prelude__Ord_Int__compare
-INSTANCE Ord Float
-  IMPL compare yona_Prelude__Ord_Float__compare
-INSTANCE Hash Int
-  IMPL hash yona_Prelude__Hash_Int__hash
-INSTANCE Hash Float
-  IMPL hash yona_Prelude__Hash_Float__hash
-INSTANCE Hash String
-  IMPL hash yona_Prelude__Hash_String__hash
-INSTANCE Hash Bool
-  IMPL hash yona_Prelude__Hash_Bool__hash
-INSTANCE Hash Symbol
-  IMPL hash yona_Prelude__Hash_Symbol__hash
-INSTANCE Array ByteArray
-  IMPL length yona_Prelude__Array_ByteArray__length
-  IMPL get yona_Prelude__Array_ByteArray__get
-INSTANCE Array IntArray
-  IMPL length yona_Prelude__Array_IntArray__length
-  IMPL get yona_Prelude__Array_IntArray__get
-INSTANCE Array Seq
-  IMPL length yona_Prelude__Array_Seq__length
-  IMPL get yona_Prelude__Array_Seq__get
-INSTANCE Array String
-  IMPL length yona_Prelude__Array_String__length
-  IMPL get yona_Prelude__Array_String__get
-FN yona_Prelude__Array_Seq__length 1 INT -> INT
-FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
-FN yona_Std_List__sum 1 INT -> INT
-FN yona_Prelude__Hash_Int__hash 1 INT -> INT
-FN yona_Std_List__zipWith 3 FUNCTION SEQ SEQ -> SEQ
-FN yona_Prelude__Show_String__show 1 STRING -> STRING
-FN yona_Std_List__product 1 INT -> INT
-FN yona_Prelude__Show_Int__show 1 INT -> STRING
-FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
-FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
-FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
-FN yona_Std_List__zip 2 SEQ SEQ -> SEQ
-FN yona_Std_List__all 2 FUNCTION SEQ -> BOOL borrow 10
-FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
-FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
-FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
-FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
-FN yona_Std_List__isEmpty 1 SEQ -> BOOL
-FN yona_Prelude__Hash_String__hash 1 STRING -> INT
-FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
-FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
-FN yona_Std_List__take 2 INT SEQ -> SEQ
-FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
-FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
-FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
-FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
-FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
-FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
-FN yona_Std_List__enumerate 1 INT -> SEQ
-FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
-FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
-FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_IntArray__length 1 INT -> INT
-FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_String__length 1 STRING -> INT
-FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
-FN yona_Prelude__Array_String__get 2 STRING INT -> INT
-FN Closeable_Int__close 1 INT -> UNIT
-FN yona_Std_List__map 2 FUNCTION SEQ -> SEQ
-FN yona_Std_List__filter 2 FUNCTION SEQ -> SEQ
-FN yona_Std_List__fold 3 FUNCTION INT SEQ -> INT borrow 100
-FN yona_Std_List__find 2 FUNCTION SEQ -> SYMBOL borrow 10
-FN yona_Std_List__foldl 3 FUNCTION INT SEQ -> INT borrow 100
-FN yona_Std_List__foldr 3 FUNCTION INT SEQ -> INT
-FN yona_Std_List__length 1 SEQ -> INT
-FN yona_Std_List__tail 1 SEQ -> SEQ
-FN yona_Std_List__head 1 SEQ -> INT
-FN yona_Std_List__any 2 FUNCTION SEQ -> BOOL borrow 10
-FN yona_Std_List__reverse 1 INT -> INT
-FN yona_Std_List__drop 2 INT SEQ -> SEQ
-FN yona_Std_List__partition 2 FUNCTION INT -> INT borrow 10
-FN yona_Std_List__flatten 1 SEQ -> SEQ
-FN yona_Std_List__contains 2 INT SEQ -> BOOL
-FN yona_Std_List__intersperse 2 INT SEQ -> SEQ
-FN yona_Std_List__nth 2 INT SEQ -> INT
-FN yona_Std_List__flatMap 2 INT INT -> SEQ
-FN yona_Std_List__scanl 3 FUNCTION INT SEQ -> SEQ
-FN yona_Std_List__sortBy 2 FUNCTION SEQ -> SEQ borrow 10
-FN yona_Std_List__groupBy 2 FUNCTION INT -> INT borrow 10
-GENFN_BEGIN yona_Std_List__map map
-map fn seq = case seq of [] -> []; [h|t] -> (fn h) :: (map fn t) end
-GENFN_END
-GENFN_BEGIN yona_Std_List__filter filter
-filter fn seq = case seq of [] -> []; [h|t] -> if fn h then h :: (filter fn t) else filter fn t end
-GENFN_END
-GENFN_BEGIN yona_Std_List__find find
-find pred seq =
-    case seq of
-        [] -> :none
-        [h|t] -> if pred h then (:some, h) else find pred t
-    end
-GENFN_END
-GENFN_BEGIN yona_Std_List__foldl foldl
-foldl fn acc seq = case seq of [] -> acc; [h|t] -> foldl fn (fn acc h) t end
-GENFN_END
-GENFN_BEGIN yona_Std_List__fold fold
-fold fn acc seq = case seq of [] -> acc; [h|t] -> fold fn (fn acc h) t end
-GENFN_END
-GENFN_BEGIN yona_Std_List__foldr foldr
-foldr fn acc seq = case seq of [] -> acc; [h|t] -> fn h (foldr fn acc t) end
-GENFN_END
-GENFN_BEGIN yona_Std_List__length length
-length seq = case seq of [] -> 0; [_|t] -> 1 + (length t) end
-GENFN_END
-GENFN_BEGIN yona_Std_List__head head
-head seq = case seq of [h|_] -> h end
-GENFN_END
-GENFN_BEGIN yona_Std_List__tail tail
-tail seq = case seq of [_|t] -> t end
+FN yona_Std_List__all 2 FUNCTION SEQ -> BOOL borrow 10 effects | hof
+FN yona_Std_List__any 2 FUNCTION SEQ -> BOOL borrow 10 effects | hof
+FN yona_Std_List__contains 2 INT SEQ -> BOOL borrow 10 effects |
+FN yona_Std_List__drop 2 INT SEQ -> SEQ borrow 10 effects |
+FN yona_Std_List__enumerate 1 SEQ -> SEQ effects |
+FN yona_Std_List__filter 2 FUNCTION(VAR(element),BOOL) Seq(VAR(element)) -> Seq(VAR(element)) effects | hof
+FN yona_Std_List__find 2 FUNCTION(VAR(element),BOOL) Seq(VAR(element)) -> ADT(Option,VAR(element)) retadt Option borrow 10 effects | hof
+FN yona_Std_List__flatMap 2 FUNCTION SEQ -> SEQ effects | hof
+FN yona_Std_List__flatten 1 SEQ -> SEQ effects -
+FN yona_Std_List__fold 3 FUNCTION INT SEQ -> INT borrow 100 effects | hof
+FN yona_Std_List__foldl 3 FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))) VAR(acc) Seq(VAR(element)) -> VAR(acc) borrow 100 effects | hof
+FN yona_Std_List__foldr 3 FUNCTION(VAR(element),FUNCTION(VAR(acc),VAR(acc))) VAR(acc) Seq(VAR(element)) -> VAR(acc) effects | hof
+FN yona_Std_List__groupBy 2 FUNCTION SEQ -> SEQ effects | hof
+FN yona_Std_List__head 1 SEQ -> INT effects -
+FN yona_Std_List__intersperse 2 INT SEQ -> SEQ effects |
+FN yona_Std_List__isEmpty 1 SEQ -> BOOL effects -
+FN yona_Std_List__length 1 SEQ -> INT effects -
+FN yona_Std_List__map 2 FUNCTION SEQ -> SEQ effects | hof
+FN yona_Std_List__nth 2 INT SEQ -> INT borrow 10 effects |
+FN yona_Std_List__partition 2 FUNCTION SEQ -> TUPLE effects | hof
+FN yona_Std_List__product 1 SEQ -> INT effects |
+FN yona_Std_List__reverse 1 Seq(VAR(element)) -> Seq(VAR(element)) effects |
+FN yona_Std_List__scanl 3 FUNCTION INT SEQ -> SEQ effects | hof
+FN yona_Std_List__sortBy 2 FUNCTION(VAR(element),FUNCTION(VAR(element),INT)) Seq(VAR(element)) -> Seq(VAR(element)) effects | hof
+FN yona_Std_List__sum 1 SEQ -> INT effects |
+FN yona_Std_List__tail 1 SEQ -> SEQ effects -
+FN yona_Std_List__take 2 INT SEQ -> SEQ effects |
+FN yona_Std_List__zip 2 SEQ SEQ -> SEQ effects |
+FN yona_Std_List__zipWith 3 FUNCTION SEQ SEQ -> SEQ effects | hof
+GENFN_BEGIN yona_Std_List__all all
+all fn seq = case seq of [] -> true; [h|t] -> if fn h then all fn t else false end
 GENFN_END
 GENFN_BEGIN yona_Std_List__any any
 any fn seq = case seq of [] -> false; [h|t] -> if fn h then true else any fn t end
 GENFN_END
-GENFN_BEGIN yona_Std_List__reverse reverse
-reverse seq = foldl (\acc x -> x :: acc) [] seq
-GENFN_END
-GENFN_BEGIN yona_Std_List__take take
-take n seq = if n <= 0 then [] else case seq of [] -> []; [h|t] -> h :: (take (n - 1) t) end
-GENFN_END
-GENFN_BEGIN yona_Std_List__drop drop
-drop n seq = if n <= 0 then seq else case seq of [] -> []; [_|t] -> drop (n - 1) t end
-GENFN_END
-GENFN_BEGIN yona_Std_List__partition partition
-partition pred seq =
-    foldl (\acc x ->
-        case acc of
-            (yes, no) -> if pred x then (yes ++ [x], no) else (yes, no ++ [x])
-        end
-    ) ([], []) seq
-GENFN_END
-GENFN_BEGIN yona_Std_List__flatten flatten
-flatten seq = case seq of [] -> []; [h|t] -> h ++ (flatten t) end
-GENFN_END
-GENFN_BEGIN yona_Std_List__zip zip
-zip seqA seqB =
-    case seqA of
-        [] -> []
-        [a|ta] -> case seqB of
-            [] -> []
-            [b|tb] -> (a, b) :: (zip ta tb)
-        end
-    end
-GENFN_END
-GENFN_BEGIN yona_Std_List__all all
-all fn seq = case seq of [] -> true; [h|t] -> if fn h then all fn t else false end
-GENFN_END
 GENFN_BEGIN yona_Std_List__contains contains
 contains elem seq = case seq of [] -> false; [h|t] -> if h == elem then true else contains elem t end
 GENFN_END
-GENFN_BEGIN yona_Std_List__isEmpty isEmpty
-isEmpty seq = case seq of [] -> true; _ -> false end
-GENFN_END
-GENFN_BEGIN yona_Std_List__intersperse intersperse
-intersperse sep seq =
-    case seq of
-        [] -> []
-        [h|t] -> case t of
-            [] -> [h]
-            _ -> h :: sep :: (intersperse sep t)
-        end
-    end
-GENFN_END
-GENFN_BEGIN yona_Std_List__nth nth
-nth idx seq =
-    if idx <= 0 then case seq of [h|_] -> h end
-    else case seq of [_|t] -> nth (idx - 1) t end
-GENFN_END
-GENFN_BEGIN yona_Std_List__flatMap flatMap
-flatMap fn seq = flatten (map fn seq)
-GENFN_END
-GENFN_BEGIN yona_Std_List__zipWith zipWith
-zipWith fn seqA seqB =
-    case seqA of
-        [] -> []
-        [a|ta] -> case seqB of
-            [] -> []
-            [b|tb] -> (fn a b) :: (zipWith fn ta tb)
-        end
-    end
+GENFN_BEGIN yona_Std_List__drop drop
+drop n seq = if n <= 0 then seq else case seq of [] -> []; [_|t] -> drop (n - 1) t end
 GENFN_END
 GENFN_BEGIN yona_Std_List__enumerate enumerate
 enumerate seq =
@@ -276,22 +47,38 @@ enumerate seq =
     end
     in go 0 seq
 GENFN_END
-GENFN_BEGIN yona_Std_List__scanl scanl
-scanl fn acc seq =
-    acc :: (case seq of
-        [] -> []
-        [h|t] -> scanl fn (fn acc h) t
-    end)
+GENFN_BEGIN yona_Std_List__filter filter
+filter : (element -> Bool) -> Seq element -> Seq element
+filter fn seq = case seq of [] -> []; [h|t] -> if fn h then h :: (filter fn t) else filter fn t end
 GENFN_END
-GENFN_BEGIN yona_Std_List__sortBy sortBy
-sortBy cmp seq =
+GENFN_CTOR yona_Std_List__find None Option 1 0 2 1
+GENFN_CTOR yona_Std_List__find Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
+GENFN_BEGIN yona_Std_List__find find
+find : (element -> Bool) -> Seq element -> Option element
+find pred seq =
     case seq of
-        [] -> []
-        [pivot|rest] ->
-            let lt = filter (\x -> cmp x pivot < 0) rest in
-            let gt = filter (\x -> cmp x pivot >= 0) rest in
-            (sortBy cmp lt) ++ [pivot] ++ (sortBy cmp gt)
+        [] -> None
+        [h|t] -> if pred h then Some h else find pred t
     end
+GENFN_END
+GENFN_CTOR yona_Std_List__flatMap None Option 1 0 2 1
+GENFN_CTOR yona_Std_List__flatMap Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
+GENFN_BEGIN yona_Std_List__flatMap flatMap
+flatMap fn seq = flatten (map fn seq)
+GENFN_END
+GENFN_BEGIN yona_Std_List__flatten flatten
+flatten seq = case seq of [] -> []; [h|t] -> h ++ (flatten t) end
+GENFN_END
+GENFN_BEGIN yona_Std_List__fold fold
+fold fn acc seq = case seq of [] -> acc; [h|t] -> fold fn (fn acc h) t end
+GENFN_END
+GENFN_BEGIN yona_Std_List__foldl foldl
+foldl : (acc -> element -> acc) -> acc -> Seq element -> acc
+foldl fn acc seq = case seq of [] -> acc; [h|t] -> foldl fn (fn acc h) t end
+GENFN_END
+GENFN_BEGIN yona_Std_List__foldr foldr
+foldr : (element -> acc -> acc) -> acc -> Seq element -> acc
+foldr fn acc seq = case seq of [] -> acc; [h|t] -> fn h (foldr fn acc t) end
 GENFN_END
 GENFN_BEGIN yona_Std_List__groupBy groupBy
 groupBy fn seq =
@@ -305,9 +92,92 @@ groupBy fn seq =
         else map (\pair -> case pair of (k, vs) -> if k == key then (k, vs ++ [x]) else (k, vs) end) acc
     ) [] seq
 GENFN_END
-GENFN_BEGIN yona_Std_List__sum sum
-sum seq = foldl (\a b -> a + b) 0 seq
+GENFN_BEGIN yona_Std_List__head head
+head seq = case seq of [h|_] -> h end
+GENFN_END
+GENFN_BEGIN yona_Std_List__intersperse intersperse
+intersperse sep seq =
+    case seq of
+        [] -> []
+        [h|t] -> case t of
+            [] -> [h]
+            _ -> h :: sep :: (intersperse sep t)
+        end
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_List__isEmpty isEmpty
+isEmpty seq = case seq of [] -> true; _ -> false end
+GENFN_END
+GENFN_BEGIN yona_Std_List__length length
+length seq = case seq of [] -> 0; [_|t] -> 1 + (length t) end
+GENFN_END
+GENFN_BEGIN yona_Std_List__map map
+map fn seq = case seq of [] -> []; [h|t] -> (fn h) :: (map fn t) end
+GENFN_END
+GENFN_BEGIN yona_Std_List__nth nth
+nth idx seq =
+    if idx <= 0 then case seq of [h|_] -> h end
+    else case seq of [_|t] -> nth (idx - 1) t end
+GENFN_END
+GENFN_BEGIN yona_Std_List__partition partition
+partition pred seq =
+    foldl (\acc x ->
+        case acc of
+            (yes, no) -> if pred x then (yes ++ [x], no) else (yes, no ++ [x])
+        end
+    ) ([], []) seq
 GENFN_END
 GENFN_BEGIN yona_Std_List__product product
 product seq = foldl (\a b -> a * b) 1 seq
+GENFN_END
+GENFN_BEGIN yona_Std_List__reverse reverse
+reverse : Seq element -> Seq element
+reverse seq = foldl (\acc x -> x :: acc) [] seq
+GENFN_END
+GENFN_BEGIN yona_Std_List__scanl scanl
+scanl fn acc seq =
+    acc :: (case seq of
+        [] -> []
+        [h|t] -> scanl fn (fn acc h) t
+    end)
+GENFN_END
+GENFN_BEGIN yona_Std_List__sortBy sortBy
+sortBy : (element -> element -> Int) -> Seq element -> Seq element
+sortBy cmp seq =
+    case seq of
+        [] -> []
+        [pivot|rest] ->
+            let lt = filter (\x -> cmp x pivot < 0) rest in
+            let gt = filter (\x -> cmp x pivot >= 0) rest in
+            (sortBy cmp lt) ++ [pivot] ++ (sortBy cmp gt)
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_List__sum sum
+sum seq = foldl (\a b -> a + b) 0 seq
+GENFN_END
+GENFN_BEGIN yona_Std_List__tail tail
+tail seq = case seq of [_|t] -> t end
+GENFN_END
+GENFN_BEGIN yona_Std_List__take take
+take n seq = if n <= 0 then [] else case seq of [] -> []; [h|t] -> h :: (take (n - 1) t) end
+GENFN_END
+GENFN_BEGIN yona_Std_List__zip zip
+zip seqA seqB =
+    case seqA of
+        [] -> []
+        [a|ta] -> case seqB of
+            [] -> []
+            [b|tb] -> (a, b) :: (zip ta tb)
+        end
+    end
+GENFN_END
+GENFN_BEGIN yona_Std_List__zipWith zipWith
+zipWith fn seqA seqB =
+    case seqA of
+        [] -> []
+        [a|ta] -> case seqB of
+            [] -> []
+            [b|tb] -> (fn a b) :: (zipWith fn ta tb)
+        end
+    end
 GENFN_END

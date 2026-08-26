@@ -8,7 +8,7 @@ per element.
 
 ## Functions
 
-### `put : Dict a b -> a -> b -> Dict a b`
+### `put : Dict(Var(Key),Var(Value)) -> Var(Key) -> Var(Value) -> Dict(Var(Key),Var(Value))`
 
 Insert or update a key-value pair. Returns a new dictionary with the
 mapping added. The original dictionary is unchanged.
@@ -19,7 +19,7 @@ let d2 = put d 2 200 in
 get d2 1 0   # => 100
 ```
 
-### `get : Dict a b -> a -> b -> b`
+### `get : Dict(Var(Key),Var(Value)) -> Var(Key) -> Var(Value) -> Var(Value)`
 
 Look up the value for `key`. Returns `default` if the key is not present.
 
@@ -29,7 +29,7 @@ get d 42 0    # => 999
 get d 99 0    # => 0
 ```
 
-### `contains : Dict a b -> a -> Bool`
+### `contains : Dict(Var(Key),Var(Value)) -> Var(Key) -> Bool`
 
 Check whether `key` exists in the dictionary. Returns `true` or `false`.
 
@@ -39,7 +39,7 @@ contains d 1   # => true
 contains d 2   # => false
 ```
 
-### `size : Dict a b -> Int`
+### `size : Dict(Var(Key),Var(Value)) -> Int`
 
 Returns the number of entries in the dictionary.
 
@@ -48,7 +48,7 @@ let d = put (put {} 1 10) 2 20 in
 size d   # => 2
 ```
 
-### `keys : Dict a b -> [a]`
+### `keys : Dict(Var(Key),Var(Value)) -> Seq(Var(Key))`
 
 Eagerly collects all keys into a sequence.
 
@@ -57,7 +57,7 @@ let d = put (put {} 1 10) 2 20 in
 keys d   # => [1, 2]  (order may vary)
 ```
 
-### `entries : Dict a b -> Iterator (a, b)`
+### `entries : Dict(Var(Key),Var(Value)) -> Adt(Iterator,Tuple(Var(Key),Var(Value)))`
 
 Returns a streaming `Iterator (Int, Int)` over `(key, value)` tuples.
 Uses stack-based trie traversal — O(1) memory per element.
@@ -67,7 +67,7 @@ let d = put (put {} 1 10) 2 20 in
 forEach (\k v -> println (show k ++ " => " ++ show v)) d
 ```
 
-### `keysIter : Dict a b -> Iterator a`
+### `keysIter : Dict(Var(Key),Var(Value)) -> Adt(Iterator,Var(Key))`
 
 Returns a streaming `Iterator Int` over keys. O(1) memory per element.
 
@@ -78,7 +78,7 @@ let iter = keysIter d in
 # consume with iterator protocol
 ```
 
-### `values : Dict a b -> Iterator b`
+### `values : Dict(Var(Key),Var(Value)) -> Adt(Iterator,Var(Value))`
 
 Returns a streaming `Iterator Int` over values. O(1) memory per element.
 
@@ -89,7 +89,7 @@ let iter = values d in
 # consume with iterator protocol
 ```
 
-### `forEach : (a -> b -> c) -> Dict a b -> ()`
+### `forEach : Function(Var(Key),Function(Var(Value),Unit)) -> Dict(Var(Key),Var(Value)) -> ()`
 
 Apply `callback` to each `(key, value)` entry for side effects.
 The callback receives two arguments: the key and the value.

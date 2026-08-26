@@ -1,0 +1,4 @@
+PASS Path decomposes filenames
+PASS Path changes extensions
+PASS Path joins and recognizes roots
+SUMMARY 3 passed, 0 failed

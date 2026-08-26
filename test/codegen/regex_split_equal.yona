@@ -1,0 +1,2 @@
+import compile, split from Std\Regex in
+split (compile "[0-9]+") "a1b22c" == ["a", "b", "c"]

@@ -113,7 +113,8 @@ FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
 FN yona_Prelude__Hash_Int__hash 1 INT -> INT
 FN yona_Prelude__Show_String__show 1 STRING -> STRING
 FN yona_Prelude__Show_Int__show 1 INT -> STRING
-FN yona_Std_Regex__matches 2 INT STRING -> BOOL
+ADT Regex 0 0
+FN yona_Std_Regex__matches 2 ADT(Regex) STRING -> BOOL borrow 10
 FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
 FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
 FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
@@ -135,13 +136,13 @@ FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
 FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
 FN yona_Prelude__Array_IntArray__length 1 INT -> INT
 FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
-FN yona_Std_Regex__compile 1 STRING -> INT
+FN yona_Std_Regex__compile 1 STRING -> ADT(Regex) retadt Regex
 FN yona_Prelude__Array_String__length 1 STRING -> INT
 FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
 FN yona_Prelude__Array_String__get 2 STRING INT -> INT
 FN Closeable_Int__close 1 INT -> UNIT
-FN yona_Std_Regex__replaceAll 3 INT STRING STRING -> STRING
-FN yona_Std_Regex__find 2 INT STRING -> ADT retadt Seq
-FN yona_Std_Regex__findAll 2 INT STRING -> ADT retadt Seq
-FN yona_Std_Regex__replace 3 INT STRING STRING -> STRING
-FN yona_Std_Regex__split 2 INT STRING -> ADT retadt Seq
+FN yona_Std_Regex__replaceAll 3 ADT(Regex) STRING STRING -> STRING borrow 100
+FN yona_Std_Regex__find 2 ADT(Regex) STRING -> Seq(STRING) borrow 10
+FN yona_Std_Regex__findAll 2 ADT(Regex) STRING -> Seq(Seq(STRING)) borrow 10
+FN yona_Std_Regex__replace 3 ADT(Regex) STRING STRING -> STRING borrow 100
+FN yona_Std_Regex__split 2 ADT(Regex) STRING -> Seq(STRING) borrow 10

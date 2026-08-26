@@ -205,7 +205,7 @@ Type-directed float map (GPU scale kernel when available, else CPU).
 
 Type-directed float reduce (GPU block-reduce when the stub device is up, else CPU).
 
-### `mapReduceGraphGPU : Int -> a -> Int`
+### `mapReduceGraphGPU : [a] -> b -> Int`
 
 One-submit map chain then `reduceSum` when the Vulkan graph path is available;
 otherwise applies maps then reduce on the CPU/backend path.
@@ -240,7 +240,7 @@ In-place float map on pinned storage (GPU scale when available, else CPU).
 
 Bounded `FloatArray` channel for CPU→GPU pipelines (`Std\Channel`).
 
-### `drainMapFloatGPU : Int -> Int -> Int -> Int`
+### `drainMapFloatGPU : a -> Int -> Int -> Int`
 
 Drain `rx` until closed: `mapFloatGPU op` each chunk and `send` to `tx`.
 Returns the number of chunks processed.
@@ -253,7 +253,7 @@ Map `vulkanLastIssueKind` to `GpuIssue`.
 
 `Ok 0` when the last classified Vulkan issue is none; else `Err` with `GpuIssue`.
 
-### `withGpuIssue : (a -> b) -> (c -> d) -> Int`
+### `withGpuIssue : (a -> b) -> (c -> d) -> ()`
 
 Branch on the last classified Vulkan issue without string-parsing `vulkanLastNote`.
 
@@ -264,7 +264,7 @@ use site: GENFN remonomorphizes this body so `perform` binds the caller's
 clauses. The precompiled module object raises `:UnhandledEffect` if invoked
 with no handler (stdlib kernels still return `GpuIssue` / `Result`).
 
-### `withGpuFallback : (a -> b) -> Int`
+### `withGpuFallback : (a -> b) -> ()`
 
 Run `action`, then `raiseGpu` on the last classified Vulkan issue (`GpuOk` is a no-op).
 

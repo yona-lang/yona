@@ -1,0 +1,11 @@
+import isNone, unwrapOr, map, filter, zip from Std\Option,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+        testCase "None remains empty" (\_ -> check "isNone" (isNone None)),
+        testCase "default is selected" (\_ -> check "unwrapOr" (unwrapOr 9 None == 9)),
+        testCase "map preserves None" (\_ -> check "map" (map (\x -> x + 1) None == None)),
+        testCase "filter rejects" (\_ -> check "filter" (isNone (filter (\x -> x > 3) (Some 1)))),
+        testCase "zip needs both" (\_ -> check "zip" (isNone (zip (Some 1) None)))
+    ]
+in render (run cases)

@@ -2,18 +2,15 @@
 
 ## Bugs (open)
 
-No known functional bugs remain after the 2026-08-25 compiler/runtime closure
-pass. The fixes and their focused regressions are summarized under Completed
-Milestones.
+No known open compiler, runtime, parser, standard-library, build-tool, or test
+harness bugs after the 2026-08-26 foundational-traits and conformance
+verification pass. Capability-dependent platform gaps remain tracked in their
+roadmap sections below.
 
 ## Build warnings
 
-- [ ] **Doctest 2.4.12 triggers a C++20 `<ciso646>` warning with Clang and
-  libstdc++ 16** — every test translation unit reports the warning from the
-  third-party `doctest.h` include chain. Project-owned LLVM deprecations,
-  incomplete enum switches, the nested-comment warning, and corrupt Ninja
-  dependency-log warning are fixed. Prefer upgrading doctest or carrying the
-  upstream compatibility fix; do not globally suppress preprocessor warnings.
+No known project-owned build warnings. Third-party dependency warnings must be
+re-evaluated when their pinned release changes.
 
 ## Current Snapshot
 
@@ -45,21 +42,31 @@ Milestones.
 
 ## Active Priorities
 
-### Immediate: standard-library conformance suite
+### Foundational traits and lawful operators — completed 2026-08-26
+
+Program of record:
+[2026-08-25-foundational-traits.md](./superpowers/plans/2026-08-25-foundational-traits.md).
+Design contract:
+[2026-08-25-type-directed-equality-design.md](./superpowers/specs/2026-08-25-type-directed-equality-design.md).
+
+Completed: coherent typed selection and interface contracts, trait-directed
+operators and structural derivation, authoritative Prelude instances,
+collection/algebra/conversion traits, erased concurrency markers, reusable law
+suites, and synchronized generated/public documentation.
+
+`Functor`, `Applicative`, and `Monad` remain intentionally deferred until the
+type system can quantify over type constructors; per-container imitations are
+not considered a complete implementation.
+
+### Standard-library conformance suite — completed 2026-08-26
 
 Program of record:
 [2026-08-25-stdlib-conformance.md](./superpowers/plans/2026-08-25-stdlib-conformance.md).
-The manifest will enforce suite presence; unchecked rollout groups do not yet
-claim exhaustive coverage of every documented function.
-
-- [x] Pure-Yona `Std\Test` ADTs, functional assertions, deterministic reports,
-  empty/non-empty rendering, and the first framework fixture
-- [ ] Recursive `test/stdlib` fixture discovery plus a complete public-module
-  coverage manifest
-- [ ] Pure functions, values, persistent collections, and format contracts
-- [ ] Arrays, codecs, parsing, path, JSON, regex, types, and UTF-16 contracts
-- [ ] Portable file/process/time/random/channel/task/parallel/stream/log contracts
-- [ ] Capability-probed network, HTTP, and Vulkan/GPU contracts
+Recursive discovery and the manifest enforce executable Yona suites for all 40
+public modules. Pure, codec, portable-runtime, network, and GPU tiers have
+deterministic reports; focused compiler/runtime fixtures supplement the public
+API matrix for ownership, malformed input, binary I/O, and platform edges.
+CTest exposes the capability slices as `stdlib-network` and `stdlib-gpu`.
 
 
 
@@ -328,6 +335,19 @@ with **async**, **task groups**, and **channels**, not compete with them.
   `Std\Json.get` / `asString` / `asInt`. Remaining: Yona rewrite of `yls`
   as the editor default. Windows `yls-yona` stdio smoke (2026-08-21):
   `readExact`/`writeBytes` now `_setmode` CRT 0/1/2 to binary.
+- [ ] **Foundational-trait LSP parity and first-class VS Code + Zed support** —
+  audit `yls` against `Eq`, `Ord`, `Hash`, `Show`, collection/algebra traits,
+  witness-directed `From` / `TryFrom` / `Parse`, `Send` / `Shareable`, and the
+  `Ordering`, conversion-error, and parsing-error ADTs. Add typed hover and
+  signature rendering for constrained/multi-parameter methods; definition,
+  references, completion, symbols, semantic tokens, and rename for trait and
+  instance declarations; and actionable missing/ambiguous-instance diagnostics
+  and code actions. Cover source plus imported `.yonai` contracts, incomplete
+  buffers, UTF-16 ranges, and incremental edits with protocol-level tests.
+  Keep `editors/vscode` as a thin, fully tested `yls --stdio` client and add a
+  first-class `editors/zed` extension using the same server and canonical
+  TextMate grammar, with binary discovery/settings, packaging or registry
+  metadata, CI smoke/package checks, and synchronized editor documentation.
 - [ ] **Documentation extraction / generation (think first, don't scrape).** Public Learn/Guides/Reference in `site/src/content/docs/` stay handwritten. `scripts/gendocs.py` is a regex walk of `lib/Std/*.yona` `##` comments and misses `.yonai`/C modules, types, effects, and exports. Design a compiler-aware extractor (`yonac --emit-docs` or successor) so API reference cannot drift from source; until then, keep `##` comments + handwritten site pages updated in the same change (see `keep-docs-up-to-date`).
 
 

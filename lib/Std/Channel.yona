@@ -5,6 +5,9 @@
 ## exactly once via pattern match. After unwrapping, a `Sender a` can only
 ## `send` and a `Receiver a` can only `recv` / `tryRecv`, enforcing the
 ## producer/consumer split at the type level.
+## Sender and Receiver endpoints implement both `Send` and `Shareable` because
+## the runtime channel is synchronized; each transmitted payload must
+## independently implement `Send`.
 ##
 ## See `docs/api/Channel.md` for the full API.
 module Std\Channel
@@ -19,13 +22,25 @@ type Sender a = Sender Channel
 ## Receive-only handle wrapping a Channel.
 type Receiver a = Receiver Channel
 
+## Channel endpoints are backed by the runtime's synchronized MPMC state and
+## are safe to move or share between tasks. The transmitted value itself must
+## independently satisfy `Send` at each `send` boundary.
+instance Send (Sender value)
+end
+instance Shareable (Sender value)
+end
+instance Send (Receiver value)
+end
+instance Shareable (Receiver value)
+end
+
 ## Low-level externs to the C runtime wrappers. The `= "..."` form binds
 ## a Yona-friendly local name to the mangled C ABI symbol so the wrapper
 ## bodies below stay readable.
 extern raw_new      : Int -> Channel        = "yona_Std_Channel__raw_new"
-extern raw_send     : Channel -> Int -> ()  = "yona_Std_Channel__raw_send"
-extern raw_recv     : Channel -> Option     = "yona_Std_Channel__raw_recv"
-extern raw_try_recv : Channel -> Option     = "yona_Std_Channel__raw_tryRecv"
+extern raw_send     : Channel -> value -> ()  = "yona_Std_Channel__raw_send"
+extern raw_recv     : Channel -> Option value = "yona_Std_Channel__raw_recv"
+extern raw_try_recv : Channel -> Option value = "yona_Std_Channel__raw_tryRecv"
 extern raw_close    : Channel -> ()         = "yona_Std_Channel__raw_close"
 extern raw_closed   : Channel -> Bool       = "yona_Std_Channel__raw_isClosed"
 extern raw_length   : Channel -> Int        = "yona_Std_Channel__raw_length"
@@ -42,28 +57,36 @@ extern raw_capacity : Channel -> Int        = "yona_Std_Channel__raw_capacity"
 ##     ...                 -- use sender / receiver freely
 ## end end
 ## ```
+channel : Int -> (Linear (Sender value), Linear (Receiver value))
 channel n =
     let raw = raw_new n in
-    (Linear raw, Linear raw)
+    (Linear (Sender raw), Linear (Receiver raw))
 
 ## Send a value through a sender. Blocks if the buffer is full.
-send s v = raw_send s v
+send : Sender value -> value -> Unit
+send (Sender raw) value = raw_send raw value
 
 ## Receive a value. Blocks if the buffer is empty. Returns `Some v` for a
 ## delivered value or `None` once the channel is closed and drained.
-recv r = raw_recv r
+recv : Receiver value -> Option value
+recv (Receiver raw) = raw_recv raw
 
 ## Non-blocking receive — returns immediately even if empty.
-tryRecv r = raw_try_recv r
+tryRecv : Receiver value -> Option value
+tryRecv (Receiver raw) = raw_try_recv raw
 
 ## Close the sender side. Wakes all blocked sends and recvs.
-close s = raw_close s
+close : Sender value -> Unit
+close (Sender raw) = raw_close raw
 
 ## Returns true if the channel has been closed.
-isClosed s = raw_closed s
+isClosed : Sender value -> Bool
+isClosed (Sender raw) = raw_closed raw
 
 ## Current number of buffered elements.
-length s = raw_length s
+length : Sender value -> Int
+length (Sender raw) = raw_length raw
 
 ## Maximum buffer size (set at creation).
-capacity s = raw_capacity s
+capacity : Sender value -> Int
+capacity (Sender raw) = raw_capacity raw

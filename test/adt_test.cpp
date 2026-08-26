@@ -216,6 +216,21 @@ id x = x
     CHECK(ft.return_types[0].name == "Int");
 }
 
+TEST_CASE("Scalar positional ADT fields preserve constructor arity") {
+    parser::Parser parser;
+    auto result = parser.parse_module(R"(
+module Test\Point
+
+type Point = Point Int Int
+)", "point.yona");
+    REQUIRE(result.has_value());
+    REQUIRE(result.value()->adt_declarations.size() == 1);
+    const auto* constructor = result.value()->adt_declarations[0]->variants[0];
+    REQUIRE(constructor->field_type_names.size() == 2);
+    CHECK(constructor->field_type_names[0].name == "Int");
+    CHECK(constructor->field_type_names[1].name == "Int");
+}
+
 TEST_CASE("ADT with thunk function type parses correctly") {
     parser::Parser parser;
     string source = R"(

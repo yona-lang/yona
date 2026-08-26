@@ -56,7 +56,27 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern* htp, CaseExpr* node,
         builder_->CreateCondBr(builder_->CreateICmpSGE(len, min_len), body_bb, next_bb);
     }
 
-    CType elem_type = (!scrutinee.subtypes.empty()) ? scrutinee.subtypes[0] : CType::INT;
+    // Recursive semantic identity is authoritative when the shallow ABI
+    // subtype came from an untyped empty literal (`[]` defaults to INT).
+    // Concrete annotations and call-site specialization retain the actual
+    // element here, e.g. Seq String in Std\Test.runCases.
+    CType elem_type = !scrutinee.semantic_subtypes.empty()
+        ? scrutinee.semantic_subtypes.front().type
+        : (!scrutinee.subtypes.empty() ? scrutinee.subtypes.front() : CType::INT);
+
+    // A single-use scrutinee may be consumed in place when binding its tail.
+    // Determine that before binding heads: heap-valued head bindings need an
+    // independent reference because consuming the sequence releases the
+    // removed element's ownership.
+    bool owned = true;
+    if (node->expr->get_type() == AST_IDENTIFIER_EXPR) {
+        const auto scrut_name =
+            static_cast<IdentifierExpr*>(node->expr)->name->value;
+        owned = current_fn_body_
+            ? count_identifier_refs(current_fn_body_, scrut_name) == 1
+            : false;
+    }
+    const bool retain_bound_heads = owned && htp->tail != nullptr;
 
     builder_->SetInsertPoint(body_bb);
     for (size_t hi = 0; hi < htp->heads.size(); hi++) {
@@ -72,15 +92,51 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern* htp, CaseExpr* node,
             head_type == CType::FUNCTION || head_type == CType::ADT ||
             elem_type == CType::SET || elem_type == CType::DICT)
             elem_val = builder_->CreateIntToPtr(hv, PointerType::get(*context_, 0));
+        else if (head_type == CType::FLOAT)
+            elem_val = builder_->CreateBitCast(
+                hv, LType::getDoubleTy(*context_), "head_float");
+        else if (head_type == CType::BOOL)
+            elem_val = builder_->CreateICmpNE(
+                hv, ConstantInt::get(hv->getType(), 0), "head_bool");
         if (hp->get_type() == AST_PATTERN_VALUE) {
             auto* pv = static_cast<PatternValue*>(hp);
-            if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
-                named_values_[(*id)->name->value] = {elem_val, head_type};
+            if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr)) {
+                TypedValue head{elem_val, head_type};
+                if (!scrutinee.semantic_subtypes.empty()) {
+                    const auto& identity = scrutinee.semantic_subtypes.front();
+                    head.adt_type_name = identity.adt_name;
+                    head.semantic_subtypes = identity.arguments;
+                    head.adt_semantic_arguments = identity.arguments;
+                    for (const auto& argument : identity.arguments) {
+                        head.adt_type_arguments.push_back(argument.type);
+                        head.adt_type_argument_names.push_back(argument.adt_name);
+                    }
+                }
+                named_values_[(*id)->name->value] = std::move(head);
+                if (retain_bound_heads && is_heap_type(head_type)) {
+                    emit_rc_inc(elem_val, head_type);
+                    if (!arm_drop_stack_.empty())
+                        arm_drop_stack_.back().push_back({elem_val, head_type});
+                }
+            }
         } else if (hp->get_type() == AST_TUPLE_PATTERN) {
             auto* tp = static_cast<TuplePattern*>(hp);
             Value* tuple_ptr = elem_val;
             if (tuple_ptr->getType()->isIntegerTy())
                 tuple_ptr = builder_->CreateIntToPtr(tuple_ptr, PointerType::get(*context_, 0));
+            // A consuming head-tail match releases the sequence's ownership
+            // of its removed heap element. Keep the tuple container alive
+            // through the arm so its heap-marked fields remain valid while
+            // their pattern bindings are used.
+            if (retain_bound_heads) {
+                emit_rc_inc(tuple_ptr, CType::TUPLE);
+                if (!arm_drop_stack_.empty())
+                    arm_drop_stack_.back().push_back({tuple_ptr, CType::TUPLE});
+            }
+            const SemanticTypeIdentity* tuple_identity = nullptr;
+            if (!scrutinee.semantic_subtypes.empty() &&
+                scrutinee.semantic_subtypes.front().type == CType::TUPLE)
+                tuple_identity = &scrutinee.semantic_subtypes.front();
             for (size_t ti = 0; ti < tp->patterns.size(); ti++) {
                 auto* sub = tp->patterns[ti];
                 if (sub->get_type() != AST_PATTERN_VALUE) continue;
@@ -90,7 +146,29 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern* htp, CaseExpr* node,
                 auto* gep = builder_->CreateGEP(i64_ty, tuple_ptr,
                     {ConstantInt::get(i64_ty, ti + 2)}, "tuple_head_gep");
                 auto* elem = builder_->CreateLoad(i64_ty, gep, "tuple_head_elem");
-                named_values_[(*id)->name->value] = {elem, CType::INT};
+                const SemanticTypeIdentity* element_identity =
+                    tuple_identity && ti < tuple_identity->arguments.size()
+                        ? &tuple_identity->arguments[ti] : nullptr;
+                const CType element_type = element_identity
+                    ? element_identity->type : CType::INT;
+                Value* typed_elem = elem;
+                if (is_heap_type(element_type))
+                    typed_elem = builder_->CreateIntToPtr(
+                        elem, PointerType::get(*context_, 0), "tuple_head_elem_ptr");
+                else if (element_type == CType::FLOAT)
+                    typed_elem = builder_->CreateBitCast(
+                        elem, LType::getDoubleTy(*context_), "tuple_head_elem_float");
+                else if (element_type == CType::BOOL)
+                    typed_elem = builder_->CreateICmpNE(
+                        elem, ConstantInt::get(elem->getType(), 0),
+                        "tuple_head_elem_bool");
+                TypedValue bound{typed_elem, element_type};
+                if (element_identity) {
+                    bound.adt_type_name = element_identity->adt_name;
+                    bound.semantic_subtypes = element_identity->arguments;
+                    bound.adt_semantic_arguments = element_identity->arguments;
+                }
+                named_values_[(*id)->name->value] = std::move(bound);
             }
         } else if (hp->get_type() == AST_RECORD_PATTERN) {
             // A sequence head may itself be a named-field ADT pattern, e.g.
@@ -132,6 +210,11 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern* htp, CaseExpr* node,
                         bound.adt_type_name = shape.function_return_adt_name;
                     }
                     named_values_[(*identifier)->name->value] = bound;
+                    if (retain_bound_heads && is_heap_type(shape.type)) {
+                        emit_rc_inc(typed, shape.type);
+                        if (!arm_drop_stack_.empty())
+                            arm_drop_stack_.back().push_back({typed, shape.type});
+                    }
                     break;
                 }
             }
@@ -157,24 +240,6 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern* htp, CaseExpr* node,
         //   - It's not an identifier (temporary expression result), or
         //   - It's an identifier with exactly one textual occurrence in
         //     the enclosing function body (so this case IS that occurrence).
-        bool owned = true;
-        if (node->expr->get_type() == AST_IDENTIFIER_EXPR) {
-            auto scrut_name = static_cast<IdentifierExpr*>(node->expr)->name->value;
-            // current_fn_body_ covers the whole function including sibling
-            // arms, guards, and let bindings. A count of 1 means this
-            // scrutinee is the single occurrence — safe to consume.
-            if (current_fn_body_) {
-                int uses = count_identifier_refs(current_fn_body_, scrut_name);
-                owned = (uses <= 1);
-            } else {
-                // No enclosing function body means top-level expression or
-                // other context without whole-scope visibility. Be
-                // conservative: a named scrutinee may be referenced after
-                // this case expression, so do not consume/mutate in place.
-                owned = false;
-            }
-        }
-
         llvm::Value* tv;
         if (owned) {
             // Phase 3: mark the scrutinee transferred in any active frame
@@ -191,13 +256,17 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern* htp, CaseExpr* node,
         }
         if (htp->tail->get_type() == AST_PATTERN_VALUE) {
             auto* pv = static_cast<PatternValue*>(htp->tail);
-            if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr))
-                named_values_[(*id)->name->value] = {tv, CType::SEQ, scrutinee.subtypes};
+            if (auto* id = std::get_if<IdentifierExpr*>(&pv->expr)) {
+                TypedValue tail{tv, CType::SEQ, scrutinee.subtypes};
+                tail.semantic_subtypes = scrutinee.semantic_subtypes;
+                named_values_[(*id)->name->value] = std::move(tail);
+            }
         } else if (htp->tail->get_type() == AST_HEAD_TAILS_PATTERN) {
             auto* nested_tail_bb = BasicBlock::Create(*context_, "tail.pat.match",
                 body_bb->getParent());
             auto* nested = static_cast<HeadTailsPattern*>(htp->tail);
             TypedValue tail_scrutinee{tv, CType::SEQ, scrutinee.subtypes};
+            tail_scrutinee.semantic_subtypes = scrutinee.semantic_subtypes;
             codegen_pattern_headtail(nested, node, clause, tail_scrutinee, tv,
                                      nested_tail_bb, next_bb);
         }
@@ -212,15 +281,17 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern* htp, CaseExpr* node,
 
 bool Codegen::codegen_pattern_seq(SeqPattern* sp, const TypedValue& scrutinee,
                                    BasicBlock* body_bb, BasicBlock* next_bb) {
+    auto* i64_ty = LType::getInt64Ty(*context_);
+    Value* seq_val = scrutinee.val;
+    if (!seq_val->getType()->isPointerTy())
+        seq_val = builder_->CreateIntToPtr(
+            seq_val, PointerType::get(*context_, 0));
     if (sp->patterns.empty()) {
-        Value* seq_val = scrutinee.val;
-        if (!seq_val->getType()->isPointerTy())
-            seq_val = builder_->CreateIntToPtr(seq_val, PointerType::get(*context_, 0));
-        auto* count_ptr = builder_->CreateGEP(LType::getInt64Ty(*context_),
-            seq_val, {ConstantInt::get(LType::getInt64Ty(*context_), 0)});
-        auto* count = builder_->CreateLoad(LType::getInt64Ty(*context_), count_ptr, "seq_count");
+        auto* count_ptr = builder_->CreateGEP(i64_ty,
+            seq_val, {ConstantInt::get(i64_ty, 0)});
+        auto* count = builder_->CreateLoad(i64_ty, count_ptr, "seq_count");
         builder_->CreateCondBr(
-            builder_->CreateICmpEQ(count, ConstantInt::get(LType::getInt64Ty(*context_), 0)),
+            builder_->CreateICmpEQ(count, ConstantInt::get(i64_ty, 0)),
             body_bb, next_bb);
         // Perceus-linear: under callee-owns, an empty-seq arm doesn't
         // consume the scrutinee through any pattern-match call. Drop it
@@ -244,6 +315,93 @@ bool Codegen::codegen_pattern_seq(SeqPattern* sp, const TypedValue& scrutinee,
             mark_transferred(scrutinee.val, TransferDomain::Seq);
         }
     } else {
+        auto* count = builder_->CreateCall(rt_.seq_length_, {seq_val}, "seq_exact_count");
+        auto* bind_bb = BasicBlock::Create(
+            *context_, "seq.exact.bind", builder_->GetInsertBlock()->getParent());
+        builder_->CreateCondBr(
+            builder_->CreateICmpEQ(
+                count, ConstantInt::get(i64_ty, sp->patterns.size())),
+            bind_bb, next_bb);
+        builder_->SetInsertPoint(bind_bb);
+
+        const SemanticTypeIdentity* element_identity =
+            scrutinee.semantic_subtypes.empty()
+            ? nullptr : &scrutinee.semantic_subtypes.front();
+        std::function<void(PatternNode*, Value*, const SemanticTypeIdentity*)>
+            bind_pattern;
+        bind_pattern = [&](PatternNode* pattern, Value* carrier,
+                           const SemanticTypeIdentity* identity) {
+            if (!pattern || pattern->get_type() == AST_UNDERSCORE_PATTERN) return;
+            if (pattern->get_type() == AST_PATTERN_VALUE) {
+                auto* value_pattern = static_cast<PatternValue*>(pattern);
+                if (auto* id = std::get_if<IdentifierExpr*>(&value_pattern->expr)) {
+                    const CType type = identity ? identity->type : CType::INT;
+                    Value* value = carrier;
+                    if (is_heap_type(type))
+                        value = builder_->CreateIntToPtr(
+                            carrier, PointerType::get(*context_, 0),
+                            "seq_pattern_ptr");
+                    else if (type == CType::FLOAT)
+                        value = builder_->CreateBitCast(
+                            carrier, LType::getDoubleTy(*context_),
+                            "seq_pattern_float");
+                    else if (type == CType::BOOL)
+                        value = builder_->CreateICmpNE(
+                            carrier, ConstantInt::get(carrier->getType(), 0),
+                            "seq_pattern_bool");
+                    TypedValue bound{value, type};
+                    if (identity) {
+                        bound.adt_type_name = identity->adt_name;
+                        bound.semantic_subtypes = identity->arguments;
+                        bound.adt_semantic_arguments = identity->arguments;
+                    }
+                    named_values_[(*id)->name->value] = std::move(bound);
+                    return;
+                }
+                Value* expected = nullptr;
+                if (auto* symbol = std::get_if<SymbolExpr*>(&value_pattern->expr))
+                    expected = ConstantInt::get(i64_ty, intern_symbol((*symbol)->value));
+                else if (auto* literal =
+                             std::get_if<LiteralExpr<void*>*>(&value_pattern->expr)) {
+                    auto* node = reinterpret_cast<AstNode*>(*literal);
+                    if (node->get_type() == AST_INTEGER_EXPR)
+                        expected = ConstantInt::get(
+                            i64_ty, static_cast<IntegerExpr*>(node)->value);
+                }
+                if (expected) {
+                    auto* matched = BasicBlock::Create(
+                        *context_, "seq.exact.value", builder_->GetInsertBlock()->getParent());
+                    builder_->CreateCondBr(
+                        builder_->CreateICmpEQ(carrier, expected), matched, next_bb);
+                    builder_->SetInsertPoint(matched);
+                }
+                return;
+            }
+            if (pattern->get_type() != AST_TUPLE_PATTERN) return;
+            auto* tuple = static_cast<TuplePattern*>(pattern);
+            Value* tuple_ptr = carrier;
+            if (tuple_ptr->getType()->isIntegerTy())
+                tuple_ptr = builder_->CreateIntToPtr(
+                    tuple_ptr, PointerType::get(*context_, 0),
+                    "seq_pattern_tuple");
+            for (size_t i = 0; i < tuple->patterns.size(); ++i) {
+                auto* slot = builder_->CreateGEP(
+                    i64_ty, tuple_ptr, {ConstantInt::get(i64_ty, i + 2)},
+                    "seq_pattern_tuple_gep");
+                auto* field = builder_->CreateLoad(
+                    i64_ty, slot, "seq_pattern_tuple_field");
+                const SemanticTypeIdentity* field_identity =
+                    identity && i < identity->arguments.size()
+                    ? &identity->arguments[i] : nullptr;
+                bind_pattern(tuple->patterns[i], field, field_identity);
+            }
+        };
+        for (size_t i = 0; i < sp->patterns.size(); ++i) {
+            auto* element = builder_->CreateCall(
+                rt_.seq_get_, {seq_val, ConstantInt::get(i64_ty, i)},
+                "seq_exact_element");
+            bind_pattern(sp->patterns[i], element, element_identity);
+        }
         builder_->CreateBr(body_bb);
     }
     return false;
@@ -414,18 +572,10 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
     // `yona_rt_async_await` for a CAF returning an Option). Coerce back to
     // ptr so the heap-layout extractors work.
     TypedValue scrutinee = scrutinee_in;
-    if (!ctor_it->second.is_recursive && ctor_it->second.max_arity == 0 &&
-        scrutinee.val && scrutinee.val->getType()->isIntegerTy()) {
-        builder_->CreateCondBr(
-            builder_->CreateICmpEQ(scrutinee.val, ConstantInt::get(i64_ty, tag)),
-            body_bb, next_bb);
-        builder_->SetInsertPoint(body_bb);
-        return true;
-    }
-    if (scrutinee.val && scrutinee.val->getType()->isIntegerTy() &&
-        scrutinee.type == CType::ADT) {
+    if (scrutinee.val && scrutinee.val->getType()->isIntegerTy()) {
         scrutinee.val = builder_->CreateIntToPtr(scrutinee.val,
             PointerType::get(*context_, 0), "adt.scrutinee.ptr");
+        scrutinee.type = CType::ADT;
     }
 
     // Use heap layout if either: (a) the constructor is recursive, or
@@ -433,6 +583,56 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
     // capture, where struct values are boxed to heap before storage).
     bool use_heap_layout = ctor_it->second.is_recursive ||
                            (scrutinee.val && scrutinee.val->getType()->isPointerTy());
+
+    auto concrete_field_type = [&](size_t field_index) -> CType {
+        if (field_index < ctor_it->second.declared_field_types.size()) {
+            const auto& declared = ctor_it->second.declared_field_types[field_index];
+            if (!declared.is_function_type && !declared.is_tuple_type &&
+                declared.type_arguments.empty()) {
+                const auto params = types_.adt_type_params.find(ctor_it->second.type_name);
+                if (params != types_.adt_type_params.end()) {
+                    for (size_t i = 0; i < params->second.size() &&
+                                       i < scrutinee.adt_type_arguments.size(); ++i) {
+                        if (params->second[i] == declared.name)
+                            return scrutinee.adt_type_arguments[i];
+                    }
+                }
+            }
+        }
+        return field_index < scrutinee.subtypes.size()
+            ? scrutinee.subtypes[field_index] : CType::INT;
+    };
+
+    auto concrete_field_adt_name = [&](size_t field_index) -> std::string {
+        if (field_index >= ctor_it->second.declared_field_types.size()) return {};
+        const auto& declared = ctor_it->second.declared_field_types[field_index];
+        if (declared.is_function_type || declared.is_tuple_type ||
+            !declared.type_arguments.empty())
+            return {};
+        const auto params = types_.adt_type_params.find(ctor_it->second.type_name);
+        if (params == types_.adt_type_params.end()) return {};
+        for (size_t i = 0; i < params->second.size() &&
+                           i < scrutinee.adt_type_argument_names.size(); ++i)
+            if (params->second[i] == declared.name)
+                return scrutinee.adt_type_argument_names[i];
+        return {};
+    };
+    auto concrete_field_identity = [&](size_t field_index)
+            -> const SemanticTypeIdentity* {
+        if (field_index >= ctor_it->second.declared_field_types.size())
+            return nullptr;
+        const auto& declared = ctor_it->second.declared_field_types[field_index];
+        if (declared.is_function_type || declared.is_tuple_type ||
+            !declared.type_arguments.empty())
+            return nullptr;
+        const auto params = types_.adt_type_params.find(ctor_it->second.type_name);
+        if (params == types_.adt_type_params.end()) return nullptr;
+        for (size_t i = 0; i < params->second.size() &&
+                           i < scrutinee.adt_semantic_arguments.size(); ++i)
+            if (params->second[i] == declared.name)
+                return &scrutinee.adt_semantic_arguments[i];
+        return nullptr;
+    };
 
     if (use_heap_layout) {
         auto scr_tag = builder_->CreateCall(rt_.adt_get_tag_, {scrutinee.val});
@@ -458,10 +658,21 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
                     // codegen_adt_construct and are accurate.
                     CType registered = (fi < ctor_it->second.field_types.size())
                         ? ctor_it->second.field_types[fi] : CType::INT;
-                    CType runtime_st = (fi < scrutinee.subtypes.size())
-                        ? scrutinee.subtypes[fi] : CType::INT;
-                    CType ftype = (registered == CType::INT && runtime_st != CType::INT)
-                        ? runtime_st : registered;
+                    CType runtime_st = concrete_field_type(fi);
+                    bool declared_parameter = false;
+                    if (fi < ctor_it->second.declared_field_types.size()) {
+                        const auto params = types_.adt_type_params.find(
+                            ctor_it->second.type_name);
+                        declared_parameter = params != types_.adt_type_params.end() &&
+                            std::find(params->second.begin(), params->second.end(),
+                                      ctor_it->second.declared_field_types[fi].name) !=
+                                params->second.end();
+                    }
+                    CType ftype = declared_parameter &&
+                            fi < scrutinee.subtypes.size()
+                        ? runtime_st
+                        : (registered == CType::INT && runtime_st != CType::INT)
+                            ? runtime_st : registered;
                     if (ctor_it->second.type_name == "Iterator" && fi == 0)
                         ftype = CType::FUNCTION;
                     Value* typed_val = field_val;
@@ -471,6 +682,12 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
                         ftype == CType::CHANNEL || ftype == CType::TUPLE)
                         typed_val = builder_->CreateIntToPtr(field_val,
                             PointerType::get(*context_, 0));
+                    else if (ftype == CType::FLOAT)
+                        typed_val = builder_->CreateBitCast(
+                            field_val, LType::getDoubleTy(*context_));
+                    else if (ftype == CType::BOOL)
+                        typed_val = builder_->CreateICmpNE(
+                            field_val, ConstantInt::get(field_val->getType(), 0));
                     // Extracting a heap-typed field is a Perceus DUP: the
                     // bound name takes a new reference. The scrutinee will
                     // be dropped later, taking its own field reference with
@@ -482,15 +699,38 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
                     // registered field_type is permissive — `Linear a`
                     // declares its field as ADT but accepts plain ints,
                     // and rc_inc on a primitive segfaults the runtime.
-                    bool runtime_heap = fi < scrutinee.subtypes.size() &&
-                                        is_heap_type(scrutinee.subtypes[fi]);
+                    bool declared_heap = false;
+                    if (fi < ctor_it->second.declared_field_types.size()) {
+                        const auto& declared =
+                            ctor_it->second.declared_field_types[fi];
+                        const auto params = types_.adt_type_params.find(
+                            ctor_it->second.type_name);
+                        const bool is_parameter = params != types_.adt_type_params.end() &&
+                            std::find(params->second.begin(), params->second.end(),
+                                      declared.name) != params->second.end();
+                        declared_heap = !is_parameter && is_heap_type(ftype);
+                    }
+                    bool runtime_heap = declared_heap ||
+                        (fi < scrutinee.subtypes.size() &&
+                         is_heap_type(scrutinee.subtypes[fi]));
                     if (runtime_heap && typed_val->getType()->isPointerTy())
                         emit_rc_inc(typed_val, ftype);
                     TypedValue bound{typed_val, ftype};
+                    if (const auto* identity = concrete_field_identity(fi))
+                        bound.semantic_subtypes = identity->arguments;
+                    if (ftype == CType::ADT) {
+                        bound.adt_type_name = concrete_field_adt_name(fi);
+                        if (const auto* identity = concrete_field_identity(fi)) {
+                            bound.adt_semantic_arguments = identity->arguments;
+                            for (const auto& argument : identity->arguments) {
+                                bound.adt_type_arguments.push_back(argument.type);
+                                bound.adt_type_argument_names.push_back(argument.adt_name);
+                            }
+                        }
+                    }
                     if (ctor_it->second.type_name == "Result" ||
                         ctor_it->second.type_name == "Option")
-                        bound.boxed_heap = (ftype == CType::INT || ftype == CType::ADT ||
-                                            ftype == CType::STRING || scrutinee.boxed_heap);
+                        bound.boxed_heap = scrutinee.boxed_heap || is_heap_type(ftype);
                     // For function-typed fields, propagate the recorded
                     // return CType (and ADT name) so call sites generate
                     // the correct closure invocation.
@@ -532,8 +772,7 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
                     // codegen_adt_construct and are accurate.
                     CType registered = (fi < ctor_it->second.field_types.size())
                         ? ctor_it->second.field_types[fi] : CType::INT;
-                    CType runtime_st = (fi < scrutinee.subtypes.size())
-                        ? scrutinee.subtypes[fi] : CType::INT;
+                    CType runtime_st = concrete_field_type(fi);
                     CType ftype = (registered == CType::INT && runtime_st != CType::INT)
                         ? runtime_st : registered;
                     if (ctor_it->second.type_name == "Iterator" && fi == 0)
@@ -552,10 +791,21 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern* cp, const TypedVal
                     if (runtime_heap && typed_val->getType()->isPointerTy())
                         emit_rc_inc(typed_val, ftype);
                     TypedValue bound{typed_val, ftype};
+                    if (const auto* identity = concrete_field_identity(fi))
+                        bound.semantic_subtypes = identity->arguments;
+                    if (ftype == CType::ADT) {
+                        bound.adt_type_name = concrete_field_adt_name(fi);
+                        if (const auto* identity = concrete_field_identity(fi)) {
+                            bound.adt_semantic_arguments = identity->arguments;
+                            for (const auto& argument : identity->arguments) {
+                                bound.adt_type_arguments.push_back(argument.type);
+                                bound.adt_type_argument_names.push_back(argument.adt_name);
+                            }
+                        }
+                    }
                     if (ctor_it->second.type_name == "Result" ||
                         ctor_it->second.type_name == "Option")
-                        bound.boxed_heap = (ftype == CType::INT || ftype == CType::ADT ||
-                                            ftype == CType::STRING || scrutinee.boxed_heap);
+                        bound.boxed_heap = scrutinee.boxed_heap || is_heap_type(ftype);
                     named_values_[(*id)->name->value] = bound;
                 }
             } else if (sub_pat->get_type() == AST_TUPLE_PATTERN) {
@@ -1074,6 +1324,8 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
         named_values_ = std::move(arm_named_values);
         BasicBlock* arm_exit = builder_->GetInsertBlock()->getTerminator()
             ? nullptr : builder_->GetInsertBlock();
+        if (arm_exit && body_tv.type == CType::SEQ)
+            mark_transferred(body_tv.val, TransferDomain::Seq);
         if (arm_exit) builder_->CreateBr(merge_bb);
         results.push_back({body_tv, arm_exit ? arm_exit : builder_->GetInsertBlock()});
         transfer_branch_end(arm_exit);

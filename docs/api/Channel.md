@@ -7,6 +7,9 @@ linearity checker enforces that each side is unwrapped from `Linear`
 exactly once via pattern match. After unwrapping, a `Sender a` can only
 `send` and a `Receiver a` can only `recv` / `tryRecv`, enforcing the
 producer/consumer split at the type level.
+Sender and Receiver endpoints implement both `Send` and `Shareable` because
+the runtime channel is synchronized; each transmitted payload must
+independently implement `Send`.
 
 See `docs/api/Channel.md` for the full API.
 
@@ -26,7 +29,7 @@ Receive-only handle wrapping a Channel.
 
 ## Functions
 
-### `channel : Int -> (Linear (Sender a), Linear (Receiver a))`
+### `channel : Int -> (Linear (Sender value), Linear (Receiver value))`
 
 Create a bounded channel with the given buffer capacity. Returns a tuple
 of `Linear`-wrapped sender and receiver handles. The linearity checker
@@ -40,31 +43,31 @@ case rl of Linear receiver ->
 end end
 ```
 
-### `send : Sender a -> a -> ()`
+### `send : Sender value -> value -> Unit`
 
 Send a value through a sender. Blocks if the buffer is full.
 
-### `recv : Receiver a -> Option a`
+### `recv : Receiver value -> Option value`
 
 Receive a value. Blocks if the buffer is empty. Returns `Some v` for a
 delivered value or `None` once the channel is closed and drained.
 
-### `tryRecv : Receiver a -> Option a`
+### `tryRecv : Receiver value -> Option value`
 
 Non-blocking receive — returns immediately even if empty.
 
-### `close : Sender a -> ()`
+### `close : Sender value -> Unit`
 
 Close the sender side. Wakes all blocked sends and recvs.
 
-### `isClosed : Sender a -> Bool`
+### `isClosed : Sender value -> Bool`
 
 Returns true if the channel has been closed.
 
-### `length : Sender a -> Int`
+### `length : Sender value -> Int`
 
 Current number of buffered elements.
 
-### `capacity : Sender a -> Int`
+### `capacity : Sender value -> Int`
 
 Maximum buffer size (set at creation).

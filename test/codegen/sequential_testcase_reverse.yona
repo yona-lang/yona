@@ -1,0 +1,7 @@
+import testCase, check, run, render from Std\Test,
+       take, drop, reverse from Std\List in
+let cases = [
+    testCase "slice" (\_ -> check "slice" (take 2 (drop 1 [1, 2, 3, 4]) == [2, 3])),
+    testCase "reverse" (\_ -> check "reverse" (reverse [1, 2, 3] == [3, 2, 1]))
+]
+in render (run cases)

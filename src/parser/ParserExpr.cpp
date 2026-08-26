@@ -1379,20 +1379,16 @@ unique_ptr<ExprNode> ParserImpl::parse_lambda_expr(bool stop_at_in) {
     vector<bool> param_borrow;
 
     if (check(TokenType::YLPAREN)) {
-        advance();
-        if (!check(TokenType::YRPAREN)) {
-            do {
-                bool borrow = try_consume_borrow_annotation();
-                auto param = parse_pattern();
-                if (param) {
-                    params.push_back(param.release());
-                    param_borrow.push_back(borrow);
-                } else return nullptr;
-            } while (match(TokenType::YCOMMA));
-        }
-        if (!expect(TokenType::YRPAREN, "Expected ')' after lambda parameters")) {
-            return nullptr;
-        }
+        // Parentheses after `\` are pattern syntax, not an alternate
+        // comma-separated parameter list.  Thus `\(a, b) -> ...` has one
+        // tuple-pattern parameter, consistently with named functions and the
+        // documented language grammar.  Multiple parameters use juxtaposition
+        // (`\a b -> ...`).  Parsing the parentheses through parse_pattern also
+        // preserves `\() -> ...` as the Unit pattern.
+        auto param = parse_pattern();
+        if (!param) return nullptr;
+        params.push_back(param.release());
+        param_borrow.push_back(false);
     } else {
         while (!check(TokenType::YARROW) && !is_at_end()) {
             bool borrow = try_consume_borrow_annotation();
@@ -1653,36 +1649,9 @@ unique_ptr<FunctionsImport> ParserImpl::parse_functions_import() {
 }
 
 bool ParserImpl::check_fqn_start() {
-    int lookahead = current_;
-    int depth = 0;
-
-    while (lookahead < static_cast<int>(tokens_.size()) && depth < 10) {
-        TokenType type = tokens_[lookahead].type;
-
-        if (type == TokenType::YFROM) {
-            return false;
-        }
-
-        if (type == TokenType::YIN) {
-            break;
-        }
-
-        if (type == TokenType::YIDENTIFIER || type == TokenType::YBACKSLASH ||
-            type == TokenType::YAS || type == TokenType::YCOMMA) {
-            lookahead++;
-            depth++;
-        } else {
-            break;
-        }
-    }
-
     if (!check(TokenType::YIDENTIFIER)) return false;
-
-    if (current_ + 1 < tokens_.size()) {
-        return tokens_[current_ + 1].type == TokenType::YBACKSLASH;
-    }
-
-    return true;
+    return current_ + 1 < tokens_.size() &&
+        tokens_[current_ + 1].type == TokenType::YBACKSLASH;
 }
 
 unique_ptr<FqnExpr> ParserImpl::parse_fqn() {

@@ -1,6 +1,6 @@
 ---
 title: Traits
-description: Yona's type classes — declarations, instances, superclasses, static dispatch, auto-derive, and cross-module use.
+description: Yona's type classes — foundational contracts, declarations, instances, laws, static dispatch, auto-derive, and cross-module use.
 ---
 
 Traits define shared behavior across types — the same idea as Haskell's
@@ -79,7 +79,7 @@ A trait can require another trait as a prerequisite:
 
 ```yona
 trait Eq a => Ord a
-    compare : a -> a -> Int
+    compare : a -> a -> Ordering
 end
 ```
 
@@ -121,9 +121,79 @@ instance Iterable String Int
 end
 ```
 
-The instance is keyed on both types. Multi-parameter traits express
-relationships such as "collection `a` yields elements `b`" or "`a`
-converts to `b`". Single-parameter traits are unaffected.
+The instance is keyed on the complete ordered type head, not only its first
+type. Multi-parameter traits express relationships such as "collection `a`
+yields elements `b`" and "source `b` converts to target `a`". This lets
+`From String Int` and `From String Float` coexist without ambiguous or
+colliding implementations. Single-parameter traits are unaffected.
+
+## Foundational traits
+
+The Prelude makes the following contracts available without imports:
+
+| Trait | Essential operation | Standard use |
+|---|---|---|
+| `Eq a` | `eq : a -> a -> Bool` | `==` and `!=` |
+| `Ord a` | `compare : a -> a -> Ordering` | `<`, `<=`, `>`, `>=` |
+| `Hash a` | `hash : a -> Int` | hash-compatible immutable values |
+| `Show a` | `show : a -> String` | deterministic structural rendering |
+| `Array array element` | `length`, `get` | indexed finite values |
+| `Sized a` | `size : a -> Int` | collection cardinality |
+| `Iterable collection element` | `toIterator` | streaming traversal |
+| `Foldable collection element` | `foldLeft`, `foldRight` | aggregation |
+| `Semigroup a` | `combine : a -> a -> a` | associative combination |
+| `Monoid a` | `emptyLike : a -> a` | a witness-directed identity |
+| `From target source` | `convert : target -> source -> target` | total conversion |
+| `TryFrom target source` | `tryConvert` | checked conversion with `ConvertError` |
+| `Parse target` | `parse : target -> String -> Result target ParseError` | strict text parsing |
+| `Closeable a` | `close : a -> Unit` | `with` resource cleanup |
+| `Send a` | marker | safe ownership transfer across concurrency |
+| `Shareable a` | marker, requires `Send` | safe shared concurrent access |
+
+`Ordering` is the Prelude ADT `Less | Equal | Greater`. Operators are ordinary
+trait-directed syntax: `a == b` selects `Eq`, while ordering operators select
+`Ord` and inspect its `Ordering` result. A missing instance is a compile-time
+error with the concrete type and suggested remedies.
+
+`emptyLike`, `convert`, `tryConvert`, and `parse` take a witness because Yona
+does not yet have explicit type applications. For example, `emptyLike {0: ""}`
+constructs an empty `Dict Int String`, and `convert 0 "42"` selects
+`From Int String`'s complete two-type instance head.
+
+## Laws and executable conformance
+
+Instances are expected to obey their algebraic contracts:
+
+- `Eq` is reflexive, symmetric, and transitive.
+- `Ord` agrees with `Eq`, reverses consistently, and is transitive.
+- equal values have equal `Hash` values.
+- `Show` is deterministic.
+- `Semigroup.combine` is associative.
+- `Monoid.emptyLike` is both a left and right identity.
+
+`Std\TraitLaws` turns these rules into ordinary `Std\Test` cases. Each law
+suite accepts explicit samples and rendering/operation callbacks, checks all
+relevant pairs or triples, and reports the first concrete counterexample.
+This is useful for user-defined instances as well as the standard library.
+
+```yona
+import run, render from Std\Test,
+       eqLaws from Std\TraitLaws
+in render (run (eqLaws "Int" (\value -> show value)
+    (\left right -> left == right) [0, 1, 2]))
+```
+
+## Concurrency marker traits
+
+`Send` and `Shareable` have no methods or runtime dictionaries. The compiler
+proves them at task, channel, parallel-comprehension, and parallel-`let`
+boundaries, then erases the evidence. Immutable primitive and structurally
+safe immutable aggregate types lift these markers transitively. Native arrays
+are `Send` because unique ownership can move, but are not `Shareable` because
+their buffers are mutable. Synchronized `Sender` and `Receiver` endpoints are
+both `Send` and `Shareable`; the value passed to `send` must independently be
+`Send`. Linear resources, promises, and closures with unsafe captures remain
+rejected.
 
 ## Static resolution: what monomorphization implies
 
@@ -214,15 +284,15 @@ show (Pair 1 2)                      # => "Pair(1, 2)"
 eq (Pair 1 2) (Pair 1 2)             # => true
 ```
 
-- **Ord** — `compare` returns -1, 0, or 1. Declaration order of
+- **Ord** — `compare` returns `Less`, `Equal`, or `Greater`. Declaration order of
   constructors defines the ordering (first declared is smallest); same
   constructor compares fields lexicographically left to right.
 
 ```yona
 type Priority = Low | Medium | High deriving Ord
 
-compare Low High                     # => -1
-compare (Version 2 0) (Version 1 9)  # => 1 with type Version = Version Int Int
+compare Low High                     # => Less
+compare (Version 2 0) (Version 1 9)  # => Greater with type Version = Version Int Int
 ```
 
 - **Hash** — mixes the constructor tag with field hashes.
@@ -247,7 +317,7 @@ to show what the clauses mean:
 type Rank = Jack | Queen | King | Ace
     deriving Show, Eq, Ord
 
-compare Jack Ace                     # => -1 (declaration order)
+compare Jack Ace                     # => Less (declaration order)
 eq Queen Queen                       # => true
 show King                            # => "King"
 ```
@@ -260,7 +330,7 @@ trait Eq a
 end
 
 trait Eq a => Ord a
-    compare : a -> a -> Int
+    compare : a -> a -> Ordering
 end
 
 type Rank = Jack | Queen | King | Ace
@@ -282,11 +352,13 @@ instance Ord Rank
             Queen -> 2
             King  -> 3
             Ace   -> 4
-        end in
-        value a - value b
+        end,
+            left = value a,
+            right = value b
+        in if left < right then Less else if left > right then Greater else Equal
 end
 
-compare Ace Jack                     # => 3 (positive: Ace > Jack)
+compare Ace Jack                     # => Greater
 ```
 
 Generic code written against the constraint now works for `Rank` and every
@@ -294,7 +366,7 @@ other `Ord` type, and each use compiles to direct calls on the concrete
 instance:
 
 ```yona
-let maxBy a b = if compare a b >= 0 then a else b in
+let maxBy a b = if compare a b == Less then b else a in
 maxBy King Queen                     # => King
 ```
 

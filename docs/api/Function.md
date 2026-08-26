@@ -69,10 +69,10 @@ let fns = [\x -> x + 1, \x -> x * 2, \x -> x - 3] in
 pipe 5 fns   # => 9  ((5+1)*2-3 = 9)
 ```
 
-### `fix : (a -> b) -> Int`
+### `fix : (a -> b) -> Int -> Int`
 
-Fixed-point combinator for anonymous recursion.
-`fix f = f (fix f)` — enables recursion without naming.
+Fixed-point combinator for anonymous unary recursion. The callback receives
+the recursive function as its first argument.
 
 ```
 let factorial = fix (\self n -> if n <= 1 then 1 else n * (self (n - 1))) in

@@ -1,0 +1,18 @@
+PASS Parse Int accepts decimal text
+PASS Parse Int accepts surrounding whitespace and signs
+PASS Parse Int rejects empty input
+PASS Parse Int rejects trailing input
+PASS Parse Int reports overflow
+PASS Parse Float accepts decimal and exponent text
+PASS Parse Float rejects non-finite values
+PASS Parse Bool is explicit and case sensitive
+PASS Parse String is identity
+PASS From formats primitive values
+PASS Trait conversion dispatch uses the target witness
+PASS TryFrom Int to Float preserves exact values
+PASS TryFrom Int to Float rejects precision loss
+PASS TryFrom Float to Int accepts integral values
+PASS TryFrom Float to Int rejects fractional values
+PASS UTF-8 byte conversion round trips Unicode
+PASS UTF-8 byte conversion rejects malformed input
+SUMMARY 17 passed, 0 failed

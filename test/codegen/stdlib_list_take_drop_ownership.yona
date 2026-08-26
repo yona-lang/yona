@@ -1,0 +1,1 @@
+import take, drop from Std\List in take 2 (drop 1 [1, 2, 3, 4])

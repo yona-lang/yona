@@ -1,0 +1,6 @@
+import fill from Std\FloatArray,
+       fromFloatArray, toSeq from Std\Iterator
+in case toSeq (fromFloatArray (fill 3 1.5)) of
+    [head|_] -> head
+    [] -> 0.0
+end

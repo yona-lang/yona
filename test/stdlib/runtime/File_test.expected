@@ -1,0 +1,3 @@
+PASS File writes appends and reads
+PASS File removal is observable
+SUMMARY 2 passed, 0 failed

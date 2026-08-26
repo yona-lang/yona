@@ -1,0 +1,4 @@
+PASS Time clocks are nonnegative
+PASS Time formats a stable-width timestamp
+PASS Time accepts a zero sleep
+SUMMARY 3 passed, 0 failed

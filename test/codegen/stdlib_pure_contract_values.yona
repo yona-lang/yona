@@ -1,0 +1,18 @@
+import take, drop, reverse as listReverse, zip, sortBy from Std\List,
+       mapBoth, curry, uncurry from Std\Tuple,
+       length as stringLength, trim, substring, replace, join,
+       startsWith, endsWith from Std\String in
+(take 2 (drop 1 [1, 2, 3, 4]),
+ listReverse [1, 2, 3],
+ sortBy (\a b -> a - b) [3, 1, 2],
+ zip [1, 2] [3],
+ mapBoth (\x -> x + 1) (\x -> x * 2) (3, 4),
+ curry (\(a, b) -> a + b) 3 4,
+ uncurry (\a b -> a * b) (3, 4),
+ stringLength "βeta",
+ trim "  yona \n",
+ substring "abcdef" 2 5,
+ replace "a-b-a" "a" "x",
+ join "," ["a", "b", "c"],
+ startsWith "yo" "yona",
+ endsWith "na" "yona")

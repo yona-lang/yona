@@ -67,13 +67,13 @@ Write `s` followed by a newline to an arbitrary fd. Non-blocking.
 `write fd s` is an alias for `putStr fd s`. Kept for when you want
 the "I'm emitting bytes, not printing text" shape at the call site.
 
-### `readLine : Option String`
+### `readLine : a`
 
 Read one line from stdin, stripping trailing '\n' (and any '\r').
 Returns `Some line` or `None` at EOF. Non-blocking — the read runs
 on a thread-pool worker.
 
-### `readLineFrom : Int -> Option String`
+### `readLineFrom : Int -> a`
 
 Read one line from an arbitrary fd. Same semantics as `readLine`.
 
@@ -82,7 +82,7 @@ Read one line from an arbitrary fd. Same semantics as `readLine`.
 Read stdin to EOF as a string. Used when the program source *is*
 stdin (`yona -` or a pipe); a file script still inherits stdin.
 
-### `readExact : Int -> Int -> Result`
+### `readExact : Int -> Int -> Result (String, String)`
 
 Read exactly `n` bytes from `fd` with stream `read` (not seek/`pread`).
 Safe on pipes and sockets — required for LSP `Content-Length` framing
@@ -100,17 +100,12 @@ Stream `read` of up to `n` bytes (may be short at EOF). Pipe-safe.
 
 ### `flush : Int -> Bool`
 
+`True` if `fd` is attached to a terminal (as opposed to a pipe or file).
+Useful for turning off colored output or prompting prefixes.
 Force pending writes on `fd` to disk / device (`fsync`). Most
 io_uring writes are durable on completion so this is rarely needed.
 
 ### `isTty : Int -> Bool`
-
-`True` if `fd` is attached to a terminal (as opposed to a pipe or file).
-Useful for turning off colored output or prompting prefixes.
-
-### `isatty : Int -> Bool`
-
-Alias for `isTty`, following the libc spelling.
 
 ### `writeBytes : Int -> String -> ()`
 

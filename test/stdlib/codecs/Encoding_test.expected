@@ -1,0 +1,6 @@
+PASS Encoding base64 round trips
+PASS Encoding base64 rejects malformed input
+PASS Encoding hex round trips
+PASS Encoding URL round trips reserved text
+PASS Encoding escapes HTML metacharacters
+SUMMARY 5 passed, 0 failed

@@ -1,0 +1,5 @@
+import testCase, check, run, render from Std\Test in
+render (run [
+    testCase "nested show" (\_ ->
+        check "nested show" (show (Some [1, 2]) == "Some([1, 2])"))
+])

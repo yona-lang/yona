@@ -511,14 +511,17 @@ instance Show a => Show (Option a)
 end
 
 trait Eq a => Ord a                               # superclass constraint
-    compare : a -> a -> Int
+    compare : a -> a -> Ordering
 end
 ```
 
 Traits are type classes resolved **statically**: each call site compiles the
 concrete instance directly (monomorphization), with no runtime dispatch
 cost. Instances are always public; `export trait Name` exports a
-declaration. See [Traits](/guides/traits/).
+declaration. Equality operators select `Eq`; relational operators select
+`Ord` and interpret `Less | Equal | Greater`. The Prelude's collection,
+algebra, conversion, parsing, and erased concurrency marker traits use the
+same resolution model. See [Traits](/guides/traits/).
 
 ### 7.4 Effect rows <span class="yona-status yona-status--partial">Partial</span>
 

@@ -1,0 +1,6 @@
+PASS None remains empty
+PASS default is selected
+PASS map preserves None
+PASS filter rejects
+PASS zip needs both
+SUMMARY 5 passed, 0 failed

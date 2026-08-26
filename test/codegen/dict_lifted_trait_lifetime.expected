@@ -1,0 +1,5 @@
+PASS Distinct empty dictionaries compare equal
+PASS Dictionary ordering agrees with equality
+PASS Dictionary ordering preserves heap values
+PASS Dictionary monoid preserves both operands
+SUMMARY 4 passed, 0 failed

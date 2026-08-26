@@ -42,7 +42,7 @@ std::vector<std::string> DeriveEngine::all_derivable_traits() {
 
 static std::string derive_show(const DeriveAdtInfo& adt) {
     std::ostringstream os;
-    os << "show x = case x of\n";
+    os << "show @borrow x = case x of\n";
 
     for (auto& ctor : adt.constructors) {
         if (ctor.arity == 0) {
@@ -70,7 +70,7 @@ static auto _reg_show = DeriveEngine::register_strategy("Show", {"show"}, derive
 
 static std::string derive_eq(const DeriveAdtInfo& adt) {
     std::ostringstream os;
-    os << "eq _a _b = case _a of\n";
+    os << "eq @borrow _a @borrow _b = case _a of\n";
 
     for (auto& ctor : adt.constructors) {
         os << "    " << ctor.name;
@@ -106,58 +106,37 @@ static auto _reg_eq = DeriveEngine::register_strategy("Eq", {"eq"}, derive_eq);
 
 static std::string derive_ord(const DeriveAdtInfo& adt) {
     std::ostringstream os;
-
-    if (adt.constructors.size() == 1) {
-        auto& ctor = adt.constructors[0];
-        os << "compare _a _b = case _a of\n";
-        os << "    " << ctor.name;
-        for (int i = 0; i < ctor.arity; i++) os << " _x" << i;
-        os << " -> case _b of\n";
-        os << "        " << ctor.name;
-        for (int i = 0; i < ctor.arity; i++) os << " _y" << i;
-        os << " -> ";
-        if (ctor.arity == 0) {
-            os << "0";
-        } else {
-            for (int i = 0; i < ctor.arity; i++) {
-                if (i == ctor.arity - 1) {
-                    os << "compare _x" << i << " _y" << i;
-                } else {
-                    os << "let _c" << i << " = compare _x" << i << " _y" << i
-                       << " in if _c" << i << " != 0 then _c" << i << " else ";
-                }
-            }
-        }
-        os << "\n    end\nend\n";
-        return os.str();
-    }
-
-    os << "compare _a _b = case _a of\n";
+    os << "compare @borrow _a @borrow _b = case _a of\n";
     for (size_t ci = 0; ci < adt.constructors.size(); ci++) {
         auto& ctor = adt.constructors[ci];
         os << "    " << ctor.name;
         for (int i = 0; i < ctor.arity; i++) os << " _x" << i;
         os << " -> case _b of\n";
 
-        os << "        " << ctor.name;
-        for (int i = 0; i < ctor.arity; i++) os << " _y" << i;
-        os << " -> ";
-        if (ctor.arity == 0) {
-            os << "0";
-        } else {
-            for (int i = 0; i < ctor.arity; i++) {
-                if (i == ctor.arity - 1) {
-                    os << "compare _x" << i << " _y" << i;
-                } else {
-                    os << "let _c" << i << " = compare _x" << i << " _y" << i
-                       << " in if _c" << i << " != 0 then _c" << i << " else ";
+        for (size_t bi = 0; bi < adt.constructors.size(); ++bi) {
+            const auto& other = adt.constructors[bi];
+            os << "        " << other.name;
+            for (int i = 0; i < other.arity; ++i)
+                os << (bi == ci ? " _y" : " _ignored") << i;
+            os << " -> ";
+            if (bi < ci) {
+                os << "Greater";
+            } else if (bi > ci) {
+                os << "Less";
+            } else if (ctor.arity == 0) {
+                os << "Equal";
+            } else {
+                for (int i = 0; i < ctor.arity; ++i) {
+                    os << "case compare _x" << i << " _y" << i << " of\n"
+                       << "            Less -> Less\n"
+                       << "            Greater -> Greater\n"
+                       << "            Equal -> ";
                 }
+                os << "Equal";
+                for (int i = 0; i < ctor.arity; ++i) os << "\n        end";
             }
+            os << "\n";
         }
-        os << "\n";
-
-        // Different constructors: earlier declaration = smaller
-        os << "        _ -> " << (int)ci << " - " << (int)adt.constructors.size() << "\n";
         os << "    end\n";
     }
     os << "end\n";
@@ -171,7 +150,7 @@ static auto _reg_ord = DeriveEngine::register_strategy("Ord", {"compare"}, deriv
 
 static std::string derive_hash(const DeriveAdtInfo& adt) {
     std::ostringstream os;
-    os << "hash x = case x of\n";
+    os << "hash @borrow x = case x of\n";
 
     for (auto& ctor : adt.constructors) {
         os << "    " << ctor.name;
@@ -182,11 +161,13 @@ static std::string derive_hash(const DeriveAdtInfo& adt) {
         if (ctor.arity == 0) {
             os << ctor.tag;
         } else {
-            os << "let _h = " << ctor.tag;
-            for (int i = 0; i < ctor.arity; i++) {
-                os << ", _h = _h * 31 + hash _f" << i;
-            }
-            os << " in _h";
+            // A Yona multi-binding `let` is parallel, so a repeated `_h`
+            // alias cannot express a sequential hash fold. Emit the fold as
+            // one nested expression instead.
+            for (int i = 0; i < ctor.arity; ++i) os << "(";
+            os << ctor.tag;
+            for (int i = 0; i < ctor.arity; ++i)
+                os << " * 31 + hash _f" << i << ")";
         }
         os << "\n";
     }

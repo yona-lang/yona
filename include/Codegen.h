@@ -45,12 +45,7 @@
 //        can be precompiled; call-site remonomorphization inside `handle`
 //        binds the caller's clauses (effect-row-directed, not a name list).
 //
-//   5. Closure devirtualization
-//      - closure_known_fn_: Value* → Function*. When a known lambda is
-//        wrapped in a closure env, we remember the underlying fn so
-//        indirect calls through the env can be rewritten to direct calls.
-//
-//   6. Module & import state
+//   5. Module & import state
 //      - module_paths_: search roots for .yonai interface files.
 //      - Interface files carry GENFN source bodies so call sites can
 //        re-compile generics locally when their arg types differ.
@@ -114,12 +109,31 @@ enum class PromiseAwaitPath : uint8_t {
     IoUring,   ///< `yona_rt_io_await` — io_uring user_data cookie (`extern io`)
 };
 
+struct SemanticTypeIdentity {
+    CType type = CType::INT;
+    std::string adt_name;
+    std::vector<SemanticTypeIdentity> arguments;
+};
+
 // A typed value: LLVM value + its codegen type + optional subtype info
 struct TypedValue {
     llvm::Value* val = nullptr;
     CType type = CType::INT;
     std::vector<CType> subtypes; // tuple: element types; SEQ/SET: {elem_type}; DICT: {key_type, val_type}
+    /// Recursive identities parallel to `subtypes`. CType is the physical ABI
+    /// tag; this retains nested structure such as `Seq (Tuple Int Int)`.
+    std::vector<SemanticTypeIdentity> semantic_subtypes;
     std::string adt_type_name;   // For CType::ADT: the ADT type name (e.g., "Option")
+    /// Source-level ADT application arguments (`Result Int String`). Unlike
+    /// `subtypes`, these are independent of the active constructor's fields.
+    std::vector<CType> adt_type_arguments;
+    /// Nominal identities for ADT-valued application arguments. CType alone
+    /// cannot distinguish `Option a` from `Result a e` while specializing a
+    /// generic derived method.
+    std::vector<std::string> adt_type_argument_names;
+    /// Recursive source-level identity used by nested lifted instances such
+    /// as `Eq (Result (Option String) e)`.
+    std::vector<SemanticTypeIdentity> adt_semantic_arguments;
     /// True when `val` is a heap pointer stored as INT (Result/Option payload
     /// from a C ABI, or a field loaded from a heap ADT). Reused call sites
     /// must DUP even though `type` is not `CType::ADT`.
@@ -212,6 +226,8 @@ public:
             const std::string& module_fqn, const std::string& name) override;
         std::vector<std::string> imported_module_exports(
             const std::string& module_fqn) override;
+        std::vector<typechecker::ImportedInstanceSig> imported_instances(
+            const std::string& module_fqn) override;
     private:
         Codegen* cg_;
     };
@@ -230,6 +246,8 @@ public:
 
     // Mangle a module function name for export
     static std::string mangle_name(const std::string& module_fqn, const std::string& func_name);
+    static std::string mangle_trait_instance_method(
+        const ast::InstanceDeclNode* instance, const std::string& method_name);
 
 private:
     std::unique_ptr<llvm::LLVMContext> context_;
@@ -241,7 +259,12 @@ private:
     /// never expose private ADTs; opaque exports omit their constructor rows.
     std::unordered_set<std::string> interface_exported_types_;
     std::unordered_set<std::string> interface_opaque_types_;
+    std::unordered_set<std::string> interface_trait_names_;
+    std::unordered_set<std::string> interface_instance_keys_;
     bool interface_export_filter_active_ = false;
+    /// Reparsed imported GENFN ASTs were created after type checking and must
+    /// never query AST-pointer keyed selections from the original source.
+    unsigned genfn_isolation_depth_ = 0;
 
     // Scope: variable name → typed value
     std::unordered_map<std::string, TypedValue> named_values_;
@@ -265,6 +288,7 @@ private:
         llvm::Value* closure_env = nullptr;
         std::string return_adt_name;
         std::vector<CType> return_subtypes;
+        std::vector<SemanticTypeIdentity> return_semantic_subtypes;
         // Borrow inference: borrowed_params[i] == true means param i is
         // read-only (not returned, not stored). Call sites skip rc_inc;
         // function exit skips rc_dec. Empty vector = all params owned.
@@ -278,6 +302,13 @@ private:
         bool effect_row_known = false;
         bool effect_open_rest = false;
         bool effect_hof = false;
+        /// Concrete source ADT names for ADT-ABI parameters. This prevents
+        /// interface emission from degrading `Option a` to anonymous `ADT`.
+        std::vector<std::string> param_adt_names;
+        /// Lossless source-level descriptors from an explicit annotation.
+        /// These retain type variables and nested arrows across `.yonai`.
+        std::vector<std::string> param_type_descriptors;
+        std::string return_type_descriptor;
     };
 
     // Escape analysis: returns true if `name` appears in a "storing"
@@ -327,12 +358,6 @@ private:
     std::unordered_set<llvm::Value*> snapshot_transferred(TransferDomain domain) const;
     void restore_transferred(TransferDomain domain,
                              const std::unordered_set<llvm::Value*>& snapshot);
-
-    // Runtime-decided "consumed by closure call" flags. When a heap-typed
-    // arg is passed to a closure and the closure returns a different ptr,
-    // the callee chain freed the arg. The function-exit dec must check
-    // this flag at runtime to avoid double-free.
-    std::unordered_map<llvm::Value*, llvm::Value*> closure_consumed_flags_;
 
     // Perceus phase 3: stack-allocated yona_frame_t for the function
     // currently being compiled (nullptr when the fn has no heap params).
@@ -409,7 +434,6 @@ private:
     // Closure devirtualization: map closure Value* → underlying Function*
     // When a known lambda is wrapped in a closure, we remember the mapping
     // so indirect closure calls can be replaced with direct calls.
-    std::unordered_map<llvm::Value*, llvm::Function*> closure_known_fn_;
 
     // Escape analysis: variables whose values don't escape the current scope
     std::unordered_set<std::string> non_escaping_vars_;
@@ -422,6 +446,7 @@ private:
         std::string type_param;            // first param (backward compat)
         std::vector<std::string> type_params; // all params for multi-param traits
         std::vector<std::string> method_names;
+        std::unordered_map<std::string, std::string> method_type_descriptors;
         std::vector<std::pair<std::string, std::string>> superclasses;
         std::unordered_map<std::string, FunctionExpr*> default_impls;
     };
@@ -429,6 +454,7 @@ private:
         std::string trait_name;
         std::string type_name;             // first type arg (backward compat)
         std::vector<std::string> type_names; // all type args for multi-param
+        std::vector<std::string> type_params; // parameters in an applied head
         std::unordered_map<std::string, std::string> method_mangled_names;
         std::vector<std::pair<std::string, std::string>> constraints;
     };
@@ -456,6 +482,8 @@ private:
         // Full recursive shapes for fields declared as tuples. `field_types`
         // is the ABI view; this retains element types for pattern binding.
         std::vector<FieldShape> field_shapes;
+        /// Declared source field contracts, including generic parameter refs.
+        std::vector<ast::FieldType> declared_field_types;
     };
 
     static AdtInfo::FieldShape field_shape_from_field_type(const ast::FieldType& field_type);
@@ -494,7 +522,12 @@ private:
         /// First parameter is a function that shares this row (`effects … hof`).
         bool effect_hof = false;
     };
+    struct NativeDependency {
+        std::string c_symbol;
+        ModuleFunctionMeta meta;
+    };
     ModuleFunctionMeta module_meta_from_compiled(const CompiledFunction& cf) const;
+    std::string source_type_descriptor(const types::Type& type) const;
     CompiledFunction compiled_function_from_meta(llvm::Function* fn,
                                                  const ModuleFunctionMeta& meta,
                                                  CType return_type) const;
@@ -509,6 +542,7 @@ private:
         std::unordered_map<std::string, TraitInfo> traits;
         std::unordered_map<std::string, TraitInstanceInfo> trait_instances;
         std::unordered_map<std::string, AdtInfo> adt_constructors;
+        std::unordered_map<std::string, std::vector<std::string>> adt_type_params;
         std::unordered_map<std::string, llvm::StructType*> adt_struct_types;
         std::unordered_map<std::string, CFFISignature> cffi_signatures;
         std::unordered_map<std::string, EffectInfo> effects;
@@ -524,6 +558,12 @@ private:
         /// without making them public imports.
         std::unordered_set<std::string> private_genfn_symbols;
         std::unordered_map<std::string, ImportedFunctionSource> imported_sources;
+        /// Native declarations used by Yona bodies embedded in an interface.
+        /// They remain private to the defining GENFN and are never wildcard
+        /// imports in the consuming module.
+        std::unordered_map<std::string, NativeDependency> native_dependencies;
+        std::unordered_map<std::string, std::vector<std::pair<std::string, NativeDependency>>>
+            private_genfn_dependencies;
         /// Constructor metadata needed only while recompiling an exported
         /// generic function. Opaque ADT constructors never enter the public
         /// constructor registry.
@@ -548,7 +588,8 @@ private:
     } debug_;
 
     std::string resolve_trait_method(const std::string& method_name, CType arg_type,
-                                     const std::string& adt_type_name = "");
+                                     const std::string& adt_type_name = "",
+                                     const std::string& trait_name = "");
     static std::string ctype_to_type_name(CType ct);
     void register_cffi_signatures();
     static bool is_cffi_import(const std::string& mod_fqn);
@@ -604,6 +645,7 @@ private:
         // Closures
         llvm::Function *closure_create_ = nullptr, *closure_set_cap_ = nullptr,
             *closure_get_cap_ = nullptr, *closure_set_heap_mask_ = nullptr,
+            *closure_set_borrow_mask_ = nullptr,
             *closure2_create_ = nullptr, *closure2_apply_ = nullptr;
         // Tuples
         llvm::Function *tuple_alloc_ = nullptr, *tuple_set_ = nullptr,
@@ -756,6 +798,12 @@ private:
     TypedValue emit_accelerator_kernel(const yona::compiler::AccelMatch& match);
     bool accelerator_lowering_enabled_ = true;
     bool strict_accelerator_ = false;
+    // Expected type for the single expression currently being lowered from
+    // an annotated function result. Imported GENFN ASTs are reparsed after
+    // the module TypeChecker pass, so this preserves contextual `{}` typing
+    // without applying the expectation to unrelated nested literals.
+    const ast::AstNode* contextual_expected_node_ = nullptr;
+    CType contextual_expected_type_ = CType::UNIT;
 
     // codegen_apply helpers (extracted for readability)
     struct ApplyChain {
@@ -770,12 +818,14 @@ private:
         std::vector<std::string> arg_lambda_names;
     };
     EvaluatedArgs evaluate_apply_args(const std::vector<ApplyExpr*>& chain);
-    void precompile_function_args(EvaluatedArgs& args);
+    void precompile_function_args(EvaluatedArgs& args, const std::string& callee_name);
     void wrap_function_args_in_closures(std::vector<TypedValue>& all_args);
 
     TypedValue codegen_adt_construct(const std::string& fn_name, const std::vector<TypedValue>& all_args);
     std::unordered_map<std::string, CompiledFunction>::iterator
-        resolve_apply_function(const std::string& fn_name, const std::vector<TypedValue>& all_args);
+        resolve_apply_function(const std::string& fn_name,
+                               const std::vector<TypedValue>& all_args,
+                               const ApplyExpr* application = nullptr);
     TypedValue codegen_higher_order_call(const std::string& fn_name, const std::vector<TypedValue>& all_args);
     TypedValue codegen_extern_call(ApplyExpr* node, const std::string& fn_name,
                                     const std::vector<TypedValue>& all_args);
@@ -830,10 +880,14 @@ private:
     struct GenfnNameIsolation {
         Codegen& cg;
         std::unordered_map<std::string, std::string> saved_externs;
+        std::unordered_map<std::string, CompiledFunction> saved_compiled_functions;
+        std::unordered_map<std::string, DeferredFunction> saved_deferred_functions;
+        std::unordered_map<std::string, TypedValue> saved_named_values;
         std::unordered_map<std::string, CompiledFunction> hidden_cfs;
         std::unordered_map<std::string, TypedValue> hidden_nvs;
         std::unordered_map<std::string, AdtInfo> saved_adt_constructors;
         std::vector<std::string> scoped_cafs;
+        std::vector<std::string> scoped_dependency_names;
         bool restored = false;
         /// `mangled` is taken by value: the constructor clears
         /// `extern_functions`, so a reference into that map would dangle.

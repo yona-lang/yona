@@ -1,0 +1,7 @@
+import fromSeq from Std\IntArray in
+import upload, mapReduceGraphGPU, Add, Mul, Sum from Std\GPU in
+let buffer = upload (fromSeq [1, 2, 3, 4, 5]),
+    added = mapReduceGraphGPU [Add 1] buffer,
+    multiplied = mapReduceGraphGPU [Mul 2] buffer,
+    combined = mapReduceGraphGPU [Add 1, Mul 2] buffer
+in added * 10000 + multiplied * 100 + combined

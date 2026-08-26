@@ -1,0 +1,3 @@
+PASS Parallel map preserves order
+PASS Parallel for completes
+SUMMARY 2 passed, 0 failed

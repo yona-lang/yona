@@ -99,12 +99,12 @@ elseif(YONA_FETCH_DEPS)
 			"Install libcli11-dev (Debian/Ubuntu), cli11-devel (Fedora), "
 			"Homebrew cli11, or the CLI11 CMake package.")
 	endif()
-	message(STATUS "CLI11 not found; fetching v2.6.2")
+	message(STATUS "CLI11 not found; fetching v2.7.2")
 	FetchContent_Declare(
 		cli11
 		QUIET
 		GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-		GIT_TAG v2.6.2
+		GIT_TAG v2.7.2
 	)
 	FetchContent_MakeAvailable(cli11)
 else()
@@ -400,6 +400,9 @@ if(Vulkan_FOUND AND NOT WIN32)
 	# cli/main.cpp: yonac-linked exe pulls vk* from gpu_stub → link libvulkan.
 	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_POSIX_VULKAN=1)
 endif()
+if(PCRE2_FOUND AND NOT WIN32)
+	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_PCRE2=1)
+endif()
 
 # Prebuilt runtime artifacts for packaged/sysroot-first toolchain flow.
 set(YONA_RUNTIME_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/runtime")
@@ -418,6 +421,10 @@ set(YONA_EMBEDDED_RUNTIME_SOURCES
 	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_ops.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_cpu.c"
 )
+if(PCRE2_FOUND)
+	list(APPEND YONA_EMBEDDED_RUNTIME_SOURCES
+		"${PROJECT_SOURCE_DIR}/src/runtime/regex.c")
+endif()
 if(WIN32)
 	list(APPEND YONA_EMBEDDED_RUNTIME_SOURCES
 		"${PROJECT_SOURCE_DIR}/src/runtime/platform/async_win32.c"
@@ -436,6 +443,9 @@ foreach(_pf IN LISTS YONA_PLATFORM_RUNTIME_SOURCES)
 endforeach()
 
 set(_YONA_CR_CCFLAGS -I${PROJECT_SOURCE_DIR}/src -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_CURRENT_BINARY_DIR}/include)
+if(PCRE2_FOUND)
+	list(APPEND _YONA_CR_CCFLAGS ${PCRE2_CFLAGS} -DYONA_EMBEDDED_PCRE2=1)
+endif()
 if(Vulkan_FOUND)
 	list(APPEND _YONA_CR_CCFLAGS -I${YONA_VK_HEADER_DIR} -DYONA_HAS_VULKAN=1)
 endif()
@@ -477,6 +487,11 @@ add_library(yona_runtime_static STATIC
 	"${PROJECT_SOURCE_DIR}/src/compiled_runtime.c"
 	${YONA_PLATFORM_RUNTIME_SOURCES}
 )
+if(PCRE2_FOUND)
+	target_sources(yona_runtime_static PRIVATE
+		"${PROJECT_SOURCE_DIR}/src/runtime/regex.c")
+	target_include_directories(yona_runtime_static PRIVATE ${PCRE2_INCLUDE_DIRS})
+endif()
 set_target_properties(yona_runtime_static PROPERTIES
 	OUTPUT_NAME yona_runtime
 	ARCHIVE_OUTPUT_DIRECTORY "${YONA_RUNTIME_ARTIFACT_DIR}"
@@ -531,7 +546,7 @@ add_subdirectory(tools)
 include(CTest)
 
 if(BUILD_TESTING)
-find_package(doctest 2.4 CONFIG QUIET)
+find_package(doctest 2.5 CONFIG QUIET)
 if(doctest_FOUND)
 	message(STATUS "Using system doctest")
 elseif(YONA_FETCH_DEPS)
@@ -542,11 +557,11 @@ elseif(YONA_FETCH_DEPS)
 			"Install doctest-dev (Debian/Ubuntu), doctest-devel (Fedora), "
 			"or Homebrew doctest.")
 	endif()
-	message(STATUS "doctest not found; fetching v2.4.12")
+	message(STATUS "doctest not found; fetching v2.5.3")
 	FetchContent_Declare(
 		doctest
 		GIT_REPOSITORY https://github.com/doctest/doctest.git
-		GIT_TAG        v2.4.12
+		GIT_TAG        v2.5.3
 	)
 	FetchContent_MakeAvailable(doctest)
 else()
@@ -607,6 +622,26 @@ set_tests_properties(doctest_tests PROPERTIES
 	ENVIRONMENT "${_ctest_env}"
 )
 
+# Independently addressable standard-library capability tiers. The complete
+# doctest run still executes these fixtures; the labeled slices let capable CI
+# and local environments target the public network/GPU contracts directly.
+add_test(NAME doctest_stdlib_network
+	COMMAND tests -tc=Stdlib?network?conformance?fixtures)
+add_test(NAME doctest_stdlib_gpu
+	COMMAND tests -tc=Stdlib?GPU?conformance?fixtures)
+set(_stdlib_network_env
+	"${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0;YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-stdlib-network-results.xml")
+set(_stdlib_gpu_env
+	"${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0;YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-stdlib-gpu-results.xml")
+set_tests_properties(doctest_stdlib_network PROPERTIES
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	LABELS "unit;stdlib-network"
+	ENVIRONMENT "${_stdlib_network_env}")
+set_tests_properties(doctest_stdlib_gpu PROPERTIES
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	LABELS "unit;stdlib-gpu"
+	ENVIRONMENT "${_stdlib_gpu_env}")
+
 # Set up test environment
 if(APPLE)
 	set_tests_properties(doctest_tests PROPERTIES
@@ -616,6 +651,18 @@ elseif(UNIX)
 	set_tests_properties(doctest_tests PROPERTIES
 		ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH};${_ctest_env}"
 	)
+endif()
+
+if(APPLE)
+	set_tests_properties(doctest_stdlib_network PROPERTIES
+		ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{DYLD_LIBRARY_PATH};${_stdlib_network_env}")
+	set_tests_properties(doctest_stdlib_gpu PROPERTIES
+		ENVIRONMENT "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{DYLD_LIBRARY_PATH};${_stdlib_gpu_env}")
+elseif(UNIX)
+	set_tests_properties(doctest_stdlib_network PROPERTIES
+		ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH};${_stdlib_network_env}")
+	set_tests_properties(doctest_stdlib_gpu PROPERTIES
+		ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH};${_stdlib_gpu_env}")
 endif()
 
 # Vulkan-only slice: same binary, no YONA_COMPILE_GPU_VULKAN=0 so local SDK matches the

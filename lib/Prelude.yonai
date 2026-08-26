@@ -1,23 +1,31 @@
+ADT ConvertError 2 1
+CTOR InvalidConversion 0 1 fields _0:STRING@N(String)
+CTOR ConversionOutOfRange 1 1 fields _0:STRING@N(String)
 ADT FileHandle 1 1
-CTOR FileHandle 0 1 fields _0:INT
+CTOR FileHandle 0 1 fields _0:INT@N(Int)
 ADT FileMode 4 0
 CTOR Read 0 0
-CTOR ReadWrite 2 0
 CTOR Write 1 0
+CTOR ReadWrite 2 0
 CTOR Append 3 0
-ADT Iterator 1 1 recursive
-CTOR Iterator 0 1 fields _0:FUNCTION:ADT:Option
-ADT Linear 1 1
-CTOR Linear 0 1 fields _0:INT
-ADT Option 2 1
-CTOR Some 0 1 fields _0:INT
+ADT Iterator 1 1 recursive params a
+CTOR Iterator 0 1 fields _0:FUNCTION@F(N(%28%29);N(Option,N(a))):ADT:Option a
+ADT Linear 1 1 params a
+CTOR Linear 0 1 fields _0:INT@N(a)
+ADT Option 2 1 params a
+CTOR Some 0 1 fields _0:INT@N(a)
 CTOR None 1 0
-ADT Result 2 1
-CTOR Ok 0 1 fields _0:INT
-CTOR Err 1 1 fields _0:INT
+ADT Ordering 3 0
+CTOR Less 0 0
+CTOR Equal 1 0
+CTOR Greater 2 0
+ADT ParseError 2 1
+CTOR InvalidSyntax 0 1 fields _0:STRING@N(String)
+CTOR ParsedValueOutOfRange 1 1 fields _0:STRING@N(String)
+ADT Result 2 1 params a e
+CTOR Ok 0 1 fields _0:INT@N(a)
+CTOR Err 1 1 fields _0:INT@N(e)
 ADT Type 18 1
-CTOR TAdt 15 1 fields _0:STRING
-CTOR TSum 16 0
 CTOR TInt 0 0
 CTOR TFloat 1 0
 CTOR TBool 2 0
@@ -26,131 +34,2275 @@ CTOR TSymbol 4 0
 CTOR TUnit 5 0
 CTOR TSeq 6 0
 CTOR TSet 7 0
-CTOR TIntArray 13 0
 CTOR TDict 8 0
 CTOR TTuple 9 0
 CTOR TFunction 10 0
 CTOR TPromise 11 0
 CTOR TByteArray 12 0
+CTOR TIntArray 13 0
 CTOR TFloatArray 14 0
+CTOR TAdt 15 1 fields _0:STRING@N(String)
+CTOR TSum 16 0
 CTOR TRecord 17 0
 ADT Whence 3 0
-CTOR SeekEnd 2 0
 CTOR SeekSet 0 0
 CTOR SeekCur 1 0
+CTOR SeekEnd 2 0
+TRAIT Array array element 2
+  METHOD length FUNCTION(VAR(array),INT)
+  METHOD get FUNCTION(VAR(array),FUNCTION(INT,VAR(element)))
 TRAIT Closeable a 1
-  METHOD close
-TRAIT Show a 1
-  METHOD show
+  METHOD close FUNCTION(VAR(a),UNIT)
 TRAIT Eq a 1
-  METHOD eq
-TRAIT Ord a 1
-  METHOD compare
+  METHOD eq FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL))
+TRAIT Foldable collection element 2
+  METHOD foldLeft FUNCTION(VAR(collection),FUNCTION(FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))),FUNCTION(VAR(acc),VAR(acc))))
+  METHOD foldRight FUNCTION(VAR(collection),FUNCTION(FUNCTION(VAR(element),FUNCTION(VAR(acc),VAR(acc))),FUNCTION(VAR(acc),VAR(acc))))
+TRAIT From target source 1
+  METHOD convert FUNCTION(VAR(target),FUNCTION(VAR(source),VAR(target)))
 TRAIT Hash a 1
-  METHOD hash
-TRAIT Array a 2
-  METHOD length
-  METHOD get
-INSTANCE Show Float
-  IMPL show yona_Prelude__Show_Float__show
-INSTANCE Closeable Int
-  IMPL close Closeable_Int__close
-INSTANCE Closeable FileHandle
-  IMPL close yona_Std_File__closeFileHandle
-INSTANCE Ord String
-  IMPL compare yona_Prelude__Ord_String__compare
+  SUPER Eq a
+  METHOD hash FUNCTION(VAR(a),INT)
+TRAIT Iterable collection element 1
+  METHOD toIterator FUNCTION(VAR(collection),ADT(Iterator,VAR(element)))
+TRAIT Monoid a 1
+  SUPER Semigroup a
+  METHOD emptyLike FUNCTION(VAR(a),VAR(a))
+TRAIT Ord a 1
+  SUPER Eq a
+  METHOD compare FUNCTION(VAR(a),FUNCTION(VAR(a),ADT(Ordering)))
+TRAIT Parse target 1
+  METHOD parse FUNCTION(VAR(target),FUNCTION(STRING,ADT(Result,VAR(target),ADT(ParseError))))
+TRAIT Semigroup a 1
+  METHOD combine FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a)))
+TRAIT Send a 0
+TRAIT Shareable a 0
+  SUPER Send a
+TRAIT Show a 1
+  METHOD show FUNCTION(VAR(a),STRING)
+TRAIT Sized a 1
+  METHOD size FUNCTION(VAR(a),INT)
+TRAIT TryFrom target source 1
+  METHOD tryConvert FUNCTION(VAR(target),FUNCTION(VAR(source),ADT(Result,VAR(target),ADT(ConvertError))))
+INSTANCE Array ByteArray Int
+  IMPL get Array_ByteArray_Int__get
+  IMPL length Array_ByteArray_Int__length
+INSTANCE Array FloatArray Float
+  IMPL get Array_FloatArray_Float__get
+  IMPL length Array_FloatArray_Float__length
+INSTANCE Array IntArray Int
+  IMPL get Array_IntArray_Int__get
+  IMPL length Array_IntArray_Int__length
+INSTANCE Array Seq element
+  PARAM element
+  IMPL get Array_Seq_element__get
+  IMPL length Array_Seq_element__length
+INSTANCE Array String Int
+  IMPL get Array_String_Int__get
+  IMPL length Array_String_Int__length
 INSTANCE Eq Bool
-  IMPL eq yona_Prelude__Eq_Bool__eq
-INSTANCE Show Int
-  IMPL show yona_Prelude__Show_Int__show
-INSTANCE Show String
-  IMPL show yona_Prelude__Show_String__show
-INSTANCE Show Bool
-  IMPL show yona_Prelude__Show_Bool__show
-INSTANCE Eq String
-  IMPL eq yona_Prelude__Eq_String__eq
-INSTANCE Show Symbol
-  IMPL show yona_Prelude__Show_Symbol__show
-INSTANCE Ord Bool
-  IMPL compare yona_Prelude__Ord_Bool__compare
-INSTANCE Eq Int
-  IMPL eq yona_Prelude__Eq_Int__eq
+  IMPL eq Eq_Bool__eq
+INSTANCE Eq ConvertError
+  IMPL eq Eq_ConvertError__eq
+INSTANCE Eq Dict
+  PARAM key
+  PARAM value
+  CONSTRAINT Eq key
+  CONSTRAINT Eq value
+  IMPL eq Eq_Dict__eq
+INSTANCE Eq FileMode
+  IMPL eq Eq_FileMode__eq
 INSTANCE Eq Float
-  IMPL eq yona_Prelude__Eq_Float__eq
-INSTANCE Array FloatArray
-  IMPL length yona_Prelude__Array_FloatArray__length
-  IMPL get yona_Prelude__Array_FloatArray__get
+  IMPL eq Eq_Float__eq
+INSTANCE Eq Int
+  IMPL eq Eq_Int__eq
+INSTANCE Eq Option
+  PARAM a
+  CONSTRAINT Eq a
+  IMPL eq Eq_Option__eq
+INSTANCE Eq Ordering
+  IMPL eq Eq_Ordering__eq
+INSTANCE Eq ParseError
+  IMPL eq Eq_ParseError__eq
+INSTANCE Eq Result
+  PARAM a
+  PARAM e
+  CONSTRAINT Eq a
+  CONSTRAINT Eq e
+  IMPL eq Eq_Result__eq
+INSTANCE Eq Seq
+  PARAM element
+  CONSTRAINT Eq element
+  IMPL eq Eq_Seq__eq
+INSTANCE Eq Set
+  PARAM element
+  CONSTRAINT Eq element
+  IMPL eq Eq_Set__eq
+INSTANCE Eq String
+  IMPL eq Eq_String__eq
 INSTANCE Eq Symbol
-  IMPL eq yona_Prelude__Eq_Symbol__eq
-INSTANCE Ord Int
-  IMPL compare yona_Prelude__Ord_Int__compare
-INSTANCE Ord Float
-  IMPL compare yona_Prelude__Ord_Float__compare
-INSTANCE Hash Int
-  IMPL hash yona_Prelude__Hash_Int__hash
-INSTANCE Hash Float
-  IMPL hash yona_Prelude__Hash_Float__hash
-INSTANCE Hash String
-  IMPL hash yona_Prelude__Hash_String__hash
+  IMPL eq Eq_Symbol__eq
+INSTANCE Eq Tuple
+  PARAM left
+  PARAM right
+  CONSTRAINT Eq left
+  CONSTRAINT Eq right
+  IMPL eq Eq_Tuple__eq
+INSTANCE Eq Type
+  IMPL eq Eq_Type__eq
+INSTANCE Eq Whence
+  IMPL eq Eq_Whence__eq
+INSTANCE Foldable ByteArray Int
+  IMPL foldLeft Foldable_ByteArray_Int__foldLeft
+  IMPL foldRight Foldable_ByteArray_Int__foldRight
+INSTANCE Foldable Dict Tuple
+  PARAM key
+  PARAM value
+  IMPL foldLeft Foldable_Dict_Tuple__foldLeft
+  IMPL foldRight Foldable_Dict_Tuple__foldRight
+INSTANCE Foldable FloatArray Float
+  IMPL foldLeft Foldable_FloatArray_Float__foldLeft
+  IMPL foldRight Foldable_FloatArray_Float__foldRight
+INSTANCE Foldable IntArray Int
+  IMPL foldLeft Foldable_IntArray_Int__foldLeft
+  IMPL foldRight Foldable_IntArray_Int__foldRight
+INSTANCE Foldable Option element
+  PARAM element
+  IMPL foldLeft Foldable_Option_element__foldLeft
+  IMPL foldRight Foldable_Option_element__foldRight
+INSTANCE Foldable Result element
+  PARAM element
+  PARAM error
+  IMPL foldLeft Foldable_Result_element__foldLeft
+  IMPL foldRight Foldable_Result_element__foldRight
+INSTANCE Foldable Seq element
+  PARAM element
+  IMPL foldLeft Foldable_Seq_element__foldLeft
+  IMPL foldRight Foldable_Seq_element__foldRight
+INSTANCE Foldable Set element
+  PARAM element
+  IMPL foldLeft Foldable_Set_element__foldLeft
+  IMPL foldRight Foldable_Set_element__foldRight
+INSTANCE Foldable String Int
+  IMPL foldLeft Foldable_String_Int__foldLeft
+  IMPL foldRight Foldable_String_Int__foldRight
 INSTANCE Hash Bool
-  IMPL hash yona_Prelude__Hash_Bool__hash
+  IMPL hash Hash_Bool__hash
+INSTANCE Hash ConvertError
+  IMPL hash Hash_ConvertError__hash
+INSTANCE Hash Dict
+  PARAM key
+  PARAM value
+  CONSTRAINT Eq key
+  CONSTRAINT Eq value
+  CONSTRAINT Hash key
+  CONSTRAINT Hash value
+  IMPL hash Hash_Dict__hash
+INSTANCE Hash FileMode
+  IMPL hash Hash_FileMode__hash
+INSTANCE Hash Float
+  IMPL hash Hash_Float__hash
+INSTANCE Hash Int
+  IMPL hash Hash_Int__hash
+INSTANCE Hash Option
+  PARAM a
+  CONSTRAINT Hash a
+  IMPL hash Hash_Option__hash
+INSTANCE Hash ParseError
+  IMPL hash Hash_ParseError__hash
+INSTANCE Hash Result
+  PARAM a
+  PARAM e
+  CONSTRAINT Hash a
+  CONSTRAINT Hash e
+  IMPL hash Hash_Result__hash
+INSTANCE Hash Seq
+  PARAM element
+  CONSTRAINT Eq element
+  CONSTRAINT Hash element
+  IMPL hash Hash_Seq__hash
+INSTANCE Hash Set
+  PARAM element
+  CONSTRAINT Eq element
+  CONSTRAINT Hash element
+  IMPL hash Hash_Set__hash
+INSTANCE Hash String
+  IMPL hash Hash_String__hash
 INSTANCE Hash Symbol
-  IMPL hash yona_Prelude__Hash_Symbol__hash
-INSTANCE Array ByteArray
-  IMPL length yona_Prelude__Array_ByteArray__length
-  IMPL get yona_Prelude__Array_ByteArray__get
-INSTANCE Array IntArray
-  IMPL length yona_Prelude__Array_IntArray__length
-  IMPL get yona_Prelude__Array_IntArray__get
-INSTANCE Array Seq
-  IMPL length yona_Prelude__Array_Seq__length
-  IMPL get yona_Prelude__Array_Seq__get
-INSTANCE Array String
-  IMPL length yona_Prelude__Array_String__length
-  IMPL get yona_Prelude__Array_String__get
-FN yona_Prelude__identity 1 INT -> INT
-FN yona_Prelude__Array_Seq__length 1 INT -> INT
-FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
-FN yona_Prelude__const 2 INT INT -> INT
-FN yona_Prelude__flip 3 FUNCTION INT INT -> INT borrow 100
-FN yona_Prelude__Hash_Int__hash 1 INT -> INT
-FN yona_Prelude__compose 3 FUNCTION FUNCTION INT -> INT borrow 100
-FN yona_Prelude__Show_String__show 1 STRING -> STRING
-FN yona_Prelude__Show_Int__show 1 INT -> STRING
-FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
-FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
-FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
-FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
-FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
-FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
-FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
-FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
-FN yona_Prelude__Hash_String__hash 1 STRING -> INT
-FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
-FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
-FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
-FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
-FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
-FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
-FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
-FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
-FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
-FN yona_Prelude__Array_IntArray__length 1 INT -> INT
-FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
-FN yona_Prelude__Array_String__length 1 STRING -> INT
-FN yona_Prelude__Array_String__get 2 STRING INT -> INT
-FN Closeable_Int__close 1 INT -> UNIT
-GENFN_BEGIN yona_Prelude__identity identity
-identity x = x
+  IMPL hash Hash_Symbol__hash
+INSTANCE Hash Tuple
+  PARAM left
+  PARAM right
+  CONSTRAINT Eq left
+  CONSTRAINT Eq right
+  CONSTRAINT Hash left
+  CONSTRAINT Hash right
+  IMPL hash Hash_Tuple__hash
+INSTANCE Hash Type
+  IMPL hash Hash_Type__hash
+INSTANCE Hash Whence
+  IMPL hash Hash_Whence__hash
+INSTANCE Iterable ByteArray Int
+  IMPL toIterator Iterable_ByteArray_Int__toIterator
+INSTANCE Iterable Dict Tuple
+  PARAM key
+  PARAM value
+  IMPL toIterator Iterable_Dict_Tuple__toIterator
+INSTANCE Iterable FloatArray Float
+  IMPL toIterator Iterable_FloatArray_Float__toIterator
+INSTANCE Iterable IntArray Int
+  IMPL toIterator Iterable_IntArray_Int__toIterator
+INSTANCE Iterable Iterator element
+  PARAM element
+  IMPL toIterator Iterable_Iterator_element__toIterator
+INSTANCE Iterable Option element
+  PARAM element
+  IMPL toIterator Iterable_Option_element__toIterator
+INSTANCE Iterable Result element
+  PARAM element
+  PARAM error
+  IMPL toIterator Iterable_Result_element__toIterator
+INSTANCE Iterable Seq element
+  PARAM element
+  IMPL toIterator Iterable_Seq_element__toIterator
+INSTANCE Iterable Set element
+  PARAM element
+  IMPL toIterator Iterable_Set_element__toIterator
+INSTANCE Iterable String Int
+  IMPL toIterator Iterable_String_Int__toIterator
+INSTANCE Monoid Dict
+  PARAM key
+  PARAM value
+  IMPL emptyLike Monoid_Dict__emptyLike
+INSTANCE Monoid Seq
+  PARAM element
+  IMPL emptyLike Monoid_Seq__emptyLike
+INSTANCE Monoid Set
+  PARAM element
+  IMPL emptyLike Monoid_Set__emptyLike
+INSTANCE Monoid String
+  IMPL emptyLike Monoid_String__emptyLike
+INSTANCE Ord Bool
+  IMPL compare Ord_Bool__compare
+INSTANCE Ord ConvertError
+  IMPL compare Ord_ConvertError__compare
+INSTANCE Ord Dict
+  PARAM key
+  PARAM value
+  CONSTRAINT Eq key
+  CONSTRAINT Eq value
+  CONSTRAINT Ord key
+  CONSTRAINT Ord value
+  IMPL compare Ord_Dict__compare
+INSTANCE Ord FileMode
+  IMPL compare Ord_FileMode__compare
+INSTANCE Ord Float
+  IMPL compare Ord_Float__compare
+INSTANCE Ord Int
+  IMPL compare Ord_Int__compare
+INSTANCE Ord Option
+  PARAM a
+  CONSTRAINT Ord a
+  IMPL compare Ord_Option__compare
+INSTANCE Ord Ordering
+  IMPL compare Ord_Ordering__compare
+INSTANCE Ord ParseError
+  IMPL compare Ord_ParseError__compare
+INSTANCE Ord Result
+  PARAM a
+  PARAM e
+  CONSTRAINT Ord a
+  CONSTRAINT Ord e
+  IMPL compare Ord_Result__compare
+INSTANCE Ord Seq
+  PARAM element
+  CONSTRAINT Eq element
+  CONSTRAINT Ord element
+  IMPL compare Ord_Seq__compare
+INSTANCE Ord Set
+  PARAM element
+  CONSTRAINT Eq element
+  CONSTRAINT Ord element
+  IMPL compare Ord_Set__compare
+INSTANCE Ord String
+  IMPL compare Ord_String__compare
+INSTANCE Ord Tuple
+  PARAM left
+  PARAM right
+  CONSTRAINT Eq left
+  CONSTRAINT Eq right
+  CONSTRAINT Ord left
+  CONSTRAINT Ord right
+  IMPL compare Ord_Tuple__compare
+INSTANCE Ord Type
+  IMPL compare Ord_Type__compare
+INSTANCE Ord Whence
+  IMPL compare Ord_Whence__compare
+INSTANCE Semigroup Dict
+  PARAM key
+  PARAM value
+  IMPL combine Semigroup_Dict__combine
+INSTANCE Semigroup Seq
+  PARAM element
+  IMPL combine Semigroup_Seq__combine
+INSTANCE Semigroup Set
+  PARAM element
+  IMPL combine Semigroup_Set__combine
+INSTANCE Semigroup String
+  IMPL combine Semigroup_String__combine
+INSTANCE Send Bool
+INSTANCE Send ByteArray
+INSTANCE Send ConvertError
+INSTANCE Send Dict
+  PARAM key
+  PARAM value
+  CONSTRAINT Send key
+  CONSTRAINT Send value
+INSTANCE Send FileMode
+INSTANCE Send Float
+INSTANCE Send FloatArray
+INSTANCE Send Int
+INSTANCE Send IntArray
+INSTANCE Send Option
+  PARAM a
+  CONSTRAINT Send a
+INSTANCE Send Ordering
+INSTANCE Send ParseError
+INSTANCE Send Result
+  PARAM a
+  PARAM e
+  CONSTRAINT Send a
+  CONSTRAINT Send e
+INSTANCE Send Seq
+  PARAM element
+  CONSTRAINT Send element
+INSTANCE Send Set
+  PARAM element
+  CONSTRAINT Send element
+INSTANCE Send String
+INSTANCE Send Symbol
+INSTANCE Send Tuple
+  PARAM left
+  PARAM right
+  CONSTRAINT Send left
+  CONSTRAINT Send right
+INSTANCE Send Type
+INSTANCE Send Unit
+INSTANCE Send Whence
+INSTANCE Shareable Bool
+INSTANCE Shareable ConvertError
+INSTANCE Shareable Dict
+  PARAM key
+  PARAM value
+  CONSTRAINT Shareable key
+  CONSTRAINT Shareable value
+INSTANCE Shareable FileMode
+INSTANCE Shareable Float
+INSTANCE Shareable Int
+INSTANCE Shareable Option
+  PARAM a
+  CONSTRAINT Shareable a
+INSTANCE Shareable Ordering
+INSTANCE Shareable ParseError
+INSTANCE Shareable Result
+  PARAM a
+  PARAM e
+  CONSTRAINT Shareable a
+  CONSTRAINT Shareable e
+INSTANCE Shareable Seq
+  PARAM element
+  CONSTRAINT Shareable element
+INSTANCE Shareable Set
+  PARAM element
+  CONSTRAINT Shareable element
+INSTANCE Shareable String
+INSTANCE Shareable Symbol
+INSTANCE Shareable Tuple
+  PARAM left
+  PARAM right
+  CONSTRAINT Shareable left
+  CONSTRAINT Shareable right
+INSTANCE Shareable Type
+INSTANCE Shareable Unit
+INSTANCE Shareable Whence
+INSTANCE Show Bool
+  IMPL show Show_Bool__show
+INSTANCE Show ConvertError
+  IMPL show Show_ConvertError__show
+INSTANCE Show Dict
+  PARAM key
+  PARAM value
+  CONSTRAINT Ord key
+  CONSTRAINT Ord value
+  CONSTRAINT Show key
+  CONSTRAINT Show value
+  IMPL show Show_Dict__show
+INSTANCE Show FileMode
+  IMPL show Show_FileMode__show
+INSTANCE Show Float
+  IMPL show Show_Float__show
+INSTANCE Show Int
+  IMPL show Show_Int__show
+INSTANCE Show Option
+  PARAM a
+  CONSTRAINT Show a
+  IMPL show Show_Option__show
+INSTANCE Show ParseError
+  IMPL show Show_ParseError__show
+INSTANCE Show Result
+  PARAM a
+  PARAM e
+  CONSTRAINT Show a
+  CONSTRAINT Show e
+  IMPL show Show_Result__show
+INSTANCE Show Seq
+  PARAM element
+  CONSTRAINT Show element
+  IMPL show Show_Seq__show
+INSTANCE Show Set
+  PARAM element
+  CONSTRAINT Ord element
+  CONSTRAINT Show element
+  IMPL show Show_Set__show
+INSTANCE Show String
+  IMPL show Show_String__show
+INSTANCE Show Symbol
+  IMPL show Show_Symbol__show
+INSTANCE Show Tuple
+  PARAM left
+  PARAM right
+  CONSTRAINT Show left
+  CONSTRAINT Show right
+  IMPL show Show_Tuple__show
+INSTANCE Show Type
+  IMPL show Show_Type__show
+INSTANCE Show Whence
+  IMPL show Show_Whence__show
+INSTANCE Sized ByteArray
+  IMPL size Sized_ByteArray__size
+INSTANCE Sized Dict
+  PARAM key
+  PARAM value
+  IMPL size Sized_Dict__size
+INSTANCE Sized FloatArray
+  IMPL size Sized_FloatArray__size
+INSTANCE Sized IntArray
+  IMPL size Sized_IntArray__size
+INSTANCE Sized Option
+  PARAM element
+  IMPL size Sized_Option__size
+INSTANCE Sized Result
+  PARAM element
+  PARAM error
+  IMPL size Sized_Result__size
+INSTANCE Sized Seq
+  PARAM element
+  IMPL size Sized_Seq__size
+INSTANCE Sized Set
+  PARAM element
+  IMPL size Sized_Set__size
+INSTANCE Sized String
+  IMPL size Sized_String__size
+FN Array_ByteArray_Int__get 2 BYTE_ARRAY INT -> INT borrow 10
+FN Array_ByteArray_Int__length 1 BYTE_ARRAY -> INT borrow 1
+FN Array_FloatArray_Float__get 2 FLOAT_ARRAY INT -> FLOAT borrow 10
+FN Array_FloatArray_Float__length 1 FLOAT_ARRAY -> INT borrow 1
+FN Array_IntArray_Int__get 2 INT_ARRAY INT -> INT borrow 10
+FN Array_IntArray_Int__length 1 INT_ARRAY -> INT borrow 1
+FN Array_Seq_element__get 2 Seq(VAR(element)) INT -> VAR(element) borrow 10
+FN Array_Seq_element__length 1 Seq(VAR(element)) -> INT borrow 1
+FN Array_String_Int__get 2 STRING INT -> INT borrow 10
+FN Array_String_Int__length 1 STRING -> INT borrow 1
+FN Eq_Bool__eq 2 BOOL BOOL -> BOOL borrow 11
+FN Eq_ConvertError__eq 2 ADT ADT -> BOOL borrow 11
+FN Eq_Dict__eq 2 Dict(VAR(key),VAR(value)) Dict(VAR(key),VAR(value)) -> BOOL borrow 11
+FN Eq_FileMode__eq 2 ADT ADT -> BOOL borrow 11
+FN Eq_Float__eq 2 FLOAT FLOAT -> BOOL borrow 11
+FN Eq_Int__eq 2 INT INT -> BOOL
+FN Eq_Option__eq 2 ADT ADT -> BOOL borrow 11
+FN Eq_Ordering__eq 2 ADT ADT -> BOOL borrow 11
+FN Eq_ParseError__eq 2 ADT ADT -> BOOL borrow 11
+FN Eq_Result__eq 2 ADT ADT -> BOOL borrow 11
+FN Eq_Seq__eq 2 Seq(VAR(element)) Seq(VAR(element)) -> BOOL borrow 11
+FN Eq_Set__eq 2 Set(VAR(element)) Set(VAR(element)) -> BOOL borrow 11
+FN Eq_String__eq 2 STRING STRING -> BOOL
+FN Eq_Symbol__eq 2 SYMBOL SYMBOL -> BOOL borrow 11
+FN Eq_Tuple__eq 2 TUPLE(VAR(left),VAR(right)) TUPLE(VAR(left),VAR(right)) -> BOOL borrow 11
+FN Eq_Type__eq 2 ADT ADT -> BOOL borrow 11
+FN Eq_Whence__eq 2 ADT ADT -> BOOL borrow 11
+FN Foldable_ByteArray_Int__foldLeft 3 BYTE_ARRAY FUNCTION(VAR(acc),FUNCTION(INT,VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_ByteArray_Int__foldRight 3 BYTE_ARRAY FUNCTION(INT,FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Dict_Tuple__foldLeft 3 Dict(VAR(key),VAR(value)) FUNCTION(VAR(acc),FUNCTION(TUPLE(VAR(key),VAR(value)),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Dict_Tuple__foldRight 3 Dict(VAR(key),VAR(value)) FUNCTION(TUPLE(VAR(key),VAR(value)),FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_FloatArray_Float__foldLeft 3 FLOAT_ARRAY FUNCTION(VAR(acc),FUNCTION(FLOAT,VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_FloatArray_Float__foldRight 3 FLOAT_ARRAY FUNCTION(FLOAT,FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_IntArray_Int__foldLeft 3 INT_ARRAY FUNCTION(VAR(acc),FUNCTION(INT,VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_IntArray_Int__foldRight 3 INT_ARRAY FUNCTION(INT,FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Option_element__foldLeft 3 ADT(Option,VAR(element)) FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Option_element__foldRight 3 ADT(Option,VAR(element)) FUNCTION(VAR(element),FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Result_element__foldLeft 3 ADT(Result,VAR(element),VAR(error)) FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Result_element__foldRight 3 ADT(Result,VAR(element),VAR(error)) FUNCTION(VAR(element),FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Seq_element__foldLeft 3 Seq(VAR(element)) FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Seq_element__foldRight 3 Seq(VAR(element)) FUNCTION(VAR(element),FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Set_element__foldLeft 3 Set(VAR(element)) FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_Set_element__foldRight 3 Set(VAR(element)) FUNCTION(VAR(element),FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_String_Int__foldLeft 3 STRING FUNCTION(VAR(acc),FUNCTION(INT,VAR(acc))) VAR(acc) -> VAR(acc)
+FN Foldable_String_Int__foldRight 3 STRING FUNCTION(INT,FUNCTION(VAR(acc),VAR(acc))) VAR(acc) -> VAR(acc)
+FN Hash_Bool__hash 1 BOOL -> INT borrow 1
+FN Hash_ConvertError__hash 1 ADT -> INT borrow 1
+FN Hash_Dict__hash 1 Dict(VAR(key),VAR(value)) -> INT borrow 1
+FN Hash_FileMode__hash 1 ADT -> INT borrow 1
+FN Hash_Float__hash 1 FLOAT -> INT borrow 1
+FN Hash_Int__hash 1 INT -> INT
+FN Hash_Option__hash 1 ADT -> INT borrow 1
+FN Hash_ParseError__hash 1 ADT -> INT borrow 1
+FN Hash_Result__hash 1 ADT -> INT borrow 1
+FN Hash_Seq__hash 1 Seq(VAR(element)) -> INT borrow 1
+FN Hash_Set__hash 1 Set(VAR(element)) -> INT borrow 1
+FN Hash_String__hash 1 STRING -> INT borrow 1
+FN Hash_Symbol__hash 1 SYMBOL -> INT borrow 1
+FN Hash_Tuple__hash 1 TUPLE(VAR(left),VAR(right)) -> INT borrow 1
+FN Hash_Type__hash 1 ADT -> INT borrow 1
+FN Hash_Whence__hash 1 ADT -> INT borrow 1
+FN Iterable_ByteArray_Int__toIterator 1 BYTE_ARRAY -> ADT(Iterator,INT)
+FN Iterable_Dict_Tuple__toIterator 1 Dict(VAR(key),VAR(value)) -> ADT(Iterator,TUPLE(VAR(key),VAR(value)))
+FN Iterable_FloatArray_Float__toIterator 1 FLOAT_ARRAY -> ADT(Iterator,FLOAT)
+FN Iterable_IntArray_Int__toIterator 1 INT_ARRAY -> ADT(Iterator,INT)
+FN Iterable_Iterator_element__toIterator 1 ADT(Iterator,VAR(element)) -> ADT(Iterator,VAR(element))
+FN Iterable_Option_element__toIterator 1 ADT(Option,VAR(element)) -> ADT(Iterator,VAR(element))
+FN Iterable_Result_element__toIterator 1 ADT(Result,VAR(element),VAR(error)) -> ADT(Iterator,VAR(element))
+FN Iterable_Seq_element__toIterator 1 Seq(VAR(element)) -> ADT(Iterator,VAR(element))
+FN Iterable_Set_element__toIterator 1 Set(VAR(element)) -> ADT(Iterator,VAR(element))
+FN Iterable_String_Int__toIterator 1 STRING -> ADT(Iterator,INT)
+FN Monoid_Dict__emptyLike 1 Dict(VAR(key),VAR(value)) -> Dict(VAR(key),VAR(value))
+FN Monoid_Seq__emptyLike 1 Seq(VAR(element)) -> Seq(VAR(element))
+FN Monoid_Set__emptyLike 1 Set(VAR(element)) -> Set(VAR(element))
+FN Monoid_String__emptyLike 1 STRING -> STRING
+FN Ord_Bool__compare 2 BOOL BOOL -> ADT(Ordering) borrow 11
+FN Ord_ConvertError__compare 2 ADT ADT -> ADT borrow 11
+FN Ord_Dict__compare 2 Dict(VAR(key),VAR(value)) Dict(VAR(key),VAR(value)) -> ADT(Ordering) borrow 11
+FN Ord_FileMode__compare 2 ADT ADT -> ADT borrow 11
+FN Ord_Float__compare 2 FLOAT FLOAT -> ADT(Ordering) borrow 11
+FN Ord_Int__compare 2 INT INT -> ADT(Ordering) retadt Ordering
+FN Ord_Option__compare 2 ADT ADT -> ADT borrow 11
+FN Ord_Ordering__compare 2 ADT ADT -> ADT borrow 11
+FN Ord_ParseError__compare 2 ADT ADT -> ADT borrow 11
+FN Ord_Result__compare 2 ADT ADT -> ADT borrow 11
+FN Ord_Seq__compare 2 Seq(VAR(element)) Seq(VAR(element)) -> ADT(Ordering) borrow 11
+FN Ord_Set__compare 2 Set(VAR(element)) Set(VAR(element)) -> ADT(Ordering) borrow 11
+FN Ord_String__compare 2 STRING STRING -> ADT(Ordering) borrow 11
+FN Ord_Tuple__compare 2 TUPLE(VAR(left),VAR(right)) TUPLE(VAR(left),VAR(right)) -> ADT(Ordering) borrow 11
+FN Ord_Type__compare 2 ADT ADT -> ADT borrow 11
+FN Ord_Whence__compare 2 ADT ADT -> ADT borrow 11
+FN Semigroup_Dict__combine 2 Dict(VAR(key),VAR(value)) Dict(VAR(key),VAR(value)) -> Dict(VAR(key),VAR(value))
+FN Semigroup_Seq__combine 2 Seq(VAR(element)) Seq(VAR(element)) -> Seq(VAR(element))
+FN Semigroup_Set__combine 2 Set(VAR(element)) Set(VAR(element)) -> Set(VAR(element))
+FN Semigroup_String__combine 2 STRING STRING -> STRING
+FN Show_Bool__show 1 BOOL -> STRING borrow 1
+FN Show_ConvertError__show 1 ADT -> STRING borrow 1
+FN Show_Dict__show 1 Dict(VAR(key),VAR(value)) -> STRING borrow 1
+FN Show_FileMode__show 1 ADT -> STRING borrow 1
+FN Show_Float__show 1 FLOAT -> STRING borrow 1
+FN Show_Int__show 1 INT -> STRING
+FN Show_Option__show 1 ADT -> STRING borrow 1
+FN Show_ParseError__show 1 ADT -> STRING borrow 1
+FN Show_Result__show 1 ADT -> STRING borrow 1
+FN Show_Seq__show 1 Seq(VAR(element)) -> STRING borrow 1
+FN Show_Set__show 1 Set(VAR(element)) -> STRING borrow 1
+FN Show_String__show 1 STRING -> STRING borrow 1
+FN Show_Symbol__show 1 SYMBOL -> STRING borrow 1
+FN Show_Tuple__show 1 TUPLE(VAR(left),VAR(right)) -> STRING borrow 1
+FN Show_Type__show 1 ADT -> STRING borrow 1
+FN Show_Whence__show 1 ADT -> STRING borrow 1
+FN Sized_ByteArray__size 1 BYTE_ARRAY -> INT
+FN Sized_Dict__size 1 Dict(VAR(key),VAR(value)) -> INT
+FN Sized_FloatArray__size 1 FLOAT_ARRAY -> INT
+FN Sized_IntArray__size 1 INT_ARRAY -> INT
+FN Sized_Option__size 1 ADT(Option,VAR(element)) -> INT
+FN Sized_Result__size 1 ADT(Result,VAR(element),VAR(error)) -> INT
+FN Sized_Seq__size 1 Seq(VAR(element)) -> INT
+FN Sized_Set__size 1 Set(VAR(element)) -> INT
+FN Sized_String__size 1 STRING -> INT
+FN yona_Prelude__compose 3 FUNCTION FUNCTION INT -> INT borrow 110 effects | hof
+FN yona_Prelude__const 2 INT INT -> INT borrow 01 effects -
+FN yona_Prelude__flip 3 FUNCTION INT INT -> INT borrow 100 effects | hof
+FN yona_Prelude__identity 1 INT -> INT effects -
+GENFN_DEP Array_ByteArray_Int__get primitiveGetByteArray FN yona_Prelude__Array_ByteArray__get 2 BYTE_ARRAY INT -> INT borrow 10
+GENFN_BEGIN Array_ByteArray_Int__get get
+get : ByteArray -> Int -> Int
+    get @borrow values index = primitiveGetByteArray values index
 GENFN_END
-GENFN_BEGIN yona_Prelude__flip flip
-flip f a b = f b a
+GENFN_DEP Array_ByteArray_Int__length primitiveSizeByteArray FN yona_Prelude__Array_ByteArray__length 1 BYTE_ARRAY -> INT borrow 1
+GENFN_BEGIN Array_ByteArray_Int__length length
+length : ByteArray -> Int
+    length @borrow values = primitiveSizeByteArray values
+GENFN_END
+GENFN_DEP Array_FloatArray_Float__get primitiveGetFloatArray FN yona_Prelude__Array_FloatArray__get 2 FLOAT_ARRAY INT -> FLOAT borrow 10
+GENFN_BEGIN Array_FloatArray_Float__get get
+get : FloatArray -> Int -> Float
+    get @borrow values index = primitiveGetFloatArray values index
+GENFN_END
+GENFN_DEP Array_FloatArray_Float__length primitiveSizeFloatArray FN yona_Prelude__Array_FloatArray__length 1 FLOAT_ARRAY -> INT borrow 1
+GENFN_BEGIN Array_FloatArray_Float__length length
+length : FloatArray -> Int
+    length @borrow values = primitiveSizeFloatArray values
+GENFN_END
+GENFN_DEP Array_IntArray_Int__get primitiveGetIntArray FN yona_Prelude__Array_IntArray__get 2 INT_ARRAY INT -> INT borrow 10
+GENFN_BEGIN Array_IntArray_Int__get get
+get : IntArray -> Int -> Int
+    get @borrow values index = primitiveGetIntArray values index
+GENFN_END
+GENFN_DEP Array_IntArray_Int__length primitiveSizeIntArray FN yona_Prelude__Array_IntArray__length 1 INT_ARRAY -> INT borrow 1
+GENFN_BEGIN Array_IntArray_Int__length length
+length : IntArray -> Int
+    length @borrow values = primitiveSizeIntArray values
+GENFN_END
+GENFN_DEP Array_Seq_element__get primitiveGetSeq FN yona_Prelude__Array_Seq__get 2 Seq(VAR(element)) INT -> VAR(element) borrow 10
+GENFN_BEGIN Array_Seq_element__get get
+get : Seq element -> Int -> element
+    get @borrow values index = primitiveGetSeq values index
+GENFN_END
+GENFN_DEP Array_Seq_element__length primitiveSizeSeq FN yona_Prelude__Array_Seq__length 1 Seq(VAR(a)) -> INT borrow 1
+GENFN_BEGIN Array_Seq_element__length length
+length : Seq element -> Int
+    length @borrow values = primitiveSizeSeq values
+GENFN_END
+GENFN_DEP Array_String_Int__get primitiveGetString FN yona_Prelude__Array_String__get 2 STRING INT -> INT borrow 10
+GENFN_BEGIN Array_String_Int__get get
+get : String -> Int -> Int
+    get @borrow value index = primitiveGetString value index
+GENFN_END
+GENFN_DEP Array_String_Int__length primitiveSizeString FN yona_Prelude__Array_String__length 1 STRING -> INT borrow 1
+GENFN_BEGIN Array_String_Int__length length
+length : String -> Int
+    length @borrow value = primitiveSizeString value
+GENFN_END
+GENFN_DEP Eq_Bool__eq primitiveEqBool FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
+GENFN_BEGIN Eq_Bool__eq eq
+eq : Bool -> Bool -> Bool
+    eq left right = primitiveEqBool left right
+GENFN_END
+GENFN_CTOR Eq_ConvertError__eq ConversionOutOfRange ConvertError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Eq_ConvertError__eq InvalidConversion ConvertError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_BEGIN Eq_ConvertError__eq eq
+eq @borrow _a @borrow _b = case _a of
+    InvalidConversion _x0 -> case _b of
+        InvalidConversion _y0 -> eq _x0 _y0
+        _ -> false
+    end
+    ConversionOutOfRange _x0 -> case _b of
+        ConversionOutOfRange _y0 -> eq _x0 _y0
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_DEP Eq_Dict__eq primitiveSizeSeq FN yona_Prelude__Array_Seq__length 1 Seq(VAR(a)) -> INT borrow 1
+GENFN_CTOR Eq_Dict__eq Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Eq_Dict__eq eq
+eq : Dict key value -> Dict key value -> Bool
+    eq left right =
+        import entries, size as dictSize from Std\Dict,
+               toSeq from Std\Iterator in
+        let leftEntries = toSeq (entries left),
+            rightEntries = toSeq (entries right)
+        in dictSize left == dictSize right &&
+           dictEntriesAllPresentAt (\first second -> eq first second) (\first second -> eq first second) leftEntries rightEntries 0 (primitiveSizeSeq leftEntries) (primitiveSizeSeq rightEntries)
+GENFN_END
+GENFN_CTOR Eq_FileMode__eq Append FileMode 3 0 4 0
+GENFN_CTOR Eq_FileMode__eq Read FileMode 0 0 4 0
+GENFN_CTOR Eq_FileMode__eq ReadWrite FileMode 2 0 4 0
+GENFN_CTOR Eq_FileMode__eq Write FileMode 1 0 4 0
+GENFN_BEGIN Eq_FileMode__eq eq
+eq @borrow _a @borrow _b = case _a of
+    Read -> case _b of
+        Read -> true
+        _ -> false
+    end
+    Write -> case _b of
+        Write -> true
+        _ -> false
+    end
+    ReadWrite -> case _b of
+        ReadWrite -> true
+        _ -> false
+    end
+    Append -> case _b of
+        Append -> true
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_DEP Eq_Float__eq primitiveEqFloat FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
+GENFN_BEGIN Eq_Float__eq eq
+eq : Float -> Float -> Bool
+    eq left right = primitiveEqFloat left right
+GENFN_END
+GENFN_DEP Eq_Int__eq primitiveEqInt FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
+GENFN_BEGIN Eq_Int__eq eq
+eq : Int -> Int -> Bool
+    eq left right = primitiveEqInt left right
+GENFN_END
+GENFN_CTOR Eq_Option__eq None Option 1 0 2 1
+GENFN_CTOR Eq_Option__eq Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Eq_Option__eq eq
+eq @borrow _a @borrow _b = case _a of
+    Some _x0 -> case _b of
+        Some _y0 -> eq _x0 _y0
+        _ -> false
+    end
+    None -> case _b of
+        None -> true
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_CTOR Eq_Ordering__eq Equal Ordering 1 0 3 0
+GENFN_CTOR Eq_Ordering__eq Greater Ordering 2 0 3 0
+GENFN_CTOR Eq_Ordering__eq Less Ordering 0 0 3 0
+GENFN_BEGIN Eq_Ordering__eq eq
+eq @borrow _a @borrow _b = case _a of
+    Less -> case _b of
+        Less -> true
+        _ -> false
+    end
+    Equal -> case _b of
+        Equal -> true
+        _ -> false
+    end
+    Greater -> case _b of
+        Greater -> true
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_CTOR Eq_ParseError__eq InvalidSyntax ParseError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Eq_ParseError__eq ParsedValueOutOfRange ParseError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_BEGIN Eq_ParseError__eq eq
+eq @borrow _a @borrow _b = case _a of
+    InvalidSyntax _x0 -> case _b of
+        InvalidSyntax _y0 -> eq _x0 _y0
+        _ -> false
+    end
+    ParsedValueOutOfRange _x0 -> case _b of
+        ParsedValueOutOfRange _y0 -> eq _x0 _y0
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_CTOR Eq_Result__eq Err Result 1 1 2 1 field:INT shape:INT contract:N(e)
+GENFN_CTOR Eq_Result__eq Ok Result 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Eq_Result__eq eq
+eq @borrow _a @borrow _b = case _a of
+    Ok _x0 -> case _b of
+        Ok _y0 -> eq _x0 _y0
+        _ -> false
+    end
+    Err _x0 -> case _b of
+        Err _y0 -> eq _x0 _y0
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_BEGIN Eq_Seq__eq eq
+eq : Seq element -> Seq element -> Bool
+    eq @borrow left @borrow right =
+        seqEqBy (\leftValue rightValue -> leftValue == rightValue) left right
+GENFN_END
+GENFN_DEP Eq_Set__eq primitiveSizeSeq FN yona_Prelude__Array_Seq__length 1 Seq(VAR(a)) -> INT borrow 1
+GENFN_BEGIN Eq_Set__eq eq
+eq : Set element -> Set element -> Bool
+    eq left right =
+        import elements, size as setSize from Std\Set in
+        let leftValues = elements left,
+            rightValues = elements right
+        in setSize left == setSize right &&
+           seqAllPresentAt (\first second -> eq first second) leftValues rightValues 0 (primitiveSizeSeq leftValues) (primitiveSizeSeq rightValues)
+GENFN_END
+GENFN_DEP Eq_String__eq primitiveEqString FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
+GENFN_BEGIN Eq_String__eq eq
+eq : String -> String -> Bool
+    eq left right = primitiveEqString left right
+GENFN_END
+GENFN_DEP Eq_Symbol__eq primitiveEqSymbol FN yona_Prelude__Eq_Symbol__eq 2 SYMBOL SYMBOL -> BOOL
+GENFN_BEGIN Eq_Symbol__eq eq
+eq : Symbol -> Symbol -> Bool
+    eq left right = primitiveEqSymbol left right
+GENFN_END
+GENFN_BEGIN Eq_Tuple__eq eq
+eq : (left, right) -> (left, right) -> Bool
+    eq (leftFirst, leftSecond) (rightFirst, rightSecond) =
+        eq leftFirst rightFirst && eq leftSecond rightSecond
+GENFN_END
+GENFN_CTOR Eq_Type__eq TAdt Type 15 1 18 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Eq_Type__eq TBool Type 2 0 18 1
+GENFN_CTOR Eq_Type__eq TByteArray Type 12 0 18 1
+GENFN_CTOR Eq_Type__eq TDict Type 8 0 18 1
+GENFN_CTOR Eq_Type__eq TFloat Type 1 0 18 1
+GENFN_CTOR Eq_Type__eq TFloatArray Type 14 0 18 1
+GENFN_CTOR Eq_Type__eq TFunction Type 10 0 18 1
+GENFN_CTOR Eq_Type__eq TInt Type 0 0 18 1
+GENFN_CTOR Eq_Type__eq TIntArray Type 13 0 18 1
+GENFN_CTOR Eq_Type__eq TPromise Type 11 0 18 1
+GENFN_CTOR Eq_Type__eq TRecord Type 17 0 18 1
+GENFN_CTOR Eq_Type__eq TSeq Type 6 0 18 1
+GENFN_CTOR Eq_Type__eq TSet Type 7 0 18 1
+GENFN_CTOR Eq_Type__eq TString Type 3 0 18 1
+GENFN_CTOR Eq_Type__eq TSum Type 16 0 18 1
+GENFN_CTOR Eq_Type__eq TSymbol Type 4 0 18 1
+GENFN_CTOR Eq_Type__eq TTuple Type 9 0 18 1
+GENFN_CTOR Eq_Type__eq TUnit Type 5 0 18 1
+GENFN_BEGIN Eq_Type__eq eq
+eq @borrow _a @borrow _b = case _a of
+    TInt -> case _b of
+        TInt -> true
+        _ -> false
+    end
+    TFloat -> case _b of
+        TFloat -> true
+        _ -> false
+    end
+    TBool -> case _b of
+        TBool -> true
+        _ -> false
+    end
+    TString -> case _b of
+        TString -> true
+        _ -> false
+    end
+    TSymbol -> case _b of
+        TSymbol -> true
+        _ -> false
+    end
+    TUnit -> case _b of
+        TUnit -> true
+        _ -> false
+    end
+    TSeq -> case _b of
+        TSeq -> true
+        _ -> false
+    end
+    TSet -> case _b of
+        TSet -> true
+        _ -> false
+    end
+    TDict -> case _b of
+        TDict -> true
+        _ -> false
+    end
+    TTuple -> case _b of
+        TTuple -> true
+        _ -> false
+    end
+    TFunction -> case _b of
+        TFunction -> true
+        _ -> false
+    end
+    TPromise -> case _b of
+        TPromise -> true
+        _ -> false
+    end
+    TByteArray -> case _b of
+        TByteArray -> true
+        _ -> false
+    end
+    TIntArray -> case _b of
+        TIntArray -> true
+        _ -> false
+    end
+    TFloatArray -> case _b of
+        TFloatArray -> true
+        _ -> false
+    end
+    TAdt _x0 -> case _b of
+        TAdt _y0 -> eq _x0 _y0
+        _ -> false
+    end
+    TSum -> case _b of
+        TSum -> true
+        _ -> false
+    end
+    TRecord -> case _b of
+        TRecord -> true
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_CTOR Eq_Whence__eq SeekCur Whence 1 0 3 0
+GENFN_CTOR Eq_Whence__eq SeekEnd Whence 2 0 3 0
+GENFN_CTOR Eq_Whence__eq SeekSet Whence 0 0 3 0
+GENFN_BEGIN Eq_Whence__eq eq
+eq @borrow _a @borrow _b = case _a of
+    SeekSet -> case _b of
+        SeekSet -> true
+        _ -> false
+    end
+    SeekCur -> case _b of
+        SeekCur -> true
+        _ -> false
+    end
+    SeekEnd -> case _b of
+        SeekEnd -> true
+        _ -> false
+    end
+end
+GENFN_END
+GENFN_CTOR Foldable_ByteArray_Int__foldLeft Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Foldable_ByteArray_Int__foldLeft foldLeft
+foldLeft : ByteArray -> (acc -> Int -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import fromByteArray, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (fromByteArray values) folder accumulator
+GENFN_END
+GENFN_DEP Foldable_ByteArray_Int__foldRight primitiveSizeByteArray FN yona_Prelude__Array_ByteArray__length 1 BYTE_ARRAY -> INT borrow 1
+GENFN_DEP Foldable_ByteArray_Int__foldRight primitiveGetByteArray FN yona_Prelude__Array_ByteArray__get 2 BYTE_ARRAY INT -> INT borrow 10
+GENFN_BEGIN Foldable_ByteArray_Int__foldRight foldRight
+foldRight : ByteArray -> (Int -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetByteArray values index) result)
+        in loop (primitiveSizeByteArray values - 1) accumulator
+GENFN_END
+GENFN_CTOR Foldable_Dict_Tuple__foldLeft Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Foldable_Dict_Tuple__foldLeft foldLeft
+foldLeft : Dict key value -> (acc -> (key, value) -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import entries from Std\Dict, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (entries values) folder accumulator
+GENFN_END
+GENFN_CTOR Foldable_Dict_Tuple__foldRight Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Foldable_Dict_Tuple__foldRight foldRight
+foldRight : Dict key value -> ((key, value) -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        import entries from Std\Dict, toSeq from Std\Iterator in
+        let loop rest result = case rest of
+                [head|tail] -> folder head (loop tail result)
+                [] -> result
+            end
+        in loop (toSeq (entries values)) accumulator
+GENFN_END
+GENFN_CTOR Foldable_FloatArray_Float__foldLeft Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Foldable_FloatArray_Float__foldLeft foldLeft
+foldLeft : FloatArray -> (acc -> Float -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import fromFloatArray, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (fromFloatArray values) folder accumulator
+GENFN_END
+GENFN_DEP Foldable_FloatArray_Float__foldRight primitiveGetFloatArray FN yona_Prelude__Array_FloatArray__get 2 FLOAT_ARRAY INT -> FLOAT borrow 10
+GENFN_DEP Foldable_FloatArray_Float__foldRight primitiveSizeFloatArray FN yona_Prelude__Array_FloatArray__length 1 FLOAT_ARRAY -> INT borrow 1
+GENFN_BEGIN Foldable_FloatArray_Float__foldRight foldRight
+foldRight : FloatArray -> (Float -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetFloatArray values index) result)
+        in loop (primitiveSizeFloatArray values - 1) accumulator
+GENFN_END
+GENFN_CTOR Foldable_IntArray_Int__foldLeft Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Foldable_IntArray_Int__foldLeft foldLeft
+foldLeft : IntArray -> (acc -> Int -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import fromIntArray, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (fromIntArray values) folder accumulator
+GENFN_END
+GENFN_DEP Foldable_IntArray_Int__foldRight primitiveGetIntArray FN yona_Prelude__Array_IntArray__get 2 INT_ARRAY INT -> INT borrow 10
+GENFN_DEP Foldable_IntArray_Int__foldRight primitiveSizeIntArray FN yona_Prelude__Array_IntArray__length 1 INT_ARRAY -> INT borrow 1
+GENFN_BEGIN Foldable_IntArray_Int__foldRight foldRight
+foldRight : IntArray -> (Int -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetIntArray values index) result)
+        in loop (primitiveSizeIntArray values - 1) accumulator
+GENFN_END
+GENFN_CTOR Foldable_Option_element__foldLeft None Option 1 0 2 1
+GENFN_CTOR Foldable_Option_element__foldLeft Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Foldable_Option_element__foldLeft foldLeft
+foldLeft : Option element -> (acc -> element -> acc) -> acc -> acc
+    foldLeft value folder accumulator = case value of
+        Some element -> folder accumulator element
+        None -> accumulator
+    end
+GENFN_END
+GENFN_CTOR Foldable_Option_element__foldRight None Option 1 0 2 1
+GENFN_CTOR Foldable_Option_element__foldRight Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Foldable_Option_element__foldRight foldRight
+foldRight : Option element -> (element -> acc -> acc) -> acc -> acc
+    foldRight value folder accumulator = case value of
+        Some element -> folder element accumulator
+        None -> accumulator
+    end
+GENFN_END
+GENFN_CTOR Foldable_Result_element__foldLeft Err Result 1 1 2 1 field:INT shape:INT contract:N(e)
+GENFN_CTOR Foldable_Result_element__foldLeft Ok Result 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Foldable_Result_element__foldLeft foldLeft
+foldLeft : Result element error -> (acc -> element -> acc) -> acc -> acc
+    foldLeft value folder accumulator = case value of
+        Ok element -> folder accumulator element
+        Err _ -> accumulator
+    end
+GENFN_END
+GENFN_CTOR Foldable_Result_element__foldRight Err Result 1 1 2 1 field:INT shape:INT contract:N(e)
+GENFN_CTOR Foldable_Result_element__foldRight Ok Result 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Foldable_Result_element__foldRight foldRight
+foldRight : Result element error -> (element -> acc -> acc) -> acc -> acc
+    foldRight value folder accumulator = case value of
+        Ok element -> folder element accumulator
+        Err _ -> accumulator
+    end
+GENFN_END
+GENFN_BEGIN Foldable_Seq_element__foldLeft foldLeft
+foldLeft : Seq element -> (acc -> element -> acc) -> acc -> acc
+    foldLeft values folder accumulator = foldSeqLeft folder accumulator values
+GENFN_END
+GENFN_BEGIN Foldable_Seq_element__foldRight foldRight
+foldRight : Seq element -> (element -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator = foldSeqRight folder accumulator values
+GENFN_END
+GENFN_CTOR Foldable_Set_element__foldLeft Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Foldable_Set_element__foldLeft foldLeft
+foldLeft : Set element -> (acc -> element -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import iterator from Std\Set, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (iterator values) folder accumulator
+GENFN_END
+GENFN_BEGIN Foldable_Set_element__foldRight foldRight
+foldRight : Set element -> (element -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        import elements from Std\Set in
+        let loop rest result = case rest of
+                [head|tail] -> folder head (loop tail result)
+                [] -> result
+            end
+        in loop (elements values) accumulator
+GENFN_END
+GENFN_CTOR Foldable_String_Int__foldLeft Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Foldable_String_Int__foldLeft foldLeft
+foldLeft : String -> (acc -> Int -> acc) -> acc -> acc
+    foldLeft value folder accumulator =
+        import chars from Std\String, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (chars value) folder accumulator
+GENFN_END
+GENFN_DEP Foldable_String_Int__foldRight primitiveGetString FN yona_Prelude__Array_String__get 2 STRING INT -> INT borrow 10
+GENFN_DEP Foldable_String_Int__foldRight primitiveSizeString FN yona_Prelude__Array_String__length 1 STRING -> INT borrow 1
+GENFN_BEGIN Foldable_String_Int__foldRight foldRight
+foldRight : String -> (Int -> acc -> acc) -> acc -> acc
+    foldRight value folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetString value index) result)
+        in loop (primitiveSizeString value - 1) accumulator
+GENFN_END
+GENFN_DEP Hash_Bool__hash primitiveHashBool FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
+GENFN_BEGIN Hash_Bool__hash hash
+hash : Bool -> Int
+    hash value = primitiveHashBool value
+GENFN_END
+GENFN_CTOR Hash_ConvertError__hash ConversionOutOfRange ConvertError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Hash_ConvertError__hash InvalidConversion ConvertError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_BEGIN Hash_ConvertError__hash hash
+hash @borrow x = case x of
+    InvalidConversion _f0 -> (0 * 31 + hash _f0)
+    ConversionOutOfRange _f0 -> (1 * 31 + hash _f0)
+end
+GENFN_END
+GENFN_CTOR Hash_Dict__hash Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Hash_Dict__hash hash
+hash : Dict key value -> Int
+    hash dictionary =
+        import entries from Std\Dict, toSeq from Std\Iterator in
+        let loop total rest = case rest of
+                [(key, value)|tail] -> loop (total + hash key * 31 + hash value) tail
+                [] -> total
+            end
+        in loop 0 (toSeq (entries dictionary))
+GENFN_END
+GENFN_CTOR Hash_FileMode__hash Append FileMode 3 0 4 0
+GENFN_CTOR Hash_FileMode__hash Read FileMode 0 0 4 0
+GENFN_CTOR Hash_FileMode__hash ReadWrite FileMode 2 0 4 0
+GENFN_CTOR Hash_FileMode__hash Write FileMode 1 0 4 0
+GENFN_BEGIN Hash_FileMode__hash hash
+hash @borrow x = case x of
+    Read -> 0
+    Write -> 1
+    ReadWrite -> 2
+    Append -> 3
+end
+GENFN_END
+GENFN_DEP Hash_Float__hash primitiveHashFloat FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
+GENFN_BEGIN Hash_Float__hash hash
+hash : Float -> Int
+    hash value = primitiveHashFloat value
+GENFN_END
+GENFN_DEP Hash_Int__hash primitiveHashInt FN yona_Prelude__Hash_Int__hash 1 INT -> INT
+GENFN_BEGIN Hash_Int__hash hash
+hash : Int -> Int
+    hash value = primitiveHashInt value
+GENFN_END
+GENFN_CTOR Hash_Option__hash None Option 1 0 2 1
+GENFN_CTOR Hash_Option__hash Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Hash_Option__hash hash
+hash @borrow x = case x of
+    Some _f0 -> (0 * 31 + hash _f0)
+    None -> 1
+end
+GENFN_END
+GENFN_CTOR Hash_ParseError__hash InvalidSyntax ParseError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Hash_ParseError__hash ParsedValueOutOfRange ParseError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_BEGIN Hash_ParseError__hash hash
+hash @borrow x = case x of
+    InvalidSyntax _f0 -> (0 * 31 + hash _f0)
+    ParsedValueOutOfRange _f0 -> (1 * 31 + hash _f0)
+end
+GENFN_END
+GENFN_CTOR Hash_Result__hash Err Result 1 1 2 1 field:INT shape:INT contract:N(e)
+GENFN_CTOR Hash_Result__hash Ok Result 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Hash_Result__hash hash
+hash @borrow x = case x of
+    Ok _f0 -> (0 * 31 + hash _f0)
+    Err _f0 -> (1 * 31 + hash _f0)
+end
+GENFN_END
+GENFN_BEGIN Hash_Seq__hash hash
+hash : Seq element -> Int
+    hash values =
+        let loop accumulator rest = case rest of
+            [head|tail] -> loop (accumulator * 31 + hash head) tail
+            [] -> accumulator
+        end
+        in loop 1 values
+GENFN_END
+GENFN_BEGIN Hash_Set__hash hash
+hash : Set element -> Int
+    hash values =
+        import elements from Std\Set in
+        let loop total rest = case rest of
+                [head|tail] -> loop (total + hash head) tail
+                [] -> total
+            end
+        in loop 0 (elements values)
+GENFN_END
+GENFN_DEP Hash_String__hash primitiveHashString FN yona_Prelude__Hash_String__hash 1 STRING -> INT
+GENFN_BEGIN Hash_String__hash hash
+hash : String -> Int
+    hash value = primitiveHashString value
+GENFN_END
+GENFN_DEP Hash_Symbol__hash primitiveHashSymbol FN yona_Prelude__Hash_Symbol__hash 1 SYMBOL -> INT
+GENFN_BEGIN Hash_Symbol__hash hash
+hash : Symbol -> Int
+    hash value = primitiveHashSymbol value
+GENFN_END
+GENFN_BEGIN Hash_Tuple__hash hash
+hash : (left, right) -> Int
+    hash (first, second) = hash first * 31 + hash second
+GENFN_END
+GENFN_CTOR Hash_Type__hash TAdt Type 15 1 18 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Hash_Type__hash TBool Type 2 0 18 1
+GENFN_CTOR Hash_Type__hash TByteArray Type 12 0 18 1
+GENFN_CTOR Hash_Type__hash TDict Type 8 0 18 1
+GENFN_CTOR Hash_Type__hash TFloat Type 1 0 18 1
+GENFN_CTOR Hash_Type__hash TFloatArray Type 14 0 18 1
+GENFN_CTOR Hash_Type__hash TFunction Type 10 0 18 1
+GENFN_CTOR Hash_Type__hash TInt Type 0 0 18 1
+GENFN_CTOR Hash_Type__hash TIntArray Type 13 0 18 1
+GENFN_CTOR Hash_Type__hash TPromise Type 11 0 18 1
+GENFN_CTOR Hash_Type__hash TRecord Type 17 0 18 1
+GENFN_CTOR Hash_Type__hash TSeq Type 6 0 18 1
+GENFN_CTOR Hash_Type__hash TSet Type 7 0 18 1
+GENFN_CTOR Hash_Type__hash TString Type 3 0 18 1
+GENFN_CTOR Hash_Type__hash TSum Type 16 0 18 1
+GENFN_CTOR Hash_Type__hash TSymbol Type 4 0 18 1
+GENFN_CTOR Hash_Type__hash TTuple Type 9 0 18 1
+GENFN_CTOR Hash_Type__hash TUnit Type 5 0 18 1
+GENFN_BEGIN Hash_Type__hash hash
+hash @borrow x = case x of
+    TInt -> 0
+    TFloat -> 1
+    TBool -> 2
+    TString -> 3
+    TSymbol -> 4
+    TUnit -> 5
+    TSeq -> 6
+    TSet -> 7
+    TDict -> 8
+    TTuple -> 9
+    TFunction -> 10
+    TPromise -> 11
+    TByteArray -> 12
+    TIntArray -> 13
+    TFloatArray -> 14
+    TAdt _f0 -> (15 * 31 + hash _f0)
+    TSum -> 16
+    TRecord -> 17
+end
+GENFN_END
+GENFN_CTOR Hash_Whence__hash SeekCur Whence 1 0 3 0
+GENFN_CTOR Hash_Whence__hash SeekEnd Whence 2 0 3 0
+GENFN_CTOR Hash_Whence__hash SeekSet Whence 0 0 3 0
+GENFN_BEGIN Hash_Whence__hash hash
+hash @borrow x = case x of
+    SeekSet -> 0
+    SeekCur -> 1
+    SeekEnd -> 2
+end
+GENFN_END
+GENFN_CTOR Iterable_ByteArray_Int__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_ByteArray_Int__toIterator toIterator
+toIterator : ByteArray -> Iterator Int
+    toIterator values = import fromByteArray from Std\Iterator in fromByteArray values
+GENFN_END
+GENFN_CTOR Iterable_Dict_Tuple__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_Dict_Tuple__toIterator toIterator
+toIterator : Dict key value -> Iterator (key, value)
+    toIterator values = import entries from Std\Dict in entries values
+GENFN_END
+GENFN_CTOR Iterable_FloatArray_Float__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_FloatArray_Float__toIterator toIterator
+toIterator : FloatArray -> Iterator Float
+    toIterator values = import fromFloatArray from Std\Iterator in fromFloatArray values
+GENFN_END
+GENFN_CTOR Iterable_IntArray_Int__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_IntArray_Int__toIterator toIterator
+toIterator : IntArray -> Iterator Int
+    toIterator values = import fromIntArray from Std\Iterator in fromIntArray values
+GENFN_END
+GENFN_CTOR Iterable_Iterator_element__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_Iterator_element__toIterator toIterator
+toIterator : Iterator element -> Iterator element
+    toIterator value = value
+GENFN_END
+GENFN_CTOR Iterable_Option_element__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_CTOR Iterable_Option_element__toIterator None Option 1 0 2 1
+GENFN_CTOR Iterable_Option_element__toIterator Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Iterable_Option_element__toIterator toIterator
+toIterator : Option element -> Iterator element
+    toIterator value = import fromSeq from Std\Iterator in
+        fromSeq (case value of Some element -> [element]; None -> [] end)
+GENFN_END
+GENFN_CTOR Iterable_Result_element__toIterator Err Result 1 1 2 1 field:INT shape:INT contract:N(e)
+GENFN_CTOR Iterable_Result_element__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_CTOR Iterable_Result_element__toIterator Ok Result 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Iterable_Result_element__toIterator toIterator
+toIterator : Result element error -> Iterator element
+    toIterator value = import fromSeq from Std\Iterator in
+        fromSeq (case value of Ok element -> [element]; Err _ -> [] end)
+GENFN_END
+GENFN_CTOR Iterable_Seq_element__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_Seq_element__toIterator toIterator
+toIterator : Seq element -> Iterator element
+    toIterator values = import fromSeq from Std\Iterator in fromSeq values
+GENFN_END
+GENFN_CTOR Iterable_Set_element__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_Set_element__toIterator toIterator
+toIterator : Set element -> Iterator element
+    toIterator values = import iterator from Std\Set in iterator values
+GENFN_END
+GENFN_CTOR Iterable_String_Int__toIterator Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Iterable_String_Int__toIterator toIterator
+toIterator : String -> Iterator Int
+    toIterator value = import chars from Std\String in chars value
+GENFN_END
+GENFN_BEGIN Monoid_Dict__emptyLike emptyLike
+emptyLike : Dict key value -> Dict key value
+    emptyLike _ = {}
+GENFN_END
+GENFN_BEGIN Monoid_Seq__emptyLike emptyLike
+emptyLike : Seq element -> Seq element
+    emptyLike _ = []
+GENFN_END
+GENFN_BEGIN Monoid_Set__emptyLike emptyLike
+emptyLike : Set element -> Set element
+    emptyLike _ = {}
+GENFN_END
+GENFN_BEGIN Monoid_String__emptyLike emptyLike
+emptyLike : String -> String
+    emptyLike _ = ""
+GENFN_END
+GENFN_DEP Ord_Bool__compare primitiveCompareBool FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
+GENFN_BEGIN Ord_Bool__compare compare
+compare : Bool -> Bool -> Ordering
+    compare left right = ordering (primitiveCompareBool left right)
+GENFN_END
+GENFN_CTOR Ord_ConvertError__compare ConversionOutOfRange ConvertError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Ord_ConvertError__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_ConvertError__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_ConvertError__compare InvalidConversion ConvertError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Ord_ConvertError__compare Less Ordering 0 0 3 0
+GENFN_BEGIN Ord_ConvertError__compare compare
+compare @borrow _a @borrow _b = case _a of
+    InvalidConversion _x0 -> case _b of
+        InvalidConversion _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+        ConversionOutOfRange _ignored0 -> Less
+    end
+    ConversionOutOfRange _x0 -> case _b of
+        InvalidConversion _ignored0 -> Greater
+        ConversionOutOfRange _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+    end
+end
+GENFN_END
+GENFN_CTOR Ord_Dict__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Dict__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Dict__compare Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_CTOR Ord_Dict__compare Less Ordering 0 0 3 0
+GENFN_BEGIN Ord_Dict__compare compare
+compare : Dict key value -> Dict key value -> Ordering
+    compare left right =
+        import entries from Std\Dict, toSeq from Std\Iterator,
+               sortBy from Std\List in
+        let compareEntry first second = case first of
+                (firstKey, _) -> case second of
+                    (secondKey, _) -> case compare firstKey secondKey of
+                        Less -> -1
+                        Equal -> 0
+                        Greater -> 1
+                    end
+                end
+            end,
+            sortedLeft = sortBy compareEntry (toSeq (entries left)),
+            sortedRight = sortBy compareEntry (toSeq (entries right))
+        in compare sortedLeft sortedRight
+GENFN_END
+GENFN_CTOR Ord_FileMode__compare Append FileMode 3 0 4 0
+GENFN_CTOR Ord_FileMode__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_FileMode__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_FileMode__compare Less Ordering 0 0 3 0
+GENFN_CTOR Ord_FileMode__compare Read FileMode 0 0 4 0
+GENFN_CTOR Ord_FileMode__compare ReadWrite FileMode 2 0 4 0
+GENFN_CTOR Ord_FileMode__compare Write FileMode 1 0 4 0
+GENFN_BEGIN Ord_FileMode__compare compare
+compare @borrow _a @borrow _b = case _a of
+    Read -> case _b of
+        Read -> Equal
+        Write -> Less
+        ReadWrite -> Less
+        Append -> Less
+    end
+    Write -> case _b of
+        Read -> Greater
+        Write -> Equal
+        ReadWrite -> Less
+        Append -> Less
+    end
+    ReadWrite -> case _b of
+        Read -> Greater
+        Write -> Greater
+        ReadWrite -> Equal
+        Append -> Less
+    end
+    Append -> case _b of
+        Read -> Greater
+        Write -> Greater
+        ReadWrite -> Greater
+        Append -> Equal
+    end
+end
+GENFN_END
+GENFN_DEP Ord_Float__compare primitiveCompareFloat FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
+GENFN_BEGIN Ord_Float__compare compare
+compare : Float -> Float -> Ordering
+    compare left right = ordering (primitiveCompareFloat left right)
+GENFN_END
+GENFN_DEP Ord_Int__compare primitiveCompareInt FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
+GENFN_BEGIN Ord_Int__compare compare
+compare : Int -> Int -> Ordering
+    compare left right = ordering (primitiveCompareInt left right)
+GENFN_END
+GENFN_CTOR Ord_Option__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Option__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Option__compare Less Ordering 0 0 3 0
+GENFN_CTOR Ord_Option__compare None Option 1 0 2 1
+GENFN_CTOR Ord_Option__compare Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Ord_Option__compare compare
+compare @borrow _a @borrow _b = case _a of
+    Some _x0 -> case _b of
+        Some _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+        None -> Less
+    end
+    None -> case _b of
+        Some _ignored0 -> Greater
+        None -> Equal
+    end
+end
+GENFN_END
+GENFN_CTOR Ord_Ordering__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Ordering__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Ordering__compare Less Ordering 0 0 3 0
+GENFN_BEGIN Ord_Ordering__compare compare
+compare @borrow _a @borrow _b = case _a of
+    Less -> case _b of
+        Less -> Equal
+        Equal -> Less
+        Greater -> Less
+    end
+    Equal -> case _b of
+        Less -> Greater
+        Equal -> Equal
+        Greater -> Less
+    end
+    Greater -> case _b of
+        Less -> Greater
+        Equal -> Greater
+        Greater -> Equal
+    end
+end
+GENFN_END
+GENFN_CTOR Ord_ParseError__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_ParseError__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_ParseError__compare InvalidSyntax ParseError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Ord_ParseError__compare Less Ordering 0 0 3 0
+GENFN_CTOR Ord_ParseError__compare ParsedValueOutOfRange ParseError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_BEGIN Ord_ParseError__compare compare
+compare @borrow _a @borrow _b = case _a of
+    InvalidSyntax _x0 -> case _b of
+        InvalidSyntax _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+        ParsedValueOutOfRange _ignored0 -> Less
+    end
+    ParsedValueOutOfRange _x0 -> case _b of
+        InvalidSyntax _ignored0 -> Greater
+        ParsedValueOutOfRange _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+    end
+end
+GENFN_END
+GENFN_CTOR Ord_Result__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Result__compare Err Result 1 1 2 1 field:INT shape:INT contract:N(e)
+GENFN_CTOR Ord_Result__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Result__compare Less Ordering 0 0 3 0
+GENFN_CTOR Ord_Result__compare Ok Result 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Ord_Result__compare compare
+compare @borrow _a @borrow _b = case _a of
+    Ok _x0 -> case _b of
+        Ok _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+        Err _ignored0 -> Less
+    end
+    Err _x0 -> case _b of
+        Ok _ignored0 -> Greater
+        Err _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+    end
+end
+GENFN_END
+GENFN_CTOR Ord_Seq__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Seq__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Seq__compare Less Ordering 0 0 3 0
+GENFN_BEGIN Ord_Seq__compare compare
+compare : Seq element -> Seq element -> Ordering
+    compare left right =
+        let leftLength = length left,
+            rightLength = length right,
+            commonLength = if leftLength < rightLength then leftLength else rightLength,
+            loop index = if index >= commonLength then
+                    if leftLength < rightLength then Less
+                    else if leftLength > rightLength then Greater else Equal
+                else if get left index < get right index then Less
+                else if get left index > get right index then Greater
+                else loop (index + 1)
+        in loop 0
+GENFN_END
+GENFN_CTOR Ord_Set__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Set__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Set__compare Less Ordering 0 0 3 0
+GENFN_BEGIN Ord_Set__compare compare
+compare : Set element -> Set element -> Ordering
+    compare left right =
+        import elements from Std\Set, sortBy from Std\List in
+        let compareInt first second = case compare first second of
+                Less -> -1
+                Equal -> 0
+                Greater -> 1
+            end,
+            sortedLeft = sortBy compareInt (elements left),
+            sortedRight = sortBy compareInt (elements right)
+        in compare sortedLeft sortedRight
+GENFN_END
+GENFN_DEP Ord_String__compare primitiveCompareString FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
+GENFN_BEGIN Ord_String__compare compare
+compare : String -> String -> Ordering
+    compare left right = ordering (primitiveCompareString left right)
+GENFN_END
+GENFN_CTOR Ord_Tuple__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Tuple__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Tuple__compare Less Ordering 0 0 3 0
+GENFN_BEGIN Ord_Tuple__compare compare
+compare : (left, right) -> (left, right) -> Ordering
+    compare (leftFirst, leftSecond) (rightFirst, rightSecond) =
+        case compare leftFirst rightFirst of
+            Less -> Less
+            Greater -> Greater
+            Equal -> compare leftSecond rightSecond
+        end
+GENFN_END
+GENFN_CTOR Ord_Type__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Type__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Type__compare Less Ordering 0 0 3 0
+GENFN_CTOR Ord_Type__compare TAdt Type 15 1 18 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Ord_Type__compare TBool Type 2 0 18 1
+GENFN_CTOR Ord_Type__compare TByteArray Type 12 0 18 1
+GENFN_CTOR Ord_Type__compare TDict Type 8 0 18 1
+GENFN_CTOR Ord_Type__compare TFloat Type 1 0 18 1
+GENFN_CTOR Ord_Type__compare TFloatArray Type 14 0 18 1
+GENFN_CTOR Ord_Type__compare TFunction Type 10 0 18 1
+GENFN_CTOR Ord_Type__compare TInt Type 0 0 18 1
+GENFN_CTOR Ord_Type__compare TIntArray Type 13 0 18 1
+GENFN_CTOR Ord_Type__compare TPromise Type 11 0 18 1
+GENFN_CTOR Ord_Type__compare TRecord Type 17 0 18 1
+GENFN_CTOR Ord_Type__compare TSeq Type 6 0 18 1
+GENFN_CTOR Ord_Type__compare TSet Type 7 0 18 1
+GENFN_CTOR Ord_Type__compare TString Type 3 0 18 1
+GENFN_CTOR Ord_Type__compare TSum Type 16 0 18 1
+GENFN_CTOR Ord_Type__compare TSymbol Type 4 0 18 1
+GENFN_CTOR Ord_Type__compare TTuple Type 9 0 18 1
+GENFN_CTOR Ord_Type__compare TUnit Type 5 0 18 1
+GENFN_BEGIN Ord_Type__compare compare
+compare @borrow _a @borrow _b = case _a of
+    TInt -> case _b of
+        TInt -> Equal
+        TFloat -> Less
+        TBool -> Less
+        TString -> Less
+        TSymbol -> Less
+        TUnit -> Less
+        TSeq -> Less
+        TSet -> Less
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TFloat -> case _b of
+        TInt -> Greater
+        TFloat -> Equal
+        TBool -> Less
+        TString -> Less
+        TSymbol -> Less
+        TUnit -> Less
+        TSeq -> Less
+        TSet -> Less
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TBool -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Equal
+        TString -> Less
+        TSymbol -> Less
+        TUnit -> Less
+        TSeq -> Less
+        TSet -> Less
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TString -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Equal
+        TSymbol -> Less
+        TUnit -> Less
+        TSeq -> Less
+        TSet -> Less
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TSymbol -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Equal
+        TUnit -> Less
+        TSeq -> Less
+        TSet -> Less
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TUnit -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Equal
+        TSeq -> Less
+        TSet -> Less
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TSeq -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Equal
+        TSet -> Less
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TSet -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Equal
+        TDict -> Less
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TDict -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Equal
+        TTuple -> Less
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TTuple -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Equal
+        TFunction -> Less
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TFunction -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Equal
+        TPromise -> Less
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TPromise -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Greater
+        TPromise -> Equal
+        TByteArray -> Less
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TByteArray -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Greater
+        TPromise -> Greater
+        TByteArray -> Equal
+        TIntArray -> Less
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TIntArray -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Greater
+        TPromise -> Greater
+        TByteArray -> Greater
+        TIntArray -> Equal
+        TFloatArray -> Less
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TFloatArray -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Greater
+        TPromise -> Greater
+        TByteArray -> Greater
+        TIntArray -> Greater
+        TFloatArray -> Equal
+        TAdt _ignored0 -> Less
+        TSum -> Less
+        TRecord -> Less
+    end
+    TAdt _x0 -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Greater
+        TPromise -> Greater
+        TByteArray -> Greater
+        TIntArray -> Greater
+        TFloatArray -> Greater
+        TAdt _y0 -> case compare _x0 _y0 of
+            Less -> Less
+            Greater -> Greater
+            Equal -> Equal
+        end
+        TSum -> Less
+        TRecord -> Less
+    end
+    TSum -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Greater
+        TPromise -> Greater
+        TByteArray -> Greater
+        TIntArray -> Greater
+        TFloatArray -> Greater
+        TAdt _ignored0 -> Greater
+        TSum -> Equal
+        TRecord -> Less
+    end
+    TRecord -> case _b of
+        TInt -> Greater
+        TFloat -> Greater
+        TBool -> Greater
+        TString -> Greater
+        TSymbol -> Greater
+        TUnit -> Greater
+        TSeq -> Greater
+        TSet -> Greater
+        TDict -> Greater
+        TTuple -> Greater
+        TFunction -> Greater
+        TPromise -> Greater
+        TByteArray -> Greater
+        TIntArray -> Greater
+        TFloatArray -> Greater
+        TAdt _ignored0 -> Greater
+        TSum -> Greater
+        TRecord -> Equal
+    end
+end
+GENFN_END
+GENFN_CTOR Ord_Whence__compare Equal Ordering 1 0 3 0
+GENFN_CTOR Ord_Whence__compare Greater Ordering 2 0 3 0
+GENFN_CTOR Ord_Whence__compare Less Ordering 0 0 3 0
+GENFN_CTOR Ord_Whence__compare SeekCur Whence 1 0 3 0
+GENFN_CTOR Ord_Whence__compare SeekEnd Whence 2 0 3 0
+GENFN_CTOR Ord_Whence__compare SeekSet Whence 0 0 3 0
+GENFN_BEGIN Ord_Whence__compare compare
+compare @borrow _a @borrow _b = case _a of
+    SeekSet -> case _b of
+        SeekSet -> Equal
+        SeekCur -> Less
+        SeekEnd -> Less
+    end
+    SeekCur -> case _b of
+        SeekSet -> Greater
+        SeekCur -> Equal
+        SeekEnd -> Less
+    end
+    SeekEnd -> case _b of
+        SeekSet -> Greater
+        SeekCur -> Greater
+        SeekEnd -> Equal
+    end
+end
+GENFN_END
+GENFN_CTOR Semigroup_Dict__combine Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_BEGIN Semigroup_Dict__combine combine
+combine : Dict key value -> Dict key value -> Dict key value
+    combine left right =
+        import entries from Std\Dict, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (entries right) insertDictEntry left
+GENFN_END
+GENFN_BEGIN Semigroup_Seq__combine combine
+combine : Seq element -> Seq element -> Seq element
+    combine left right = left ++ right
+GENFN_END
+GENFN_BEGIN Semigroup_Set__combine combine
+combine : Set element -> Set element -> Set element
+    combine left right = import union from Std\Set in union left right
+GENFN_END
+GENFN_BEGIN Semigroup_String__combine combine
+combine : String -> String -> String
+    combine left right = left ++ right
+GENFN_END
+GENFN_DEP Show_Bool__show primitiveShowBool FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
+GENFN_BEGIN Show_Bool__show show
+show : Bool -> String
+    show value = primitiveShowBool value
+GENFN_END
+GENFN_CTOR Show_ConvertError__show ConversionOutOfRange ConvertError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Show_ConvertError__show InvalidConversion ConvertError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_BEGIN Show_ConvertError__show show
+show @borrow x = case x of
+    InvalidConversion _f0 -> "InvalidConversion(" ++ show _f0 ++ ")"
+    ConversionOutOfRange _f0 -> "ConversionOutOfRange(" ++ show _f0 ++ ")"
+end
+GENFN_END
+GENFN_CTOR Show_Dict__show Equal Ordering 1 0 3 0
+GENFN_CTOR Show_Dict__show Greater Ordering 2 0 3 0
+GENFN_CTOR Show_Dict__show Iterator Iterator 0 1 1 1 recursive field:FUNCTION:ADT:Option a shape:Fn(ADT(Option a)) contract:F(N(%28%29);N(Option,N(a)))
+GENFN_CTOR Show_Dict__show Less Ordering 0 0 3 0
+GENFN_BEGIN Show_Dict__show show
+show : Dict key value -> String
+    show dictionary =
+        import entries from Std\Dict, toSeq from Std\Iterator,
+               sortBy from Std\List in
+        let compareEntry first second = case first of
+                (firstKey, _) -> case second of
+                    (secondKey, _) -> case compare firstKey secondKey of
+                        Less -> -1
+                        Equal -> 0
+                        Greater -> 1
+                    end
+                end
+            end,
+            render rest = case rest of
+                [(key, value)|tail] -> case tail of
+                    [] -> show key ++ ": " ++ show value
+                    _ -> show key ++ ": " ++ show value ++ ", " ++ render tail
+                end
+                [] -> ""
+            end
+        in "{{" ++ render (sortBy compareEntry (toSeq (entries dictionary))) ++ "}}"
+GENFN_END
+GENFN_CTOR Show_FileMode__show Append FileMode 3 0 4 0
+GENFN_CTOR Show_FileMode__show Read FileMode 0 0 4 0
+GENFN_CTOR Show_FileMode__show ReadWrite FileMode 2 0 4 0
+GENFN_CTOR Show_FileMode__show Write FileMode 1 0 4 0
+GENFN_BEGIN Show_FileMode__show show
+show @borrow x = case x of
+    Read -> "Read"
+    Write -> "Write"
+    ReadWrite -> "ReadWrite"
+    Append -> "Append"
+end
+GENFN_END
+GENFN_DEP Show_Float__show primitiveShowFloat FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
+GENFN_BEGIN Show_Float__show show
+show : Float -> String
+    show value = primitiveShowFloat value
+GENFN_END
+GENFN_DEP Show_Int__show primitiveShowInt FN yona_Prelude__Show_Int__show 1 INT -> STRING
+GENFN_BEGIN Show_Int__show show
+show : Int -> String
+    show value = primitiveShowInt value
+GENFN_END
+GENFN_CTOR Show_Option__show None Option 1 0 2 1
+GENFN_CTOR Show_Option__show Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Show_Option__show show
+show @borrow x = case x of
+    Some _f0 -> "Some(" ++ show _f0 ++ ")"
+    None -> "None"
+end
+GENFN_END
+GENFN_CTOR Show_ParseError__show InvalidSyntax ParseError 0 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Show_ParseError__show ParsedValueOutOfRange ParseError 1 1 2 1 field:STRING shape:STRING contract:N(String)
+GENFN_BEGIN Show_ParseError__show show
+show @borrow x = case x of
+    InvalidSyntax _f0 -> "InvalidSyntax(" ++ show _f0 ++ ")"
+    ParsedValueOutOfRange _f0 -> "ParsedValueOutOfRange(" ++ show _f0 ++ ")"
+end
+GENFN_END
+GENFN_CTOR Show_Result__show Err Result 1 1 2 1 field:INT shape:INT contract:N(e)
+GENFN_CTOR Show_Result__show Ok Result 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Show_Result__show show
+show @borrow x = case x of
+    Ok _f0 -> "Ok(" ++ show _f0 ++ ")"
+    Err _f0 -> "Err(" ++ show _f0 ++ ")"
+end
+GENFN_END
+GENFN_BEGIN Show_Seq__show show
+show : Seq element -> String
+    show values =
+        let render rest = case rest of
+            [head|tail] -> case tail of
+                [] -> show head
+                _ -> show head ++ ", " ++ render tail
+            end
+            [] -> ""
+        end
+        in "[" ++ render values ++ "]"
+GENFN_END
+GENFN_CTOR Show_Set__show Equal Ordering 1 0 3 0
+GENFN_CTOR Show_Set__show Greater Ordering 2 0 3 0
+GENFN_CTOR Show_Set__show Less Ordering 0 0 3 0
+GENFN_BEGIN Show_Set__show show
+show : Set element -> String
+    show values =
+        import elements from Std\Set, sortBy from Std\List in
+        let compareInt first second = case compare first second of
+                Less -> -1
+                Equal -> 0
+                Greater -> 1
+            end,
+            render rest = case rest of
+                [head|tail] -> case tail of
+                    [] -> show head
+                    _ -> show head ++ ", " ++ render tail
+                end
+                [] -> ""
+            end
+        in "{{" ++ render (sortBy compareInt (elements values)) ++ "}}"
+GENFN_END
+GENFN_DEP Show_String__show primitiveShowString FN yona_Prelude__Show_String__show 1 STRING -> STRING
+GENFN_BEGIN Show_String__show show
+show : String -> String
+    show value = primitiveShowString value
+GENFN_END
+GENFN_DEP Show_Symbol__show primitiveShowSymbol FN yona_Prelude__Show_Symbol__show 1 SYMBOL -> STRING
+GENFN_BEGIN Show_Symbol__show show
+show : Symbol -> String
+    show value = primitiveShowSymbol value
+GENFN_END
+GENFN_BEGIN Show_Tuple__show show
+show : (left, right) -> String
+    show (first, second) = "(" ++ show first ++ ", " ++ show second ++ ")"
+GENFN_END
+GENFN_CTOR Show_Type__show TAdt Type 15 1 18 1 field:STRING shape:STRING contract:N(String)
+GENFN_CTOR Show_Type__show TBool Type 2 0 18 1
+GENFN_CTOR Show_Type__show TByteArray Type 12 0 18 1
+GENFN_CTOR Show_Type__show TDict Type 8 0 18 1
+GENFN_CTOR Show_Type__show TFloat Type 1 0 18 1
+GENFN_CTOR Show_Type__show TFloatArray Type 14 0 18 1
+GENFN_CTOR Show_Type__show TFunction Type 10 0 18 1
+GENFN_CTOR Show_Type__show TInt Type 0 0 18 1
+GENFN_CTOR Show_Type__show TIntArray Type 13 0 18 1
+GENFN_CTOR Show_Type__show TPromise Type 11 0 18 1
+GENFN_CTOR Show_Type__show TRecord Type 17 0 18 1
+GENFN_CTOR Show_Type__show TSeq Type 6 0 18 1
+GENFN_CTOR Show_Type__show TSet Type 7 0 18 1
+GENFN_CTOR Show_Type__show TString Type 3 0 18 1
+GENFN_CTOR Show_Type__show TSum Type 16 0 18 1
+GENFN_CTOR Show_Type__show TSymbol Type 4 0 18 1
+GENFN_CTOR Show_Type__show TTuple Type 9 0 18 1
+GENFN_CTOR Show_Type__show TUnit Type 5 0 18 1
+GENFN_BEGIN Show_Type__show show
+show @borrow x = case x of
+    TInt -> "TInt"
+    TFloat -> "TFloat"
+    TBool -> "TBool"
+    TString -> "TString"
+    TSymbol -> "TSymbol"
+    TUnit -> "TUnit"
+    TSeq -> "TSeq"
+    TSet -> "TSet"
+    TDict -> "TDict"
+    TTuple -> "TTuple"
+    TFunction -> "TFunction"
+    TPromise -> "TPromise"
+    TByteArray -> "TByteArray"
+    TIntArray -> "TIntArray"
+    TFloatArray -> "TFloatArray"
+    TAdt _f0 -> "TAdt(" ++ show _f0 ++ ")"
+    TSum -> "TSum"
+    TRecord -> "TRecord"
+end
+GENFN_END
+GENFN_CTOR Show_Whence__show SeekCur Whence 1 0 3 0
+GENFN_CTOR Show_Whence__show SeekEnd Whence 2 0 3 0
+GENFN_CTOR Show_Whence__show SeekSet Whence 0 0 3 0
+GENFN_BEGIN Show_Whence__show show
+show @borrow x = case x of
+    SeekSet -> "SeekSet"
+    SeekCur -> "SeekCur"
+    SeekEnd -> "SeekEnd"
+end
+GENFN_END
+GENFN_DEP Sized_ByteArray__size primitiveSizeByteArray FN yona_Prelude__Array_ByteArray__length 1 BYTE_ARRAY -> INT borrow 1
+GENFN_BEGIN Sized_ByteArray__size size
+size : ByteArray -> Int
+    size values = primitiveSizeByteArray values
+GENFN_END
+GENFN_BEGIN Sized_Dict__size size
+size : Dict key value -> Int
+    size values = import size as dictSize from Std\Dict in dictSize values
+GENFN_END
+GENFN_DEP Sized_FloatArray__size primitiveSizeFloatArray FN yona_Prelude__Array_FloatArray__length 1 FLOAT_ARRAY -> INT borrow 1
+GENFN_BEGIN Sized_FloatArray__size size
+size : FloatArray -> Int
+    size values = primitiveSizeFloatArray values
+GENFN_END
+GENFN_DEP Sized_IntArray__size primitiveSizeIntArray FN yona_Prelude__Array_IntArray__length 1 INT_ARRAY -> INT borrow 1
+GENFN_BEGIN Sized_IntArray__size size
+size : IntArray -> Int
+    size values = primitiveSizeIntArray values
+GENFN_END
+GENFN_CTOR Sized_Option__size None Option 1 0 2 1
+GENFN_CTOR Sized_Option__size Some Option 0 1 2 1 field:INT shape:INT contract:N(a)
+GENFN_BEGIN Sized_Option__size size
+size : Option element -> Int
+    size value = case value of Some _ -> 1; None -> 0 end
+GENFN_END
+GENFN_BEGIN Sized_Result__size size
+size : Result element error -> Int
+    size _ = 1
+GENFN_END
+GENFN_DEP Sized_Seq__size primitiveSizeSeq FN yona_Prelude__Array_Seq__length 1 Seq(VAR(a)) -> INT borrow 1
+GENFN_BEGIN Sized_Seq__size size
+size : Seq element -> Int
+    size values = primitiveSizeSeq values
+GENFN_END
+GENFN_BEGIN Sized_Set__size size
+size : Set element -> Int
+    size values = import size as setSize from Std\Set in setSize values
+GENFN_END
+GENFN_DEP Sized_String__size primitiveSizeString FN yona_Prelude__Array_String__length 1 STRING -> INT borrow 1
+GENFN_BEGIN Sized_String__size size
+size : String -> Int
+    size value = primitiveSizeString value
+GENFN_END
+GENFN_BEGIN yona_Prelude__compose compose
+compose f g x = f (g x)
 GENFN_END
 GENFN_BEGIN yona_Prelude__const const
 const x _ = x
 GENFN_END
-GENFN_BEGIN yona_Prelude__compose compose
-compose f g x = f (g x)
+GENFN_BEGIN yona_Prelude__dictEntriesAllPresentAt dictEntriesAllPresentAt
+dictEntriesAllPresentAt : (key -> key -> Bool) -> (value -> value -> Bool) ->
+    Seq (key, value) -> Seq (key, value) -> Int -> Int -> Int -> Bool
+dictEntriesAllPresentAt @borrow keyEquals @borrow valueEquals @borrow values @borrow candidates index valueCount candidateCount =
+    if index >= valueCount then true
+    else let wanted = get values index in
+    case wanted of (wantedKey, wantedValue) ->
+        if dictEntryPresentAt keyEquals valueEquals candidates wantedKey wantedValue 0 candidateCount then
+            dictEntriesAllPresentAt keyEquals valueEquals values candidates (index + 1) valueCount candidateCount
+        else false
+    end
+GENFN_END
+GENFN_BEGIN yona_Prelude__dictEntryPresentAt dictEntryPresentAt
+dictEntryPresentAt : (key -> key -> Bool) -> (value -> value -> Bool) ->
+    Seq (key, value) -> key -> value -> Int -> Int -> Bool
+dictEntryPresentAt @borrow keyEquals @borrow valueEquals @borrow candidates @borrow wantedKey @borrow wantedValue index count =
+    if index >= count then false
+    else let candidate = get candidates index in
+    case candidate of (candidateKey, candidateValue) ->
+        if keyEquals wantedKey candidateKey then
+            valueEquals wantedValue candidateValue
+        else dictEntryPresentAt keyEquals valueEquals candidates wantedKey wantedValue (index + 1) count
+    end
+GENFN_END
+GENFN_BEGIN yona_Prelude__flip flip
+flip f a b = f b a
+GENFN_END
+GENFN_BEGIN yona_Prelude__foldSeqLeft foldSeqLeft
+foldSeqLeft : (acc -> element -> acc) -> acc -> Seq element -> acc
+foldSeqLeft folder accumulator values =
+    case values of
+        [head|tail] -> foldSeqLeft folder (folder accumulator head) tail
+        [] -> accumulator
+    end
+GENFN_END
+GENFN_BEGIN yona_Prelude__foldSeqRight foldSeqRight
+foldSeqRight : (element -> acc -> acc) -> acc -> Seq element -> acc
+foldSeqRight folder accumulator values =
+    case values of
+        [head|tail] -> folder head (foldSeqRight folder accumulator tail)
+        [] -> accumulator
+    end
+GENFN_END
+GENFN_BEGIN yona_Prelude__identity identity
+identity x = x
+GENFN_END
+GENFN_BEGIN yona_Prelude__insertDictEntry insertDictEntry
+insertDictEntry dictionary entry =
+    import put from Std\Dict in
+    case entry of (key, value) -> put dictionary key value end
+GENFN_END
+GENFN_CTOR yona_Prelude__ordering Equal Ordering 1 0 3 0
+GENFN_CTOR yona_Prelude__ordering Greater Ordering 2 0 3 0
+GENFN_CTOR yona_Prelude__ordering Less Ordering 0 0 3 0
+GENFN_BEGIN yona_Prelude__ordering ordering
+ordering value = if value < 0 then Less else if value > 0 then Greater else Equal
+GENFN_END
+GENFN_BEGIN yona_Prelude__seqAllPresentAt seqAllPresentAt
+seqAllPresentAt : (element -> element -> Bool) -> Seq element -> Seq element -> Int -> Int -> Int -> Bool
+seqAllPresentAt equals @borrow values @borrow candidates index valueCount candidateCount =
+    if index >= valueCount then true
+    else if seqContainsEqAt equals candidates (get values index) 0 candidateCount then
+        seqAllPresentAt equals values candidates (index + 1) valueCount candidateCount
+    else false
+GENFN_END
+GENFN_BEGIN yona_Prelude__seqContainsEqAt seqContainsEqAt
+seqContainsEqAt : (element -> element -> Bool) -> Seq element -> element -> Int -> Int -> Bool
+seqContainsEqAt equals @borrow candidates needle index count =
+    if index >= count then false
+    else if equals needle (get candidates index) then true
+    else seqContainsEqAt equals candidates needle (index + 1) count
+GENFN_END
+GENFN_BEGIN yona_Prelude__seqEqAt seqEqAt
+seqEqAt : (element -> element -> Bool) -> Seq element -> Seq element -> Int -> Int -> Bool
+seqEqAt equals @borrow left @borrow right index count =
+    if index >= count then true
+    else if equals (get left index) (get right index) then
+        seqEqAt equals left right (index + 1) count
+    else false
+GENFN_END
+GENFN_BEGIN yona_Prelude__seqEqBy seqEqBy
+seqEqBy : (element -> element -> Bool) -> Seq element -> Seq element -> Bool
+seqEqBy equals @borrow left @borrow right =
+    let leftLength = length left, rightLength = length right in
+    if leftLength == rightLength then seqEqAt equals left right 0 leftLength
+    else false
 GENFN_END

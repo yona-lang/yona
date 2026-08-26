@@ -24,6 +24,11 @@ end
 The report contains one line per case followed by
 `SUMMARY 2 passed, 0 failed`.
 
+The compiler repository keeps executable suites under `test/stdlib/` and a
+complete public-module matrix in `test/stdlib/manifest.md`. The default
+CTest run executes the whole matrix; `stdlib-network` and `stdlib-gpu`
+labels expose the capability-sensitive slices directly.
+
 ## Types
 
 ### TestResult

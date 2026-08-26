@@ -16,12 +16,13 @@ import sha256 from Std\Crypto in
 sha256 "hello"   # => "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 ```
 
-### `randomBytes : Int -> String`
+### `randomBytes : Int -> ByteArray`
 
-Generate `n` cryptographically secure random bytes, returned as a raw string.
+Generate `n` cryptographically secure random bytes as binary data. Non-positive
+lengths return an empty `ByteArray`.
 
 ```yona
-import randomBytes from Std\Crypto in
+import randomBytes from Std\Crypto, length from Std\ByteArray in
 let key = randomBytes 32 in
 length key   # => 32
 ```

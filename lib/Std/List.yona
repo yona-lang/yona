@@ -22,6 +22,7 @@ map fn seq = case seq of [] -> []; [h|t] -> (fn h) :: (map fn t) end
 ## ```
 ## filter (\x -> x > 2) [1, 2, 3, 4]   # => [3, 4]
 ## ```
+filter : (element -> Bool) -> Seq element -> Seq element
 filter fn seq = case seq of [] -> []; [h|t] -> if fn h then h :: (filter fn t) else filter fn t end
 
 ## Left fold — reduces a sequence to a single value, left to right.
@@ -32,6 +33,7 @@ filter fn seq = case seq of [] -> []; [h|t] -> if fn h then h :: (filter fn t) e
 fold fn acc seq = case seq of [] -> acc; [h|t] -> fold fn (fn acc h) t end
 
 ## Alias for `fold`.
+foldl : (acc -> element -> acc) -> acc -> Seq element -> acc
 foldl fn acc seq = case seq of [] -> acc; [h|t] -> foldl fn (fn acc h) t end
 
 ## Right fold — reduces a sequence right to left.
@@ -39,6 +41,7 @@ foldl fn acc seq = case seq of [] -> acc; [h|t] -> foldl fn (fn acc h) t end
 ## ```
 ## foldr (\x acc -> x :: acc) [] [1, 2, 3]   # => [1, 2, 3]
 ## ```
+foldr : (element -> acc -> acc) -> acc -> Seq element -> acc
 foldr fn acc seq = case seq of [] -> acc; [h|t] -> fn h (foldr fn acc t) end
 
 ## Returns the number of elements.
@@ -68,6 +71,7 @@ tail seq = case seq of [_|t] -> t end
 ## ```
 ## reverse [1, 2, 3]   # => [3, 2, 1]
 ## ```
+reverse : Seq element -> Seq element
 reverse seq = foldl (\acc x -> x :: acc) [] seq
 
 ## Returns the first `n` elements.
@@ -140,16 +144,17 @@ nth idx seq =
 ## ```
 flatMap fn seq = flatten (map fn seq)
 
-## Returns `(:some, value)` for the first element satisfying `pred`, or `:none`.
+## Returns `Some value` for the first element satisfying `pred`, or `None`.
 ##
 ## ```
-## find (\x -> x > 3) [1, 2, 5, 4]   # => (:some, 5)
-## find (\x -> x > 9) [1, 2, 3]      # => :none
+## find (\x -> x > 3) [1, 2, 5, 4]   # => Some 5
+## find (\x -> x > 9) [1, 2, 3]      # => None
 ## ```
+find : (element -> Bool) -> Seq element -> Option element
 find pred seq =
     case seq of
-        [] -> :none
-        [h|t] -> if pred h then (:some, h) else find pred t
+        [] -> None
+        [h|t] -> if pred h then Some h else find pred t
     end
 
 ## Pairs elements from two sequences. Stops at the shorter one.
@@ -237,6 +242,7 @@ scanl fn acc seq =
 ## ```
 ## sortBy (\a b -> a - b) [3, 1, 4, 1, 5]   # => [1, 1, 3, 4, 5]
 ## ```
+sortBy : (element -> element -> Int) -> Seq element -> Seq element
 sortBy cmp seq =
     case seq of
         [] -> []

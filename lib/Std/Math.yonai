@@ -1,193 +1,74 @@
-ADT FileHandle 1 1
-CTOR FileHandle 0 1 fields _0:INT
-ADT FileMode 4 0
-CTOR Read 0 0
-CTOR ReadWrite 2 0
-CTOR Write 1 0
-CTOR Append 3 0
-ADT Iterator 1 1 recursive
-CTOR Iterator 0 1 fields _0:FUNCTION:ADT:Option
-ADT Linear 1 1
-CTOR Linear 0 1 fields _0:INT
-ADT Option 2 1
-CTOR Some 0 1 fields _0:INT
-CTOR None 1 0
-ADT Result 2 1
-CTOR Ok 0 1 fields _0:INT
-CTOR Err 1 1 fields _0:INT
-ADT Type 18 1
-CTOR TSum 16 0
-CTOR TAdt 15 1 fields _0:STRING
-CTOR TInt 0 0
-CTOR TFloat 1 0
-CTOR TBool 2 0
-CTOR TString 3 0
-CTOR TSymbol 4 0
-CTOR TUnit 5 0
-CTOR TSeq 6 0
-CTOR TIntArray 13 0
-CTOR TSet 7 0
-CTOR TDict 8 0
-CTOR TFunction 10 0
-CTOR TTuple 9 0
-CTOR TPromise 11 0
-CTOR TByteArray 12 0
-CTOR TFloatArray 14 0
-CTOR TRecord 17 0
-ADT Whence 3 0
-CTOR SeekEnd 2 0
-CTOR SeekSet 0 0
-CTOR SeekCur 1 0
-TRAIT Closeable a 1
-  METHOD close
-TRAIT Show a 1
-  METHOD show
 TRAIT Num a 4
-  METHOD abs
-  METHOD max
-  METHOD min
-  METHOD negate
-TRAIT Eq a 1
-  METHOD eq
-TRAIT Ord a 1
-  METHOD compare
-TRAIT Hash a 1
-  METHOD hash
-TRAIT Array a 2
-  METHOD length
-  METHOD get
-INSTANCE Show Float
-  IMPL show yona_Prelude__Show_Float__show
-INSTANCE Closeable Int
-  IMPL close Closeable_Int__close
+  METHOD abs FUNCTION(VAR(a),VAR(a))
+  METHOD max FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a)))
+  METHOD min FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a)))
+  METHOD negate FUNCTION(VAR(a),VAR(a))
 INSTANCE Num Float
   IMPL abs Num_Float__abs
-  IMPL negate Num_Float__negate
   IMPL max Num_Float__max
   IMPL min Num_Float__min
-INSTANCE Closeable FileHandle
-  IMPL close yona_Std_File__closeFileHandle
-INSTANCE Ord String
-  IMPL compare yona_Prelude__Ord_String__compare
-INSTANCE Eq Bool
-  IMPL eq yona_Prelude__Eq_Bool__eq
-INSTANCE Show Int
-  IMPL show yona_Prelude__Show_Int__show
-INSTANCE Show String
-  IMPL show yona_Prelude__Show_String__show
-INSTANCE Eq String
-  IMPL eq yona_Prelude__Eq_String__eq
-INSTANCE Show Bool
-  IMPL show yona_Prelude__Show_Bool__show
-INSTANCE Ord Bool
-  IMPL compare yona_Prelude__Ord_Bool__compare
-INSTANCE Show Symbol
-  IMPL show yona_Prelude__Show_Symbol__show
-INSTANCE Eq Int
-  IMPL eq yona_Prelude__Eq_Int__eq
-INSTANCE Array FloatArray
-  IMPL length yona_Prelude__Array_FloatArray__length
-  IMPL get yona_Prelude__Array_FloatArray__get
-INSTANCE Eq Float
-  IMPL eq yona_Prelude__Eq_Float__eq
-INSTANCE Eq Symbol
-  IMPL eq yona_Prelude__Eq_Symbol__eq
-INSTANCE Ord Int
-  IMPL compare yona_Prelude__Ord_Int__compare
-INSTANCE Ord Float
-  IMPL compare yona_Prelude__Ord_Float__compare
-INSTANCE Hash Int
-  IMPL hash yona_Prelude__Hash_Int__hash
-INSTANCE Hash Float
-  IMPL hash yona_Prelude__Hash_Float__hash
-INSTANCE Hash String
-  IMPL hash yona_Prelude__Hash_String__hash
-INSTANCE Hash Bool
-  IMPL hash yona_Prelude__Hash_Bool__hash
-INSTANCE Hash Symbol
-  IMPL hash yona_Prelude__Hash_Symbol__hash
-INSTANCE Array ByteArray
-  IMPL length yona_Prelude__Array_ByteArray__length
-  IMPL get yona_Prelude__Array_ByteArray__get
-INSTANCE Array IntArray
-  IMPL length yona_Prelude__Array_IntArray__length
-  IMPL get yona_Prelude__Array_IntArray__get
-INSTANCE Array Seq
-  IMPL length yona_Prelude__Array_Seq__length
-  IMPL get yona_Prelude__Array_Seq__get
-INSTANCE Array String
-  IMPL length yona_Prelude__Array_String__length
-  IMPL get yona_Prelude__Array_String__get
+  IMPL negate Num_Float__negate
 INSTANCE Num Int
   IMPL abs Num_Int__abs
-  IMPL negate Num_Int__negate
   IMPL max Num_Int__max
   IMPL min Num_Int__min
-FN yona_Std_Math__gcd 2 INT INT -> INT
-FN yona_Prelude__Array_Seq__length 1 INT -> INT
-FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
-FN yona_Prelude__Hash_Int__hash 1 INT -> INT
-FN Num_Float__min 2 INT INT -> INT
-FN yona_Prelude__Show_String__show 1 STRING -> STRING
-FN yona_Prelude__Show_Int__show 1 INT -> STRING
-FN Num_Int__min 2 INT INT -> INT
-FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
-FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
-FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
-FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
-FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
-FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
-FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
-FN Num_Float__max 2 INT INT -> INT
-FN yona_Std_Math__clamp 3 INT INT INT -> INT
-FN yona_Prelude__Hash_String__hash 1 STRING -> INT
-FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
-FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
-FN yona_Std_Math__ceil 1 FLOAT -> FLOAT
-FN yona_Std_Math__exp 1 FLOAT -> FLOAT
-FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
-FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
-FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
-FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
-FN Num_Int__max 2 INT INT -> INT
-FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
-FN yona_Std_Math__floor 1 FLOAT -> FLOAT
-FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
-FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
-FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
-FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
-FN Num_Float__negate 1 INT -> FLOAT
-FN yona_Prelude__Array_IntArray__length 1 INT -> INT
-FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
-FN yona_Prelude__Array_String__length 1 STRING -> INT
-FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
-FN yona_Prelude__Array_String__get 2 STRING INT -> INT
-FN Num_Int__abs 1 INT -> INT
-FN Closeable_Int__close 1 INT -> UNIT
-FN yona_Std_Math__sqrt 1 FLOAT -> FLOAT
-FN yona_Std_Math__sin 1 FLOAT -> FLOAT
-FN yona_Std_Math__cos 1 FLOAT -> FLOAT
-FN yona_Std_Math__tan 1 FLOAT -> FLOAT
-FN yona_Std_Math__log 1 FLOAT -> FLOAT
-FN Num_Int__negate 1 INT -> INT
-FN yona_Std_Math__round 1 FLOAT -> FLOAT
-FN yona_Std_Math__sign 1 INT -> INT
-FN yona_Std_Math__isEven 1 INT -> BOOL
-FN yona_Std_Math__pi 0 -> FLOAT
-FN yona_Std_Math__isOdd 1 INT -> BOOL
-FN yona_Std_Math__pow 2 INT INT -> INT
-FN yona_Std_Math__factorial 1 INT -> INT
+  IMPL negate Num_Int__negate
 FN Num_Float__abs 1 INT -> FLOAT
-GENFN_BEGIN yona_Std_Math__factorial factorial
-factorial n =
-    if n <= 1 then 1
-    else n * (factorial (n - 1))
+FN Num_Float__max 2 INT INT -> INT
+FN Num_Float__min 2 INT INT -> INT
+FN Num_Float__negate 1 INT -> FLOAT
+FN Num_Int__abs 1 INT -> INT
+FN Num_Int__max 2 INT INT -> INT
+FN Num_Int__min 2 INT INT -> INT
+FN Num_Int__negate 1 INT -> INT
+FN yona_Std_Math__ceil 1 FLOAT -> FLOAT
+FN yona_Std_Math__clamp 3 INT INT INT -> INT effects -
+FN yona_Std_Math__cos 1 FLOAT -> FLOAT
+FN yona_Std_Math__exp 1 FLOAT -> FLOAT
+FN yona_Std_Math__factorial 1 INT -> INT effects -
+FN yona_Std_Math__floor 1 FLOAT -> FLOAT
+FN yona_Std_Math__gcd 2 INT INT -> INT effects |
+FN yona_Std_Math__isEven 1 INT -> BOOL effects -
+FN yona_Std_Math__isOdd 1 INT -> BOOL effects -
+FN yona_Std_Math__log 1 FLOAT -> FLOAT
+FN yona_Std_Math__pi 0 -> FLOAT effects -
+FN yona_Std_Math__pow 2 INT INT -> INT effects |
+FN yona_Std_Math__round 1 FLOAT -> FLOAT
+FN yona_Std_Math__sign 1 INT -> INT effects -
+FN yona_Std_Math__sin 1 FLOAT -> FLOAT
+FN yona_Std_Math__sqrt 1 FLOAT -> FLOAT
+FN yona_Std_Math__tan 1 FLOAT -> FLOAT
+GENFN_BEGIN Num_Float__abs abs
+abs x = if x < 0.0 then 0.0 - x else x
+GENFN_END
+GENFN_BEGIN Num_Float__max max
+max a b = if a > b then a else b
+GENFN_END
+GENFN_BEGIN Num_Float__min min
+min a b = if a < b then a else b
+GENFN_END
+GENFN_BEGIN Num_Float__negate negate
+negate x = 0.0 - x
+GENFN_END
+GENFN_BEGIN Num_Int__abs abs
+abs x = if x < 0 then 0 - x else x
+GENFN_END
+GENFN_BEGIN Num_Int__max max
+max a b = if a > b then a else b
+GENFN_END
+GENFN_BEGIN Num_Int__min min
+min a b = if a < b then a else b
+GENFN_END
+GENFN_BEGIN Num_Int__negate negate
+negate x = 0 - x
 GENFN_END
 GENFN_BEGIN yona_Std_Math__clamp clamp
 clamp lo hi x = if x < lo then lo else if x > hi then hi else x
 GENFN_END
-GENFN_BEGIN yona_Std_Math__sign sign
-sign x = if x > 0 then 1 else if x < 0 then 0 - 1 else 0
+GENFN_BEGIN yona_Std_Math__factorial factorial
+factorial n =
+    if n <= 1 then 1
+    else n * (factorial (n - 1))
 GENFN_END
 GENFN_BEGIN yona_Std_Math__gcd gcd
 gcd a b =
@@ -199,11 +80,11 @@ GENFN_END
 GENFN_BEGIN yona_Std_Math__isEven isEven
 isEven x = x % 2 == 0
 GENFN_END
-GENFN_BEGIN yona_Std_Math__pi pi
-pi = 3.141592653589793
-GENFN_END
 GENFN_BEGIN yona_Std_Math__isOdd isOdd
 isOdd x = x % 2 != 0
+GENFN_END
+GENFN_BEGIN yona_Std_Math__pi pi
+pi = 3.141592653589793
 GENFN_END
 GENFN_BEGIN yona_Std_Math__pow pow
 pow base exp =
@@ -211,4 +92,7 @@ pow base exp =
     else if exp % 2 == 0 then
         let half = pow base (exp / 2) in half * half
     else base * (pow base (exp - 1))
+GENFN_END
+GENFN_BEGIN yona_Std_Math__sign sign
+sign x = if x > 0 then 1 else if x < 0 then 0 - 1 else 0
 GENFN_END

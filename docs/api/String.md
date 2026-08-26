@@ -108,7 +108,7 @@ import replace from Std\String in
 replace "aabaa" "a" "x"   # => "xxbxx"
 ```
 
-### `split : String -> String -> Iterator a`
+### `split : String -> String -> Seq(String)`
 
 Split a string by a delimiter. Returns an `Iterator String`.
 

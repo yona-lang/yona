@@ -1,0 +1,4 @@
+PASS IntArray round trips sequences
+PASS IntArray updates persistently
+PASS IntArray transforms and slices
+SUMMARY 3 passed, 0 failed

@@ -1,0 +1,4 @@
+case [(1, "value")] of
+    [(key, value)] -> if key == 1 then value else "wrong key"
+    _ -> "missing"
+end

@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <ctype.h>
+#include <errno.h>
 #if !defined(_WIN32)
 #include <pthread.h>
 #endif
@@ -76,6 +77,7 @@ void yona_rt_hamt_stamp_aux_flags(void* node, int64_t flags);
 #define RC_TYPE_STRING  6
 #define RC_TYPE_INT_ARRAY   18
 #define RC_TYPE_FLOAT_ARRAY 19
+#define RC_TYPE_NATIVE_STATE 21
 
 /* ===== Size-class pool allocator ===== */
 /* Free-list pools for common allocation sizes. Avoids malloc/free overhead
@@ -98,10 +100,15 @@ typedef struct pool_block {
 static _Thread_local pool_block_t* pool_freelist[POOL_CLASSES] = {0};
 
 static int pool_class_for(size_t total_bytes) {
+#ifdef YONA_DISABLE_POOL
+    (void)total_bytes;
+    return -1;
+#else
     for (int i = 0; i < POOL_CLASSES; i++) {
         if (total_bytes <= pool_sizes[i]) return i;
     }
     return -1; /* too large for pools */
+#endif
 }
 
 /* Slab allocator: instead of individual malloc per block, allocate slabs
@@ -387,12 +394,13 @@ void yona_rt_rc_dec(void* ptr) {
             }
         } else if (type_tag == RC_TYPE_CLOSURE) {
             /* Closure: rc_dec heap-typed captures using the heap_mask.
-             * Layout: [fn_ptr, ret_type, arity, num_captures, heap_mask, cap0, ...] */
+             * Layout: [fn_ptr, ret_type, arity, num_captures, heap_mask,
+             *          borrow_mask, cap0, ...] */
             int64_t num_caps = payload[3];
             int64_t heap_mask = payload[4];
             for (int64_t ci = 0; ci < num_caps && ci < 64; ci++) {
                 if (heap_mask & ((int64_t)1 << ci)) {
-                    int64_t cap_val = payload[5 + ci];
+                    int64_t cap_val = payload[6 + ci];
                     if (cap_val) yona_rt_rc_dec((void*)(intptr_t)cap_val);
                 }
             }
@@ -452,6 +460,11 @@ void yona_rt_rc_dec(void* ptr) {
             /* Channel: signal waiters, destroy mutex/condvars, free buffer. */
             extern void yona_rt_channel_destroy(void* ch);
             yona_rt_channel_destroy(ptr);
+        } else if (type_tag == RC_TYPE_NATIVE_STATE) {
+            /* Opaque mutable state captured by a native iterator closure.
+             * The first payload word is an optional type-specific finalizer. */
+            void (*finalize)(void*) = *(void (**)(void*))payload;
+            if (finalize) finalize(ptr);
         }
         YONA_FREE_INC_TAG((int)type_tag);
         if (pool_cls >= 0)
@@ -459,6 +472,13 @@ void yona_rt_rc_dec(void* ptr) {
         else
             free(header);
     }
+}
+
+void* yona_rt_native_state_alloc(size_t bytes, void (*finalize)(void*)) {
+    if (bytes < sizeof(finalize)) bytes = sizeof(finalize);
+    void* state = rc_alloc(RC_TYPE_NATIVE_STATE, bytes);
+    *(void (**)(void*))state = finalize;
+    return state;
 }
 
 /* ===== Arena Allocator ===== */
@@ -1426,6 +1446,10 @@ void yona_rt_print_heap_value(int64_t val) {
 static inline int64_t* make_none(void);
 static inline int64_t* make_some(int64_t value, int is_heap);
 static inline int64_t* make_iterator(int64_t* closure);
+void yona_rt_closure_set_heap_mask(void* closure, int64_t mask);
+void* yona_rt_closure_create(void* fn_ptr, int64_t ret_type, int64_t arity,
+                             int64_t num_captures);
+void yona_rt_closure_set_cap(void* closure, int64_t index, int64_t value);
 
 /* ===== Dict/Set Streaming Iterators ===== */
 /* Stack-based HAMT trie traversal. Yields entries one at a time via Iterator. */
@@ -1443,11 +1467,17 @@ typedef struct {
 } hamt_stack_frame_t;
 
 typedef struct {
+    void (*finalize)(void*);
     hamt_stack_frame_t stack[HAMT_ITER_MAX_DEPTH];
     int depth;      /* current stack depth (0 = done) */
     int mode;       /* 0 = entries (key,val tuples), 1 = keys only, 2 = values only */
     int64_t* root;  /* RC ref to root dict/set — kept alive during iteration */
 } hamt_iter_state_t;
+
+static void hamt_iter_finalize(void* raw) {
+    hamt_iter_state_t* st = (hamt_iter_state_t*)raw;
+    if (st->root) yona_rt_rc_dec(st->root);
+}
 
 static void hamt_iter_push(hamt_iter_state_t* st, hamt_node_t* node) {
     if (!node || st->depth >= HAMT_ITER_MAX_DEPTH) return;
@@ -1486,49 +1516,66 @@ static int hamt_iter_advance(hamt_iter_state_t* st, int64_t* out_key, int64_t* o
 
 /* Dict entries iterator: yields (key, value) tuples */
 static int64_t dict_entries_iter_next(int64_t* env) {
-    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[5];
+    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[6];
     int64_t key, val;
     if (!hamt_iter_advance(st, &key, &val)) {
         return (int64_t)(intptr_t)make_none();
     }
-    /* Build a 2-tuple: heap-allocated [key, val] */
-    int64_t* tup = (int64_t*)rc_alloc(RC_TYPE_ADT, 2 * sizeof(int64_t));
-    tup[0] = key;
-    tup[1] = val;
+    const int64_t flags = hamt_aux_flags((hamt_node_t*)st->root);
+    int64_t mask = 0;
+    if ((flags & HAMT_FLAG_KEY_HEAP) && key) {
+        yona_rt_rc_inc((void*)(intptr_t)key);
+        mask |= 1;
+    }
+    if ((flags & HAMT_FLAG_VAL_HEAP) && val) {
+        yona_rt_rc_inc((void*)(intptr_t)val);
+        mask |= 2;
+    }
+    int64_t* tup = (int64_t*)yona_rt_tuple_alloc(2);
+    yona_rt_tuple_set(tup, 0, key);
+    yona_rt_tuple_set(tup, 1, val);
+    yona_rt_tuple_set_heap_mask(tup, mask);
     return (int64_t)(intptr_t)make_some((int64_t)(intptr_t)tup, 1);
 }
 
 /* Dict keys iterator: yields keys */
 static int64_t dict_keys_iter_next(int64_t* env) {
-    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[5];
+    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[6];
     int64_t key, val;
     if (!hamt_iter_advance(st, &key, &val))
         return (int64_t)(intptr_t)make_none();
+    if ((hamt_aux_flags((hamt_node_t*)st->root) & HAMT_FLAG_KEY_HEAP) && key)
+        yona_rt_rc_inc((void*)(intptr_t)key);
     return (int64_t)(intptr_t)make_some(key, 0);
 }
 
 /* Dict values iterator: yields values */
 static int64_t dict_values_iter_next(int64_t* env) {
-    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[5];
+    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[6];
     int64_t key, val;
     if (!hamt_iter_advance(st, &key, &val))
         return (int64_t)(intptr_t)make_none();
+    if ((hamt_aux_flags((hamt_node_t*)st->root) & HAMT_FLAG_VAL_HEAP) && val)
+        yona_rt_rc_inc((void*)(intptr_t)val);
     return (int64_t)(intptr_t)make_some(val, 0);
 }
 
 /* Set elements iterator: yields elements (keys with val=1) */
 static int64_t set_elements_iter_next(int64_t* env) {
-    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[5];
+    hamt_iter_state_t* st = (hamt_iter_state_t*)(intptr_t)env[6];
     int64_t key, val;
     if (!hamt_iter_advance(st, &key, &val))
         return (int64_t)(intptr_t)make_none();
+    if ((hamt_aux_flags((hamt_node_t*)st->root) & HAMT_FLAG_KEY_HEAP) && key)
+        yona_rt_rc_inc((void*)(intptr_t)key);
     return (int64_t)(intptr_t)make_some(key, 0);
 }
 
 static int64_t hamt_make_iterator(int64_t* collection, void* next_fn) {
     extern void* yona_rt_closure_create(void* fn, int64_t ret, int64_t arity, int64_t caps);
     extern void yona_rt_closure_set_cap(void* cl, int64_t idx, int64_t val);
-    hamt_iter_state_t* st = (hamt_iter_state_t*)malloc(sizeof(hamt_iter_state_t));
+    hamt_iter_state_t* st = (hamt_iter_state_t*)
+        yona_rt_native_state_alloc(sizeof(hamt_iter_state_t), hamt_iter_finalize);
     st->depth = 0;
     st->root = collection;
     /* Keep the root alive during iteration */
@@ -1536,6 +1583,7 @@ static int64_t hamt_make_iterator(int64_t* collection, void* next_fn) {
     hamt_iter_push(st, (hamt_node_t*)collection);
     int64_t* cl = (int64_t*)yona_rt_closure_create(next_fn, 0, 0, 1);
     yona_rt_closure_set_cap(cl, 0, (int64_t)(intptr_t)st);
+    yona_rt_closure_set_heap_mask(cl, 1);
     return (int64_t)(intptr_t)make_iterator(cl);
 }
 
@@ -1623,9 +1671,89 @@ static inline int64_t* make_some(int64_t value, int is_heap) {
 /* Helper: allocate an Iterator ADT wrapping a closure */
 static inline int64_t* make_iterator(int64_t* closure) {
     int64_t* adt = (int64_t*)rc_alloc(RC_TYPE_ADT, (ADT_HDR_SIZE + 1) * sizeof(int64_t));
-    adt[0] = 0; adt[1] = 1; adt[2] = 0; /* heap_mask=0: closure managed separately */
+    adt[0] = 0; adt[1] = 1; adt[2] = 1;
     adt[3] = (int64_t)(intptr_t)closure;
     return adt;
+}
+
+typedef struct {
+    void (*finalize)(void*);
+    void* source;
+    int64_t index;
+    int64_t length;
+    int kind;
+} indexed_iter_state_t;
+
+static void indexed_iter_finalize(void* raw) {
+    indexed_iter_state_t* st = (indexed_iter_state_t*)raw;
+    if (st->source) yona_rt_rc_dec(st->source);
+}
+
+static int64_t indexed_iter_next(int64_t* env) {
+    indexed_iter_state_t* st = (indexed_iter_state_t*)(intptr_t)env[6];
+    if (st->index >= st->length)
+        return (int64_t)(intptr_t)make_none();
+
+    const int64_t index = st->index++;
+    int64_t value = 0;
+    switch (st->kind) {
+        case 0:
+            value = yona_rt_seq_get((int64_t*)st->source, index);
+            break;
+        case 1:
+            value = yona_Std_ByteArray__get((int64_t*)st->source, index);
+            break;
+        case 2:
+            value = yona_Std_IntArray__get((int64_t*)st->source, index);
+            break;
+        case 3: {
+            const double number = yona_Std_FloatArray__get((double*)st->source, index);
+            memcpy(&value, &number, sizeof(value));
+            break;
+        }
+    }
+    return (int64_t)(intptr_t)make_some(value, 0);
+}
+
+static int64_t make_indexed_iterator(void* source, int64_t length, int kind) {
+    indexed_iter_state_t* st = (indexed_iter_state_t*)
+        yona_rt_native_state_alloc(sizeof(indexed_iter_state_t), indexed_iter_finalize);
+    st->source = source;
+    st->index = 0;
+    st->length = length;
+    st->kind = kind;
+    if (source) yona_rt_rc_inc(source);
+    int64_t* closure = (int64_t*)
+        yona_rt_closure_create((void*)indexed_iter_next, 0, 0, 1);
+    yona_rt_closure_set_cap(closure, 0, (int64_t)(intptr_t)st);
+    yona_rt_closure_set_heap_mask(closure, 1);
+    return (int64_t)(intptr_t)make_iterator(closure);
+}
+
+int64_t yona_Std_Iterator__fromSeq(int64_t* values) {
+    return make_indexed_iterator(values, yona_rt_seq_length(values), 0);
+}
+
+int64_t yona_Std_Iterator__fromByteArray(int64_t* values) {
+    return make_indexed_iterator(values, yona_Std_ByteArray__length(values), 1);
+}
+
+int64_t yona_Std_Iterator__fromIntArray(int64_t* values) {
+    return make_indexed_iterator(values, yona_Std_IntArray__length(values), 2);
+}
+
+int64_t yona_Std_Iterator__fromFloatArray(double* values) {
+    return make_indexed_iterator(values, yona_Std_FloatArray__length(values), 3);
+}
+
+int64_t yona_Std_Iterator__nextNative(int64_t* iterator) {
+    if (!iterator || iterator[0] != 0 || iterator[1] != 1)
+        return (int64_t)(intptr_t)make_none();
+    int64_t* closure = (int64_t*)(intptr_t)iterator[ADT_HDR_SIZE];
+    if (!closure) return (int64_t)(intptr_t)make_none();
+    typedef int64_t (*next_fn_t)(int64_t*);
+    next_fn_t advance = (next_fn_t)(intptr_t)closure[0];
+    return advance(closure);
 }
 
 void* yona_rt_adt_alloc(int64_t tag, int64_t num_fields) {
@@ -1673,8 +1801,106 @@ double yona_Std_Math__cos(double x) { return cos(x); }
 
 /* Std\String — pure string operations, no I/O */
 
+#define YONA_UTF8_REPLACEMENT 0xfffdu
+
+/* Decode one Unicode scalar. Invalid UTF-8 consumes one byte and produces
+ * U+FFFD, giving native inputs deterministic forward progress. */
+static size_t yona_string_utf8_decode(const char* input, size_t remaining, uint32_t* scalar) {
+    if (!remaining) { *scalar = YONA_UTF8_REPLACEMENT; return 0; }
+    const unsigned char* s = (const unsigned char*)input;
+    if (s[0] < 0x80) { *scalar = s[0]; return 1; }
+    if (s[0] >= 0xc2 && s[0] <= 0xdf && remaining >= 2 &&
+        (s[1] & 0xc0) == 0x80) {
+        *scalar = ((uint32_t)(s[0] & 0x1f) << 6) | (uint32_t)(s[1] & 0x3f);
+        return 2;
+    }
+    if (s[0] >= 0xe0 && s[0] <= 0xef && remaining >= 3 &&
+        (s[1] & 0xc0) == 0x80 && (s[2] & 0xc0) == 0x80 &&
+        !(s[0] == 0xe0 && s[1] < 0xa0) &&
+        !(s[0] == 0xed && s[1] >= 0xa0)) {
+        *scalar = ((uint32_t)(s[0] & 0x0f) << 12) |
+                  ((uint32_t)(s[1] & 0x3f) << 6) |
+                  (uint32_t)(s[2] & 0x3f);
+        return 3;
+    }
+    if (s[0] >= 0xf0 && s[0] <= 0xf4 && remaining >= 4 &&
+        (s[1] & 0xc0) == 0x80 && (s[2] & 0xc0) == 0x80 &&
+        (s[3] & 0xc0) == 0x80 &&
+        !(s[0] == 0xf0 && s[1] < 0x90) &&
+        !(s[0] == 0xf4 && s[1] >= 0x90)) {
+        *scalar = ((uint32_t)(s[0] & 0x07) << 18) |
+                  ((uint32_t)(s[1] & 0x3f) << 12) |
+                  ((uint32_t)(s[2] & 0x3f) << 6) |
+                  (uint32_t)(s[3] & 0x3f);
+        return 4;
+    }
+    *scalar = YONA_UTF8_REPLACEMENT;
+    return 1;
+}
+
+static size_t yona_utf8_encoded_size(uint32_t scalar) {
+    if (scalar == 0 || scalar > 0x10ffff ||
+        (scalar >= 0xd800 && scalar <= 0xdfff))
+        scalar = YONA_UTF8_REPLACEMENT;
+    if (scalar <= 0x7f) return 1;
+    if (scalar <= 0x7ff) return 2;
+    if (scalar <= 0xffff) return 3;
+    return 4;
+}
+
+static size_t yona_utf8_encode(char* output, uint32_t scalar) {
+    if (scalar == 0 || scalar > 0x10ffff ||
+        (scalar >= 0xd800 && scalar <= 0xdfff))
+        scalar = YONA_UTF8_REPLACEMENT;
+    if (scalar <= 0x7f) {
+        output[0] = (char)scalar;
+        return 1;
+    }
+    if (scalar <= 0x7ff) {
+        output[0] = (char)(0xc0 | (scalar >> 6));
+        output[1] = (char)(0x80 | (scalar & 0x3f));
+        return 2;
+    }
+    if (scalar <= 0xffff) {
+        output[0] = (char)(0xe0 | (scalar >> 12));
+        output[1] = (char)(0x80 | ((scalar >> 6) & 0x3f));
+        output[2] = (char)(0x80 | (scalar & 0x3f));
+        return 3;
+    }
+    output[0] = (char)(0xf0 | (scalar >> 18));
+    output[1] = (char)(0x80 | ((scalar >> 12) & 0x3f));
+    output[2] = (char)(0x80 | ((scalar >> 6) & 0x3f));
+    output[3] = (char)(0x80 | (scalar & 0x3f));
+    return 4;
+}
+
+static size_t yona_utf8_scalar_count_bytes(const char* s, size_t bytes) {
+    size_t count = 0;
+    for (size_t offset = 0; offset < bytes; ++count) {
+        uint32_t scalar;
+        size_t consumed = yona_string_utf8_decode(s + offset, bytes - offset, &scalar);
+        offset += consumed ? consumed : 1;
+    }
+    return count;
+}
+
+static size_t yona_utf8_scalar_count(const char* s) {
+    return yona_utf8_scalar_count_bytes(s, strlen(s));
+}
+
+static size_t yona_utf8_byte_offset(const char* s, size_t scalar_index) {
+    const size_t bytes = strlen(s);
+    size_t offset = 0;
+    for (size_t index = 0; offset < bytes && index < scalar_index; ++index) {
+        uint32_t scalar;
+        size_t consumed = yona_string_utf8_decode(s + offset, bytes - offset, &scalar);
+        offset += consumed ? consumed : 1;
+    }
+    return offset;
+}
+
 int64_t yona_Std_String__length(const char* s) {
-    return yona_rt_string_length_fast(s);
+    return (int64_t)yona_utf8_scalar_count(s);
 }
 
 const char* yona_Std_String__toUpperCase(const char* s) {
@@ -1692,6 +1918,11 @@ const char* yona_Std_String__toLowerCase(const char* s) {
 }
 
 const char* yona_Std_String__trim(const char* s) {
+    if (!*s) {
+        char* empty = (char*)rc_alloc(RC_TYPE_STRING, 1);
+        empty[0] = '\0';
+        return empty;
+    }
     const char* start = s;
     while (*start && (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r')) start++;
     const char* end = s + strlen(s) - 1;
@@ -1705,7 +1936,8 @@ const char* yona_Std_String__trim(const char* s) {
 
 int64_t yona_Std_String__indexOf(const char* needle, const char* haystack) {
     const char* p = strstr(haystack, needle);
-    return p ? (int64_t)(p - haystack) : -1;
+    return p ? (int64_t)yona_utf8_scalar_count_bytes(
+        haystack, (size_t)(p - haystack)) : -1;
 }
 
 int64_t yona_Std_String__contains(const char* needle, const char* haystack) {
@@ -1724,18 +1956,20 @@ int64_t yona_Std_String__endsWith(const char* suffix, const char* s) {
     return strcmp(s + slen - xlen, suffix) == 0;
 }
 
-const char* yona_Std_String__substring(const char* s, int64_t start, int64_t len) {
-    size_t slen = strlen(s);
+const char* yona_Std_String__substring(const char* s, int64_t start, int64_t end) {
     if (start < 0) start = 0;
-    if ((size_t)start >= slen) { char* r = (char*)rc_alloc(RC_TYPE_STRING, 1); r[0] = '\0'; return r; }
-    if (len < 0 || (size_t)(start + len) > slen) len = slen - start;
+    if (end < start) end = start;
+    if (end < 0) end = 0;
+    const size_t start_byte = yona_utf8_byte_offset(s, (size_t)start);
+    const size_t end_byte = yona_utf8_byte_offset(s, (size_t)end);
+    size_t len = end_byte - start_byte;
     char* r = (char*)rc_alloc(RC_TYPE_STRING, len + 1);
-    memcpy(r, s + start, len);
+    memcpy(r, s + start_byte, len);
     r[len] = '\0';
     return r;
 }
 
-const char* yona_Std_String__replace(const char* old, const char* new_s, const char* s) {
+const char* yona_Std_String__replace(const char* s, const char* old, const char* new_s) {
     size_t olen = strlen(old);
     size_t nlen = strlen(new_s);
     size_t slen = strlen(s);
@@ -1768,10 +2002,23 @@ const char* yona_Std_String__replace(const char* old, const char* new_s, const c
 }
 
 /* split returns an Iterator that yields substrings on demand */
-typedef struct { const char* str; const char* pos; const char* delim; size_t dlen; int done; } split_iter_state_t;
+typedef struct {
+    void (*finalize)(void*);
+    const char* str;
+    const char* pos;
+    const char* delim;
+    size_t dlen;
+    int done;
+} split_iter_state_t;
+
+static void split_iter_finalize(void* raw) {
+    split_iter_state_t* st = (split_iter_state_t*)raw;
+    if (st->str) yona_rt_rc_dec((void*)st->str);
+    if (st->delim) yona_rt_rc_dec((void*)st->delim);
+}
 
 static int64_t split_iter_next(int64_t* env) {
-    split_iter_state_t* st = (split_iter_state_t*)(intptr_t)env[5];
+    split_iter_state_t* st = (split_iter_state_t*)(intptr_t)env[6];
     if (st->done) return (int64_t)(intptr_t)make_none();
     const char* next = st->dlen > 0 ? strstr(st->pos, st->delim) : NULL;
     size_t len;
@@ -1780,29 +2027,44 @@ static int64_t split_iter_next(int64_t* env) {
             st->done = 1;
             return (int64_t)(intptr_t)make_none();
         }
-        len = 1;
+        uint32_t scalar;
+        len = yona_string_utf8_decode(st->pos, strlen(st->pos), &scalar);
         next = NULL;
     } else {
         len = next ? (size_t)(next - st->pos) : strlen(st->pos);
     }
     extern void* yona_rt_rc_alloc_string_len(size_t bytes, size_t str_len);
-    char* part = (char*)yona_rt_rc_alloc_string_len(len + 1, len);
-    memcpy(part, st->pos, len); part[len] = '\0';
+    size_t output_len = len;
+    uint32_t empty_delimiter_scalar = 0;
+    if (st->dlen == 0) {
+        yona_string_utf8_decode(st->pos, strlen(st->pos), &empty_delimiter_scalar);
+        output_len = yona_utf8_encoded_size(empty_delimiter_scalar);
+    }
+    char* part = (char*)yona_rt_rc_alloc_string_len(output_len + 1, output_len);
+    if (st->dlen == 0)
+        yona_utf8_encode(part, empty_delimiter_scalar);
+    else
+        memcpy(part, st->pos, len);
+    part[output_len] = '\0';
     if (next) st->pos = next + st->dlen;
-    else if (st->dlen == 0) st->pos += 1;
+    else if (st->dlen == 0) st->pos += len;
     else st->done = 1;
     if (st->dlen == 0 && *st->pos == '\0') st->done = 1;
     return (int64_t)(intptr_t)make_some((int64_t)(intptr_t)part, 1);
 }
 
 int64_t yona_Std_String__split(const char* delim, const char* s) {
-    split_iter_state_t* st = (split_iter_state_t*)malloc(sizeof(split_iter_state_t));
+    split_iter_state_t* st = (split_iter_state_t*)
+        yona_rt_native_state_alloc(sizeof(split_iter_state_t), split_iter_finalize);
     st->str = s; st->pos = s; st->delim = delim;
     st->dlen = strlen(delim); st->done = 0;
+    yona_rt_rc_inc((void*)s);
+    yona_rt_rc_inc((void*)delim);
     extern void* yona_rt_closure_create(void* fn, int64_t ret, int64_t arity, int64_t caps);
     extern void yona_rt_closure_set_cap(void* cl, int64_t idx, int64_t val);
     int64_t* cl = (int64_t*)yona_rt_closure_create((void*)split_iter_next, 0, 0, 1);
     yona_rt_closure_set_cap(cl, 0, (int64_t)(intptr_t)st);
+    yona_rt_closure_set_heap_mask(cl, 1);
     return (int64_t)(intptr_t)make_iterator(cl);
 }
 
@@ -1831,41 +2093,97 @@ const char* yona_Std_String__join(const char* sep, int64_t* seq) {
 }
 
 int64_t yona_Std_String__charAt(const char* s, int64_t idx) {
-    size_t len = strlen(s);
-    if (idx < 0 || (size_t)idx >= len) return 0;
-    return (int64_t)(unsigned char)s[idx];
+    if (idx < 0) return 0;
+    const size_t bytes = strlen(s);
+    size_t offset = yona_utf8_byte_offset(s, (size_t)idx);
+    if (offset >= bytes) return 0;
+    uint32_t scalar;
+    yona_string_utf8_decode(s + offset, bytes - offset, &scalar);
+    return (int64_t)scalar;
 }
 
 const char* yona_Std_String__padLeft(int64_t width, const char* pad, const char* s) {
-    size_t slen = strlen(s);
-    if ((int64_t)slen >= width) { char* r = (char*)rc_alloc(RC_TYPE_STRING, slen + 1); memcpy(r, s, slen + 1); return r; }
-    size_t plen = strlen(pad);
-    if (plen == 0) { char* r = (char*)rc_alloc(RC_TYPE_STRING, slen + 1); memcpy(r, s, slen + 1); return r; }
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, width + 1);
-    size_t fill = width - slen;
-    for (size_t i = 0; i < fill; i++) r[i] = pad[i % plen];
-    memcpy(r + fill, s, slen + 1);
+    const size_t sbytes = strlen(s);
+    const size_t scalars = yona_utf8_scalar_count_bytes(s, sbytes);
+    const size_t pbytes = strlen(pad);
+    if (width <= (int64_t)scalars || pbytes == 0) {
+        char* r = (char*)rc_alloc(RC_TYPE_STRING, sbytes + 1);
+        memcpy(r, s, sbytes + 1);
+        return r;
+    }
+    const size_t fill = (size_t)width - scalars;
+    size_t fill_bytes = 0, pad_offset = 0;
+    for (size_t i = 0; i < fill; ++i) {
+        if (pad_offset >= pbytes) pad_offset = 0;
+        uint32_t scalar;
+        size_t consumed = yona_string_utf8_decode(pad + pad_offset, pbytes - pad_offset, &scalar);
+        fill_bytes += yona_utf8_encoded_size(scalar);
+        pad_offset += consumed ? consumed : 1;
+    }
+    char* r = (char*)rc_alloc(RC_TYPE_STRING, fill_bytes + sbytes + 1);
+    char* out = r;
+    pad_offset = 0;
+    for (size_t i = 0; i < fill; ++i) {
+        if (pad_offset >= pbytes) pad_offset = 0;
+        uint32_t scalar;
+        size_t consumed = yona_string_utf8_decode(pad + pad_offset, pbytes - pad_offset, &scalar);
+        out += yona_utf8_encode(out, scalar);
+        pad_offset += consumed ? consumed : 1;
+    }
+    memcpy(out, s, sbytes + 1);
     return r;
 }
 
 const char* yona_Std_String__padRight(int64_t width, const char* pad, const char* s) {
-    size_t slen = strlen(s);
-    if ((int64_t)slen >= width) { char* r = (char*)rc_alloc(RC_TYPE_STRING, slen + 1); memcpy(r, s, slen + 1); return r; }
-    size_t plen = strlen(pad);
-    if (plen == 0) { char* r = (char*)rc_alloc(RC_TYPE_STRING, slen + 1); memcpy(r, s, slen + 1); return r; }
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, width + 1);
-    memcpy(r, s, slen);
-    size_t fill = width - slen;
-    for (size_t i = 0; i < fill; i++) r[slen + i] = pad[i % plen];
-    r[width] = '\0';
+    const size_t sbytes = strlen(s);
+    const size_t scalars = yona_utf8_scalar_count_bytes(s, sbytes);
+    const size_t pbytes = strlen(pad);
+    if (width <= (int64_t)scalars || pbytes == 0) {
+        char* r = (char*)rc_alloc(RC_TYPE_STRING, sbytes + 1);
+        memcpy(r, s, sbytes + 1);
+        return r;
+    }
+    const size_t fill = (size_t)width - scalars;
+    size_t fill_bytes = 0, pad_offset = 0;
+    for (size_t i = 0; i < fill; ++i) {
+        if (pad_offset >= pbytes) pad_offset = 0;
+        uint32_t scalar;
+        size_t consumed = yona_string_utf8_decode(pad + pad_offset, pbytes - pad_offset, &scalar);
+        fill_bytes += yona_utf8_encoded_size(scalar);
+        pad_offset += consumed ? consumed : 1;
+    }
+    char* r = (char*)rc_alloc(RC_TYPE_STRING, sbytes + fill_bytes + 1);
+    memcpy(r, s, sbytes);
+    char* out = r + sbytes;
+    pad_offset = 0;
+    for (size_t i = 0; i < fill; ++i) {
+        if (pad_offset >= pbytes) pad_offset = 0;
+        uint32_t scalar;
+        size_t consumed = yona_string_utf8_decode(pad + pad_offset, pbytes - pad_offset, &scalar);
+        out += yona_utf8_encode(out, scalar);
+        pad_offset += consumed ? consumed : 1;
+    }
+    *out = '\0';
     return r;
 }
 
 const char* yona_Std_String__reverse(const char* s) {
-    size_t len = strlen(s);
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, len + 1);
-    for (size_t i = 0; i < len; i++) r[i] = s[len - 1 - i];
-    r[len] = '\0';
+    const size_t bytes = strlen(s);
+    const size_t count = yona_utf8_scalar_count_bytes(s, bytes);
+    uint32_t* scalars = count ? (uint32_t*)malloc(count * sizeof(uint32_t)) : NULL;
+    if (count && !scalars) abort();
+    size_t offset = 0, output_bytes = 0;
+    for (size_t i = 0; i < count; ++i) {
+        size_t consumed = yona_string_utf8_decode(s + offset, bytes - offset, &scalars[i]);
+        offset += consumed ? consumed : 1;
+        output_bytes += yona_utf8_encoded_size(scalars[i]);
+    }
+    char* r = (char*)rc_alloc(RC_TYPE_STRING, output_bytes + 1);
+    char* out = r;
+    for (size_t i = count; i > 0; --i)
+        out += yona_utf8_encode(out, scalars[i - 1]);
+    *out = '\0';
+    free(scalars);
     return r;
 }
 
@@ -1884,22 +2202,21 @@ const char* yona_Std_String__repeat(int64_t n, const char* s) {
 }
 
 const char* yona_Std_String__take(int64_t n, const char* s) {
-    size_t len = strlen(s);
-    if ((size_t)n >= len) n = (int64_t)len;
     if (n < 0) n = 0;
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, (size_t)n + 1);
-    memcpy(r, s, (size_t)n);
-    r[n] = '\0';
+    const size_t bytes = yona_utf8_byte_offset(s, (size_t)n);
+    char* r = (char*)rc_alloc(RC_TYPE_STRING, bytes + 1);
+    memcpy(r, s, bytes);
+    r[bytes] = '\0';
     return r;
 }
 
 const char* yona_Std_String__drop(int64_t n, const char* s) {
-    size_t len = strlen(s);
-    if ((size_t)n >= len) return (const char*)rc_alloc(RC_TYPE_STRING, 1);
     if (n < 0) n = 0;
-    size_t new_len = len - (size_t)n;
+    const size_t len = strlen(s);
+    const size_t offset = yona_utf8_byte_offset(s, (size_t)n);
+    size_t new_len = len - offset;
     char* r = (char*)rc_alloc(RC_TYPE_STRING, new_len + 1);
-    memcpy(r, s + n, new_len + 1);
+    memcpy(r, s + offset, new_len + 1);
     return r;
 }
 
@@ -1922,33 +2239,161 @@ const char* yona_Std_String__unlines(int64_t* seq) {
 }
 
 /* chars returns an Iterator that yields each character as a single-char string */
-typedef struct { const char* str; size_t pos; size_t len; } char_iter_state_t;
+typedef struct {
+    void (*finalize)(void*);
+    const char* str;
+    size_t pos;
+    size_t len;
+} char_iter_state_t;
+
+static void char_iter_finalize(void* raw) {
+    char_iter_state_t* st = (char_iter_state_t*)raw;
+    if (st->str) yona_rt_rc_dec((void*)st->str);
+}
 
 static int64_t char_iter_next(int64_t* env) {
-    char_iter_state_t* st = (char_iter_state_t*)(intptr_t)env[5];
+    char_iter_state_t* st = (char_iter_state_t*)(intptr_t)env[6];
     if (st->pos >= st->len) return (int64_t)(intptr_t)make_none();
-    int64_t ch = (int64_t)(unsigned char)st->str[st->pos++];
+    uint32_t scalar;
+    size_t consumed = yona_string_utf8_decode(st->str + st->pos, st->len - st->pos, &scalar);
+    st->pos += consumed ? consumed : 1;
+    int64_t ch = (int64_t)scalar;
     return (int64_t)(intptr_t)make_some(ch, 0);
 }
 
 int64_t yona_Std_String__chars(const char* s) {
     size_t len = yona_rt_string_length_fast(s);
-    char_iter_state_t* st = (char_iter_state_t*)malloc(sizeof(char_iter_state_t));
+    char_iter_state_t* st = (char_iter_state_t*)
+        yona_rt_native_state_alloc(sizeof(char_iter_state_t), char_iter_finalize);
     st->str = s; st->pos = 0; st->len = len;
+    yona_rt_rc_inc((void*)s);
     extern void* yona_rt_closure_create(void* fn, int64_t ret, int64_t arity, int64_t caps);
     extern void yona_rt_closure_set_cap(void* cl, int64_t idx, int64_t val);
     int64_t* cl = (int64_t*)yona_rt_closure_create((void*)char_iter_next, 0, 0, 1);
     yona_rt_closure_set_cap(cl, 0, (int64_t)(intptr_t)st);
+    yona_rt_closure_set_heap_mask(cl, 1);
     return (int64_t)(intptr_t)make_iterator(cl);
 }
 
 const char* yona_Std_String__fromChars(int64_t* seq) {
-    int64_t len = yona_rt_seq_length(seq);
-    char* r = (char*)yona_rt_rc_alloc_string_len((size_t)len + 1, (size_t)len);
+    const int64_t len = yona_rt_seq_length(seq);
+    size_t bytes = 0;
     for (int64_t i = 0; i < len; i++)
-        r[i] = (char)yona_rt_seq_get(seq, i);
-    r[len] = '\0';
+        bytes += yona_utf8_encoded_size((uint32_t)yona_rt_seq_get(seq, i));
+    char* r = (char*)yona_rt_rc_alloc_string_len(bytes + 1, bytes);
+    char* out = r;
+    for (int64_t i = 0; i < len; i++)
+        out += yona_utf8_encode(out, (uint32_t)yona_rt_seq_get(seq, i));
+    *out = '\0';
     return r;
+}
+
+/* ===== Std\Convert — checked conversion and parsing primitives ===== */
+
+static int64_t yona_conversion_result_ok(int64_t value, int value_is_heap) {
+    int64_t* result = (int64_t*)yona_rt_adt_alloc(0, 1);
+    yona_rt_adt_set_field(result, 0, value);
+    yona_rt_adt_set_heap_mask(result, value_is_heap ? 1 : 0);
+    return (int64_t)(intptr_t)result;
+}
+
+static char* yona_conversion_copy_text(const char* text) {
+    const size_t length = strlen(text);
+    char* copy = (char*)yona_rt_rc_alloc_string_len(length + 1, length);
+    memcpy(copy, text, length + 1);
+    return copy;
+}
+
+static int64_t yona_conversion_result_error(int error_tag, const char* message) {
+    int64_t* error = (int64_t*)yona_rt_adt_alloc(error_tag, 1);
+    yona_rt_adt_set_field(
+        error, 0, (int64_t)(intptr_t)yona_conversion_copy_text(message));
+    yona_rt_adt_set_heap_mask(error, 1);
+    int64_t* result = (int64_t*)yona_rt_adt_alloc(1, 1);
+    yona_rt_adt_set_field(result, 0, (int64_t)(intptr_t)error);
+    yona_rt_adt_set_heap_mask(result, 1);
+    return (int64_t)(intptr_t)result;
+}
+
+static int64_t yona_parse_error(int error_tag, const char* expected,
+                                const char* input) {
+    char message[320];
+    snprintf(message, sizeof(message), "expected %s, found '%s'", expected, input);
+    return yona_conversion_result_error(error_tag, message);
+}
+
+int64_t yona_Std_Convert__parseIntNative(const char* text) {
+    errno = 0;
+    char* end = NULL;
+    long long value = strtoll(text, &end, 10);
+    if (end == text)
+        return yona_parse_error(0, "a signed decimal Int", text);
+    while (*end && isspace((unsigned char)*end)) ++end;
+    if (*end)
+        return yona_parse_error(0, "a complete signed decimal Int", text);
+    if (errno == ERANGE)
+        return yona_parse_error(1, "an Int in the signed 64-bit range", text);
+    return yona_conversion_result_ok((int64_t)value, 0);
+}
+
+int64_t yona_Std_Convert__parseFloatNative(const char* text) {
+    errno = 0;
+    char* end = NULL;
+    double value = strtod(text, &end);
+    if (end == text)
+        return yona_parse_error(0, "a decimal Float", text);
+    while (*end && isspace((unsigned char)*end)) ++end;
+    if (*end)
+        return yona_parse_error(0, "a complete decimal Float", text);
+    if (errno == ERANGE || !isfinite(value))
+        return yona_parse_error(1, "a finite Float", text);
+    int64_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return yona_conversion_result_ok(bits, 0);
+}
+
+int64_t yona_Std_Convert__intToFloatNative(int64_t value) {
+    const int64_t exact_limit = INT64_C(9007199254740992);
+    if (value < -exact_limit || value > exact_limit)
+        return yona_conversion_result_error(
+            1, "Int is outside Float's exact integer range [-2^53, 2^53]");
+    const double converted = (double)value;
+    int64_t bits;
+    memcpy(&bits, &converted, sizeof(bits));
+    return yona_conversion_result_ok(bits, 0);
+}
+
+int64_t yona_Std_Convert__floatToIntNative(double value) {
+    if (!isfinite(value) || value < -9223372036854775808.0 ||
+        value >= 9223372036854775808.0)
+        return yona_conversion_result_error(
+            1, "Float is outside the signed 64-bit Int range");
+    if (trunc(value) != value)
+        return yona_conversion_result_error(
+            0, "Float has a fractional part; an integral value is required");
+    return yona_conversion_result_ok((int64_t)value, 0);
+}
+
+int64_t yona_Std_Convert__decodeUtf8Native(void* bytes) {
+    const int64_t signed_length = yona_rt_byte_array_length(bytes);
+    const size_t length = signed_length > 0 ? (size_t)signed_length : 0;
+    const char* data = (const char*)((int64_t*)bytes + 1);
+    for (size_t offset = 0; offset < length;) {
+        uint32_t scalar;
+        size_t consumed = yona_string_utf8_decode(
+            data + offset, length - offset, &scalar);
+        if (!consumed || (scalar == YONA_UTF8_REPLACEMENT && consumed == 1))
+            return yona_conversion_result_error(
+                0, "ByteArray is not well-formed UTF-8");
+        if (scalar == 0)
+            return yona_conversion_result_error(
+                0, "Yona String cannot contain an embedded NUL scalar");
+        offset += consumed;
+    }
+    char* result = (char*)yona_rt_rc_alloc_string_len(length + 1, length);
+    memcpy(result, data, length);
+    result[length] = '\0';
+    return yona_conversion_result_ok((int64_t)(intptr_t)result, 1);
 }
 
 /* Std\Encoding — base64, hex, URL encoding */
@@ -1985,15 +2430,31 @@ static int b64_decode_char(char c) {
 
 const char* yona_Std_Encoding__base64Decode(const char* s) {
     size_t len = strlen(s);
+    if (len % 4 != 0) {
+        char* empty = (char*)rc_alloc(RC_TYPE_STRING, 1);
+        empty[0] = '\0';
+        return empty;
+    }
+    for (size_t i = 0; i < len; i += 4) {
+        const int final_block = i + 4 == len;
+        if (b64_decode_char(s[i]) < 0 || b64_decode_char(s[i + 1]) < 0 ||
+            (s[i + 2] != '=' && b64_decode_char(s[i + 2]) < 0) ||
+            (s[i + 3] != '=' && b64_decode_char(s[i + 3]) < 0) ||
+            (!final_block && (s[i + 2] == '=' || s[i + 3] == '=')) ||
+            (s[i + 2] == '=' && s[i + 3] != '=')) {
+            char* empty = (char*)rc_alloc(RC_TYPE_STRING, 1);
+            empty[0] = '\0';
+            return empty;
+        }
+    }
     size_t out_len = 3 * len / 4;
     char* r = (char*)rc_alloc(RC_TYPE_STRING, out_len + 1);
     size_t j = 0;
     for (size_t i = 0; i < len; i += 4) {
         int a = b64_decode_char(s[i]);
         int b = (i + 1 < len) ? b64_decode_char(s[i + 1]) : 0;
-        int c = (i + 2 < len) ? b64_decode_char(s[i + 2]) : 0;
-        int d = (i + 3 < len) ? b64_decode_char(s[i + 3]) : 0;
-        if (a < 0) a = 0; if (b < 0) b = 0;
+        int c = s[i + 2] == '=' ? 0 : b64_decode_char(s[i + 2]);
+        int d = s[i + 3] == '=' ? 0 : b64_decode_char(s[i + 3]);
         uint32_t triple = ((uint32_t)a << 18) | ((uint32_t)b << 12) | ((uint32_t)c << 6) | (uint32_t)d;
         r[j++] = (triple >> 16) & 0xFF;
         if (i + 2 < len && s[i + 2] != '=') r[j++] = (triple >> 8) & 0xFF;
@@ -2464,7 +2925,8 @@ const char* yona_Std_Process__yonaVersion(void) {
     return yona_rt_copy_cstr(YONA_VERSION_STRING);
 }
 
-char* yona_Std_IO__readStdin(void) {
+char* yona_Std_IO__readStdin_impl(int64_t unit) {
+    (void)unit;
     const size_t max_cap = 64u * 1024u * 1024u;
     size_t cap = 4096, len = 0;
     char* buf = (char*)malloc(cap);
@@ -3094,18 +3556,43 @@ const char* yona_Std_Crypto__sha256(const char* input) {
     return r;
 }
 
-const char* yona_Std_Crypto__randomBytes(int64_t n) {
-    char* r = (char*)rc_alloc(RC_TYPE_STRING, (size_t)n + 1);
-    FILE* f = fopen("/dev/urandom", "rb");
-    if (f) { fread(r, 1, (size_t)n, f); fclose(f); }
-    r[n] = '\0';
-    return r;
+static int yona_crypto_random_fill(uint8_t* buffer, size_t length) {
+    if (length == 0) return 1;
+#if defined(_WIN32)
+    typedef LONG (WINAPI *bcrypt_gen_random_fn)(void*, unsigned char*,
+                                                unsigned long, unsigned long);
+    HMODULE library = LoadLibraryA("bcrypt.dll");
+    if (!library) return 0;
+    bcrypt_gen_random_fn generate = (bcrypt_gen_random_fn)(uintptr_t)
+        GetProcAddress(library, "BCryptGenRandom");
+    const LONG result = generate
+        ? generate(NULL, buffer, (unsigned long)length, 0x00000002UL)
+        : (LONG)-1;
+    FreeLibrary(library);
+    return result >= 0;
+#else
+    FILE* source = fopen("/dev/urandom", "rb");
+    if (!source) return 0;
+    const size_t read = fread(buffer, 1, length, source);
+    fclose(source);
+    return read == length;
+#endif
+}
+
+void* yona_Std_Crypto__randomBytes(int64_t n) {
+    if (n < 0) n = 0;
+    int64_t* result = (int64_t*)yona_rt_byte_array_alloc(n);
+    uint8_t* bytes = (uint8_t*)(result + 1);
+    if (!yona_crypto_random_fill(bytes, (size_t)n))
+        memset(bytes, 0, (size_t)n);
+    return result;
 }
 
 const char* yona_Std_Crypto__randomHex(int64_t n) {
+    if (n < 0) n = 0;
     char* bytes = (char*)malloc((size_t)n);
-    FILE* f = fopen("/dev/urandom", "rb");
-    if (f) { fread(bytes, 1, (size_t)n, f); fclose(f); }
+    if (!yona_crypto_random_fill((uint8_t*)bytes, (size_t)n))
+        memset(bytes, 0, (size_t)n);
     char* r = (char*)rc_alloc(RC_TYPE_STRING, (size_t)n * 2 + 1);
     static const char hex[] = "0123456789abcdef";
     for (int64_t i = 0; i < n; i++) {
@@ -3119,8 +3606,8 @@ const char* yona_Std_Crypto__randomHex(int64_t n) {
 
 const char* yona_Std_Crypto__uuid4(void) {
     uint8_t bytes[16];
-    FILE* f = fopen("/dev/urandom", "rb");
-    if (f) { fread(bytes, 1, 16, f); fclose(f); }
+    if (!yona_crypto_random_fill(bytes, sizeof(bytes)))
+        memset(bytes, 0, sizeof(bytes));
     bytes[6] = (bytes[6] & 0x0f) | 0x40; /* version 4 */
     bytes[8] = (bytes[8] & 0x3f) | 0x80; /* variant 1 */
     char* r = (char*)rc_alloc(RC_TYPE_STRING, 37);
@@ -3394,6 +3881,10 @@ int64_t yona_Prelude__Ord_Float__compare(double a, double b) {
     return (a < b) ? -1 : (a > b) ? 1 : 0;
 }
 int64_t yona_Prelude__Hash_Float__hash(double f) {
+    /* Eq identifies +0.0 and -0.0, so Hash must canonicalize their two IEEE
+     * encodings to the same value. NaNs remain unconstrained because Eq NaN
+     * is false. */
+    if (f == 0.0) f = 0.0;
     uint64_t bits;
     memcpy(&bits, &f, sizeof(bits));
     bits = (bits ^ (bits >> 30)) * 0xbf58476d1ce4e5b9ULL;
@@ -3424,39 +3915,38 @@ int64_t yona_Prelude__Hash_Symbol__hash(int64_t s) { return s; }
 
 /* ===== Array trait instance wrappers ===== */
 
-int64_t yona_Prelude__Array_ByteArray__length(int64_t arr) {
-    return yona_rt_byte_array_length((void*)(intptr_t)arr);
+int64_t yona_Prelude__Array_ByteArray__length(void* arr) {
+    return yona_rt_byte_array_length(arr);
 }
-int64_t yona_Prelude__Array_ByteArray__get(int64_t arr, int64_t i) {
-    return yona_rt_byte_array_get((void*)(intptr_t)arr, i);
+int64_t yona_Prelude__Array_ByteArray__get(void* arr, int64_t i) {
+    return yona_rt_byte_array_get(arr, i);
 }
-int64_t yona_Prelude__Array_IntArray__length(int64_t arr) {
-    return yona_rt_int_array_length((int64_t*)(intptr_t)arr);
+int64_t yona_Prelude__Array_IntArray__length(int64_t* arr) {
+    return yona_rt_int_array_length(arr);
 }
-int64_t yona_Prelude__Array_IntArray__get(int64_t arr, int64_t i) {
-    return yona_rt_int_array_get((int64_t*)(intptr_t)arr, i);
+int64_t yona_Prelude__Array_IntArray__get(int64_t* arr, int64_t i) {
+    return yona_rt_int_array_get(arr, i);
 }
-int64_t yona_Prelude__Array_FloatArray__length(int64_t arr) {
-    return (int64_t)yona_rt_float_array_length((double*)(intptr_t)arr);
+int64_t yona_Prelude__Array_FloatArray__length(double* arr) {
+    return (int64_t)yona_rt_float_array_length(arr);
 }
-double yona_Prelude__Array_FloatArray__get(int64_t arr, int64_t i) {
-    return yona_rt_float_array_get((double*)(intptr_t)arr, i);
+double yona_Prelude__Array_FloatArray__get(double* arr, int64_t i) {
+    return yona_rt_float_array_get(arr, i);
 }
-int64_t yona_Prelude__Array_Seq__length(int64_t arr) {
+int64_t yona_Prelude__Array_Seq__length(int64_t* arr) {
     extern int64_t yona_rt_seq_length(int64_t* seq);
-    return yona_rt_seq_length((int64_t*)(intptr_t)arr);
+    return yona_rt_seq_length(arr);
 }
-int64_t yona_Prelude__Array_Seq__get(int64_t arr, int64_t i) {
-    extern int64_t yona_rt_seq_get(int64_t* seq, int64_t index);
-    return yona_rt_seq_get((int64_t*)(intptr_t)arr, i);
+int64_t yona_Prelude__Array_Seq__get(int64_t* arr, int64_t i) {
+    extern int64_t yona_rt_seq_get_owned(int64_t* seq, int64_t index);
+    return yona_rt_seq_get_owned(arr, i);
 }
-int64_t yona_Prelude__Array_String__length(int64_t arr) {
+int64_t yona_Prelude__Array_String__length(const char* arr) {
     extern int64_t yona_Std_String__length(const char* s);
-    return yona_Std_String__length((const char*)(intptr_t)arr);
+    return yona_Std_String__length(arr);
 }
-int64_t yona_Prelude__Array_String__get(int64_t arr, int64_t i) {
-    const char* s = (const char*)(intptr_t)arr;
-    return (int64_t)(unsigned char)s[i];
+int64_t yona_Prelude__Array_String__get(const char* arr, int64_t i) {
+    return yona_Std_String__charAt(arr, i);
 }
 
 /* seq_head and seq_tail are in runtime/seq.c */
@@ -3480,3 +3970,7 @@ int64_t yona_Prelude__Array_String__get(int64_t arr, int64_t i) {
 
 /* UTF-8 ↔ LSP UTF-16 positions (documented C ABI + Std\Utf16) */
 #include "runtime/utf16.c"
+
+#if defined(YONA_EMBEDDED_PCRE2)
+#include "runtime/regex.c"
+#endif

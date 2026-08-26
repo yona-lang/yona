@@ -1,0 +1,4 @@
+FAIL first: first detail
+PASS middle
+FAIL last: last detail
+SUMMARY 1 passed, 2 failed

@@ -4,11 +4,7 @@
 ## or extract values with `unwrapOr`. Convert to Option with `toOption`.
 module Std\Result
 
-export type Result
 export isOk, isErr, unwrapOr, map, mapErr, flatMap, flatten, toOption, andThen, orElse, fold
-
-## A result type: either `Ok value` (success) or `Err error` (failure).
-type Result a e = Ok a | Err e
 
 ## Returns `true` if the result is `Ok`.
 ##
@@ -16,6 +12,7 @@ type Result a e = Ok a | Err e
 ## isOk (Ok 42)       # => true
 ## isOk (Err "fail")  # => false
 ## ```
+isOk : Result (a, e) -> Bool
 isOk r =
     case r of
         Ok _  -> true
@@ -28,6 +25,7 @@ isOk r =
 ## isErr (Err "fail")  # => true
 ## isErr (Ok 42)       # => false
 ## ```
+isErr : Result (a, e) -> Bool
 isErr r =
     case r of
         Err _ -> true
@@ -40,6 +38,7 @@ isErr r =
 ## unwrapOr 0 (Ok 42)       # => 42
 ## unwrapOr 0 (Err "fail")  # => 0
 ## ```
+unwrapOr : a -> Result (a, e) -> a
 unwrapOr default r =
     case r of
         Ok value -> value
@@ -52,6 +51,7 @@ unwrapOr default r =
 ## map (\x -> x * 2) (Ok 21)       # => Ok 42
 ## map (\x -> x * 2) (Err "fail")  # => Err "fail"
 ## ```
+map : (a -> b) -> Result (a, e) -> Result (b, e)
 map fn r =
     case r of
         Ok value -> Ok (fn value)
@@ -64,6 +64,7 @@ map fn r =
 ## mapErr (\e -> e + "!") (Err "fail")  # => Err "fail!"
 ## mapErr (\e -> e + "!") (Ok 42)       # => Ok 42
 ## ```
+mapErr : (e -> f) -> Result (a, e) -> Result (a, f)
 mapErr fn r =
     case r of
         Err e -> Err (fn e)
@@ -76,6 +77,7 @@ mapErr fn r =
 ## flatMap (\x -> if x > 0 then Ok (x * 2) else Err "negative") (Ok 21)  # => Ok 42
 ## flatMap (\x -> Ok (x * 2)) (Err "fail")                                # => Err "fail"
 ## ```
+flatMap : (a -> Result (b, e)) -> Result (a, e) -> Result (b, e)
 flatMap fn r =
     case r of
         Ok value -> fn value
@@ -89,6 +91,7 @@ flatMap fn r =
 ## flatten (Ok (Err "inner")) # => Err "inner"
 ## flatten (Err "outer")      # => Err "outer"
 ## ```
+flatten : Result (Result (a, e), e) -> Result (a, e)
 flatten r =
     case r of
         Ok inner -> case inner of
@@ -98,16 +101,18 @@ flatten r =
         Err e -> Err e
     end
 
-## Converts to a symbol-tagged option: `Ok v` → `(:some, v)`, `Err _` → `:none`.
+## Converts to an Option: `Ok value` becomes `Some value`; `Err` becomes
+## `None`.
 ##
 ## ```
-## toOption (Ok 42)       # => (:some, 42)
-## toOption (Err "fail")  # => :none
+## toOption (Ok 42)       # => Some 42
+## toOption (Err "fail")  # => None
 ## ```
+toOption : Result (a, e) -> Option a
 toOption r =
     case r of
-        Ok value -> (:some, value)
-        Err _    -> :none
+        Ok value -> Some value
+        Err _    -> None
     end
 
 ## Alias for `flatMap` — chains a computation that may fail.
@@ -115,6 +120,7 @@ toOption r =
 ## ```
 ## andThen (\x -> Ok (x + 1)) (Ok 41)  # => Ok 42
 ## ```
+andThen : (a -> Result (b, e)) -> Result (a, e) -> Result (b, e)
 andThen fn r =
     case r of
         Ok value -> fn value
@@ -127,6 +133,7 @@ andThen fn r =
 ## orElse (\e -> Ok 0) (Err "fail")  # => Ok 0
 ## orElse (\e -> Ok 0) (Ok 42)       # => Ok 42
 ## ```
+orElse : (e -> Result (a, f)) -> Result (a, e) -> Result (a, f)
 orElse fn r =
     case r of
         Ok v  -> Ok v
@@ -139,6 +146,7 @@ orElse fn r =
 ## fold (\e -> 0) (\v -> v * 2) (Ok 21)       # => 42
 ## fold (\e -> 0) (\v -> v * 2) (Err "fail")  # => 0
 ## ```
+fold : (e -> b) -> (a -> b) -> Result (a, e) -> b
 fold onErr onOk r =
     case r of
         Ok v  -> onOk v

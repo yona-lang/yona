@@ -22,6 +22,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Defined by the shared runtime after this implementation is included in
+ * compiled_runtime.c.  Keep all ADT consumers on the canonical accessor API;
+ * the declarations are needed because gpu_cpu.c is included earlier. */
+int64_t yona_rt_adt_get_tag(void* node);
+int64_t yona_rt_adt_get_field(void* node, int64_t index);
+
 #if YONA_GPU_VULKAN_ENABLED
 static int yona_gpu_has_gpu_cached = -1;
 #endif
@@ -378,11 +384,11 @@ int64_t yona_Std_GPU__mapReduceGraphGPU(int64_t stages, int64_t buffer) {
     if (n < 0) n = 0;
     int64_t* enc = yona_rt_int_array_alloc(n * 2);
     for (int64_t i = 0; i < n; i++) {
-        int64_t* op = (int64_t*)(intptr_t)yona_rt_seq_get(seq, i);
-        /* Seq literals box non-recursive ADTs via yona_rt_box({tag, fields...}). */
-        int64_t tag = op[0];
+        void* op = (void*)(intptr_t)yona_rt_seq_get(seq, i);
+        int64_t tag = yona_rt_adt_get_tag(op);
         enc[1 + i * 2] = tag;
-        enc[1 + i * 2 + 1] = (tag == 2) ? 0 : op[1];
+        enc[1 + i * 2 + 1] =
+            (tag == 2) ? 0 : yona_rt_adt_get_field(op, 0);
     }
     int64_t sum = yona_Std_GPU_raw__mapReduceGraph(enc, yona_gpu_buffer_values(buffer));
     yona_rt_rc_dec(enc);

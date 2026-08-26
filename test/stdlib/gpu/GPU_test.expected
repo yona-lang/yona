@@ -1,0 +1,4 @@
+PASS GPU backend reports a name
+PASS GPU availability probe is stable
+PASS GPU numeric probes are nonnegative
+SUMMARY 3 passed, 0 failed

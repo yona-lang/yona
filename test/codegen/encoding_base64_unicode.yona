@@ -1,0 +1,2 @@
+import base64Encode, base64Decode from Std\Encoding in
+base64Decode (base64Encode "hello β")

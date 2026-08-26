@@ -1,0 +1,164 @@
+PASS Eq compares primitive values
+PASS Ord compares derived values
+PASS Sized measures strings
+PASS Sized measures empty sequences
+PASS Foldable folds left
+PASS Foldable folds right
+PASS Semigroup combines values
+PASS Monoid supplies identities
+PASS Lifted Option equality recurses
+PASS Lifted Result equality recurses
+PASS Lifted sequence ordering is lexicographic
+PASS Lifted sequence ordering recognizes equality
+PASS Lifted sequence ordering compares prefixes
+PASS Lifted sequence ordering checks the first difference
+PASS Lifted sequence ordering supports heap elements
+PASS Lifted sequence hashing follows equality
+PASS Lifted rendering is structural
+PASS Foldable handles optional values
+PASS Sized covers native arrays
+PASS Iterable adapts persistent and optional values
+PASS String Sized, Iterable, and Foldable agree
+PASS Foldable covers native arrays
+PASS Sized covers finite collections
+PASS Set algebra supplies lawful identities
+PASS Dictionary Semigroup is right biased
+PASS Dictionary Semigroup replaces duplicate values
+PASS Dictionary Semigroup keeps disjoint entries
+PASS Dictionary Semigroup preserves persistent inputs
+PASS Dictionary equality is reflexive
+PASS Dictionary equality is structural
+PASS Dictionary equality ignores insertion order
+PASS Dictionary equality accepts a merged value reflexively
+PASS Dictionary equality accepts a bound merged value
+PASS Dictionary iteration sees merged entries
+PASS Dictionary Foldable yields canonical tuples
+PASS Array indexes every supported representation
+PASS Iterable covers native arrays
+PASS Iterable covers sets and dictionaries
+PASS Iterable covers Result and Iterator
+PASS Foldable covers Set, Result, and FloatArray
+PASS Int Eq reflexive
+PASS Int Eq symmetric
+PASS Int Eq transitive
+PASS Int Ord agrees with Eq
+PASS Int Ord transitive
+PASS Int Hash agrees with Eq
+PASS Int Show deterministic
+PASS Bool Eq reflexive
+PASS Bool Eq symmetric
+PASS Bool Eq transitive
+PASS Bool Ord agrees with Eq
+PASS Bool Ord transitive
+PASS Bool Hash agrees with Eq
+PASS Bool Show deterministic
+PASS Float Eq reflexive
+PASS Float Eq symmetric
+PASS Float Eq transitive
+PASS Float Ord agrees with Eq
+PASS Float Ord transitive
+PASS Float Hash agrees with Eq
+PASS Float Show deterministic
+PASS String Eq reflexive
+PASS String Eq symmetric
+PASS String Eq transitive
+PASS String Ord agrees with Eq
+PASS String Ord transitive
+PASS String Hash agrees with Eq
+PASS String Show deterministic
+PASS Symbol Eq reflexive
+PASS Symbol Eq symmetric
+PASS Symbol Eq transitive
+PASS Symbol Hash agrees with Eq
+PASS Symbol Show deterministic
+PASS Ordering Eq reflexive
+PASS Ordering Eq symmetric
+PASS Ordering Eq transitive
+PASS Ordering Ord agrees with Eq
+PASS Ordering Ord transitive
+PASS FileMode Eq reflexive
+PASS FileMode Eq symmetric
+PASS FileMode Eq transitive
+PASS FileMode Ord agrees with Eq
+PASS FileMode Ord transitive
+PASS FileMode Hash agrees with Eq
+PASS FileMode Show deterministic
+PASS Whence Eq reflexive
+PASS Whence Eq symmetric
+PASS Whence Eq transitive
+PASS Whence Ord agrees with Eq
+PASS Whence Ord transitive
+PASS Whence Hash agrees with Eq
+PASS Whence Show deterministic
+PASS Type Eq reflexive
+PASS Type Eq symmetric
+PASS Type Eq transitive
+PASS Type Ord agrees with Eq
+PASS Type Ord transitive
+PASS Type Hash agrees with Eq
+PASS Type Show deterministic
+PASS ConvertError Eq reflexive
+PASS ConvertError Eq symmetric
+PASS ConvertError Eq transitive
+PASS ConvertError Ord agrees with Eq
+PASS ConvertError Ord transitive
+PASS ConvertError Hash agrees with Eq
+PASS ConvertError Show deterministic
+PASS ParseError Eq reflexive
+PASS ParseError Eq symmetric
+PASS ParseError Eq transitive
+PASS ParseError Ord agrees with Eq
+PASS ParseError Ord transitive
+PASS ParseError Hash agrees with Eq
+PASS ParseError Show deterministic
+PASS Option Eq reflexive
+PASS Option Eq symmetric
+PASS Option Eq transitive
+PASS Option Ord agrees with Eq
+PASS Option Ord transitive
+PASS Option Hash agrees with Eq
+PASS Option Show deterministic
+PASS Result Eq reflexive
+PASS Result Eq symmetric
+PASS Result Eq transitive
+PASS Result Ord agrees with Eq
+PASS Result Ord transitive
+PASS Result Hash agrees with Eq
+PASS Result Show deterministic
+PASS Seq Eq reflexive
+PASS Seq Eq symmetric
+PASS Seq Eq transitive
+PASS Seq Ord agrees with Eq
+PASS Seq Ord transitive
+PASS Seq Hash agrees with Eq
+PASS Seq Show deterministic
+PASS Set Eq reflexive
+PASS Set Eq symmetric
+PASS Set Eq transitive
+PASS Set Ord agrees with Eq
+PASS Set Ord transitive
+PASS Set Hash agrees with Eq
+PASS Set Show deterministic
+PASS Dict Eq reflexive
+PASS Dict Eq symmetric
+PASS Dict Eq transitive
+PASS Dict Ord agrees with Eq
+PASS Dict Ord transitive
+PASS Dict Hash agrees with Eq
+PASS Dict Show deterministic
+PASS Tuple Eq reflexive
+PASS Tuple Eq symmetric
+PASS Tuple Eq transitive
+PASS Tuple Ord agrees with Eq
+PASS Tuple Ord transitive
+PASS Tuple Hash agrees with Eq
+PASS Tuple Show deterministic
+PASS String Semigroup associative
+PASS String Monoid identity
+PASS Seq Semigroup associative
+PASS Seq Monoid identity
+PASS Set Semigroup associative
+PASS Set Monoid identity
+PASS Dict Semigroup associative
+PASS Dict Monoid identity
+SUMMARY 163 passed, 0 failed

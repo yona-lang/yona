@@ -22,22 +22,56 @@ These constructors are always in scope:
 ## Functions
 
 ```yona
-identity x = x           -- returns its argument
-const x _ = x             -- ignores second argument
-flip f a b = f b a         -- swaps argument order
-compose f g x = f (g x)   -- function composition
-```
-
-## Functions
-
-```yona
 identity x = x             -- returns its argument
 const x _ = x               -- ignores second argument
 flip f a b = f b a           -- swaps argument order
 compose f g x = f (g x)     -- function composition
-foldl fn acc seq             -- left fold (C loop, no stack overflow)
-foldr fn acc seq             -- right fold (C loop)
 ```
+
+Collection folds are intentionally not Prelude functions. Use the polymorphic
+`foldLeft` / `foldRight` trait methods, or import the specialized helpers from
+`Std\List` and `Std\Iterator`.
+
+## Foundational traits
+
+The Prelude is also the single source of truth for Yona's foundational static
+contracts:
+
+```yona
+trait Eq a
+trait Eq a => Ord a
+trait Eq a => Hash a
+trait Show a
+trait Array array element
+trait Closeable a
+trait Sized a
+trait Iterable collection element
+trait Foldable collection element
+trait Semigroup a
+trait Semigroup a => Monoid a
+trait From target source
+trait TryFrom target source
+trait Parse target
+trait Send a
+trait Send a => Shareable a
+```
+
+`Eq`, `Ord`, `Hash`, and `Show` have primitive and lawful lifted immutable
+instances. `Array`, `Sized`, `Iterable`, and `Foldable` cover the finite
+sequence/string/native-array and appropriate Option/Result/Set/Dict/Iterator
+families. `Semigroup` and `Monoid` cover String, Seq, Set, and right-biased
+Dict combination. Conversion implementations live in `Std\Convert`.
+
+`Send` and `Shareable` are method-free marker traits checked and erased at
+concurrency boundaries. They lift through safe immutable aggregates. Native
+arrays implement `Send` (unique ownership may move) but not `Shareable`;
+thread-safe `Sender`/`Receiver` channel endpoints implement both. Linear
+resources and promises remain outside both contracts.
+
+Equality and relational operators select these contracts statically:
+`==`/`!=` use `Eq`; `<`/`<=`/`>`/`>=` use `Ord.compare`, whose result is the
+`Ordering` ADT (`Less | Equal | Greater`). See the trait guide and
+`Std\TraitLaws` for the laws and reusable executable checks.
 
 ## How It Works
 
@@ -64,9 +98,10 @@ No manual registration in `cli/main.cpp`, `Parser.cpp`, or anywhere else.
 2. Recompile: `yonac lib/Prelude.yona && mv Prelude.yonai lib/`
 3. Rebuild compiler. Done.
 
-**For C-backed functions (foldl, foldr):**
+**For C-backed functions:**
 1. Add implementation in `src/compiled_runtime.c`
-2. Add `FN yona_Prelude__funcname ...` line to `lib/Prelude.yonai`
-3. Rebuild. Done.
+2. Declare the `extern` and its exact type in `lib/Prelude.yona`
+3. Regenerate `lib/Prelude.yonai` and `lib/Prelude.o`
+4. Rebuild. Done.
 
 No other files need changes — `load_prelude()` reads .yonai automatically.

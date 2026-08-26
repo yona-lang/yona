@@ -5,6 +5,8 @@
 //
 
 #include "Codegen.h"
+#include "analysis/BorrowEscapeAnalysis.h"
+#include "typechecker/TypeChecker.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
@@ -39,11 +41,53 @@ static std::string ctype_to_string(CType ct) {
     return "INT";
 }
 
+// Persistent collection slots use one uniform i64 carrier irrespective of
+// the source scalar's LLVM representation. Keep this conversion centralized
+// so cons and snoc cannot accidentally pass `double` or `i1` to the runtime.
+static Value* collection_carrier(IRBuilder<>& builder, Value* value,
+                                 IntegerType* i64_type) {
+    if (value->getType() == i64_type) return value;
+    if (value->getType()->isPointerTy())
+        return builder.CreatePtrToInt(value, i64_type);
+    if (value->getType()->isDoubleTy())
+        return builder.CreateBitCast(value, i64_type);
+    if (value->getType()->isIntegerTy())
+        return builder.CreateZExtOrTrunc(value, i64_type);
+    return value;
+}
+
+static SemanticTypeIdentity semantic_identity(const TypedValue& value) {
+    SemanticTypeIdentity identity;
+    identity.type = value.type;
+    identity.adt_name = value.adt_type_name;
+    identity.arguments = !value.semantic_subtypes.empty()
+        ? value.semantic_subtypes : value.adt_semantic_arguments;
+    return identity;
+}
+
+// Empty nested collections carry their outer representation but cannot name
+// an element type on their own.  Refine that incomplete identity from any
+// later homogeneous element instead of permanently choosing the first value
+// (for example the leading `[]` in `[[], [1], [1, 2]]`).
+static void refine_semantic_identity(SemanticTypeIdentity& target,
+                                     const SemanticTypeIdentity& candidate) {
+    if (target.type != candidate.type) return;
+    if (target.adt_name.empty()) target.adt_name = candidate.adt_name;
+    if (target.arguments.empty()) {
+        target.arguments = candidate.arguments;
+        return;
+    }
+    if (target.arguments.size() != candidate.arguments.size()) return;
+    for (size_t i = 0; i < target.arguments.size(); ++i)
+        refine_semantic_identity(target.arguments[i], candidate.arguments[i]);
+}
+
 TypedValue Codegen::codegen_tuple(TupleExpr* node) {
     set_debug_loc(node->source_context);
     auto i64_ty = LType::getInt64Ty(*context_);
     std::vector<Value*> elems;
     std::vector<CType> subtypes;
+    std::vector<SemanticTypeIdentity> semantic_subtypes;
 
     for (auto* v : node->values) {
         auto tv = codegen(v);
@@ -85,6 +129,12 @@ TypedValue Codegen::codegen_tuple(TupleExpr* node) {
         }
         elems.push_back(i64_val);
         subtypes.push_back(tv.type);
+        SemanticTypeIdentity identity;
+        identity.type = tv.type;
+        identity.adt_name = tv.adt_type_name;
+        identity.arguments = !tv.semantic_subtypes.empty()
+            ? tv.semantic_subtypes : tv.adt_semantic_arguments;
+        semantic_subtypes.push_back(std::move(identity));
     }
 
     // Heap-allocate tuple with metadata for recursive destruction
@@ -101,7 +151,9 @@ TypedValue Codegen::codegen_tuple(TupleExpr* node) {
         builder_->CreateCall(rt_.tuple_set_heap_mask_,
             {tuple_ptr, ConstantInt::get(i64_ty, tuple_heap_mask)});
     auto* tuple_i64 = builder_->CreatePtrToInt(tuple_ptr, i64_ty, "tuple_i64");
-    return {tuple_i64, CType::TUPLE, subtypes};
+    TypedValue result{tuple_i64, CType::TUPLE, subtypes};
+    result.semantic_subtypes = std::move(semantic_subtypes);
+    return result;
 }
 
 TypedValue Codegen::codegen_seq(ValuesSequenceExpr* node) {
@@ -122,14 +174,38 @@ TypedValue Codegen::codegen_seq(ValuesSequenceExpr* node) {
     }
 
     CType elem_type = CType::INT;
+    SemanticTypeIdentity element_identity;
     for (size_t i = 0; i < n; i++) {
+        last_lambda_name_.clear();
         auto tv = codegen(node->values[i]);
+        if (tv.type == CType::FUNCTION && !tv.val &&
+            !last_lambda_name_.empty()) {
+            const auto deferred = deferred_functions_.find(last_lambda_name_);
+            if (deferred != deferred_functions_.end()) {
+                std::vector<TypedValue> lambda_args;
+                lambda_args.reserve(deferred->second.param_names.size());
+                for (size_t pi = 0; pi < deferred->second.param_names.size(); ++pi)
+                    lambda_args.push_back(dummy_typed_value(CType::INT));
+                auto compiled = compile_function(
+                    last_lambda_name_, deferred->second, lambda_args);
+                if (compiled.fn) {
+                    auto* closure = wrap_in_closure(
+                        compiled.fn, compiled.return_type);
+                    tv = {closure, CType::FUNCTION, {compiled.return_type}};
+                }
+            }
+        }
         if (!tv) return {};
-        if (i == 0) elem_type = tv.type;
+        if (i == 0) {
+            elem_type = tv.type;
+            element_identity = semantic_identity(tv);
+        }
         else if (tv.type != elem_type)
             report_error(node->values[i]->source_context,
                 "type error: heterogeneous sequence — expected " + ctype_to_string(elem_type)
                 + " but got " + ctype_to_string(tv.type));
+        else
+            refine_semantic_identity(element_identity, semantic_identity(tv));
         auto idx = ConstantInt::get(i64_ty, i);
         Value* store_val = tv.val;
         if (store_val->getType()->isStructTy()) {
@@ -157,7 +233,9 @@ TypedValue Codegen::codegen_seq(ValuesSequenceExpr* node) {
     // Tell the seq destructor to walk elements when they're heap-typed.
     if (n > 0 && is_heap_type(elem_type))
         builder_->CreateCall(rt_.seq_set_heap_, {seq, ConstantInt::get(i64_ty, 1)});
-    return {seq, CType::SEQ, {elem_type}};
+    TypedValue result{seq, CType::SEQ, {elem_type}};
+    if (n > 0) result.semantic_subtypes = {std::move(element_identity)};
+    return result;
 }
 
 TypedValue Codegen::codegen_set(SetExpr* node) {
@@ -166,9 +244,28 @@ TypedValue Codegen::codegen_set(SetExpr* node) {
     auto i64_ty = LType::getInt64Ty(*context_);
 
     if (n == 0) {
-        /* Empty set: use flat alloc (codegen for {} uses SetExpr) */
+        // `{}` has no payload from which to infer its collection kind.  The
+        // type checker can nevertheless resolve it contextually (notably the
+        // `Dict key value` result of Monoid.emptyLike), so lower the inferred
+        // kind instead of hard-coding every empty literal as Set.
         auto* zero = ConstantInt::get(i64_ty, 0);
-        auto set = builder_->CreateCall(rt_.set_alloc_, {zero}, "set");
+        bool inferred_dict = false;
+        if (contextual_expected_node_ == node &&
+            contextual_expected_type_ == CType::DICT)
+            inferred_dict = true;
+        if (type_checker_) {
+            auto* inferred = type_checker_->zonk(type_checker_->type_of(node));
+            inferred_dict = inferred_dict || (inferred &&
+                ((inferred->tag == typechecker::MonoType::App &&
+                  inferred->type_name == "Dict") ||
+                 (inferred->tag == typechecker::MonoType::Con &&
+                  inferred->con == typechecker::TyCon::Dict)));
+        }
+        if (inferred_dict) {
+            auto* dict = builder_->CreateCall(rt_.dict_alloc_, {zero}, "dict");
+            return {dict, CType::DICT};
+        }
+        auto* set = builder_->CreateCall(rt_.set_alloc_, {zero}, "set");
         return {set, CType::SET};
     }
 
@@ -177,10 +274,16 @@ TypedValue Codegen::codegen_set(SetExpr* node) {
     Value* set = builder_->CreateCall(rt_.set_alloc_, {zero}, "set");
 
     CType elem_type = CType::INT;
+    SemanticTypeIdentity element_identity;
     for (size_t i = 0; i < n; i++) {
         auto tv = codegen(node->values[i]);
         if (!tv) return {};
-        if (i == 0) elem_type = tv.type;
+        if (i == 0) {
+            elem_type = tv.type;
+            element_identity = semantic_identity(tv);
+        } else if (tv.type == elem_type) {
+            refine_semantic_identity(element_identity, semantic_identity(tv));
+        }
         Value* val = tv.val;
         if (val->getType()->isPointerTy())
             val = builder_->CreatePtrToInt(val, i64_ty);
@@ -188,7 +291,9 @@ TypedValue Codegen::codegen_set(SetExpr* node) {
     }
     if (n > 0 && is_heap_type(elem_type))
         builder_->CreateCall(rt_.set_set_heap_, {set, ConstantInt::get(i64_ty, 1)});
-    return {set, CType::SET, {elem_type}};
+    TypedValue result{set, CType::SET, {elem_type}};
+    result.semantic_subtypes = {std::move(element_identity)};
+    return result;
 }
 
 TypedValue Codegen::codegen_dict(DictExpr* node) {
@@ -199,11 +304,23 @@ TypedValue Codegen::codegen_dict(DictExpr* node) {
     Value* dict = builder_->CreateCall(rt_.dict_alloc_, {zero}, "dict");
 
     CType key_type = CType::INT, val_type = CType::INT;
+    SemanticTypeIdentity key_identity, value_identity;
     for (size_t i = 0; i < n; i++) {
         auto key_tv = codegen(node->values[i].first);
         auto val_tv = codegen(node->values[i].second);
         if (!key_tv || !val_tv) return {};
-        if (i == 0) { key_type = key_tv.type; val_type = val_tv.type; }
+        if (i == 0) {
+            key_type = key_tv.type;
+            val_type = val_tv.type;
+            key_identity.type = key_tv.type;
+            key_identity.adt_name = key_tv.adt_type_name;
+            key_identity.arguments = !key_tv.semantic_subtypes.empty()
+                ? key_tv.semantic_subtypes : key_tv.adt_semantic_arguments;
+            value_identity.type = val_tv.type;
+            value_identity.adt_name = val_tv.adt_type_name;
+            value_identity.arguments = !val_tv.semantic_subtypes.empty()
+                ? val_tv.semantic_subtypes : val_tv.adt_semantic_arguments;
+        }
         // Persistent put: dict = dict_put(dict, key, val)
         Value* key_val = key_tv.val;
         Value* val_val = val_tv.val;
@@ -219,7 +336,11 @@ TypedValue Codegen::codegen_dict(DictExpr* node) {
              ConstantInt::get(i64_ty, is_heap_type(key_type) ? 1 : 0),
              ConstantInt::get(i64_ty, is_heap_type(val_type) ? 1 : 0)});
     }
-    return {dict, CType::DICT, {key_type, val_type}};
+    TypedValue result{dict, CType::DICT, {key_type, val_type}};
+    if (n > 0)
+        result.semantic_subtypes = {
+            std::move(key_identity), std::move(value_identity)};
+    return result;
 }
 
 TypedValue Codegen::codegen_cons(ConsLeftExpr* node) {
@@ -237,43 +358,83 @@ TypedValue Codegen::codegen_cons(ConsLeftExpr* node) {
         !elem_val->getType()->isStructTy())
         emit_rc_inc(elem_val, elem.type);
     // Ensure correct types for rt_seq_cons(i64, ptr)
-    if (elem_val->getType()->isPointerTy())
-        elem_val = builder_->CreatePtrToInt(elem_val, i64_ty);
-    else if (elem_val->getType()->isStructTy()) {
+    if (elem_val->getType()->isStructTy()) {
         // Box struct elements (e.g. a non-recursive ADT) so they fit in i64.
         auto* alloca = builder_->CreateAlloca(elem_val->getType());
         builder_->CreateStore(elem_val, alloca);
         uint64_t sz = module_->getDataLayout().getTypeAllocSize(elem_val->getType());
         auto* boxed = builder_->CreateCall(rt_.box_, {alloca, ConstantInt::get(i64_ty, sz)});
         elem_val = builder_->CreatePtrToInt(boxed, i64_ty);
-    }
+    } else
+        elem_val = collection_carrier(*builder_, elem_val, i64_ty);
     if (seq_ptr->getType()->isIntegerTy())
         seq_ptr = builder_->CreateIntToPtr(seq_ptr, PointerType::get(*context_, 0));
+    bool seq_is_named = false;
+    bool single_use_named = false;
+    bool has_arm_protected_ref = false;
+    if (seq.type == CType::SEQ && seq.val && !isa<Constant>(seq.val) &&
+        !seq.val->getType()->isStructTy()) {
+        for (auto& [_, value] : named_values_)
+            if (value.val == seq.val) {
+                seq_is_named = true;
+                break;
+            }
+        if (seq_is_named && node->right->get_type() == AST_IDENTIFIER_EXPR &&
+            current_fn_body_) {
+            const auto& name =
+                static_cast<IdentifierExpr*>(node->right)->name->value;
+            single_use_named = compiler::analysis::max_identifier_refs_on_path(
+                current_fn_body_, name) == 1;
+        }
+        if (seq_is_named && !single_use_named && !arm_drop_stack_.empty())
+            has_arm_protected_ref = std::any_of(
+                arm_drop_stack_.back().begin(), arm_drop_stack_.back().end(),
+                [&](const auto& entry) {
+                    return entry.first == seq.val && entry.second == CType::SEQ;
+                });
+        // A multi-use named sequence keeps its binding's reference. Give the
+        // consuming runtime primitive a separate ownership reference unless
+        // a borrowed head-tail pattern already created one for this arm.
+        if (seq_is_named && !single_use_named && !has_arm_protected_ref)
+            emit_rc_inc(seq_ptr, CType::SEQ);
+    }
     auto* result = builder_->CreateCall(rt_.seq_cons_, {elem_val, seq_ptr}, "cons");
-    // Perceus: seq_cons is callee-borrows (preserves unique-owner
-    // in-place path). For ANONYMOUS intermediate seqs (expression
-    // results with no named binding), the cons result replaces the
-    // intermediate — emit rc_dec on the old seq when cons copied
-    // (result != input). Named bindings are managed by function-exit
-    // cleanup; anonymous temporaries have no other cleanup path.
+    // `cons` consumes one ownership reference from its right operand and
+    // returns one reference to the result.  The runtime may return the same
+    // pointer for a unique sequence or path-copy a shared one, so consume the
+    // input only on the copy path.  A single-use named operand is transferred
+    // out of its enclosing scope; a multi-use binding retains its protected
+    // reference and is still released by normal scope cleanup.
     if (seq.type == CType::SEQ && seq.val && !isa<Constant>(seq.val)
         && !seq.val->getType()->isStructTy()) {
-        bool is_named = false;
-        for (auto& [k, v] : named_values_)
-            if (v.val == seq.val) { is_named = true; break; }
-        if (!is_named) {
-            // Anonymous: cons may have copied. Emit conditional dec.
-            auto* ptr_ty = PointerType::get(*context_, 0);
-            auto* is_same = builder_->CreateICmpEQ(result, seq_ptr, "cons_inplace");
-            auto* dec_bb = BasicBlock::Create(*context_, "cons.dec",
-                builder_->GetInsertBlock()->getParent());
-            auto* cont_bb = BasicBlock::Create(*context_, "cons.cont",
-                builder_->GetInsertBlock()->getParent());
-            builder_->CreateCondBr(is_same, cont_bb, dec_bb);
-            builder_->SetInsertPoint(dec_bb);
-            emit_rc_dec(seq_ptr, CType::SEQ);
-            builder_->CreateBr(cont_bb);
-            builder_->SetInsertPoint(cont_bb);
+        auto* is_same = builder_->CreateICmpEQ(result, seq_ptr, "cons_inplace");
+        auto* dec_bb = BasicBlock::Create(*context_, "cons.dec",
+            builder_->GetInsertBlock()->getParent());
+        auto* cont_bb = BasicBlock::Create(*context_, "cons.cont",
+            builder_->GetInsertBlock()->getParent());
+        builder_->CreateCondBr(is_same, cont_bb, dec_bb);
+        builder_->SetInsertPoint(dec_bb);
+        emit_rc_dec(seq_ptr, CType::SEQ);
+        builder_->CreateBr(cont_bb);
+        builder_->SetInsertPoint(cont_bb);
+
+        if (single_use_named) {
+            mark_transferred(seq.val, TransferDomain::Seq);
+            emit_frame_transfer(seq.val);
+        } else if (has_arm_protected_ref) {
+            // A borrowed head-tail pattern schedules its protected scrutinee
+            // reference for arm-exit cleanup. Consuming that same binding as
+            // the tail of `::` transfers the protected reference into the
+            // result (or releases it on the copy path above); only the
+            // function/local binding's original reference remains for normal
+            // scope cleanup. Leaving both drops scheduled double-releases
+            // recursive algorithms such as insertion sort.
+            auto& drops = arm_drop_stack_.back();
+            const auto drop = std::find_if(
+                drops.begin(), drops.end(), [&](const auto& entry) {
+                    return entry.first == seq.val && entry.second == CType::SEQ;
+                });
+            if (drop != drops.end()) drops.erase(drop);
         }
     }
     // Mark the new seq as containing heap elements so the destructor walks
@@ -282,7 +443,14 @@ TypedValue Codegen::codegen_cons(ConsLeftExpr* node) {
     // need to set it explicitly when the cons-ed element is heap-typed.
     if (is_heap_type(elem.type))
         builder_->CreateCall(rt_.seq_set_heap_, {result, ConstantInt::get(i64_ty, 1)});
-    return {result, CType::SEQ, {elem.type}};
+    TypedValue sequence{result, CType::SEQ, {elem.type}};
+    SemanticTypeIdentity element_identity;
+    element_identity.type = elem.type;
+    element_identity.adt_name = elem.adt_type_name;
+    element_identity.arguments = !elem.semantic_subtypes.empty()
+        ? elem.semantic_subtypes : elem.adt_semantic_arguments;
+    sequence.semantic_subtypes = {std::move(element_identity)};
+    return sequence;
 }
 
 TypedValue Codegen::codegen_join(JoinExpr* node) {
@@ -321,15 +489,14 @@ TypedValue Codegen::codegen_cons_right(ConsRightExpr* node) {
     if (is_heap_type(elem.type) && elem_val && !isa<Constant>(elem_val) &&
         !elem_val->getType()->isStructTy())
         emit_rc_inc(elem_val, elem.type);
-    if (elem_val->getType()->isPointerTy())
-        elem_val = builder_->CreatePtrToInt(elem_val, i64_ty);
-    else if (elem_val->getType()->isStructTy()) {
+    if (elem_val->getType()->isStructTy()) {
         auto* alloca = builder_->CreateAlloca(elem_val->getType());
         builder_->CreateStore(elem_val, alloca);
         uint64_t sz = module_->getDataLayout().getTypeAllocSize(elem_val->getType());
         auto* boxed = builder_->CreateCall(rt_.box_, {alloca, ConstantInt::get(i64_ty, sz)});
         elem_val = builder_->CreatePtrToInt(boxed, i64_ty);
-    }
+    } else
+        elem_val = collection_carrier(*builder_, elem_val, i64_ty);
     if (seq_ptr->getType()->isIntegerTy())
         seq_ptr = builder_->CreateIntToPtr(seq_ptr, PointerType::get(*context_, 0));
     auto* result = builder_->CreateCall(rt_.seq_snoc_, {seq_ptr, elem_val}, "snoc");

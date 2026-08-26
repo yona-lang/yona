@@ -98,10 +98,10 @@ Create a simple 200 OK response.
 ok "Hello, World!"
 ```
 
-### `notFound : Response`
+### `notFound : Adt(Response)`
 
 Create a 404 Not Found response.
 
-### `serverError : Response`
+### `serverError : Adt(Response)`
 
 Create a 500 Internal Server Error response.

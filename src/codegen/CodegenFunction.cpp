@@ -11,6 +11,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
 #include <llvm/BinaryFormat/Dwarf.h>
+#include <cctype>
 #include <iostream>
 
 namespace yona::compiler::codegen {
@@ -18,13 +19,90 @@ namespace yona::compiler::codegen {
 // Closure layout constants — match CLOSURE_HDR_SIZE in compiled_runtime.c
 static constexpr int CLOSURE_FIELD_FN = 0;      // fn_ptr
 static constexpr int CLOSURE_FIELD_ARITY = 2;   // arity
-static constexpr int CLOSURE_HDR_SIZE = 5;       // fn_ptr, ret_type, arity, num_captures, heap_mask
+static constexpr int CLOSURE_HDR_SIZE = 6;
+
+static int64_t borrow_mask(const std::vector<bool>& borrowed, size_t offset = 0) {
+    int64_t mask = 0;
+    for (size_t i = offset; i < borrowed.size() && i - offset < 64; ++i)
+        if (borrowed[i]) mask |= int64_t{1} << (i - offset);
+    return mask;
+}
 
 // Perceus phase 3: match YONA_MAX_FRAME_DROPS in src/runtime/exceptions.c
 static constexpr int YONA_MAX_FRAME_DROPS = 16;
 
 using namespace llvm;
 using LType = llvm::Type;
+
+std::string Codegen::source_type_descriptor(const types::Type& type) const {
+    if (const auto* builtin = std::get_if<types::BuiltinType>(&type)) {
+        switch (*builtin) {
+            case types::Bool: return "BOOL";
+            case types::String: return "STRING";
+            case types::Symbol: return "SYMBOL";
+            case types::Unit: return "UNIT";
+            case types::Float32:
+            case types::Float64:
+            case types::Float128: return "FLOAT";
+            case types::Seq: return "Seq(VAR(element))";
+            case types::Set: return "Set(VAR(element))";
+            default: return "INT";
+        }
+    }
+    if (const auto* function = std::get_if<std::shared_ptr<types::FunctionType>>(&type)) {
+        return "FUNCTION(" + source_type_descriptor((*function)->argumentType) + "," +
+            source_type_descriptor((*function)->returnType) + ")";
+    }
+    if (const auto* named = std::get_if<std::shared_ptr<types::NamedType>>(&type)) {
+        const auto& value = *named;
+        if (!value || value->name.empty()) return "ADT";
+        if (value->name == "IntArray") return "INT_ARRAY";
+        if (value->name == "FloatArray") return "FLOAT_ARRAY";
+        if (value->name == "ByteArray") return "BYTE_ARRAY";
+        if (value->name == "String") return "STRING";
+        if (value->name == "Bool") return "BOOL";
+        if (value->name == "Symbol") return "SYMBOL";
+        if (std::islower(static_cast<unsigned char>(value->name.front())))
+            return "VAR(" + value->name + ")";
+        std::string descriptor = "ADT(" + value->name;
+        if (!std::holds_alternative<std::nullptr_t>(value->type)) {
+            const auto params = types_.adt_type_params.find(value->name);
+            if (const auto* product =
+                    std::get_if<std::shared_ptr<types::ProductType>>(&value->type);
+                product && params != types_.adt_type_params.end() && params->second.size() > 1 &&
+                (*product)->types.size() == params->second.size()) {
+                for (const auto& argument : (*product)->types)
+                    descriptor += "," + source_type_descriptor(argument);
+            } else {
+                descriptor += "," + source_type_descriptor(value->type);
+            }
+        }
+        return descriptor + ")";
+    }
+    if (const auto* product = std::get_if<std::shared_ptr<types::ProductType>>(&type)) {
+        std::string descriptor = "TUPLE(";
+        for (size_t i = 0; i < (*product)->types.size(); ++i) {
+            if (i) descriptor += ",";
+            descriptor += source_type_descriptor((*product)->types[i]);
+        }
+        return descriptor + ")";
+    }
+    if (const auto* collection =
+            std::get_if<std::shared_ptr<types::SingleItemCollectionType>>(&type)) {
+        return std::string((*collection)->kind == types::SingleItemCollectionType::Seq
+                ? "Seq(" : "Set(") +
+            source_type_descriptor((*collection)->valueType) + ")";
+    }
+    if (const auto* dict = std::get_if<std::shared_ptr<types::DictCollectionType>>(&type)) {
+        return "Dict(" + source_type_descriptor((*dict)->keyType) + "," +
+            source_type_descriptor((*dict)->valueType) + ")";
+    }
+    if (const auto* promise = std::get_if<std::shared_ptr<types::PromiseType>>(&type))
+        return "Promise(" + source_type_descriptor((*promise)->valueType) + ")";
+    if (const auto* refined = std::get_if<std::shared_ptr<types::RefinedType>>(&type))
+        return source_type_descriptor((*refined)->base_type);
+    return "INT";
+}
 
 // Layout must match yona_frame_t in src/runtime/exceptions.c:
 //   struct yona_frame { yona_frame* prev; int drop_count; int pad;
@@ -114,6 +192,99 @@ static std::pair<std::vector<CType>, CType> uncurry_type_signature(const types::
         current = &ft->returnType;
     }
     return {params, yona_type_to_ctype(*current)};
+}
+
+static std::pair<CType, std::string> function_result_identity(
+        const types::Type& type) {
+    const types::Type* current = &type;
+    while (std::holds_alternative<std::shared_ptr<types::FunctionType>>(*current))
+        current = &std::get<std::shared_ptr<types::FunctionType>>(*current)->returnType;
+    const CType result = yona_type_to_ctype(*current);
+    if (result == CType::ADT) {
+        if (const auto* named =
+                std::get_if<std::shared_ptr<types::NamedType>>(current);
+            named && *named)
+            return {result, (*named)->name};
+    }
+    return {result, {}};
+}
+
+// Surface type variables are parsed as NamedType nodes so that the older AST
+// can preserve their spelling.  They are not nominal heap ADTs: each is a
+// specialization hole and must inherit the concrete call-site CType.
+static bool is_type_variable_annotation(const types::Type& t) {
+    auto named = std::get_if<std::shared_ptr<types::NamedType>>(&t);
+    return named && *named && !(*named)->name.empty() &&
+        std::islower(static_cast<unsigned char>((*named)->name.front()));
+}
+
+static bool contains_type_variable_annotation(const types::Type& type) {
+    if (is_type_variable_annotation(type)) return true;
+    if (const auto* collection =
+            std::get_if<std::shared_ptr<types::SingleItemCollectionType>>(&type);
+        collection && *collection)
+        return contains_type_variable_annotation((*collection)->valueType);
+    if (const auto* dict =
+            std::get_if<std::shared_ptr<types::DictCollectionType>>(&type);
+        dict && *dict)
+        return contains_type_variable_annotation((*dict)->keyType) ||
+               contains_type_variable_annotation((*dict)->valueType);
+    if (const auto* function =
+            std::get_if<std::shared_ptr<types::FunctionType>>(&type);
+        function && *function)
+        return contains_type_variable_annotation((*function)->argumentType) ||
+               contains_type_variable_annotation((*function)->returnType);
+    if (const auto* product =
+            std::get_if<std::shared_ptr<types::ProductType>>(&type);
+        product && *product)
+        return std::any_of((*product)->types.begin(), (*product)->types.end(),
+            [](const auto& element) {
+                return contains_type_variable_annotation(element);
+            });
+    if (const auto* named = std::get_if<std::shared_ptr<types::NamedType>>(&type);
+        named && *named &&
+        !std::holds_alternative<std::nullptr_t>((*named)->type))
+        return contains_type_variable_annotation((*named)->type);
+    return false;
+}
+
+static std::vector<CType> annotated_adt_arguments(
+        const types::Type& type,
+        const std::unordered_map<std::string, std::vector<std::string>>& adt_type_params) {
+    if (const auto* collection =
+            std::get_if<std::shared_ptr<types::SingleItemCollectionType>>(&type);
+        collection && *collection)
+        return {yona_type_to_ctype((*collection)->valueType)};
+    if (const auto* dict =
+            std::get_if<std::shared_ptr<types::DictCollectionType>>(&type);
+        dict && *dict)
+        return {yona_type_to_ctype((*dict)->keyType),
+                yona_type_to_ctype((*dict)->valueType)};
+    if (const auto* product =
+            std::get_if<std::shared_ptr<types::ProductType>>(&type);
+        product && *product) {
+        std::vector<CType> result;
+        result.reserve((*product)->types.size());
+        for (const auto& element : (*product)->types)
+            result.push_back(yona_type_to_ctype(element));
+        return result;
+    }
+    const auto* named = std::get_if<std::shared_ptr<types::NamedType>>(&type);
+    if (!named || !*named || std::holds_alternative<std::nullptr_t>((*named)->type))
+        return {};
+    std::vector<CType> result;
+    const auto params = adt_type_params.find((*named)->name);
+    if (const auto* product =
+            std::get_if<std::shared_ptr<types::ProductType>>(&(*named)->type);
+        product && params != adt_type_params.end() && params->second.size() > 1 &&
+        (*product)->types.size() == params->second.size()) {
+        result.reserve((*product)->types.size());
+        for (const auto& argument : (*product)->types)
+            result.push_back(yona_type_to_ctype(argument));
+    } else {
+        result.push_back(yona_type_to_ctype((*named)->type));
+    }
+    return result;
 }
 
 // ===== Free variable analysis =====
@@ -225,6 +396,14 @@ void Codegen::collect_free_vars(AstNode* node, const std::unordered_set<std::str
                     nb.insert(la->name->value);
             }
             collect_free_vars(e->expr, nb, free_vars);
+            break;
+        }
+        case AST_IMPORT_EXPR: {
+            // Imports extend lookup but do not form an opaque boundary for
+            // defining-module dependency discovery. Instance bodies commonly
+            // import a public iterator/fold and then pass a private helper.
+            collect_free_vars(static_cast<ImportExpr*>(node)->expr, bound,
+                              free_vars);
             break;
         }
         case AST_CASE_EXPR: {
@@ -469,7 +648,11 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
                 ret_ctype = ct;
             }
         }
-        auto fn_type = llvm::FunctionType::get(ret_llvm, param_types, false);
+        // Closures have one uniform return ABI.  The semantic result is
+        // encoded into i64 below (pointers as addresses, Bool widened, Float
+        // bit-cast, flat ADTs boxed).  Indirect callers decode it from the
+        // closure header's return tag.
+        auto fn_type = llvm::FunctionType::get(i64_ty, param_types, false);
         auto* fn = Function::Create(fn_type, Function::InternalLinkage, fn_name, module_.get());
 
         // Register preliminary for recursive calls (closure_env set below after entry block)
@@ -478,6 +661,8 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
         cf_pre.return_type = ret_ctype;
         for (size_t pi = 0; pi < def.param_names.size(); pi++)
             cf_pre.param_types.push_back(CType::INT);
+        cf_pre.borrowed_params = infer_borrowed_params(
+            fn_name, def, cf_pre.param_types);
         compiled_functions_[fn_name] = cf_pre;
         named_values_[fn_name] = {fn, CType::FUNCTION};
 
@@ -525,6 +710,7 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
 
         // Update preliminary entry with env for recursive closure calls
         compiled_functions_[fn_name].closure_env = env;
+        named_values_[fn_name] = {env, CType::FUNCTION, {ret_ctype}};
 
         // Load captures from env
         for (size_t ci = 0; ci < def.free_vars.size(); ci++) {
@@ -540,7 +726,14 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
                 typed_val = builder_->CreateBitCast(cap_val, LType::getDoubleTy(*context_));
             else if (cap_type == CType::BOOL)
                 typed_val = builder_->CreateTrunc(cap_val, LType::getInt1Ty(*context_));
-            named_values_[def.free_vars[ci]] = {typed_val, cap_type, capture_tvs[ci].subtypes};
+            TypedValue captured{typed_val, cap_type, capture_tvs[ci].subtypes};
+            captured.semantic_subtypes = capture_tvs[ci].semantic_subtypes;
+            captured.adt_type_name = capture_tvs[ci].adt_type_name;
+            captured.adt_type_arguments = capture_tvs[ci].adt_type_arguments;
+            captured.adt_type_argument_names = capture_tvs[ci].adt_type_argument_names;
+            captured.adt_semantic_arguments = capture_tvs[ci].adt_semantic_arguments;
+            captured.boxed_heap = capture_tvs[ci].boxed_heap;
+            named_values_[def.free_vars[ci]] = std::move(captured);
         }
 
         // Bind regular params
@@ -567,23 +760,61 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
         }
         current_fn_body_ = saved_fn_body;
 
-        // Coerce body result to match the function's declared return type
+        // Encode the semantic body result into the universal closure carrier.
         if (body_tv && body_tv.val) {
             Value* ret_val = body_tv.val;
-            // Match declared return type
-            if (ret_val->getType() != ret_llvm) {
-                if (ret_val->getType()->isIntegerTy() && ret_llvm->isPointerTy())
-                    ret_val = builder_->CreateIntToPtr(ret_val, ret_llvm);
-                else if (ret_val->getType()->isPointerTy() && ret_llvm->isIntegerTy())
-                    ret_val = builder_->CreatePtrToInt(ret_val, ret_llvm);
-                else if (ret_val->getType()->isIntegerTy() && ret_llvm->isIntegerTy())
-                    ret_val = builder_->CreateZExtOrTrunc(ret_val, ret_llvm);
+            if (ret_val->getType()->isPointerTy()) {
+                ret_val = builder_->CreatePtrToInt(ret_val, i64_ty,
+                                                   "closure_ret_ptr");
+            } else if (ret_val->getType()->isDoubleTy()) {
+                ret_val = builder_->CreateBitCast(ret_val, i64_ty,
+                                                  "closure_ret_float");
+            } else if (ret_val->getType()->isIntegerTy()) {
+                ret_val = builder_->CreateZExtOrTrunc(ret_val, i64_ty,
+                                                      "closure_ret_int");
+            } else if (ret_val->getType()->isStructTy()) {
+                auto* structure = llvm::cast<llvm::StructType>(
+                    ret_val->getType());
+                auto* tag = builder_->CreateExtractValue(
+                    ret_val, {0}, "closure_ret_tag");
+                if (!tag->getType()->isIntegerTy(64))
+                    tag = builder_->CreateZExtOrTrunc(tag, i64_ty);
+                auto* boxed = builder_->CreateCall(
+                    rt_.adt_alloc_,
+                    {tag, ConstantInt::get(i64_ty,
+                                           structure->getNumElements() - 1)},
+                    "closure_ret_adt");
+                int64_t heap_mask = 0;
+                for (unsigned field = 1;
+                     field < structure->getNumElements(); ++field) {
+                    auto* value = builder_->CreateExtractValue(
+                        ret_val, {field}, "closure_ret_field");
+                    if (value->getType()->isPointerTy())
+                        value = builder_->CreatePtrToInt(value, i64_ty);
+                    else if (value->getType()->isDoubleTy())
+                        value = builder_->CreateBitCast(value, i64_ty);
+                    else if (!value->getType()->isIntegerTy(64))
+                        value = builder_->CreateZExtOrTrunc(value, i64_ty);
+                    builder_->CreateCall(
+                        rt_.adt_set_field_,
+                        {boxed, ConstantInt::get(i64_ty, field - 1), value});
+                    const size_t subtype = field - 1;
+                    if (subtype < body_tv.subtypes.size() &&
+                        is_heap_type(body_tv.subtypes[subtype]) && subtype < 64)
+                        heap_mask |= int64_t{1} << subtype;
+                }
+                if (heap_mask != 0)
+                    builder_->CreateCall(
+                        rt_.adt_set_heap_mask_,
+                        {boxed, ConstantInt::get(i64_ty, heap_mask)});
+                ret_val = builder_->CreatePtrToInt(boxed, i64_ty,
+                                                   "closure_ret_adt_i64");
             }
             if (!builder_->GetInsertBlock()->getTerminator())
                 builder_->CreateRet(ret_val);
         } else {
             if (!builder_->GetInsertBlock()->getTerminator()) {
-                auto* default_ret = Constant::getNullValue(ret_llvm);
+                auto* default_ret = ConstantInt::get(i64_ty, 0);
                 builder_->CreateRet(default_ret);
             }
         }
@@ -608,6 +839,11 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
             {fn, ConstantInt::get(i64_ty, static_cast<int64_t>(ret_ctype)),
              ConstantInt::get(i64_ty, def.param_names.size()),
              ConstantInt::get(i64_ty, def.free_vars.size())}, fn_name + "_closure");
+        const int64_t parameter_borrow_mask =
+            borrow_mask(cf_pre.borrowed_params);
+        if (parameter_borrow_mask != 0)
+            builder_->CreateCall(rt_.closure_set_borrow_mask_,
+                {closure, ConstantInt::get(i64_ty, parameter_borrow_mask)});
 
         // Store captured values — rc_inc each heap-typed capture since the
         // closure now holds an additional reference.
@@ -691,10 +927,20 @@ TypedValue Codegen::codegen_lambda_alias(LambdaAlias* node) {
 Codegen::CompiledFunction Codegen::compile_function(
     const std::string& name, const DeferredFunction& def, const std::vector<TypedValue>& args) {
 
+    const auto source_self = deferred_functions_.find(def.ast->name);
+    const bool has_source_self_alias = def.ast->name != name &&
+        source_self != deferred_functions_.end() &&
+        source_self->second.ast == def.ast;
+
     // If the function has a type annotation, use it to determine param types
     // instead of relying on caller's arg types (which may be wrong).
     std::vector<CType> annotated_ctypes;
+    std::vector<bool> annotated_param_is_variable;
     std::vector<std::string> annotated_adt_names;
+    std::vector<CType> annotated_function_return_types;
+    std::vector<std::string> annotated_function_return_adt_names;
+    std::vector<std::vector<CType>> annotated_adt_arguments_by_param;
+    std::vector<bool> annotated_arguments_are_concrete;
     std::string annotated_return_adt_name;
     CType annotated_ret = CType::INT;
     bool has_annotated_ret = false;
@@ -706,14 +952,37 @@ Codegen::CompiledFunction Codegen::compile_function(
         const types::Type* current_type = &*def.ast->type_signature;
         while (std::holds_alternative<std::shared_ptr<types::FunctionType>>(*current_type)) {
             auto ft = std::get<std::shared_ptr<types::FunctionType>>(*current_type);
+            annotated_param_is_variable.push_back(
+                is_type_variable_annotation(ft->argumentType));
             if (std::holds_alternative<std::shared_ptr<types::NamedType>>(ft->argumentType))
                 annotated_adt_names.push_back(
                     std::get<std::shared_ptr<types::NamedType>>(ft->argumentType)->name);
             else
                 annotated_adt_names.push_back("");
+            annotated_adt_arguments_by_param.push_back(
+                annotated_adt_arguments(ft->argumentType, types_.adt_type_params));
+            annotated_arguments_are_concrete.push_back(
+                !contains_type_variable_annotation(ft->argumentType));
+            if (std::holds_alternative<std::shared_ptr<types::FunctionType>>(
+                    ft->argumentType)) {
+                auto [return_type, return_adt] =
+                    function_result_identity(ft->argumentType);
+                annotated_function_return_types.push_back(return_type);
+                annotated_function_return_adt_names.push_back(
+                    std::move(return_adt));
+            } else {
+                annotated_function_return_types.push_back(CType::INT);
+                annotated_function_return_adt_names.emplace_back();
+            }
+
             current_type = &ft->returnType;
         }
-        if (std::holds_alternative<std::shared_ptr<types::NamedType>>(*current_type))
+        if (is_type_variable_annotation(*current_type)) {
+            // A polymorphic result is determined by this monomorphized body's
+            // actual arguments/callbacks. Treating `a` as a nominal ADT would
+            // force a pointer return even for `unwrapOr 0` and `fold ... 0`.
+            has_annotated_ret = false;
+        } else if (std::holds_alternative<std::shared_ptr<types::NamedType>>(*current_type))
             annotated_return_adt_name =
                 std::get<std::shared_ptr<types::NamedType>>(*current_type)->name;
     }
@@ -722,7 +991,10 @@ Codegen::CompiledFunction Codegen::compile_function(
     std::vector<LType*> param_types;
     std::vector<CType> param_ctypes;
     for (size_t i = 0; i < def.param_names.size(); i++) {
-        CType ct = (!annotated_ctypes.empty() && i < annotated_ctypes.size())
+        const bool is_annotation_variable = i < annotated_param_is_variable.size() &&
+            annotated_param_is_variable[i];
+        CType ct = (!annotated_ctypes.empty() && i < annotated_ctypes.size() &&
+                     !is_annotation_variable)
             ? annotated_ctypes[i]
             : ((i < args.size()) ? args[i].type : CType::INT);
         if (i < args.size() && args[i].val && args[i].val->getType() != llvm_type(ct)) {
@@ -839,13 +1111,8 @@ Codegen::CompiledFunction Codegen::compile_function(
             }
             // Check ADT constructors (zero-arity)
             auto adt_it = types_.adt_constructors.find(id->name->value);
-            if (adt_it != types_.adt_constructors.end()) {
-                if (adt_it->second.is_recursive)
-                    return {PointerType::get(*context_, 0), CType::ADT};
-                std::vector<LType*> fields = {tag_ty};
-                for (int f = 0; f < adt_it->second.max_arity; f++) fields.push_back(i64_ty);
-                return {StructType::get(*context_, fields), CType::ADT};
-            }
+            if (adt_it != types_.adt_constructors.end())
+                return {PointerType::get(*context_, 0), CType::ADT};
         }
         // ADT constructor application: Next n tail → returns the ADT type
         if (ct == AST_APPLY_EXPR) {
@@ -863,13 +1130,8 @@ Codegen::CompiledFunction Codegen::compile_function(
             }
             if (!root_name.empty()) {
                 auto adt_it = types_.adt_constructors.find(root_name);
-                if (adt_it != types_.adt_constructors.end()) {
-                    if (adt_it->second.is_recursive)
-                        return {PointerType::get(*context_, 0), CType::ADT};
-                    std::vector<LType*> fields = {tag_ty};
-                    for (int f = 0; f < adt_it->second.max_arity; f++) fields.push_back(i64_ty);
-                    return {StructType::get(*context_, fields), CType::ADT};
-                }
+                if (adt_it != types_.adt_constructors.end())
+                    return {PointerType::get(*context_, 0), CType::ADT};
             }
         }
         // Recurse through wrappers
@@ -896,11 +1158,44 @@ Codegen::CompiledFunction Codegen::compile_function(
     // is AST_MULTIPLY and infer_ret would otherwise leave i64).
     if (has_annotated_ret) {
         preliminary_ret = annotated_ret;
-        ret_type = llvm_type(annotated_ret);
+        ret_type = annotated_ret == CType::ADT && !annotated_return_adt_name.empty()
+            ? adt_llvm_type(annotated_return_adt_name)
+            : llvm_type(annotated_ret);
     }
 
     auto fn_type = llvm::FunctionType::get(ret_type, param_types, false);
-    auto fn = Function::Create(fn_type, Function::InternalLinkage, name, module_.get());
+    // An imported/interface declaration is an already-published ABI. When its
+    // parameters match this materialization, use its declared result type as
+    // the provisional result too. Derived case bodies are intentionally
+    // unannotated source, so structural return inference may initially guess
+    // i64 even when the canonical contract returns Bool.
+    if (auto* canonical = module_->getFunction(name);
+        canonical && canonical->isDeclaration() &&
+        canonical->arg_size() == param_types.size()) {
+        bool parameters_match = true;
+        for (size_t pi = 0; pi < param_types.size(); ++pi)
+            if (canonical->getFunctionType()->getParamType(pi) != param_types[pi]) {
+                parameters_match = false;
+                break;
+            }
+        if (parameters_match) {
+            if (const auto meta = imports_.meta.find(name);
+                meta != imports_.meta.end())
+                preliminary_ret = meta->second.return_type;
+            ret_type = canonical->getReturnType();
+            fn_type = canonical->getFunctionType();
+        }
+    }
+    // Imported GENFN declarations may already have live callers. Materialize
+    // a matching declaration in place so those Uses remain attached to the
+    // same LLVM Value; erasing and recreating it corrupts the use-list and
+    // lets optimization delete functions that are still called.
+    Function* fn = module_->getFunction(name);
+    if (fn && fn->isDeclaration() && fn->getFunctionType() == fn_type) {
+        fn->setLinkage(Function::InternalLinkage);
+    } else {
+        fn = Function::Create(fn_type, Function::InternalLinkage, name, module_.get());
+    }
 
     // Borrow inference must run before preliminary registration so recursive
     // calls see the same ownership contract as non-recursive calls.
@@ -926,6 +1221,11 @@ Codegen::CompiledFunction Codegen::compile_function(
     cf_preliminary.capture_names = def.free_vars;
     compiled_functions_[name] = cf_preliminary;
     named_values_[name] = {fn, CType::FUNCTION};
+    // A monomorphized function retains its source-level name in recursive
+    // calls.  Alias that lexical name to this materialization while compiling
+    // the body so recursion cannot fall back to an unspecialized sibling.
+    if (has_source_self_alias)
+        named_values_[def.ast->name] = {fn, CType::FUNCTION};
 
     // Save state
     auto saved_block = builder_->GetInsertBlock();
@@ -973,15 +1273,18 @@ Codegen::CompiledFunction Codegen::compile_function(
         std::vector<CType> st;
         if (i < def.param_names.size()) {
             pname = def.param_names[i];
-            ct = (i < args.size()) ? args[i].type : CType::INT;
+            // `param_ctypes` already reconciles concrete annotations with
+            // call-site monomorphization. Re-reading only `args` here turned
+            // an annotated higher-order parameter into INT whenever an
+            // exported/instance body was compiled without concrete call
+            // arguments, so its lexical callback name was no longer callable.
+            ct = i < param_ctypes.size() ? param_ctypes[i] : CType::INT;
             if (i < args.size()) st = args[i].subtypes;
+            if (st.empty() && i < annotated_adt_arguments_by_param.size() &&
+                (ct == CType::SEQ || ct == CType::SET || ct == CType::DICT ||
+                 ct == CType::TUPLE))
+                st = annotated_adt_arguments_by_param[i];
             // For FUNCTION args, look up return type for type propagation.
-            // Do NOT propagate closure_known_fn_ to formal params — the
-            // compiled function is cached and may be called with different
-            // closures. Devirtualizing here hardcodes the first closure's
-            // function pointer into the IR, producing wrong results for
-            // subsequent calls with different closures (see bug: "Closure
-            // devirtualization with polymorphic HOFs" in todo-list.md).
             if (ct == CType::FUNCTION && i < args.size() && args[i].val) {
                 if (auto* fn_val = dyn_cast<Function>(args[i].val)) {
                     if (st.empty()) {
@@ -991,6 +1294,9 @@ Codegen::CompiledFunction Codegen::compile_function(
                     }
                 }
             }
+            if (ct == CType::FUNCTION && st.empty() &&
+                i < annotated_function_return_types.size())
+                st = {annotated_function_return_types[i]};
         } else {
             pname = def.free_vars[i - def.param_names.size()];
             size_t ci = i - def.param_names.size();
@@ -998,6 +1304,17 @@ Codegen::CompiledFunction Codegen::compile_function(
         }
         arg.setName(pname);
         TypedValue param_tv{&arg, ct, st};
+        if (ct == CType::FUNCTION &&
+            i < annotated_function_return_adt_names.size())
+            param_tv.adt_type_name = annotated_function_return_adt_names[i];
+        if (i < args.size())
+            param_tv.semantic_subtypes = args[i].semantic_subtypes;
+        if (param_tv.semantic_subtypes.empty() &&
+            i < annotated_adt_arguments_by_param.size() &&
+            i < annotated_arguments_are_concrete.size() &&
+            annotated_arguments_are_concrete[i])
+            for (const auto subtype : annotated_adt_arguments_by_param[i])
+                param_tv.semantic_subtypes.push_back({subtype, {}, {}});
         // Propagate ADT type name from argument
         if (ct == CType::ADT && !annotated_adt_names.empty() && i < annotated_adt_names.size() &&
             !annotated_adt_names[i].empty()) {
@@ -1005,6 +1322,17 @@ Codegen::CompiledFunction Codegen::compile_function(
         } else if (ct == CType::ADT && i < args.size() && !args[i].adt_type_name.empty()) {
             param_tv.adt_type_name = args[i].adt_type_name;
         }
+        if (ct == CType::ADT && i < args.size() &&
+            !args[i].adt_type_arguments.empty()) {
+            param_tv.adt_type_arguments = args[i].adt_type_arguments;
+        } else if (ct == CType::ADT && i < annotated_adt_arguments_by_param.size() &&
+                   !annotated_adt_arguments_by_param[i].empty())
+            param_tv.adt_type_arguments = annotated_adt_arguments_by_param[i];
+        if (ct == CType::ADT && i < args.size())
+            param_tv.adt_type_argument_names = args[i].adt_type_argument_names;
+        if (ct == CType::ADT && i < args.size())
+            param_tv.adt_semantic_arguments = args[i].adt_semantic_arguments;
+        if (i < args.size()) param_tv.boxed_heap = args[i].boxed_heap;
         named_values_[pname] = param_tv;
 
         if (i < def.ast->patterns.size())
@@ -1038,7 +1366,10 @@ Codegen::CompiledFunction Codegen::compile_function(
                 ApplyExpr* cur = app;
                 while (cur) {
                     if (auto* nc = dynamic_cast<NameCall*>(cur->call)) {
-                        if (nc->name->value == name) return true;
+                        if (nc->name->value == name ||
+                            (has_source_self_alias &&
+                             nc->name->value == def.ast->name))
+                            return true;
                         break;
                     }
                     if (auto* ec = dynamic_cast<ExprCall*>(cur->call)) {
@@ -1168,15 +1499,23 @@ Codegen::CompiledFunction Codegen::compile_function(
     // decide which seq params to rc_dec at exit.
     auto saved_fn_body = current_fn_body_;
     auto saved_transferred = transferred_values_;
-    auto saved_closure_consumed = closure_consumed_flags_;
     transferred_values_.clear();
-    closure_consumed_flags_.clear();
+    auto codegen_annotated_body = [&](ExprNode* expression) {
+        const auto* saved_expected_node = contextual_expected_node_;
+        const auto saved_expected_type = contextual_expected_type_;
+        contextual_expected_node_ = has_annotated_ret ? expression : nullptr;
+        contextual_expected_type_ = annotated_ret;
+        auto value = codegen(expression);
+        contextual_expected_node_ = saved_expected_node;
+        contextual_expected_type_ = saved_expected_type;
+        return value;
+    };
     TypedValue body_tv;
     if (!def.ast->bodies.empty()) {
         auto* body = def.ast->bodies[0];
         if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
             current_fn_body_ = bwg->expr;
-            body_tv = codegen(bwg->expr);
+            body_tv = codegen_annotated_body(bwg->expr);
             // AFN calls return PROMISE. Top-level print awaits them, but a
             // let-bound function's inferred return is usually INT — without
             // this, `let f cmd = exec cmd in f "echo x"` prints a pointer.
@@ -1186,7 +1525,8 @@ Codegen::CompiledFunction Codegen::compile_function(
     }
     current_fn_body_ = saved_fn_body;
 
-    CType ret_ctype = body_tv ? body_tv.type : CType::INT;
+    CType ret_ctype = has_annotated_ret
+        ? annotated_ret : (body_tv ? body_tv.type : CType::INT);
 
     if (body_tv && body_tv.val) {
         // Coerce non-recursive ADT structs to i64 ONLY when the body type
@@ -1209,6 +1549,42 @@ Codegen::CompiledFunction Codegen::compile_function(
                     {adt_ptr, ConstantInt::get(i64_ty, fi - 1), field_val});
             }
             body_tv.val = builder_->CreatePtrToInt(adt_ptr, i64_ty);
+        }
+
+        // A universal closure call returns heap values as i64. The declared
+        // result type remains authoritative, so recover its pointer ABI here
+        // instead of rebuilding the whole function with the erased i64 view.
+        if (has_annotated_ret && body_tv.val->getType() != ret_type) {
+            if (body_tv.val->getType()->isIntegerTy() && ret_type->isPointerTy())
+                body_tv.val = builder_->CreateIntToPtr(
+                    body_tv.val, ret_type, "annotated_result_ptr");
+            else if (body_tv.val->getType()->isPointerTy() && ret_type->isIntegerTy())
+                body_tv.val = builder_->CreatePtrToInt(
+                    body_tv.val, ret_type, "annotated_result_int");
+            if (body_tv.val->getType() == ret_type) {
+                body_tv.type = annotated_ret;
+                if (annotated_ret == CType::ADT)
+                    body_tv.adt_type_name = annotated_return_adt_name;
+            }
+        }
+
+        if (body_tv.val->getType() != ret_type) {
+            bool has_external_users = false;
+            for (auto* user : fn->users()) {
+                auto* instruction = dyn_cast<Instruction>(user);
+                if (!instruction || instruction->getFunction() != fn) {
+                    has_external_users = true;
+                    break;
+                }
+            }
+            if (has_external_users) {
+                report_error(def.ast->source_context,
+                    "function ABI mismatch for '" + name +
+                    "': its inferred return type changed after callers were emitted; "
+                    "add an explicit return type annotation");
+                body_tv.val = UndefValue::get(ret_type);
+                body_tv.type = preliminary_ret;
+            }
         }
 
         if (body_tv.val->getType() != ret_type) {
@@ -1264,6 +1640,10 @@ Codegen::CompiledFunction Codegen::compile_function(
                     pname = def.param_names[i];
                     ct = (i < args.size()) ? args[i].type : CType::INT;
                     if (i < args.size()) st = args[i].subtypes;
+                    if (st.empty() && i < annotated_adt_arguments_by_param.size() &&
+                        (ct == CType::SEQ || ct == CType::SET ||
+                         ct == CType::DICT || ct == CType::TUPLE))
+                        st = annotated_adt_arguments_by_param[i];
                     if (ct == CType::FUNCTION && st.empty() && i < args.size() && args[i].val) {
                         if (auto* fn_val = dyn_cast<Function>(args[i].val)) {
                             auto cf_it2 = compiled_functions_.find(fn_val->getName().str());
@@ -1277,7 +1657,33 @@ Codegen::CompiledFunction Codegen::compile_function(
                     ct = (ci < capture_values.size()) ? capture_values[ci].type : CType::INT;
                 }
                 arg.setName(pname);
-                named_values_[pname] = {&arg, ct, st};
+                TypedValue param_tv{&arg, ct, st};
+                if (i < args.size())
+                    param_tv.semantic_subtypes = args[i].semantic_subtypes;
+                if (param_tv.semantic_subtypes.empty() &&
+                    i < annotated_adt_arguments_by_param.size() &&
+                    i < annotated_arguments_are_concrete.size() &&
+                    annotated_arguments_are_concrete[i])
+                    for (const auto subtype : annotated_adt_arguments_by_param[i])
+                        param_tv.semantic_subtypes.push_back({subtype, {}, {}});
+                if (ct == CType::ADT && !annotated_adt_names.empty() &&
+                    i < annotated_adt_names.size() && !annotated_adt_names[i].empty()) {
+                    param_tv.adt_type_name = annotated_adt_names[i];
+                } else if (ct == CType::ADT && i < args.size()) {
+                    param_tv.adt_type_name = args[i].adt_type_name;
+                }
+                if (ct == CType::ADT && i < annotated_adt_arguments_by_param.size() &&
+                    !annotated_adt_arguments_by_param[i].empty())
+                    param_tv.adt_type_arguments = annotated_adt_arguments_by_param[i];
+                else if (ct == CType::ADT && i < args.size()) {
+                    param_tv.adt_type_arguments = args[i].adt_type_arguments;
+                }
+                if (ct == CType::ADT && i < args.size())
+                    param_tv.adt_type_argument_names = args[i].adt_type_argument_names;
+                if (ct == CType::ADT && i < args.size())
+                    param_tv.adt_semantic_arguments = args[i].adt_semantic_arguments;
+                if (i < args.size()) param_tv.boxed_heap = args[i].boxed_heap;
+                named_values_[pname] = std::move(param_tv);
 
                 if (i < def.ast->patterns.size())
                     bind_parameter_pattern(def.ast->patterns[i], named_values_[pname]);
@@ -1290,17 +1696,17 @@ Codegen::CompiledFunction Codegen::compile_function(
             // invalid, so no ownership/transfer state from that discarded
             // body may participate in the regenerated function.
             transferred_values_.clear();
-            closure_consumed_flags_.clear();
             arm_drop_stack_.clear();
             if (!def.ast->bodies.empty()) {
                 auto* body = def.ast->bodies[0];
                 if (auto* bwg = dynamic_cast<BodyWithoutGuards*>(body)) {
-                    body_tv = codegen(bwg->expr);
+                    body_tv = codegen_annotated_body(bwg->expr);
                     if (body_tv.type == CType::PROMISE)
                         body_tv = auto_await(body_tv);
                 }
             }
-            ret_ctype = body_tv ? body_tv.type : CType::INT;
+            ret_ctype = has_annotated_ret
+                ? annotated_ret : (body_tv ? body_tv.type : CType::INT);
         }
         if (!builder_->GetInsertBlock()->getTerminator()) {
             // Perceus callee-owns DROP for all heap params (seqs under the
@@ -1330,56 +1736,23 @@ Codegen::CompiledFunction Codegen::compile_function(
                     if (is_transferred(param, TransferDomain::Map))
                         continue;
 
-                    // If a closure call already consumed this param at
-                    // runtime (result != param), skip the function-exit
-                    // dec to avoid double-free.
-                    auto ccf_it = closure_consumed_flags_.find(param);
-                    if (ccf_it != closure_consumed_flags_.end()) {
-                        auto* consumed_val = builder_->CreateLoad(
-                            LType::getInt1Ty(*context_), ccf_it->second, "consumed");
-                        auto* not_consumed = builder_->CreateNot(consumed_val, "not_consumed");
-                        auto* check_bb = BasicBlock::Create(*context_, "check_param", fn);
-                        auto* skip_bb = BasicBlock::Create(*context_, "skip_param", fn);
-                        builder_->CreateCondBr(not_consumed, check_bb, skip_bb);
-                        builder_->SetInsertPoint(check_bb);
-                        // Normal param_is_ret check for non-consumed path
-                        Value* param_ptr = param;
-                        Value* ret_ptr = body_tv.val;
-                        if (param_ptr->getType()->isIntegerTy())
-                            param_ptr = builder_->CreateIntToPtr(param_ptr, ptr_ty);
-                        if (ret_ptr->getType()->isIntegerTy())
-                            ret_ptr = builder_->CreateIntToPtr(ret_ptr, ptr_ty);
-                        if (param_ptr->getType()->isPointerTy() && ret_ptr->getType()->isPointerTy()) {
-                            auto* is_same = builder_->CreateICmpEQ(param_ptr, ret_ptr, "param_is_ret");
-                            auto* drop_bb = BasicBlock::Create(*context_, "drop_param", fn);
-                            builder_->CreateCondBr(is_same, skip_bb, drop_bb);
-                            builder_->SetInsertPoint(drop_bb);
-                            emit_rc_dec(param, ct);
-                            builder_->CreateBr(skip_bb);
-                        } else {
-                            emit_rc_dec(param, ct);
-                            builder_->CreateBr(skip_bb);
-                        }
-                        builder_->SetInsertPoint(skip_bb);
+                    Value* param_ptr = param;
+                    Value* ret_ptr = body_tv.val;
+                    if (param_ptr->getType()->isIntegerTy())
+                        param_ptr = builder_->CreateIntToPtr(param_ptr, ptr_ty);
+                    if (ret_ptr->getType()->isIntegerTy())
+                        ret_ptr = builder_->CreateIntToPtr(ret_ptr, ptr_ty);
+                    if (param_ptr->getType()->isPointerTy() && ret_ptr->getType()->isPointerTy()) {
+                        auto* is_same = builder_->CreateICmpEQ(param_ptr, ret_ptr, "param_is_ret");
+                        auto* drop_bb = BasicBlock::Create(*context_, "drop_param", fn);
+                        auto* cont_bb = BasicBlock::Create(*context_, "cont", fn);
+                        builder_->CreateCondBr(is_same, cont_bb, drop_bb);
+                        builder_->SetInsertPoint(drop_bb);
+                        emit_rc_dec(param, ct);
+                        builder_->CreateBr(cont_bb);
+                        builder_->SetInsertPoint(cont_bb);
                     } else {
-                        Value* param_ptr = param;
-                        Value* ret_ptr = body_tv.val;
-                        if (param_ptr->getType()->isIntegerTy())
-                            param_ptr = builder_->CreateIntToPtr(param_ptr, ptr_ty);
-                        if (ret_ptr->getType()->isIntegerTy())
-                            ret_ptr = builder_->CreateIntToPtr(ret_ptr, ptr_ty);
-                        if (param_ptr->getType()->isPointerTy() && ret_ptr->getType()->isPointerTy()) {
-                            auto* is_same = builder_->CreateICmpEQ(param_ptr, ret_ptr, "param_is_ret");
-                            auto* drop_bb = BasicBlock::Create(*context_, "drop_param", fn);
-                            auto* cont_bb = BasicBlock::Create(*context_, "cont", fn);
-                            builder_->CreateCondBr(is_same, cont_bb, drop_bb);
-                            builder_->SetInsertPoint(drop_bb);
-                            emit_rc_dec(param, ct);
-                            builder_->CreateBr(cont_bb);
-                            builder_->SetInsertPoint(cont_bb);
-                        } else {
-                            emit_rc_dec(param, ct);
-                        }
+                        emit_rc_dec(param, ct);
                     }
                 }
             }
@@ -1407,6 +1780,24 @@ Codegen::CompiledFunction Codegen::compile_function(
     cf.fn = fn;
     cf.return_type = ret_ctype;
     cf.param_types = param_ctypes;
+    cf.param_adt_names.resize(param_ctypes.size());
+    for (size_t i = 0; i < cf.param_adt_names.size() && i < annotated_adt_names.size(); ++i) {
+        if (param_ctypes[i] == CType::ADT &&
+            !annotated_adt_names[i].empty() &&
+            !std::islower(static_cast<unsigned char>(annotated_adt_names[i].front()))) {
+            cf.param_adt_names[i] = annotated_adt_names[i];
+        }
+    }
+    if (def.ast->type_signature.has_value()) {
+        const types::Type* annotated = &*def.ast->type_signature;
+        while (std::holds_alternative<std::shared_ptr<types::FunctionType>>(*annotated)) {
+            const auto& function = std::get<std::shared_ptr<types::FunctionType>>(*annotated);
+            cf.param_type_descriptors.push_back(
+                source_type_descriptor(function->argumentType));
+            annotated = &function->returnType;
+        }
+        cf.return_type_descriptor = source_type_descriptor(*annotated);
+    }
     cf.borrowed_params = borrowed;
     cf.capture_names = def.free_vars;
     if (ret_ctype == CType::ADT) {
@@ -1416,6 +1807,8 @@ Codegen::CompiledFunction Codegen::compile_function(
     }
     if (body_tv && !body_tv.subtypes.empty())
         cf.return_subtypes = body_tv.subtypes;
+    if (body_tv && !body_tv.semantic_subtypes.empty())
+        cf.return_semantic_subtypes = body_tv.semantic_subtypes;
     // Propagate io-promise-ness from the body so a Yona wrapper like
     // `println s = writeLine stdoutFd s` is treated at its call sites as
     // an io_uring submit (direct call + yona_rt_io_await) rather than a
@@ -1430,7 +1823,6 @@ Codegen::CompiledFunction Codegen::compile_function(
     // are emitted — the function's body-local transfers should not leak
     // out to the enclosing scope's transfer tracking.
     transferred_values_ = saved_transferred;
-    closure_consumed_flags_ = saved_closure_consumed;
     current_frame_alloca_ = saved_frame_alloca;
     return cf;
 }

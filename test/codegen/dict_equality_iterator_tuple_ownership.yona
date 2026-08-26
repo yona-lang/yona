@@ -1,0 +1,10 @@
+import testCase, check, run, render from Std\Test,
+       get from Std\Dict
+in render (run [
+    testCase "Dictionary equality preserves tuple ownership" (\_ ->
+        check "a subsequent dictionary allocation remains valid"
+            (1 == 1 &&
+             combine {1: 10, 2: 20} {2: 99, 3: 30} ==
+                {1: 10, 2: 99, 3: 30} &&
+             get {4: 7} 4 0 == 7))
+])

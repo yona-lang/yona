@@ -16,7 +16,7 @@ case orl of Linear out_r ->
         Some b ->
             let s = reduceFloatGPU FSum b in
             n + s
-        None -> 0
+        None -> 0.0
     end
 end end
 end end

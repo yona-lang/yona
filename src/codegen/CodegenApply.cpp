@@ -11,6 +11,7 @@
 
 #include "Codegen.h"
 #include "AcceleratorLowering.h"
+#include "analysis/BorrowEscapeAnalysis.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
@@ -27,10 +28,181 @@ using yona::compiler::is_unlowerable_column_apply;
 // Closure layout constants — must match CodegenFunction.cpp / compiled_runtime.c
 static constexpr int CLOSURE_FIELD_FN = 0;      // fn_ptr
 static constexpr int CLOSURE_FIELD_ARITY = 2;   // arity
-static constexpr int CLOSURE_HDR_SIZE = 5;       // fn_ptr, ret_type, arity, num_captures, heap_mask
+static constexpr int CLOSURE_FIELD_BORROW_MASK = 5;
+static constexpr int CLOSURE_HDR_SIZE = 6;
+
+static int64_t borrow_mask(const std::vector<bool>& borrowed, size_t offset = 0) {
+    int64_t mask = 0;
+    for (size_t i = offset; i < borrowed.size() && i - offset < 64; ++i)
+        if (borrowed[i]) mask |= int64_t{1} << (i - offset);
+    return mask;
+}
 
 using namespace llvm;
 using LType = llvm::Type;
+
+static CType yona_type_to_ctype(const types::Type& t);
+
+struct TypeDescriptorNode {
+    std::string name;
+    std::vector<TypeDescriptorNode> arguments;
+};
+
+static std::optional<TypeDescriptorNode> parse_type_descriptor(
+        std::string_view text, size_t& offset) {
+    while (offset < text.size() && text[offset] == ' ') ++offset;
+    const size_t begin = offset;
+    while (offset < text.size() && text[offset] != '(' && text[offset] != ',' &&
+           text[offset] != ')')
+        ++offset;
+    if (begin == offset) return std::nullopt;
+    TypeDescriptorNode node{std::string(text.substr(begin, offset - begin)), {}};
+    while (!node.name.empty() && node.name.back() == ' ') node.name.pop_back();
+    if (offset >= text.size() || text[offset] != '(') return node;
+    ++offset;
+    while (offset < text.size() && text[offset] != ')') {
+        auto argument = parse_type_descriptor(text, offset);
+        if (!argument) return std::nullopt;
+        node.arguments.push_back(std::move(*argument));
+        if (offset < text.size() && text[offset] == ',') ++offset;
+        else if (offset < text.size() && text[offset] != ')') return std::nullopt;
+    }
+    if (offset >= text.size() || text[offset] != ')') return std::nullopt;
+    ++offset;
+    return node;
+}
+
+static std::optional<TypeDescriptorNode> parse_type_descriptor(
+        const std::string& text) {
+    size_t offset = 0;
+    auto node = parse_type_descriptor(text, offset);
+    while (offset < text.size() && text[offset] == ' ') ++offset;
+    return node && offset == text.size() ? node : std::nullopt;
+}
+
+static SemanticTypeIdentity semantic_identity_of(const TypedValue& value);
+
+static void bind_descriptor_variables(
+        const TypeDescriptorNode& formal, const SemanticTypeIdentity& actual,
+        std::unordered_map<std::string, SemanticTypeIdentity>& substitutions) {
+    if (formal.name == "VAR" && formal.arguments.size() == 1) {
+        substitutions.insert_or_assign(formal.arguments.front().name, actual);
+        return;
+    }
+    size_t formal_offset = formal.name == "ADT" ? 1 : 0;
+    for (size_t i = formal_offset; i < formal.arguments.size() &&
+                                   i - formal_offset < actual.arguments.size(); ++i)
+        bind_descriptor_variables(formal.arguments[i],
+                                  actual.arguments[i - formal_offset], substitutions);
+}
+
+static std::optional<SemanticTypeIdentity> identity_from_descriptor(
+        const TypeDescriptorNode& descriptor,
+        const std::unordered_map<std::string, SemanticTypeIdentity>& substitutions) {
+    if (descriptor.name == "VAR" && descriptor.arguments.size() == 1) {
+        const auto found = substitutions.find(descriptor.arguments.front().name);
+        return found == substitutions.end()
+            ? std::nullopt : std::optional<SemanticTypeIdentity>(found->second);
+    }
+    SemanticTypeIdentity result;
+    if (descriptor.name == "INT") result.type = CType::INT;
+    else if (descriptor.name == "FLOAT") result.type = CType::FLOAT;
+    else if (descriptor.name == "BOOL") result.type = CType::BOOL;
+    else if (descriptor.name == "STRING") result.type = CType::STRING;
+    else if (descriptor.name == "SYMBOL") result.type = CType::SYMBOL;
+    else if (descriptor.name == "UNIT") result.type = CType::UNIT;
+    else if (descriptor.name == "BYTE_ARRAY") result.type = CType::BYTE_ARRAY;
+    else if (descriptor.name == "INT_ARRAY") result.type = CType::INT_ARRAY;
+    else if (descriptor.name == "FLOAT_ARRAY") result.type = CType::FLOAT_ARRAY;
+    else if (descriptor.name == "Seq") result.type = CType::SEQ;
+    else if (descriptor.name == "Set") result.type = CType::SET;
+    else if (descriptor.name == "Dict") result.type = CType::DICT;
+    else if (descriptor.name == "TUPLE") result.type = CType::TUPLE;
+    else if (descriptor.name == "FUNCTION") result.type = CType::FUNCTION;
+    else if (descriptor.name == "Promise") result.type = CType::PROMISE;
+    else if (descriptor.name == "ADT" && !descriptor.arguments.empty()) {
+        result.type = CType::ADT;
+        result.adt_name = descriptor.arguments.front().name;
+    } else {
+        return std::nullopt;
+    }
+    const size_t argument_offset = descriptor.name == "ADT" ? 1 : 0;
+    for (size_t i = argument_offset; i < descriptor.arguments.size(); ++i) {
+        auto argument = identity_from_descriptor(descriptor.arguments[i], substitutions);
+        if (!argument) return std::nullopt;
+        result.arguments.push_back(std::move(*argument));
+    }
+    return result;
+}
+
+static std::optional<SemanticTypeIdentity> resolve_descriptor_identity(
+        const std::string& result_descriptor,
+        const std::vector<std::string>& parameter_descriptors,
+        const std::vector<TypedValue>& args) {
+    const auto result = parse_type_descriptor(result_descriptor);
+    if (!result) return std::nullopt;
+    std::unordered_map<std::string, SemanticTypeIdentity> substitutions;
+    for (size_t pi = 0; pi < parameter_descriptors.size() && pi < args.size(); ++pi) {
+        const auto parameter = parse_type_descriptor(parameter_descriptors[pi]);
+        if (parameter)
+            bind_descriptor_variables(*parameter, semantic_identity_of(args[pi]),
+                                      substitutions);
+    }
+    return identity_from_descriptor(*result, substitutions);
+}
+
+static void flatten_function_descriptor(const TypeDescriptorNode& descriptor,
+                                        std::vector<const TypeDescriptorNode*>& parameters) {
+    if (descriptor.name != "FUNCTION" || descriptor.arguments.size() != 2)
+        return;
+    parameters.push_back(&descriptor.arguments[0]);
+    flatten_function_descriptor(descriptor.arguments[1], parameters);
+}
+
+static std::string semantic_head_name(const TypedValue& value) {
+    if (value.type == CType::ADT && !value.adt_type_name.empty())
+        return value.adt_type_name;
+    switch (value.type) {
+        case CType::INT: return "Int";
+        case CType::FLOAT: return "Float";
+        case CType::BOOL: return "Bool";
+        case CType::STRING: return "String";
+        case CType::SYMBOL: return "Symbol";
+        case CType::UNIT: return "Unit";
+        case CType::SEQ: return "Seq";
+        case CType::SET: return "Set";
+        case CType::DICT: return "Dict";
+        case CType::TUPLE: return "Tuple";
+        case CType::FUNCTION: return "Function";
+        case CType::PROMISE: return "Promise";
+        case CType::BYTE_ARRAY: return "ByteArray";
+        case CType::INT_ARRAY: return "IntArray";
+        case CType::FLOAT_ARRAY: return "FloatArray";
+        case CType::CHANNEL: return "Channel";
+        default: return value.adt_type_name;
+    }
+}
+
+static bool descriptor_parameter_matches(
+        const TypeDescriptorNode& formal, const TypedValue& actual,
+        const auto& trait, const auto& instance) {
+    if (formal.name == "VAR" && formal.arguments.size() == 1) {
+        const auto parameter = std::find(trait.type_params.begin(),
+                                         trait.type_params.end(),
+                                         formal.arguments.front().name);
+        if (parameter == trait.type_params.end()) return true;
+        const size_t index = static_cast<size_t>(
+            std::distance(trait.type_params.begin(), parameter));
+        if (index >= instance.type_names.size()) return false;
+        const auto& head = instance.type_names[index];
+        return !head.empty() &&
+            (std::islower(static_cast<unsigned char>(head.front())) ||
+             head == semantic_head_name(actual));
+    }
+    const auto expected = identity_from_descriptor(formal, {});
+    if (!expected || expected->type != actual.type) return false;
+    return expected->adt_name.empty() || expected->adt_name == actual.adt_type_name;
+}
 
 Value* coerce_to_type(IRBuilder<>& builder, Value* v, LType* expected) {
     if (!v || v->getType() == expected)
@@ -202,16 +374,318 @@ Codegen::EvaluatedArgs Codegen::evaluate_apply_args(const std::vector<ApplyExpr*
     return result;
 }
 
-void Codegen::precompile_function_args(EvaluatedArgs& args) {
+static bool is_type_variable(const types::Type& type, std::string& name) {
+    auto named = std::get_if<std::shared_ptr<types::NamedType>>(&type);
+    if (!named || !*named || (*named)->name.empty() ||
+        !std::islower(static_cast<unsigned char>((*named)->name.front())))
+        return false;
+    name = (*named)->name;
+    return true;
+}
+
+static bool contains_type_variable(const types::Type& type) {
+    std::string variable;
+    if (is_type_variable(type, variable)) return true;
+    if (const auto* collection =
+            std::get_if<std::shared_ptr<types::SingleItemCollectionType>>(&type);
+        collection && *collection)
+        return contains_type_variable((*collection)->valueType);
+    if (const auto* dict =
+            std::get_if<std::shared_ptr<types::DictCollectionType>>(&type);
+        dict && *dict)
+        return contains_type_variable((*dict)->keyType) ||
+               contains_type_variable((*dict)->valueType);
+    if (const auto* function =
+            std::get_if<std::shared_ptr<types::FunctionType>>(&type);
+        function && *function)
+        return contains_type_variable((*function)->argumentType) ||
+               contains_type_variable((*function)->returnType);
+    if (const auto* product =
+            std::get_if<std::shared_ptr<types::ProductType>>(&type);
+        product && *product)
+        return std::any_of((*product)->types.begin(), (*product)->types.end(),
+            [](const auto& element) { return contains_type_variable(element); });
+    if (const auto* named = std::get_if<std::shared_ptr<types::NamedType>>(&type);
+        named && *named &&
+        !std::holds_alternative<std::nullptr_t>((*named)->type))
+        return contains_type_variable((*named)->type);
+    return false;
+}
+
+static std::vector<const types::Type*> function_arguments(const types::Type& signature) {
+    std::vector<const types::Type*> result;
+    auto* current = &signature;
+    while (std::holds_alternative<std::shared_ptr<types::FunctionType>>(*current)) {
+        const auto& function = std::get<std::shared_ptr<types::FunctionType>>(*current);
+        result.push_back(&function->argumentType);
+        current = &function->returnType;
+    }
+    return result;
+}
+
+struct LambdaArgumentHint {
+    CType type = CType::INT;
+    std::string adt_type_name;
+    std::vector<SemanticTypeIdentity> semantic_arguments;
+    bool known = false;
+};
+
+static SemanticTypeIdentity semantic_identity_of(const TypedValue& value) {
+    SemanticTypeIdentity identity;
+    identity.type = value.type;
+    identity.adt_name = value.adt_type_name;
+    identity.arguments = !value.semantic_subtypes.empty()
+        ? value.semantic_subtypes : value.adt_semantic_arguments;
+    if (identity.arguments.empty())
+        for (const auto subtype : value.subtypes)
+            identity.arguments.push_back({subtype, {}, {}});
+    return identity;
+}
+
+static void append_specialization_identity(
+        std::string& name, const SemanticTypeIdentity& identity) {
+    name += "_" + std::to_string(static_cast<int>(identity.type));
+    if (!identity.adt_name.empty()) name += "_" + identity.adt_name;
+    for (const auto& argument : identity.arguments) {
+        name += "_of";
+        append_specialization_identity(name, argument);
+    }
+}
+
+static LambdaArgumentHint hint_from_identity(const SemanticTypeIdentity& identity) {
+    return {identity.type, identity.adt_name, identity.arguments, true};
+}
+
+static LambdaArgumentHint checked_lambda_argument_hint(
+    typechecker::TypeChecker& checker, typechecker::MonoTypePtr type) {
+    type = checker.zonk(type);
+    if (!type) return {};
+    if (type->tag == typechecker::MonoType::App) {
+        const auto& name = type->type_name;
+        // An unresolved source type variable is represented as an App by the
+        // checker. It is not a nominal heap ADT: marking it as ADT turns the
+        // universal i64 carrier into a pointer and produces invalid IR in
+        // callbacks such as `map (\x -> x + 1) None`.
+        if (!name.empty() &&
+            std::islower(static_cast<unsigned char>(name.front())))
+            return {};
+        if (name == "Seq") return {CType::SEQ, {}, {}, true};
+        if (name == "Set") return {CType::SET, {}, {}, true};
+        if (name == "Dict") return {CType::DICT, {}, {}, true};
+        if (name == "ByteArray") return {CType::BYTE_ARRAY, {}, {}, true};
+        if (name == "IntArray") return {CType::INT_ARRAY, {}, {}, true};
+        if (name == "FloatArray") return {CType::FLOAT_ARRAY, {}, {}, true};
+        if (name == "Promise") return {CType::PROMISE, {}, {}, true};
+        return {CType::ADT, name, {}, true};
+    }
+    if (type->tag == typechecker::MonoType::Arrow)
+        return {CType::FUNCTION, {}, {}, true};
+    if (type->tag == typechecker::MonoType::MTuple)
+        return {CType::TUPLE, {}, {}, true};
+    if (type->tag != typechecker::MonoType::Con) return {};
+    using typechecker::TyCon;
+    switch (type->con) {
+        case TyCon::Int: case TyCon::Char: case TyCon::Byte:
+            return {CType::INT, {}, {}, true};
+        case TyCon::Float: return {CType::FLOAT, {}, {}, true};
+        case TyCon::Bool: return {CType::BOOL, {}, {}, true};
+        case TyCon::String: return {CType::STRING, {}, {}, true};
+        case TyCon::Symbol: return {CType::SYMBOL, {}, {}, true};
+        case TyCon::Unit: return {CType::UNIT, {}, {}, true};
+        case TyCon::Seq: return {CType::SEQ, {}, {}, true};
+        case TyCon::Set: return {CType::SET, {}, {}, true};
+        case TyCon::Dict: return {CType::DICT, {}, {}, true};
+        case TyCon::Tuple: return {CType::TUPLE, {}, {}, true};
+        case TyCon::Function: return {CType::FUNCTION, {}, {}, true};
+        case TyCon::Promise: return {CType::PROMISE, {}, {}, true};
+        case TyCon::ByteArray: return {CType::BYTE_ARRAY, {}, {}, true};
+    }
+    return {};
+}
+
+static LambdaArgumentHint lambda_argument_hint(const types::Type& type) {
+    std::string variable;
+    if (is_type_variable(type, variable))
+        return {};
+    LambdaArgumentHint hint{yona_type_to_ctype(type), {}, {}, true};
+    if (const auto* named = std::get_if<std::shared_ptr<types::NamedType>>(&type);
+        named && *named && hint.type == CType::ADT) {
+        hint.adt_type_name = (*named)->name;
+    }
+    return hint;
+}
+
+static std::vector<std::vector<LambdaArgumentHint>> infer_lambda_argument_hints(
+    const types::Type& signature, const std::vector<TypedValue>& call_args) {
+    const auto formal_args = function_arguments(signature);
+    std::unordered_map<std::string, LambdaArgumentHint> substitutions;
+    std::function<void(const types::Type&, const SemanticTypeIdentity&)> bind;
+    bind = [&](const types::Type& formal, const SemanticTypeIdentity& actual) {
+        std::string variable;
+        if (is_type_variable(formal, variable)) {
+            substitutions.insert_or_assign(variable, hint_from_identity(actual));
+            return;
+        }
+        if (const auto* collection =
+                std::get_if<std::shared_ptr<types::SingleItemCollectionType>>(&formal);
+            collection && *collection && !actual.arguments.empty()) {
+            bind((*collection)->valueType, actual.arguments.front());
+            return;
+        }
+        if (const auto* dict =
+                std::get_if<std::shared_ptr<types::DictCollectionType>>(&formal);
+            dict && *dict && actual.arguments.size() >= 2) {
+            bind((*dict)->keyType, actual.arguments[0]);
+            bind((*dict)->valueType, actual.arguments[1]);
+            return;
+        }
+        if (const auto* product =
+                std::get_if<std::shared_ptr<types::ProductType>>(&formal);
+            product && *product) {
+            for (size_t i = 0; i < (*product)->types.size() &&
+                               i < actual.arguments.size(); ++i)
+                bind((*product)->types[i], actual.arguments[i]);
+            return;
+        }
+        if (const auto* named = std::get_if<std::shared_ptr<types::NamedType>>(&formal);
+            named && *named &&
+            !std::holds_alternative<std::nullptr_t>((*named)->type) &&
+            !actual.arguments.empty()) {
+            if (const auto* product =
+                    std::get_if<std::shared_ptr<types::ProductType>>(&(*named)->type);
+                product && *product) {
+                for (size_t i = 0; i < (*product)->types.size() &&
+                                   i < actual.arguments.size(); ++i)
+                    bind((*product)->types[i], actual.arguments[i]);
+            } else {
+                bind((*named)->type, actual.arguments.front());
+            }
+        }
+    };
+    for (size_t i = 0; i < formal_args.size() && i < call_args.size(); ++i) {
+        bind(*formal_args[i], semantic_identity_of(call_args[i]));
+    }
+
+    std::vector<std::vector<LambdaArgumentHint>> hints(call_args.size());
+    for (size_t i = 0; i < formal_args.size() && i < call_args.size(); ++i) {
+        if (call_args[i].type != CType::FUNCTION ||
+            !std::holds_alternative<std::shared_ptr<types::FunctionType>>(*formal_args[i]))
+            continue;
+        for (const auto* parameter : function_arguments(*formal_args[i])) {
+            std::string variable;
+            auto substitution = is_type_variable(*parameter, variable)
+                ? substitutions.find(variable) : substitutions.end();
+            hints[i].push_back(substitution != substitutions.end()
+                ? substitution->second : lambda_argument_hint(*parameter));
+        }
+    }
+    return hints;
+}
+
+void Codegen::precompile_function_args(EvaluatedArgs& args, const std::string& callee_name) {
+    std::optional<types::Type> signature;
+    if (auto deferred = deferred_functions_.find(callee_name);
+        deferred != deferred_functions_.end() && deferred->second.ast->type_signature) {
+        signature = *deferred->second.ast->type_signature;
+    } else if (auto ext = imports_.extern_functions.find(callee_name);
+               ext != imports_.extern_functions.end()) {
+        if (auto source = imports_.imported_sources.find(ext->second);
+            source != imports_.imported_sources.end()) {
+            auto parsed = reparse_genfn(source->second.local_name, source->second.source_text);
+            if (parsed && !parsed->functions.empty() && parsed->functions[0]->type_signature)
+                signature = *parsed->functions[0]->type_signature;
+        }
+    }
+    // Infer source-level variables from every concrete argument, then apply
+    // them to arguments whose literal representation carries no element
+    // identity (most importantly `[]`). This makes a call such as
+    // `collect (Iterator (Int, String)) []` specialize both parameters to
+    // the same tuple element type; otherwise recursive helpers compile the
+    // empty accumulator as `Seq Int` and omit required heap retains.
+    if (signature) {
+        const auto formal_args = function_arguments(*signature);
+        std::unordered_map<std::string, SemanticTypeIdentity> substitutions;
+        for (size_t i = 0; i < formal_args.size() && i < args.all_args.size(); ++i) {
+            const auto formal = parse_type_descriptor(
+                source_type_descriptor(*formal_args[i]));
+            if (formal)
+                bind_descriptor_variables(
+                    *formal, semantic_identity_of(args.all_args[i]), substitutions);
+        }
+        for (size_t i = 0; i < formal_args.size() && i < args.all_args.size(); ++i) {
+            auto& actual = args.all_args[i];
+            if (actual.type != CType::SEQ && actual.type != CType::SET &&
+                actual.type != CType::DICT)
+                continue;
+            if (!actual.semantic_subtypes.empty()) continue;
+            const auto formal = parse_type_descriptor(
+                source_type_descriptor(*formal_args[i]));
+            if (!formal) continue;
+            const auto inferred = identity_from_descriptor(*formal, substitutions);
+            if (!inferred || inferred->type != actual.type ||
+                inferred->arguments.empty())
+                continue;
+            actual.semantic_subtypes = inferred->arguments;
+            actual.subtypes.clear();
+            for (const auto& argument : inferred->arguments)
+                actual.subtypes.push_back(argument.type);
+        }
+    }
+    const auto hints = signature ? infer_lambda_argument_hints(*signature, args.all_args)
+                                 : std::vector<std::vector<LambdaArgumentHint>>(args.all_args.size());
     for (size_t ai = 0; ai < args.all_args.size(); ai++) {
         if (args.all_args[ai].type == CType::FUNCTION && !args.all_args[ai].val && !args.arg_lambda_names[ai].empty()) {
             auto& lname = args.arg_lambda_names[ai];
             auto def_it = deferred_functions_.find(lname);
             if (def_it != deferred_functions_.end()) {
-                // Compile with INT args as default type hint
+                bool has_call_site_hints = ai < hints.size() &&
+                    std::any_of(hints[ai].begin(), hints[ai].end(),
+                        [](const LambdaArgumentHint& hint) { return hint.known; });
+                if (!has_call_site_hints) {
+                    if (auto compiled = compiled_functions_.find(lname);
+                        compiled != compiled_functions_.end() && compiled->second.fn) {
+                        args.all_args[ai] = {
+                            compiled->second.fn, CType::FUNCTION,
+                            {compiled->second.return_type}};
+                        continue;
+                    }
+                }
                 std::vector<TypedValue> hint_args;
-                for (size_t pi = 0; pi < def_it->second.param_names.size(); pi++)
-                    hint_args.push_back({ConstantInt::get(LType::getInt64Ty(*context_), 0), CType::INT});
+                std::vector<std::optional<LambdaArgumentHint>> checked_hints;
+                if (type_checker_) {
+                    auto* checked = type_checker_->zonk(
+                        type_checker_->type_of(def_it->second.ast));
+                    for (size_t pi = 0; pi < def_it->second.param_names.size() &&
+                         checked && checked->tag == typechecker::MonoType::Arrow; ++pi) {
+                        auto* parameter = type_checker_->zonk(checked->param_type);
+                        checked_hints.push_back(
+                            parameter && parameter->tag != typechecker::MonoType::Var
+                                ? std::optional<LambdaArgumentHint>(
+                                      checked_lambda_argument_hint(
+                                          *type_checker_, parameter))
+                                : std::nullopt);
+                        checked = type_checker_->zonk(checked->return_type);
+                    }
+                }
+                for (size_t pi = 0; pi < def_it->second.param_names.size(); pi++) {
+                    const bool has_contextual_hint = ai < hints.size() &&
+                        pi < hints[ai].size() && hints[ai][pi].known;
+                    const LambdaArgumentHint hint = has_contextual_hint
+                        ? hints[ai][pi]
+                        : pi < checked_hints.size() && checked_hints[pi].has_value()
+                            ? *checked_hints[pi] : LambdaArgumentHint{};
+                    auto value = dummy_typed_value(hint.type);
+                    if (hint.type == CType::ADT && !hint.adt_type_name.empty()) {
+                        value.val = Constant::getNullValue(
+                            adt_llvm_type(hint.adt_type_name));
+                    }
+                    value.adt_type_name = hint.adt_type_name;
+                    value.semantic_subtypes = hint.semantic_arguments;
+                    value.adt_semantic_arguments = hint.semantic_arguments;
+                    for (const auto& argument : hint.semantic_arguments)
+                        value.subtypes.push_back(argument.type);
+                    hint_args.push_back(std::move(value));
+                }
                 auto cf = compile_function(lname, def_it->second, hint_args);
                 args.all_args[ai] = {cf.fn, CType::FUNCTION, {cf.return_type}};
             } else if (imports_.extern_functions.count(lname)) {
@@ -234,11 +708,6 @@ void Codegen::wrap_function_args_in_closures(std::vector<TypedValue>& all_args) 
             CType fn_ret = (!all_args[ai].subtypes.empty()) ? all_args[ai].subtypes[0] : CType::INT;
             auto* underlying_fn = cast<Function>(all_args[ai].val);
             all_args[ai].val = wrap_in_closure(underlying_fn, fn_ret);
-            // Remember the closure → wrapper function mapping for devirtualization.
-            // The wrapper has the env-passing signature: (ptr env, user_args...).
-            auto wrapper_name = underlying_fn->getName().str() + "_env";
-            if (auto* wrapper_fn = module_->getFunction(wrapper_name))
-                closure_known_fn_[all_args[ai].val] = wrapper_fn;
         }
     }
 }
@@ -295,8 +764,11 @@ TypedValue Codegen::codegen_adt_construct(const std::string& fn_name, const std:
     for (size_t ai = 0; ai < all_args.size() && ai < (size_t)info.arity; ai++)
         field_subtypes.push_back(all_args[ai].type);
 
-    if (info.is_recursive) {
-        // Recursive ADT: heap-allocate via runtime
+    {
+        // Every ADT uses the same heap ABI. A single representation is
+        // essential for generic functions, closures, and separately compiled
+        // modules: their call signatures cannot depend on whether a concrete
+        // constructor happened to be recursive or carried a heap field.
         auto* node_ptr = builder_->CreateCall(rt_.adt_alloc_,
             {ConstantInt::get(tag_ty, info.tag),
              ConstantInt::get(i64_ty, info.arity)}, "adt_node");
@@ -319,27 +791,29 @@ TypedValue Codegen::codegen_adt_construct(const std::string& fn_name, const std:
         TypedValue result{node_ptr, CType::ADT};
         result.adt_type_name = info.type_name;
         result.subtypes = field_subtypes;
-        for (auto& a : all_args)
-            if (a.boxed_heap) { result.boxed_heap = true; break; }
-        return result;
-    } else {
-        // Non-recursive: flat struct {i8, i64*max_arity}
-        std::vector<LType*> fields = {tag_ty};
-        for (int f = 0; f < info.max_arity; f++) fields.push_back(i64_ty);
-        auto* struct_type = StructType::get(*context_, fields);
-        Value* val = UndefValue::get(struct_type);
-        val = builder_->CreateInsertValue(val, ConstantInt::get(tag_ty, info.tag), {0});
-        for (size_t ai = 0; ai < all_args.size() && ai < (size_t)info.arity; ai++) {
-            // rc_inc heap field values: same ownership rule as the recursive
-            // path — the ADT (eventually boxed) becomes a co-owner.
-            if (is_heap_value(all_args[ai]) && !all_args[ai].val->getType()->isStructTy())
-                emit_rc_inc(all_args[ai].val, all_args[ai].type);
-            Value* arg_val = to_i64(all_args[ai]);
-            val = builder_->CreateInsertValue(val, arg_val, {(unsigned)(ai + 1)});
+        if (const auto params = types_.adt_type_params.find(info.type_name);
+            params != types_.adt_type_params.end()) {
+            result.adt_type_arguments.assign(params->second.size(), CType::INT);
+            result.adt_type_argument_names.resize(params->second.size());
+            result.adt_semantic_arguments.resize(params->second.size());
+            for (size_t fi = 0; fi < all_args.size() &&
+                 fi < info.declared_field_types.size(); ++fi) {
+                const auto& declared = info.declared_field_types[fi];
+                const auto parameter = std::find(
+                    params->second.begin(), params->second.end(), declared.name);
+                if (parameter == params->second.end()) continue;
+                const size_t pi = static_cast<size_t>(
+                    std::distance(params->second.begin(), parameter));
+                result.adt_type_arguments[pi] = all_args[fi].type;
+                result.adt_type_argument_names[pi] = all_args[fi].adt_type_name;
+                auto& identity = result.adt_semantic_arguments[pi];
+                identity.type = all_args[fi].type;
+                identity.adt_name = all_args[fi].adt_type_name;
+                identity.arguments = !all_args[fi].semantic_subtypes.empty()
+                    ? all_args[fi].semantic_subtypes
+                    : all_args[fi].adt_semantic_arguments;
+            }
         }
-        TypedValue result{val, CType::ADT};
-        result.adt_type_name = info.type_name;
-        result.subtypes = field_subtypes;
         for (auto& a : all_args)
             if (a.boxed_heap) { result.boxed_heap = true; break; }
         return result;
@@ -347,7 +821,33 @@ TypedValue Codegen::codegen_adt_construct(const std::string& fn_name, const std:
 }
 
 std::unordered_map<std::string, Codegen::CompiledFunction>::iterator
-Codegen::resolve_apply_function(const std::string& fn_name, const std::vector<TypedValue>& all_args) {
+Codegen::resolve_apply_function(const std::string& fn_name,
+                                const std::vector<TypedValue>& all_args,
+                                const ApplyExpr* application) {
+    // Source-defined polymorphic helpers need the same complete semantic
+    // specialization as exported GENFNs.  In particular, an imported public
+    // GENFN may call private siblings registered under their local names.
+    // Caching those siblings by the local name alone erases nested element
+    // identities (for example Seq (Int, String)) and can compile an unsafe
+    // ownership path for every later instantiation.
+    if (auto deferred = deferred_functions_.find(fn_name);
+        deferred != deferred_functions_.end() &&
+        deferred->second.ast->type_signature &&
+        contains_type_variable(*deferred->second.ast->type_signature)) {
+        std::string specialization = fn_name + "__genfn";
+        for (const auto& argument : all_args)
+            append_specialization_identity(
+                specialization, semantic_identity_of(argument));
+        if (auto compiled = compiled_functions_.find(specialization);
+            compiled != compiled_functions_.end())
+            return compiled;
+
+        // Copy before compilation: nested codegen can grow the deferred map.
+        const DeferredFunction definition = deferred->second;
+        compile_function(specialization, definition, all_args);
+        return compiled_functions_.find(specialization);
+    }
+
     // First try direct lookup, then resolve through named_values_ indirection
     auto cf_it = compiled_functions_.find(fn_name);
     if (cf_it == compiled_functions_.end()) {
@@ -373,8 +873,178 @@ Codegen::resolve_apply_function(const std::string& fn_name, const std::vector<Ty
     if (cf_it == compiled_functions_.end()) {
         CType first_arg_type = all_args.empty() ? CType::INT : all_args[0].type;
         std::string first_adt_name = all_args.empty() ? "" : all_args[0].adt_type_name;
-        auto resolved = resolve_trait_method(fn_name, first_arg_type, first_adt_name);
+        std::string resolved;
+        if (type_checker_ && application &&
+            application->source_context.filename != "<imported>" &&
+            genfn_isolation_depth_ == 0) {
+            const ApplyExpr* selected_application = application;
+            std::optional<typechecker::TypeChecker::SelectedTraitInstance>
+                selected_instance;
+            while (selected_application && !selected_instance) {
+                selected_instance = type_checker_->selected_trait_instance(
+                    selected_application);
+                auto* expression_call =
+                    dynamic_cast<ExprCall*>(selected_application->call);
+                selected_application = expression_call
+                    ? dynamic_cast<ApplyExpr*>(expression_call->expr)
+                    : nullptr;
+            }
+            if (selected_instance) {
+                const auto& selected = *selected_instance;
+                std::string key = selected.trait_name;
+                for (const auto& head : selected.type_names) key += ":" + head;
+                if (const auto instance = types_.trait_instances.find(key);
+                    instance != types_.trait_instances.end()) {
+                    if (const auto method =
+                            instance->second.method_mangled_names.find(fn_name);
+                        method != instance->second.method_mangled_names.end())
+                        resolved = method->second;
+                }
+            }
+        }
+        // Reparsed GENFN bodies are created after the importing module's
+        // TypeChecker pass, so they have no AST-keyed selection entry. Resolve
+        // concrete overloaded methods from their complete call ABI instead of
+        // falling back to the receiver alone. Nominal ADTs are checked as well
+        // as CType so equally represented instance heads remain distinct.
+        if (resolved.empty()) {
+            std::vector<std::string> candidates;
+            for (const auto& [_, trait] : types_.traits) {
+                if (std::find(trait.method_names.begin(), trait.method_names.end(),
+                              fn_name) == trait.method_names.end())
+                    continue;
+                for (const auto& [__, instance] : types_.trait_instances) {
+                    if (instance.trait_name != trait.name) continue;
+                    const auto method = instance.method_mangled_names.find(fn_name);
+                    if (method == instance.method_mangled_names.end()) continue;
+                    const auto meta = imports_.meta.find(method->second);
+                    const auto compiled = compiled_functions_.find(method->second);
+                    const auto* parameter_types = meta != imports_.meta.end()
+                        ? &meta->second.param_types
+                        : compiled != compiled_functions_.end()
+                            ? &compiled->second.param_types : nullptr;
+                    bool matches = true;
+                    const auto signature = trait.method_type_descriptors.find(fn_name);
+                    const auto descriptor = signature == trait.method_type_descriptors.end()
+                        ? std::nullopt : parse_type_descriptor(signature->second);
+                    if (descriptor) {
+                        std::vector<const TypeDescriptorNode*> parameters;
+                        flatten_function_descriptor(*descriptor, parameters);
+                        if (parameters.size() != all_args.size()) matches = false;
+                        for (size_t i = 0; matches && i < all_args.size(); ++i) {
+                            if (!descriptor_parameter_matches(
+                                    *parameters[i], all_args[i], trait, instance)) {
+                                matches = false;
+                            }
+                        }
+                    } else if (!parameter_types) {
+                        matches = false;
+                    }
+                    if (matches && parameter_types &&
+                        parameter_types->size() != all_args.size()) {
+                        matches = false;
+                    }
+                    if (!matches) continue;
+                    if (parameter_types && parameter_types->size() != all_args.size()) {
+                        continue;
+                    }
+                    for (size_t i = 0; matches && parameter_types &&
+                                           i < all_args.size(); ++i) {
+                        if ((*parameter_types)[i] != all_args[i].type) {
+                            matches = false;
+                            break;
+                        }
+                        std::string expected_adt;
+                        if (meta != imports_.meta.end() &&
+                            i < meta->second.param_type_descriptors.size()) {
+                            const auto descriptor = parse_type_descriptor(
+                                meta->second.param_type_descriptors[i]);
+                            if (descriptor && descriptor->name == "ADT" &&
+                                !descriptor->arguments.empty())
+                                expected_adt = descriptor->arguments.front().name;
+                        } else if (compiled != compiled_functions_.end() &&
+                                   i < compiled->second.param_adt_names.size()) {
+                            expected_adt = compiled->second.param_adt_names[i];
+                        }
+                        if (!expected_adt.empty() &&
+                            expected_adt != all_args[i].adt_type_name) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if (matches) candidates.push_back(method->second);
+                }
+            }
+            std::sort(candidates.begin(), candidates.end());
+            candidates.erase(std::unique(candidates.begin(), candidates.end()),
+                             candidates.end());
+            if (candidates.size() == 1) resolved = candidates.front();
+        }
+        if (resolved.empty())
+            resolved = resolve_trait_method(fn_name, first_arg_type, first_adt_name);
         if (!resolved.empty()) {
+            // Generic trait implementations must be specialized at nested
+            // method calls too (`Eq Result` calling `Eq Option`), not only at
+            // surface comparison operators. Calling the bootstrap declaration
+            // directly can otherwise mix a flat generic struct signature with
+            // a heap-specialized argument.
+            const bool element_dispatch_method =
+                fn_name == "eq" || fn_name == "compare" ||
+                fn_name == "hash" || fn_name == "show";
+            if (!all_args.empty() && imports_.imported_sources.count(resolved) &&
+                (!all_args[0].adt_semantic_arguments.empty() ||
+                 !all_args[0].adt_type_arguments.empty() ||
+                 (element_dispatch_method && !all_args[0].subtypes.empty()))) {
+                std::string specialization = resolved + "__";
+                std::function<void(const SemanticTypeIdentity&)> append_identity;
+                append_identity = [&](const SemanticTypeIdentity& identity) {
+                    specialization += std::to_string(static_cast<int>(identity.type));
+                    if (!identity.adt_name.empty())
+                        specialization += "_" + identity.adt_name;
+                    for (const auto& argument : identity.arguments) {
+                        specialization += "_of_";
+                        append_identity(argument);
+                    }
+                };
+                if (!all_args[0].adt_semantic_arguments.empty()) {
+                    for (const auto& argument : all_args[0].adt_semantic_arguments) {
+                        append_identity(argument);
+                        specialization += "_";
+                    }
+                } else {
+                    const auto& arguments = !all_args[0].adt_type_arguments.empty()
+                        ? all_args[0].adt_type_arguments : all_args[0].subtypes;
+                    for (auto type : arguments)
+                        specialization +=
+                            std::to_string(static_cast<int>(type)) + "_";
+                }
+                cf_it = compiled_functions_.find(specialization);
+                if (cf_it == compiled_functions_.end()) {
+                    const auto& source = imports_.imported_sources.at(resolved);
+                    GenfnNameIsolation iso(*this, resolved);
+                    install_private_genfn_ctors(resolved);
+                    auto reparsed = reparse_genfn(source.local_name, source.source_text);
+                    if (reparsed && !reparsed->functions.empty()) {
+                        auto* function = reparsed->functions.front();
+                        reparsed->functions.clear();
+                        imports_.imported_ast_nodes.push_back(
+                            std::unique_ptr<FunctionExpr>(function));
+                        register_sibling_genfns(resolved);
+                        codegen_function_def(function, specialization);
+                        if (auto deferred = deferred_functions_.find(specialization);
+                            deferred != deferred_functions_.end())
+                            compile_function(specialization, deferred->second, all_args);
+                        cf_it = compiled_functions_.find(specialization);
+                        if (cf_it != compiled_functions_.end()) {
+                            CompiledFunction specialized = cf_it->second;
+                            iso.restore();
+                            compiled_functions_[specialization] = std::move(specialized);
+                            cf_it = compiled_functions_.find(specialization);
+                        }
+                    }
+                }
+                if (cf_it != compiled_functions_.end()) return cf_it;
+            }
             // Try compiled functions first
             cf_it = compiled_functions_.find(resolved);
             if (cf_it == compiled_functions_.end()) {
@@ -385,7 +1055,46 @@ Codegen::resolve_apply_function(const std::string& fn_name, const std::vector<Ty
                     cf_it = compiled_functions_.find(resolved);
                 }
             }
-        }
+            if (cf_it == compiled_functions_.end() ||
+                (cf_it->second.fn && cf_it->second.fn->isDeclaration() &&
+                 imports_.imported_sources.count(resolved))) {
+                // Concrete imported instances (for example Num Int) have no
+                // type arguments to trigger the specialization path above.
+                // Their interface still carries GENFN source, so compile the
+                // canonical implementation on demand instead of assuming a
+                // separately linked module object exists.
+                auto source = imports_.imported_sources.find(resolved);
+                if (source != imports_.imported_sources.end()) {
+                    GenfnNameIsolation iso(*this, resolved);
+                    if (cf_it != compiled_functions_.end()) {
+                        compiled_functions_.erase(cf_it);
+                        cf_it = compiled_functions_.end();
+                    }
+                    install_private_genfn_ctors(resolved);
+                    auto reparsed = reparse_genfn(
+                        source->second.local_name, source->second.source_text);
+                    if (reparsed && !reparsed->functions.empty()) {
+                        auto* function = reparsed->functions.front();
+                        reparsed->functions.clear();
+                        imports_.imported_ast_nodes.push_back(
+                            std::unique_ptr<FunctionExpr>(function));
+                        register_sibling_genfns(resolved);
+                        codegen_function_def(function, resolved);
+                        if (auto deferred = deferred_functions_.find(resolved);
+                            deferred != deferred_functions_.end()) {
+                            compile_function(resolved, deferred->second, all_args);
+                            cf_it = compiled_functions_.find(resolved);
+                        }
+                        if (cf_it != compiled_functions_.end()) {
+                            CompiledFunction specialized = cf_it->second;
+                            iso.restore();
+                            compiled_functions_[resolved] = std::move(specialized);
+                            cf_it = compiled_functions_.find(resolved);
+                        }
+                    }
+                }
+            }
+            }
     }
     return cf_it;
 }
@@ -406,6 +1115,37 @@ TypedValue Codegen::codegen_higher_order_call(const std::string& fn_name, const 
                                                          : first_arg;
     auto ret_llvm = llvm_type(ret_ctype);
     auto var_val = var_it->second.val;
+    auto decode_universal_result = [&](Value* universal) -> TypedValue {
+        auto* i64_ty = LType::getInt64Ty(*context_);
+        if (ret_ctype == CType::BOOL) {
+            auto* integer = universal->getType()->isIntegerTy(64)
+                ? universal : builder_->CreateZExtOrTrunc(universal, i64_ty);
+            return {builder_->CreateICmpNE(
+                        integer, ConstantInt::get(i64_ty, 0), "closure_bool"),
+                    CType::BOOL};
+        }
+        if (ret_ctype == CType::FLOAT) {
+            auto* bits = universal->getType()->isIntegerTy(64)
+                ? universal : builder_->CreateZExtOrTrunc(universal, i64_ty);
+            return {builder_->CreateBitCast(
+                        bits, LType::getDoubleTy(*context_), "closure_float"),
+                    CType::FLOAT};
+        }
+        if (ret_ctype == CType::STRING || ret_ctype == CType::SEQ ||
+            ret_ctype == CType::SET || ret_ctype == CType::DICT ||
+            ret_ctype == CType::FUNCTION || ret_ctype == CType::ADT ||
+            ret_ctype == CType::BYTE_ARRAY || ret_ctype == CType::INT_ARRAY ||
+            ret_ctype == CType::FLOAT_ARRAY || ret_ctype == CType::CHANNEL ||
+            ret_ctype == CType::PROMISE) {
+            auto* pointer = universal->getType()->isPointerTy()
+                ? universal : builder_->CreateIntToPtr(
+                    universal, PointerType::get(*context_, 0), "closure_ptr");
+            TypedValue decoded{pointer, ret_ctype};
+            decoded.adt_type_name = var_it->second.adt_type_name;
+            return decoded;
+        }
+        return {universal, ret_ctype};
+    };
 
     if (isa<Function>(var_val) || effect_resume_names_.count(fn_name)) {
         // Direct function pointer or effect resume fn ptr
@@ -413,34 +1153,9 @@ TypedValue Codegen::codegen_higher_order_call(const std::string& fn_name, const 
         auto result = builder_->CreateCall(fn_type, var_val, vals, "indirect_call");
         return {result, ret_ctype};
     } else {
-        // Closure call. Check if we know the underlying Function*
-        // (from closure devirtualization) for a direct call.
-        auto kf_it = closure_known_fn_.find(var_val);
-        if (kf_it != closure_known_fn_.end()) {
-            // Devirtualized: direct call to the known wrapper function.
-            // Coerce args to match wrapper's expected param types.
-            auto* known_fn = kf_it->second;
-            std::vector<Value*> call_vals = {var_val}; // env = closure
-            size_t param_idx = 1; // skip env param
-            for (auto& a : all_args) {
-                Value* arg_val = a.val;
-                if (param_idx < known_fn->arg_size()) {
-                    auto* expected = known_fn->getArg(param_idx)->getType();
-                    if (arg_val->getType() != expected) {
-                        if (arg_val->getType()->isPointerTy() && expected->isIntegerTy())
-                            arg_val = builder_->CreatePtrToInt(arg_val, expected);
-                        else if (arg_val->getType()->isIntegerTy() && expected->isPointerTy())
-                            arg_val = builder_->CreateIntToPtr(arg_val, expected);
-                    }
-                }
-                call_vals.push_back(arg_val);
-                param_idx++;
-            }
-            auto* result = builder_->CreateCall(known_fn, call_vals, "devirt_call");
-            return {result, ret_ctype};
-        }
-
-        // Generic closure: load fn_ptr from closure[0]
+        // Every closure call goes through the same universal ABI. Keeping the
+        // ownership path uniform lets closures passed through generic
+        // functions retain their exact borrow contract.
         auto i64_ty = LType::getInt64Ty(*context_);
         auto ptr_ty = PointerType::get(*context_, 0);
 
@@ -476,6 +1191,112 @@ TypedValue Codegen::codegen_higher_order_call(const std::string& fn_name, const 
                 n_args_this_call = vals.size() - args_consumed;
             }
 
+            auto* borrow_mask_gep = builder_->CreateGEP(
+                i64_ty, current_closure,
+                {ConstantInt::get(i64_ty, CLOSURE_FIELD_BORROW_MASK)},
+                "borrow_mask_ptr");
+            auto* current_borrow_mask = builder_->CreateLoad(
+                i64_ty, borrow_mask_gep, "borrow_mask");
+
+            // Apply the callback's ownership contract before the call. An
+            // owned last-use argument transfers its existing reference; an
+            // owned non-last-use argument is duplicated; a borrowed argument
+            // remains entirely caller-owned.
+            std::vector<std::pair<TypedValue, Value*>> borrowed_temporaries;
+            for (size_t ai = 0; ai < n_args_this_call; ++ai) {
+                const size_t argument_index = args_consumed + ai;
+                if (argument_index >= all_args.size()) break;
+                const auto& argument = all_args[argument_index];
+                if (!is_heap_type(argument.type) || !argument.val ||
+                    isa<Constant>(argument.val) ||
+                    argument.val->getType()->isStructTy())
+                    continue;
+
+                auto* bit = builder_->CreateAnd(
+                    current_borrow_mask,
+                    ConstantInt::get(i64_ty, int64_t{1} << ai),
+                    "borrow_bit");
+                auto* is_borrowed = builder_->CreateICmpNE(
+                    bit, ConstantInt::get(i64_ty, 0), "arg_is_borrowed");
+
+                std::string binding;
+                for (const auto& [name, value] : named_values_)
+                    if (value.val == argument.val) { binding = name; break; }
+
+                // A recursive local function's environment is its first LLVM
+                // parameter. Passing that self value to a borrowing callback
+                // is not a consumable "last textual use": every recursive
+                // invocation shares the same environment reference.
+                auto* argument_parameter = dyn_cast<Argument>(argument.val);
+                auto* active_function = builder_->GetInsertBlock()->getParent();
+                const bool recursive_self_environment = argument_parameter &&
+                    argument_parameter->getArgNo() == 0 && active_function &&
+                    active_function->arg_size() > 0 &&
+                    active_function->getArg(0) == argument_parameter &&
+                    argument_parameter->getType()->isPointerTy();
+                if (recursive_self_environment && binding.empty())
+                    binding = active_function->getName().str();
+
+                const bool last_use = !recursive_self_environment &&
+                    !binding.empty() && current_fn_body_ &&
+                    compiler::analysis::max_identifier_refs_on_path(
+                        current_fn_body_, binding) == 1;
+                if (last_use) {
+                    auto* owned_transfer = builder_->CreateNot(
+                        is_borrowed, "owned_transfer");
+                    if (current_frame_alloca_) {
+                        auto* transfer_bb = BasicBlock::Create(
+                            *context_, "closure_transfer",
+                            builder_->GetInsertBlock()->getParent());
+                        auto* continue_bb = BasicBlock::Create(
+                            *context_, "closure_transfer_cont",
+                            builder_->GetInsertBlock()->getParent());
+                        builder_->CreateCondBr(owned_transfer, transfer_bb, continue_bb);
+                        builder_->SetInsertPoint(transfer_bb);
+                        emit_frame_transfer(argument.val);
+                        builder_->CreateBr(continue_bb);
+                        builder_->SetInsertPoint(continue_bb);
+                    }
+                    if (argument.type == CType::SEQ)
+                        mark_transferred(argument.val, TransferDomain::Seq);
+                    else
+                        mark_transferred(argument.val, TransferDomain::Map);
+                    // Normalize both contracts to a consumed last use. The
+                    // callback consumes an owned argument; after a borrowing
+                    // callback returns, the call site consumes it instead.
+                    borrowed_temporaries.emplace_back(argument, is_borrowed);
+                    // Pattern-bound heap heads carry one retained reference
+                    // in the active case-arm drop list. This normalized call
+                    // consumes that exact reference on both runtime paths, so
+                    // leaving the scheduled arm drop would release it twice.
+                    for (auto drops = arm_drop_stack_.rbegin();
+                         drops != arm_drop_stack_.rend(); ++drops) {
+                        auto& entries = *drops;
+                        const auto old_size = entries.size();
+                        entries.erase(std::remove_if(
+                            entries.begin(), entries.end(),
+                            [&](const auto& entry) {
+                                return entry.first == argument.val;
+                            }), entries.end());
+                        if (entries.size() != old_size) break;
+                    }
+                } else if (!binding.empty()) {
+                    auto* retain_bb = BasicBlock::Create(
+                        *context_, "closure_retain",
+                        builder_->GetInsertBlock()->getParent());
+                    auto* continue_bb = BasicBlock::Create(
+                        *context_, "closure_retain_cont",
+                        builder_->GetInsertBlock()->getParent());
+                    builder_->CreateCondBr(is_borrowed, continue_bb, retain_bb);
+                    builder_->SetInsertPoint(retain_bb);
+                    emit_rc_inc(argument.val, argument.type);
+                    builder_->CreateBr(continue_bb);
+                    builder_->SetInsertPoint(continue_bb);
+                } else {
+                    borrowed_temporaries.emplace_back(argument, is_borrowed);
+                }
+            }
+
             // Build closure call: fn(env, args...)
             std::vector<LType*> call_arg_types = {ptr_ty};
             std::vector<Value*> call_vals = {current_closure};
@@ -485,70 +1306,46 @@ TypedValue Codegen::codegen_higher_order_call(const std::string& fn_name, const 
             }
 
             // Use the actual return type for the closure call
-            auto* closure_ret_ty = (args_consumed + n_args_this_call < vals.size())
-                ? (LType*)ptr_ty  // intermediate result is a closure (pointer)
-                : llvm_type(ret_ctype);  // final result uses inferred type
+            // Every closure wrapper has the universal i64 return ABI.  Decode
+            // that carrier only after the final application; intermediate
+            // curried results carry the next closure pointer as i64.
+            auto* closure_ret_ty = static_cast<LType*>(i64_ty);
             auto* call_type = llvm::FunctionType::get(closure_ret_ty, call_arg_types, false);
             auto* result = builder_->CreateCall(call_type, fn_ptr, call_vals, "closure_call");
+
+            // A borrowing callback leaves an anonymous temporary owned by
+            // this call site, where it must be released.
+            for (const auto& [temporary, is_borrowed] : borrowed_temporaries) {
+                auto* drop_bb = BasicBlock::Create(
+                    *context_, "drop_borrowed_temporary",
+                    builder_->GetInsertBlock()->getParent());
+                auto* continue_bb = BasicBlock::Create(
+                    *context_, "borrowed_temporary_cont",
+                    builder_->GetInsertBlock()->getParent());
+                builder_->CreateCondBr(is_borrowed, drop_bb, continue_bb);
+                builder_->SetInsertPoint(drop_bb);
+                emit_frame_transfer(temporary.val);
+                emit_rc_dec(temporary.val, temporary.type);
+                builder_->CreateBr(continue_bb);
+                builder_->SetInsertPoint(continue_bb);
+            }
 
             args_consumed += n_args_this_call;
 
             if (args_consumed < vals.size()) {
-                current_closure = result; // already ptr type
+                current_closure = builder_->CreateIntToPtr(
+                    result, ptr_ty, "curried_closure");
             } else {
-                // Perceus: when a callee chain (lambda → CType-upgraded
-                // function) handles the ownership drop for a heap-typed
-                // arg, foldl's function-exit must NOT also dec it. But we
-                // don't know at compile time whether the callee dec'd —
-                // it depends on the runtime path (empty arm vs head-tail,
-                // in-place vs copy). Use the result != arg test as a
-                // proxy: if the closure returned a DIFFERENT pointer, the
-                // arg was consumed (by the callee's Perceus or by the
-                // operation itself). Store the flag in an alloca so the
-                // function-exit can check it at runtime.
-                for (size_t ai = 0; ai < all_args.size(); ai++) {
-                    if (!is_heap_type(all_args[ai].type)) continue;
-                    if (!all_args[ai].val || isa<Constant>(all_args[ai].val)) continue;
-                    if (all_args[ai].val->getType()->isStructTy()) continue;
-                    bool is_named = false;
-                    for (auto& [k, v] : named_values_)
-                        if (v.val == all_args[ai].val) { is_named = true; break; }
-                    if (!is_named) continue;
-                    Value* arg_ptr = all_args[ai].val;
-                    Value* res_ptr = result;
-                    if (arg_ptr->getType()->isIntegerTy())
-                        arg_ptr = builder_->CreateIntToPtr(arg_ptr, ptr_ty);
-                    if (res_ptr->getType()->isIntegerTy())
-                        res_ptr = builder_->CreateIntToPtr(res_ptr, ptr_ty);
-                    if (arg_ptr->getType()->isPointerTy() && res_ptr->getType()->isPointerTy()) {
-                        auto* consumed = builder_->CreateICmpNE(arg_ptr, res_ptr, "closure_consumed");
-                        // Store in an alloca so function-exit can load it
-                        // (the icmp is in a case arm; function-exit is at merge).
-                        auto* flag_alloca = closure_consumed_flags_[all_args[ai].val];
-                        if (!flag_alloca) {
-                            auto* fn_parent = builder_->GetInsertBlock()->getParent();
-                            IRBuilder<> entry_ir(&fn_parent->getEntryBlock(),
-                                                  fn_parent->getEntryBlock().begin());
-                            flag_alloca = entry_ir.CreateAlloca(
-                                LType::getInt1Ty(*context_), nullptr, "consumed_flag");
-                            entry_ir.CreateStore(
-                                ConstantInt::getFalse(*context_), flag_alloca);
-                            closure_consumed_flags_[all_args[ai].val] = flag_alloca;
-                        }
-                        builder_->CreateStore(consumed, flag_alloca);
-                    }
-                }
-                return {result, ret_ctype};
+                return decode_universal_result(result);
             }
         }
 
         // Genuine zero-argument closure call.
         auto* fn_i64 = builder_->CreateLoad(i64_ty, current_closure, "closure_fn_i64");
         auto* fn_ptr_val = builder_->CreateIntToPtr(fn_i64, ptr_ty, "closure_fn_ptr");
-        auto* thunk_ret_ty = llvm_type(ret_ctype);
-        auto* call_type = llvm::FunctionType::get(thunk_ret_ty, {ptr_ty}, false);
+        auto* call_type = llvm::FunctionType::get(i64_ty, {ptr_ty}, false);
         auto* result = builder_->CreateCall(call_type, fn_ptr_val, {current_closure}, "closure_call");
-        return {result, ret_ctype};
+        return decode_universal_result(result);
     }
 }
 
@@ -593,6 +1390,26 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
     }
     if (genfn_it != imports_.imported_sources.end()) {
         auto& ifs = genfn_it->second;
+        std::string materialization_name = fn_name;
+        // A lifted trait method is polymorphic even though it has a stable
+        // exported bootstrap symbol.  Explicit calls (including callbacks
+        // passed to a generic helper) must therefore retain the same complete
+        // semantic identity as operator-driven dispatch.  Materializing plain
+        // `Ord_Seq__compare`, for example, loses the element type and makes
+        // `get` return an opaque ADT inside the implementation. Concrete
+        // methods need the suffix too: caching `Hash Int` as plain `hash`
+        // would shadow every later Hash instance in the module.
+        materialization_name += "__genfn";
+        for (const auto& argument : all_args) {
+            auto identity = semantic_identity_of(argument);
+            if (identity.arguments.empty())
+                for (const auto subtype : argument.subtypes)
+                    identity.arguments.push_back({subtype, {}, {}});
+            append_specialization_identity(materialization_name, identity);
+        }
+        if (auto cached = compiled_functions_.find(materialization_name);
+            cached != compiled_functions_.end())
+            return emit_direct_call(materialization_name, cached->second, all_args);
         // Reparse in an isolated defining-module scope, with any private ADT
         // constructors installed before parsing their expression syntax.
         GenfnNameIsolation iso(*this, mangled);
@@ -604,30 +1421,35 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
             imports_.imported_ast_nodes.push_back(std::unique_ptr<FunctionExpr>(func_ast));
             int errors_before = error_count_;
             register_sibling_genfns(mangled);
-            codegen_function_def(func_ast, fn_name);
-            auto def_it2 = deferred_functions_.find(fn_name);
+            codegen_function_def(func_ast, materialization_name);
+            auto def_it2 = deferred_functions_.find(materialization_name);
             if (def_it2 != deferred_functions_.end()) {
-                compile_function(fn_name, def_it2->second, all_args);
-                auto cf_it2 = compiled_functions_.find(fn_name);
+                compile_function(materialization_name, def_it2->second, all_args);
+                auto cf_it2 = compiled_functions_.find(materialization_name);
                 if (error_count_ > errors_before) {
-                    imports_.imported_sources.erase(mangled);
-                    compiled_functions_.erase(fn_name);
-                    deferred_functions_.erase(fn_name);
+                    compiled_functions_.erase(materialization_name);
+                    deferred_functions_.erase(materialization_name);
                     iso.restore();
                     // Fall through to the precompiled extern instead of a
                     // half-compiled GENFN body that could not resolve helpers.
                 } else if (cf_it2 != compiled_functions_.end()) {
+                    // Restoring the importer scope reinstates any hidden
+                    // bootstrap declaration under the same logical name.
+                    // Preserve the freshly monomorphized function metadata
+                    // (notably structural tuple return fields) across that
+                    // restoration instead of retaining a reference into the
+                    // map that restore() is about to mutate.
+                    CompiledFunction specialized = cf_it2->second;
                     iso.restore();
-                    imports_.extern_functions.erase(fn_name);
-                    imports_.imported_sources.erase(mangled);
-                    auto& cf2 = cf_it2->second;
+                    compiled_functions_[materialization_name] = std::move(specialized);
+                    auto& cf2 = compiled_functions_[materialization_name];
                     size_t genfn_arity = cf2.param_types.size() - cf2.capture_names.size();
                     if (all_args.size() < genfn_arity)
-                        return codegen_partial_apply(fn_name, cf2, all_args);
+                        return codegen_partial_apply(materialization_name, cf2, all_args);
                     // Same Perceus DUP / return-subtype path as a local call.
                     // A raw CreateCall skipped rc_inc on reused named Json
                     // values, so a second `get j key` saw a consumed object.
-                    return emit_direct_call(fn_name, cf2, all_args);
+                    return emit_direct_call(materialization_name, cf2, all_args);
                 } else {
                     iso.restore();
                 }
@@ -804,6 +1626,37 @@ TypedValue Codegen::codegen_extern_call(ApplyExpr* node, const std::string& fn_n
     } else if (ret_ctype == CType::ADT && meta_it != imports_.meta.end() &&
         !meta_it->second.return_adt_name.empty())
         result.adt_type_name = meta_it->second.return_adt_name;
+    if (meta_it != imports_.meta.end()) {
+        if (auto identity = resolve_descriptor_identity(
+                meta_it->second.return_type_descriptor,
+                meta_it->second.param_type_descriptors, all_args)) {
+            result.type = identity->type;
+            result.adt_type_name = identity->adt_name;
+            result.semantic_subtypes = identity->arguments;
+            result.adt_semantic_arguments = identity->arguments;
+            result.subtypes.clear();
+            for (const auto& argument : identity->arguments) {
+                result.subtypes.push_back(argument.type);
+                result.adt_type_arguments.push_back(argument.type);
+                result.adt_type_argument_names.push_back(argument.adt_name);
+            }
+            if (is_heap_type(result.type) && result.type != CType::TUPLE &&
+                result.val->getType()->isIntegerTy())
+                result.val = builder_->CreateIntToPtr(
+                    result.val, PointerType::get(*context_, 0),
+                    "generic_extern_return_ptr");
+            else if (result.type == CType::FLOAT &&
+                     result.val->getType()->isIntegerTy(64))
+                result.val = builder_->CreateBitCast(
+                    result.val, LType::getDoubleTy(*context_),
+                    "generic_extern_return_float");
+            else if (result.type == CType::BOOL &&
+                     !result.val->getType()->isIntegerTy(1))
+                result.val = builder_->CreateICmpNE(
+                    result.val, ConstantInt::get(result.val->getType(), 0),
+                    "generic_extern_return_bool");
+        }
+    }
     return result;
 }
 
@@ -923,6 +1776,11 @@ TypedValue Codegen::codegen_partial_apply(const std::string& fn_name, CompiledFu
         {wrapper, ConstantInt::get(i64_ty, static_cast<int64_t>(cf.return_type)),
          ConstantInt::get(i64_ty, n_remaining),
          ConstantInt::get(i64_ty, n_provided)}, wrapper_name + "_closure");
+    const int64_t parameter_borrow_mask =
+        borrow_mask(cf.borrowed_params, n_provided);
+    if (parameter_borrow_mask != 0)
+        builder_->CreateCall(rt_.closure_set_borrow_mask_,
+            {closure, ConstantInt::get(i64_ty, parameter_borrow_mask)});
     int64_t heap_mask = 0;
     for (size_t i = 0; i < n_provided; i++) {
         Value* cap = all_args[i].val;
@@ -1325,6 +2183,35 @@ TypedValue Codegen::emit_direct_call(const std::string& fn_name, CompiledFunctio
         result.adt_type_name = cf.return_adt_name;
     if (!cf.return_subtypes.empty())
         result.subtypes = cf.return_subtypes;
+    if (!cf.return_semantic_subtypes.empty())
+        result.semantic_subtypes = cf.return_semantic_subtypes;
+    if (auto identity = resolve_descriptor_identity(
+            cf.return_type_descriptor, cf.param_type_descriptors, all_args)) {
+        result.type = identity->type;
+        result.adt_type_name = identity->adt_name;
+        result.semantic_subtypes = identity->arguments;
+        result.adt_semantic_arguments = identity->arguments;
+        result.subtypes.clear();
+        for (const auto& argument : identity->arguments) {
+            result.subtypes.push_back(argument.type);
+            result.adt_type_arguments.push_back(argument.type);
+            result.adt_type_argument_names.push_back(argument.adt_name);
+        }
+        if (is_heap_type(result.type) && result.type != CType::TUPLE &&
+            result.val->getType()->isIntegerTy())
+            result.val = builder_->CreateIntToPtr(
+                result.val, PointerType::get(*context_, 0), "generic_return_ptr");
+        else if (result.type == CType::FLOAT &&
+                 result.val->getType()->isIntegerTy(64))
+            result.val = builder_->CreateBitCast(
+                result.val, LType::getDoubleTy(*context_),
+                "generic_return_float");
+        else if (result.type == CType::BOOL &&
+                 !result.val->getType()->isIntegerTy(1))
+            result.val = builder_->CreateICmpNE(
+                result.val, ConstantInt::get(result.val->getType(), 0),
+                "generic_return_bool");
+    }
     return result;
 }
 
@@ -1335,6 +2222,11 @@ TypedValue Codegen::codegen_apply(ApplyExpr* node) {
 
     // 1. Flatten juxtaposition chain: f x y → collect all args and root name
     auto [fn_name, module_fqn, chain] = flatten_apply_chain(node);
+    ExprNode* expression_callee = nullptr;
+    if (fn_name.empty() && !chain.empty()) {
+        if (auto* call = dynamic_cast<ExprCall*>(chain.back()->call))
+            expression_callee = call->expr;
+    }
 
     if (accelerator_lowering_enabled_) {
         if (auto plan = match_transparent_apply(node))
@@ -1356,8 +2248,72 @@ TypedValue Codegen::codegen_apply(ApplyExpr* node) {
         return {}; // evaluation failed (signalled by cleared all_args)
 
     // 3. Pre-compile deferred lambda args and wrap Function* in closures
-    precompile_function_args(eval);
+    precompile_function_args(eval, fn_name);
     wrap_function_args_in_closures(all_args);
+
+    if (expression_callee) {
+        // A branch that yields a local function must materialize each
+        // deferred alternative before codegen_if creates its PHI. Compiling
+        // an alternative while emitting the branch can temporarily move the
+        // builder into the callee and leave cross-function branch targets.
+        std::function<void(AstNode*)> materialize_function_values;
+        materialize_function_values = [&](AstNode* expression) {
+            if (!expression) return;
+            if (expression->get_type() == AST_IDENTIFIER_EXPR) {
+                const auto name = static_cast<IdentifierExpr*>(expression)->name->value;
+                auto deferred = deferred_functions_.find(name);
+                if (deferred == deferred_functions_.end()) return;
+                auto compiled = compile_function(name, deferred->second, all_args);
+                named_values_[name] = {
+                    wrap_in_closure(compiled.fn, compiled.return_type),
+                    CType::FUNCTION, {compiled.return_type}};
+                return;
+            }
+            if (expression->get_type() == AST_IF_EXPR) {
+                auto* conditional = static_cast<IfExpr*>(expression);
+                materialize_function_values(conditional->thenExpr);
+                materialize_function_values(conditional->elseExpr);
+            }
+        };
+        materialize_function_values(expression_callee);
+
+        last_lambda_name_.clear();
+        TypedValue callee_value = codegen(expression_callee);
+        const std::string callee_lambda_name = last_lambda_name_;
+        if (callee_value.type != CType::FUNCTION) return {};
+        CType return_type = callee_value.subtypes.empty()
+            ? CType::INT : callee_value.subtypes.front();
+        if (!callee_value.val && !callee_lambda_name.empty()) {
+            auto deferred = deferred_functions_.find(callee_lambda_name);
+            if (deferred == deferred_functions_.end()) return {};
+            auto compiled = compile_function(
+                callee_lambda_name, deferred->second, all_args);
+            return_type = compiled.return_type;
+            callee_value = {
+                wrap_in_closure(compiled.fn, return_type),
+                CType::FUNCTION, {return_type}};
+        } else if (callee_value.val && isa<Function>(callee_value.val)) {
+            callee_value.val = wrap_in_closure(
+                cast<Function>(callee_value.val), return_type);
+        }
+        if (!callee_value.val) return {};
+
+        const std::string temporary_name = "__expression_callee";
+        auto previous = named_values_.find(temporary_name);
+        std::optional<TypedValue> saved;
+        if (previous != named_values_.end()) saved = previous->second;
+        named_values_[temporary_name] = callee_value;
+        auto result = codegen_higher_order_call(temporary_name, all_args);
+        // A literal lambda allocates its closure for this application. Values
+        // selected from bindings remain owned by their lexical scope.
+        if (expression_callee->get_type() == AST_FUNCTION_EXPR)
+            emit_rc_dec(callee_value.val, CType::FUNCTION);
+        if (saved)
+            named_values_[temporary_name] = *saved;
+        else
+            named_values_.erase(temporary_name);
+        return result;
+    }
 
     // 4. Check if it's an ADT constructor call
     auto adt_it = types_.adt_constructors.find(fn_name);
@@ -1407,13 +2363,24 @@ TypedValue Codegen::codegen_apply(ApplyExpr* node) {
 
     // Explicit imports shadow trait-method fallback. This matters for names
     // like `close`, where Std\Channel.close must not resolve to Closeable Int.
-    if (imports_.extern_functions.find(fn_name) != imports_.extern_functions.end() &&
-        compiled_functions_.find(fn_name) == compiled_functions_.end() &&
-        deferred_functions_.find(fn_name) == deferred_functions_.end())
-        return codegen_extern_call(node, fn_name, all_args);
+    if (auto imported = imports_.extern_functions.find(fn_name);
+        imported != imports_.extern_functions.end()) {
+        const bool has_source = imports_.imported_sources.count(imported->second);
+        const bool active_self_call = [&] {
+            auto compiled = compiled_functions_.find(fn_name);
+            return compiled != compiled_functions_.end() && compiled->second.fn &&
+                builder_->GetInsertBlock() &&
+                builder_->GetInsertBlock()->getParent() == compiled->second.fn;
+        }();
+        if (has_source && !active_self_call)
+            return codegen_extern_call(node, fn_name, all_args);
+        if (!has_source && compiled_functions_.find(fn_name) == compiled_functions_.end() &&
+            deferred_functions_.find(fn_name) == deferred_functions_.end())
+            return codegen_extern_call(node, fn_name, all_args);
+    }
 
     // 5. Resolve the function (compiled, deferred, or trait method)
-    auto cf_it = resolve_apply_function(fn_name, all_args);
+    auto cf_it = resolve_apply_function(fn_name, all_args, node);
 
     // 6. If not found as compiled function, try higher-order, extern, or raw LLVM
     if (cf_it == compiled_functions_.end()) {
@@ -1544,10 +2511,18 @@ Value* Codegen::wrap_in_closure(Function* fn, CType ret_type) {
 
     // Create trivial closure {wrapper_fn_ptr, ret_tag, arity, <no captures>}
     int64_t arity = fn->arg_size(); // user args (wrapper has env + original params)
-    return builder_->CreateCall(rt_.closure_create_,
+    auto* closure = builder_->CreateCall(rt_.closure_create_,
         {existing, ConstantInt::get(i64_ty, static_cast<int64_t>(ret_type)),
          ConstantInt::get(i64_ty, arity),
          ConstantInt::get(i64_ty, 0)}, wrapper_name + "_closure");
+    const auto cf = compiled_functions_.find(fn->getName().str());
+    if (cf != compiled_functions_.end()) {
+        const int64_t parameter_borrow_mask = borrow_mask(cf->second.borrowed_params);
+        if (parameter_borrow_mask != 0)
+            builder_->CreateCall(rt_.closure_set_borrow_mask_,
+                {closure, ConstantInt::get(i64_ty, parameter_borrow_mask)});
+    }
+    return closure;
 }
 
 TypedValue Codegen::auto_await(TypedValue tv) {

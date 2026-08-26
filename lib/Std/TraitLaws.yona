@@ -1,0 +1,231 @@
+## Reusable executable laws for foundational trait instances.
+##
+## Every suite accepts an explicit finite sample set plus the operations under
+## test. This keeps the API deterministic and useful for opaque types while
+## still checking every relevant sample pair or triple. Failures include the
+## first rendered counterexample instead of only naming the violated law.
+module Std\TraitLaws
+
+export eqLaws, ordLaws, hashLaws, showLaws, semigroupLaws, monoidLaws
+
+lawResult : String -> Option String -> TestResult
+lawResult success failure = import pass, fail from Std\Test in
+    case failure of None -> pass success; Some message -> fail message end
+
+reflexiveFailure : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Option String
+reflexiveFailure render equals samples index count =
+    if index >= count then None
+    else let value = get samples index in
+        if equals value value then reflexiveFailure render equals samples (index + 1) count
+        else Some ("not reflexive for " ++ render value)
+
+symmetricFailureAt : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Int -> Option String
+symmetricFailureAt render equals samples leftIndex rightIndex count =
+    if rightIndex >= count then None
+    else let left = get samples leftIndex, right = get samples rightIndex in
+        if equals left right == equals right left then
+            symmetricFailureAt render equals samples leftIndex (rightIndex + 1) count
+        else Some ("asymmetric for " ++ render left ++ " and " ++ render right)
+
+symmetricFailure : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Option String
+symmetricFailure render equals samples leftIndex count =
+    if leftIndex >= count then None
+    else case symmetricFailureAt render equals samples leftIndex 0 count of
+        None -> symmetricFailure render equals samples (leftIndex + 1) count
+        Some message -> Some message
+    end
+
+transitiveEqFailureThird : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Int -> Int -> Option String
+transitiveEqFailureThird render equals samples firstIndex secondIndex thirdIndex count =
+    if thirdIndex >= count then None
+    else let first = get samples firstIndex,
+             second = get samples secondIndex,
+             third = get samples thirdIndex
+         in if equals first second && equals second third && equals first third == false then
+            Some ("non-transitive chain " ++ render first ++ ", " ++ render second ++ ", " ++ render third)
+         else transitiveEqFailureThird render equals samples firstIndex secondIndex (thirdIndex + 1) count
+
+transitiveEqFailureSecond : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Int -> Option String
+transitiveEqFailureSecond render equals samples firstIndex secondIndex count =
+    if secondIndex >= count then None
+    else case transitiveEqFailureThird render equals samples firstIndex secondIndex 0 count of
+        None -> transitiveEqFailureSecond render equals samples firstIndex (secondIndex + 1) count
+        Some message -> Some message
+    end
+
+transitiveEqFailure : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Option String
+transitiveEqFailure render equals samples firstIndex count =
+    if firstIndex >= count then None
+    else case transitiveEqFailureSecond render equals samples firstIndex 0 count of
+        None -> transitiveEqFailure render equals samples (firstIndex + 1) count
+        Some message -> Some message
+    end
+
+## Equality laws over every supplied sample, pair, and equality chain.
+eqLaws : String -> (a -> String) -> (a -> a -> Bool) -> Seq a -> Seq TestCase
+eqLaws label render equals samples = import testCase from Std\Test in
+    let count = size samples in [
+        testCase (label ++ " Eq reflexive") (\_ ->
+            lawResult "reflexive" (reflexiveFailure render equals samples 0 count)),
+        testCase (label ++ " Eq symmetric") (\_ ->
+            lawResult "symmetric" (symmetricFailure render equals samples 0 count)),
+        testCase (label ++ " Eq transitive") (\_ ->
+            lawResult "transitive" (transitiveEqFailure render equals samples 0 count))
+    ]
+
+opposite : Ordering -> Ordering
+opposite ordering = case ordering of Less -> Greater; Equal -> Equal; Greater -> Less end
+
+ordPairFailureAt : (a -> String) -> (a -> a -> Bool) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Int -> Option String
+ordPairFailureAt render equals compareValues samples leftIndex rightIndex count =
+    if rightIndex >= count then None
+    else let left = get samples leftIndex,
+             right = get samples rightIndex,
+             forward = compareValues left right,
+             backward = compareValues right left
+         in if (forward == Equal) != equals left right then
+            Some ("compare/Eq disagreement for " ++ render left ++ " and " ++ render right)
+         else if backward != opposite forward then
+            Some ("reversing operands is inconsistent for " ++ render left ++ " and " ++ render right)
+         else ordPairFailureAt render equals compareValues samples leftIndex (rightIndex + 1) count
+
+ordPairFailure : (a -> String) -> (a -> a -> Bool) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Option String
+ordPairFailure render equals compareValues samples leftIndex count =
+    if leftIndex >= count then None
+    else case ordPairFailureAt render equals compareValues samples leftIndex 0 count of
+        None -> ordPairFailure render equals compareValues samples (leftIndex + 1) count
+        Some message -> Some message
+    end
+
+transitiveOrdFailureThird : (a -> String) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Int -> Int -> Option String
+transitiveOrdFailureThird render compareValues samples firstIndex secondIndex thirdIndex count =
+    if thirdIndex >= count then None
+    else let first = get samples firstIndex,
+             second = get samples secondIndex,
+             third = get samples thirdIndex,
+             firstSecond = compareValues first second,
+             secondThird = compareValues second third
+         in if firstSecond != Greater && secondThird != Greater && compareValues first third == Greater then
+            Some ("non-transitive order " ++ render first ++ ", " ++ render second ++ ", " ++ render third)
+         else transitiveOrdFailureThird render compareValues samples firstIndex secondIndex (thirdIndex + 1) count
+
+transitiveOrdFailureSecond : (a -> String) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Int -> Option String
+transitiveOrdFailureSecond render compareValues samples firstIndex secondIndex count =
+    if secondIndex >= count then None
+    else case transitiveOrdFailureThird render compareValues samples firstIndex secondIndex 0 count of
+        None -> transitiveOrdFailureSecond render compareValues samples firstIndex (secondIndex + 1) count
+        Some message -> Some message
+    end
+
+transitiveOrdFailure : (a -> String) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Option String
+transitiveOrdFailure render compareValues samples firstIndex count =
+    if firstIndex >= count then None
+    else case transitiveOrdFailureSecond render compareValues samples firstIndex 0 count of
+        None -> transitiveOrdFailure render compareValues samples (firstIndex + 1) count
+        Some message -> Some message
+    end
+
+## Total-order laws, including agreement with equality and reversal symmetry.
+ordLaws : String -> (a -> String) -> (a -> a -> Bool) ->
+    (a -> a -> Ordering) -> Seq a -> Seq TestCase
+ordLaws label render equals compareValues samples = import testCase from Std\Test in
+    let count = size samples in [
+        testCase (label ++ " Ord agrees with Eq") (\_ ->
+            lawResult "Eq agreement" (ordPairFailure render equals compareValues samples 0 count)),
+        testCase (label ++ " Ord transitive") (\_ ->
+            lawResult "transitive" (transitiveOrdFailure render compareValues samples 0 count))
+    ]
+
+hashFailureAt : (a -> String) -> (a -> a -> Bool) -> (a -> Int) -> Seq a -> Int -> Int -> Int -> Option String
+hashFailureAt render equals hasher samples leftIndex rightIndex count =
+    if rightIndex >= count then None
+    else let left = get samples leftIndex, right = get samples rightIndex in
+        if equals left right && hasher left != hasher right then
+            Some ("equal values hash differently: " ++ render left ++ " and " ++ render right)
+        else hashFailureAt render equals hasher samples leftIndex (rightIndex + 1) count
+
+hashFailure : (a -> String) -> (a -> a -> Bool) -> (a -> Int) -> Seq a -> Int -> Int -> Option String
+hashFailure render equals hasher samples leftIndex count =
+    if leftIndex >= count then None
+    else case hashFailureAt render equals hasher samples leftIndex 0 count of
+        None -> hashFailure render equals hasher samples (leftIndex + 1) count
+        Some message -> Some message
+    end
+
+## Equal values must always produce equal hashes.
+hashLaws : String -> (a -> String) -> (a -> a -> Bool) ->
+    (a -> Int) -> Seq a -> Seq TestCase
+hashLaws label render equals hasher samples = import testCase from Std\Test in [
+    testCase (label ++ " Hash agrees with Eq") (\_ ->
+        lawResult "hash agreement" (hashFailure render equals hasher samples 0 (size samples)))
+]
+
+showFailure : (a -> String) -> Seq a -> Int -> Int -> Option String
+showFailure renderer samples index count =
+    if index >= count then None
+    else let value = get samples index in
+        if renderer value == renderer value then showFailure renderer samples (index + 1) count
+        else Some ("rendering is unstable at sample " ++ renderer value)
+
+## Rendering the same value is deterministic for every sample.
+showLaws : String -> (a -> String) -> Seq a -> Seq TestCase
+showLaws label renderer samples = import testCase from Std\Test in [
+    testCase (label ++ " Show deterministic") (\_ ->
+        lawResult "deterministic" (showFailure renderer samples 0 (size samples)))
+]
+
+associativeFailureThird : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> Seq a -> Int -> Int -> Int -> Int -> Option String
+associativeFailureThird render equals append samples firstIndex secondIndex thirdIndex count =
+    if thirdIndex >= count then None
+    else let first = get samples firstIndex,
+             second = get samples secondIndex,
+             third = get samples thirdIndex,
+             left = append (append first second) third,
+             right = append first (append second third)
+         in if equals left right then
+            associativeFailureThird render equals append samples firstIndex secondIndex (thirdIndex + 1) count
+         else Some ("non-associative for " ++ render first ++ ", " ++ render second ++ ", " ++ render third)
+
+associativeFailureSecond : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> Seq a -> Int -> Int -> Int -> Option String
+associativeFailureSecond render equals append samples firstIndex secondIndex count =
+    if secondIndex >= count then None
+    else case associativeFailureThird render equals append samples firstIndex secondIndex 0 count of
+        None -> associativeFailureSecond render equals append samples firstIndex (secondIndex + 1) count
+        Some message -> Some message
+    end
+
+associativeFailure : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> Seq a -> Int -> Int -> Option String
+associativeFailure render equals append samples firstIndex count =
+    if firstIndex >= count then None
+    else case associativeFailureSecond render equals append samples firstIndex 0 count of
+        None -> associativeFailure render equals append samples (firstIndex + 1) count
+        Some message -> Some message
+    end
+
+## Associativity over every triple in the sample set.
+semigroupLaws : String -> (a -> String) -> (a -> a -> Bool) ->
+    (a -> a -> a) -> Seq a -> Seq TestCase
+semigroupLaws label render equals append samples = import testCase from Std\Test in [
+    testCase (label ++ " Semigroup associative") (\_ ->
+        lawResult "associative" (associativeFailure render equals append samples 0 (size samples)))
+]
+
+identityFailure : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> a -> Seq a -> Int -> Int -> Option String
+identityFailure @borrow render @borrow equals @borrow append @borrow emptyValue @borrow samples index count =
+    if index >= count then None
+    else let value = get samples index,
+             leftCombined = append emptyValue value,
+             rightCombined = append value emptyValue
+         in if equals leftCombined value then
+            if equals rightCombined value then
+                identityFailure render equals append emptyValue samples (index + 1) count
+            else Some ("right identity fails: " ++ render value ++ " <> empty = " ++ render rightCombined)
+        else Some ("left identity fails: empty <> " ++ render value ++ " = " ++ render leftCombined)
+
+## Left and right identity over every sample.
+monoidLaws : String -> (a -> String) -> (a -> a -> Bool) ->
+    (a -> a -> a) -> a -> Seq a -> Seq TestCase
+monoidLaws label render equals append emptyValue samples = import testCase from Std\Test in [
+    testCase (label ++ " Monoid identity") (\_ ->
+        lawResult "identity" (identityFailure render equals append emptyValue samples 0 (size samples)))
+]

@@ -1,0 +1,5 @@
+import compile, find, findAll, split from Std\Regex in
+let digits = compile "[0-9]+" in
+(find digits "a12b" == ["12"],
+ findAll digits "a1b22" == [["1"], ["22"]],
+ split digits "a1b22c" == ["a", "b", "c"])

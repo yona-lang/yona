@@ -1,0 +1,5 @@
+PASS formats one placeholder
+PASS formats in order
+PASS doubled braces are literal
+PASS extra arguments are ignored
+SUMMARY 4 passed, 0 failed

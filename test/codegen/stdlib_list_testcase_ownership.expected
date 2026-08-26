@@ -1,0 +1,6 @@
+PASS map filter
+PASS folds
+PASS allocate afterward
+PASS manual reverse afterward
+PASS reverse afterward
+SUMMARY 5 passed, 0 failed

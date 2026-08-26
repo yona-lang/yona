@@ -65,11 +65,13 @@ pipe x fns =
         [f|rest] -> pipe (f x) rest
     end
 
-## Fixed-point combinator for anonymous recursion.
-## `fix f = f (fix f)` — enables recursion without naming.
+## Fixed-point combinator for anonymous unary recursion. The callback receives
+## the recursive function as its first argument.
 ##
 ## ```
 ## let factorial = fix (\self n -> if n <= 1 then 1 else n * (self (n - 1))) in
 ## factorial 5   # => 120
 ## ```
-fix f = f (fix f)
+fix f value =
+    let loop value = f loop value
+    in loop value

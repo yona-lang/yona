@@ -1,0 +1,4 @@
+PASS ByteArray string round trip
+PASS ByteArray indexes bytes
+PASS ByteArray slices and concatenates
+SUMMARY 3 passed, 0 failed

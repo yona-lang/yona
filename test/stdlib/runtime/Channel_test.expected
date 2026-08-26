@@ -1,0 +1,3 @@
+PASS Channel sends in FIFO order
+PASS Channel empty try-receive is None
+SUMMARY 2 passed, 0 failed

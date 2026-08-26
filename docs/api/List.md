@@ -16,7 +16,7 @@ map (\x -> x * 2) [1, 2, 3]   # => [2, 4, 6]
 map (\x -> x + 1) []           # => []
 ```
 
-### `filter : (a -> Bool) -> [a] -> [a]`
+### `filter : (element -> Bool) -> Seq element -> Seq element`
 
 Keeps only elements where `fn` returns true.
 
@@ -32,11 +32,11 @@ Left fold — reduces a sequence to a single value, left to right.
 fold (\acc x -> acc + x) 0 [1, 2, 3]   # => 6
 ```
 
-### `foldl : (b -> a -> b) -> b -> [a] -> b`
+### `foldl : (acc -> element -> acc) -> acc -> Seq element -> acc`
 
 Alias for `fold`.
 
-### `foldr : (a -> b -> b) -> b -> [a] -> b`
+### `foldr : (element -> acc -> acc) -> acc -> Seq element -> acc`
 
 Right fold — reduces a sequence right to left.
 
@@ -69,7 +69,7 @@ Returns all elements except the first. Crashes on empty sequence.
 tail [1, 2, 3]   # => [2, 3]
 ```
 
-### `reverse : [a] -> Int`
+### `reverse : Seq element -> Seq element`
 
 Reverses the sequence.
 
@@ -171,7 +171,7 @@ Pairs each element with its 0-based index.
 enumerate [10, 20, 30]   # => [(0, 10), (1, 20), (2, 30)]
 ```
 
-### `partition : (a -> b) -> [c] -> Int`
+### `partition : (a -> b) -> [a] -> (c, d)`
 
 Splits into two sequences: elements satisfying `pred` and those that don't.
 
@@ -196,7 +196,7 @@ Like `foldl` but returns all intermediate accumulator values.
 scanl (\a b -> a + b) 0 [1, 2, 3]   # => [0, 1, 3, 6]
 ```
 
-### `flatMap : (a -> b) -> [c] -> [d]`
+### `flatMap : (a -> b) -> [a] -> [b]`
 
 Maps then flattens — applies `fn` which returns a sequence, then concatenates all results.
 
@@ -204,16 +204,16 @@ Maps then flattens — applies `fn` which returns a sequence, then concatenates 
 flatMap (\x -> [x, x * 10]) [1, 2, 3]   # => [1, 10, 2, 20, 3, 30]
 ```
 
-### `find : (a -> Bool) -> [a] -> Symbol`
+### `find : (element -> Bool) -> Seq element -> Option element`
 
-Returns `(:some, value)` for the first element satisfying `pred`, or `:none`.
+Returns `Some value` for the first element satisfying `pred`, or `None`.
 
 ```
-find (\x -> x > 3) [1, 2, 5, 4]   # => (:some, 5)
-find (\x -> x > 9) [1, 2, 3]      # => :none
+find (\x -> x > 3) [1, 2, 5, 4]   # => Some 5
+find (\x -> x > 9) [1, 2, 3]      # => None
 ```
 
-### `sortBy : (a -> b) -> [a] -> [b]`
+### `sortBy : (element -> element -> Int) -> Seq element -> Seq element`
 
 Sorts using a comparison function. `cmp a b` should return negative if a < b,
 zero if equal, positive if a > b. Uses quicksort.
@@ -222,7 +222,7 @@ zero if equal, positive if a > b. Uses quicksort.
 sortBy (\a b -> a - b) [3, 1, 4, 1, 5]   # => [1, 1, 3, 4, 5]
 ```
 
-### `groupBy : (a -> b) -> [c] -> Int`
+### `groupBy : (a -> b) -> [a] -> [b]`
 
 Groups elements by a key function. Returns a sequence of `(key, [values])` pairs.
 

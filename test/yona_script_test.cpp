@@ -100,6 +100,17 @@ static CmdResult run_yona(const std::vector<std::string>& args, const std::strin
     return run_cmd(cmd.str());
 }
 
+#ifndef _WIN32
+TEST_CASE("format script fails clearly when clang-format is unavailable") {
+    const auto script = yona::test::repo_root() / "scripts" / "format.sh";
+    const auto result = run_cmd("env PATH=/nonexistent /bin/sh " + shell_quote(script.string()) +
+                                " 2>&1");
+    CHECK(result.status != 0);
+    CHECK(result.out.find("clang-format") != std::string::npos);
+    CHECK(result.out.find("Done") == std::string::npos);
+}
+#endif
+
 static fs::path write_temp_yona(const std::string& stem, const std::string& body) {
     fs::path p = yona::test::link::scratch_root() / (stem + ".yona");
     std::ofstream o(p);
@@ -232,6 +243,39 @@ TEST_CASE("yonac - reads stdin") {
 TEST_CASE("yonac -e is rejected") {
     auto r = run_cmd(yona::test::link::qpath(tool("yonac")) + " -e \"1 + 2\"" + yona::test::link::err_null());
     CHECK(r.status != 0);
+}
+
+TEST_CASE("yonac rejects module codegen errors before emitting artifacts") {
+    auto src = write_temp_yona(
+        "module_codegen_error",
+        "module Test\\CodegenError\n"
+        "export broken\n"
+        // The trait method is valid during generic type inference, but there
+        // is deliberately no Semigroup Int instance for the exporter's
+        // placeholder ABI.  This reaches the module-codegen error path.
+        "broken value = combine value value\n");
+    auto object = yona::test::link::scratch_root() / "module_codegen_error.o";
+    auto interface = yona::test::link::scratch_root() / "module_codegen_error.yonai";
+    std::error_code ec;
+    fs::remove(object, ec);
+    fs::remove(interface, ec);
+
+    std::ostringstream cmd;
+    cmd << yona::test::link::qpath(tool("yonac")) << " --sysroot "
+        << yona::test::link::qpath(bin_dir()) << " -I "
+        << yona::test::link::qpath(yona::test::lib_dir()) << " --emit-obj -o "
+        << yona::test::link::qpath(object) << " " << yona::test::link::qpath(src)
+        << " 2>&1";
+    auto result = run_cmd(cmd.str());
+
+    CHECK(result.status != 0);
+#ifndef _WIN32
+    CHECK(result.status != 139);
+#endif
+    CHECK(result.out.find("undefined function 'combine'") != std::string::npos);
+    CHECK(result.out.find("Module verification failed") == std::string::npos);
+    CHECK_FALSE(fs::exists(object));
+    CHECK_FALSE(fs::exists(interface));
 }
 
 static CmdResult run_yonac_ir(const fs::path& src, const std::vector<std::string>& extra = {}) {

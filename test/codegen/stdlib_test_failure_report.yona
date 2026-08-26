@@ -1,0 +1,6 @@
+import testCase, check, run, render from Std\Test in
+render (run [
+    testCase "first" (\_ -> check "first detail" false),
+    testCase "middle" (\_ -> check "middle passes" true),
+    testCase "last" (\_ -> check "last detail" false)
+])

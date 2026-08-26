@@ -1,0 +1,3 @@
+PASS Net rejects an invalid descriptor safely
+PASS Net has no peer for an invalid descriptor
+SUMMARY 2 passed, 0 failed

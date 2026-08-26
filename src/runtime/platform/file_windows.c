@@ -411,6 +411,7 @@ static int64_t win_read_file_bytes_blocking(void* p) {
 }
 
 typedef struct {
+	void (*finalize)(void*);
 	int fd;
 	char* buf;
 	size_t total;
@@ -699,8 +700,14 @@ typedef struct {
 	int eof;
 } line_iter_state_t;
 
+static void line_iter_finalize(void* raw) {
+	line_iter_state_t* st = (line_iter_state_t*)raw;
+	if (st->fd >= 0) close(st->fd);
+	free(st->buf);
+}
+
 static int64_t line_iter_next(int64_t* closure_env) {
-	line_iter_state_t* st = (line_iter_state_t*)(intptr_t)closure_env[5];
+	line_iter_state_t* st = (line_iter_state_t*)(intptr_t)closure_env[6];
 	if (st->eof) {
 		int64_t* adt = (int64_t*)rc_alloc(4, 3 * sizeof(int64_t));
 		adt[0] = 1;
@@ -747,7 +754,9 @@ line_done:
 
 int64_t yona_rt_file_line_iterator(const char* path) {
 	int fd = open(path, O_RDONLY);
-	line_iter_state_t* st = (line_iter_state_t*)malloc(sizeof(line_iter_state_t));
+	extern void* yona_rt_native_state_alloc(size_t, void (*)(void*));
+	line_iter_state_t* st = (line_iter_state_t*)
+		yona_rt_native_state_alloc(sizeof(line_iter_state_t), line_iter_finalize);
 	if (fd < 0) {
 		st->fd = -1;
 		st->buf = NULL;
@@ -765,15 +774,18 @@ int64_t yona_rt_file_line_iterator(const char* path) {
 	int64_t* closure = (int64_t*)yona_rt_closure_create((void*)line_iter_next, 0, 0, 1);
 	extern void yona_rt_closure_set_cap(void* closure, int64_t idx, int64_t val);
 	yona_rt_closure_set_cap(closure, 0, (int64_t)(intptr_t)st);
+	extern void yona_rt_closure_set_heap_mask(void* closure, int64_t mask);
+	yona_rt_closure_set_heap_mask(closure, 1);
 	int64_t* iter_adt = (int64_t*)rc_alloc(4, 4 * sizeof(int64_t));
 	iter_adt[0] = 0;
 	iter_adt[1] = 1;
-	iter_adt[2] = 0;
+	iter_adt[2] = 1;
 	iter_adt[3] = (int64_t)(intptr_t)closure;
 	return (int64_t)(intptr_t)iter_adt;
 }
 
 typedef struct {
+	void (*finalize)(void*);
 	int fd;
 	int64_t position;
 	int64_t chunk_size;
@@ -781,7 +793,7 @@ typedef struct {
 } chunk_iter_state_t;
 
 static int64_t chunk_iter_next(int64_t* env) {
-	chunk_iter_state_t* st = (chunk_iter_state_t*)(intptr_t)env[5];
+	chunk_iter_state_t* st = (chunk_iter_state_t*)(intptr_t)env[6];
 	if (st->eof) {
 		int64_t* none = (int64_t*)rc_alloc(4, 3 * sizeof(int64_t));
 		none[0] = 1;
@@ -821,7 +833,9 @@ static int64_t chunk_iter_next(int64_t* env) {
 }
 
 int64_t yona_rt_file_chunk_iterator(int64_t fd, int64_t chunk_size) {
-	chunk_iter_state_t* st = (chunk_iter_state_t*)malloc(sizeof(chunk_iter_state_t));
+	extern void* yona_rt_native_state_alloc(size_t, void (*)(void*));
+	chunk_iter_state_t* st = (chunk_iter_state_t*)
+		yona_rt_native_state_alloc(sizeof(chunk_iter_state_t), NULL);
 	st->fd = (int)fd;
 	st->position = 0;
 	st->chunk_size = chunk_size;
@@ -830,10 +844,12 @@ int64_t yona_rt_file_chunk_iterator(int64_t fd, int64_t chunk_size) {
 	int64_t* closure = (int64_t*)yona_rt_closure_create((void*)chunk_iter_next, 0, 0, 1);
 	extern void yona_rt_closure_set_cap(void* closure, int64_t idx, int64_t val);
 	yona_rt_closure_set_cap(closure, 0, (int64_t)(intptr_t)st);
+	extern void yona_rt_closure_set_heap_mask(void* closure, int64_t mask);
+	yona_rt_closure_set_heap_mask(closure, 1);
 	int64_t* iter_adt = (int64_t*)rc_alloc(4, 4 * sizeof(int64_t));
 	iter_adt[0] = 0;
 	iter_adt[1] = 1;
-	iter_adt[2] = 0;
+	iter_adt[2] = 1;
 	iter_adt[3] = (int64_t)(intptr_t)closure;
 	return (int64_t)(intptr_t)iter_adt;
 }

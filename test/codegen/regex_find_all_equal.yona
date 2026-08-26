@@ -1,0 +1,2 @@
+import compile, findAll from Std\Regex in
+findAll (compile "[0-9]+") "a1b22" == [["1"], ["22"]]

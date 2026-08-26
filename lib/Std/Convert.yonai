@@ -1,0 +1,147 @@
+INSTANCE From ByteArray String
+  IMPL convert From_ByteArray_String__convert
+INSTANCE From String Bool
+  IMPL convert From_String_Bool__convert
+INSTANCE From String Float
+  IMPL convert From_String_Float__convert
+INSTANCE From String Int
+  IMPL convert From_String_Int__convert
+INSTANCE Parse Bool
+  IMPL parse Parse_Bool__parse
+INSTANCE Parse Float
+  IMPL parse Parse_Float__parse
+INSTANCE Parse Int
+  IMPL parse Parse_Int__parse
+INSTANCE Parse String
+  IMPL parse Parse_String__parse
+INSTANCE TryFrom Float Int
+  IMPL tryConvert TryFrom_Float_Int__tryConvert
+INSTANCE TryFrom Int Float
+  IMPL tryConvert TryFrom_Int_Float__tryConvert
+INSTANCE TryFrom String ByteArray
+  IMPL tryConvert TryFrom_String_ByteArray__tryConvert
+FN From_ByteArray_String__convert 2 BYTE_ARRAY STRING -> BYTE_ARRAY borrow 10
+FN From_String_Bool__convert 2 STRING BOOL -> STRING borrow 10
+FN From_String_Float__convert 2 STRING FLOAT -> STRING borrow 10
+FN From_String_Int__convert 2 STRING INT -> STRING borrow 10
+FN Parse_Bool__parse 2 BOOL STRING -> ADT(Result,BOOL,ADT(ParseError)) retadt Result borrow 10
+FN Parse_Float__parse 2 FLOAT STRING -> ADT(Result,FLOAT,ADT(ParseError)) retadt Result borrow 10
+FN Parse_Int__parse 2 INT STRING -> ADT(Result,INT,ADT(ParseError)) retadt Result borrow 10
+FN Parse_String__parse 2 STRING STRING -> ADT(Result,STRING,ADT(ParseError)) retadt Result borrow 10
+FN TryFrom_Float_Int__tryConvert 2 FLOAT INT -> ADT(Result,FLOAT,ADT(ConvertError)) retadt Result borrow 10
+FN TryFrom_Int_Float__tryConvert 2 INT FLOAT -> ADT(Result,INT,ADT(ConvertError)) retadt Result borrow 10
+FN TryFrom_String_ByteArray__tryConvert 2 STRING BYTE_ARRAY -> ADT(Result,STRING,ADT(ConvertError)) retadt Result borrow 10
+FN yona_Std_Convert__decodeUtf8 1 BYTE_ARRAY -> ADT(Result,STRING,ADT(ConvertError)) retadt Result effects -
+FN yona_Std_Convert__encodeUtf8 1 STRING -> BYTE_ARRAY effects -
+FN yona_Std_Convert__floatToInt 1 FLOAT -> ADT(Result,INT,ADT(ConvertError)) retadt Result effects -
+FN yona_Std_Convert__formatBool 1 BOOL -> STRING effects -
+FN yona_Std_Convert__formatFloat 1 FLOAT -> STRING effects -
+FN yona_Std_Convert__formatInt 1 INT -> STRING effects -
+FN yona_Std_Convert__intToFloat 1 INT -> ADT(Result,FLOAT,ADT(ConvertError)) retadt Result effects -
+FN yona_Std_Convert__parseBool 1 STRING -> ADT(Result,BOOL,ADT(ParseError)) retadt Result effects -
+FN yona_Std_Convert__parseFloat 1 STRING -> ADT(Result,FLOAT,ADT(ParseError)) retadt Result effects -
+FN yona_Std_Convert__parseInt 1 STRING -> ADT(Result,INT,ADT(ParseError)) retadt Result effects -
+FN yona_Std_Convert__parseString 1 STRING -> ADT(Result,STRING,ADT(ParseError)) retadt Result effects -
+GENFN_BEGIN From_ByteArray_String__convert convert
+convert : ByteArray -> String -> ByteArray
+    convert _ value = import fromString from Std\ByteArray in fromString value
+GENFN_END
+GENFN_BEGIN From_String_Bool__convert convert
+convert : String -> Bool -> String
+    convert _ value = import boolToString from Std\Types in boolToString value
+GENFN_END
+GENFN_BEGIN From_String_Float__convert convert
+convert : String -> Float -> String
+    convert _ value = import floatToString from Std\Types in floatToString value
+GENFN_END
+GENFN_BEGIN From_String_Int__convert convert
+convert : String -> Int -> String
+    convert _ value = import intToString from Std\Types in intToString value
+GENFN_END
+GENFN_CTOR Parse_Bool__parse Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
+GENFN_CTOR Parse_Bool__parse InvalidSyntax ParseError 0 1 2 1 fieldname:_0 field:STRING contract:N(String)
+GENFN_CTOR Parse_Bool__parse Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
+GENFN_BEGIN Parse_Bool__parse parse
+parse : Bool -> String -> Result (Bool, ParseError)
+    parse _ text = if text == "true" then Ok true
+        else if text == "false" then Ok false
+        else Err (InvalidSyntax ("expected 'true' or 'false', found '" ++ text ++ "'"))
+GENFN_END
+GENFN_DEP Parse_Float__parse parseFloatNative FN yona_Std_Convert__parseFloatNative 1 STRING -> ADT(Result,FLOAT,ADT(ParseError)) retadt Result
+GENFN_BEGIN Parse_Float__parse parse
+parse : Float -> String -> Result (Float, ParseError)
+    parse _ text = parseFloatNative text
+GENFN_END
+GENFN_DEP Parse_Int__parse parseIntNative FN yona_Std_Convert__parseIntNative 1 STRING -> ADT(Result,INT,ADT(ParseError)) retadt Result
+GENFN_BEGIN Parse_Int__parse parse
+parse : Int -> String -> Result (Int, ParseError)
+    parse _ text = parseIntNative text
+GENFN_END
+GENFN_CTOR Parse_String__parse Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
+GENFN_BEGIN Parse_String__parse parse
+parse : String -> String -> Result (String, ParseError)
+    parse _ text = Ok text
+GENFN_END
+GENFN_DEP TryFrom_Float_Int__tryConvert intToFloatNative FN yona_Std_Convert__intToFloatNative 1 INT -> ADT(Result,FLOAT,ADT(ConvertError)) retadt Result
+GENFN_BEGIN TryFrom_Float_Int__tryConvert tryConvert
+tryConvert : Float -> Int -> Result (Float, ConvertError)
+    tryConvert _ value = intToFloatNative value
+GENFN_END
+GENFN_DEP TryFrom_Int_Float__tryConvert floatToIntNative FN yona_Std_Convert__floatToIntNative 1 FLOAT -> ADT(Result,INT,ADT(ConvertError)) retadt Result
+GENFN_BEGIN TryFrom_Int_Float__tryConvert tryConvert
+tryConvert : Int -> Float -> Result (Int, ConvertError)
+    tryConvert _ value = floatToIntNative value
+GENFN_END
+GENFN_DEP TryFrom_String_ByteArray__tryConvert decodeUtf8Native FN yona_Std_Convert__decodeUtf8Native 1 BYTE_ARRAY -> ADT(Result,STRING,ADT(ConvertError)) retadt Result
+GENFN_BEGIN TryFrom_String_ByteArray__tryConvert tryConvert
+tryConvert : String -> ByteArray -> Result (String, ConvertError)
+    tryConvert _ value = decodeUtf8Native value
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__byteArrayTarget byteArrayTarget
+byteArrayTarget : Unit -> ByteArray
+byteArrayTarget _ = import alloc from Std\ByteArray in alloc 0
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__decodeUtf8 decodeUtf8
+decodeUtf8 : ByteArray -> Result (String, ConvertError)
+decodeUtf8 bytes = tryConvert "" bytes
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__encodeUtf8 encodeUtf8
+encodeUtf8 : String -> ByteArray
+encodeUtf8 text = convert (byteArrayTarget ()) text
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__floatToInt floatToInt
+floatToInt : Float -> Result (Int, ConvertError)
+floatToInt value = tryConvert 0 value
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__formatBool formatBool
+formatBool : Bool -> String
+formatBool value = convert "" value
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__formatFloat formatFloat
+formatFloat : Float -> String
+formatFloat value = convert "" value
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__formatInt formatInt
+formatInt : Int -> String
+formatInt value = convert "" value
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__intToFloat intToFloat
+intToFloat : Int -> Result (Float, ConvertError)
+intToFloat value = tryConvert 0.0 value
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__parseBool parseBool
+parseBool : String -> Result (Bool, ParseError)
+parseBool text = parse false text
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__parseFloat parseFloat
+parseFloat : String -> Result (Float, ParseError)
+parseFloat text = parse 0.0 text
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__parseInt parseInt
+parseInt : String -> Result (Int, ParseError)
+parseInt text = parse 0 text
+GENFN_END
+GENFN_BEGIN yona_Std_Convert__parseString parseString
+parseString : String -> Result (String, ParseError)
+parseString text = parse "" text
+GENFN_END

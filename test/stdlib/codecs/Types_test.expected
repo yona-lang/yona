@@ -1,0 +1,4 @@
+PASS Types converts integers
+PASS Types converts floats
+PASS Types converts booleans
+SUMMARY 3 passed, 0 failed

@@ -210,3 +210,33 @@ int64_t* yona_regex_split(void* regex, const char* text) {
     pcre2_match_data_free_8(md);
     return result;
 }
+
+/* Public Std\Regex ABI. Regex is an opaque managed ADT at the language
+ * boundary; its payload is the RC_TYPE_REGEX runtime object itself. */
+void* yona_Std_Regex__compile(const char* pattern) {
+    return yona_regex_compile(pattern);
+}
+
+int64_t yona_Std_Regex__matches(void* regex, const char* text) {
+    return yona_regex_matches(regex, text);
+}
+
+int64_t* yona_Std_Regex__find(void* regex, const char* text) {
+    return yona_regex_find(regex, text);
+}
+
+int64_t* yona_Std_Regex__findAll(void* regex, const char* text) {
+    return yona_regex_findAll(regex, text);
+}
+
+char* yona_Std_Regex__replace(void* regex, const char* text, const char* replacement) {
+    return yona_regex_replace(regex, text, replacement);
+}
+
+char* yona_Std_Regex__replaceAll(void* regex, const char* text, const char* replacement) {
+    return yona_regex_replaceAll(regex, text, replacement);
+}
+
+int64_t* yona_Std_Regex__split(void* regex, const char* text) {
+    return yona_regex_split(regex, text);
+}

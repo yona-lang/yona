@@ -1,0 +1,19 @@
+import testCase, check, run, render from Std\Test,
+       get from Std\Dict
+in
+let value = {1: "a", 2: "b"}, empty = emptyLike value in
+render (run [
+    testCase "Distinct empty dictionaries compare equal" (\_ ->
+        check "empty dictionaries are structurally equal"
+            (emptyLike {0: ""} == emptyLike {0: ""})),
+    testCase "Dictionary ordering agrees with equality" (\_ ->
+        check "a dictionary compares equal to itself"
+            (compare value value == Equal && value == value)),
+    testCase "Dictionary ordering preserves heap values" (\_ ->
+        check "ordered dictionaries retain their stored strings"
+            (get value 1 "" == "a" && get value 2 "" == "b")),
+    testCase "Dictionary monoid preserves both operands" (\_ ->
+        check "empty is a left and right identity"
+            (combine empty empty == empty &&
+             combine empty value == value && combine value empty == value))
+])

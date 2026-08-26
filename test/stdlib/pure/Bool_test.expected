@@ -1,0 +1,4 @@
+PASS negation
+PASS exclusive or
+PASS implication boundary
+SUMMARY 3 passed, 0 failed

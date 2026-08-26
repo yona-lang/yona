@@ -443,7 +443,7 @@ yona_promise_t* yona_rt_async_call_thunk_grouped(yona_thunk_t thunk, yona_task_g
 }
 
 /* Spawn a Yona closure as a task. The closure layout is:
- *   [fn_ptr, ret_tag, arity, num_caps, heap_mask, caps...]
+ *   [fn_ptr, ret_tag, arity, num_caps, heap_mask, borrow_mask, caps...]
  * The function pointer takes the closure (env) as its first argument.
  * For zero-arity closures (thunks), we call fn(closure). */
 extern int64_t yona_rt_closure_apply_thunk(int64_t* closure);

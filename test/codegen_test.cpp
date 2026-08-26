@@ -11,6 +11,7 @@
 #include <doctest/doctest.h>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <vector>
 
@@ -54,10 +55,12 @@ static string ir_function_body(const string &ir, const string &fn_name) {
 }
 
 static string compile_and_run(const string &code, const char *run_env_key = nullptr, const char *run_env_val = nullptr,
-                              const char *artifact_suffix = nullptr, const char *stdin_data = nullptr) {
+                              const char *artifact_suffix = nullptr, const char *stdin_data = nullptr,
+                              int opt_level = 2) {
   parser::Parser parser;
 
   Codegen codegen("test_module");
+  codegen.set_opt_level(opt_level);
   if (fs::exists(yona::test::lib_dir()))
     codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
   for (auto &dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
@@ -78,8 +81,9 @@ static string compile_and_run(const string &code, const char *run_env_key = null
 
   type_checker.set_import_type_source(&codegen.import_types_);
   type_checker.check(parse_result.node.get());
-  if (type_checker.has_direct_errors())
+  if (!type_checker.solve_constraints() || type_checker.has_errors())
     return "TYPE_ERROR";
+  codegen.set_type_checker(&type_checker);
 
   auto module = codegen.compile(parse_result.node.get());
   if (!module)
@@ -92,6 +96,9 @@ static string compile_and_run(const string &code, const char *run_env_key = null
     return "EMIT_ERROR";
 
   vector<fs::path> objs = {obj_path};
+  const auto prelude_object = yona::test::lib_dir() / "Prelude.o";
+  if (fs::exists(prelude_object))
+    objs.push_back(prelude_object);
   if (!yona::test::link::append_runtime_objects(objs))
     return "RT_COMPILE_ERROR";
 
@@ -114,7 +121,93 @@ static string compile_and_run(const string &code, const char *run_env_key = null
   return yona::test::link::popen_read_all(exe_path);
 }
 
+TEST_CASE("Logical composition normalizes higher-order Bool results") {
+  const string source = R"(
+import run, render from Std\Test,
+       eqLaws, ordLaws, hashLaws, showLaws from Std\TraitLaws in
+let orderingRender = \value -> case value of
+        Less -> "Less"
+        Equal -> "Equal"
+        Greater -> "Greater"
+    end
+in render (run (
+    eqLaws "Int" (\value -> show value) (\left right -> left == right) [0, 1] ++
+    ordLaws "Int" (\value -> show value) (\left right -> left == right)
+        (\left right -> compare left right) [0, 1] ++
+    hashLaws "Int" (\value -> show value) (\left right -> left == right)
+        (\value -> hash value) [0, 1] ++
+    showLaws "Int" (\value -> show value) [0, 1] ++
+    eqLaws "Ordering" orderingRender (\left right -> left == right)
+        [Less, Equal, Greater] ++
+    ordLaws "Ordering" orderingRender (\left right -> left == right)
+        (\left right -> compare left right) [Less, Equal, Greater]
+))
+)";
+  for (int opt_level = 0; opt_level <= 3; ++opt_level) {
+    CAPTURE(opt_level);
+    const auto result = compile_and_run(source, nullptr, nullptr,
+                                        "higher_order_bool", nullptr, opt_level);
+    CHECK(result.find("SUMMARY 12 passed, 0 failed") != string::npos);
+  }
+}
+
 static string read_file(const fs::path &path);
+
+static string trim_cell(string value) {
+  const auto first = value.find_first_not_of(" \t");
+  if (first == string::npos) return "";
+  const auto last = value.find_last_not_of(" \t");
+  return value.substr(first, last - first + 1);
+}
+
+static string fixture_name(const fs::path& root, const fs::path& yona_file) {
+  auto relative = fs::relative(yona_file, root);
+  relative.replace_extension();
+  string name = relative.generic_string();
+  for (char& ch : name)
+    if (ch == '/' || ch == '\\' || ch == '-' || ch == '.') ch = '_';
+  return name;
+}
+
+static void run_yona_fixture_tree(const fs::path& fixtures_dir) {
+  const bool exists = fs::exists(fixtures_dir) && fs::is_directory(fixtures_dir);
+  REQUIRE_MESSAGE(exists,
+                  "Could not find fixture directory: ", fixtures_dir.string());
+
+  vector<fs::path> test_files;
+  for (const auto& entry : fs::recursive_directory_iterator(fixtures_dir))
+    if (entry.is_regular_file() && entry.path().extension() == ".yona")
+      test_files.push_back(entry.path());
+  sort(test_files.begin(), test_files.end());
+  REQUIRE(!test_files.empty());
+
+  for (const auto& yona_file : test_files) {
+    auto expected_file = yona_file;
+    expected_file.replace_extension(".expected");
+    if (!fs::exists(expected_file)) continue;
+
+    string source = read_file(yona_file);
+    yona::test::link::rewrite_codegen_fixture_tmp_paths(source);
+    const string expected = read_file(expected_file);
+    const string name = fixture_name(fixtures_dir, yona_file);
+    const string stem = yona_file.stem().string();
+
+    SUBCASE(name.c_str()) {
+      const char* env_k = nullptr;
+      const char* env_v = nullptr;
+      const char* stdin_data = nullptr;
+      if (stem == "gpu_backend_flags" || stem == "gpu_vulkan_last_note") {
+        env_k = "YONA_GPU_DISABLE_VULKAN";
+        env_v = "1";
+      }
+      if (stem == "stdlib_json_get_import_length")
+        stdin_data = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"capabilities\":{}}}";
+      const string actual = compile_and_run(source, env_k, env_v, name.c_str(), stdin_data);
+      CHECK_MESSAGE(actual == expected, "Fixture '", name, "': expected '", expected,
+                    "' but got '", actual, "'");
+    }
+  }
+}
 
 /* Ensures merged runtime .o exists (same artifact compile_and_run uses). */
 static void ensure_compiled_runtime_test_obj() { REQUIRE(yona::test::link::ensure_runtime_objects()); }
@@ -289,22 +382,6 @@ TEST_SUITE("Codegen E2E") {
 
   TEST_CASE("Fixture-based codegen tests") {
     fs::path fixtures_dir = yona::test::codegen_fixtures_dir();
-    if (!fs::exists(fixtures_dir) || !fs::is_directory(fixtures_dir)) {
-      WARN("Could not find test/codegen fixtures directory (YONA_SOURCE_DIR)");
-      return;
-    }
-
-    // Collect all .yona files
-    vector<fs::path> test_files;
-    for (auto &entry : fs::directory_iterator(fixtures_dir)) {
-      if (entry.path().extension() == ".yona") {
-        test_files.push_back(entry.path());
-      }
-    }
-    sort(test_files.begin(), test_files.end());
-
-    REQUIRE(!test_files.empty());
-
     // Set up and tear down scratch files that specific fixtures read from.
     // The fixtures foldl_iterator and iterator_gen_lines assume a
     // /tmp/yona_iter_gen_lines_test.txt file with 3 lines totalling 14 bytes.
@@ -329,33 +406,57 @@ TEST_SUITE("Codegen E2E") {
           fs::remove(p, ec);
       }
     } scratch_files;
+    run_yona_fixture_tree(fixtures_dir);
+  }
 
-    for (const auto &yona_file : test_files) {
-      auto expected_file = yona_file;
-      expected_file.replace_extension(".expected");
+  TEST_CASE("Stdlib conformance fixtures") {
+    run_yona_fixture_tree(yona::test::repo_root() / "test" / "stdlib");
+  }
 
-      if (!fs::exists(expected_file))
-        continue;
+  TEST_CASE("Stdlib network conformance fixtures") {
+    run_yona_fixture_tree(yona::test::repo_root() / "test" / "stdlib" / "network");
+  }
 
-      string source = read_file(yona_file);
-      yona::test::link::rewrite_codegen_fixture_tmp_paths(source);
-      string expected = read_file(expected_file);
-      string test_name = yona_file.stem().string();
+  TEST_CASE("Stdlib GPU conformance fixtures") {
+    run_yona_fixture_tree(yona::test::repo_root() / "test" / "stdlib" / "gpu");
+  }
 
-      SUBCASE(test_name.c_str()) {
-        const char *env_k = nullptr;
-        const char *env_v = nullptr;
-        const char *stdin_data = nullptr;
-        if (test_name == "gpu_backend_flags" || test_name == "gpu_vulkan_last_note") {
-          env_k = "YONA_GPU_DISABLE_VULKAN";
-          env_v = "1";
-        }
-        if (test_name == "stdlib_json_get_import_length")
-          stdin_data = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"capabilities\":{}}}";
-        string actual = compile_and_run(source, env_k, env_v, test_name.c_str(), stdin_data);
-        CHECK_MESSAGE(actual == expected, "Test '", test_name, "': expected '", expected, "' but got '", actual, "'");
-      }
+  TEST_CASE("stdlib manifest has complete suite coverage") {
+    const auto root = yona::test::repo_root();
+    const auto manifest = root / "test" / "stdlib" / "manifest.md";
+    REQUIRE_MESSAGE(fs::exists(manifest), "Missing stdlib conformance manifest");
+
+    set<string> documented_modules;
+    istringstream api(read_file(root / "docs" / "api" / "README.md"));
+    string line;
+    while (getline(api, line)) {
+      const auto begin = line.find("[Std.");
+      const auto end = line.find("](", begin);
+      if (begin != string::npos && end != string::npos)
+        documented_modules.insert(line.substr(begin + 1, end - begin - 1));
     }
+
+    set<string> manifest_modules;
+    istringstream rows(read_file(manifest));
+    while (getline(rows, line)) {
+      if (line.empty() || line[0] != '|' || line.find("---") != string::npos)
+        continue;
+      vector<string> columns;
+      string column;
+      istringstream row(line);
+      while (getline(row, column, '|')) columns.push_back(column);
+      if (columns.size() < 5 || columns[1].find("Module") != string::npos) continue;
+      const string module = trim_cell(columns[1]);
+      const string tier = trim_cell(columns[2]);
+      const string script = trim_cell(columns[3]);
+      const string contracts = trim_cell(columns[4]);
+      REQUIRE((tier == "pure" || tier == "runtime" || tier == "network" || tier == "gpu"));
+      REQUIRE_FALSE(contracts.empty());
+      REQUIRE(fs::exists(root / "test" / "stdlib" / (script + ".yona")));
+      REQUIRE(fs::exists(root / "test" / "stdlib" / (script + ".expected")));
+      manifest_modules.insert(module);
+    }
+    CHECK(manifest_modules == documented_modules);
   }
 
 } // Codegen E2E
@@ -363,6 +464,19 @@ TEST_SUITE("Codegen E2E") {
 TEST_CASE("print tuple containing seq") {
   CHECK(compile_and_run("(42, [1, 2, 3])", nullptr, nullptr, "tc_print_tuple_int_seq") ==
         "(42, [1, 2, 3])");
+}
+
+TEST_CASE("Immediately applied expression lambdas use the closure call path") {
+  CHECK(compile_and_run(R"((\_ -> 42) ())", nullptr, nullptr,
+                        "tc_immediate_lambda_unit") == "42");
+  CHECK(compile_and_run(R"((\value -> value + 1) 41)", nullptr, nullptr,
+                        "tc_immediate_lambda_value") == "42");
+  CHECK(compile_and_run(R"(let offset = 2 in (\value -> value + offset) 40)",
+                        nullptr, nullptr,
+                        "tc_immediate_lambda_capture") == "42");
+  CHECK(compile_and_run(
+            R"(let increment value = value + 1, decrement value = value - 1 in (if true then increment else decrement) 41)",
+            nullptr, nullptr, "tc_immediate_expression_callee") == "42");
 }
 
 TEST_CASE("print nested seq") {
@@ -965,8 +1079,34 @@ end
     auto interface_path = yona::test::link::scratch_root() / "TypedSeq.yonai";
     REQUIRE(codegen.emit_interface_file(interface_path.string()));
     const auto interface_text = read_file(interface_path);
-    CHECK(interface_text.find("FN yona_Test_TypedSeq__isEmpty 1 SEQ -> BOOL") !=
+    CHECK(interface_text.find("FN yona_Test_TypedSeq__isEmpty 1 Seq(INT) -> BOOL") !=
           std::string::npos);
+  }
+
+  TEST_CASE("Interface signatures preserve every unparenthesized Dict type argument") {
+    parser::Parser parser;
+    auto module_result = parser.parse_module(R"(
+module Test\TypedDict
+
+export keep
+
+keep : Dict key value -> Dict key value
+keep dictionary = dictionary
+)", "typed_dict.yona");
+    REQUIRE(module_result.has_value());
+
+    DiagnosticEngine diag;
+    Codegen codegen("typed_dict", &diag);
+    auto module = codegen.compile_module(module_result.value().get());
+    REQUIRE(module != nullptr);
+    CHECK_FALSE(diag.has_errors());
+
+    auto interface_path = yona::test::link::scratch_root() / "TypedDict.yonai";
+    REQUIRE(codegen.emit_interface_file(interface_path.string()));
+    const auto interface_text = read_file(interface_path);
+    CHECK(interface_text.find(
+              "FN yona_Test_TypedDict__keep 1 Dict(VAR(key),VAR(value)) -> "
+              "Dict(VAR(key),VAR(value))") != std::string::npos);
   }
 
   TEST_CASE("Std String join reads sequence elements after the runtime header") {
@@ -1142,8 +1282,12 @@ returnSeq xs = xs
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
-    CHECK(yonai.find("FN yona_Test_BorrowMeta__ignoreSeq 1 SEQ -> INT borrow 1") != string::npos);
-    CHECK(yonai.find("FN yona_Test_BorrowMeta__returnSeq 1 SEQ -> SEQ borrow") == string::npos);
+    CHECK(yonai.find(
+              "FN yona_Test_BorrowMeta__ignoreSeq 1 Seq(VAR(element)) -> INT borrow 1") !=
+          string::npos);
+    CHECK(yonai.find(
+              "FN yona_Test_BorrowMeta__returnSeq 1 Seq(VAR(element)) -> Seq(VAR(element)) borrow") ==
+          string::npos);
 
     {
       parser::Parser p2;
@@ -1220,7 +1364,7 @@ difference left right = left -- right
 
     const auto interface_text = read_file(interface_path);
     CHECK(interface_text.find(
-              "FN yona_Test_SetDifferenceBorrow__difference 2 SET SET -> SET borrow 01") !=
+              "FN yona_Test_SetDifferenceBorrow__difference 2 Set(INT) Set(INT) -> Set(INT) borrow 01") !=
           string::npos);
   }
 
@@ -1296,8 +1440,44 @@ extern values : String -> Seq = "yona_Test_ExternSeq__values"
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
-    CHECK(yonai.find("FN yona_Test_ExternSeq__values 1 STRING -> SEQ") != string::npos);
+    CHECK(yonai.find("FN yona_Test_ExternSeq__values 1 STRING -> Seq(VAR(element))") != string::npos);
     CHECK(yonai.find("ADT retadt Seq") == string::npos);
+  }
+
+  TEST_CASE("Interface externs preserve parameterized ADT result descriptors") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_extern_result";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser p;
+    string mod_source = R"(
+module Test\ExternResult
+
+export read
+
+extern read : Int -> Result (String, String) = "yona_Test_ExternResult__read"
+)";
+    auto mod_result = p.parse_module(mod_source, "extern_result.yona");
+    REQUIRE(mod_result.has_value());
+
+    Codegen mod_codegen("extern_result_mod");
+    mod_codegen.module_paths_ = {"lib"};
+    mod_codegen.load_prelude(&p);
+    auto mod = mod_codegen.compile_module(mod_result.value().get());
+    REQUIRE(mod != nullptr);
+    fs::path iface = yona_lib / "Test" / "ExternResult.yonai";
+    REQUIRE(mod_codegen.emit_interface_file(iface.string()));
+
+    string yonai = read_file(iface);
+    CHECK(yonai.find("FN yona_Test_ExternResult__read 1 INT -> ADT(Result,STRING,STRING)") !=
+          string::npos);
+  }
+
+  TEST_CASE("Parameterized ADT case fields retain their floating-point ABI") {
+    CHECK(compile_and_run(R"(
+let actual = Ok 1.5, expected = Ok 1.5 in
+if actual == expected then 1 else 0
+)", nullptr, nullptr, "tc_result_float_eq") == "1");
   }
 
   TEST_CASE("Interface files preserve exported FN effect rows") {
@@ -2064,7 +2244,11 @@ TEST_SUITE("Regex") {
 
       fs::path exe_out = yona::test::link::scratch_root() / ("regex_link_test" + yona::test::link::exe_suffix());
       string libs = yona::test::link::pcre_link_flags();
-      vector<fs::path> robj = {expr_obj, mod_obj};
+      // C-backed Std modules ship their public ABI in the runtime object. The
+      // source module above is compiled to validate and emit its interface,
+      // but linking both its export trampolines and the runtime ABI would
+      // intentionally define the same public symbols twice.
+      vector<fs::path> robj = {expr_obj};
       if (!yona::test::link::append_runtime_objects(robj))
         return "RT_COMPILE_ERROR";
       robj.push_back(regex_obj);

@@ -1,0 +1,4 @@
+PASS Crypto SHA-256 matches a standard vector
+PASS Crypto random outputs honor lengths
+PASS Crypto UUID has canonical width
+SUMMARY 3 passed, 0 failed

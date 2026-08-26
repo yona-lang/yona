@@ -1,0 +1,4 @@
+PASS Process reports runtime paths
+PASS Process reports version and arguments
+PASS Process reads environment
+SUMMARY 3 passed, 0 failed

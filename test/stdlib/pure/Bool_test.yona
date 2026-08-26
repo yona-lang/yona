@@ -1,0 +1,9 @@
+import not, xor, implies from Std\Bool,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+        testCase "negation" (\_ -> check "not false" (not false)),
+        testCase "exclusive or" (\_ -> check "one true operand" (xor true false)),
+        testCase "implication boundary" (\_ -> check "false implies false" (implies false false))
+    ]
+in render (run cases)

@@ -1,9 +1,9 @@
-FN yona_Std_Dict__put 3 DICT INT INT -> DICT
-FN yona_Std_Dict__get 3 DICT INT INT -> INT
-FN yona_Std_Dict__contains 2 DICT INT -> BOOL
-FN yona_Std_Dict__size 1 DICT -> INT
-FN yona_Std_Dict__keys 1 DICT -> SEQ
-FN yona_Std_Dict__entries 1 DICT -> ADT retadt Iterator
-FN yona_Std_Dict__keysIter 1 DICT -> ADT retadt Iterator
-FN yona_Std_Dict__values 1 DICT -> ADT retadt Iterator
-FN yona_Std_Dict__forEach 2 FUNCTION DICT -> UNIT
+FN yona_Std_Dict__put 3 Dict(VAR(key),VAR(value)) VAR(key) VAR(value) -> Dict(VAR(key),VAR(value))
+FN yona_Std_Dict__get 3 Dict(VAR(key),VAR(value)) VAR(key) VAR(value) -> VAR(value)
+FN yona_Std_Dict__contains 2 Dict(VAR(key),VAR(value)) VAR(key) -> BOOL
+FN yona_Std_Dict__size 1 Dict(VAR(key),VAR(value)) -> INT
+FN yona_Std_Dict__keys 1 Dict(VAR(key),VAR(value)) -> Seq(VAR(key))
+FN yona_Std_Dict__entries 1 Dict(VAR(key),VAR(value)) -> ADT(Iterator,TUPLE(VAR(key),VAR(value))) retadt Iterator
+FN yona_Std_Dict__keysIter 1 Dict(VAR(key),VAR(value)) -> ADT(Iterator,VAR(key)) retadt Iterator
+FN yona_Std_Dict__values 1 Dict(VAR(key),VAR(value)) -> ADT(Iterator,VAR(value)) retadt Iterator
+FN yona_Std_Dict__forEach 2 FUNCTION(VAR(key),FUNCTION(VAR(value),UNIT)) Dict(VAR(key),VAR(value)) -> UNIT

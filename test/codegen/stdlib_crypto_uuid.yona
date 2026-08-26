@@ -1,1 +1,1 @@
-import uuid4 from Std\Crypto in import length from Std\String in length (uuid4 ())
+import uuid4 from Std\Crypto in import length from Std\String in length uuid4

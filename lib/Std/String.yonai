@@ -9,7 +9,7 @@ FN yona_Std_String__startsWith 2 STRING STRING -> BOOL
 FN yona_Std_String__endsWith 2 STRING STRING -> BOOL
 FN yona_Std_String__substring 3 STRING INT INT -> STRING
 FN yona_Std_String__replace 3 STRING STRING STRING -> STRING
-FN yona_Std_String__split 2 STRING STRING -> ADT
+FN yona_Std_String__split 2 STRING STRING -> Seq(STRING)
 FN yona_Std_String__join 2 STRING SEQ -> STRING
 FN yona_Std_String__charAt 2 STRING INT -> INT
 FN yona_Std_String__padLeft 3 INT STRING STRING -> STRING

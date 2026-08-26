@@ -1,0 +1,12 @@
+import testCase, check, equalBy, run, render from Std\Test
+in
+let intEqual a b = a == b,
+    stringEqual a b = a == b,
+    cases = [
+        testCase "truth" (\_ -> check "true is accepted" true),
+        testCase "comparator" (\_ -> equalBy "two equals two" intEqual 2 2),
+        testCase "generic comparator" (\_ ->
+            equalBy "strings compare through the same API" stringEqual "yona" "yona"),
+        testCase "all cases run" (\_ -> check "later case ran" true)
+    ]
+in render (run cases)

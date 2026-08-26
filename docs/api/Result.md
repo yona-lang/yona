@@ -5,17 +5,9 @@ Error handling — represents either success (`Ok value`) or failure (`Err error
 Chain operations with `flatMap`/`andThen`, transform errors with `mapErr`,
 or extract values with `unwrapOr`. Convert to Option with `toOption`.
 
-## Types
-
-### Result
-
-`type Result a e = Ok a | Err e`
-
-A result type: either `Ok value` (success) or `Err error` (failure).
-
 ## Functions
 
-### `isOk : Result a b -> Bool`
+### `isOk : Result (a, e) -> Bool`
 
 Returns `true` if the result is `Ok`.
 
@@ -24,7 +16,7 @@ isOk (Ok 42)       # => true
 isOk (Err "fail")  # => false
 ```
 
-### `isErr : Result a b -> Bool`
+### `isErr : Result (a, e) -> Bool`
 
 Returns `true` if the result is `Err`.
 
@@ -33,7 +25,7 @@ isErr (Err "fail")  # => true
 isErr (Ok 42)       # => false
 ```
 
-### `unwrapOr : a -> Result b c -> d`
+### `unwrapOr : a -> Result (a, e) -> a`
 
 Extracts the value from `Ok`, or returns `default` if `Err`.
 
@@ -42,7 +34,7 @@ unwrapOr 0 (Ok 42)       # => 42
 unwrapOr 0 (Err "fail")  # => 0
 ```
 
-### `map : (a -> b) -> Result c d -> Result e f`
+### `map : (a -> b) -> Result (a, e) -> Result (b, e)`
 
 Transforms the success value, leaving errors unchanged.
 
@@ -51,7 +43,7 @@ map (\x -> x * 2) (Ok 21)       # => Ok 42
 map (\x -> x * 2) (Err "fail")  # => Err "fail"
 ```
 
-### `mapErr : (a -> b) -> Result c d -> Result e f`
+### `mapErr : (e -> f) -> Result (a, e) -> Result (a, f)`
 
 Transforms the error value, leaving successes unchanged.
 
@@ -60,7 +52,7 @@ mapErr (\e -> e + "!") (Err "fail")  # => Err "fail!"
 mapErr (\e -> e + "!") (Ok 42)       # => Ok 42
 ```
 
-### `flatMap : (a -> b) -> Result c d -> e`
+### `flatMap : (a -> Result (b, e)) -> Result (a, e) -> Result (b, e)`
 
 Applies `fn` which returns a Result, flattening the nested result.
 
@@ -69,7 +61,7 @@ flatMap (\x -> if x > 0 then Ok (x * 2) else Err "negative") (Ok 21)  # => Ok 42
 flatMap (\x -> Ok (x * 2)) (Err "fail")                                # => Err "fail"
 ```
 
-### `flatten : Result a b -> Result c d`
+### `flatten : Result (Result (a, e), e) -> Result (a, e)`
 
 Flattens a nested `Result (Result a e) e` into `Result a e`.
 
@@ -79,16 +71,17 @@ flatten (Ok (Err "inner")) # => Err "inner"
 flatten (Err "outer")      # => Err "outer"
 ```
 
-### `toOption : Result a b -> (c, d)`
+### `toOption : Result (a, e) -> Option a`
 
-Converts to a symbol-tagged option: `Ok v` → `(:some, v)`, `Err _` → `:none`.
+Converts to an Option: `Ok value` becomes `Some value`; `Err` becomes
+`None`.
 
 ```
-toOption (Ok 42)       # => (:some, 42)
-toOption (Err "fail")  # => :none
+toOption (Ok 42)       # => Some 42
+toOption (Err "fail")  # => None
 ```
 
-### `andThen : (a -> b) -> Result c d -> e`
+### `andThen : (a -> Result (b, e)) -> Result (a, e) -> Result (b, e)`
 
 Alias for `flatMap` — chains a computation that may fail.
 
@@ -96,7 +89,7 @@ Alias for `flatMap` — chains a computation that may fail.
 andThen (\x -> Ok (x + 1)) (Ok 41)  # => Ok 42
 ```
 
-### `orElse : (a -> b) -> Result c d -> Result e f`
+### `orElse : (e -> Result (a, f)) -> Result (a, e) -> Result (a, f)`
 
 Recovers from an error by applying `fn` to the error value.
 
@@ -105,7 +98,7 @@ orElse (\e -> Ok 0) (Err "fail")  # => Ok 0
 orElse (\e -> Ok 0) (Ok 42)       # => Ok 42
 ```
 
-### `fold : (a -> b) -> (c -> d) -> Result e f -> g`
+### `fold : (e -> b) -> (a -> b) -> Result (a, e) -> b`
 
 Eliminates a result: applies `onErr` to errors, `onOk` to successes.
 

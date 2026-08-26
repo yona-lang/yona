@@ -1,0 +1,101 @@
+## Lawful total conversions, checked numeric conversions, and strict parsing.
+##
+## Generic dispatch is target-witness directed: `convert "" 42`,
+## `tryConvert 0 1.0`, and `parse 0 "42"`. The named helpers below make common
+## concrete conversions concise while retaining the same trait contracts.
+module Std\Convert
+
+export parseInt, parseFloat, parseBool, parseString
+export formatInt, formatFloat, formatBool
+export intToFloat, floatToInt, encodeUtf8, decodeUtf8
+
+extern parseIntNative : String -> Result (Int, ParseError) = "yona_Std_Convert__parseIntNative"
+extern parseFloatNative : String -> Result (Float, ParseError) = "yona_Std_Convert__parseFloatNative"
+extern intToFloatNative : Int -> Result (Float, ConvertError) = "yona_Std_Convert__intToFloatNative"
+extern floatToIntNative : Float -> Result (Int, ConvertError) = "yona_Std_Convert__floatToIntNative"
+extern decodeUtf8Native : ByteArray -> Result (String, ConvertError) = "yona_Std_Convert__decodeUtf8Native"
+
+instance From String Int
+    convert : String -> Int -> String
+    convert _ value = import intToString from Std\Types in intToString value
+end
+
+instance From String Float
+    convert : String -> Float -> String
+    convert _ value = import floatToString from Std\Types in floatToString value
+end
+
+instance From String Bool
+    convert : String -> Bool -> String
+    convert _ value = import boolToString from Std\Types in boolToString value
+end
+
+instance From ByteArray String
+    convert : ByteArray -> String -> ByteArray
+    convert _ value = import fromString from Std\ByteArray in fromString value
+end
+
+instance TryFrom Float Int
+    tryConvert : Float -> Int -> Result (Float, ConvertError)
+    tryConvert _ value = intToFloatNative value
+end
+
+instance TryFrom Int Float
+    tryConvert : Int -> Float -> Result (Int, ConvertError)
+    tryConvert _ value = floatToIntNative value
+end
+
+instance TryFrom String ByteArray
+    tryConvert : String -> ByteArray -> Result (String, ConvertError)
+    tryConvert _ value = decodeUtf8Native value
+end
+
+instance Parse Int
+    parse : Int -> String -> Result (Int, ParseError)
+    parse _ text = parseIntNative text
+end
+
+instance Parse Float
+    parse : Float -> String -> Result (Float, ParseError)
+    parse _ text = parseFloatNative text
+end
+
+instance Parse Bool
+    parse : Bool -> String -> Result (Bool, ParseError)
+    parse _ text = if text == "true" then Ok true
+        else if text == "false" then Ok false
+        else Err (InvalidSyntax ("expected 'true' or 'false', found '" ++ text ++ "'"))
+end
+
+instance Parse String
+    parse : String -> String -> Result (String, ParseError)
+    parse _ text = Ok text
+end
+
+parseInt : String -> Result (Int, ParseError)
+parseInt text = parse 0 text
+parseFloat : String -> Result (Float, ParseError)
+parseFloat text = parse 0.0 text
+parseBool : String -> Result (Bool, ParseError)
+parseBool text = parse false text
+parseString : String -> Result (String, ParseError)
+parseString text = parse "" text
+
+formatInt : Int -> String
+formatInt value = convert "" value
+formatFloat : Float -> String
+formatFloat value = convert "" value
+formatBool : Bool -> String
+formatBool value = convert "" value
+
+intToFloat : Int -> Result (Float, ConvertError)
+intToFloat value = tryConvert 0.0 value
+floatToInt : Float -> Result (Int, ConvertError)
+floatToInt value = tryConvert 0 value
+
+byteArrayTarget : Unit -> ByteArray
+byteArrayTarget _ = import alloc from Std\ByteArray in alloc 0
+encodeUtf8 : String -> ByteArray
+encodeUtf8 text = convert (byteArrayTarget ()) text
+decodeUtf8 : ByteArray -> Result (String, ConvertError)
+decodeUtf8 bytes = tryConvert "" bytes

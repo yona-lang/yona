@@ -25,6 +25,15 @@ void TypeEnv::bind_scheme(const std::string& name, TypeScheme scheme) {
     bindings_[name] = std::move(scheme);
 }
 
+bool TypeEnv::bound_through(const std::string& name,
+                            const TypeEnv* ancestor) const {
+    for (const TypeEnv* scope = this; scope; scope = scope->parent_.get()) {
+        if (scope->bindings_.count(name)) return true;
+        if (scope == ancestor) break;
+    }
+    return false;
+}
+
 std::shared_ptr<TypeEnv> TypeEnv::child() const {
     // const_cast is safe: parent_ is only read, never mutated via child
     auto self = std::const_pointer_cast<TypeEnv>(shared_from_this());

@@ -1,0 +1,44 @@
+## Stateful pull-iterator adapters and consumers.
+##
+## Iterators are single-pass values: every call to `next` advances the shared
+## cursor. Use `toSeq` when a persistent, reusable collection is required.
+module Std\Iterator
+
+export fromSeq, fromByteArray, fromIntArray, fromFloatArray
+export next, foldLeft, toSeq
+
+extern fromSeq : Seq element -> Iterator element = "yona_Std_Iterator__fromSeq"
+extern fromByteArray : ByteArray -> Iterator Int = "yona_Std_Iterator__fromByteArray"
+extern fromIntArray : IntArray -> Iterator Int = "yona_Std_Iterator__fromIntArray"
+extern fromFloatArray : FloatArray -> Iterator Float = "yona_Std_Iterator__fromFloatArray"
+extern nextNative : Iterator element -> Option element = "yona_Std_Iterator__nextNative"
+
+## Advance an iterator once.
+next : Iterator element -> Option element
+next @borrow iterator = nextNative iterator
+
+## Consume an iterator from left to right.
+foldLeft : Iterator element -> (acc -> element -> acc) -> acc -> acc
+foldLeft iterator folder accumulator =
+    case next iterator of
+        Some value -> foldLeft iterator folder (folder accumulator value)
+        None -> accumulator
+    end
+
+reverseInto : Seq element -> Seq element -> Seq element
+reverseInto values accumulator =
+    case values of
+        [head|tail] -> reverseInto tail (head :: accumulator)
+        [] -> accumulator
+    end
+
+collect : Iterator element -> Seq element -> Seq element
+collect iterator accumulator =
+    case next iterator of
+        Some value -> collect iterator (value :: accumulator)
+        None -> reverseInto accumulator []
+    end
+
+## Consume an iterator into a persistent sequence.
+toSeq : Iterator element -> Seq element
+toSeq iterator = collect iterator []

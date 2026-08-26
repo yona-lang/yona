@@ -4,11 +4,7 @@
 ## with `flatMap`, filter with predicates, or provide defaults with `unwrapOr`.
 module Std\Option
 
-export type Option
 export isSome, isNone, unwrapOr, map, flatMap, filter, orElse, toResult, zip, fold
-
-## An optional value: either `Some value` or `None`.
-type Option a = Some a | None
 
 ## Returns `true` if the option contains a value.
 ##
@@ -16,6 +12,7 @@ type Option a = Some a | None
 ## isSome (Some 42)   # => true
 ## isSome None        # => false
 ## ```
+isSome : Option a -> Bool
 isSome opt =
     case opt of
         Some _ -> true
@@ -28,6 +25,7 @@ isSome opt =
 ## isNone None        # => true
 ## isNone (Some 42)   # => false
 ## ```
+isNone : Option a -> Bool
 isNone opt =
     case opt of
         None   -> true
@@ -40,6 +38,7 @@ isNone opt =
 ## unwrapOr 0 (Some 42)   # => 42
 ## unwrapOr 0 None         # => 0
 ## ```
+unwrapOr : a -> Option a -> a
 unwrapOr default opt =
     case opt of
         Some value -> value
@@ -52,6 +51,7 @@ unwrapOr default opt =
 ## map (\x -> x * 2) (Some 5)   # => Some 10
 ## map (\x -> x * 2) None       # => None
 ## ```
+map : (a -> b) -> Option a -> Option b
 map fn opt =
     case opt of
         Some value -> Some (fn value)
@@ -65,6 +65,7 @@ map fn opt =
 ## flatMap (\x -> if x > 0 then Some (x * 10) else None) (Some 5)   # => Some 50
 ## flatMap (\x -> if x > 0 then Some (x * 10) else None) (Some 0)   # => None
 ## ```
+flatMap : (a -> Option b) -> Option a -> Option b
 flatMap fn opt =
     case opt of
         Some value -> fn value
@@ -77,6 +78,7 @@ flatMap fn opt =
 ## filter (\x -> x > 3) (Some 5)   # => Some 5
 ## filter (\x -> x > 3) (Some 1)   # => None
 ## ```
+filter : (a -> Bool) -> Option a -> Option a
 filter pred opt =
     case opt of
         Some value -> if pred value then Some value else None
@@ -89,6 +91,7 @@ filter pred opt =
 ## orElse (Some 99) None        # => Some 99
 ## orElse (Some 99) (Some 42)   # => Some 42
 ## ```
+orElse : Option a -> Option a -> Option a
 orElse alternative opt =
     case opt of
         Some value -> Some value
@@ -113,6 +116,7 @@ toResult err opt =
 ## zip (Some 1) (Some 2)   # => Some (1, 2)
 ## zip (Some 1) None       # => None
 ## ```
+zip : Option a -> Option b -> Option (a, b)
 zip optA optB =
     case optA of
         Some a -> case optB of
@@ -128,6 +132,7 @@ zip optA optB =
 ## fold 0 (\x -> x * 10) (Some 5)   # => 50
 ## fold 0 (\x -> x * 10) None       # => 0
 ## ```
+fold : b -> (a -> b) -> Option a -> b
 fold onNone onSome opt =
     case opt of
         Some value -> onSome value

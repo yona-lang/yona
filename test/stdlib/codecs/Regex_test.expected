@@ -1,0 +1,4 @@
+PASS Regex matches and finds
+PASS Regex finds every match
+PASS Regex replaces and splits globally
+SUMMARY 3 passed, 0 failed

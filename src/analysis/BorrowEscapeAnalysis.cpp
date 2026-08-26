@@ -2,6 +2,7 @@
 
 #include "ast.h"
 
+#include <algorithm>
 #include <variant>
 
 namespace yona::compiler::analysis {
@@ -33,10 +34,8 @@ static int count_identifier_refs_impl(AstNode* node, const std::string& name,
         for (auto* a : e->aliases) {
             if (auto* va = dynamic_cast<ValueAlias*>(a)) {
                 c += count_identifier_refs_impl(va->expr, name, include_call_targets);
-                if (va->identifier->name->value == name) return c;
             } else if (auto* la = dynamic_cast<LambdaAlias*>(a)) {
                 c += count_identifier_refs_impl(la->lambda, name, include_call_targets);
-                if (la->name->value == name) return c;
             }
         }
         return c + count_identifier_refs_impl(e->expr, name, include_call_targets);
@@ -137,6 +136,78 @@ int count_identifier_refs(AstNode* node, const std::string& name) {
 
 int count_identifier_value_refs(AstNode* node, const std::string& name) {
     return count_identifier_refs_impl(node, name, false);
+}
+
+int max_identifier_refs_on_path(AstNode* node, const std::string& name) {
+    if (!node) return 0;
+    const auto refs = [&](AstNode* child) {
+        return max_identifier_refs_on_path(child, name);
+    };
+    if (node->get_type() == AST_IDENTIFIER_EXPR)
+        return static_cast<IdentifierExpr*>(node)->name->value == name ? 1 : 0;
+    if (auto* binary = dynamic_cast<BinaryOpExpr*>(node))
+        return refs(binary->left) + refs(binary->right);
+    if (node->get_type() == AST_IF_EXPR) {
+        auto* expression = static_cast<IfExpr*>(node);
+        return refs(expression->condition) +
+            std::max(refs(expression->thenExpr), refs(expression->elseExpr));
+    }
+    if (node->get_type() == AST_CASE_EXPR) {
+        auto* expression = static_cast<CaseExpr*>(node);
+        int arm_max = 0;
+        for (auto* clause : expression->clauses)
+            arm_max = std::max(arm_max,
+                refs(clause->guard) + refs(clause->body));
+        return refs(expression->expr) + arm_max;
+    }
+    if (node->get_type() == AST_LET_EXPR) {
+        auto* expression = static_cast<LetExpr*>(node);
+        int total = 0;
+        for (auto* alias : expression->aliases) {
+            if (auto* value = dynamic_cast<ValueAlias*>(alias)) {
+                total += refs(value->expr);
+            } else if (auto* lambda = dynamic_cast<LambdaAlias*>(alias)) {
+                total += refs(lambda->lambda);
+            } else if (auto* pattern = dynamic_cast<PatternAlias*>(alias)) {
+                total += refs(pattern->expr);
+            }
+        }
+        return total + refs(expression->expr);
+    }
+    if (node->get_type() == AST_IMPORT_EXPR)
+        return refs(static_cast<ImportExpr*>(node)->expr);
+    if (node->get_type() == AST_APPLY_EXPR) {
+        auto* expression = static_cast<ApplyExpr*>(node);
+        int total = 0;
+        if (auto* call = dynamic_cast<NameCall*>(expression->call))
+            total += call->name->value == name ? 1 : 0;
+        else if (auto* call = dynamic_cast<ExprCall*>(expression->call))
+            total += refs(call->expr);
+        for (auto& argument : expression->args)
+            total += std::holds_alternative<ExprNode*>(argument)
+                ? refs(std::get<ExprNode*>(argument))
+                : refs(std::get<ValueExpr*>(argument));
+        return total;
+    }
+    if (node->get_type() == AST_TUPLE_EXPR) {
+        int total = 0;
+        for (auto* value : static_cast<TupleExpr*>(node)->values)
+            total += refs(value);
+        return total;
+    }
+    if (node->get_type() == AST_VALUES_SEQUENCE_EXPR) {
+        int total = 0;
+        for (auto* value : static_cast<ValuesSequenceExpr*>(node)->values)
+            total += refs(value);
+        return total;
+    }
+    if (node->get_type() == AST_DO_EXPR) {
+        int total = 0;
+        for (auto* step : static_cast<DoExpr*>(node)->steps)
+            total += refs(step);
+        return total;
+    }
+    return count_identifier_refs(node, name);
 }
 
 bool heap_param_may_escape(AstNode* node, const std::string& name, bool is_return_position) {

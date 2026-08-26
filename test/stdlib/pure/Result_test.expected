@@ -1,0 +1,13 @@
+PASS recognizes success
+PASS recognizes failure
+PASS unwrap uses default
+PASS map transforms success
+PASS map preserves failure
+PASS mapErr transforms failure
+PASS flatMap short-circuits
+PASS flatten removes one layer
+PASS toOption uses Prelude Option
+PASS andThen chains
+PASS orElse recovers
+PASS fold selects branch
+SUMMARY 12 passed, 0 failed

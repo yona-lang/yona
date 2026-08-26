@@ -155,4 +155,16 @@ compose (\x -> x * 2) (\x -> x + 1) 5  # => 12
 
 ## Other always-available definitions
 
-The Prelude also defines file-I/O and reflection support types — `FileHandle`, `FileMode` (`Read | Write | ReadWrite | Append`), `Whence` (`SeekSet | SeekCur | SeekEnd`), and `Type` (returned by `typeOf`) — as well as the built-in traits `Show`, `Eq`, `Ord`, `Hash`, `Array`, and `Closeable` with instances for the primitive types. See [Std\File](/stdlib/file/) and [Std\Types](/stdlib/types/) for the functions that use them, and the [language specification](/reference/specification/) for trait semantics.
+The Prelude also defines file-I/O and reflection support types — `FileHandle`,
+`FileMode` (`Read | Write | ReadWrite | Append`), `Whence`
+(`SeekSet | SeekCur | SeekEnd`), and `Type` (returned by `typeOf`).
+
+Its foundational traits are `Eq`, `Ord`, `Hash`, `Show`, `Array`, `Closeable`,
+`Sized`, `Iterable`, `Foldable`, `Semigroup`, `Monoid`, `From`, `TryFrom`,
+`Parse`, `Send`, and `Shareable`. Operators use `Eq` and `Ord` statically;
+collection traits lift over their element types; conversion traits select the
+complete source/target instance; and the method-free concurrency markers are
+proved at compile time and erased. See [Traits](/guides/traits/) for laws,
+standard instances, conversion witnesses, and marker restrictions, plus
+[Std\File](/stdlib/file/) and [Std\Types](/stdlib/types/) for the functions
+that use the support types.

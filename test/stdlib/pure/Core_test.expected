@@ -1,0 +1,25 @@
+PASS List maps and filters in order
+PASS List folds empty and populated sequences
+PASS List take and drop compose
+PASS List reverse preserves every value
+PASS List sort uses a three-way comparator
+PASS List zip truncates to the shorter input
+PASS List find returns an Option for hits and misses
+PASS Pair preserves named positions
+PASS Tuple combinators preserve positions
+PASS Range includes both endpoints
+PASS Range supports negative steps and slicing
+PASS Range fold handles empty direction
+PASS Math integer helpers cover signs
+PASS Math powers and factorial use identities
+PASS String boundaries preserve Unicode text
+PASS String indexing uses Unicode scalars
+PASS String scalar slicing and reversal preserve UTF-8
+PASS String scalar construction validates code points
+PASS String padding measures scalar width
+PASS String search replacement and joining compose
+PASS String parsing rejects invalid integers
+PASS Set operations are persistent and deduplicate
+PASS Set algebra preserves membership
+PASS Dict updates are persistent
+SUMMARY 24 passed, 0 failed

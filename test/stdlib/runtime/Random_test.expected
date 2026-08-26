@@ -1,0 +1,4 @@
+PASS Random integer respects inclusive bounds
+PASS Random singleton choice is stable
+PASS Random shuffle preserves length
+SUMMARY 3 passed, 0 failed

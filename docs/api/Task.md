@@ -14,7 +14,7 @@ Spawn a Yona closure as a concurrent task on a thread pool worker.
 Returns a promise that resolves to the closure's return value when the
 task completes.
 
-`spawn` is declared as an `IO` function — its result is auto-awaited at
+`spawn` is declared as a native promise function — its result is auto-awaited at
 the value's first use, just like `readFile` and other I/O calls. This
 means the existing transparent async machinery handles task lifecycle:
 

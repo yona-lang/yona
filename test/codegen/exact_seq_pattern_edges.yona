@@ -1,0 +1,14 @@
+let exactLength = case [1, 2] of
+        [only] -> false
+        _ -> true
+    end,
+    literalMismatch = case [1, 2] of
+        [1, 3] -> false
+        [1, 2] -> true
+        _ -> false
+    end,
+    scalarTupleCarriers = case [(1.5, true)] of
+        [(number, flag)] -> number == 1.5 && flag
+        _ -> false
+    end
+in exactLength && literalMismatch && scalarTupleCarriers

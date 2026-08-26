@@ -415,6 +415,7 @@ int64_t* yona_platform_list_dir(const char* path) {
 extern void* rc_alloc(int64_t type_tag, size_t payload_bytes);
 
 typedef struct {
+    void (*finalize)(void*);
     int fd;
     char* buf;
     size_t buf_pos;
@@ -422,13 +423,19 @@ typedef struct {
     int eof;
 } line_iter_state_t;
 
+static void line_iter_finalize(void* raw) {
+    line_iter_state_t* st = (line_iter_state_t*)raw;
+    if (st->fd >= 0) close(st->fd);
+    free(st->buf);
+}
+
 /* Read the next line from the buffered file iterator.
  * Returns an Option: Some(line_string) or None (as heap ADT).
  * Option layout: [rc, tag_encoded, tag_i64, value_i64] where tag=0 is Some, tag=1 is None. */
 static int64_t line_iter_next(int64_t* closure_env) {
-    /* closure_env layout: [fn_ptr, ret_tag, arity, num_caps, heap_mask, cap0]
+    /* closure_env layout: [fn_ptr, ret_tag, arity, num_caps, heap_mask, borrow_mask, cap0]
      * cap0 = pointer to line_iter_state_t */
-    line_iter_state_t* st = (line_iter_state_t*)(intptr_t)closure_env[5];
+    line_iter_state_t* st = (line_iter_state_t*)(intptr_t)closure_env[6];
     extern void* yona_rt_rc_alloc_string_len(size_t bytes, size_t str_len);
 
     if (st->eof) {
@@ -493,7 +500,9 @@ int64_t yona_rt_file_line_iterator(const char* path) {
     int fd = open(path, O_RDONLY);
 
     /* Allocate state */
-    line_iter_state_t* st = (line_iter_state_t*)malloc(sizeof(line_iter_state_t));
+    extern void* yona_rt_native_state_alloc(size_t, void (*)(void*));
+    line_iter_state_t* st = (line_iter_state_t*)
+        yona_rt_native_state_alloc(sizeof(line_iter_state_t), line_iter_finalize);
     if (fd < 0) {
         /* File not found — empty iterator */
         st->fd = -1;
@@ -509,7 +518,7 @@ int64_t yona_rt_file_line_iterator(const char* path) {
         st->eof = 0;
     }
     /* Create a closure that captures the state.
-     * Closure layout: [fn_ptr, ret_tag, arity, num_caps, heap_mask, cap0, ...] */
+     * Closure layout: [fn_ptr, ret_tag, arity, num_caps, heap_mask, borrow_mask, cap0, ...] */
     extern void* yona_rt_closure_create(void* fn_ptr, int64_t ret_tag,
                                         int64_t arity, int64_t num_caps);
     int64_t* closure = (int64_t*)yona_rt_closure_create(
@@ -521,12 +530,14 @@ int64_t yona_rt_file_line_iterator(const char* path) {
     /* Set cap0 = state pointer */
     extern void yona_rt_closure_set_cap(void* closure, int64_t idx, int64_t val);
     yona_rt_closure_set_cap(closure, 0, (int64_t)(intptr_t)st);
+    extern void yona_rt_closure_set_heap_mask(void* closure, int64_t mask);
+    yona_rt_closure_set_heap_mask(closure, 1);
 
     /* Wrap in Iterator ADT: [tag=0, num_fields=1, heap_mask=1, closure_ptr] */
     int64_t* iter_adt = (int64_t*)rc_alloc(4 /* RC_TYPE_ADT */, 4 * sizeof(int64_t));
     iter_adt[0] = 0;  /* tag = Iterator */
     iter_adt[1] = 1;  /* num_fields */
-    iter_adt[2] = 0;  /* heap_mask=0: closure managed separately */
+    iter_adt[2] = 1;
     iter_adt[3] = (int64_t)(intptr_t)closure;
 
     return (int64_t)(intptr_t)iter_adt;
@@ -536,6 +547,7 @@ int64_t yona_rt_file_line_iterator(const char* path) {
 /* Reads fixed-size chunks from an open fd using pread. */
 
 typedef struct {
+    void (*finalize)(void*);
     int fd;
     int64_t position;
     int64_t chunk_size;
@@ -543,7 +555,7 @@ typedef struct {
 } chunk_iter_state_t;
 
 static int64_t chunk_iter_next(int64_t* env) {
-    chunk_iter_state_t* st = (chunk_iter_state_t*)(intptr_t)env[5];
+    chunk_iter_state_t* st = (chunk_iter_state_t*)(intptr_t)env[6];
     if (st->eof) {
         int64_t* none = (int64_t*)rc_alloc(4, 3 * sizeof(int64_t));
         none[0] = 1; none[1] = 0; none[2] = 0;
@@ -585,7 +597,9 @@ static int64_t chunk_iter_next(int64_t* env) {
 /* readChunks: create a streaming binary chunk iterator for an open fd.
  * Does NOT close the fd — caller owns the handle. */
 int64_t yona_rt_file_chunk_iterator(int64_t fd, int64_t chunk_size) {
-    chunk_iter_state_t* st = (chunk_iter_state_t*)malloc(sizeof(chunk_iter_state_t));
+    extern void* yona_rt_native_state_alloc(size_t, void (*)(void*));
+    chunk_iter_state_t* st = (chunk_iter_state_t*)
+        yona_rt_native_state_alloc(sizeof(chunk_iter_state_t), NULL);
     st->fd = (int)fd;
     st->position = 0;
     st->chunk_size = chunk_size;
@@ -597,11 +611,13 @@ int64_t yona_rt_file_chunk_iterator(int64_t fd, int64_t chunk_size) {
         (void*)chunk_iter_next, 0, 0, 1);
     extern void yona_rt_closure_set_cap(void* closure, int64_t idx, int64_t val);
     yona_rt_closure_set_cap(closure, 0, (int64_t)(intptr_t)st);
+    extern void yona_rt_closure_set_heap_mask(void* closure, int64_t mask);
+    yona_rt_closure_set_heap_mask(closure, 1);
 
     int64_t* iter_adt = (int64_t*)rc_alloc(4, 4 * sizeof(int64_t));
     iter_adt[0] = 0;
     iter_adt[1] = 1;
-    iter_adt[2] = 0;
+    iter_adt[2] = 1;
     iter_adt[3] = (int64_t)(intptr_t)closure;
     return (int64_t)(intptr_t)iter_adt;
 }

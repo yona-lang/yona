@@ -1,0 +1,4 @@
+PASS FloatArray fill has requested shape
+PASS FloatArray updates persistently
+PASS FloatArray maps and folds
+SUMMARY 3 passed, 0 failed

@@ -1,0 +1,6 @@
+import reverse from Std\List in
+let first = [1, 2] == [1, 2],
+    second = [4, 6] == [4, 6],
+    third = [1, 2] == [1, 2],
+    fourth = reverse [1, 2, 3] == [3, 2, 1]
+in (first, second, third, fourth)

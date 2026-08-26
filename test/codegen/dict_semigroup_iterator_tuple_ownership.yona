@@ -1,0 +1,4 @@
+import get from Std\Dict in
+let combineMany n result = if n == 0 then result else
+        combineMany (n - 1) (combine result {2: 99, 3: 30})
+in get (combineMany 128 {1: 10, 2: 20}) 2 0

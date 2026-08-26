@@ -604,7 +604,7 @@ end
 
 # Superclass constraint
 trait Eq a => Ord a
-    compare : a -> a -> Int
+    compare : a -> a -> Ordering
 end
 ```
 
@@ -632,7 +632,12 @@ show 42           # resolves to Show Int instance at compile time
 show (Some true)  # resolves through Show (Option a) + Show Bool
 ```
 
-Traits are resolved statically via monomorphization — zero runtime overhead. Each call site compiles the concrete implementation directly.
+Traits are resolved statically via monomorphization — zero runtime overhead.
+Each call site compiles the concrete implementation directly. `==` / `!=`
+select `Eq`; relational operators select `Ord`, whose `compare` result is
+`Less`, `Equal`, or `Greater`. The Prelude also provides `Hash`, `Array`,
+`Sized`, `Iterable`, `Foldable`, `Semigroup`, `Monoid`, conversion/parsing
+traits, and the erased concurrency markers `Send` / `Shareable`.
 
 ### Exporting Traits
 

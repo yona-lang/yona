@@ -5,6 +5,28 @@ export type Option
 export type Result
 export type Iterator
 export type FileHandle
+export type FileMode
+export type Whence
+export type Type
+export type Ordering
+export trait Eq
+export trait Ord
+export trait Hash
+export trait Show
+export trait Array
+export trait Closeable
+export trait Sized
+export trait Iterable
+export trait Foldable
+export trait Semigroup
+export trait Monoid
+export trait From
+export trait TryFrom
+export trait Parse
+export trait Send
+export trait Shareable
+export type ConvertError
+export type ParseError
 export identity, const, flip, compose
 
 ## Linear resource wrapper — values of type `Linear a` must be consumed
@@ -12,10 +34,21 @@ export identity, const, flip, compose
 type Linear a = Linear a
 
 ## Optional value — either `Some value` or `None`.
-type Option a = Some a | None
+type Option a = Some a | None deriving Eq, Ord, Hash, Show, Send, Shareable
 
 ## Result of a computation — either `Ok value` or `Err error`.
-type Result a e = Ok a | Err e
+type Result a e = Ok a | Err e deriving Eq, Ord, Hash, Show, Send, Shareable
+
+## Total ordering result returned by `Ord.compare`.
+type Ordering = Less | Equal | Greater deriving Eq, Ord, Send, Shareable
+
+## Structured conversion failure.
+type ConvertError = InvalidConversion String | ConversionOutOfRange String
+    deriving Eq, Ord, Hash, Show, Send, Shareable
+
+## Structured parsing failure.
+type ParseError = InvalidSyntax String | ParsedValueOutOfRange String
+    deriving Eq, Ord, Hash, Show, Send, Shareable
 
 ## Pull-based iterator — wraps a function that returns the next element
 ## or `None` when exhausted. Used for streaming I/O and lazy sequences.
@@ -27,9 +60,11 @@ type FileHandle = FileHandle Int
 
 ## File open mode for openFile.
 type FileMode = Read | Write | ReadWrite | Append
+    deriving Eq, Ord, Hash, Show, Send, Shareable
 
 ## Seek origin for the seek function.
 type Whence = SeekSet | SeekCur | SeekEnd
+    deriving Eq, Ord, Hash, Show, Send, Shareable
 
 ## Compile-time type representation returned by typeOf.
 ## Use case-of pattern matching for type-based dispatch.
@@ -37,6 +72,822 @@ type Type = TInt | TFloat | TBool | TString | TSymbol | TUnit
           | TSeq | TSet | TDict | TTuple | TFunction | TPromise
           | TByteArray | TIntArray | TFloatArray
           | TAdt String | TSum | TRecord
+          deriving Eq, Ord, Hash, Show, Send, Shareable
+
+## Equality. Implementations must be reflexive, symmetric, and transitive.
+trait Eq a
+    eq : a -> a -> Bool
+end
+
+## Total ordering. `compare` returns a semantic ordering value rather than an
+## integer convention. Every ordered type must also have lawful equality.
+trait Eq a => Ord a
+    compare : a -> a -> Ordering
+end
+
+## Hashing consistent with equality: equal values must have equal hashes.
+trait Eq a => Hash a
+    hash : a -> Int
+end
+
+## Human-readable rendering intended for diagnostics and user interfaces.
+trait Show a
+    show : a -> String
+end
+
+## Random-access finite values. Prefer `Sized`, `Iterable`, and `Foldable` in
+## generic APIs; Array remains the indexed compatibility contract.
+trait Array array element
+    length : array -> Int
+    get : array -> Int -> element
+end
+
+## Resources that can be deterministically closed by a `with` expression.
+trait Closeable a
+    close : a -> Unit
+end
+
+## Finite values with a constant-time or documented bounded size operation.
+trait Sized a
+    size : a -> Int
+end
+
+## Values that can produce a pull iterator of elements.
+trait Iterable collection element
+    toIterator : collection -> Iterator element
+end
+
+## Finite collections that support left and right folds.
+trait Foldable collection element
+    foldLeft : collection -> (acc -> element -> acc) -> acc -> acc
+    foldRight : collection -> (element -> acc -> acc) -> acc -> acc
+end
+
+## Associative combination.
+trait Semigroup a
+    combine : a -> a -> a
+end
+
+## A semigroup with an identity. The witness argument keeps dispatch fully
+## static until Yona gains explicit type applications.
+trait Semigroup a => Monoid a
+    emptyLike : a -> a
+end
+
+## Total conversion selected by an explicit target witness. Keeping the target
+## first makes multi-parameter dispatch deterministic without result-type
+## guessing or explicit type applications.
+trait From target source
+    convert : target -> source -> target
+end
+
+## Checked conversion selected by an explicit target witness.
+trait TryFrom target source
+    tryConvert : target -> source -> Result (target, ConvertError)
+end
+
+## Text parsing. The target witness makes result-directed dispatch explicit.
+trait Parse target
+    parse : target -> String -> Result (target, ParseError)
+end
+
+## Marker for values that may move across concurrency boundaries.
+trait Send a
+end
+
+## Marker for immutable values that may be shared concurrently.
+trait Send a => Shareable a
+end
+
+instance Send Int
+end
+instance Shareable Int
+end
+instance Send Float
+end
+instance Shareable Float
+end
+instance Send Bool
+end
+instance Shareable Bool
+end
+instance Send String
+end
+instance Shareable String
+end
+instance Send Symbol
+end
+instance Shareable Symbol
+end
+instance Send Unit
+end
+instance Shareable Unit
+end
+
+## Native arrays are mutable but have unique ownership at concurrency
+## boundaries: they may be moved to another task or through a channel, never
+## captured/shared concurrently.
+instance Send ByteArray
+end
+instance Send IntArray
+end
+instance Send FloatArray
+end
+
+instance Send element => Send (Seq element)
+end
+instance Shareable element => Shareable (Seq element)
+end
+instance Send element => Send (Set element)
+end
+instance Shareable element => Shareable (Set element)
+end
+instance Send key, Send value => Send (Dict key value)
+end
+instance Shareable key, Shareable value => Shareable (Dict key value)
+end
+instance Send left, Send right => Send (Tuple left right)
+end
+instance Shareable left, Shareable right => Shareable (Tuple left right)
+end
+
+extern primitiveEqInt : Int -> Int -> Bool = "yona_Prelude__Eq_Int__eq"
+extern primitiveEqFloat : Float -> Float -> Bool = "yona_Prelude__Eq_Float__eq"
+extern primitiveEqBool : Bool -> Bool -> Bool = "yona_Prelude__Eq_Bool__eq"
+extern primitiveEqString : String -> String -> Bool = "yona_Prelude__Eq_String__eq"
+extern primitiveEqSymbol : Symbol -> Symbol -> Bool = "yona_Prelude__Eq_Symbol__eq"
+
+extern primitiveCompareInt : Int -> Int -> Int = "yona_Prelude__Ord_Int__compare"
+extern primitiveCompareFloat : Float -> Float -> Int = "yona_Prelude__Ord_Float__compare"
+extern primitiveCompareBool : Bool -> Bool -> Int = "yona_Prelude__Ord_Bool__compare"
+extern primitiveCompareString : String -> String -> Int = "yona_Prelude__Ord_String__compare"
+
+extern primitiveHashInt : Int -> Int = "yona_Prelude__Hash_Int__hash"
+extern primitiveHashFloat : Float -> Int = "yona_Prelude__Hash_Float__hash"
+extern primitiveHashBool : Bool -> Int = "yona_Prelude__Hash_Bool__hash"
+extern primitiveHashString : String -> Int = "yona_Prelude__Hash_String__hash"
+extern primitiveHashSymbol : Symbol -> Int = "yona_Prelude__Hash_Symbol__hash"
+
+extern primitiveShowInt : Int -> String = "yona_Prelude__Show_Int__show"
+extern primitiveShowFloat : Float -> String = "yona_Prelude__Show_Float__show"
+extern primitiveShowBool : Bool -> String = "yona_Prelude__Show_Bool__show"
+extern primitiveShowString : String -> String = "yona_Prelude__Show_String__show"
+extern primitiveShowSymbol : Symbol -> String = "yona_Prelude__Show_Symbol__show"
+extern primitiveSizeString : String -> Int = "yona_Prelude__Array_String__length"
+extern primitiveSizeSeq : Seq a -> Int = "yona_Prelude__Array_Seq__length"
+extern primitiveGetString : String -> Int -> Int = "yona_Prelude__Array_String__get"
+extern primitiveGetSeq : Seq element -> Int -> element = "yona_Prelude__Array_Seq__get"
+extern primitiveSizeByteArray : ByteArray -> Int = "yona_Prelude__Array_ByteArray__length"
+extern primitiveGetByteArray : ByteArray -> Int -> Int = "yona_Prelude__Array_ByteArray__get"
+extern primitiveSizeIntArray : IntArray -> Int = "yona_Prelude__Array_IntArray__length"
+extern primitiveGetIntArray : IntArray -> Int -> Int = "yona_Prelude__Array_IntArray__get"
+extern primitiveSizeFloatArray : FloatArray -> Int = "yona_Prelude__Array_FloatArray__length"
+extern primitiveGetFloatArray : FloatArray -> Int -> Float = "yona_Prelude__Array_FloatArray__get"
+
+ordering value = if value < 0 then Less else if value > 0 then Greater else Equal
+
+instance Eq Int
+    eq : Int -> Int -> Bool
+    eq left right = primitiveEqInt left right
+end
+
+instance Eq Float
+    eq : Float -> Float -> Bool
+    eq left right = primitiveEqFloat left right
+end
+
+instance Eq Bool
+    eq : Bool -> Bool -> Bool
+    eq left right = primitiveEqBool left right
+end
+
+instance Eq String
+    eq : String -> String -> Bool
+    eq left right = primitiveEqString left right
+end
+
+instance Eq Symbol
+    eq : Symbol -> Symbol -> Bool
+    eq left right = primitiveEqSymbol left right
+end
+
+seqEqAt : (element -> element -> Bool) -> Seq element -> Seq element -> Int -> Int -> Bool
+seqEqAt equals @borrow left @borrow right index count =
+    if index >= count then true
+    else if equals (get left index) (get right index) then
+        seqEqAt equals left right (index + 1) count
+    else false
+
+seqEqBy : (element -> element -> Bool) -> Seq element -> Seq element -> Bool
+seqEqBy equals @borrow left @borrow right =
+    let leftLength = length left, rightLength = length right in
+    if leftLength == rightLength then seqEqAt equals left right 0 leftLength
+    else false
+
+seqContainsEqAt : (element -> element -> Bool) -> Seq element -> element -> Int -> Int -> Bool
+seqContainsEqAt equals @borrow candidates needle index count =
+    if index >= count then false
+    else if equals needle (get candidates index) then true
+    else seqContainsEqAt equals candidates needle (index + 1) count
+
+seqAllPresentAt : (element -> element -> Bool) -> Seq element -> Seq element -> Int -> Int -> Int -> Bool
+seqAllPresentAt equals @borrow values @borrow candidates index valueCount candidateCount =
+    if index >= valueCount then true
+    else if seqContainsEqAt equals candidates (get values index) 0 candidateCount then
+        seqAllPresentAt equals values candidates (index + 1) valueCount candidateCount
+    else false
+
+dictEntryPresentAt : (key -> key -> Bool) -> (value -> value -> Bool) ->
+    Seq (key, value) -> key -> value -> Int -> Int -> Bool
+dictEntryPresentAt @borrow keyEquals @borrow valueEquals @borrow candidates @borrow wantedKey @borrow wantedValue index count =
+    if index >= count then false
+    else let candidate = get candidates index in
+    case candidate of (candidateKey, candidateValue) ->
+        if keyEquals wantedKey candidateKey then
+            valueEquals wantedValue candidateValue
+        else dictEntryPresentAt keyEquals valueEquals candidates wantedKey wantedValue (index + 1) count
+    end
+
+dictEntriesAllPresentAt : (key -> key -> Bool) -> (value -> value -> Bool) ->
+    Seq (key, value) -> Seq (key, value) -> Int -> Int -> Int -> Bool
+dictEntriesAllPresentAt @borrow keyEquals @borrow valueEquals @borrow values @borrow candidates index valueCount candidateCount =
+    if index >= valueCount then true
+    else let wanted = get values index in
+    case wanted of (wantedKey, wantedValue) ->
+        if dictEntryPresentAt keyEquals valueEquals candidates wantedKey wantedValue 0 candidateCount then
+            dictEntriesAllPresentAt keyEquals valueEquals values candidates (index + 1) valueCount candidateCount
+        else false
+    end
+
+instance Eq element => Eq (Seq element)
+    eq : Seq element -> Seq element -> Bool
+    eq @borrow left @borrow right =
+        seqEqBy (\leftValue rightValue -> leftValue == rightValue) left right
+end
+
+instance Eq element, Ord element => Ord (Seq element)
+    compare : Seq element -> Seq element -> Ordering
+    compare left right =
+        let leftLength = length left,
+            rightLength = length right,
+            commonLength = if leftLength < rightLength then leftLength else rightLength,
+            loop index = if index >= commonLength then
+                    if leftLength < rightLength then Less
+                    else if leftLength > rightLength then Greater else Equal
+                else if get left index < get right index then Less
+                else if get left index > get right index then Greater
+                else loop (index + 1)
+        in loop 0
+end
+
+instance Eq element, Hash element => Hash (Seq element)
+    hash : Seq element -> Int
+    hash values =
+        let loop accumulator rest = case rest of
+            [head|tail] -> loop (accumulator * 31 + hash head) tail
+            [] -> accumulator
+        end
+        in loop 1 values
+end
+
+instance Show element => Show (Seq element)
+    show : Seq element -> String
+    show values =
+        let render rest = case rest of
+            [head|tail] -> case tail of
+                [] -> show head
+                _ -> show head ++ ", " ++ render tail
+            end
+            [] -> ""
+        end
+        in "[" ++ render values ++ "]"
+end
+
+instance Eq left, Eq right => Eq (Tuple left right)
+    eq : (left, right) -> (left, right) -> Bool
+    eq (leftFirst, leftSecond) (rightFirst, rightSecond) =
+        eq leftFirst rightFirst && eq leftSecond rightSecond
+end
+
+instance Eq left, Eq right, Ord left, Ord right => Ord (Tuple left right)
+    compare : (left, right) -> (left, right) -> Ordering
+    compare (leftFirst, leftSecond) (rightFirst, rightSecond) =
+        case compare leftFirst rightFirst of
+            Less -> Less
+            Greater -> Greater
+            Equal -> compare leftSecond rightSecond
+        end
+end
+
+instance Eq left, Eq right, Hash left, Hash right => Hash (Tuple left right)
+    hash : (left, right) -> Int
+    hash (first, second) = hash first * 31 + hash second
+end
+
+instance Show left, Show right => Show (Tuple left right)
+    show : (left, right) -> String
+    show (first, second) = "(" ++ show first ++ ", " ++ show second ++ ")"
+end
+
+instance Eq element => Eq (Set element)
+    eq : Set element -> Set element -> Bool
+    eq left right =
+        import elements, size as setSize from Std\Set in
+        let leftValues = elements left,
+            rightValues = elements right
+        in setSize left == setSize right &&
+           seqAllPresentAt (\first second -> eq first second) leftValues rightValues 0 (primitiveSizeSeq leftValues) (primitiveSizeSeq rightValues)
+end
+
+instance Eq element, Ord element => Ord (Set element)
+    compare : Set element -> Set element -> Ordering
+    compare left right =
+        import elements from Std\Set, sortBy from Std\List in
+        let compareInt first second = case compare first second of
+                Less -> -1
+                Equal -> 0
+                Greater -> 1
+            end,
+            sortedLeft = sortBy compareInt (elements left),
+            sortedRight = sortBy compareInt (elements right)
+        in compare sortedLeft sortedRight
+end
+
+instance Eq element, Hash element => Hash (Set element)
+    hash : Set element -> Int
+    hash values =
+        import elements from Std\Set in
+        let loop total rest = case rest of
+                [head|tail] -> loop (total + hash head) tail
+                [] -> total
+            end
+        in loop 0 (elements values)
+end
+
+instance Ord element, Show element => Show (Set element)
+    show : Set element -> String
+    show values =
+        import elements from Std\Set, sortBy from Std\List in
+        let compareInt first second = case compare first second of
+                Less -> -1
+                Equal -> 0
+                Greater -> 1
+            end,
+            render rest = case rest of
+                [head|tail] -> case tail of
+                    [] -> show head
+                    _ -> show head ++ ", " ++ render tail
+                end
+                [] -> ""
+            end
+        in "{{" ++ render (sortBy compareInt (elements values)) ++ "}}"
+end
+
+instance Eq key, Eq value => Eq (Dict key value)
+    eq : Dict key value -> Dict key value -> Bool
+    eq left right =
+        import entries, size as dictSize from Std\Dict,
+               toSeq from Std\Iterator in
+        let leftEntries = toSeq (entries left),
+            rightEntries = toSeq (entries right)
+        in dictSize left == dictSize right &&
+           dictEntriesAllPresentAt (\first second -> eq first second) (\first second -> eq first second) leftEntries rightEntries 0 (primitiveSizeSeq leftEntries) (primitiveSizeSeq rightEntries)
+end
+
+instance Eq key, Eq value, Ord key, Ord value => Ord (Dict key value)
+    compare : Dict key value -> Dict key value -> Ordering
+    compare left right =
+        import entries from Std\Dict, toSeq from Std\Iterator,
+               sortBy from Std\List in
+        let compareEntry first second = case first of
+                (firstKey, _) -> case second of
+                    (secondKey, _) -> case compare firstKey secondKey of
+                        Less -> -1
+                        Equal -> 0
+                        Greater -> 1
+                    end
+                end
+            end,
+            sortedLeft = sortBy compareEntry (toSeq (entries left)),
+            sortedRight = sortBy compareEntry (toSeq (entries right))
+        in compare sortedLeft sortedRight
+end
+
+instance Eq key, Eq value, Hash key, Hash value => Hash (Dict key value)
+    hash : Dict key value -> Int
+    hash dictionary =
+        import entries from Std\Dict, toSeq from Std\Iterator in
+        let loop total rest = case rest of
+                [(key, value)|tail] -> loop (total + hash key * 31 + hash value) tail
+                [] -> total
+            end
+        in loop 0 (toSeq (entries dictionary))
+end
+
+instance Ord key, Ord value, Show key, Show value => Show (Dict key value)
+    show : Dict key value -> String
+    show dictionary =
+        import entries from Std\Dict, toSeq from Std\Iterator,
+               sortBy from Std\List in
+        let compareEntry first second = case first of
+                (firstKey, _) -> case second of
+                    (secondKey, _) -> case compare firstKey secondKey of
+                        Less -> -1
+                        Equal -> 0
+                        Greater -> 1
+                    end
+                end
+            end,
+            render rest = case rest of
+                [(key, value)|tail] -> case tail of
+                    [] -> show key ++ ": " ++ show value
+                    _ -> show key ++ ": " ++ show value ++ ", " ++ render tail
+                end
+                [] -> ""
+            end
+        in "{{" ++ render (sortBy compareEntry (toSeq (entries dictionary))) ++ "}}"
+end
+
+instance Ord Int
+    compare : Int -> Int -> Ordering
+    compare left right = ordering (primitiveCompareInt left right)
+end
+
+instance Ord Float
+    compare : Float -> Float -> Ordering
+    compare left right = ordering (primitiveCompareFloat left right)
+end
+
+instance Ord Bool
+    compare : Bool -> Bool -> Ordering
+    compare left right = ordering (primitiveCompareBool left right)
+end
+
+instance Ord String
+    compare : String -> String -> Ordering
+    compare left right = ordering (primitiveCompareString left right)
+end
+
+instance Hash Int
+    hash : Int -> Int
+    hash value = primitiveHashInt value
+end
+
+instance Hash Float
+    hash : Float -> Int
+    hash value = primitiveHashFloat value
+end
+
+instance Hash Bool
+    hash : Bool -> Int
+    hash value = primitiveHashBool value
+end
+
+instance Hash String
+    hash : String -> Int
+    hash value = primitiveHashString value
+end
+
+instance Hash Symbol
+    hash : Symbol -> Int
+    hash value = primitiveHashSymbol value
+end
+
+instance Show Int
+    show : Int -> String
+    show value = primitiveShowInt value
+end
+
+instance Show Float
+    show : Float -> String
+    show value = primitiveShowFloat value
+end
+
+instance Show Bool
+    show : Bool -> String
+    show value = primitiveShowBool value
+end
+
+instance Show String
+    show : String -> String
+    show value = primitiveShowString value
+end
+
+instance Show Symbol
+    show : Symbol -> String
+    show value = primitiveShowSymbol value
+end
+
+instance Sized String
+    size : String -> Int
+    size value = primitiveSizeString value
+end
+
+instance Sized (Seq element)
+    size : Seq element -> Int
+    size values = primitiveSizeSeq values
+end
+
+instance Sized ByteArray
+    size : ByteArray -> Int
+    size values = primitiveSizeByteArray values
+end
+
+instance Sized IntArray
+    size : IntArray -> Int
+    size values = primitiveSizeIntArray values
+end
+
+instance Sized FloatArray
+    size : FloatArray -> Int
+    size values = primitiveSizeFloatArray values
+end
+
+instance Sized (Set element)
+    size : Set element -> Int
+    size values = import size as setSize from Std\Set in setSize values
+end
+
+instance Sized (Dict key value)
+    size : Dict key value -> Int
+    size values = import size as dictSize from Std\Dict in dictSize values
+end
+
+instance Sized (Option element)
+    size : Option element -> Int
+    size value = case value of Some _ -> 1; None -> 0 end
+end
+
+instance Sized (Result element error)
+    size : Result element error -> Int
+    size _ = 1
+end
+
+instance Iterable (Seq element) element
+    toIterator : Seq element -> Iterator element
+    toIterator values = import fromSeq from Std\Iterator in fromSeq values
+end
+
+instance Iterable String Int
+    toIterator : String -> Iterator Int
+    toIterator value = import chars from Std\String in chars value
+end
+
+instance Iterable ByteArray Int
+    toIterator : ByteArray -> Iterator Int
+    toIterator values = import fromByteArray from Std\Iterator in fromByteArray values
+end
+
+instance Iterable IntArray Int
+    toIterator : IntArray -> Iterator Int
+    toIterator values = import fromIntArray from Std\Iterator in fromIntArray values
+end
+
+instance Iterable FloatArray Float
+    toIterator : FloatArray -> Iterator Float
+    toIterator values = import fromFloatArray from Std\Iterator in fromFloatArray values
+end
+
+instance Iterable (Set element) element
+    toIterator : Set element -> Iterator element
+    toIterator values = import iterator from Std\Set in iterator values
+end
+
+instance Iterable (Dict key value) (key, value)
+    toIterator : Dict key value -> Iterator (key, value)
+    toIterator values = import entries from Std\Dict in entries values
+end
+
+instance Iterable (Option element) element
+    toIterator : Option element -> Iterator element
+    toIterator value = import fromSeq from Std\Iterator in
+        fromSeq (case value of Some element -> [element]; None -> [] end)
+end
+
+instance Iterable (Result element error) element
+    toIterator : Result element error -> Iterator element
+    toIterator value = import fromSeq from Std\Iterator in
+        fromSeq (case value of Ok element -> [element]; Err _ -> [] end)
+end
+
+instance Iterable (Iterator element) element
+    toIterator : Iterator element -> Iterator element
+    toIterator value = value
+end
+
+instance Foldable (Option element) element
+    foldLeft : Option element -> (acc -> element -> acc) -> acc -> acc
+    foldLeft value folder accumulator = case value of
+        Some element -> folder accumulator element
+        None -> accumulator
+    end
+    foldRight : Option element -> (element -> acc -> acc) -> acc -> acc
+    foldRight value folder accumulator = case value of
+        Some element -> folder element accumulator
+        None -> accumulator
+    end
+end
+
+instance Array String Int
+    length : String -> Int
+    length @borrow value = primitiveSizeString value
+    get : String -> Int -> Int
+    get @borrow value index = primitiveGetString value index
+end
+
+instance Array (Seq element) element
+    length : Seq element -> Int
+    length @borrow values = primitiveSizeSeq values
+    get : Seq element -> Int -> element
+    get @borrow values index = primitiveGetSeq values index
+end
+
+instance Array ByteArray Int
+    length : ByteArray -> Int
+    length @borrow values = primitiveSizeByteArray values
+    get : ByteArray -> Int -> Int
+    get @borrow values index = primitiveGetByteArray values index
+end
+
+instance Array IntArray Int
+    length : IntArray -> Int
+    length @borrow values = primitiveSizeIntArray values
+    get : IntArray -> Int -> Int
+    get @borrow values index = primitiveGetIntArray values index
+end
+
+instance Array FloatArray Float
+    length : FloatArray -> Int
+    length @borrow values = primitiveSizeFloatArray values
+    get : FloatArray -> Int -> Float
+    get @borrow values index = primitiveGetFloatArray values index
+end
+
+foldSeqLeft : (acc -> element -> acc) -> acc -> Seq element -> acc
+foldSeqLeft folder accumulator values =
+    case values of
+        [head|tail] -> foldSeqLeft folder (folder accumulator head) tail
+        [] -> accumulator
+    end
+
+foldSeqRight : (element -> acc -> acc) -> acc -> Seq element -> acc
+foldSeqRight folder accumulator values =
+    case values of
+        [head|tail] -> folder head (foldSeqRight folder accumulator tail)
+        [] -> accumulator
+    end
+
+instance Foldable (Seq element) element
+    foldLeft : Seq element -> (acc -> element -> acc) -> acc -> acc
+    foldLeft values folder accumulator = foldSeqLeft folder accumulator values
+    foldRight : Seq element -> (element -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator = foldSeqRight folder accumulator values
+end
+
+
+instance Foldable String Int
+    foldLeft : String -> (acc -> Int -> acc) -> acc -> acc
+    foldLeft value folder accumulator =
+        import chars from Std\String, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (chars value) folder accumulator
+    foldRight : String -> (Int -> acc -> acc) -> acc -> acc
+    foldRight value folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetString value index) result)
+        in loop (primitiveSizeString value - 1) accumulator
+end
+
+
+instance Foldable ByteArray Int
+    foldLeft : ByteArray -> (acc -> Int -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import fromByteArray, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (fromByteArray values) folder accumulator
+    foldRight : ByteArray -> (Int -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetByteArray values index) result)
+        in loop (primitiveSizeByteArray values - 1) accumulator
+end
+
+
+instance Foldable IntArray Int
+    foldLeft : IntArray -> (acc -> Int -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import fromIntArray, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (fromIntArray values) folder accumulator
+    foldRight : IntArray -> (Int -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetIntArray values index) result)
+        in loop (primitiveSizeIntArray values - 1) accumulator
+end
+
+
+instance Foldable FloatArray Float
+    foldLeft : FloatArray -> (acc -> Float -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import fromFloatArray, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (fromFloatArray values) folder accumulator
+    foldRight : FloatArray -> (Float -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        let loop index result = if index < 0 then result
+                else loop (index - 1) (folder (primitiveGetFloatArray values index) result)
+        in loop (primitiveSizeFloatArray values - 1) accumulator
+end
+
+
+instance Foldable (Set element) element
+    foldLeft : Set element -> (acc -> element -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import iterator from Std\Set, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (iterator values) folder accumulator
+    foldRight : Set element -> (element -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        import elements from Std\Set in
+        let loop rest result = case rest of
+                [head|tail] -> folder head (loop tail result)
+                [] -> result
+            end
+        in loop (elements values) accumulator
+end
+
+
+instance Foldable (Dict key value) (key, value)
+    foldLeft : Dict key value -> (acc -> (key, value) -> acc) -> acc -> acc
+    foldLeft values folder accumulator =
+        import entries from Std\Dict, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (entries values) folder accumulator
+    foldRight : Dict key value -> ((key, value) -> acc -> acc) -> acc -> acc
+    foldRight values folder accumulator =
+        import entries from Std\Dict, toSeq from Std\Iterator in
+        let loop rest result = case rest of
+                [head|tail] -> folder head (loop tail result)
+                [] -> result
+            end
+        in loop (toSeq (entries values)) accumulator
+end
+
+
+instance Foldable (Result element error) element
+    foldLeft : Result element error -> (acc -> element -> acc) -> acc -> acc
+    foldLeft value folder accumulator = case value of
+        Ok element -> folder accumulator element
+        Err _ -> accumulator
+    end
+    foldRight : Result element error -> (element -> acc -> acc) -> acc -> acc
+    foldRight value folder accumulator = case value of
+        Ok element -> folder element accumulator
+        Err _ -> accumulator
+    end
+end
+
+instance Semigroup String
+    combine : String -> String -> String
+    combine left right = left ++ right
+end
+
+instance Monoid String
+    emptyLike : String -> String
+    emptyLike _ = ""
+end
+
+instance Semigroup (Seq element)
+    combine : Seq element -> Seq element -> Seq element
+    combine left right = left ++ right
+end
+
+instance Monoid (Seq element)
+    emptyLike : Seq element -> Seq element
+    emptyLike _ = []
+end
+
+
+instance Semigroup (Set element)
+    combine : Set element -> Set element -> Set element
+    combine left right = import union from Std\Set in union left right
+end
+
+instance Monoid (Set element)
+    emptyLike : Set element -> Set element
+    emptyLike _ = {}
+end
+
+insertDictEntry dictionary entry =
+    import put from Std\Dict in
+    case entry of (key, value) -> put dictionary key value end
+
+instance Semigroup (Dict key value)
+    combine : Dict key value -> Dict key value -> Dict key value
+    combine left right =
+        import entries from Std\Dict, foldLeft as foldIterator from Std\Iterator in
+        foldIterator (entries right) insertDictEntry left
+end
+
+instance Monoid (Dict key value)
+    emptyLike : Dict key value -> Dict key value
+    emptyLike _ = {}
+end
 
 ## Identity function — returns its argument unchanged.
 identity x = x

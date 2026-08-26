@@ -1,0 +1,3 @@
+PASS IO exposes conventional descriptors
+PASS IO reports tty state
+SUMMARY 2 passed, 0 failed
