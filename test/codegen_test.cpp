@@ -1957,6 +1957,35 @@ TEST_SUITE("Diagnostics") {
     CHECK_FALSE(analysis.incomplete.has_value());
   }
 
+  TEST_CASE("Case analysis distinguishes nested constructor coverage") {
+    parser::Parser parser;
+    Codegen codegen("nested_case");
+    if (fs::exists(yona::test::lib_dir()))
+      codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    codegen.load_prelude(&parser);
+
+    auto partial = parser.parse_expression("case Some 1 of Some 1 -> 1; Some _ -> 2; None -> 3 end",
+                                           "nested-partial.yona");
+    REQUIRE(partial.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(partial.value().get())).unreachable_clauses.empty());
+
+    auto covered = parser.parse_expression("case Some 1 of Some _ -> 1; Some 1 -> 2; None -> 3 end",
+                                           "nested-covered.yona");
+    REQUIRE(covered.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(covered.value().get())).unreachable_clauses == vector<size_t>{1});
+
+    auto tuple = parser.parse_expression("case (true, 1) of (true, _) -> 1; (true, 1) -> 2; _ -> 3 end",
+                                         "tuple-covered.yona");
+    REQUIRE(tuple.has_value());
+    CHECK(static_cast<CaseExpr*>(tuple.value().get())->clauses[0]->pattern->get_type() == AST_TUPLE_PATTERN);
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(tuple.value().get())).unreachable_clauses == vector<size_t>{1});
+
+    auto sequence = parser.parse_expression("case [1] of [_] -> 1; [1] -> 2; _ -> 3 end",
+                                            "sequence-covered.yona");
+    REQUIRE(sequence.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(sequence.value().get())).unreachable_clauses == vector<size_t>{1});
+  }
+
   TEST_CASE("Parser errors route through DiagnosticEngine") {
     DiagnosticEngine diag;
     string source = "let x = in 42";

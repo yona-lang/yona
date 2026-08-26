@@ -20,6 +20,9 @@ compatibility API and diagnostic emitter; code generation is unchanged.
 - Preserve finite-ADT/`Bool` exhaustiveness and `--require-effect-free`.
 - Use test-driven development; run complete CTest and `git diff --check`.
 - Update internal docs, public site, TODO, and `CHANGELOG.md` in the same change.
+- Verify that `yls` publishes the improved overlap diagnostic with the same
+  warning code/range; keep VS Code and Zed transport-only and update their
+  syntax/query assets only when the grammar exposes a useful new pattern node.
 
 ---
 
@@ -106,3 +109,17 @@ module; `-Woverlapping-patterns` has the precise unreachable-only contract.
 - [ ] Run `cmake --build --preset build-debug-linux -j2`,
   `ctest --preset unit-tests-linux --output-on-failure`, and `git diff --check`.
 - [ ] Commit: `docs: complete pattern overlap analysis`.
+
+### Task 5: Verify LSP and editor integration
+
+**Files:**
+- Modify: `test/lsp_test.cpp` only if the protocol regression exposes a gap
+- Modify: `editors/zed/` only if a new grammar node needs a query
+
+- [ ] Add an `yls` diagnostic regression for a nested unreachable arm; assert
+  `overlapping-patterns` remains the published warning code and its range
+  selects the later arm.
+- [ ] Run the VS Code extension test suite and the Zed manifest/package smoke
+  checks. Do not add editor-local pattern analysis.
+- [ ] Commit any required editor-facing regression or query/documentation
+  update with the compiler feature.
