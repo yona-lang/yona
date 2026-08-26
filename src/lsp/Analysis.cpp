@@ -113,6 +113,52 @@ std::string drop_last_line(std::string s) {
     return s.substr(0, nl);
 }
 
+std::string declared_type_text(const compiler::types::Type& type) {
+    using namespace compiler::types;
+    if (const auto* builtin = std::get_if<BuiltinType>(&type)) {
+        switch (*builtin) {
+        case Bool: return "Bool";
+        case String: return "String";
+        case Symbol: return "Symbol";
+        case Unit: return "Unit";
+        case Float32:
+        case Float64:
+        case Float128: return "Float";
+        case Byte: return "Byte";
+        case SignedInt16:
+        case SignedInt32:
+        case SignedInt64:
+        case SignedInt128:
+        case UnsignedInt16:
+        case UnsignedInt32:
+        case UnsignedInt64:
+        case UnsignedInt128: return "Int";
+        default: return BuiltinTypeStrings[*builtin];
+        }
+    }
+    if (const auto* function = std::get_if<std::shared_ptr<FunctionType>>(&type))
+        return declared_type_text((*function)->argumentType) + " -> " +
+               declared_type_text((*function)->returnType);
+    if (const auto* named = std::get_if<std::shared_ptr<NamedType>>(&type))
+        return *named && !(*named)->name.empty() ? (*named)->name : "Unknown";
+    if (const auto* collection = std::get_if<std::shared_ptr<SingleItemCollectionType>>(&type))
+        return std::string((*collection)->kind == SingleItemCollectionType::Seq ? "Seq " : "Set ") +
+               declared_type_text((*collection)->valueType);
+    if (const auto* dict = std::get_if<std::shared_ptr<DictCollectionType>>(&type))
+        return "Dict " + declared_type_text((*dict)->keyType) + " " +
+               declared_type_text((*dict)->valueType);
+    if (const auto* product = std::get_if<std::shared_ptr<ProductType>>(&type)) {
+        std::string result = "(";
+        for (std::size_t i = 0; i < (*product)->types.size(); ++i) {
+            if (i)
+                result += ", ";
+            result += declared_type_text((*product)->types[i]);
+        }
+        return result + ")";
+    }
+    return "Unknown";
+}
+
 constexpr const char* kRecoverSuffixes[] = {
     " 0",
     " in 0",
@@ -155,6 +201,9 @@ struct Occurrence {
     std::string type;
     std::string origin_module;
     std::string origin_name;
+    std::string detail;
+    std::string container;
+    std::string semantic_id;
 };
 
 struct Analysis::Impl {
@@ -188,7 +237,8 @@ struct Analysis::Impl {
 
     void add_occ(const std::string& name, const SourceLocation& loc, std::string_view text,
                  bool is_def, const std::string& kind, compiler::typechecker::TypeChecker* tc,
-                 ast::AstNode* typed) {
+                 ast::AstNode* typed, std::string detail = {}, std::string container = {},
+                 std::string type_override = {}) {
         if (name.empty())
             return;
         Occurrence o;
@@ -196,20 +246,37 @@ struct Analysis::Impl {
         o.range = source_to_range(text, loc);
         o.is_def = is_def;
         o.kind = kind;
+        o.detail = std::move(detail);
+        o.container = std::move(container);
+        o.semantic_id = kind + ":" + o.container + ":" + name;
         if (tc && typed) {
             if (auto* ty = tc->type_of(typed))
                 o.type = compiler::typechecker::pretty_print(tc->zonk(ty));
         }
+        if (!type_override.empty())
+            o.type = std::move(type_override);
         occs.push_back(std::move(o));
         if (is_def) {
+            const auto& stored = occs.back();
             SymbolInfo s;
             s.name = name;
             s.kind = kind;
-            s.range = o.range;
-            s.selection = o.range;
-            s.type = o.type;
+            s.range = stored.range;
+            s.selection = stored.range;
+            s.type = stored.type;
+            s.container = stored.container;
+            s.detail = stored.detail;
+            s.semantic_id = stored.semantic_id;
             symbols.push_back(std::move(s));
         }
+    }
+
+    void add_occ_at(const std::string& name, std::size_t offset, std::string_view text, bool is_def,
+                    const std::string& kind, std::string detail, std::string container,
+                    std::string type) {
+        SourceLocation loc{1, 1, offset, name.size(), {}};
+        add_occ(name, loc, text, is_def, kind, nullptr, nullptr, std::move(detail),
+                std::move(container), std::move(type));
     }
 
     void mark_origin(const std::string& module, const std::string& export_name) {
@@ -397,12 +464,52 @@ void Analysis::Impl::walk(ast::AstNode* node, std::string_view text, compiler::t
     }
     case ast::AST_TRAIT_DECL: {
         auto* tr = static_cast<ast::TraitDeclNode*>(node);
-        add_occ(tr->name, tr->source_context, text, true, "interface", tc, node);
+        std::string head = "trait " + tr->name;
+        for (const auto& parameter : tr->type_params)
+            head += " " + parameter;
+        if (tr->type_params.empty() && !tr->type_param.empty())
+            head += " " + tr->type_param;
+        if (!tr->superclasses.empty()) {
+            head += " where ";
+            for (std::size_t i = 0; i < tr->superclasses.size(); ++i) {
+                if (i != 0)
+                    head += ", ";
+                head += tr->superclasses[i].first + " " + tr->superclasses[i].second;
+            }
+        }
+        auto trait_offset = text.find(tr->name, tr->source_context.offset);
+        if (trait_offset == std::string_view::npos)
+            trait_offset = tr->source_context.offset;
+        add_occ_at(tr->name, trait_offset, text, true, "interface", head, {}, head);
+        std::size_t cursor = trait_offset + tr->name.size();
+        for (const auto& method : tr->methods) {
+            auto found = text.find(method.name, cursor);
+            if (found == std::string_view::npos)
+                continue;
+            auto type = declared_type_text(method.type_signature);
+            add_occ_at(method.name, found, text, true, "method", head, tr->name, type);
+            cursor = found + method.name.size();
+        }
         return;
     }
     case ast::AST_INSTANCE_DECL: {
         auto* inst = static_cast<ast::InstanceDeclNode*>(node);
+        std::string head = "instance ";
+        for (std::size_t i = 0; i < inst->constraints.size(); ++i) {
+            if (i != 0)
+                head += ", ";
+            head += inst->constraints[i].first + " " + inst->constraints[i].second;
+        }
+        if (!inst->constraints.empty())
+            head += " => ";
+        head += inst->trait_name;
+        for (const auto& type_name : inst->type_names)
+            head += " " + type_name;
+        if (inst->type_names.empty() && !inst->type_name.empty())
+            head += " " + inst->type_name;
+        auto name = head.substr(std::string("instance ").size());
         add_occ(inst->trait_name, inst->source_context, text, false, "interface", tc, node);
+        add_occ(name, inst->source_context, text, true, "instance", tc, node, head, inst->trait_name, head);
         for (auto* fn : inst->methods)
             walk(fn, text, tc);
         return;

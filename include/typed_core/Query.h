@@ -71,6 +71,8 @@ struct Symbol {
     Range selection;
     std::string type;
     std::string container;
+    std::string detail;
+    std::string semantic_id;
 };
 
 } // namespace yona::typed_core

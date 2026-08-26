@@ -134,6 +134,49 @@ TEST_CASE("Analysis document symbols") {
     CHECK(found);
 }
 
+TEST_CASE("LSP trait symbols retain declaration metadata") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/traits.yona", R"(
+module Test\Traits
+
+trait Eq a
+    eq : a -> a -> Bool
+end
+
+instance Eq Int
+    eq left right = left == right
+end
+)");
+
+    auto symbols = a.document_symbols();
+    const SymbolInfo* trait = nullptr;
+    const SymbolInfo* method = nullptr;
+    const SymbolInfo* instance = nullptr;
+    for (const auto& symbol : symbols) {
+        if (symbol.name == "Eq" && symbol.kind == "interface")
+            trait = &symbol;
+        if (symbol.name == "eq" && symbol.kind == "method")
+            method = &symbol;
+        if (symbol.name == "Eq Int" && symbol.kind == "instance")
+            instance = &symbol;
+    }
+    REQUIRE(trait);
+    CHECK(trait->type.find("trait Eq a") != std::string::npos);
+    REQUIRE(method);
+    CHECK(method->container == "Eq");
+    CHECK(method->type == "a -> a -> Bool");
+    REQUIRE(instance);
+    CHECK(instance->type == "instance Eq Int");
+
+    auto trait_hover = a.hover(Position{3, 7});
+    REQUIRE(trait_hover);
+    CHECK(trait_hover->contents.find("trait Eq a") != std::string::npos);
+    auto method_hover = a.hover(Position{4, 5});
+    REQUIRE(method_hover);
+    CHECK(method_hover->contents.find("a -> a -> Bool") != std::string::npos);
+}
+
 TEST_CASE("Server initialize and hover") {
     Server srv;
     RpcMessage init;
