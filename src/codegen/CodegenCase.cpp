@@ -3,6 +3,7 @@
 //
 
 #include "Codegen.h"
+#include "PatternAnalysis.h"
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
@@ -12,69 +13,6 @@
 namespace yona::compiler::codegen {
 using namespace llvm;
 using LType = llvm::Type;
-
-// Conservative structural subsumption used by the pattern matrix front-end.
-// `covers(a, b)` is true only when every value matched by b is matched by a.
-static bool pattern_covers(PatternNode* a, PatternNode* b) {
-    if (!a || !b) return false;
-    if (a->get_type() == AST_UNDERSCORE_PATTERN || a->get_type() == AST_UNDERSCORE_NODE) return true;
-    if (a->get_type() == AST_PATTERN_VALUE) {
-        auto* value = static_cast<PatternValue*>(a);
-        if (std::get_if<IdentifierExpr*>(&value->expr)) return true;
-        if (b->get_type() != AST_PATTERN_VALUE) return false;
-        auto* other = static_cast<PatternValue*>(b);
-        if (auto* left = std::get_if<LiteralExpr<nullptr_t>*>(&value->expr)) {
-            auto* right = std::get_if<LiteralExpr<nullptr_t>*>(&other->expr);
-            return right && reinterpret_cast<AstNode*>(*left)->get_type() ==
-                reinterpret_cast<AstNode*>(*right)->get_type();
-        }
-        if (auto* left = std::get_if<LiteralExpr<void*>*>(&value->expr)) {
-            auto* right = std::get_if<LiteralExpr<void*>*>(&other->expr);
-            if (!right) return false;
-            auto* lhs = reinterpret_cast<AstNode*>(*left);
-            auto* rhs = reinterpret_cast<AstNode*>(*right);
-            if (lhs->get_type() != rhs->get_type()) return false;
-            if (lhs->get_type() == AST_INTEGER_EXPR)
-                return static_cast<IntegerExpr*>(lhs)->value == static_cast<IntegerExpr*>(rhs)->value;
-            return true;
-        }
-        if (auto* left = std::get_if<SymbolExpr*>(&value->expr)) {
-            auto* right = std::get_if<SymbolExpr*>(&other->expr);
-            return right && (*left)->value == (*right)->value;
-        }
-        return value->expr.index() == other->expr.index();
-    }
-    if (a->get_type() == AST_OR_PATTERN) {
-        for (const auto& alternative : static_cast<OrPattern*>(a)->patterns)
-            if (pattern_covers(alternative.get(), b)) return true;
-        return false;
-    }
-    if (a->get_type() == AST_CONSTRUCTOR_PATTERN && b->get_type() == AST_CONSTRUCTOR_PATTERN) {
-        auto* left = static_cast<ConstructorPattern*>(a);
-        auto* right = static_cast<ConstructorPattern*>(b);
-        if (left->constructor_name != right->constructor_name || left->sub_patterns.size() != right->sub_patterns.size()) return false;
-        for (size_t i = 0; i < left->sub_patterns.size(); ++i)
-            if (!pattern_covers(left->sub_patterns[i], right->sub_patterns[i])) return false;
-        return true;
-    }
-    if (a->get_type() == AST_TUPLE_PATTERN && b->get_type() == AST_TUPLE_PATTERN) {
-        auto* left = static_cast<TuplePattern*>(a);
-        auto* right = static_cast<TuplePattern*>(b);
-        if (left->patterns.size() != right->patterns.size()) return false;
-        for (size_t i = 0; i < left->patterns.size(); ++i)
-            if (!pattern_covers(left->patterns[i], right->patterns[i])) return false;
-        return true;
-    }
-    if (a->get_type() == AST_SEQ_PATTERN && b->get_type() == AST_SEQ_PATTERN) {
-        auto* left = static_cast<SeqPattern*>(a);
-        auto* right = static_cast<SeqPattern*>(b);
-        if (left->patterns.size() != right->patterns.size()) return false;
-        for (size_t i = 0; i < left->patterns.size(); ++i)
-            if (!pattern_covers(left->patterns[i], right->patterns[i])) return false;
-        return true;
-    }
-    return false;
-}
 
 // ===== Pattern match helpers (extracted from codegen_case) =====
 
@@ -1006,12 +944,12 @@ Codegen::CasePatternAnalysis Codegen::analyze_case_patterns(CaseExpr* node) cons
                 for (const auto& alternative : static_cast<OrPattern*>(clause->pattern)->patterns) {
                     bool covered = false;
                     for (auto* previous : prior_unguarded)
-                        covered = covered || pattern_covers(previous, alternative.get());
+                        covered = covered || pattern_analysis::covers(previous, alternative.get());
                     covered_by_prior = covered_by_prior && covered;
                 }
             } else {
                 for (auto* previous : prior_unguarded)
-                    covered_by_prior = covered_by_prior || pattern_covers(previous, clause->pattern);
+                    covered_by_prior = covered_by_prior || pattern_analysis::covers(previous, clause->pattern);
             }
             bool before_wildcard = has_wildcard;
             collect(collect, clause->pattern);
