@@ -1,0 +1,14 @@
+import parse, stringify, stringifyString, stringifyBool, parseInt from Std\Json,
+       fromChars from Std\String,
+       testCase, check, run, render from Std\Test
+in
+let objectText = fromChars [123] ++ "\"a\":1,\"b\":[true,null]" ++ fromChars [125],
+    cases = [
+        testCase "Json parses and stringifies nested values" (\_ ->
+            check "nested" (case parse objectText of Ok value -> stringify value == objectText; Err _ -> false end)),
+        testCase "Json rejects invalid input" (\_ ->
+            check "invalid" (case parse "[1," of Err _ -> true; _ -> false end)),
+        testCase "Json scalar helpers are exact" (\_ ->
+            check "scalars" (stringifyString "a\nb" == "\"a\\nb\"" && stringifyBool true == "true" && parseInt "42" == 42))
+    ]
+in render (run cases)

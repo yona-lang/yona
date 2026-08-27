@@ -10,18 +10,26 @@ This directory contains the MSI installer definition for Yona.
 ## Prerequisites
 
 - WiX Toolset **v5** (`wix.exe` on `PATH`) — v4 rejects `<Files>` inside `ComponentGroup`
-- A built Yona tree (default: `out/build/x64-release`)
+- A built Yona tree (default: `out/build/x64-release`; ARM64:
+  `out/build/arm64-release`)
 
 ## Build MSI
 
 ```powershell
 pwsh ./packaging/windows/build-msi.ps1 -BuildDir out/build/x64-release -Version 0.1.0
+
+# Native Windows ARM64
+pwsh ./packaging/windows/build-msi.ps1 -BuildDir out/build/arm64-release -Architecture arm64 -Version 0.1.0
 ```
 
 The script creates:
 
-- staging tree: `out/installer/windows/stage`
-- msi: `out/installer/windows/yona-<version>-windows-x64.msi`
+- output directory: `out/installer/windows/<architecture>/`
+- staging tree: `out/installer/windows/<architecture>/stage`
+- msi: `out/installer/windows/<architecture>/yona-<version>-windows-<architecture>.msi`
+
+`-Architecture` accepts only `x64` (the default) or `arm64`; it is used for
+both the isolated staging directory and WiX package architecture.
 
 ## Notes
 

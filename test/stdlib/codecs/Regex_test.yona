@@ -1,0 +1,14 @@
+import compile, matches, find, findAll, replaceAll, split from Std\Regex,
+       testCase, check, run, render from Std\Test
+in
+let words = compile "[a-z]+",
+    digits = compile "[0-9]+",
+    cases = [
+        testCase "Regex matches and finds" (\_ ->
+            check "match find" (matches words "hello 123" && find digits "a12b" == ["12"])),
+        testCase "Regex finds every match" (\_ ->
+            check "find all" (findAll digits "a1 b22 c333" == [["1"], ["22"], ["333"]])),
+        testCase "Regex replaces and splits globally" (\_ ->
+            check "replace split" (replaceAll digits "a1b22" "#" == "a#b#" && split digits "a1b22c" == ["a", "b", "c"]))
+    ]
+in render (run cases)

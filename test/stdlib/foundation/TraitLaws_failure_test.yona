@@ -1,0 +1,2 @@
+import run, render from Std\Test, eqLaws from Std\TraitLaws in
+render (run (eqLaws "Broken" identity (\_ _ -> false) ["sample"]))

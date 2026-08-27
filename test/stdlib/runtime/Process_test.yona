@@ -1,0 +1,13 @@
+import getenv, getcwd, getArgs, executablePath, yonaVersion, tempDir from Std\Process,
+       length as stringLength from Std\String,
+       length as listLength from Std\List,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Process reports runtime paths" (\_ ->
+        check "paths" (stringLength getcwd > 0 && stringLength executablePath > 0 && stringLength tempDir > 0)),
+    testCase "Process reports version and arguments" (\_ ->
+        check "metadata" (stringLength yonaVersion > 0 && listLength getArgs >= 1)),
+    testCase "Process reads environment" (\_ ->
+        check "path environment" (stringLength (getenv "PATH") > 0))
+] in render (run cases)

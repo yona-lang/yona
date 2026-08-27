@@ -8,7 +8,7 @@
 | Ubuntu / Debian | `sudo add-apt-repository ppa:kovariadam/yona && sudo apt update && sudo apt install yona` |
 | Arch | `yay -S yona-bin` |
 | macOS / Linuxbrew | `brew install akovari/tap/yona` |
-| Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest) |
+| Windows | Native x64 or ARM64 MSI/ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest) |
 
 These install `yonac`, `yona`, `yona-repl`, and `yls` on `PATH`. Distro packages put the compiler sysroot under `/usr/lib/yona` or `/usr/lib64/yona`; Homebrew uses `$(brew --prefix)/lib/yona`.
 
@@ -29,7 +29,8 @@ All platforms require:
 - **LLVM** for the codegen backend: **22+** recommended (see `CLAUDE.md`); **16+** may work if `find_package(LLVM)` succeeds with your toolchain. **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle. CI (`.github/actions/setup-llvm`) uses the runner image where it is enough: Ubuntu 26.04 already has Clang 22 and only needs `llvm-22-dev`; macOS needs Homebrew `llvm` (Apple Clang has no `LLVMConfig.cmake`); Windows downloads the latest official archive because the image’s Chocolatey LLVM is not a complete tree.
 - **CMake 3.10+** and **Ninja** (for building from source; on **Windows** use the **Windows** section: Ninja + Clang from a prebuilt LLVM + MSVC toolset)
 - **C++23 capable compiler** (clang recommended; Windows presets use Clang with the MSVC linker)
-- **PCRE2** (optional, for Std\Regex module; on Windows you typically need a manual/vcpkg setup because `pkg-config` is uncommon)
+- **PCRE2** (optional, for `Std\Regex`; on Windows provide a normal CMake-discoverable
+  installation or leave the optional module disabled)
 
 ## Linux (Fedora/RHEL)
 
@@ -93,31 +94,62 @@ brew install llvm lld cmake ninja pcre2 cli11 doctest pkgconf
 
 git clone https://github.com/yona-lang/yona.git
 cd yona
-cmake --preset x64-release-macos
-cmake --build --preset build-release-macos
+# Native Apple Silicon build
+cmake --preset arm64-release-macos
+cmake --build --preset build-release-macos-arm64
 ```
 
 Optional **`Std\GPU` Vulkan** (MoltenVK): `brew install molten-vk vulkan-headers vulkan-loader`, then configure with `-DYONA_ENABLE_VULKAN=ON`. CMake finds `vulkan/vulkan.h` and `libvulkan` / `libMoltenVK` via `VULKAN_SDK` and `HOMEBREW_PREFIX` or `brew --prefix`. The runtime `dlopen`s those discovered dirs (and bare loader names) and, if unset, hints `VK_ICD_FILENAMES` at a MoltenVK ICD json CMake or the env prefix located. Metal typically lacks `shaderInt64`; `hasGpu` is still true when the device is ready, and IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit. `vulkanStatus` can be `vulkan-device`. See `docs/gpu-architecture.md` and `docs/gpu-vulkan-implementation-plan.md` §11.
 
 ## Windows
 
-Windows presets (`x64-debug`, `x64-release`) use **Ninja** and expect **Clang** as the compiler (same as CI). **MSVC** with the **Desktop development with C++** workload (or Build Tools + Windows SDK) must be installed so the MSVC linker and libraries are available.
+Windows presets (`x64-debug`, `x64-release`, `arm64-debug`, `arm64-release`)
+use **Ninja** and expect native **Clang** (same as CI). **MSVC** with the
+**Desktop development with C++** workload (or Build Tools + Windows SDK) must
+be installed for the matching x64 or ARM64 linker and libraries.
 
-For tagged releases, Windows artifacts include both a portable ZIP and an MSI installer.
-The MSI flow is defined under `packaging/windows/` (`YonaInstaller.wxs`, `build-msi.ps1`).
+For tagged releases, Windows has architecture-labelled portable ZIP and MSI
+artifacts: `yona-<version>-windows-x64.{zip,msi}` and
+`yona-<version>-windows-arm64.{zip,msi}`. Apple Silicon releases use
+`yona-<version>-macos-arm64.tar.gz`; hosted releases do not publish a separate
+Intel macOS artifact. The MSI flow is defined under
+`packaging/windows/` (`YonaInstaller.wxs`, `build-msi.ps1`).
 
 ### 1. Install tools
 
 - **CMake** 3.29+ (3.30+ recommended if you enable newer CMake policies elsewhere). [cmake.org/download](https://cmake.org/download/)
 - **Ninja**: [ninja-build.org](https://github.com/ninja-build/ninja/releases) or `winget install Ninja-build.Ninja`
-- **LLVM for Windows**: use a **prebuilt** `clang+llvm-*-x86_64-pc-windows-msvc` archive from the [LLVM project releases](https://github.com/llvm/llvm-project/releases) (search the page for `windows-msvc`). Extract it to a short path such as `C:\LLVM`. This avoids link errors from LLVM builds that were produced on another machine with hard-coded Visual Studio paths (see *Troubleshooting* below).
-- **Optional — PCRE2** for `Std\Regex`: there is no `pkg-config` on a typical Windows dev shell, so CMake usually skips PCRE2 unless you point CMake at a build of PCRE2 yourself (e.g. vcpkg). The rest of the compiler and runtime still build without it.
+- **LLVM for Windows**: use the complete official prebuilt archive matching
+  your native target: `clang+llvm-*-x86_64-pc-windows-msvc` for x64 or
+  `clang+llvm-*-aarch64-pc-windows-msvc` for ARM64, from the
+  [LLVM project releases](https://github.com/llvm/llvm-project/releases).
+  Extract it to a short path such as `C:\LLVM`. This avoids link errors from
+  LLVM builds produced against unrelated Visual Studio paths (see
+  *Troubleshooting* below).
+- **Optional — PCRE2** for `Std\Regex`: there is no `pkg-config` on a typical Windows
+  developer shell, so CMake usually skips PCRE2 unless its headers and library are
+  discoverable through the normal compiler/CMake search paths (for example, a
+  manually installed build exposed through `CMAKE_PREFIX_PATH`). The rest of the
+  compiler and runtime still build without it.
 
 The CMake toolchain reads `LLVM_INSTALL_PREFIX` from CMake cache or the environment (CI sets both). Do **not** rely on a guessed install path. Set `LLVM_INSTALL_PREFIX` to the extracted tree (for example `C:\LLVM`). **Spell the path correctly** in user and machine environment variables; a typo leaves `find_package(LLVM)` searching an empty prefix.
 
+The official LLVM package declares Zlib and DIA SDK targets in its CMake
+metadata. Yona resolves Zlib through ordinary `find_package(ZLIB)` discovery;
+when no package is installed and `YONA_FETCH_DEPS=ON` (the default), CMake
+builds Yona's pinned Zlib source dependency. The Visual Studio workload supplies
+the DIA SDK; CMake discovers it automatically. If it is installed outside the
+normal Visual Studio locations, pass its exact library with
+`-DYONA_DIA_SDK_LIBRARY=C:\path\to\diaguids.lib`. Neither dependency requires a
+separate package manager.
+
 #### Complete Windows LLVM tree (CMake + `find_package(LLVM)`)
 
-Use the official **`clang+llvm-*-x86_64-pc-windows-msvc`** archive from the [LLVM releases](https://github.com/llvm/llvm-project/releases) (not a Clang-only installer that omits LLVM libraries, and not a partial extract). `LLVM_INSTALL_PREFIX` must be the **root** of that tree (the folder that contains `bin`, `lib`, `include`).
+Use the official complete **`clang+llvm-*-<native-target>-pc-windows-msvc`**
+archive from the [LLVM releases](https://github.com/llvm/llvm-project/releases):
+`x86_64` for x64 or `aarch64` for ARM64. Do not use a Clang-only installer or
+partial extract. `LLVM_INSTALL_PREFIX` must be the **root** of that tree (the
+folder that contains `bin`, `lib`, `include`).
 
 CMake’s imported targets expect a coherent install, including at minimum under `bin\`: **`clang.exe`**, **`clang++.exe`**, **`llvm-ar.exe`**, and other tools referenced from `LLVMExports.cmake`; under `lib\`: the **`LLVM*.lib`** set plus **`LTO.lib`**; under `bin\` (or next to those libs as shipped): **`LTO.dll`** when the export set references it. If `find_package(LLVM)` fails with “imported target … references the file … but this file does not exist”, the prefix is incomplete—re-download the matching `clang+llvm` archive or repair the install.
 
@@ -130,7 +162,10 @@ When CMake finds Vulkan, **`yonac`**-linked programmes use **`gpu_stub`** Vulkan
 
 ### 2. Configure and build (PowerShell)
 
-Open **x64 Native Tools** or **Developer PowerShell for VS** (so `cl`, the linker, and SDK paths are on `PATH`). If you have **both Visual Studio 2022 and 2026** (folder `18`), still use a **2022**-aware developer shell for this project when linking against typical Windows LLVM binaries: their import libraries often reference **`...\Microsoft Visual Studio\2022\...`** paths, which a 2026-only environment does not provide.
+Open the native **x64** or **ARM64** Developer PowerShell for Visual Studio so
+the matching linker and SDK paths are on `PATH`. If you have **both Visual
+Studio 2022 and 2026** (folder `18`), use a developer shell compatible with
+the LLVM archive's import libraries.
 
 Then:
 
@@ -145,9 +180,15 @@ $env:CXX = "C:\LLVM\bin\clang++.exe"
 
 cmake --preset x64-release
 cmake --build --preset build-release
+
+# Or, from native ARM64 Developer PowerShell with the ARM64 LLVM archive:
+cmake --preset arm64-release
+cmake --build --preset build-release-arm64
 ```
 
-Binaries are written under `out\build\x64-release\`, for example `yonac.exe`, `yona.exe`, and `yona_lib.dll`.
+Binaries are written under the selected preset directory (for example,
+`out\build\x64-release\` or `out\build\arm64-release\`), including
+`yonac.exe`, `yona.exe`, and `yona_lib.dll`.
 
 **`yonac` linking a full executable (not `--emit-obj` / `--emit-ir`):** the CLI shells out to compile `src/compiled_runtime.c` and the platform layer, then link. On Windows it uses **`clang`** by default (or **`YONAC_CC`** if set) and links **`ws2_32`** / **`dbghelp`**. Put the same LLVM `bin` directory on `PATH`, or set `YONAC_CC` to the full path of `clang.exe` so the subprocess can find the compiler. Optional LTO uses **`llvm-link.exe`** next to that `clang` when `YONAC_CC` is set.
 
@@ -176,8 +217,18 @@ ctest --preset unit-tests-windows
 
 ### Troubleshooting (Windows)
 
-- **`diaguids.lib` / DIA SDK / path under `...\Microsoft Visual Studio\2022\...` missing when linking**
-  Official `clang+llvm` import libraries often hardcode `...\2022\Enterprise\DIA SDK\lib\amd64\diaguids.lib`. CMake remaps that to a `diaguids.lib` discovered with `vswhere` (`cmake/YonaLlvmWindowsDia.cmake`) as long as some Visual Studio install still has the DIA SDK. If configure logs `DIA SDK diaguids.lib not found`, install the **DIA SDK** / C++ debugging components for your VS SKU. A junction from `Enterprise` to `Community` is only needed for tools that bypass CMake.
+- **`DIASDK::Diaguids` / `diaguids.lib` missing during `find_package(LLVM)`**
+  Install the **Desktop development with C++** workload (including the DIA SDK)
+  for Visual Studio or Build Tools. Yona creates the required CMake target before
+  it loads LLVM and locates it through the active Visual Studio installation or
+  `vswhere`. If it lives elsewhere, configure with
+  `-DYONA_DIA_SDK_LIBRARY=C:\path\to\diaguids.lib`; do not patch LLVM's exported
+  target files or create Visual Studio-directory junctions.
+
+- **`ZLIB::ZLIB` missing during `find_package(LLVM)`**
+  Install a normal Zlib CMake package, or leave `YONA_FETCH_DEPS=ON` so CMake
+  builds Yona's pinned Zlib dependency. For offline/package builds with
+  `YONA_FETCH_DEPS=OFF`, supplying the system CMake package is required.
 
 - **`Policy CMP0167 is not known`**
   Use a newer CMake (3.30+), or use a checkout that guards optional policies for older CMake (supported on 3.29).
@@ -224,8 +275,11 @@ ctest --preset unit-tests-linux
 # Via CTest (Windows)
 ctest --preset unit-tests-windows
 
-# Via CTest (macOS)
-ctest --preset unit-tests-macos
+# Via CTest (Windows ARM64)
+ctest --preset unit-tests-windows-arm64
+
+# Via CTest (macOS Apple Silicon)
+ctest --preset unit-tests-macos-arm64
 
 # Directly (Linux / macOS)
 ./out/build/x64-release-linux/tests

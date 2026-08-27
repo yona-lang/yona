@@ -1,0 +1,14 @@
+import now, epoch, elapsed, format, sleep from Std\Time,
+       length from Std\String,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Time clocks are nonnegative" (\_ ->
+        let start = now (), finish = now () in check "clock" (elapsed start finish >= 0 && epoch () > 0)),
+    testCase "Time formats a stable-width timestamp" (\_ ->
+        check "format width" (length (format 0) == 19)),
+    testCase "Time accepts a zero sleep" (\_ -> do
+        sleep 0
+        check "zero sleep" true
+    end)
+] in render (run cases)

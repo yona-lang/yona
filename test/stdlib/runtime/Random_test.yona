@@ -1,0 +1,12 @@
+import int as randomInt, choice, shuffle from Std\Random,
+       length from Std\List,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Random integer respects inclusive bounds" (\_ ->
+        let value = randomInt 3 7 in check "bounds" (value >= 3 && value <= 7)),
+    testCase "Random singleton choice is stable" (\_ ->
+        check "singleton" (choice [42] == 42)),
+    testCase "Random shuffle preserves length" (\_ ->
+        check "shuffle length" (length (shuffle [1, 2, 3, 4]) == 4))
+] in render (run cases)

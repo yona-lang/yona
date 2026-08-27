@@ -1,0 +1,12 @@
+import fill, length, get, set, map, foldl from Std\FloatArray,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "FloatArray fill has requested shape" (\_ ->
+        let values = fill 3 1.5 in check "fill" (length values == 3 && get values 2 == 1.5)),
+    testCase "FloatArray updates persistently" (\_ ->
+        let original = fill 2 1.0, updated = set original 1 2.5 in
+        check "persistent set" (get original 1 == 1.0 && get updated 1 == 2.5)),
+    testCase "FloatArray maps and folds" (\_ ->
+        check "map fold" (foldl (\a b -> a + b) 0.0 (map (\x -> x * 2.0) (fill 3 1.5)) == 9.0))
+] in render (run cases)

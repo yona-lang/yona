@@ -1,6 +1,12 @@
 name: Set up LLVM
 description: Use the runner's LLVM when it is complete; install only what the image lacks.
 
+inputs:
+  windows-architecture:
+    description: Windows target architecture (x64 or arm64).
+    required: false
+    default: x64
+
 runs:
   using: composite
   steps:
@@ -98,6 +104,7 @@ runs:
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
+        LLVM_WINDOWS_ARCHITECTURE: ${{ inputs.windows-architecture }}
       run: |
         $ErrorActionPreference = "Stop"
         # Image LLVM is Chocolatey `llvm` (currently 20) — the win64 installer, not a
@@ -107,30 +114,38 @@ runs:
           "Accept" = "application/vnd.github+json"
         }
         if ($env:GH_TOKEN) { $headers["Authorization"] = "Bearer $($env:GH_TOKEN)" }
+        $architecture = $env:LLVM_WINDOWS_ARCHITECTURE.Trim().ToLowerInvariant()
+        switch ($architecture) {
+          "x64" { $targetTriple = "x86_64-pc-windows-msvc" }
+          "arm64" { $targetTriple = "aarch64-pc-windows-msvc" }
+          default { throw "Unsupported Windows LLVM architecture '$architecture'; expected x64 or arm64" }
+        }
         $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/llvm/llvm-project/releases?per_page=30" -Headers $headers
         $chosen = $null
         foreach ($rel in $releases) {
           if ($rel.prerelease) { continue }
           if ($rel.tag_name -notmatch '^llvmorg-\d+\.\d+\.\d+$') { continue }
           $ver = $rel.tag_name.Substring("llvmorg-".Length)
-          $assetName = "clang+llvm-$ver-x86_64-pc-windows-msvc.tar.xz"
+          $assetName = "clang+llvm-$ver-$targetTriple.tar.xz"
           $asset = $rel.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
           if ($asset) {
-            $chosen = [pscustomobject]@{ Version = $ver; Url = $asset.browser_download_url }
+            $chosen = [pscustomobject]@{ Version = $ver; Url = $asset.browser_download_url; Archive = $assetName }
             break
           }
         }
-        if (-not $chosen) { throw "No stable llvmorg release publishes clang+llvm-*-x86_64-pc-windows-msvc.tar.xz" }
-        Write-Host "Latest official Windows LLVM archive: $($chosen.Version)"
+        if (-not $chosen) { throw "No stable llvmorg release publishes clang+llvm-*-$targetTriple.tar.xz" }
+        Write-Host "Latest official Windows LLVM archive for $architecture ($targetTriple): $($chosen.Version)"
         "release=$($chosen.Version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         "url=$($chosen.Url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "archive=$($chosen.Archive)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "target-triple=$targetTriple" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     - name: Cache LLVM (Windows)
       if: runner.os == 'Windows'
       uses: actions/cache@v4
       with:
         path: C:\LLVM
-        key: llvm-windows-${{ steps.win-llvm.outputs.release }}-x86_64-msvc
+        key: llvm-windows-${{ steps.win-llvm.outputs.release }}-${{ steps.win-llvm.outputs.target-triple }}
 
     - name: Set up LLVM (Windows)
       if: runner.os == 'Windows'
@@ -138,16 +153,22 @@ runs:
       env:
         LLVM_RELEASE: ${{ steps.win-llvm.outputs.release }}
         LLVM_URL: ${{ steps.win-llvm.outputs.url }}
+        LLVM_ARCHIVE: ${{ steps.win-llvm.outputs.archive }}
+        LLVM_TARGET_TRIPLE: ${{ steps.win-llvm.outputs.target-triple }}
       run: |
         $ErrorActionPreference = "Stop"
         $destDir = "C:\LLVM"
         $clangExe = Join-Path $destDir "bin\clang.exe"
+        $ver = $env:LLVM_RELEASE
+        $archive = $env:LLVM_ARCHIVE
+        $expectedArchive = "clang+llvm-$ver-$($env:LLVM_TARGET_TRIPLE).tar.xz"
+        if ($archive -ne $expectedArchive) {
+          throw "Resolved LLVM archive '$archive' does not match requested target '$($env:LLVM_TARGET_TRIPLE)'"
+        }
         if (Test-Path $clangExe) {
           Write-Host "Using cached LLVM at $destDir"
         } else {
-          $ver = $env:LLVM_RELEASE
           $url = $env:LLVM_URL
-          $archive = "clang+llvm-$ver-x86_64-pc-windows-msvc.tar.xz"
           $tempArchive = Join-Path $env:RUNNER_TEMP $archive
           Write-Host "Downloading $url"
           & curl.exe -fL --retry 3 --retry-delay 2 -o $tempArchive $url
@@ -166,6 +187,10 @@ runs:
           Move-Item $extractedDir.FullName $destDir
         }
         if (-not (Test-Path $clangExe)) { throw "clang.exe missing under $destDir" }
+        $compilerTriple = (& $clangExe -print-target-triple).Trim()
+        if ($compilerTriple -ne $env:LLVM_TARGET_TRIPLE) {
+          throw "LLVM compiler target '$compilerTriple' does not match requested '$($env:LLVM_TARGET_TRIPLE)'"
+        }
         $llvmCmake = Join-Path $destDir "lib\cmake\llvm"
         if (-not (Test-Path (Join-Path $llvmCmake "LLVMConfig.cmake"))) { throw "incomplete LLVM tree: missing LLVMConfig.cmake" }
         $major = $env:LLVM_RELEASE.Split(".")[0]

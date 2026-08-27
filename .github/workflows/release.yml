@@ -68,6 +68,9 @@ jobs:
   build-macos:
     permissions:
       contents: read
+    strategy:
+      matrix:
+        arch: [arm64]
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -82,26 +85,29 @@ jobs:
 
       - name: Build release
         run: |
-          cmake --preset x64-release-macos
-          cmake --build --preset build-release-macos
+          cmake --preset arm64-release-macos
+          cmake --build --preset build-release-macos-arm64
 
       - name: Report embedded LLD
-        run: python3 scripts/ci/report-embedded-lld.py out/build/x64-release-macos/CMakeCache.txt "macOS release"
+        run: python3 scripts/ci/report-embedded-lld.py out/build/arm64-release-macos/CMakeCache.txt "macOS ARM64 release"
+
+      - name: Run tests
+        run: ctest --test-dir out/build/arm64-release-macos --output-on-failure
 
       - name: Validate linker modes
-        run: bash scripts/ci/validate-linker-modes.sh out/build/x64-release-macos
+        run: bash scripts/ci/validate-linker-modes.sh out/build/arm64-release-macos
 
       - name: Package
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          DIST=yona-${VERSION}-macos-$(uname -m)
+          DIST=yona-${VERSION}-macos-${{ matrix.arch }}
           mkdir -p ${DIST}/bin ${DIST}/lib/Std ${DIST}/runtime ${DIST}/src/runtime/platform ${DIST}/include/yona/runtime
-          cp out/build/x64-release-macos/yonac ${DIST}/bin/
-          cp out/build/x64-release-macos/yona ${DIST}/bin/
-          cp out/build/x64-release-macos/yona-repl ${DIST}/bin/
-          cp out/build/x64-release-macos/yls ${DIST}/bin/
+          cp out/build/arm64-release-macos/yonac ${DIST}/bin/
+          cp out/build/arm64-release-macos/yona ${DIST}/bin/
+          cp out/build/arm64-release-macos/yona-repl ${DIST}/bin/
+          cp out/build/arm64-release-macos/yls ${DIST}/bin/
           cp lib/Std/*.yona* ${DIST}/lib/Std/ 2>/dev/null || true
-          cp out/build/x64-release-macos/runtime/* ${DIST}/runtime/ 2>/dev/null || true
+          cp out/build/arm64-release-macos/runtime/* ${DIST}/runtime/ 2>/dev/null || true
           cp src/compiled_runtime.c ${DIST}/src/
           cp src/runtime/*.c ${DIST}/src/runtime/ 2>/dev/null || true
           cp src/runtime/*.h ${DIST}/src/runtime/ 2>/dev/null || true
@@ -113,13 +119,26 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos
-          path: yona-*-macos-*.tar.gz
+          name: macos-${{ matrix.arch }}
+          path: yona-*-macos-${{ matrix.arch }}.tar.gz
 
   build-windows:
     permissions:
       contents: read
-    runs-on: windows-2025
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+            configure_preset: x64-release
+            build_preset: build-release
+            build_dir: x64-release
+          - arch: arm64
+            runner: windows-11-vs2026-arm
+            configure_preset: arm64-release
+            build_preset: build-release-arm64
+            build_dir: arm64-release
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,6 +146,8 @@ jobs:
 
       - name: Set up LLVM
         uses: ./.github/actions/setup-llvm
+        with:
+          windows-architecture: ${{ matrix.arch }}
 
       - name: Install WiX v5 CLI
         shell: pwsh
@@ -143,39 +164,39 @@ jobs:
       - name: Build release
         shell: pwsh
         run: |
-          cmake --preset x64-release
-          cmake --build --preset build-release
+          cmake --preset ${{ matrix.configure_preset }}
+          cmake --build --preset ${{ matrix.build_preset }}
 
       - name: Report embedded LLD
         shell: bash
         run: |
           PY="$(command -v python3 || command -v python)"
-          "$PY" scripts/ci/report-embedded-lld.py out/build/x64-release/CMakeCache.txt "Windows release"
+          "$PY" scripts/ci/report-embedded-lld.py out/build/${{ matrix.build_dir }}/CMakeCache.txt "Windows ${{ matrix.arch }} release"
 
       - name: Run tests
         shell: pwsh
-        run: ctest --test-dir out/build/x64-release --output-on-failure
+        run: ctest --test-dir out/build/${{ matrix.build_dir }} --output-on-failure
 
       - name: Validate linker modes
         shell: pwsh
-        run: ./scripts/ci/validate-linker-modes.ps1 -BuildDir "out/build/x64-release"
+        run: ./scripts/ci/validate-linker-modes.ps1 -BuildDir "out/build/${{ matrix.build_dir }}"
 
       - name: Package (zip + msi)
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v',''
-          ./packaging/windows/build-msi.ps1 -BuildDir "out/build/x64-release" -Version $version
+          ./packaging/windows/build-msi.ps1 -BuildDir "out/build/${{ matrix.build_dir }}" -Version $version -Architecture ${{ matrix.arch }}
 
-          $stageDir = "out/installer/windows/stage"
-          $zipPath = "yona-$version-windows-x64.zip"
+          $stageDir = "out/installer/windows/${{ matrix.arch }}/stage"
+          $zipPath = "yona-$version-windows-${{ matrix.arch }}.zip"
           if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
           Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $zipPath
-          Copy-Item "out/installer/windows/yona-$version-windows-x64.msi" "."
+          Copy-Item "out/installer/windows/${{ matrix.arch }}/yona-$version-windows-${{ matrix.arch }}.msi" "."
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows
+          name: windows-${{ matrix.arch }}
           path: |
             yona-*-windows-*.zip
             yona-*-windows-*.msi

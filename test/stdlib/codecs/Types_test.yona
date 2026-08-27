@@ -1,0 +1,8 @@
+import toInt, toFloat, intToString, floatToString, boolToString from Std\Types,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Types converts integers" (\_ -> check "integer" (toInt "-42" == (0 - 42) && intToString (0 - 42) == "-42")),
+    testCase "Types converts floats" (\_ -> check "float" (toFloat "1.5" == 1.5 && floatToString 1.5 == "1.5")),
+    testCase "Types converts booleans" (\_ -> check "bool" (boolToString true == "true" && boolToString false == "false"))
+] in render (run cases)

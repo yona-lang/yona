@@ -10,7 +10,7 @@ Pipeline (expression programs **and** modules): parse → `TypeChecker` →
 ([`cli/main.cpp`](../cli/main.cpp)). `--Wno-refinement` / `--Wno-linear`
 skip those overlays. Leaks are **E0602** (`-Wlinear-leak`, default on).
 
-Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
+Date: 2026-08-27. HEAD at audit: current working tree plus this document.
 
 ---
 
@@ -19,7 +19,7 @@ Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 | Feature | Parser | AST | Typechecker | Codegen | `.yonai` | Tests | Overall |
 |---------|--------|-----|-------------|---------|----------|-------|---------|
 | Algebraic effects (`perform` / `handle`) | partial | partial | partial | partial | partial | partial | **partial** |
-| Effect rows (inference, union, `.yonai`) | missing | missing | partial | missing | partial | partial | **partial** |
+| Effect rows (inference, union, `.yonai`) | inferred | implicit | implemented | partial | implemented | implemented | **partial** |
 | Record row polymorphism | implemented | implemented | implemented | implemented | partial | implemented | **implemented** |
 | Linear types (`Linear a`) | implemented | implemented | partial | implemented | missing | implemented | **partial** |
 | Refinement types / E0500 | implemented | implemented | partial | implemented | missing | implemented | **partial** |
@@ -31,11 +31,14 @@ Date: 2026-08-18. HEAD at audit: `b5076e3` plus this document.
 
 `MonoType` tags are `Var | Con | App | Arrow | MTuple | MRecord | ERow`
 ([`include/typechecker/InferType.h`](../include/typechecker/InferType.h)).
-`Arrow` carries `arrow_effects` plus `effect_rest` (Var / `ERow` / closed).
-Rows unify and pretty-print as `!{…}`. Closed sets write to `.yonai`
-`FN … effects Fs.read` (comma-separated for several ops). Missing
-`effects` means unknown, not pure. `MRecord.row_rest` is **record**
-rows, not effect rows.
+`Arrow` carries a solver-owned effect reference. The checker keeps effect
+aggregation separate from value-type equality: joins preserve every independent
+source, masks model handlers symbolically, and equality is an explicit solver
+constraint. Diagnostics pretty-print the normalized summary as `!{…}`.
+Closed summaries write to `.yonai` as `FN … effects Fs.read`; new interfaces
+also carry a versioned `effectscheme v2` normal form for every arrow, shared
+open source, and mask. A missing `effects` field is unknown, not pure.
+`MRecord.row_rest` is a **record** row, not an effect row.
 
 ---
 
@@ -48,9 +51,9 @@ row (known labels + optional open rest).
 |-------|--------|----------|
 | Parser | partial | `YPERFORM` / `YHANDLE` ([`src/Lexer.cpp`](../src/Lexer.cpp)); `parse_perform_expr` / `parse_handle_expr` ([`src/parser/ParserExpr.cpp`](../src/parser/ParserExpr.cpp)). Token `YEFFECT` is **never consumed**. No `effect Name … end` / `export effect`. |
 | AST | partial | `PerformExpr`, `HandleExpr`, `HandlerClause`, unused `EffectDeclNode` ([`include/ast.h`](../include/ast.h)). Parser never builds `EffectDeclNode`. |
-| Typechecker | partial | `register_effect` / `infer_perform` / `infer_handle` ([`src/typechecker/TypeChecker.cpp`](../src/typechecker/TypeChecker.cpp)). Direct unhandled `perform` → `-Wunhandled-effect`. Applying a lambda that collected a latent op with no covering handler → **E0202**. Unknown ops → fresh type var, **no error**. `register_effect` is called from **tests**, not from a parsed `effect` decl. Function arrows carry a closed `arrow_effects` set (not unified / not open). |
+| Typechecker | partial | `register_effect` / `infer_perform` / `infer_handle` ([`src/typechecker/TypeChecker.cpp`](../src/typechecker/TypeChecker.cpp)). Direct unhandled `perform` → `-Wunhandled-effect`; uncovered application → **E0202**. The solver preserves independent higher-order rows, recursive least cells, and symbolic handler masks. Unknown operations still receive fresh structural types because parsed effect declarations do not exist. |
 | Codegen | partial | [`src/codegen/CodegenEffects.cpp`](../src/codegen/CodegenEffects.cpp): lookup `handler_stack_`; resume is identity `i64(i64)`, not a captured continuation. Unhandled `perform` is a string error, not `E0200`. Result typed `CType::INT`. |
-| `.yonai` | partial | `FN` / `AFN` / `IO` / `NAT` may append `effects Op,…` ([`src/codegen/CodegenModule.cpp`](../src/codegen/CodegenModule.cpp)). No `EFFECT` keyword / `effect` decl. |
+| `.yonai` | partial | `FN` / `AFN` / `IO` / `NAT` append a readable `effects Op,…` summary and new files append `effectscheme v2`, a deterministic normalized schema for all arrow effects. Old open metadata imports conservatively. There is still no `EFFECT` keyword or parsed effect declaration. |
 | Tests | partial | Typechecker cases below; fixtures `test/codegen/effect_*.yona`. |
 
 **Positive:** `test/codegen/effect_simple_get.yona` → `42`
@@ -84,41 +87,58 @@ Unhandled perform: `TEST_CASE("Effect: unhandled perform produces warning")`.
 **Codegen fixtures:** `effect_simple_get`, `effect_let_perform`, `effect_nested`,
 `effect_with_arg`, `effect_return_handler`, `effect_lambda_handle`.
 
-**Stale docs:** [`docs/effects.md`](effects.md) claims compile-time CPS and
-`export effect` / `import effect`. Neither exists. Effect type parameters are
-discarded (`(void)type_param` in `register_effect`).
+Effect type parameters are currently discarded (`(void)type_param` in
+`register_effect`); the current effect guide documents that limitation.
 
 **Follow-up:** parse `effect` decls ([#9](https://github.com/yona-lang/yona/issues/80)).
 
 ---
 
-## 2. Effect rows — **partial** (unify + HOF + E0202 + `.yonai`)
+## 2. Effect rows — **partial** (lossless inference + HOF + E0202 + `.yonai`)
 
-[#8](https://github.com/yona-lang/yona/issues/79) (2026-08-19):
-`Arrow.arrow_effects` + `effect_rest` (Var / `ERow` / closed). Unifier merges
-rows like record rows. Lambdas collect uncovered `perform`s and **uncovered
-apply**s (handler subtraction). `\() ->` thunks are `Unit -> ret`.
-`infer_apply` uses an open expected rest so HOF `apply f x = f x` shares `r`.
-Top-level uncovered apply is **E0202**. Pretty-print: `(a -> !{Fs.read} b)`.
-`generalize` zonks so rest vars quantify.
-`check_module` infers siblings as a unit (two passes). Export rows are
-written as `FN … effects Fs.read` and/or `effects | hof`. Import restores
-a nonempty / open field into `Arrow.arrow_effects`; otherwise the name
-stays a fresh var. HOF restore is the first-param-is-function shape.
+[#8](https://github.com/yona-lang/yona/issues/79) (2026-08-27): every `Arrow`
+now owns an `EffectRef` in a dedicated solver. It is not a value row and does
+not use record-row unification. The solver separates ACI aggregation from true
+effect equality and represents flexible sources, least-derived function/SCC
+cells, conservative opaque imports, joins, and symbolic handler masks.
 
-**Still missing:** `effect` decls ([#9](https://github.com/yona-lang/yona/issues/80));
-serializing `\x f -> f x` (function not first). Module compile still does
-not *fail* on type errors — rows are collected non-blocking.
+`perform` contributes a label to the current derived body cell. Application
+includes the callee expression in that cell, so `use f g n = (f n, g n)`
+preserves both callback sources without equating them. `handle` inserts a
+mask, including for a callback whose labels become known only after later
+instantiation. Curried functions attach their body cell only to the final
+source parameter; partial applications are pure. `effect_row_info`, typed
+core, E0202, strict effect-freedom, and interface summaries query the same
+normalized solver result.
+
+Recursive module components are predeclared with derived body cells. Pure
+direct/mutual recursion reaches the least empty solution, while higher-order
+or imported opaque sources remain open. Type schemes freeze every arrow root
+as one effect graph and instantiate fresh roots together, preserving sharing
+without leaking mutable effect state across sibling uses.
+
+New `.yonai` files append `effectscheme v2`: a deterministic normalized scheme
+for every structural arrow path, known labels, shared flexible/opaque sources,
+and masks. Import reconstructs and clones it over the structural signature.
+The readable `effects` field remains for compatibility. Legacy open metadata
+becomes opaque and a missing row remains unknown, never pure.
+
+**Still missing:** parsed `effect` declarations
+([#9](https://github.com/yona-lang/yona/issues/80)); captured/delimited
+continuations; and a source syntax for effect annotations. The runtime handler
+implementation is shallow in-scope dispatch, not CPS.
 
 **Closed empty rows are an effect-freedom fact.** Exported functions write
 `.yonai` `effects -`, while a missing `effects` field remains unknown. `yonac
 --require-effect-free` accepts only closed empty rows, exhaustive matches over
-registered finite ADTs and `Bool`, and direct recursion with a conservative
-structural-descent proof. It emits E0203 for known, open, or imported-unknown
-rows, missing alternatives, unproven direct recursion, and mutual recursion.
-It does **not** prove general termination, complete overlap freedom, or arbitrary
-non-ADT coverage; those remaining totality obligations keep
-[#5](https://github.com/yona-lang/yona/issues/76) open.
+registered finite ADTs and `Bool`, and local direct or mutual recursive SCCs
+with a sound structural size-change proof. The analyser supports lexicographic
+multi-parameter descent. It emits E0203 for known, open, or imported-unknown
+rows, missing alternatives, numeric or guarded decreases, opaque/helper or
+higher-order recursion, incompatible/mixed cycles, and every other unproved
+recursive SCC. It does **not** prove general termination, complete overlap
+freedom, or arbitrary open-domain coverage; those remaining totality
+obligations keep [#5](https://github.com/yona-lang/yona/issues/76) open.
 
 [`docs/row-polymorphism.md`](row-polymorphism.md) is **record** field rows
 (`{ name : t | r }`), not effect rows. Do not cite it as #8 evidence.
@@ -246,8 +266,11 @@ in non-final `do` steps and `let _ = …`
 missing from a closed ADT `case`. A wildcard arm is exhaustive; a guarded arm
 does not prove coverage. `--Werror` promotes the warning to a failing build.
 `--require-effect-free` makes the same finite-domain obligation E0203, including
-inside module function bodies, and requires direct structural descent for a
-self-call; mutual-recursion cycles are rejected. `--Woverlapping-patterns`
+inside module function bodies, and accepts direct or mutual local recursion only
+when every SCC cycle has a sound structural size-change proof. The proof permits
+lexicographic multi-parameter descent, but not numeric decreases, guarded
+descent, opaque/helper or higher-order recursion, incompatible arities, or mixed
+incompatible decreases. `--Woverlapping-patterns`
 soundly reports later arms covered by earlier unguarded arms through aliases,
 alternatives, nested constructors, tuples, exact and head–tail sequences, and
 scalar literals; it also combines closed root `Bool` and ADT families. Guards
@@ -274,8 +297,7 @@ missing constructors.
 
 | Doc | Claim | Reality |
 |-----|--------|---------|
-| [effects.md](effects.md) | CPS transformation; `export effect` | Identity resume; no `effect` parse |
-| [type-checker-design.md](type-checker-design.md) | Effects `[done]` | Closed latent sets + E0202 only; no `effect` decl in grammar |
+| [type-checker-design.md](type-checker-design.md) | Effects `[done]` | Inference is lossless, but no parsed `effect` declaration or captured continuation exists |
 | [row-polymorphism.md](row-polymorphism.md) | (if read as effect rows) | Record rows only |
 | [linear-types.md](linear-types.md) | (if still claiming E0602 unused) | E0602 is `-Wlinear-leak` |
 | [refinement-types.md](refinement-types.md) | Signature aliases checked | Syntax only |
@@ -313,7 +335,7 @@ flowchart TD
 
 | Work | Issue / note | Independent? |
 |------|----------------|--------------|
-| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yona/issues/79) | Done 2026-08-19 (closed FN rows, `effects | hof`, sibling-aware `check_module`) |
+| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yona/issues/79) | Implemented 2026-08-27 (lossless joins/masks/SCC cells, cloned schemes, `effectscheme v2`); parsed effect declarations remain separate #9 work |
 | Opaque exported types | [#6](https://github.com/yona-lang/yona/issues/77) | Done 2026-08-24 (`export type T opaque`; hidden constructor interface rows) |
 | Totality / empty row | [#5](https://github.com/yona-lang/yona/issues/76) | After #8 |
 | Typed-core | [#7](https://github.com/yona-lang/yona/issues/78) | Arch after audit; API after #8 |

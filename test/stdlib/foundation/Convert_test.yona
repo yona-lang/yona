@@ -1,0 +1,72 @@
+import testCase, check, run, render from Std\Test,
+       parseInt, parseFloat, parseBool, parseString,
+       formatInt, formatFloat, formatBool,
+       intToFloat, floatToInt, encodeUtf8, decodeUtf8 from Std\Convert,
+       fromSeq as bytesFromSeq from Std\ByteArray
+in
+let cases = [
+    testCase "Parse Int accepts decimal text" (\_ ->
+        check "plain decimal" (parseInt "42" == Ok 42)),
+    testCase "Parse Int accepts surrounding whitespace and signs" (\_ ->
+        check "whitespace plus and minus"
+            (parseInt "  +42\n" == Ok 42 && parseInt "-17" == Ok (0 - 17))),
+    testCase "Parse Int rejects empty input" (\_ ->
+        check "empty is invalid syntax" (case parseInt "" of
+            Err (InvalidSyntax _) -> true
+            _ -> false
+        end)),
+    testCase "Parse Int rejects trailing input" (\_ ->
+        check "the whole string must parse" (case parseInt "42x" of
+            Err (InvalidSyntax _) -> true
+            _ -> false
+        end)),
+    testCase "Parse Int reports overflow" (\_ ->
+        check "out of range is distinct from syntax" (case parseInt "9223372036854775808" of
+            Err (ParsedValueOutOfRange _) -> true
+            _ -> false
+        end)),
+    testCase "Parse Float accepts decimal and exponent text" (\_ ->
+        check "finite floating point syntax"
+            (parseFloat "1.5" == Ok 1.5 && parseFloat " -2.5e2 " == Ok (0.0 - 250.0))),
+    testCase "Parse Float rejects non-finite values" (\_ ->
+        check "NaN and infinity are not portable parsed values"
+            (case parseFloat "nan" of Err (ParsedValueOutOfRange _) -> true; _ -> false end &&
+             case parseFloat "inf" of Err (ParsedValueOutOfRange _) -> true; _ -> false end)),
+    testCase "Parse Bool is explicit and case sensitive" (\_ ->
+        check "only true and false are accepted"
+            (parseBool "true" == Ok true && parseBool "false" == Ok false &&
+             case parseBool "True" of Err (InvalidSyntax _) -> true; _ -> false end)),
+    testCase "Parse String is identity" (\_ ->
+        check "text needs no validation" (parseString "β😀" == Ok "β😀")),
+    testCase "From formats primitive values" (\_ ->
+        check "formatting is total"
+            (formatInt 42 == "42" && formatBool true == "true" && formatFloat 1.5 == "1.5")),
+    testCase "Trait conversion dispatch uses the target witness" (\_ ->
+        check "the complete From and Parse heads are selected"
+            (convert "" 42 == "42" && parse 0 "7" == Ok 7)),
+    testCase "TryFrom Int to Float preserves exact values" (\_ ->
+        check "the exact integer range converts"
+            (intToFloat 9007199254740992 == Ok 9007199254740992.0)),
+    testCase "TryFrom Int to Float rejects precision loss" (\_ ->
+        check "integers beyond 2^53 are checked" (case intToFloat 9007199254740993 of
+            Err (ConversionOutOfRange _) -> true
+            _ -> false
+        end)),
+    testCase "TryFrom Float to Int accepts integral values" (\_ ->
+        check "integral finite values convert" (floatToInt (0.0 - 42.0) == Ok (0 - 42))),
+    testCase "TryFrom Float to Int rejects fractional values" (\_ ->
+        check "fractional input is invalid" (case floatToInt 1.25 of
+            Err (InvalidConversion _) -> true
+            _ -> false
+        end)),
+    testCase "UTF-8 byte conversion round trips Unicode" (\_ ->
+        check "encoding is explicit and lossless"
+            (decodeUtf8 (encodeUtf8 "aβ😀z") == Ok "aβ😀z")),
+    testCase "UTF-8 byte conversion rejects malformed input" (\_ ->
+        check "invalid byte sequences return a structured error"
+            (case decodeUtf8 (bytesFromSeq [195, 40]) of
+                Err (InvalidConversion _) -> true
+                _ -> false
+            end))
+]
+in render (run cases)

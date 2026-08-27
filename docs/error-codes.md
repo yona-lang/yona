@@ -118,7 +118,9 @@ perform State.put 42
 A function whose type includes latent effects (`!{Effect.op}`) is applied
 where those operations are not covered by a surrounding `handle ... with`.
 The primary diagnostic points at the introducing `perform`; a note marks
-the call that lets the effect escape.
+the application that lets the effect escape. Independent callback effects are
+reported separately, but a curried function's pure partial-application stages
+do not repeat the same operation before its final source application runs.
 
 ```yona
 -- f : a -> !{State.get} Int
@@ -136,15 +138,26 @@ Direct `perform` without a handler still warns via `-Wunhandled-effect`.
 ### E0203 — Effect-freedom requirement not satisfied
 
 `yonac --require-effect-free` requires a closed empty effect row, exhaustive
-registered finite-ADT and `Bool` cases, and a conservative termination proof.
+registered finite-ADT and `Bool` cases, and a sound structural size-change
+proof for every local recursive strongly connected component (SCC). The proof
+supports direct and mutual recursion and lexicographic descent over multiple
+parameters. It derives strict descent only from fields or non-empty sequence
+tails bound by unguarded patterns; simple lexical aliases retain those facts.
+
 Known operations, open row variables, imports without row facts, missing
-alternatives, unproven direct recursion, and mutual-recursion cycles are
-rejected; `.yonai` records a proven empty export row as `effects -`. A direct
-self-call is accepted only when it receives a variable destructured from an
-unguarded constructor arm (or a lexical alias of that variable). Ordinary
-compilation remains non-fatal: `--Wincomplete-patterns` warns about missing
-alternatives. The gate does not prove general termination or arbitrary non-ADT
-coverage.
+alternatives, and any unproved recursive cycle are rejected. In particular,
+numeric decreases, guarded descent, opaque/helper or higher-order recursion,
+incompatible-arity SCCs, and cycles with mixed incompatible decreases do not
+establish a proof. A proven empty export row is recorded in `.yonai` as
+`effects -`.
+
+This is deliberately not a general termination checker and does not prove
+coverage for arbitrary open domains. Ordinary compilation remains unchanged;
+for example, `--Wincomplete-patterns` can warn about missing alternatives. The
+strict E0203 gate is currently available only through the `yonac` CLI: `yls`
+and the VS Code and Zed integrations do not expose `--require-effect-free`,
+although their ordinary parse, type, refinement, and linearity diagnostics use
+the same compiler analyses.
 
 ## Parse Errors (E03xx)
 

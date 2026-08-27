@@ -12,15 +12,16 @@
 ///   checker.check(root_node);
 ///   auto* ty = checker.type_of(some_node);
 
+#include "Diagnostic.h"
 #include "InferType.h"
 #include "TypeArena.h"
-#include "UnionFind.h"
-#include "Unification.h"
 #include "TypeEnv.h"
-#include "Diagnostic.h"
+#include "Unification.h"
+#include "UnionFind.h"
 #include "ast.h"
 #include "types.h"
 #include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -45,6 +46,9 @@ struct ImportedFnSig {
     std::string return_descriptor;
     /// Named payload for a `LINEAR` return, carried by `.yonai` `retadt`.
     std::string return_linear_adt_name;
+    /// Versioned normalized effect graph for every arrow in the imported
+    /// source type. Empty means a legacy interface row.
+    std::string effect_scheme;
 };
 
 /// Complete imported instance head. `type_names` are the concrete head
@@ -161,6 +165,13 @@ public:
     /// treated as pure.
     bool is_effect_free(MonoTypePtr type);
 
+    /// Versioned, deterministic normal-form graph for all arrows in a type.
+    /// Used exclusively by `.yonai`; ordinary diagnostics consume summaries.
+    std::string serialize_effect_scheme(MonoTypePtr type);
+    /// Overlay a decoded `.yonai` effect scheme on a structural function type.
+    /// Legacy or malformed input is handled conservatively by the importer.
+    MonoTypePtr apply_effect_scheme(MonoTypePtr type, std::string_view encoded);
+
     /// Locations of direct top-level `perform`s with no covering handler.
     /// Kept independently of warning configuration for strict tooling modes.
     const std::vector<SourceLocation>& unhandled_effect_locations() const {
@@ -214,18 +225,23 @@ private:
     void collect_free_vars(MonoTypePtr type, int level, std::vector<TypeId>& vars);
 
     /// Substitute type variables according to a mapping.
-    MonoTypePtr substitute(MonoTypePtr type, const std::unordered_map<TypeId, MonoTypePtr>& subst);
+    MonoTypePtr substitute(
+        MonoTypePtr type, const std::unordered_map<TypeId, MonoTypePtr>& subst,
+        const std::vector<std::pair<EffectRef, EffectRef>>& effect_subst = {});
 
     // --- Helpers ---
 
-    /// Collect known labels and open rest from an Arrow / ERow (chasing rest).
-    void flatten_callee_effects(MonoTypePtr callee, std::vector<LatentEffect>& known,
-                                MonoTypePtr& rest);
+    /// Return the authoritative effect expression on an Arrow/legacy row.
+    std::optional<EffectRef> callee_effect(MonoTypePtr callee);
 
     /// Union uncovered callee effects into the enclosing lambda, or E0202 at top level.
     void apply_callee_effects(MonoTypePtr callee, const SourceLocation& apply_loc);
 
-    bool is_effect_handled(const std::string& op_key) const;
+    void include_ambient_effect(EffectRef effect,
+                                const SourceLocation& loc,
+                                const std::string& context);
+    void collect_effect_roots(MonoTypePtr type,
+                              std::vector<EffectRef>& roots);
 
     /// Record the inferred type for an AST node.
     void record(ast::AstNode* node, MonoTypePtr type);
@@ -318,24 +334,33 @@ private:
     };
     std::unordered_map<std::string, EffectOpInfo> effect_ops_;
 
-    /// Handler scope stack: each entry lists the effect operations handled at that level.
-    std::vector<std::vector<std::string>> handler_scope_stack_;
-
-    /// Collectors for latent effects while inferring function bodies.
+    /// Derived cells collecting effects while inferring function and handler
+    /// bodies. A derived cell is the only locally-defaultable effect node.
     struct CollectedRow {
-        std::vector<LatentEffect> known;
-        MonoTypePtr rest = nullptr;
+        EffectRef effect;
     };
     std::vector<CollectedRow> latent_effect_stack_;
+    std::unordered_map<std::string, SourceLocation> effect_origins_;
     std::vector<SourceLocation> unhandled_effect_locations_;
     bool require_effect_free_ = false;
     bool has_unknown_effect_rows_ = false;
 
-    /// Type vars of `let`-bound functions currently being inferred. A
-    /// recursive self-application must not inject its own apply-rest into
-    /// the function's latent row (that yields `ρ ~ {labels | ρ}` or an
-    /// unsound open rest on a pure recursive function).
-    std::vector<TypeId> recursive_self_vars_;
+    /// While checking a recursive binding, self calls are equations already
+    /// represented by its derived body cell.  Recording them again through a
+    /// provisional flexible arrow would create `D includes F; F = D`, leaving
+    /// an artificial open projection instead of the least fixed point.
+    struct RecursiveSelfContext {
+        MonoTypePtr preliminary = nullptr;
+        std::vector<MonoTypePtr> continuations;
+    };
+    std::vector<RecursiveSelfContext> recursive_self_contexts_;
+
+    /// Recursive SCC predeclarations are value variables, but their latent
+    /// effects are known derived cells immediately.  This prevents a call to
+    /// a sibling inferred later in the SCC from inventing a flexible proxy
+    /// that would survive as an artificial open row.
+    std::unordered_map<const ast::FunctionExpr*, EffectRef>
+        predeclared_function_body_effects_;
 
     std::vector<std::string> module_paths_;
     ImportTypeSource* import_src_ = nullptr;

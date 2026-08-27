@@ -762,21 +762,10 @@ static string compile_and_run_derive(const string& mod_source, const string& exp
 
     if (!yona::test::link::ensure_runtime_objects()) return "RT_COMPILE_ERROR";
 
-    string prelude_obj;
-    auto po = yona::test::lib_dir() / "Prelude.o";
-    if (fs::exists(po))
-        prelude_obj = po.string();
-    else {
-        for (auto& dir : {"lib", "../lib", "../../lib", "../../../lib"}) {
-            auto candidate = fs::path(dir) / "Prelude.o";
-            if (fs::exists(candidate)) { prelude_obj = candidate.string(); break; }
-        }
-    }
-
     fs::path exe_path = yona::test::link::scratch_root() / ("yona_derive_test_exe" + yona::test::link::exe_suffix());
     vector<fs::path> objs = {expr_obj, mod_obj};
+    if (!yona::test::link::append_prelude_object(objs)) return "PRELUDE_OBJECT_ERROR";
     if (!yona::test::link::append_runtime_objects(objs)) return "RT_COMPILE_ERROR";
-    if (!prelude_obj.empty()) objs.push_back(fs::path(prelude_obj));
     if (!yona::test::link::link_objs_to_exe(objs, exe_path)) return "LINK_ERROR";
 
     return yona::test::link::popen_read_all(exe_path);

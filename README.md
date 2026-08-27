@@ -51,6 +51,9 @@ yay -S yona-bin
 ### Windows
 
 Download the MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest).
+Tagged releases provide native `windows-x64` and `windows-arm64` ZIP/MSI
+artifacts. The native Apple Silicon archive is named `macos-arm64`; hosted
+releases do not publish a separate Intel macOS artifact.
 
 ### macOS / Linux (Homebrew)
 

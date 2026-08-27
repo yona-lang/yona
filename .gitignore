@@ -75,6 +75,7 @@ test/_scratch/
 !test/code/*.yona
 !test/code/**/*.yona
 !test/codegen/*.yona
+!test/stdlib/**/*.yona
 !lib/**/*.yona
 !tools/**/*.yona
 !bench/**/*.yona

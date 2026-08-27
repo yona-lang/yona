@@ -96,9 +96,8 @@ static string compile_and_run(const string &code, const char *run_env_key = null
     return "EMIT_ERROR";
 
   vector<fs::path> objs = {obj_path};
-  const auto prelude_object = yona::test::lib_dir() / "Prelude.o";
-  if (fs::exists(prelude_object))
-    objs.push_back(prelude_object);
+  if (!yona::test::link::append_prelude_object(objs))
+    return "PRELUDE_OBJECT_ERROR";
   if (!yona::test::link::append_runtime_objects(objs))
     return "RT_COMPILE_ERROR";
 
@@ -184,7 +183,8 @@ static void run_yona_fixture_tree(const fs::path& fixtures_dir) {
   for (const auto& yona_file : test_files) {
     auto expected_file = yona_file;
     expected_file.replace_extension(".expected");
-    if (!fs::exists(expected_file)) continue;
+    REQUIRE_MESSAGE(fs::exists(expected_file), "Missing expected output for fixture: ",
+                    fs::relative(yona_file, fixtures_dir).generic_string());
 
     string source = read_file(yona_file);
     yona::test::link::rewrite_codegen_fixture_tmp_paths(source);
@@ -379,6 +379,31 @@ TEST_SUITE("Codegen IR") {
 // Loads .yona source files and .expected output files from test/codegen/
 
 TEST_SUITE("Codegen E2E") {
+
+  TEST_CASE("CMake provides a deterministic Prelude test object") {
+#ifdef YONA_TEST_PRELUDE_OBJECT
+    const fs::path prelude_object(YONA_TEST_PRELUDE_OBJECT);
+    CHECK(prelude_object.is_absolute());
+    CHECK(fs::exists(prelude_object));
+    CHECK(prelude_object != yona::test::lib_dir() / "Prelude.o");
+#else
+    FAIL_CHECK("YONA_TEST_PRELUDE_OBJECT is missing from the generated test configuration");
+#endif
+  }
+
+  TEST_CASE("Stdlib expected fixtures all have source files") {
+    const auto fixtures = yona::test::repo_root() / "test" / "stdlib";
+    size_t expected_count = 0;
+    for (const auto& entry : fs::recursive_directory_iterator(fixtures)) {
+      if (!entry.is_regular_file() || entry.path().extension() != ".expected") continue;
+      ++expected_count;
+      auto source = entry.path();
+      source.replace_extension(".yona");
+      REQUIRE_MESSAGE(fs::exists(source), "Missing source for stdlib fixture: ",
+                      fs::relative(source, fixtures).generic_string());
+    }
+    CHECK(expected_count > 0);
+  }
 
   TEST_CASE("Fixture-based codegen tests") {
     fs::path fixtures_dir = yona::test::codegen_fixtures_dir();
@@ -1631,6 +1656,96 @@ apply f x = f x
     checker.add_module_path(yona_lib.string());
     checker.check(parsed.node.get());
     CHECK(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Interface effect schemes preserve two independent callback rows") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_effect_scheme";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser exporter_parser;
+    auto exporter = exporter_parser.parse_module(R"(
+module Test\EffectScheme
+
+export use
+
+use f g n = (f n, g n)
+)", "effect_scheme_export.yona");
+    REQUIRE(exporter.has_value());
+
+    Codegen exporter_codegen("effect_scheme_export");
+    REQUIRE(exporter_codegen.compile_module(exporter.value().get()) != nullptr);
+    DiagnosticEngine exporter_diag;
+    typechecker::TypeChecker exporter_checker(exporter_diag);
+    exporter_codegen.populate_interface_effect_rows(exporter.value().get(), exporter_checker);
+    const fs::path iface = yona_lib / "Test" / "EffectScheme.yonai";
+    REQUIRE(exporter_codegen.emit_interface_file(iface.string()));
+    const string yonai = read_file(iface);
+    CHECK(yonai.find("effectscheme v2;") != string::npos);
+
+    parser::Parser client_parser;
+    istringstream client_source(
+        "import use from Test\\EffectScheme in\n"
+        "use (\\x -> perform State.get ()) (\\x -> perform Log.log ()) 0");
+    auto client = client_parser.parse_input(client_source);
+    REQUIRE(client.node != nullptr);
+
+    DiagnosticEngine diag;
+    typechecker::TypeChecker checker(diag);
+    auto* int_type = checker.arena().make_con(typechecker::TyCon::Int);
+    checker.register_effect("State", "s", {{"get", {}, int_type}});
+    checker.register_effect("Log", "", {{"log", {}, int_type}});
+    Codegen importer_codegen("effect_scheme_import");
+    importer_codegen.module_paths_.push_back(yona_lib.string());
+    checker.add_module_path(yona_lib.string());
+    checker.set_import_type_source(&importer_codegen.import_types_);
+    checker.check(client.node.get());
+
+    REQUIRE(checker.has_direct_errors());
+    size_t e0202 = 0;
+    bool saw_state = false;
+    bool saw_log = false;
+    for (const auto& record : diag.records()) {
+      if (record.level != DiagLevel::Error || record.code != ErrorCode::E0202)
+        continue;
+      ++e0202;
+      saw_state = saw_state || record.message.find("State.get") != string::npos;
+      saw_log = saw_log || record.message.find("Log.log") != string::npos;
+    }
+    CHECK(e0202 == 2);
+    CHECK(saw_state);
+    CHECK(saw_log);
+
+    parser::Parser sibling_parser;
+    auto sibling = sibling_parser.parse_module(R"(
+module Test\EffectSchemeClient
+
+export run
+
+get x = do perform State.get (); x end
+log x = do perform Log.log (); x end
+ping x = do perform Net.ping (); x end
+audit x = do perform Audit.write (); x end
+run n = import use from Test\EffectScheme in
+  (use get log n, use ping audit n)
+)", "effect_scheme_client.yona");
+    REQUIRE(sibling.has_value());
+    DiagnosticEngine sibling_diag;
+    typechecker::TypeChecker sibling_checker(sibling_diag);
+    auto* sibling_int = sibling_checker.arena().make_con(typechecker::TyCon::Int);
+    sibling_checker.register_effect("State", "s", {{"get", {}, sibling_int}});
+    sibling_checker.register_effect("Log", "", {{"log", {}, sibling_int}});
+    sibling_checker.register_effect("Net", "", {{"ping", {}, sibling_int}});
+    sibling_checker.register_effect("Audit", "", {{"write", {}, sibling_int}});
+    sibling_checker.add_module_path(yona_lib.string());
+    sibling_checker.set_import_type_source(&importer_codegen.import_types_);
+    sibling_checker.check_module(sibling.value().get());
+    REQUIRE_FALSE(sibling_checker.has_direct_errors());
+    REQUIRE_FALSE(sibling_diag.has_errors());
+    REQUIRE(sibling.value()->functions.size() == 5);
+    CHECK(sibling_checker.closed_effect_ops(
+              sibling_checker.type_of(sibling.value()->functions[4])) ==
+          vector<string>{"Audit.write", "Log.log", "Net.ping", "State.get"});
   }
 
   TEST_CASE("Interface files preserve sibling-wrapped FN effect rows") {

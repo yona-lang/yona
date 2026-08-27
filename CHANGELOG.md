@@ -45,6 +45,9 @@
   sequences, and scalar literals are compared soundly; complete closed root
   `Bool` and ADT families also make a later catch-all arm unreachable. `yls`
   publishes the same warning range, so VS Code and Zed receive it through LSP.
+- CI and tagged releases now build native Windows ARM64 artifacts alongside
+  Windows x64 (`.zip` and `.msi`), and explicitly build the Apple Silicon
+  `macos-arm64` archive. Intel macOS is not part of this hosted release matrix.
 
 ### Changed
 - FetchContent now uses doctest 2.5.3 and CLI11 2.7.2; the Windows
@@ -64,11 +67,14 @@
   rather than swallowing the input source as another include path.
 - `yonac --require-effect-free` establishes the #5 effect-freedom gate: it
   accepts only closed empty effect rows and exhaustive registered finite-ADT
-  matches (E0203 otherwise). Exported empty rows are preserved as `.yonai`
-  `effects -`; interfaces without a row remain unknown and are rejected by the
-  gate. It deliberately remains conservative: it does not prove general
-  termination or arbitrary non-ADT coverage, and overlap warnings only cover
-  arms definitely unreachable after an earlier unguarded arm.
+  matches (E0203 otherwise), plus direct and mutual local recursion proved by
+  conservative structural size-change analysis with lexicographic parameters.
+  Exported empty rows are preserved as `.yonai` `effects -`; interfaces without
+  a row remain unknown and are rejected by the gate. It deliberately remains
+  conservative: it does not prove general termination, numeric measures,
+  opaque/higher-order termination, or arbitrary non-ADT coverage; overlap
+  warnings only cover arms definitely unreachable after an earlier unguarded
+  arm.
 - `yonac` now exits non-zero on refinement **E0500** and linearity **E0600** /
   **E0601** (expression programs and modules). Previously those diagnostics
   were emitted on expressions and ignored, and module compile skipped both
@@ -78,6 +84,26 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
+- Effect inference now uses a dedicated lossless constraint solver: independent
+  higher-order callback rows form a true union rather than dropping or
+  equating a later source; handlers mask symbolically; recursive bodies use
+  least-derived cells; and `effectscheme v2` preserves all arrow effects,
+  masks, and shared sources across `.yonai` imports. Curried partial
+  applications are pure until their final source argument, so E0202 no longer
+  duplicates the same operation at every stage. Wildcard imports shadow
+  same-named local module functions during dependency-SCC discovery, and
+  package-qualified selective imports preserve the package/module separator
+  when locating interfaces.
+- Windows CMake now provides the Zlib and DIA SDK targets required by the
+  official LLVM package *before* loading `LLVMConfig.cmake`. It discovers normal
+  installations first and uses the project's pinned CMake source fallback only
+  when dependency fetching is enabled; no external package manager is required.
+- Fresh-clone test builds now generate their Prelude object in the build tree,
+  track every standard-library fixture source, and enforce a source/expected
+  contract for every codegen fixture. LSP fixture navigation resolves the
+  repository `lib` directory independent of CTest's working directory.
+- `TypeChecker.cpp` now directly includes the standard algorithm facilities it
+  uses, fixing strict macOS Clang builds.
 - Generic collection identity now survives empty-first nested literals,
   Set/Dict runtime interfaces, recursive List filtering/sorting, explicit
   imported trait-method callbacks, and higher-order law suites. Contextually

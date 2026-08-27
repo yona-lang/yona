@@ -1,6 +1,8 @@
 param(
     [string]$BuildDir = "out/build/x64-release",
     [string]$Version = "0.1.0",
+    [ValidateSet("x64", "arm64")]
+    [string]$Architecture = "x64",
     [string]$OutDir = "out/installer/windows"
 )
 
@@ -15,7 +17,8 @@ function Require-Path([string]$Path, [string]$What) {
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $absBuildDir = Join-Path $repoRoot $BuildDir
 $absOutDir = Join-Path $repoRoot $OutDir
-$stageDir = Join-Path $absOutDir "stage"
+$architectureOutDir = Join-Path $absOutDir $Architecture
+$stageDir = Join-Path $architectureOutDir "stage"
 $wxsPath = Join-Path $PSScriptRoot "YonaInstaller.wxs"
 
 Require-Path $absBuildDir "Build directory"
@@ -27,6 +30,7 @@ Require-Path (Join-Path $absBuildDir "runtime") "runtime directory"
 Require-Path $wxsPath "WiX source"
 
 New-Item -ItemType Directory -Path $absOutDir -Force | Out-Null
+New-Item -ItemType Directory -Path $architectureOutDir -Force | Out-Null
 if (Test-Path $stageDir) {
     Remove-Item -Recurse -Force $stageDir
 }
@@ -53,12 +57,12 @@ Copy-Item (Join-Path $repoRoot "README.md") (Join-Path $stageDir "README.md")
 Copy-Item (Join-Path $repoRoot "INSTALL.md") (Join-Path $stageDir "INSTALL.md")
 Copy-Item (Join-Path $repoRoot "CHANGELOG.md") (Join-Path $stageDir "CHANGELOG.md")
 
-$msiPath = Join-Path $absOutDir "yona-$Version-windows-x64.msi"
+$msiPath = Join-Path $architectureOutDir "yona-$Version-windows-$Architecture.msi"
 
 & wix build `
   -d Version=$Version `
   -d StagingDir=$stageDir `
-  -arch x64 `
+  -arch $Architecture `
   -out $msiPath `
   $wxsPath
 if ($LASTEXITCODE -ne 0) {

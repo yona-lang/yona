@@ -1,0 +1,9 @@
+import close, peerAddress from Std\Net,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Net rejects an invalid descriptor safely" (\_ ->
+        check "invalid close" (close (0 - 1) <= 0)),
+    testCase "Net has no peer for an invalid descriptor" (\_ ->
+        check "invalid peer" (peerAddress (0 - 1) == "unknown"))
+] in render (run cases)

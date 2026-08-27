@@ -23,13 +23,11 @@
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
-#include <functional>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -40,6 +38,7 @@
 #include "InProcessLld.h"
 #include "LinkerPlan.h"
 #include "Parser.h"
+#include "TerminationAnalysis.h"
 #include "typechecker/LinearityChecker.h"
 #include "typechecker/RefinementChecker.h"
 #include "typechecker/TypeChecker.h"
@@ -428,178 +427,30 @@ static bool collect_incomplete_cases(ast::AstNode *node, Codegen &codegen,
   return ok;
 }
 
-static bool require_structural_termination(ast::AstNode *root, DiagnosticEngine &diag) {
-  auto is_name = [](ast::AstNode *node, const std::unordered_set<string> &names) {
-    auto *id = dynamic_cast<ast::IdentifierExpr *>(node);
-    return id && id->name && names.count(id->name->value) != 0;
-  };
-  auto direct_calls = [](ast::AstNode *root, const std::unordered_set<string> &local_names) {
-    std::unordered_set<string> calls;
-    std::function<void(ast::AstNode *)> walk;
-    walk = [&](ast::AstNode *node) {
-      if (!node) return;
-      if (auto *apply = dynamic_cast<ast::ApplyExpr *>(node)) {
-        if (auto *call = dynamic_cast<ast::NameCall *>(apply->call);
-            call && call->name && local_names.count(call->name->value))
-          calls.insert(call->name->value);
-        for (const auto &argument : apply->args)
-          std::visit([&](auto *arg) { walk(arg); }, argument);
-      } else if (auto *case_expr = dynamic_cast<ast::CaseExpr *>(node)) {
-        walk(case_expr->expr);
-        for (auto *clause : case_expr->clauses) if (clause) { walk(clause->guard); walk(clause->body); }
-      } else if (auto *binary = dynamic_cast<ast::BinaryOpExpr *>(node)) {
-        walk(binary->left); walk(binary->right);
-      } else if (auto *iff = dynamic_cast<ast::IfExpr *>(node)) {
-        walk(iff->condition); walk(iff->thenExpr); walk(iff->elseExpr);
-      } else if (auto *let = dynamic_cast<ast::LetExpr *>(node)) {
-        for (auto *alias : let->aliases) {
-          if (auto *value = dynamic_cast<ast::ValueAlias *>(alias)) walk(value->expr);
-          else if (auto *lambda = dynamic_cast<ast::LambdaAlias *>(alias)) walk(lambda->lambda);
-          else if (auto *pattern = dynamic_cast<ast::PatternAlias *>(alias)) walk(pattern->expr);
-        }
-        walk(let->expr);
-      } else if (auto *body = dynamic_cast<ast::BodyWithoutGuards *>(node)) {
-        walk(body->expr);
-      } else if (auto *body = dynamic_cast<ast::BodyWithGuards *>(node)) {
-        walk(body->guard); walk(body->expr);
-      } else if (auto *function = dynamic_cast<ast::FunctionExpr *>(node)) {
-        for (auto *body : function->bodies) walk(body);
-      } else if (auto *do_expr = dynamic_cast<ast::DoExpr *>(node)) {
-        for (auto *step : do_expr->steps) walk(step);
-      } else if (auto *import = dynamic_cast<ast::ImportExpr *>(node)) {
-        walk(import->expr);
-      } else if (auto *with = dynamic_cast<ast::WithExpr *>(node)) {
-        walk(with->contextExpr); walk(with->bodyExpr);
-      } else if (auto *raise = dynamic_cast<ast::RaiseExpr *>(node)) {
-        walk(raise->value);
-      } else if (auto *handle = dynamic_cast<ast::HandleExpr *>(node)) {
-        walk(handle->body);
-        for (auto *clause : handle->clauses) if (clause) walk(clause->body);
-      }
-    };
-    walk(root);
-    return calls;
-  };
-  auto check_function = [&](ast::FunctionExpr *function) {
-    if (!function) return true;
-    bool ok = true;
-    std::unordered_set<string> parameters;
-    for (auto *pattern : function->patterns)
-      if (auto *value = dynamic_cast<ast::PatternValue *>(pattern))
-        if (auto *id = std::get_if<ast::IdentifierExpr *>(&value->expr))
-          if (*id && (*id)->name) parameters.insert((*id)->name->value);
-    std::function<void(ast::AstNode *, const std::unordered_set<string> &, const std::unordered_set<string> &)> walk;
-    walk = [&](ast::AstNode *node, const std::unordered_set<string> &structural,
-               const std::unordered_set<string> &smaller) {
-      if (!node) return;
-      if (auto *apply = dynamic_cast<ast::ApplyExpr *>(node)) {
-        if (auto *call = dynamic_cast<ast::NameCall *>(apply->call);
-            call && call->name && call->name->value == function->name) {
-          bool decreases = false;
-          for (const auto &argument : apply->args) {
-            ast::AstNode *arg = std::holds_alternative<ast::ExprNode *>(argument)
-                ? static_cast<ast::AstNode *>(std::get<ast::ExprNode *>(argument))
-                : static_cast<ast::AstNode *>(std::get<ast::ValueExpr *>(argument));
-            if (auto *id = dynamic_cast<ast::IdentifierExpr *>(arg);
-                id && id->name && smaller.count(id->name->value)) decreases = true;
-          }
-          if (!decreases) {
-            diag.error(apply->source_context, ErrorCode::E0203,
-                       "`--require-effect-free` cannot prove structural termination of '" +
-                       function->name + "'");
-            ok = false;
-          }
-        }
-        for (const auto &argument : apply->args)
-          std::visit([&](auto *arg) { walk(arg, structural, smaller); }, argument);
-        return;
-      }
-      if (auto *case_expr = dynamic_cast<ast::CaseExpr *>(node)) {
-        walk(case_expr->expr, structural, smaller);
-        string scrutinee;
-        if (auto *id = dynamic_cast<ast::IdentifierExpr *>(case_expr->expr))
-          if (id->name) scrutinee = id->name->value;
-        for (auto *clause : case_expr->clauses) {
-          auto descendants = smaller;
-          if (!clause->guard && !scrutinee.empty() && structural.count(scrutinee)) {
-            if (auto *ctor = dynamic_cast<ast::ConstructorPattern *>(clause->pattern))
-              for (auto *sub : ctor->sub_patterns)
-                if (auto *value = dynamic_cast<ast::PatternValue *>(sub))
-                  if (auto *id = std::get_if<ast::IdentifierExpr *>(&value->expr))
-                    if (*id && (*id)->name) descendants.insert((*id)->name->value);
-            if (auto *heads = dynamic_cast<ast::HeadTailsPattern *>(clause->pattern))
-              if (auto *tail = dynamic_cast<ast::IdentifierExpr *>(heads->tail);
-                  tail && tail->name) descendants.insert(tail->name->value);
-          }
-          walk(clause->guard, structural, descendants);
-          walk(clause->body, structural, descendants);
-        }
-        return;
-      }
-      if (auto *binary = dynamic_cast<ast::BinaryOpExpr *>(node)) { walk(binary->left, structural, smaller); walk(binary->right, structural, smaller); }
-      else if (auto *iff = dynamic_cast<ast::IfExpr *>(node)) { walk(iff->condition, structural, smaller); walk(iff->thenExpr, structural, smaller); walk(iff->elseExpr, structural, smaller); }
-      else if (auto *let = dynamic_cast<ast::LetExpr *>(node)) {
-        auto aliases = smaller;
-        for (auto *alias : let->aliases) if (auto *value = dynamic_cast<ast::ValueAlias *>(alias)) {
-          walk(value->expr, structural, aliases);
-          if (is_name(value->expr, aliases) && value->identifier && value->identifier->name)
-            aliases.insert(value->identifier->name->value);
-        }
-        walk(let->expr, structural, aliases);
-      } else if (auto *do_expr = dynamic_cast<ast::DoExpr *>(node)) {
-        for (auto *step : do_expr->steps) walk(step, structural, smaller);
-      } else if (auto *import = dynamic_cast<ast::ImportExpr *>(node)) {
-        walk(import->expr, structural, smaller);
-      } else if (auto *with = dynamic_cast<ast::WithExpr *>(node)) {
-        walk(with->contextExpr, structural, smaller); walk(with->bodyExpr, structural, smaller);
-      } else if (auto *raise = dynamic_cast<ast::RaiseExpr *>(node)) {
-        walk(raise->value, structural, smaller);
-      } else if (auto *handle = dynamic_cast<ast::HandleExpr *>(node)) {
-        walk(handle->body, structural, smaller);
-        for (auto *clause : handle->clauses) if (clause) walk(clause->body, structural, smaller);
-      }
-    };
-    for (auto *body : function->bodies)
-      if (auto *plain = dynamic_cast<ast::BodyWithoutGuards *>(body)) walk(plain->expr, parameters, {});
-      else if (auto *guarded = dynamic_cast<ast::BodyWithGuards *>(body)) {
-        walk(guarded->guard, parameters, {});
-        walk(guarded->expr, parameters, {});
-      }
-    return ok;
-  };
-  if (auto *main = dynamic_cast<ast::MainNode *>(root)) root = main->node;
-  if (auto *module = dynamic_cast<ast::ModuleDecl *>(root)) {
-    bool ok = true;
-    std::unordered_set<string> names;
-    std::unordered_map<string, ast::FunctionExpr *> functions;
-    for (auto *function : module->functions) if (function) {
-      names.insert(function->name);
-      functions.emplace(function->name, function);
-    }
-    std::unordered_map<string, std::unordered_set<string>> calls;
-    for (const auto &[name, function] : functions) calls.emplace(name, direct_calls(function, names));
-    for (const auto &[name, function] : functions) {
-      std::unordered_set<string> reachable;
-      std::function<void(const string &)> visit = [&](const string &current) {
-        if (!reachable.insert(current).second) return;
-        for (const auto &callee : calls[current]) visit(callee);
-      };
-      for (const auto &callee : calls[name]) visit(callee);
-      bool mutual = std::any_of(reachable.begin(), reachable.end(), [&](const string &other) {
-        return other != name && calls[other].count(name) != 0;
-      });
-      if (mutual) {
-        diag.error(function->source_context, ErrorCode::E0203,
-                   "`--require-effect-free` cannot prove structural termination of mutual recursion involving '" + name + "'");
-        ok = false;
-      } else if (calls[name].count(name)) {
-        ok = check_function(function) && ok;
-      }
-    }
-    return ok;
+static string termination_repair_note(const termination_analysis::Failure &failure) {
+  if (failure.reason == "recursive component members have incompatible arity") {
+    return "Repair: give every function in the recursive component the same number of parameters, "
+           "or reshape the recursive component into SCCs with compatible arity";
   }
-  if (auto *function = dynamic_cast<ast::FunctionExpr *>(root)) return check_function(function);
-  return true;
+  if (failure.reason.find("no provable lexicographic structural descent") != string::npos) {
+    return "Repair: recurse on a constructor field or non-empty sequence tail bound by an unguarded "
+           "`case` arm, preserving the decreasing parameter position across the cycle "
+           "(for example, `Succ rest -> loop rest`)";
+  }
+  return "Repair: expose direct local recursive calls with a statically visible structural decrease; "
+         "opaque helper and higher-order calls are not inspected by this proof";
+}
+
+static bool require_structural_termination(ast::AstNode *root, DiagnosticEngine &diag) {
+  if (!root) return true;
+  const auto result = termination_analysis::analyze(*root);
+  for (const auto &failure : result.failures) {
+    diag.error(failure.call_location, ErrorCode::E0203,
+               "`--require-effect-free` cannot prove structural termination for recursive component '" +
+                   failure.component + "' at call '" + failure.caller + " -> " + failure.callee + "': " +
+                   failure.reason + ". " + termination_repair_note(failure));
+  }
+  return result.failures.empty();
 }
 
 static bool require_effect_free(ast::AstNode *root, DiagnosticEngine &diag,
@@ -610,7 +461,8 @@ static bool require_effect_free(ast::AstNode *root, DiagnosticEngine &diag,
       if (!func || tc.is_effect_free(tc.type_of(func))) continue;
       diag.error(func->source_context, ErrorCode::E0203,
                  "`--require-effect-free` requires '" + func->name +
-                     "' to have a closed empty effect row");
+                     "' to have a closed empty effect row. Repair: remove or handle the open effect source; "
+                     "opaque and higher-order calls must have a closed empty row independently of recursion shape");
       ok = false;
     }
   }
@@ -705,7 +557,8 @@ int main(int argc, char *argv[]) {
   app.add_flag("--Wno-linear-leak", flag_no_linear_leak,
                "Disable E0602 resource-leak warnings (-Wlinear-leak)");
   app.add_flag("--require-effect-free", flag_require_effect_free,
-               "Require a closed empty effect row (does not prove termination)");
+               "Require closed empty effect rows, finite case coverage, and conservative structural size-change "
+               "proofs for local recursive SCCs (not a global termination proof)");
   app.add_flag("-g,--debug", flag_debug, "Emit DWARF debug information");
   app.add_option("--explain", explain_code, "Show detailed explanation for an error code (e.g., E0100)");
 

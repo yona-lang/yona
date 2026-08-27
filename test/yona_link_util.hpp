@@ -257,6 +257,13 @@ inline bool append_runtime_objects(std::vector<std::filesystem::path>& objs) {
     return true;
 }
 
+inline bool append_prelude_object(std::vector<std::filesystem::path>& objs) {
+    const auto prelude = yona::test::prelude_object();
+    if (!std::filesystem::exists(prelude)) return false;
+    objs.push_back(prelude);
+    return true;
+}
+
 /** @deprecated Use append_runtime_objects; kept for a few call sites. */
 inline bool ensure_merged_runtime_obj() {
     return ensure_runtime_objects();

@@ -329,12 +329,14 @@ enclosing `handle` that covers it. A handler clause receives the operation's
 argument and a `resume` continuation; `return val -> …` transforms the
 handled expression's normal result.
 
-Function types carry a **latent effect row** listing the operations the
-function may perform: `Int -> !{State.get} Int`. `handle` subtracts the
-operations it covers; applying a function whose row is not fully covered at
-the top level is error **E0202**, reported at the introducing `perform` with
-a note at the call site. Higher-order functions carry open rows (`!{|r}`)
-that unify with their argument's row.
+Function types carry a **latent effect expression** listing known operations
+and any independent open sources: `Int -> !{State.get} Int`. `handle`
+symbolically masks the operations it covers; application joins a callee's
+expression into the caller without equating independent callbacks. Applying a
+function whose row is not fully covered at the top level is error **E0202**,
+reported at the introducing `perform` with a note at the application site.
+Pure recursive components use a least-derived summary; imported and
+higher-order unknown sources remain open.
 
 *Current limitations.* Handlers are shallow, in-scope dispatch: `resume` is
 an identity continuation, not a captured delimited continuation. `effect`
@@ -525,10 +527,12 @@ same resolution model. See [Traits](/guides/traits/).
 
 ### 7.4 Effect rows <span class="yona-status yona-status--partial">Partial</span>
 
-Function arrows carry the set of effect operations the function may perform:
-`a -> !{State.get} Int`. Rows are inferred, unioned at application,
-subtracted by `handle`, propagated through `.yonai` interfaces, and kept
-open (`!{|r}`) on higher-order parameters. §3.10 lists current limitations.
+Function arrows carry a normalized effect expression such as
+`a -> !{State.get} Int`. Effects are inferred, losslessly unioned at
+application, symbolically masked by `handle`, and propagated through `.yonai`
+interfaces. New interfaces write `effectscheme v2`, which preserves all arrow
+positions, independent open sources, and masks; legacy open metadata imports
+conservatively. §3.10 lists current limitations.
 
 ### 7.5 Linear types <span class="yona-status yona-status--partial">Partial</span>
 
@@ -583,7 +587,7 @@ Std\List::map (\x -> x + 1) [1, 2, 3]        # fully qualified, no import
 
 *Implementation note.* A module compiles to a native object file with
 C-ABI exports (mangled `yona_Pkg_Mod__func`) and a `.yonai` **interface
-file** carrying types, effect rows, linearity, and — for generic functions —
+file** carrying types, effect summaries/schemes, linearity, and — for generic functions —
 the source text itself (`GENFN`), so a caller with new concrete types can
 re-monomorphize the function locally. `yonac -I path` adds interface search
 paths. See [Modules and interfaces](/guides/modules-interfaces/).

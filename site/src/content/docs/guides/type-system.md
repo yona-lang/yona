@@ -140,11 +140,16 @@ The rules:
   the top level of a program, applying a function whose row is not fully
   handled is error **E0202**, reported at the introducing `perform` with a
   note at the call site.
-- **Higher-order functions** keep an *open rest* `|r`: `apply : (a -> !{|r}
-  b) -> a -> !{|r} b`, so passing an effectful function threads its row
-  through and E0202 still fires at the outermost unhandled point.
-- **Recursive definitions** solve `r ~ !{L | r}` as the least fixed point
-  `r := !{L}` rather than reporting an infinite type.
+- **Higher-order functions** preserve every callback source separately. For
+  `use f g n = (f n, g n)`, the inferred row is the union of `f` and `g`'s
+  rows; using the helper again instantiates fresh effect variables rather than
+  equating the callbacks.
+- **Handlers** subtract operations symbolically, so a handler can mask an
+  effect that is still open when a helper is defined and only becomes concrete
+  at its call site.
+- **Recursive definitions** use least-derived effect cells. Pure direct and
+  mutual recursive components close; callback and imported opaque sources
+  remain open rather than being defaulted away.
 
 ```yona
 # The call site must handle the latent effects of f
@@ -154,12 +159,12 @@ handle f 0 with
 end                                   # => 7
 ```
 
-Rows survive module boundaries: exported functions record
-`effects Fs.read` (closed) or `effects | hof` (`apply f x = f x`) on the
-`.yonai` `FN` line. Imports restore that row for call-site E0202.
-Siblings are typechecked as a unit, so wrapping an effectful helper
-exports the helper's row. A missing `effects` field means unknown, not
-pure.
+Rows survive module boundaries. New `.yonai` files include a versioned
+`effectscheme v2` normal form for every arrow, shared open source, and handler
+mask; import clones that graph so polymorphic siblings stay independent.
+The readable `effects Fs.read` summary remains for compatibility. Legacy open
+metadata (`effects |`, optionally `hof`) is restored conservatively as opaque;
+a missing `effects` field means unknown, not pure.
 
 Honest limitations: `effect Name … end` declarations do not parse yet (an
 operation's identity is its `Effect.op` label at the `perform` site),

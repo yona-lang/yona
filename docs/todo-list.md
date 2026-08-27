@@ -2,8 +2,10 @@
 
 ## Bugs (open)
 
-No known open compiler, runtime, parser, standard-library, build-tool, or test
-harness bugs after the 2026-08-27 pattern-analysis verification pass.
+No known project-owned bug is currently open. The full doctest/CTest suite
+passes on Linux; native Apple Silicon and Windows ARM64 execution remains a
+hosted-CI verification item under Distribution readiness.
+
 Capability-dependent platform gaps remain tracked in their roadmap sections
 below.
 
@@ -89,6 +91,13 @@ macOS kqueue + MoltenVK/`Std\GPU` portability shipped (`docs/gpu-vulkan-implemen
 
 - [x] Copr / AUR / Launchpad + Homebrew tap + Linux/macOS in-process LLD (v0.1.2–v0.1.3) — see Completed Milestones
 - [ ] Windows installer productionization (upgrade behavior, signing, final UX polish)
+- [ ] Publish a versioned **WinGet** manifest for each tagged release after the
+  x64 and ARM64 MSI assets have stable GitHub Release URLs and SHA-256 hashes:
+  submit one multi-file manifest set (both architectures) to
+  `microsoft/winget-pkgs`, validate with `winget validate` and a clean local or
+  Windows Sandbox install, then monitor the repository's validation PR. This is
+  a registry manifest, not an in-repository package formula; do not submit it
+  before the release assets exist.
 - [x] `#!/usr/bin/env yona` script mode + `Std\Process.getArgs` after package install — Yona-written `yona` runner; C++ REPL is `yona-repl`
 - [ ] Final packaging pass for sysroot-based CLI/REPL distribution layout
 - [ ] Enable embedded LLD backend by default across supported toolchains (remaining gate: MSVC-compatible LibXml2 on Windows)
@@ -107,6 +116,94 @@ already works.
 
 - [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — `yonac --require-effect-free` rejects known/open/unknown effect rows, incomplete registered finite-ADT or `Bool` matches, unproven direct recursion, and mutual-recursion cycles (E0203); closed empty export rows persist as `.yonai` `effects -`. #5 remains open for general termination and arbitrary open-domain coverage.
   - [x] Closed-empty-row effect-freedom gate + `.yonai` `effects -` propagation (2026-08-24)
+  - [x] Pure recursive module functions retain an open effect row: `even n = case n of Zero -> true; Succ rest -> odd rest end; odd n = case n of Zero -> false; Succ rest -> even rest end` fails `yonac --require-effect-free` before termination analysis. Fixed 2026-08-27.
+  - [x] Mutual-recursion effect-row closure erases higher-order effects: `forward f x = apply f x; apply f x = f x` is accepted by `yonac --require-effect-free` despite applying an effect-unknown function argument. Fixed 2026-08-27.
+  - [x] Imported open effect rows lose their provenance when they flow through a
+    parameterless value alias: `forward a b = get a b; get = import gcd from Std\Math in gcd`
+    is accepted by `yonac --require-effect-free` even though `gcd` has `effects |`. Fixed 2026-08-27.
+  - [x] Provisional whole-module effect rows make nonrecursive siblings
+    effect-monomorphic: forwarding distinct `State.get` and `Log.log` callbacks
+    through the same polymorphic helper produces an incompatible effect-row error. Fixed 2026-08-27.
+  - [x] Effect aggregation drops a later rigid imported open row: a structural
+    mutual SCC whose recursive arm is inferred before a base arm importing
+    `Std\Math.gcd` is accepted by `yonac --require-effect-free` although `gcd`
+    declares `effects |`. Fixed 2026-08-27.
+  - [x] Module dependency discovery does not shadow local names imported by a
+    whole-module import: `outer f x = import Std\Function in apply x f` can
+    resolve a local module function named `apply`, creating a false SCC and
+    breaking sibling polymorphism. Fixed 2026-08-27.
+  - [x] Effect aggregation drops a later higher-order open row after a
+    preliminary recursive row: `app f n = case n of Succ rest -> app f rest;
+    Zero -> f n end` is accepted by `yonac --require-effect-free` when the
+    recursive arm appears first, but rejected when the arms are reversed.
+    Fixed 2026-08-27.
+  - [x] Preliminary tail provenance contaminates an HOF tail after unification:
+    mutually recursive `a f n = case n of Succ rest -> (a f) rest; Zero -> b f n end`
+    and `b f n = case n of Succ rest -> (a f) rest; Zero -> f n end` infer an
+    effect-free export `a` even though its recursive component applies `f`.
+    Fixed 2026-08-27.
+  - [x] Recursive-SCC effect tracking classifies a fully applied recursive
+    call's returned callback as a preliminary equation, so unrelated callback
+    rows are unified: `left f g n = do use f g n; f end; right f g n = do use
+    f g n; g end; use f g n = ((left f g n) n, (right f g n) n)` rejects
+    independently effectful `get` / `log` callbacks with E0100. Repro:
+    `yonac --emit-ir -` on `Test\\PreliminaryIndependentRows`. Fixed 2026-08-27.
+  - [x] Effect aggregation retains only the first of multiple independent HOF
+    callback rows: after `Test\\PreliminaryIndependentRows` type-checks,
+    `yonac --emit-typed-core -` reports `result` with `State.get` but omits the
+    independently invoked `Log.log` effect. Fixed 2026-08-27.
+  - [x] The new effect-union solver records deferred equality constraints but
+    does not enforce them during normalization or graph-template instantiation:
+    equating a derived empty row with an opaque row leaves the derived root
+    falsely closed, and later labels can make already-equal rows diverge. Fixed
+    2026-08-27.
+  - [x] `EffectRef` is only a node index, so a reference from another
+    `EffectSolver` with the same index is accepted as a local node and can
+    silently misrepresent an effect row. Repro: join `solverA.flexible()` with
+    `solverB.labels({"Log.log"})`. Fixed 2026-08-27.
+  - [x] Effect-solver equality treats every constraint involving a
+    `DerivedLeast` node as conflict-free, allowing a later flexible binding to
+    add `Log.log` to a row previously constrained equal to ground `{State}`;
+    it also rejects the order-reversed empty-derived equality before the
+    derived cell can grow. Repro: `include(flexible, derived)`,
+    `equate(derived, {State})`, then `equate(flexible, {Log})`. Fixed
+    2026-08-27.
+  - [x] Effect-solver equality validates pairs independently instead of the
+    transitive equality component, so it accepts incompatible closed peers via
+    a shared derived or opaque node: `equate(opaque, {State})` then
+    `equate(opaque, {Log})` both defer even though the component is
+    unsatisfiable. Fixed 2026-08-27.
+  - [x] A satisfiable equality such as `derivedA ∪ derivedB = {State}` has two
+    incomparable derived least solutions; the solver currently reports both
+    derived rows closed empty. It must reject a no-least `DerivedLeast`
+    component rather than select an order-dependent model or hide correlation.
+    Fixed 2026-08-27.
+  - [x] Selective imports from package-qualified modules lose the separator
+    between package and module names: `import identity from Foo\Bar in identity 1`
+    searches for `FooBar.yonai` instead of `Foo/Bar.yonai`. Fixed 2026-08-27.
+  - [x] Termination analysis skips recursive calls nested under expression wrappers such as `extern ... in ...` and sequence generators; repro: `module Test\\HiddenGenerator; export loop; loop n = [x for x = loop n]` passes strict mode. Fixed 2026-08-27.
+  - [x] Termination analysis resolves unqualified local calls by a global name table, creating false recursive edges between same-named nested and instance functions. Fixed 2026-08-27.
+  - [x] Guarded function clauses retain structural descent facts from their parameter patterns; repro: a guarded `loop (Succ rest)` clause calling `loop rest` is accepted as total. Fixed 2026-08-27.
+  - [x] Handler and catch bindings do not shadow same-named local functions during termination analysis, creating false recursive edges from calls to bound values. Fixed 2026-08-27.
+  - [x] Handler return bindings and generator binders do not erase inherited structural descent facts; a same-named inner binding can make a non-decreasing call appear strict. Fixed 2026-08-27.
+  - [x] Anonymous lambda `FunctionExpr` nodes are indexed under an empty internal name instead of their `LambdaAlias` binding; repro: `wrapper n = let f = \x -> f x in f n` hides recursive `f`. Fixed 2026-08-27.
+  - [x] Generator binders do not shadow inherited descent facts during termination analysis; repro: `Succ rest -> let xs = [loop rest for rest = [n]] in () end` accepts an unchanged recursive call. Fixed 2026-08-27.
+  - [x] Termination analysis misses recursion reached through a lexical value
+    alias: `loop n = let f = loop in f n` passes
+    `yonac --require-effect-free` while emitting an unconditional self-loop.
+    Fixed 2026-08-27.
+  - [x] Nested functions do not inherit enclosing non-callable shadows during
+    termination analysis: `f n = outer n; outer n = let f = identity in let g x = f x in g n`
+    creates a false recursive SCC under `--require-effect-free`. Fixed 2026-08-27.
+  - [x] The termination guard regression exercises an `IfExpr`, not the actual
+    guarded-function syntax (`loop (Succ rest) = if true -> loop rest`), leaving
+    the `BodyWithGuards` path without direct coverage. Fixed 2026-08-27.
+  - [x] E0203 termination diagnostics discard the analyzer's SCC context and
+    offer structural-descent advice even for incompatible-arity cycles, where
+    that advice cannot fix the proof; repro: `left n = right n n; right a b = left a`. Fixed 2026-08-27.
+  - [x] `--require-effect-free` help says it requires a termination proof,
+    overstating the local-recursive-SCC structural gate; ordinary numeric
+    recursion remains valid outside strict mode. Fixed 2026-08-27.
   - [x] Finite-ADT case exhaustiveness warnings (`--Wincomplete-patterns`, 2026-08-24)
   - [x] Strict finite-ADT exhaustiveness in `--require-effect-free` (2026-08-24)
   - [x] `Bool` coverage, definitely-unreachable arm warning, and conservative structural-recursion gate (2026-08-24)

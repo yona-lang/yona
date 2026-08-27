@@ -1,0 +1,18 @@
+import isOk, isErr, unwrapOr, map, mapErr, flatMap, flatten, toOption, andThen, orElse, fold from Std\Result,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+        testCase "recognizes success" (\_ -> check "isOk" (isOk (Ok 42))),
+        testCase "recognizes failure" (\_ -> check "isErr" (isErr (Err "bad"))),
+        testCase "unwrap uses default" (\_ -> check "unwrapOr" (unwrapOr 7 (Err "bad") == 7)),
+        testCase "map transforms success" (\_ -> check "map Ok" (map (\x -> x + 1) (Ok 41) == Ok 42)),
+        testCase "map preserves failure" (\_ -> check "map Err" (map (\x -> x + 1) (Err "bad") == Err "bad")),
+        testCase "mapErr transforms failure" (\_ -> check "mapErr" (mapErr (\e -> e ++ "!") (Err "bad") == Err "bad!")),
+        testCase "flatMap short-circuits" (\_ -> check "flatMap" (flatMap (\x -> Ok (x + 1)) (Err "bad") == Err "bad")),
+        testCase "flatten removes one layer" (\_ -> check "flatten" (flatten (Ok (Ok 42)) == Ok 42)),
+        testCase "toOption uses Prelude Option" (\_ -> check "toOption" (toOption (Ok 42) == Some 42)),
+        testCase "andThen chains" (\_ -> check "andThen" (andThen (\x -> Ok (x + 1)) (Ok 41) == Ok 42)),
+        testCase "orElse recovers" (\_ -> check "orElse" (orElse (\_ -> Ok 42) (Err "bad") == Ok 42)),
+        testCase "fold selects branch" (\_ -> check "fold" (fold (\_ -> 0) (\x -> x) (Ok 42) == 42))
+    ]
+in render (run cases)

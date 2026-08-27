@@ -5,6 +5,12 @@ description: Syntax highlighting and semantic features for Yona in VS Code and o
 
 Yona ships a TextMate grammar and a language server named **`yls`**.
 
+`yls` and the VS Code and Zed integrations do not currently expose
+`yonac --require-effect-free`. Run that flag from the compiler CLI when you need
+strict E0203 validation for effect freedom, finite-case coverage, and structural
+size-change termination. Ordinary parse, type, refinement, and linearity
+diagnostics remain shared between `yonac` and the language server.
+
 ## Zed
 
 Install the **Yona** extension from Zed's Extensions panel, then install the

@@ -1,0 +1,92 @@
+import testCase, check, run, render from Std\Test,
+       not as boolNot from Std\Bool,
+       map as listMap, filter as listFilter, foldl as listFoldl, length as listLength, reverse as listReverse,
+       take as listTake, drop as listDrop, zip as listZip, find as listFind, sortBy, sum, product from Std\List,
+       pair, first, second, mapPair, swap as pairSwap, toTuple from Std\Pair,
+       fst, snd, mapBoth, curry, uncurry from Std\Tuple,
+       range, rangeStep, toList as rangeToList, contains as rangeContains,
+       length as rangeLength, take as rangeTake, fold as rangeFold from Std\Range,
+       abs, clamp, gcd, pow, factorial, isEven, isOdd from Std\Math,
+       length as stringLength, trim, substring, replace, join as stringJoin,
+       startsWith, endsWith, charAt, fromChars, reverse as stringReverse,
+       take as stringTake, drop as stringDrop, padLeft, padRight, toInt from Std\String,
+       insert as setInsert, contains as setContains, size as setSize,
+       union as setUnion, intersection as setIntersection, difference as setDifference from Std\Set,
+       put as dictPut, get as dictGet, contains as dictContains, size as dictSize,
+       keys as dictKeys from Std\Dict
+in
+let cases = [
+    testCase "List maps and filters in order" (\_ ->
+        check "ordered transformations"
+            (listFilter (\x -> x > 3) (listMap (\x -> x * 2) [1, 2, 3]) == [4, 6])),
+    testCase "List folds empty and populated sequences" (\_ ->
+        check "fold identities" (listFoldl (\a b -> a + b) 7 [] == 7 && sum [1, 2, 3] == 6 && product [2, 3, 4] == 24)),
+    testCase "List take and drop compose" (\_ ->
+        check "slice" (listTake 2 (listDrop 1 [1, 2, 3, 4]) == [2, 3])),
+    testCase "List reverse preserves every value" (\_ ->
+        check "reverse" (listReverse [1, 2, 3] == [3, 2, 1])),
+    testCase "List sort uses a three-way comparator" (\_ ->
+        check "sort" (sortBy (\a b -> a - b) [3, 1, 2] == [1, 2, 3])),
+    testCase "List zip truncates to the shorter input" (\_ ->
+        check "zip" (listZip [1, 2] [3] == [(1, 3)])),
+    testCase "List find returns an Option for hits and misses" (\_ ->
+        check "find" (case listFind (\value -> value == "beta") ["alpha", "beta"] of
+            Some "beta" -> case listFind (\value -> value == "gamma") ["alpha", "beta"] of
+                None -> true
+                _ -> false
+            end
+            _ -> false
+        end)),
+    testCase "Pair preserves named positions" (\_ ->
+        let value = pair 2 5, mapped = mapPair (\x -> x + 1) (\x -> x * 2) value
+        in check "pair access and mapping"
+            (first value == 2 && second value == 5 && toTuple mapped == (3, 10) && toTuple (pairSwap value) == (5, 2))),
+    testCase "Tuple combinators preserve positions" (\_ ->
+        check "tuple access mapping and currying"
+            (fst (3, 4) == 3 && snd (3, 4) == 4 && mapBoth (\x -> x + 1) (\x -> x * 2) (3, 4) == (4, 8) &&
+             curry (\(a, b) -> a + b) 3 4 == 7 && uncurry (\a b -> a * b) (3, 4) == 12)),
+    testCase "Range includes both endpoints" (\_ ->
+        check "ascending range" (rangeToList (range 1 4) == [1, 2, 3, 4] && rangeLength (range 1 4) == 4)),
+    testCase "Range supports negative steps and slicing" (\_ ->
+        check "descending range" (rangeToList (rangeStep 5 1 (0 - 2)) == [5, 3, 1] &&
+            rangeContains 3 (rangeStep 5 1 (0 - 2)) && rangeToList (rangeTake 2 (range 4 8)) == [4, 5])),
+    testCase "Range fold handles empty direction" (\_ ->
+        check "range fold" (rangeFold (\a b -> a + b) 0 (range 1 4) == 10 && rangeToList (range 4 1) == [])),
+    testCase "Math integer helpers cover signs" (\_ ->
+        check "integer math" (abs (0 - 7) == 7 && clamp 0 10 12 == 10 && gcd 54 24 == 6 && isEven 8 && isOdd 7)),
+    testCase "Math powers and factorial use identities" (\_ ->
+        check "recursive math" (pow 2 10 == 1024 && pow 9 0 == 1 && factorial 0 == 1 && factorial 5 == 120)),
+    testCase "String boundaries preserve Unicode text" (\_ ->
+        check "length trim substring" (stringLength "βeta" == 4 && trim "" == "" && trim "  yona \n" == "yona" && substring "abcdef" 2 5 == "cde")),
+    testCase "String indexing uses Unicode scalars" (\_ ->
+        check "BMP and supplementary values occupy one position"
+            (charAt "aβ😀z" 1 == 946 && charAt "aβ😀z" 2 == 128512 &&
+             substring "aβ😀z" 1 3 == "β😀")),
+    testCase "String scalar slicing and reversal preserve UTF-8" (\_ ->
+        check "take drop reverse"
+            (stringTake 2 "aβ😀z" == "aβ" && stringDrop 2 "aβ😀z" == "😀z" &&
+             stringReverse "aβ😀z" == "z😀βa")),
+    testCase "String scalar construction validates code points" (\_ ->
+        check "fromChars round trips BMP and supplementary scalars"
+            (fromChars [97, 946, 128512, 122] == "aβ😀z")),
+    testCase "String padding measures scalar width" (\_ ->
+        check "multibyte padding never splits an encoding"
+            (padLeft 4 "β😀" "x" == "β😀βx" &&
+             padRight 4 "β😀" "x" == "xβ😀β")),
+    testCase "String search replacement and joining compose" (\_ ->
+        check "string composition" (replace "a-b-a" "a" "x" == "x-b-x" &&
+            stringJoin "," ["a", "b", "c"] == "a,b,c" && startsWith "yo" "yona" && endsWith "na" "yona")),
+    testCase "String parsing rejects invalid integers" (\_ ->
+        check "integer parsing" (toInt "42" == 42 && toInt "not-a-number" == 0)),
+    testCase "Set operations are persistent and deduplicate" (\_ ->
+        let original = setInsert {} 1, updated = setInsert original 2
+        in check "persistent set" (setSize original == 1 && setSize updated == 2 && setContains updated 2 && boolNot (setContains original 2))),
+    testCase "Set algebra preserves membership" (\_ ->
+        let left = setInsert (setInsert {} 1) 2, right = setInsert (setInsert {} 2) 3
+        in check "set algebra" (setSize (setUnion left right) == 3 && setContains (setIntersection left right) 2 && setContains (setDifference left right) 1)),
+    testCase "Dict updates are persistent" (\_ ->
+        let original = dictPut {} 1 10, updated = dictPut original 1 20, extended = dictPut updated 2 30
+        in check "persistent dictionary" (dictGet original 1 0 == 10 && dictGet updated 1 0 == 20 &&
+            dictContains extended 2 && dictSize extended == 2 && listLength (dictKeys extended) == 2))
+]
+in render (run cases)

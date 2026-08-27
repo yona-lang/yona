@@ -1,0 +1,14 @@
+import fromSeq, toSeq, length, get, set, map, filter, foldl, slice from Std\IntArray,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "IntArray round trips sequences" (\_ ->
+        let values = fromSeq [1, 2, 3] in check "round trip" (toSeq values == [1, 2, 3] && length values == 3)),
+    testCase "IntArray updates persistently" (\_ ->
+        let original = fromSeq [1, 2], updated = set original 0 9 in
+        check "persistent set" (get original 0 == 1 && get updated 0 == 9)),
+    testCase "IntArray transforms and slices" (\_ ->
+        let values = fromSeq [1, 2, 3, 4] in
+        check "transform" (toSeq (filter (\x -> x > 4) (map (\x -> x * 2) values)) == [6, 8] &&
+                           foldl (\a b -> a + b) 0 (slice values 1 2) == 5))
+] in render (run cases)

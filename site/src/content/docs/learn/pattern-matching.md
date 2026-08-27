@@ -291,7 +291,13 @@ non-exhaustive match that falls off the end aborts at runtime. For code checked
 with `yonac --require-effect-free`, missing alternatives in registered finite
 ADTs and `Bool` are instead E0203 errors; ordinary compilation keeps them as
 the opt-in `--Wincomplete-patterns` warning. The strict gate also requires a
-conservative direct structural-recursion proof and rejects mutual recursion;
+sound structural size-change proof for every local direct or mutual recursive
+SCC. It accepts lexicographic multi-parameter descent when each cycle provably
+decreases through fields or non-empty sequence tails bound by unguarded
+patterns. Numeric decreases, guarded descent, opaque/helper or higher-order
+recursion, incompatible-arity SCCs, and mixed incompatible cycles remain
+conservatively rejected.
+
 `--Woverlapping-patterns` identifies arms provably covered by earlier
 unguarded arms, including aliases, alternatives, nested constructors, tuples,
 exact and head–tail sequences, and scalar literals. It combines complete root

@@ -1,0 +1,9 @@
+import pmap, pfor from Std\Parallel,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Parallel map preserves order" (\_ ->
+        check "pmap" (pmap (\x -> x * 2) [1, 2, 3] == [2, 4, 6])),
+    testCase "Parallel for completes" (\_ ->
+        check "pfor" (pfor (\x -> x + 1) [1, 2, 3] == 0))
+] in render (run cases)

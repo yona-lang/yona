@@ -1,0 +1,10 @@
+import format from Std\Format,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+        testCase "formats one placeholder" (\_ -> check "one" (format "hello {}" ["world"] == "hello world")),
+        testCase "formats in order" (\_ -> check "ordered" (format "{}:{}:{}" ["a", "b", "c"] == "a:b:c")),
+        testCase "doubled braces are literal" (\_ -> check "braces" (format "{{}}" [] == "{}")),
+        testCase "extra arguments are ignored" (\_ -> check "extra" (format "plain" ["unused"] == "plain"))
+    ]
+in render (run cases)

@@ -289,6 +289,15 @@ static CmdResult run_yonac_ir(const fs::path& src, const std::vector<std::string
     return run_cmd(cmd.str());
 }
 
+static CmdResult run_yonac_typed_core(const fs::path& src) {
+    std::ostringstream cmd;
+    cmd << yona::test::link::qpath(tool("yonac")) << " --sysroot "
+        << yona::test::link::qpath(bin_dir()) << " -I "
+        << yona::test::link::qpath(yona::test::lib_dir())
+        << " --emit-typed-core " << yona::test::link::qpath(src) << " 2>&1";
+    return run_cmd(cmd.str());
+}
+
 TEST_CASE("yonac fails E0500 on unproven head") {
     auto src = write_temp_yona(
         "e0500_head",
@@ -449,6 +458,98 @@ TEST_CASE("yonac --require-effect-free requires structural recursion") {
     CHECK(mutual_result.status != 0);
     CHECK(mutual_result.out.find("E0203") != std::string::npos);
     CHECK(mutual_result.out.find("mutual recursion") != std::string::npos);
+
+    auto mutual_structural = write_temp_yona("effect_free_mutual_structural", "module Test\\MutualStructural\n"
+                                                                              "export even\nexport odd\n"
+                                                                              "type Nat = Zero | Succ Nat\n"
+                                                                              "even n = case n of Zero -> true; Succ rest -> odd rest end\n"
+                                                                              "odd n = case n of Zero -> false; Succ rest -> even rest end\n");
+    auto mutual_structural_result = run_yonac_ir(mutual_structural, {"--require-effect-free"});
+    CHECK(mutual_structural_result.status == 0);
+    CHECK(mutual_structural_result.out.find("E0203") == std::string::npos);
+
+    auto lexical = write_temp_yona("effect_free_lexical_structural",
+                                   "module Test\\LexicalStructural\n"
+                                   "export walk\n"
+                                   "type Nat = Zero | Succ Nat\n"
+                                   "walk stable changing = case changing of Zero -> stable; Succ rest -> walk stable rest end\n");
+    CHECK(run_yonac_ir(lexical, {"--require-effect-free"}).status == 0);
+
+    auto incompatible = write_temp_yona("effect_free_incompatible_cycle", "module Test\\IncompatibleCycle\n"
+                                                                          "export left\nexport right\n"
+                                                                          "type Nat = Zero | Succ Nat\n"
+                                                                          "left a b = case a of Zero -> b; Succ rest -> right b rest end\n"
+                                                                          "right a b = case a of Zero -> b; Succ rest -> left b rest end\n");
+    auto incompatible_result = run_yonac_ir(incompatible, {"--require-effect-free"});
+    CHECK(incompatible_result.status != 0);
+    CHECK(incompatible_result.out.find("E0203") != std::string::npos);
+    CHECK(incompatible_result.out.find("recursive component 'left, right'") != std::string::npos);
+    CHECK(incompatible_result.out.find("left -> right") != std::string::npos);
+    CHECK(incompatible_result.out.find("mutual recursion has no provable lexicographic structural descent") != std::string::npos);
+    CHECK(incompatible_result.out.find("Repair:") != std::string::npos);
+    CHECK(incompatible_result.out.find("Succ rest -> loop rest") != std::string::npos);
+
+    auto numeric = write_temp_yona("effect_free_numeric_recursion", "module Test\\NumericRecursion\nexport loop\nloop n = loop (n - 1)\n");
+    auto numeric_result = run_yonac_ir(numeric, {"--require-effect-free"});
+    CHECK(numeric_result.status != 0);
+    CHECK(numeric_result.out.find("E0203") != std::string::npos);
+    CHECK(numeric_result.out.find("recursive component 'loop'") != std::string::npos);
+    CHECK(numeric_result.out.find("loop -> loop") != std::string::npos);
+    CHECK(numeric_result.out.find("recursive call has no provable lexicographic structural descent") != std::string::npos);
+    CHECK(numeric_result.out.find("Repair:") != std::string::npos);
+    CHECK(numeric_result.out.find("Succ rest -> loop rest") != std::string::npos);
+
+    auto callable_alias = write_temp_yona("effect_free_callable_alias_recursion", "module Test\\CallableAliasRecursion\n"
+                                                                                  "export loop\n"
+                                                                                  "loop n = let f = loop in f n\n");
+    auto callable_alias_result = run_yonac_ir(callable_alias, {"--require-effect-free"});
+    CHECK(callable_alias_result.status != 0);
+    CHECK(callable_alias_result.out.find("E0203") != std::string::npos);
+
+    auto lexical_capture = write_temp_yona("effect_free_lexical_capture", "module Test\\LexicalCapture\n"
+                                                                          "export outer\n"
+                                                                          "f n = outer n\n"
+                                                                          "outer n = let f = identity in let g x = f x in g n\n");
+    auto lexical_capture_result = run_yonac_ir(lexical_capture, {"--require-effect-free"});
+    CHECK(lexical_capture_result.status == 0);
+    CHECK(lexical_capture_result.out.find("E0203") == std::string::npos);
+
+    auto guarded_function = write_temp_yona("effect_free_guarded_function_recursion", "module Test\\GuardedFunctionRecursion\n"
+                                                                                      "export loop\n"
+                                                                                      "type Nat = Zero | Succ Nat\n"
+                                                                                      "loop (Succ rest) = if true -> loop rest\n");
+    auto guarded_function_result = run_yonac_ir(guarded_function, {"--require-effect-free"});
+    CHECK(guarded_function_result.status != 0);
+    CHECK(guarded_function_result.out.find("E0203") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free explains incompatible recursive arity") {
+    auto src = write_temp_yona("effect_free_incompatible_arity", "module Test\\IncompatibleArity\n"
+                                                                 "export left\nexport right\n"
+                                                                 "left n = right n n\n"
+                                                                 "right a b = left a\n");
+    auto result = run_yonac_ir(src, {"--require-effect-free"});
+
+    CHECK(result.status != 0);
+    CHECK(result.out.find("E0203") != std::string::npos);
+    CHECK(result.out.find("recursive component 'left, right'") != std::string::npos);
+    CHECK(result.out.find("left -> right") != std::string::npos);
+    CHECK(result.out.find("recursive component members have incompatible arity") != std::string::npos);
+    CHECK(result.out.find("same number of parameters") != std::string::npos);
+    CHECK(result.out.find("reshape the recursive component") != std::string::npos);
+    CHECK(result.out.find("Succ rest -> loop rest") == std::string::npos);
+    CHECK(result.out.find("constructor field") == std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free help states its conservative scope") {
+    auto result = run_cmd(yona::test::link::qpath(tool("yonac")) + " --help 2>&1");
+
+    CHECK(result.status == 0);
+    CHECK(result.out.find("closed empty effect rows") != std::string::npos);
+    CHECK(result.out.find("finite case coverage") != std::string::npos);
+    CHECK(result.out.find("local recursive") != std::string::npos);
+    CHECK(result.out.find("SCCs (not a global termination proof)") != std::string::npos);
+    CHECK(result.out.find("not a global termination proof") != std::string::npos);
 }
 
 TEST_CASE("yonac --require-effect-free rejects imported functions without effect rows") {
@@ -462,4 +563,158 @@ TEST_CASE("yonac --require-effect-free rejects imported functions without effect
     auto r = run_yonac_ir(src, {"--require-effect-free", "-I", modules.string()});
     CHECK(r.status != 0);
     CHECK(r.out.find("E0203") != std::string::npos);
+}
+
+TEST_CASE("yonac selective imports preserve package-qualified module separators") {
+    fs::path modules = yona::test::link::scratch_root() / "package_qualified_import";
+    fs::create_directories(modules / "Foo");
+    {
+        std::ofstream iface(modules / "Foo" / "Bar.yonai");
+        iface << "FN yona_Foo_Bar__identity 1 INT -> INT effects -\n";
+    }
+    auto src = write_temp_yona("package_qualified_import",
+                               "module Test\\PackageQualifiedImport\n"
+                               "export call\n"
+                               "call n = import identity from Foo\\Bar in identity n\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free", "-I", modules.string()});
+    CHECK(r.status == 0);
+    CHECK(r.out.find("E0203") == std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free rejects imported open rows through value aliases") {
+    auto src = write_temp_yona("effect_free_imported_open_value_alias", "module Test\\ImportedOpenValueAlias\n"
+                                                                          "export forward\n"
+                                                                          "forward a b = get a b\n"
+                                                                          "get = import gcd from Std\\Math in gcd\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free"});
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0203") != std::string::npos);
+    CHECK(r.out.find("closed empty effect row") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free preserves later imported open rows in mutual SCCs") {
+    auto src = write_temp_yona("effect_free_mutual_later_imported_open_row",
+                               "module Test\\MutualImportedBranch\n"
+                               "export even\nexport odd\n"
+                               "type Nat = Zero | Succ Nat\n"
+                               "even n = case n of Succ rest -> odd rest; Zero -> import gcd from Std\\Math in gcd 1 1 end\n"
+                               "odd n = case n of Succ rest -> even rest; Zero -> import gcd from Std\\Math in gcd 1 1 end\n");
+    auto r = run_yonac_ir(src, {"--require-effect-free"});
+    CHECK(r.status != 0);
+    CHECK(r.out.find("E0203") != std::string::npos);
+    CHECK(r.out.find("closed empty effect row") != std::string::npos);
+}
+
+TEST_CASE("yonac module dependencies respect whole-module import bindings") {
+    auto src = write_temp_yona("module_dependency_wildcard_import_shadow", "module Test\\WildcardShadow\n"
+                                                                            "export both\n"
+                                                                            "apply = (outer identity 1, outer identity \"two\")\n"
+                                                                            "outer f x = import Std\\Function in apply x f\n"
+                                                                            "both = apply\n");
+    auto r = run_yonac_ir(src);
+    CHECK(r.status == 0);
+    CHECK(r.out.find("E0100") == std::string::npos);
+}
+
+TEST_CASE("yonac keeps callbacks returned by recursive calls effect-polymorphic") {
+    auto src = write_temp_yona(
+        "preliminary_independent_callback_rows",
+        "module Test\\PreliminaryIndependentRows\n"
+        "export result\n"
+        "left f g n = do use f g n; f end\n"
+        "right f g n = do use f g n; g end\n"
+        "use f g n = ((left f g n) n, (right f g n) n)\n"
+        "get x = do perform State.get (); x end\n"
+        "log x = do perform Log.log (); x end\n"
+        "result = use get log 0\n");
+
+    auto result = run_yonac_ir(src);
+
+    CHECK(result.status == 0);
+    CHECK(result.out.find("E0100") == std::string::npos);
+}
+
+TEST_CASE("yonac typed core retains effects from independent HOF callbacks") {
+    auto src = write_temp_yona(
+        "independent_callback_effects",
+        "module Test\\IndependentCallbackEffects\n"
+        "export result\n"
+        "use f g n = (f n, g n)\n"
+        "get x = do perform State.get (); x end\n"
+        "log x = do perform Log.log (); x end\n"
+        "result = use get log 0\n");
+
+    auto result = run_yonac_typed_core(src);
+
+    REQUIRE(result.status == 0);
+    const auto result_start = result.out.find("function result ");
+    REQUIRE(result_start != std::string::npos);
+    const auto result_end = result.out.find('\n', result_start);
+    const auto result_line = result.out.substr(result_start,
+                                                result_end - result_start);
+    CHECK(result_line.find("State.get") != std::string::npos);
+    CHECK(result_line.find("Log.log") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free rejects module higher-order open rows") {
+    auto forward = write_temp_yona("effect_free_forward_higher_order", "module Test\\ForwardHigherOrderEffects\n"
+                                                                         "export forward\nexport apply\n"
+                                                                         "forward f x = apply f x\n"
+                                                                         "apply f x = f x\n");
+    auto forward_result = run_yonac_ir(forward, {"--require-effect-free"});
+    CHECK(forward_result.status != 0);
+    CHECK(forward_result.out.find("E0203") != std::string::npos);
+    CHECK(forward_result.out.find("closed empty effect row") != std::string::npos);
+
+    auto recursive = write_temp_yona("effect_free_recursive_higher_order", "module Test\\RecursiveHigherOrderEffects\n"
+                                                                             "export app\n"
+                                                                             "type Nat = Zero | Succ Nat\n"
+                                                                             "app f n = case n of Zero -> f n; Succ rest -> app f rest end\n");
+    auto recursive_result = run_yonac_ir(recursive, {"--require-effect-free"});
+    CHECK(recursive_result.status != 0);
+    CHECK(recursive_result.out.find("E0203") != std::string::npos);
+    CHECK(recursive_result.out.find("closed empty effect row") != std::string::npos);
+}
+
+TEST_CASE("yonac --require-effect-free rejects recursive HOF rows in either arm order") {
+    const std::vector<std::pair<std::string, std::string>> modules = {
+        {"effect_free_hof_callback_first",
+         "module Test\\CallbackFirst\n"
+         "export app\n"
+         "type Nat = Zero | Succ Nat\n"
+         "app f n = case n of Zero -> f n; Succ rest -> app f rest end\n"},
+        {"effect_free_hof_recursive_first",
+         "module Test\\RecursiveFirst\n"
+         "export app\n"
+         "type Nat = Zero | Succ Nat\n"
+         "app f n = case n of Succ rest -> app f rest; Zero -> f n end\n"},
+    };
+
+    for (const auto& [stem, source] : modules) {
+        CAPTURE(stem);
+        auto result = run_yonac_ir(write_temp_yona(stem, source),
+                                   {"--require-effect-free"});
+        CHECK(result.status != 0);
+        CHECK(result.out.find("E0203") != std::string::npos);
+        CHECK(result.out.find("closed empty effect row") != std::string::npos);
+    }
+}
+
+TEST_CASE("yonac --require-effect-free preserves HOF rows unified with preliminary tails") {
+    auto source = write_temp_yona(
+        "effect_free_hof_rank_contamination",
+        "module Test\\RankContamination\n"
+        "export a\n"
+        "export b\n"
+        "type Nat = Zero | Succ Nat\n"
+        "a f n = case n of Succ rest -> (a f) rest; Zero -> b f n end\n"
+        "b f n = case n of Succ rest -> (a f) rest; Zero -> f n end\n");
+
+    auto result = run_yonac_ir(source, {"--require-effect-free"});
+
+    CHECK(result.status != 0);
+    CHECK(result.out.find("requires 'a' to have a closed empty effect row") !=
+          std::string::npos);
+    CHECK(result.out.find("requires 'b' to have a closed empty effect row") !=
+          std::string::npos);
 }

@@ -1,0 +1,22 @@
+import channel, send, recv, tryRecv, close, capacity from Std\Channel,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Channel sends in FIFO order" (\_ ->
+        let (senderLinear, receiverLinear) = channel 2 in
+        case senderLinear of Linear sender ->
+        case receiverLinear of Linear receiver -> do
+            send sender 41
+            send sender 42
+            close sender
+            check "fifo" (recv receiver == Some 41 && recv receiver == Some 42 && recv receiver == None)
+        end end end),
+    testCase "Channel empty try-receive is None" (\_ ->
+        let (senderLinear, receiverLinear) = channel 3 in
+        case senderLinear of Linear sender ->
+        case receiverLinear of Linear receiver ->
+            let result = check "empty" (capacity sender == 3 && tryRecv receiver == None) in do
+            close sender
+            result
+        end end end)
+] in render (run cases)

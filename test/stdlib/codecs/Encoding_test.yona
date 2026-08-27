@@ -1,0 +1,16 @@
+import base64Encode, base64Decode, hexEncode, hexDecode, urlEncode, urlDecode, htmlEscape from Std\Encoding,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Encoding base64 round trips" (\_ ->
+        check "base64" (base64Decode (base64Encode "hello β") == "hello β" &&
+                        base64Decode "" == "" && base64Decode "YQ==" == "a")),
+    testCase "Encoding base64 rejects malformed input" (\_ ->
+        check "invalid base64" (base64Decode "abc" == "" && base64Decode "!!!!" == "")),
+    testCase "Encoding hex round trips" (\_ ->
+        check "hex" (hexEncode "ABC" == "414243" && hexDecode "414243" == "ABC")),
+    testCase "Encoding URL round trips reserved text" (\_ ->
+        check "url" (urlDecode (urlEncode "a b&c") == "a b&c")),
+    testCase "Encoding escapes HTML metacharacters" (\_ ->
+        check "html" (htmlEscape "<a>&" == "&lt;a&gt;&amp;"))
+] in render (run cases)

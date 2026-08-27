@@ -1,0 +1,11 @@
+import join, dirname, basename, extension, withExtension, isAbsolute from Std\Path,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Path decomposes filenames" (\_ ->
+        check "decompose" (dirname "/tmp/a.txt" == "/tmp" && basename "/tmp/a.txt" == "a.txt" && extension "/tmp/a.txt" == ".txt")),
+    testCase "Path changes extensions" (\_ ->
+        check "extension" (withExtension "/tmp/a.txt" ".md" == "/tmp/a.md")),
+    testCase "Path joins and recognizes roots" (\_ ->
+        check "join absolute" (join "/tmp" "a" == "/tmp/a" && isAbsolute "/tmp/a"))
+] in render (run cases)

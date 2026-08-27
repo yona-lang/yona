@@ -302,6 +302,8 @@ private:
         bool effect_row_known = false;
         bool effect_open_rest = false;
         bool effect_hof = false;
+        /// Versioned normalized effect graph for every source arrow.
+        std::string effect_scheme;
         /// Concrete source ADT names for ADT-ABI parameters. This prevents
         /// interface emission from degrading `Option a` to anonymous `ADT`.
         std::vector<std::string> param_adt_names;
@@ -521,6 +523,7 @@ private:
         bool effect_open_rest = false;
         /// First parameter is a function that shares this row (`effects … hof`).
         bool effect_hof = false;
+        std::string effect_scheme;
     };
     struct NativeDependency {
         std::string c_symbol;

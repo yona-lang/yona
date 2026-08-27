@@ -1,0 +1,16 @@
+import sha256, randomBytes, randomHex, uuid4 from Std\Crypto,
+       length from Std\String,
+       length as byteLength from Std\ByteArray,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Crypto SHA-256 matches a standard vector" (\_ ->
+        check "sha256" (sha256 "hello" == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")),
+    testCase "Crypto random outputs honor lengths" (\_ ->
+        check "random lengths"
+            (byteLength (randomBytes 8) == 8 && length (randomHex 8) == 16 &&
+             byteLength (randomBytes 0) == 0 && length (randomHex 0) == 0 &&
+             byteLength (randomBytes (0 - 1)) == 0)),
+    testCase "Crypto UUID has canonical width" (\_ ->
+        check "uuid width" (length uuid4 == 36))
+] in render (run cases)

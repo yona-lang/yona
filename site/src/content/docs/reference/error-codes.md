@@ -143,7 +143,7 @@ perform State.put 42
 
 ### E0202 — Unhandled effect at call site
 
-A function whose type includes latent effects (`!{Effect.op}`) is applied where those operations are not covered by a surrounding `handle ... with`. The primary diagnostic points at the introducing `perform`; a note marks the call that lets the effect escape.
+A function whose type includes latent effects (`!{Effect.op}`) is applied where those operations are not covered by a surrounding `handle ... with`. The primary diagnostic points at the introducing `perform`; a note marks the application that lets the effect escape. Independent callback effects are reported separately, but pure curried partial applications do not repeat an operation before the final source application runs.
 
 ```yona
 # f : a -> !{State.get} Int
@@ -161,13 +161,23 @@ A direct `perform` without a handler still warns via `-Wunhandled-effect`.
 ### E0203 — Effect-freedom requirement not satisfied
 
 `yonac --require-effect-free` accepts only a closed empty effect row, exhaustive
-registered finite-ADT and `Bool` `case` expressions, and direct recursion with
-a conservative structural-descent proof. Known operations, open row variables,
-imports without row facts, missing alternatives, unproven direct recursion, and
-mutual recursion are rejected; a proven empty exported row is recorded in
-`.yonai` as `effects -`. Ordinary compilation remains non-fatal:
-`--Wincomplete-patterns` warns about missing alternatives. The flag does not
-prove general termination or arbitrary non-ADT coverage.
+registered finite-ADT and `Bool` `case` expressions, and a sound structural
+size-change proof for every local recursive SCC. Direct and mutual recursion can
+be accepted, including lexicographic descent over multiple parameters. Proof
+facts come from structural fields or non-empty sequence tails bound by
+unguarded patterns; simple lexical aliases preserve them.
+
+Known operations, open row variables, imports without row facts, missing
+alternatives, numeric decreases, guarded descent, opaque/helper or higher-order
+recursion, incompatible-arity SCCs, mixed incompatible cycles, and every other
+unproved recursive cycle are rejected. A proven empty exported row is recorded
+in `.yonai` as `effects -`.
+
+The flag is not a general termination checker and does not prove arbitrary
+open-domain coverage. Ordinary compilation remains unchanged; for example,
+`--Wincomplete-patterns` can warn about missing alternatives. Strict E0203
+validation is CLI-only today because `yls` and the VS Code and Zed integrations
+do not expose `--require-effect-free`; ordinary diagnostics remain shared.
 
 ## Parse errors (E03xx)
 

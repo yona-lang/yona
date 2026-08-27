@@ -1,0 +1,16 @@
+import writeFile, appendFile, readFile, exists, size, remove from Std\File,
+       testCase, check, run, render from Std\Test
+in
+let path = "/tmp/yona_stdlib_file_contract.txt",
+    cases = [
+        testCase "File writes appends and reads" (\_ -> do
+            writeFile path "one"
+            appendFile path "-two"
+            check "contents" (exists path && size path == 7 && readFile path == "one-two")
+        end),
+        testCase "File removal is observable" (\_ -> do
+            remove path
+            check "removed" (if exists path then false else true)
+        end)
+    ]
+in render (run cases)

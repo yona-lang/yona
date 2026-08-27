@@ -1,289 +1,159 @@
-# Algebraic Effects in Yona
+# Algebraic effects in Yona
 
-**Status (2026-08-19):** **partial.** `perform` / `handle` parse, typecheck, and
-compile as in-scope handler dispatch. Effect rows unify (closed + open rest);
-HOF and wrapping propagate; `handle` subtracts; unhandled apply is **E0202**.
-Closed `.yonai` `FN … effects` rows and open `effects | hof` are written
-and restored on import. Sibling exports inherit applied helpers' rows.
-`effect` declarations and CPS resume are **not**. Evidence:
-[type-system-status.md](type-system-status.md) §1–2.
-Rows: GitHub [#8](https://github.com/yona-lang/yona/issues/79).
+**Status (2026-08-27): partial.** `perform` and `handle` parse, typecheck,
+and compile as shallow lexical handler dispatch. The compiler now infers
+lossless latent-effect unions through higher-order functions, recursive
+components, handlers, polymorphic schemes, and module interfaces. Parsed
+`effect` declarations and captured delimited continuations are still not
+implemented. See [type-system-status.md](type-system-status.md) for the audit
+and GitHub [#8](https://github.com/yona-lang/yona/issues/79) for the remaining
+language-surface work.
 
-## The Problem
+## `perform` and `handle`
 
-In most languages, side effects are invisible. A function `processOrder(order)` might read from a database, write to a log, send an email, throw an exception, or modify global state — and you can't tell from its signature.
-
-This creates three practical problems:
-
-1. **Testing**: You need mock frameworks, dependency injection containers, and interface hierarchies just to test a function that reads from a database.
-
-2. **Composition**: Error handling via try/catch doesn't compose. Logging is a cross-cutting concern that pollutes every function signature. State must be threaded manually or hidden in globals.
-
-3. **Flexibility**: If your function hardcodes `println` for logging, you can't switch to file logging, structured logging, or silent logging without changing the function.
-
-Haskell addresses this with monads, but monad transformer stacks are verbose and don't compose well. Go uses interfaces, but they don't track which effects a function performs. Rust uses traits and generics, but requires manual plumbing.
-
-## The Solution: Typed, Composable Effects
-
-Yona's algebraic effect system makes side effects explicit, composable, and handleable:
+`perform Effect.operation value` requests an operation from the nearest
+enclosing handler that covers its label. A handler clause receives the
+operation arguments and a `resume` value; the optional `return` clause maps a
+normal result.
 
 ```yona
--- Declare what operations an effect provides
-effect Database
-    query : String -> Seq
-    insert : String -> Seq -> Bool
+handle
+    let value = perform State.get () in
+    value + 1
+with
+    State.get () resume -> resume 41
+    return value -> value
 end
-
--- Functions perform effect operations (like calling an interface method)
-processOrder order =
-    let items = perform Database.query order.id in
-    do
-        perform Log.log ("Processing " ++ order.id)
-        perform Database.insert "results" items
-    end
-
--- The CALLER decides how effects are handled
-handle processOrder myOrder with
-    Database.query sql resume -> resume (real_db_query sql)
-    Database.insert t d resume -> resume (real_db_insert t d)
-    Log.log msg resume -> do; appendFile "app.log" msg; resume (); end
-    return val -> val
-end
+# => 42
 ```
 
-The same function works with different handlers — production, testing, staging — without any code changes.
+Operations are identified by their `Effect.operation` label. There is no
+source-level `effect … end` declaration today: registered operations are a
+compiler/library contract, and argument types are checked at the `perform`
+site.
 
-## Syntax
-
-### Declaring Effects
-
-```yona
-effect State s
-    get : () -> s
-    put : s -> ()
-end
-
-effect Console
-    readLine : () -> String
-    print : String -> ()
-end
-
-effect Failure e
-    fail : e -> a
-end
-```
-
-An effect declares a set of operations with typed signatures. The type parameter (`s`, `e`) is instantiated when the effect is handled.
-
-### Performing Operations
-
-```yona
-let count = perform State.get () in
-perform State.put (count + 1)
-perform Console.print "hello"
-```
-
-`perform` calls an effect operation. It suspends the current computation until a handler provides the result via `resume`.
-
-### Handling Effects
-
-```yona
-handle <body> with
-    Effect.operation args resume -> <handler body>
-    ...
-    return val -> <return body>
-end
-```
-
-- **Handler clauses**: Match effect operations by name. `resume` is the continuation — calling `resume value` returns `value` to the `perform` site and continues execution.
-- **Return clause**: Transforms the final result of the body. Optional (defaults to identity).
-
-## Examples
-
-### Testing Without Mocks
-
-```yona
-effect Database
-    query : String -> Seq
-end
-
-getUsers = perform Database.query "SELECT * FROM users"
-
--- Production
-handle getUsers with
-    Database.query sql resume -> resume (postgresql_query conn sql)
-    return val -> val
-end
-
--- Test: no database needed
-handle getUsers with
-    Database.query sql resume -> resume [("alice", 30), ("bob", 25)]
-    return val -> val
-end
-```
-
-### Error Handling That Composes
-
-```yona
-effect Failure
-    fail : String -> a
-end
-
-parseConfig path =
-    let content = readFile path in
-    case validateJson content of
-        :error -> perform Failure.fail ("Invalid config: " ++ path)
-        result -> result
-    end
-
--- Strategy 1: abort with default
-handle parseConfig "config.yaml" with
-    Failure.fail msg resume -> defaultConfig
-    return val -> val
-end
-
--- Strategy 2: collect errors and continue
-handle parseConfig "config.yaml" with
-    Failure.fail msg resume ->
-        do; logError msg; resume defaultValue; end
-    return val -> val
-end
-```
-
-The same `parseConfig` works with "abort", "default", or "collect errors" — decided by the caller.
-
-### Pure State
-
-```yona
-effect State s
-    get : () -> s
-    put : s -> ()
-end
-
-counter =
-    let n = perform State.get () in
-    do
-        perform State.put (n + 1)
-        perform State.get ()
-    end
-
--- Run with initial state 0
-handle counter with
-    State.get () resume -> resume 42
-    State.put s resume -> resume ()
-    return val -> val
-end
--- Result: 42
-```
-
-Functions use "stateful" operations without any actual mutation. The handler provides the behavior.
-
-### Logging Without Pollution
-
-```yona
-effect Log
-    log : String -> ()
-end
-
-processPayment amount =
-    do
-        perform Log.log "payment_start"
-        result = chargeCard amount
-        perform Log.log ("charged: " ++ show amount)
-        result
-    end
-
--- Production: file logging
-handle processPayment 100 with
-    Log.log msg resume -> do; appendFile "app.log" msg; resume (); end
-    return val -> val
-end
-
--- Test: silent
-handle processPayment 100 with
-    Log.log msg resume -> resume ()
-    return val -> val
-end
-```
-
-### Nested Handlers
-
-Inner handlers shadow outer handlers for the same effect:
+Handlers are lexical. A nested handler for the same operation takes priority:
 
 ```yona
 handle
     handle perform State.get () with
         State.get () resume -> resume 99
-        return val -> val
+        return value -> value
     end
 with
     State.get () resume -> resume 0
-    return val -> val
+    return value -> value
 end
--- Result: 99 (inner handler wins)
+# => 99
 ```
 
-## How It Works
+## Latent effect rows
 
-Yona uses **continuation-passing style (CPS) transformation** at compile time. No runtime stack manipulation, no garbage collector, no overhead for code that doesn't use effects.
+Every function arrow has a latent effect expression. Diagnostics print its
+normalized summary as `!{Effect.operation}`; an unresolved source appears as
+an open tail, `!{|r}`. Source code does not need effect annotations.
 
-When you write:
 ```yona
-let x = perform State.get () in
-x + 1
+let read = \x -> perform State.get () in
+read 0                         # `read` has !{State.get}
 ```
 
-The compiler transforms this into:
+Internally the checker uses a separate effect-constraint graph rather than a
+single row tail. Its operations are associative, commutative, and idempotent
+join, symbolic handler masking, and true equality. That distinction matters
+for higher-order code:
+
 ```yona
-handler_get (\x -> x + 1)
+let use f g n = (f n, g n) in
+use get log 0
 ```
 
-The "rest of the computation" (`x + 1`) becomes a closure passed to the handler. The handler calls this closure with `resume value` to continue execution.
+If `get` performs `State.get` and `log` performs `Log.log`, `use` has the
+union of both effects. The callback rows remain independent: a later call can
+instantiate `use` with entirely different callbacks without sharing or
+unifying their effect variables. Reordering the callbacks does not change the
+summary.
 
-### Key Properties
+Application adds the callee's latent effect expression to the caller; it does
+not equate callback effects merely because both are used. A curried function
+only evaluates its body after its final source argument. Its earlier partial
+application stages are pure, and diagnostics report each uncovered operation
+once at the application which actually runs the body.
 
-- **Zero cost when not used**: No effect system overhead in code that doesn't use `perform`
-- **One-shot continuations**: Calling `resume` exactly once is the common case and has zero overhead beyond a closure call
-- **Reference counted**: Continuation closures participate in Yona's RC system — no leaks, no GC needed
-- **Compiled to native**: Effects compile to direct closure calls via LLVM, not interpreted
-
-## Comparison
-
-| Language | Approach | Trade-off |
-|----------|----------|-----------|
-| **Yona** | Native algebraic effects via CPS | Zero-cost one-shot continuations, compiled to LLVM |
-| Haskell | Monads / MTL | Transformer stacks, lifting boilerplate |
-| OCaml 5 | Algebraic effects | Runtime (not ahead-of-time compiled) |
-| Koka | Algebraic effects | Compiles to C (not LLVM), smaller ecosystem |
-| Scala ZIO | Effect types as library | JVM overhead, not native |
-| Rust | Traits + generics | Manual plumbing, no handler composition |
-| Go | Interfaces | No effect tracking, no continuations |
-
-## Module System
-
-Effects can be exported from modules:
+`handle` creates a symbolic mask, so it also works when a helper's callback
+effect is unknown when the helper is defined:
 
 ```yona
-module Std\Effects
-
-export effect State
-export effect Failure
-
-effect State s
-    get : () -> s
-    put : s -> ()
-end
-
-effect Failure e
-    fail : e -> a
+let use f n = f n,
+    get n = do perform State.get (); n end
+in
+handle use get 0 with
+    State.get () resume -> resume 7
+    return value -> value
 end
 ```
 
-Import and use:
+Recursive function bodies use least-derived effect cells. Pure direct and
+mutual recursion therefore closes to an empty row; a callback, imported open
+row, or other opaque source remains open and is never defaulted away.
+
+## E0202 — unhandled application effects
+
+Applying an effectful function outside a covering handler is an **E0202**
+error. The primary diagnostic points at the originating `perform`; a note
+points at the application that lets it escape.
+
 ```yona
-import effect State from Std\Effects in
-handle perform State.get () with
-    State.get () resume -> resume 42
-    return val -> val
+let read = \x -> perform State.get () in
+read 0
+# error[E0202]: unhandled effect operation 'State.get'
+```
+
+Handle the operation at its use site:
+
+```yona
+let read = \x -> perform State.get () in
+handle read 0 with
+    State.get () resume -> resume 7
+    return value -> value
 end
 ```
+
+A direct `perform` with no enclosing function application remains the
+`-Wunhandled-effect` warning; it raises `:UnhandledEffect` if reached at
+runtime.
+
+## Modules and polymorphism
+
+New `.yonai` files keep the familiar readable summary:
+
+```text
+FN yona_Test_Fx__fetch 1 STRING -> STRING effects Fs.read
+```
+
+They also carry a versioned `effectscheme v2` field. It is a deterministic,
+normalized description of every arrow in the exported type, including shared
+open variables and handler masks. On import, the whole scheme is cloned with
+fresh effect variables, preserving polymorphism and independent callback
+effects across module boundaries.
+
+Old interfaces remain supported. Closed `effects …` rows restore their known
+labels; legacy open metadata (`effects |`, optionally `hof`) becomes a
+conservative opaque source. A missing effect field is unknown, never proof of
+purity.
+
+## Current limitations
+
+- **Handlers are shallow lexical dispatch.** `resume` is an identity-style
+  continuation, not a captured delimited continuation. It cannot be stored,
+  resumed later, or used for backtracking/generator semantics.
+- **`effect` declarations are not parsed.** Operations are labels at
+  `perform` and `handle` sites; there is no exported operation-signature
+  declaration syntax yet.
+- **The strict gate is conservative.** `yonac --require-effect-free` requires
+  a closed empty summary, exhaustive finite pattern coverage, and a local
+  structural size-change proof. It is not a general termination checker.
+
+See [the public effects guide](/learn/effects/) for the user-facing version,
+[error codes](error-codes.md#e0202--unhandled-effect-at-call-site) for E0202,
+and [type-system-status.md](type-system-status.md) for implementation detail.

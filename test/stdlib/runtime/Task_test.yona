@@ -1,0 +1,7 @@
+import spawn from Std\Task,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Task spawn returns a task handle" (\_ ->
+        check "spawn" (spawn (\() -> 42) == 42))
+] in render (run cases)

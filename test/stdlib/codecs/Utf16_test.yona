@@ -1,0 +1,11 @@
+import offsetToLine, offsetToCharacter, positionToOffset from Std\Utf16,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Utf16 maps ASCII positions" (\_ ->
+        check "ascii" (offsetToLine "ab\ncd" 4 == 1 && offsetToCharacter "ab\ncd" 4 == 1)),
+    testCase "Utf16 counts surrogate pairs" (\_ ->
+        let text = "a😀b" in check "emoji" (offsetToCharacter text 5 == 3 && positionToOffset text 0 3 == 5)),
+    testCase "Utf16 handles CRLF lines" (\_ ->
+        let text = "a\r\nb" in check "crlf" (offsetToLine text 3 == 1 && positionToOffset text 1 0 == 3))
+] in render (run cases)

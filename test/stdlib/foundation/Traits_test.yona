@@ -1,0 +1,248 @@
+import testCase, check, run, render from Std\Test,
+       eqLaws, ordLaws, hashLaws, showLaws, semigroupLaws, monoidLaws from Std\TraitLaws,
+       fromString as bytesFromString from Std\ByteArray,
+       fromSeq as intsFromSeq from Std\IntArray,
+       fill as floatsFill from Std\FloatArray,
+       get as dictGet from Std\Dict,
+       toSeq as iteratorToSeq from Std\Iterator
+in
+let directCases = [
+    testCase "Eq compares primitive values" (\_ ->
+        check "primitive equality" (42 == 42 && "left" != "right")),
+    testCase "Ord compares derived values" (\_ ->
+        check "ordering constructors" (Less < Greater && Equal <= Equal)),
+    testCase "Sized measures strings" (\_ ->
+        check "string size counts Unicode scalars" (size "β😀" == 2)),
+    testCase "Sized measures empty sequences" (\_ ->
+        check "empty sequence size" (size [] == 0)),
+    testCase "Foldable folds left" (\_ ->
+        check "left sum" (foldLeft [1, 2, 3, 4] (\sum value -> sum + value) 0 == 10)),
+    testCase "Foldable folds right" (\_ ->
+        check "right subtraction" (foldRight [1, 2, 3] (\value rest -> value - rest) 0 == 2)),
+    testCase "Semigroup combines values" (\_ ->
+        check "string and sequence combination"
+            (combine "yo" "na" == "yona" && combine [1, 2] [3] == [1, 2, 3])),
+    testCase "Monoid supplies identities" (\_ ->
+        check "string and sequence identities"
+            (emptyLike "witness" == "" && emptyLike [1] == [])),
+    testCase "Lifted Option equality recurses" (\_ ->
+        check "nested sequences compare structurally"
+            (Some [1, 2] == Some [1, 2])),
+    testCase "Lifted Result equality recurses" (\_ ->
+        check "nested options compare structurally"
+            (Ok (Some "value") == Ok (Some "value"))),
+    testCase "Lifted sequence ordering is lexicographic" (\_ ->
+        check "the first differing element decides"
+            (compare [1, 2] [1, 3] == Less)),
+    testCase "Lifted sequence ordering recognizes equality" (\_ ->
+        check "equal sequences compare equal"
+            (compare [1, 2] [1, 2] == Equal)),
+    testCase "Lifted sequence ordering compares prefixes" (\_ ->
+        check "a shorter equal prefix sorts first"
+            (compare [1] [1, 0] == Less && compare [1, 0] [1] == Greater)),
+    testCase "Lifted sequence ordering checks the first difference" (\_ ->
+        check "an early difference wins"
+            (compare [0, 9] [1, 0] == Less)),
+    testCase "Lifted sequence ordering supports heap elements" (\_ ->
+        check "strings use their Ord instance"
+            (compare ["alpha", "beta"] ["alpha", "gamma"] == Less)),
+    testCase "Lifted sequence hashing follows equality" (\_ ->
+        check "equal sequences hash equally"
+            (hash ["same"] == hash ["same"])),
+    testCase "Lifted rendering is structural" (\_ ->
+        check "nested values use their Show instances"
+            (show (Some [1, 2]) == "Some([1, 2])")),
+    testCase "Foldable handles optional values" (\_ ->
+        check "Some folds once and None folds zero times"
+            (foldLeft (Some 4) (\sum value -> sum + value) 3 == 7 &&
+             foldRight None (\value sum -> value + sum) 3 == 3)),
+    testCase "Sized covers native arrays" (\_ ->
+        check "byte, integer, and float array lengths"
+            (size (bytesFromString "abc") == 3 &&
+             size (intsFromSeq [1, 2, 3, 4]) == 4 &&
+             size (floatsFill 2 1.5) == 2)),
+    testCase "Iterable adapts persistent and optional values" (\_ ->
+        check "iterators preserve element order and optional cardinality"
+            (iteratorToSeq (toIterator [1, 2, 3]) == [1, 2, 3] &&
+             iteratorToSeq (toIterator (Some 7)) == [7] &&
+             iteratorToSeq (toIterator None) == [])),
+    testCase "String Sized, Iterable, and Foldable agree" (\_ ->
+        check "each Unicode scalar is visited exactly once"
+            (size "aβ😀" == 3 &&
+             iteratorToSeq (toIterator "aβ😀") == [97, 946, 128512] &&
+             foldLeft "aβ😀" (\count _ -> count + 1) 0 == 3)),
+    testCase "Foldable covers native arrays" (\_ ->
+        check "native array folds use their element types"
+            (foldLeft (intsFromSeq [1, 2, 3]) (\sum value -> sum + value) 0 == 6 &&
+             foldRight (bytesFromString "ABC") (\value rest -> value + rest) 0 == 198)),
+    testCase "Sized covers finite collections" (\_ ->
+        check "sets, dictionaries, options, and results report cardinality"
+            (size {1, 2, 3} == 3 && size {1: 2, 3: 4} == 2 &&
+             size (Some 1) == 1 && size None == 0 && size (Ok 1) == 1)),
+    testCase "Set algebra supplies lawful identities" (\_ ->
+        check "union and empty set implement Semigroup and Monoid"
+            (combine {1, 2} {2, 3} == {1, 2, 3} &&
+             combine (emptyLike {1}) {1} == {1})),
+    testCase "Dictionary Semigroup is right biased" (\_ ->
+        check "right entries replace duplicate left keys"
+            (combine {1: 10, 2: 20} {2: 99, 3: 30} ==
+             {1: 10, 2: 99, 3: 30})),
+    testCase "Dictionary Semigroup replaces duplicate values" (\_ ->
+        let merged = combine {1: 10, 2: 20} {2: 99, 3: 30} in
+        check "duplicate lookup returns the right value"
+            (dictGet merged 2 0 == 99)),
+    testCase "Dictionary Semigroup keeps disjoint entries" (\_ ->
+        let merged = combine {1: 10, 2: 20} {2: 99, 3: 30} in
+        check "left-only and right-only keys remain"
+            (dictGet merged 1 0 == 10 && dictGet merged 3 0 == 30)),
+    testCase "Dictionary Semigroup preserves persistent inputs" (\_ ->
+        let left = {1: 10, 2: 20}, right = {2: 99, 3: 30},
+            merged = combine left right
+        in check "combining does not mutate either operand"
+            (dictGet left 2 0 == 20 && dictGet right 2 0 == 99 &&
+             dictGet merged 2 0 == 99)),
+    testCase "Dictionary equality is reflexive" (\_ ->
+        let value = {1: 10, 2: 20} in
+        check "a dictionary equals itself" (value == value)),
+    testCase "Dictionary equality is structural" (\_ ->
+        check "independent literals with equal entries compare equal"
+            ({1: 10, 2: 20} == {1: 10, 2: 20})),
+    testCase "Dictionary equality ignores insertion order" (\_ ->
+        check "HAMT traversal order is not observable"
+            ({1: 10, 2: 20} == {2: 20, 1: 10})),
+    testCase "Dictionary equality accepts a merged value reflexively" (\_ ->
+        let merged = combine {1: 10, 2: 20} {2: 99, 3: 30} in
+        check "a merged dictionary equals itself" (merged == merged)),
+    testCase "Dictionary equality accepts a bound merged value" (\_ ->
+        let merged = combine {1: 10, 2: 20} {2: 99, 3: 30},
+            expected = {1: 10, 2: 99, 3: 30}
+        in check "a named merge compares structurally" (merged == expected)),
+    testCase "Dictionary iteration sees merged entries" (\_ ->
+        let merged = combine {1: 10, 2: 20} {2: 99, 3: 30},
+            total = foldLeft merged
+                (\sum entry -> case entry of (key, value) -> sum + key + value end)
+                0
+        in check "iteration observes all replacement entries once" (total == 145)),
+    testCase "Dictionary Foldable yields canonical tuples" (\_ ->
+        check "entry pairs can be pattern matched"
+            (foldLeft {1: 10, 2: 20}
+                (\sum entry -> case entry of (key, value) -> sum + key + value end)
+                0 == 33)),
+    testCase "Array indexes every supported representation" (\_ ->
+        check "String, Seq, and native arrays preserve element types"
+            (get "aβ" 1 == 946 && get [10, 20] 1 == 20 &&
+             get (bytesFromString "AB") 1 == 66 &&
+             get (intsFromSeq [7, 8]) 1 == 8 &&
+             get (floatsFill 2 1.5) 1 == 1.5)),
+    testCase "Iterable covers native arrays" (\_ ->
+        check "native array iterators preserve values and order"
+            (iteratorToSeq (toIterator (bytesFromString "AB")) == [65, 66] &&
+             iteratorToSeq (toIterator (intsFromSeq [3, 4])) == [3, 4] &&
+             iteratorToSeq (toIterator (floatsFill 2 1.5)) == [1.5, 1.5])),
+    testCase "Iterable covers sets and dictionaries" (\_ ->
+        let setValues = iteratorToSeq (toIterator {1, 2, 3}),
+            entryTotal = foldLeft (iteratorToSeq (toIterator {1: 10, 2: 20}))
+                (\sum entry -> case entry of (key, value) -> sum + key + value end)
+                0
+        in check "unordered iterators visit every element exactly once"
+            (size setValues == 3 && foldLeft setValues (\sum value -> sum + value) 0 == 6 &&
+             entryTotal == 33)),
+    testCase "Iterable covers Result and Iterator" (\_ ->
+        let source = toIterator [4, 5] in
+        check "zero-or-one and identity adapters preserve cardinality"
+            (iteratorToSeq (toIterator (Ok 7)) == [7] &&
+             iteratorToSeq (toIterator (Err "no")) == [] &&
+             iteratorToSeq (toIterator source) == [4, 5])),
+    testCase "Foldable covers Set, Result, and FloatArray" (\_ ->
+        check "remaining finite containers fold with their element ABI"
+            (foldLeft {1, 2, 3} (\sum value -> sum + value) 0 == 6 &&
+             foldLeft (Ok 4) (\sum value -> sum + value) 3 == 7 &&
+             foldLeft (Err "no") (\sum value -> sum + value) 3 == 3 &&
+             foldLeft (floatsFill 2 1.5) (\sum value -> sum + value) 0.0 == 3.0))
+],
+    intEquals = \left right -> eq left right,
+    intCompare = \left right -> compare left right,
+    intHash = \value -> hash value,
+    intShow = \value -> show value,
+    stringEquals = \left right -> eq left right,
+    stringAppend = \left right -> combine left right,
+    orderingRender = \value -> case value of
+        Less -> "Less"
+        Equal -> "Equal"
+        Greater -> "Greater"
+    end,
+    lawCases =
+        eqLaws "Int" intShow intEquals [0, 1, 2] ++
+        ordLaws "Int" intShow intEquals intCompare [0, 1, 2] ++
+        hashLaws "Int" intShow intEquals intHash [7, 7, 9] ++
+        showLaws "Int" intShow [0, 42] ++
+        eqLaws "Bool" (\value -> show value) (\a b -> a == b) [false, true] ++
+        ordLaws "Bool" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [false, true] ++
+        hashLaws "Bool" (\value -> show value) (\a b -> a == b) (\a -> hash a) [false, true] ++
+        showLaws "Bool" (\value -> show value) [false, true] ++
+        eqLaws "Float" (\value -> show value) (\a b -> a == b) [-1.0, 0.0, 1.5] ++
+        ordLaws "Float" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [-1.0, 0.0, 1.5] ++
+        hashLaws "Float" (\value -> show value) (\a b -> a == b) (\a -> hash a) [0.0, -0.0, 1.5] ++
+        showLaws "Float" (\value -> show value) [0.0, 1.5] ++
+        eqLaws "String" (\value -> show value) (\a b -> a == b) ["", "β", "😀"] ++
+        ordLaws "String" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) ["", "a", "β"] ++
+        hashLaws "String" (\value -> show value) (\a b -> a == b) (\a -> hash a) ["same", "same", "other"] ++
+        showLaws "String" (\value -> show value) ["", "β"] ++
+        eqLaws "Symbol" (\value -> show value) (\a b -> a == b) [:alpha, :beta] ++
+        hashLaws "Symbol" (\value -> show value) (\a b -> a == b) (\a -> hash a) [:alpha, :alpha, :beta] ++
+        showLaws "Symbol" (\value -> show value) [:alpha, :beta] ++
+        eqLaws "Ordering" orderingRender (\a b -> a == b) [Less, Equal, Greater] ++
+        ordLaws "Ordering" orderingRender (\a b -> a == b) (\a b -> compare a b) [Less, Equal, Greater] ++
+        eqLaws "FileMode" (\value -> show value) (\a b -> a == b) [Read, Write, ReadWrite, Append] ++
+        ordLaws "FileMode" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [Read, Write, ReadWrite, Append] ++
+        hashLaws "FileMode" (\value -> show value) (\a b -> a == b) (\a -> hash a) [Read, Read, Write] ++
+        showLaws "FileMode" (\value -> show value) [Read, Append] ++
+        eqLaws "Whence" (\value -> show value) (\a b -> a == b) [SeekSet, SeekCur, SeekEnd] ++
+        ordLaws "Whence" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [SeekSet, SeekCur, SeekEnd] ++
+        hashLaws "Whence" (\value -> show value) (\a b -> a == b) (\a -> hash a) [SeekSet, SeekSet, SeekEnd] ++
+        showLaws "Whence" (\value -> show value) [SeekSet, SeekEnd] ++
+        eqLaws "Type" (\value -> show value) (\a b -> a == b) [TInt, TString, TAdt "Box"] ++
+        ordLaws "Type" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [TInt, TString, TAdt "Box"] ++
+        hashLaws "Type" (\value -> show value) (\a b -> a == b) (\a -> hash a) [TInt, TInt, TString] ++
+        showLaws "Type" (\value -> show value) [TInt, TAdt "Box"] ++
+        eqLaws "ConvertError" (\value -> show value) (\a b -> a == b) [InvalidConversion "x", ConversionOutOfRange "x"] ++
+        ordLaws "ConvertError" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [InvalidConversion "x", ConversionOutOfRange "x"] ++
+        hashLaws "ConvertError" (\value -> show value) (\a b -> a == b) (\a -> hash a) [InvalidConversion "x", InvalidConversion "x"] ++
+        showLaws "ConvertError" (\value -> show value) [InvalidConversion "x", ConversionOutOfRange "x"] ++
+        eqLaws "ParseError" (\value -> show value) (\a b -> a == b) [InvalidSyntax "x", ParsedValueOutOfRange "x"] ++
+        ordLaws "ParseError" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [InvalidSyntax "x", ParsedValueOutOfRange "x"] ++
+        hashLaws "ParseError" (\value -> show value) (\a b -> a == b) (\a -> hash a) [InvalidSyntax "x", InvalidSyntax "x"] ++
+        showLaws "ParseError" (\value -> show value) [InvalidSyntax "x", ParsedValueOutOfRange "x"] ++
+        eqLaws "Option" (\value -> show value) (\a b -> a == b) [None, Some 0, Some 1] ++
+        ordLaws "Option" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [Some 0, Some 1, None] ++
+        hashLaws "Option" (\value -> show value) (\a b -> a == b) (\a -> hash a) [None, Some 1, Some 1] ++
+        showLaws "Option" (\value -> show value) [None, Some 1] ++
+        eqLaws "Result" (\value -> show value) (\a b -> a == b) [Ok 0, Ok 1, Err "x"] ++
+        ordLaws "Result" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [Ok 0, Ok 1, Err "x"] ++
+        hashLaws "Result" (\value -> show value) (\a b -> a == b) (\a -> hash a) [Ok 1, Ok 1, Err "x"] ++
+        showLaws "Result" (\value -> show value) [Ok 1, Err "x"] ++
+        eqLaws "Seq" (\value -> show value) (\a b -> a == b) [[], [1], [1, 2]] ++
+        ordLaws "Seq" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [[], [1], [1, 2]] ++
+        hashLaws "Seq" (\value -> show value) (\a b -> a == b) (\a -> hash a) [[1], [1], [2]] ++
+        showLaws "Seq" (\value -> show value) [[], [1, 2]] ++
+        eqLaws "Set" (\value -> show value) (\a b -> a == b) [{}, {1}, {1, 2}] ++
+        ordLaws "Set" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [{}, {1}, {1, 2}] ++
+        hashLaws "Set" (\value -> show value) (\a b -> a == b) (\a -> hash a) [{1}, {1}, {2}] ++
+        showLaws "Set" (\value -> show value) [{}, {1, 2}] ++
+        eqLaws "Dict" (\value -> show value) (\a b -> a == b) [emptyLike {0: ""}, {1: "a"}, {1: "a", 2: "b"}] ++
+        ordLaws "Dict" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [emptyLike {0: ""}, {1: "a"}, {1: "a", 2: "b"}] ++
+        hashLaws "Dict" (\value -> show value) (\a b -> a == b) (\a -> hash a) [{1: "a"}, {1: "a"}, {2: "b"}] ++
+        showLaws "Dict" (\value -> show value) [emptyLike {0: ""}, {1: "a"}] ++
+        eqLaws "Tuple" (\value -> show value) (\a b -> a == b) [(0, ""), (1, "a")] ++
+        ordLaws "Tuple" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [(0, ""), (1, "a")] ++
+        hashLaws "Tuple" (\value -> show value) (\a b -> a == b) (\a -> hash a) [(1, "a"), (1, "a")] ++
+        showLaws "Tuple" (\value -> show value) [(0, ""), (1, "a")] ++
+        semigroupLaws "String" identity stringEquals stringAppend ["", "a", "β"] ++
+        monoidLaws "String" identity stringEquals stringAppend "" ["", "yona", "β"] ++
+        semigroupLaws "Seq" (\value -> show value) (\a b -> a == b) (\a b -> combine a b) [[], [1], [2, 3]] ++
+        monoidLaws "Seq" (\value -> show value) (\a b -> a == b) (\a b -> combine a b) [] [[], [1], [2, 3]] ++
+        semigroupLaws "Set" (\value -> show value) (\a b -> a == b) (\a b -> combine a b) [{}, {1}, {2, 3}] ++
+        monoidLaws "Set" (\value -> show value) (\a b -> a == b) (\a b -> combine a b) {} [{}, {1}, {2, 3}] ++
+        semigroupLaws "Dict" (\value -> show value) (\a b -> a == b) (\a b -> combine a b) [emptyLike {0: ""}, {1: "a"}, {1: "b", 2: "c"}] ++
+        monoidLaws "Dict" (\value -> show value) (\a b -> a == b) (\a b -> combine a b) (emptyLike {0: ""}) [emptyLike {0: ""}, {1: "a"}, {2: "b"}]
+in render (run (directCases ++ lawCases))

@@ -1,0 +1,12 @@
+import fromString, toString, length, get, slice, concat from Std\ByteArray,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "ByteArray string round trip" (\_ ->
+        let bytes = fromString "Aβ" in check "round trip" (toString bytes == "Aβ" && length bytes == 3)),
+    testCase "ByteArray indexes bytes" (\_ ->
+        check "byte values" (get (fromString "ABC") 1 == 66)),
+    testCase "ByteArray slices and concatenates" (\_ ->
+        let bytes = fromString "abcdef" in
+        check "slice concat" (toString (concat (slice bytes 1 3) (fromString "!")) == "bcd!"))
+] in render (run cases)

@@ -1,0 +1,15 @@
+import identity as functionIdentity, const as constant, compose as functionCompose, pipe, apply, flip as functionFlip, on, fix from Std\Function,
+       testCase, check, run, render from Std\Test
+in
+let add a b = a + b,
+    cases = [
+        testCase "identity returns input" (\_ -> check "identity" (functionIdentity 42 == 42)),
+        testCase "constant ignores argument" (\_ -> check "constant" (constant 7 "ignored" == 7)),
+        testCase "compose is right to left" (\_ -> check "compose" (functionCompose (\x -> x * 2) (\x -> x + 1) 20 == 42)),
+        testCase "pipe is left to right" (\_ -> check "pipe" (pipe 20 [\x -> x + 1, \x -> x * 2] == 42)),
+        testCase "apply invokes function" (\_ -> check "apply" (apply 41 (\x -> x + 1) == 42)),
+        testCase "flip swaps arguments" (\_ -> check "flip" (functionFlip (\a b -> a - b) 2 44 == 42)),
+        testCase "on projects both arguments" (\_ -> check "on" (on add (\x -> x + 1) 19 21 == 42)),
+        testCase "fix supports anonymous recursion" (\_ -> check "fix" (fix (\self n -> if n <= 1 then 1 else n * self (n - 1)) 5 == 120))
+    ]
+in render (run cases)

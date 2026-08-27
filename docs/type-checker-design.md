@@ -1,10 +1,11 @@
 # Type Checker Design
 
-**Status (2026-08-18):** HM + ADTs + traits + **record** rows are in
-`MonoType`. Algebraic `perform`/`handle` typechecking exists; **effect rows
-are design-only**. Linear/refinement/`@borrow` live in separate checkers or
-codegen — see [type-system-status.md](type-system-status.md). Phase 7
-`[done]` below means handler-scope warnings, not rows or `effect` decls.
+**Status (2026-08-27):** HM, ADTs, traits, record rows, and lossless inferred
+effect expressions are implemented in `MonoType`/`TypeArena`. Effects use a
+dedicated solver for joins, masks, equality, derived recursive bodies, and
+cloneable schemes; parsed `effect` declarations and captured continuations are
+still absent. Linear/refinement/`@borrow` live in separate checkers or codegen
+— see [type-system-status.md](type-system-status.md).
 
 ## Overview
 
@@ -67,22 +68,21 @@ The type checker tracks algebraic effects via:
 - **Handler scope stack**: `handle...with` blocks push handled operations onto a stack
 - **Perform checking**: `infer_perform()` verifies argument types against the operation signature and returns the declared return type
 - **Handler inference**: `infer_handle()` infers handler clause bodies, binding operation arguments and `resume` with correct types
+- **Effect solver**: arrows reference effect expressions; application joins
+  independent callback sources, handlers insert symbolic masks, recursive
+  function bodies are least-derived cells, and generalization clones all arrow
+  roots together
 - **Unhandled effect warning**: `perform` outside any matching `handle` triggers a `-Wunhandled-effect` warning
 
 ```yona
-effect State s
-    get : () -> s
-    put : s -> ()
-end
-
--- Type checker verifies: get returns s, put takes s
--- resume in handlers has type: return_type -> result_type
+-- State.get and State.put are registered operations today; source-level
+-- `effect State ... end` declarations are not parsed yet.
 handle
-    let x = perform State.get () in   -- x : s
-    perform State.put (x + 1)          -- checked: x + 1 must match s
+    let value = perform State.get () in
+    perform State.put (value + 1)
 with
-    State.get () resume -> resume 0    -- resume : s -> result
-    State.put s resume -> resume ()    -- s : s, resume : () -> result
+    State.get () resume -> resume 41
+    State.put _ resume -> resume ()
     return val -> val
 end
 ```
@@ -131,6 +131,8 @@ Trait methods have deferred constraints that are solved after inference:
 4. **Collections**: tuples, seqs, patterns (head-tail, tuple, constructor, or-pattern) [done]
 5. **ADTs**: constructor types, constructor patterns, polymorphic schemes [done]
 6. **Traits**: constrained polymorphism, deferred constraints, instance resolution [done]
-7. **Effects**: perform/handle type checking, handler scope tracking, unhandled warnings [done]
+7. **Effects**: perform/handle checking, lossless latent-effect inference,
+   E0202, recursive SCC cells, and `.yonai` schemes [implemented]; parsed
+   declarations and captured continuations remain [partial]
 8. **Codegen Integration**: wired into cli/main.cpp pipeline [done]
 9. **Error Polish**: "did you mean?" suggestions, context strings, source display [done]

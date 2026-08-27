@@ -1,0 +1,19 @@
+import parseResponse, response, ok, notFound, serverError from Std\Http,
+       testCase, check, run, render from Std\Test
+in
+let cases = [
+    testCase "Http response constructors set status and body" (\_ ->
+        check "constructors" (case response 201 "made" of
+            Response { status = 201, body = "made" } -> true
+            _ -> false
+        end)),
+    testCase "Http convenience responses use canonical statuses" (\_ ->
+        check "statuses" (case ok "yes" of Response { status = 200 } -> true; _ -> false end &&
+                          case notFound of Response { status = 404 } -> true; _ -> false end &&
+                          case serverError of Response { status = 500 } -> true; _ -> false end)),
+    testCase "Http parses a complete response" (\_ ->
+        check "parse" (case parseResponse "HTTP/1.1 204 No Content\r\nX-Test: yes\r\n\r\n" of
+            Response { status = 204, body = "" } -> true
+            _ -> false
+        end))
+] in render (run cases)

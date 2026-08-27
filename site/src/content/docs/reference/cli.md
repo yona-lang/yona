@@ -64,9 +64,15 @@ Compiling a module additionally writes an interface file next to the object file
 | `--Wno-refinement` | Skip refinement checking (E0500 nonempty / nonzero proofs) |
 | `--Wno-linear` | Skip linearity checking (E0600 / E0601 / E0602) |
 | `--Wno-linear-leak` | Disable E0602 resource-leak warnings (`-Wlinear-leak`, on by default) |
-| `--require-effect-free` | Require a closed empty effect row, exhaustive registered finite-ADT and `Bool` `case`s, and conservative direct structural recursion; reject known/open/imported-unknown rows, missing alternatives, unproven direct recursion, or mutual recursion (E0203). It does not prove general termination or arbitrary non-ADT coverage. |
+| `--require-effect-free` | Require a closed empty effect row, exhaustive registered finite-ADT and `Bool` `case`s, and a sound structural size-change proof for every local direct or mutual recursive SCC, including lexicographic multi-parameter descent. Unproved forms fail with E0203; this is not a general termination checker. |
 
 The individual warning flags and which group enables them are listed on the [error codes](/reference/error-codes/) page.
+
+The size-change proof uses structural descendants bound by unguarded constructor
+or non-empty sequence patterns; simple lexical aliases preserve those facts. It
+conservatively rejects numeric decreases, guarded descent, opaque/helper and
+higher-order recursion, incompatible-arity SCCs, cycles with mixed incompatible
+decreases. The strict gate also does not prove arbitrary open-domain coverage.
 
 ### Modules
 
@@ -238,3 +244,8 @@ yls [--stdio] [-I path]
 with `Content-Length` framing. `-I path` adds a module search directory,
 matching `yonac -I`. Discovery from the VS Code extension uses `PATH`,
 `YONA_HOME/bin/yls`, then the directory that contains `yonac`.
+
+`yls`, VS Code, and Zed do not currently expose a strict
+`--require-effect-free` configuration. Run `yonac --require-effect-free`
+explicitly for strict E0203 validation. Ordinary parse, type, refinement, and
+linearity diagnostics remain shared between the compiler and language server.

@@ -4,6 +4,7 @@
 #include "lsp/JsonRpc.h"
 #include "lsp/Server.h"
 #include "lsp/Utf16.h"
+#include "repo_paths.h"
 
 #include <doctest/doctest.h>
 #include <filesystem>
@@ -253,7 +254,7 @@ run _ = measure "x"
 
 TEST_CASE("LSP imported interface contract preserves UTF-16 navigation") {
     Analysis a;
-    a.set_module_paths({"lib"});
+    a.set_module_paths({yona::test::lib_dir().string()});
     const std::string source =
         "import identity from Prelude in let marker = \"\xF0\x9F\x98\x80\" in identity 2";
     a.analyze("file:///tmp/imported-trait.yona", source);

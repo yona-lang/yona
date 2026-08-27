@@ -35,25 +35,39 @@ jobs:
             build_preset: build-release-linux-arm64
             build_dir: arm64-release-linux
           - os: macos-26
-            name: macOS Debug
-            configure_preset: x64-debug-macos
-            build_preset: build-debug-macos
-            build_dir: x64-debug-macos
+            name: macOS arm64 Debug
+            configure_preset: arm64-debug-macos
+            build_preset: build-debug-macos-arm64
+            build_dir: arm64-debug-macos
           - os: macos-26
-            name: macOS Release
-            configure_preset: x64-release-macos
-            build_preset: build-release-macos
-            build_dir: x64-release-macos
+            name: macOS arm64 Release
+            configure_preset: arm64-release-macos
+            build_preset: build-release-macos-arm64
+            build_dir: arm64-release-macos
           - os: windows-2025
-            name: Windows Debug
+            name: Windows x64 Debug
             configure_preset: x64-debug
             build_preset: build-debug
             build_dir: x64-debug
+            arch: x64
           - os: windows-2025
-            name: Windows Release
+            name: Windows x64 Release
             configure_preset: x64-release
             build_preset: build-release
             build_dir: x64-release
+            arch: x64
+          - os: windows-11-vs2026-arm
+            name: Windows arm64 Debug
+            configure_preset: arm64-debug
+            build_preset: build-debug-arm64
+            build_dir: arm64-debug
+            arch: arm64
+          - os: windows-11-vs2026-arm
+            name: Windows arm64 Release
+            configure_preset: arm64-release
+            build_preset: build-release-arm64
+            build_dir: arm64-release
+            arch: arm64
 
     steps:
     - uses: actions/checkout@v4
@@ -66,6 +80,8 @@ jobs:
 
     - name: Set up LLVM
       uses: ./.github/actions/setup-llvm
+      with:
+        windows-architecture: ${{ matrix.arch }}
 
     - name: Configure
       run: cmake --preset ${{ matrix.configure_preset }}

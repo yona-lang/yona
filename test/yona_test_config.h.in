@@ -3,6 +3,7 @@
 #define YONA_SOURCE_DIR "@CMAKE_SOURCE_DIR@"
 #define YONA_BINARY_DIR "@CMAKE_BINARY_DIR@"
 #define YONA_BUILD_INCLUDE_DIR "@CMAKE_CURRENT_BINARY_DIR@/include"
+#define YONA_TEST_PRELUDE_OBJECT "@YONA_TEST_PRELUDE_OBJECT@"
 
 /* MSVC/UCRT tests use _popen/_pclose; map POSIX names for portable test sources. */
 #if defined(_WIN32)

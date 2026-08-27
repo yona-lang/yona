@@ -23,7 +23,7 @@ Every installation provides these executables:
 | Ubuntu / Debian | `sudo add-apt-repository ppa:kovariadam/yona && sudo apt update && sudo apt install yona` |
 | Arch Linux | `yay -S yona-bin` |
 | macOS / Linuxbrew | `brew install akovari/tap/yona` |
-| Windows | MSI or ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest) |
+| Windows | Native x64 or ARM64 MSI/ZIP from [GitHub Releases](https://github.com/yona-lang/yona/releases/latest) |
 
 Distro packages place the compiler sysroot (standard library sources,
 interface files, runtime objects) under `/usr/lib/yona` or `/usr/lib64/yona`;
@@ -43,6 +43,10 @@ The Homebrew formula builds from source against Homebrew `llvm`, `lld`,
 `pcre2`, and `cli11` (Apple Silicon, Intel, and Linuxbrew). Wrappers on
 `PATH` set `YONA_HOME` and `YONAC_CC` so the keg-only LLVM is used when
 compiling Yona programs.
+
+Tagged binary releases include a native Apple Silicon archive named
+`yona-<version>-macos-arm64.tar.gz`; the hosted CI/release matrix does not
+build a separate Intel macOS artifact.
 
 Optional GPU support via MoltenVK:
 
@@ -101,18 +105,29 @@ brew install llvm lld cmake ninja pcre2 cli11 doctest pkgconf
 
 git clone https://github.com/yona-lang/yona.git
 cd yona
-cmake --preset x64-release-macos
-cmake --build --preset build-release-macos
+cmake --preset arm64-release-macos
+cmake --build --preset build-release-macos-arm64
 ```
 
 ### Windows
 
-Windows presets (`x64-debug`, `x64-release`) use Ninja with Clang from a
-prebuilt **`clang+llvm-*-x86_64-pc-windows-msvc`** archive, plus the MSVC
-toolset for the linker and Windows SDK. Extract the LLVM archive to a short
-path and set `LLVM_INSTALL_PREFIX` to its root (the directory containing
-`bin`, `lib`, `include`). The archive must be the complete tree — a
-Clang-only installer omits libraries that `find_package(LLVM)` requires.
+Windows has native x64 and ARM64 presets. Use Ninja with the matching official
+complete LLVM archive — **`clang+llvm-*-x86_64-pc-windows-msvc`** for x64 or
+**`clang+llvm-*-aarch64-pc-windows-msvc`** for ARM64 — plus the matching MSVC
+toolset and Windows SDK. Extract it to a short path and set
+`LLVM_INSTALL_PREFIX` to its root (the directory containing `bin`, `lib`,
+`include`). A Clang-only installer omits libraries that `find_package(LLVM)`
+requires.
+
+Tagged releases publish `yona-<version>-windows-x64.{zip,msi}` and
+`yona-<version>-windows-arm64.{zip,msi}`.
+
+The MSVC **Desktop development with C++** workload supplies the DIA SDK used
+by the official LLVM CMake package. Yona discovers that SDK before loading
+LLVM; if it is installed in a custom location, set
+`YONA_DIA_SDK_LIBRARY` to its `diaguids.lib`. Zlib is resolved through normal
+CMake discovery, with Yona's pinned CMake source fallback enabled by default.
+No external package manager is needed for this setup.
 
 See
 [INSTALL.md](https://github.com/yona-lang/yona/blob/master/INSTALL.md)

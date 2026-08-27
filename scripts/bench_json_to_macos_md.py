@@ -228,7 +228,7 @@ def main():
     lines.append("")
     lines.append("- `export PATH=\"$(brew --prefix llvm)/bin:$(brew --prefix openjdk)/bin:$PATH\"`")
     lines.append("- `export YONAC_CC=$(command -v clang)`  # Homebrew LLVM 22.1.8")
-    lines.append("- `python3 bench/runner.py --yonac out/build/x64-debug-macos/yonac -n 10 -O 2 --compare \"c,erl,java,hs,js,py\" --json --save`")
+    lines.append("- `python3 bench/runner.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O 2 --compare \"c,erl,java,hs,js,py\" --json --save`")
     lines.append("- Raw output: `bench/macos-full-bench-2026-08-17-n10.log`")
     lines.append("- Machine-readable: `bench/macos-full-bench-2026-08-17-n10.json`")
     lines.append("- GPU crossover: `bench/macos-gpu-compare-2026-08-17-n10.json`, `bench/macos-gpu-bench-meta-2026-08-17.json`")
@@ -327,7 +327,7 @@ def main():
             gpu_rows = []
         lines.append("## Std\\GPU / Vulkan crossover (this machine)")
         lines.append("")
-        lines.append("Captured with `python3 bench/run_gpu_compare.py --yonac out/build/x64-debug-macos/yonac -n 10 -O2 --json-report`.")
+        lines.append("Captured with `python3 bench/run_gpu_compare.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O2 --json-report`.")
         lines.append("Device: Apple M3 via MoltenVK (no `shaderInt64` / typically no `shaderFloat64`; IntArray uses i32 when values fit, float scale uses f32).")
         lines.append("")
         if gpu_rows:
@@ -363,7 +363,7 @@ def main():
     lines.append("- Startup-adjusted floor can exaggerate ratios when values clamp to `0.01ms`.")
     lines.append("- This report uses warm-cache behavior for file workloads.")
     lines.append("- Startup RSS values are cached per runtime; rerun after toolchain/runtime changes.")
-    lines.append("- `yonac` used here is the **debug** macOS build (`x64-debug-macos`) with `-DYONA_ENABLE_VULKAN=ON`.")
+    lines.append("- `yonac` used here is the native Apple Silicon debug macOS build (`arm64-debug-macos`) with `-DYONA_ENABLE_VULKAN=ON`.")
     lines.append("- The main `bench/runner.py` matrix does not force CPU or Vulkan; accelerator rows use default `Std\\GPU` discovery.")
     lines.append("- Erlang/OTP 29 is on PATH; cells are `—` only when that row has no working `.erl` reference.")
     lines.append("- Erlang cold-start is ~686 ms (BEAM boot). Most short rows clamp to the `0.01ms` adjusted floor; prefer raw times in the JSON for those cells.")

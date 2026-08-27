@@ -1,0 +1,44 @@
+import testCase, check, run, render from Std\Test,
+       fromSeq, fromByteArray, fromIntArray, fromFloatArray,
+       next, foldLeft, toSeq from Std\Iterator,
+       fromString from Std\ByteArray,
+       fromSeq as intArrayFromSeq from Std\IntArray,
+       fill as floatArrayFill from Std\FloatArray
+in
+let cases = [
+    testCase "Sequence iterators preserve order" (\_ ->
+        check "all sequence elements are yielded once"
+            (toSeq (fromSeq [1, 2, 3]) == [1, 2, 3])),
+    testCase "Empty iterators stay empty" (\_ ->
+        check "empty conversion has no elements"
+            (toSeq (fromSeq []) == [])),
+    testCase "Iterator next advances shared state" (\_ ->
+        let iterator = fromSeq [10, 20] in
+        case next iterator of
+            Some first -> case next iterator of
+                Some second -> case next iterator of
+                    None -> check "next visits each element then terminates" (first == 10 && second == 20)
+                    Some _ -> check "iterator must terminate" false
+                end
+                None -> check "second element must exist" false
+            end
+            None -> check "first element must exist" false
+        end),
+    testCase "Iterator fold is left associative" (\_ ->
+        check "fold observes source order"
+            (foldLeft (fromSeq [1, 2, 3]) (\acc value -> acc * 10 + value) 0 == 123)),
+    testCase "ByteArray adapters expose bytes" (\_ ->
+        check "UTF-8 bytes are yielded without boxing"
+            (toSeq (fromByteArray (fromString "Aβ")) == [65, 206, 178])),
+    testCase "IntArray adapters preserve signed integers" (\_ ->
+        check "native integers round trip through iteration"
+            (toSeq (fromIntArray (intArrayFromSeq [-2, 0, 7])) == [-2, 0, 7])),
+    testCase "FloatArray adapters preserve values" (\_ ->
+        check "native floats retain their ABI"
+            (toSeq (fromFloatArray (floatArrayFill 3 1.5)) == [1.5, 1.5, 1.5])),
+    testCase "Heap tuple elements survive materialization" (\_ ->
+        check "iterator output owns nested heap values"
+            (toSeq (fromSeq [(1, "one"), (2, "two")]) ==
+             [(1, "one"), (2, "two")]))
+]
+in render (run cases)

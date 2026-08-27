@@ -71,9 +71,10 @@ if(YONA_HOMEBREW_PREFIX)
 	list(PREPEND CMAKE_PREFIX_PATH "${YONA_HOMEBREW_PREFIX}")
 endif()
 
-# Prefer distro / Homebrew packages. FetchContent is a last resort (Windows CI,
-# machines without cli11/doctest). Packaging passes -DYONA_FETCH_DEPS=OFF.
-option(YONA_FETCH_DEPS "Git-clone CLI11/doctest when no system CMake package is found" ON)
+# Prefer distro / Homebrew packages. FetchContent is a last resort for the
+# project's pinned third-party build dependencies (including the Windows LLVM
+# package's Zlib prerequisite). Packaging passes -DYONA_FETCH_DEPS=OFF.
+option(YONA_FETCH_DEPS "Fetch pinned dependencies when no system CMake package is found" ON)
 # Distro packages copy binaries from the build tree (no cmake --install). Linking
 # the shared in-tree DSO embeds that directory as DT_RUNPATH; Fedora check-rpaths
 # rejects it and the RPM would not ship libyona_lib.so. Packaging passes ON.
@@ -170,13 +171,55 @@ if(Vulkan_FOUND AND WIN32)
 	endif()
 endif()
 
+if(WIN32)
+	# LLVMExports.cmake from the official Windows archive references these
+	# imported targets while it is being evaluated. They must exist before the
+	# LLVM package is loaded; repairing target link interfaces afterward is too
+	# late because CMake validates them during find_package(LLVM).
+	find_package(ZLIB QUIET)
+	if(NOT TARGET ZLIB::ZLIB)
+		if(YONA_FETCH_DEPS)
+			find_package(Git QUIET)
+			if(NOT Git_FOUND)
+				message(FATAL_ERROR
+					"ZLIB was not found and git is unavailable for FetchContent. "
+					"Install zlib with a CMake package that provides ZLIB::ZLIB, "
+					"or install git and configure with -DYONA_FETCH_DEPS=ON.")
+			endif()
+			message(STATUS "ZLIB not found; fetching zlib v1.3.1 for LLVM")
+			set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+			FetchContent_Declare(
+				yona_zlib
+				QUIET
+				GIT_REPOSITORY https://github.com/madler/zlib.git
+				GIT_TAG v1.3.1
+				GIT_SHALLOW TRUE
+			)
+			FetchContent_MakeAvailable(yona_zlib)
+			if(TARGET zlibstatic)
+				add_library(ZLIB::ZLIB ALIAS zlibstatic)
+			elseif(TARGET zlib)
+				add_library(ZLIB::ZLIB ALIAS zlib)
+			else()
+				message(FATAL_ERROR
+					"Fetched zlib v1.3.1 did not define the expected zlibstatic or zlib target.")
+			endif()
+		else()
+			message(FATAL_ERROR
+				"LLVM's Windows CMake package requires ZLIB::ZLIB, but ZLIB was not found. "
+				"Install zlib with a CMake package, or configure with -DYONA_FETCH_DEPS=ON "
+				"to build the pinned zlib dependency.")
+		endif()
+	endif()
+
+	include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaLlvmWindowsDia.cmake")
+	yona_prepare_llvm_dia_sdk()
+endif()
+
 find_package(LLVM CONFIG REQUIRED)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
-if(WIN32)
-	include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaLlvmWindowsDia.cmake")
-endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaInProcessLld.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaVulkan.cmake")
@@ -230,7 +273,7 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 #set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 #set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 
-file(GLOB_RECURSE all_lib_SRCS
+file(GLOB_RECURSE all_lib_SRCS CONFIGURE_DEPENDS
 		"${PROJECT_SOURCE_DIR}/include/*.h"
 		"${PROJECT_SOURCE_DIR}/src/*.cpp"
 		"${PROJECT_SOURCE_DIR}/src/*.c"
@@ -527,6 +570,30 @@ else()
 endif()
 add_dependencies(yona-repl yona_runtime_objects yona_runtime_static)
 
+# Tests link generated programs against Prelude's exported constructors and
+# functions. Build that object deterministically in the binary tree; never
+# depend on a developer-local, ignored lib/Prelude.o.
+set(YONA_TEST_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/test_artifacts")
+set(YONA_TEST_PRELUDE_OBJECT "${YONA_TEST_ARTIFACT_DIR}/Prelude${CMAKE_C_OUTPUT_EXTENSION}")
+set(YONA_TEST_PRELUDE_INTERFACE "${YONA_TEST_ARTIFACT_DIR}/Prelude.yonai")
+add_custom_command(
+	OUTPUT "${YONA_TEST_PRELUDE_OBJECT}"
+	BYPRODUCTS "${YONA_TEST_PRELUDE_INTERFACE}"
+	COMMAND ${CMAKE_COMMAND} -E make_directory "${YONA_TEST_ARTIFACT_DIR}"
+	COMMAND $<TARGET_FILE:yonac>
+		--sysroot "${CMAKE_CURRENT_BINARY_DIR}"
+		-I "${CMAKE_CURRENT_SOURCE_DIR}/lib"
+		--emit-obj
+		-o "${YONA_TEST_PRELUDE_OBJECT}"
+		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yona"
+	DEPENDS yonac
+		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yona"
+		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yonai"
+	COMMENT "Building deterministic Prelude object for tests"
+	VERBATIM
+)
+add_custom_target(yona_test_prelude_object DEPENDS "${YONA_TEST_PRELUDE_OBJECT}")
+
 # Absolute repo path for tests (fixtures, lib/, src/) regardless of process CWD (e.g. CTest).
 # Generated even when BUILD_TESTING=OFF: the Windows REPL force-includes this header.
 configure_file(
@@ -574,6 +641,7 @@ add_executable(
 	tests
 	${all_TESTS}
 )
+add_dependencies(tests yona_test_prelude_object)
 
 # We provide our own main for consistency across all platforms
 target_sources(tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test/doctest_main.cpp)
@@ -600,6 +668,32 @@ endif()
 
 # Register the test executable with CTest
 add_test(NAME doctest_tests COMMAND tests)
+
+add_test(NAME cmake_windows_llvm_prerequisites
+	COMMAND "${CMAKE_COMMAND}"
+		-S "${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/windows_llvm_prerequisites"
+		-B "${CMAKE_CURRENT_BINARY_DIR}/test-cmake/windows-llvm-prerequisites"
+		-DYONA_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR})
+
+# CMake 3.10 predates FindPython3, while newer CMake versions may disable the
+# legacy FindPythonInterp module. Resolve a Python 3 interpreter directly so
+# this source-contract test runs on every supported host.
+find_program(YONA_PYTHON_EXECUTABLE NAMES python3 python)
+if(NOT YONA_PYTHON_EXECUTABLE)
+	message(FATAL_ERROR "Python 3 is required to run native_arm64_ci_packaging_contract")
+endif()
+execute_process(
+	COMMAND "${YONA_PYTHON_EXECUTABLE}" -c "import sys; raise SystemExit(sys.version_info < (3, 7))"
+	RESULT_VARIABLE _yona_python3_result)
+if(NOT _yona_python3_result EQUAL 0)
+	message(FATAL_ERROR
+		"native_arm64_ci_packaging_contract requires Python 3.7 or newer: ${YONA_PYTHON_EXECUTABLE}")
+endif()
+add_test(NAME native_arm64_ci_packaging_contract
+	COMMAND "${YONA_PYTHON_EXECUTABLE}"
+		"${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/native_arm64_ci_packaging_contract.py")
+set_tests_properties(native_arm64_ci_packaging_contract PROPERTIES
+	LABELS "ci-contract")
 
 # Set working directory for the test to the binary directory
 set(_yona_path_env "YONA_PATH=${CMAKE_CURRENT_SOURCE_DIR}/test/code:${CMAKE_CURRENT_SOURCE_DIR}/lib")

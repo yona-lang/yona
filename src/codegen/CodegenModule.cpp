@@ -505,6 +505,7 @@ Codegen::ModuleFunctionMeta Codegen::module_meta_from_compiled(const CompiledFun
     meta.effect_row_known = cf.effect_row_known;
     meta.effect_open_rest = cf.effect_open_rest;
     meta.effect_hof = cf.effect_hof;
+    meta.effect_scheme = cf.effect_scheme;
     return meta;
 }
 
@@ -528,6 +529,7 @@ Codegen::CompiledFunction Codegen::compiled_function_from_meta(llvm::Function* f
     cf.effect_row_known = meta.effect_row_known;
     cf.effect_open_rest = meta.effect_open_rest;
     cf.effect_hof = meta.effect_hof;
+    cf.effect_scheme = meta.effect_scheme;
     return cf;
 }
 
@@ -700,6 +702,8 @@ bool Codegen::emit_interface_file(const std::string& path) {
             }
             if (meta.effect_hof) out << " hof";
         }
+        if (!meta.effect_scheme.empty())
+            out << " effectscheme " << meta.effect_scheme;
         out << "\n";
     };
 
@@ -1115,10 +1119,11 @@ bool Codegen::load_interface_file(const std::string& path) {
                             }
                             if (!cur.empty()) meta.effect_ops.push_back(cur);
                         }
-                        std::string extra;
-                        if (iss >> extra && extra == "hof")
-                            meta.effect_hof = true;
                     }
+                } else if (trailing == "hof") {
+                    meta.effect_hof = true;
+                } else if (trailing == "effectscheme") {
+                    iss >> meta.effect_scheme;
                 }
             }
 
@@ -1272,6 +1277,7 @@ typechecker::ImportedFnSig Codegen::sig_from_meta(const ModuleFunctionMeta& meta
         !sig.return_descriptor.starts_with("LINEAR("))
         sig.return_descriptor = "LINEAR(" + sig.return_descriptor + ")";
     sig.return_linear_adt_name = meta.return_linear ? meta.return_adt_name : "";
+    sig.effect_scheme = meta.effect_scheme;
     if (!sig.tuple_elem_linear.empty())
         sig.return_linear = false;
     return sig;
@@ -2362,6 +2368,7 @@ void Codegen::populate_interface_effect_rows(ast::ModuleDecl* mod,
             it->second.effect_row_known = true;
             it->second.effect_open_rest = row.open_rest;
             it->second.effect_hof = row.hof;
+            it->second.effect_scheme = tc.serialize_effect_scheme(tc.zonk(ty));
         }
         auto cf_it = compiled_functions_.find(func->name);
         if (cf_it != compiled_functions_.end()) {
@@ -2369,6 +2376,7 @@ void Codegen::populate_interface_effect_rows(ast::ModuleDecl* mod,
             cf_it->second.effect_row_known = true;
             cf_it->second.effect_open_rest = row.open_rest;
             cf_it->second.effect_hof = row.hof;
+            cf_it->second.effect_scheme = tc.serialize_effect_scheme(tc.zonk(ty));
         }
     }
 }

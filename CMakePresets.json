@@ -89,6 +89,30 @@
       }
     },
     {
+      "name": "arm64-debug",
+      "displayName": "arm64 Debug",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "arm64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "arm64-release",
+      "displayName": "arm64 Release",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "arm64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "x64-debug-linux",
       "displayName": "x64 Debug Linux",
       "inherits": "linux-base",
@@ -137,27 +161,29 @@
       }
     },
     {
-      "name": "x64-debug-macos",
-      "displayName": "x64 Debug macOS",
+      "name": "arm64-debug-macos",
+      "displayName": "arm64 Debug macOS",
       "inherits": "macos-base",
       "architecture": {
-        "value": "x64",
+        "value": "arm64",
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_OSX_ARCHITECTURES": "arm64"
       }
     },
     {
-      "name": "x64-release-macos",
-      "displayName": "x64 Release macOS",
+      "name": "arm64-release-macos",
+      "displayName": "arm64 Release macOS",
       "inherits": "macos-base",
       "architecture": {
-        "value": "x64",
+        "value": "arm64",
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_ARCHITECTURES": "arm64"
       }
     }
   ],
@@ -211,17 +237,33 @@
       ]
     },
     {
-      "name": "build-debug-macos",
-      "displayName": "Build Debug macOS",
-      "configurePreset": "x64-debug-macos",
+      "name": "build-debug-arm64",
+      "displayName": "Build Debug arm64",
+      "configurePreset": "arm64-debug",
       "targets": [
         "all"
       ]
     },
     {
-      "name": "build-release-macos",
-      "displayName": "Build Release macOS",
-      "configurePreset": "x64-release-macos",
+      "name": "build-release-arm64",
+      "displayName": "Build Release arm64",
+      "configurePreset": "arm64-release",
+      "targets": [
+        "all"
+      ]
+    },
+    {
+      "name": "build-debug-macos-arm64",
+      "displayName": "Build Debug macOS arm64",
+      "configurePreset": "arm64-debug-macos",
+      "targets": [
+        "all"
+      ]
+    },
+    {
+      "name": "build-release-macos-arm64",
+      "displayName": "Build Release macOS arm64",
+      "configurePreset": "arm64-release-macos",
       "targets": [
         "all"
       ]
@@ -232,6 +274,14 @@
       "name": "unit-tests-windows",
       "displayName": "Unit Tests (Windows)",
       "configurePreset": "x64-debug",
+      "environment": {
+        "CTEST_OUTPUT_ON_FAILURE": "1"
+      }
+    },
+    {
+      "name": "unit-tests-windows-arm64",
+      "displayName": "Unit Tests (Windows arm64)",
+      "configurePreset": "arm64-debug",
       "environment": {
         "CTEST_OUTPUT_ON_FAILURE": "1"
       }
@@ -253,9 +303,9 @@
       }
     },
     {
-      "name": "unit-tests-macos",
-      "displayName": "Unit Tests (macOS)",
-      "configurePreset": "x64-debug-macos",
+      "name": "unit-tests-macos-arm64",
+      "displayName": "Unit Tests (macOS arm64)",
+      "configurePreset": "arm64-debug-macos",
       "environment": {
         "CTEST_OUTPUT_ON_FAILURE": "1"
       }
