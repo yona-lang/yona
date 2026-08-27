@@ -1354,7 +1354,7 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
             arm_drop_stack_.pop_back();
         }
         named_values_ = std::move(arm_named_values);
-        BasicBlock* arm_exit = builder_->GetInsertBlock()->getTerminator()
+        BasicBlock* arm_exit = current_block_terminated()
             ? nullptr : builder_->GetInsertBlock();
         if (arm_exit && body_tv.type == CType::SEQ)
             mark_transferred(body_tv.val, TransferDomain::Seq);
@@ -1396,7 +1396,7 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
         Value* incoming = tv.val;
         if (incoming->getType() != phi_type) {
             // Insert coercion before the branch terminator in the source block
-            builder_->SetInsertPoint(bb->getTerminator());
+            builder_->SetInsertPoint(block_terminator(bb));
             // A non-recursive ADT is represented locally as a flat struct,
             // while a recursive call returning the same ADT is a heap pointer.
             // The case result must use the runtime ADT representation, not an

@@ -378,6 +378,18 @@ bool Codegen::is_heap_value(const TypedValue& value) const {
     return is_heap_type(value.type) && !is_unboxed_enum_adt(value);
 }
 
+bool Codegen::block_has_terminator(const BasicBlock* block) const {
+    return block && !block->empty() && block->getTerminator() != nullptr;
+}
+
+Instruction* Codegen::block_terminator(BasicBlock* block) const {
+    return block_has_terminator(block) ? block->getTerminator() : nullptr;
+}
+
+bool Codegen::current_block_terminated() const {
+    return builder_ && block_has_terminator(builder_->GetInsertBlock());
+}
+
 void Codegen::emit_rc_inc(Value* val, CType type) {
     if (!val || !is_heap_type(type)) return;
     if (isa<Constant>(val)) return;

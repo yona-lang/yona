@@ -958,6 +958,13 @@ private:
     static bool is_heap_type(CType ct);
     bool is_unboxed_enum_adt(const TypedValue& value) const;
     bool is_heap_value(const TypedValue& value) const;
+    /// LLVM 23 requires callers to establish that a block is non-empty before
+    /// asking for its terminator. Keep that version-sensitive detail behind
+    /// these helpers so empty fall-through blocks consistently receive their
+    /// required branch or return on every supported LLVM release.
+    bool block_has_terminator(const llvm::BasicBlock* block) const;
+    llvm::Instruction* block_terminator(llvm::BasicBlock* block) const;
+    bool current_block_terminated() const;
     void emit_rc_inc(llvm::Value* val, CType type);
     void emit_rc_dec(llvm::Value* val, CType type);
 

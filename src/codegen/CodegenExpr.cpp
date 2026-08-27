@@ -675,11 +675,11 @@ void Codegen::transfer_scope_exit() {
             // drop in this sibling exit block.
             if (auto* inst = llvm::dyn_cast<llvm::Instruction>(v)) {
                 llvm::DominatorTree dominators(*b.exit_bb->getParent());
-                if (!dominators.dominates(inst, b.exit_bb->getTerminator()))
+                if (!dominators.dominates(inst, block_terminator(b.exit_bb)))
                     continue;
             }
             auto saved_ip = builder_->saveIP();
-            builder_->SetInsertPoint(b.exit_bb->getTerminator());
+            builder_->SetInsertPoint(block_terminator(b.exit_bb));
             emit_rc_dec(v, CType::SEQ);
             builder_->restoreIP(saved_ip);
         }
@@ -1350,7 +1350,7 @@ TypedValue Codegen::codegen_let(LetExpr* node) {
     if (has_group && arena)
         current_arena_ = saved_arena;
 
-    const bool body_terminated = builder_->GetInsertBlock()->getTerminator() != nullptr;
+    const bool body_terminated = current_block_terminated();
 
     // 7. Await children before scope cleanup (only on fall-through path; raise/
     //    other terminators skip IR here — runtime unwind calls yona_rt_group_end).
@@ -1414,7 +1414,7 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     transfer_branch_begin();
     auto then_tv = codegen(node->thenExpr);
     if (!then_tv) { transfer_scope_exit(); return {}; }
-    bool then_terminated = builder_->GetInsertBlock()->getTerminator() != nullptr;
+    bool then_terminated = current_block_terminated();
     BasicBlock* then_end = nullptr;
     if (!then_terminated) {
         if (then_tv.type == CType::SEQ)
@@ -1429,7 +1429,7 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     transfer_branch_begin();
     auto else_tv = codegen(node->elseExpr);
     if (!else_tv) { transfer_scope_exit(); return {}; }
-    bool else_terminated = builder_->GetInsertBlock()->getTerminator() != nullptr;
+    bool else_terminated = current_block_terminated();
     BasicBlock* else_end = nullptr;
     if (!else_terminated) {
         if (else_tv.type == CType::SEQ)
@@ -1463,7 +1463,7 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
         // Coerce then value if needed — insert before the branch terminator
         if (then_tv.val->getType() != phi_type) {
             auto saved = builder_->GetInsertPoint();
-            builder_->SetInsertPoint(then_end->getTerminator());
+            builder_->SetInsertPoint(block_terminator(then_end));
             then_tv.val = coerce_for_phi(then_tv.val, phi_type, *builder_, *context_);
             builder_->SetInsertPoint(merge_bb);
         }
@@ -1472,7 +1472,7 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     if (else_end) {
         if (else_tv.val->getType() != phi_type) {
             auto saved = builder_->GetInsertPoint();
-            builder_->SetInsertPoint(else_end->getTerminator());
+            builder_->SetInsertPoint(block_terminator(else_end));
             else_tv.val = coerce_for_phi(else_tv.val, phi_type, *builder_, *context_);
             builder_->SetInsertPoint(merge_bb);
         }
@@ -1825,7 +1825,7 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     // Try body
     builder_->SetInsertPoint(try_bb);
     auto try_val = codegen(node->tryExpr);
-    bool try_terminated = builder_->GetInsertBlock()->getTerminator() != nullptr;
+    bool try_terminated = current_block_terminated();
     BasicBlock* try_end_bb = nullptr;
     if (!try_terminated) {
         builder_->CreateCall(rt_.try_end_, {});
@@ -1912,7 +1912,7 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
                 handler_val = codegen((*pwog)->expr);
             if (!handler_val) handler_val = {ConstantInt::get(i64_ty, 0), CType::INT};
 
-            if (!builder_->GetInsertBlock()->getTerminator()) {
+            if (!current_block_terminated()) {
                 builder_->CreateBr(merge_bb);
                 catch_results.push_back({handler_val, builder_->GetInsertBlock()});
             }
@@ -1958,7 +1958,7 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     if (try_end_bb) {
         Value* incoming = try_val.val;
         if (incoming->getType() != result_llvm) {
-            builder_->SetInsertPoint(try_end_bb->getTerminator());
+            builder_->SetInsertPoint(block_terminator(try_end_bb));
             incoming = coerce_for_phi(incoming, result_llvm, *builder_, *context_);
             builder_->SetInsertPoint(merge_bb);
         }
@@ -1967,7 +1967,7 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     for (auto& [tv, bb] : catch_results) {
         Value* incoming = tv.val;
         if (incoming->getType() != result_llvm) {
-            builder_->SetInsertPoint(bb->getTerminator());
+            builder_->SetInsertPoint(block_terminator(bb));
             incoming = coerce_for_phi(incoming, result_llvm, *builder_, *context_);
             builder_->SetInsertPoint(merge_bb);
         }
@@ -2059,7 +2059,7 @@ TypedValue Codegen::codegen_with(WithExpr* node) {
     if (!body_val) body_val = {ConstantInt::get(i64_ty, 0), CType::INT};
 
     // 4. Close resource (always, regardless of body result)
-    if (!builder_->GetInsertBlock()->getTerminator())
+    if (!current_block_terminated())
         emit_close();
 
     named_values_ = saved_values;

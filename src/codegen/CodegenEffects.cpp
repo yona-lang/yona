@@ -138,7 +138,7 @@ TypedValue Codegen::codegen_handle(HandleExpr* node) {
         effect_resume_names_.insert(clause->resume_name);
 
         auto result = codegen(clause->body);
-        if (!builder_->GetInsertBlock()->getTerminator()) {
+        if (!current_block_terminated()) {
             Value* rv = result ? result.val : ConstantInt::get(i64_ty, 0);
             if (rv->getType()->isPointerTy()) rv = builder_->CreatePtrToInt(rv, i64_ty);
             else if (rv->getType() != i64_ty && rv->getType()->isIntegerTy())

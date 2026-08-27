@@ -22,6 +22,13 @@
   segfaulting. Repro: GitHub Actions run `33078505123`, Linux Release job
   `98538992088` (`regex_find_all_equal`) and macOS ARM64 Release job
   `98538991995`.
+- [ ] **Prelude compilation can leave case bodies unterminated on native
+  Windows LLVM.** Building the deterministic `Prelude.obj` invokes `yonac`
+  successfully until module verification reports unterminated `case.body.*`
+  blocks across derived trait methods (for example `Hash_FileMode__hash` and
+  `Eq_Option__eq`), and Debug may assert while querying a missing terminator.
+  Repro: GitHub Actions run `33082841451`, Windows x64 Release job
+  `98554422796` and Windows x64 Debug job `98554422665`.
 
 The full doctest/CTest suite passes on Linux; native Apple Silicon and Windows
 ARM64 execution remains a hosted-CI verification item under Distribution

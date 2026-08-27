@@ -1866,7 +1866,7 @@ Function* Codegen::codegen_main(AstNode* node) {
 
     auto result = codegen(node);
     // Don't add print/ret if the block is already terminated (e.g., by raise)
-    if (!builder_->GetInsertBlock()->getTerminator()) {
+    if (!current_block_terminated()) {
         if (result) codegen_print(result);
         builder_->CreateRet(ConstantInt::get(i32, 0));
     }

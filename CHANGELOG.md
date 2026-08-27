@@ -98,6 +98,11 @@
   official LLVM package *before* loading `LLVMConfig.cmake`. It discovers normal
   installations first and uses the project's pinned CMake source fallback only
   when dependency fetching is enabled; no external package manager is required.
+- The Windows-LLVM prerequisite contract now forces its isolated mock package
+  instead of inheriting a host `LLVM_DIR`. Code generation also treats an empty
+  LLVM basic block as an unterminated fall-through block before querying its
+  terminator, keeping derived Prelude functions valid with LLVM 23 on native
+  Windows and Apple Silicon.
 - Fresh-clone test builds now generate their Prelude object in the build tree,
   track every standard-library fixture source, and enforce a source/expected
   contract for every codegen fixture. LSP fixture navigation resolves the

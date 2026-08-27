@@ -810,10 +810,10 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
                 ret_val = builder_->CreatePtrToInt(boxed, i64_ty,
                                                    "closure_ret_adt_i64");
             }
-            if (!builder_->GetInsertBlock()->getTerminator())
+            if (!current_block_terminated())
                 builder_->CreateRet(ret_val);
         } else {
-            if (!builder_->GetInsertBlock()->getTerminator()) {
+            if (!current_block_terminated()) {
                 auto* default_ret = ConstantInt::get(i64_ty, 0);
                 builder_->CreateRet(default_ret);
             }
@@ -1708,7 +1708,7 @@ Codegen::CompiledFunction Codegen::compile_function(
             ret_ctype = has_annotated_ret
                 ? annotated_ret : (body_tv ? body_tv.type : CType::INT);
         }
-        if (!builder_->GetInsertBlock()->getTerminator()) {
+        if (!current_block_terminated()) {
             // Perceus callee-owns DROP for all heap params (seqs under the
             // new Perceus-linear ABI, plus non-seq types that were always
             // callee-owns). Skip if TCO already handled cleanup before
@@ -1761,7 +1761,7 @@ Codegen::CompiledFunction Codegen::compile_function(
             builder_->CreateRet(body_tv.val);
         }
     } else {
-        if (!builder_->GetInsertBlock()->getTerminator()) {
+        if (!current_block_terminated()) {
             if (current_frame_alloca_)
                 builder_->CreateCall(rt_.frame_pop_, {current_frame_alloca_});
             builder_->CreateRet(Constant::getNullValue(ret_type));
