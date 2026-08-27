@@ -396,7 +396,10 @@ TEST_CASE("yonac warns for overlapping patterns and rejects incomplete Bool in s
                                    "case true of _ -> 1; true -> 2 end\n");
     auto warning = run_yonac_ir(overlap, {"--Woverlapping-patterns"});
     CHECK(warning.status == 0);
-    CHECK(warning.out.find("unreachable pattern") != std::string::npos);
+    CHECK(warning.out.find("earlier unguarded arms already cover every value it can match") != std::string::npos);
+    auto wall = run_yonac_ir(overlap, {"--Wall"});
+    CHECK(wall.status == 0);
+    CHECK(wall.out.find("unreachable pattern") != std::string::npos);
     auto werror = run_yonac_ir(overlap, {"--Woverlapping-patterns", "--Werror"});
     CHECK(werror.status != 0);
 

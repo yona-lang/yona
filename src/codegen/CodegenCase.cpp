@@ -871,6 +871,24 @@ static LType* common_phi_type(LType* a, LType* b, LLVMContext& ctx) {
 Codegen::CasePatternAnalysis Codegen::analyze_case_patterns(CaseExpr* node) const {
     CasePatternAnalysis result;
     if (!node) return result;
+    const pattern_analysis::ConstructorCatalog constructors{
+        .lookup = [this](std::string_view name) -> std::optional<pattern_analysis::ConstructorInfo> {
+            const auto it = types_.adt_constructors.find(std::string(name));
+            if (it == types_.adt_constructors.end()) return std::nullopt;
+            return pattern_analysis::ConstructorInfo{it->second.type_name};
+        },
+        .members = [this](std::string_view family) {
+            std::vector<std::string> members;
+            for (const auto& [name, info] : types_.adt_constructors)
+                if (info.type_name == family) members.push_back(name);
+            return members;
+        },
+    };
+    auto analysis = pattern_analysis::analyze_case(*node, constructors);
+    result.unreachable_clauses = std::move(analysis.unreachable_clauses);
+    if (analysis.incomplete)
+        result.incomplete = FiniteCaseCoverage{std::move(analysis.incomplete->family), std::move(analysis.incomplete->missing)};
+    return result;
 
     std::string adt_type_name;
     bool has_wildcard = false;
@@ -1033,7 +1051,7 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
         for (size_t index : analysis.unreachable_clauses) {
             if (index < node->clauses.size() && node->clauses[index])
                 diag_->warning(node->clauses[index]->source_context,
-                               "unreachable pattern: an earlier unguarded arm already covers it",
+                               "unreachable pattern: earlier unguarded arms already cover every value it can match",
                                compiler::WarningFlag::OverlappingPatterns);
         }
         if (auto coverage = analysis.incomplete) {

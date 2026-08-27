@@ -248,8 +248,11 @@ does not prove coverage. `--Werror` promotes the warning to a failing build.
 `--require-effect-free` makes the same finite-domain obligation E0203, including
 inside module function bodies, and requires direct structural descent for a
 self-call; mutual-recursion cycles are rejected. `--Woverlapping-patterns`
-reports arms definitely shadowed by an earlier unguarded arm. General overlap,
-termination, and arbitrary non-ADT coverage remain unimplemented.
+soundly reports later arms covered by earlier unguarded arms through aliases,
+alternatives, nested constructors, tuples, exact and head–tail sequences, and
+scalar literals; it also combines closed root `Bool` and ADT families. Guards
+and unsupported/open domains remain conservative. General termination and
+arbitrary open-domain coverage remain unimplemented.
 
 **Stale:** [`docs/pattern-matching.md`](pattern-matching.md) and
 [`docs/error-codes.md`](error-codes.md) describe `-Wincomplete-patterns` for

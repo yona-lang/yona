@@ -332,7 +332,7 @@ Warnings are controlled via `--Wall`, `--Wextra`, `-w`, and `--Werror` (see the 
 |------|------|----------|------------|
 | `-Wunused-variable` | Unused variable binding | yes | yes |
 | `--Wincomplete-patterns` | Non-exhaustive finite-ADT or `Bool` pattern match | yes | yes |
-| `--Woverlapping-patterns` | Definitely unreachable arm after an earlier unguarded arm | yes | yes |
+| `--Woverlapping-patterns` | Later arm provably covered by earlier unguarded arms | yes | yes |
 | `-Wunhandled-effect` | `perform` without matching `handle` | yes | yes |
 | `-Wlinear-leak` | Unconsumed `Linear` value at scope exit (`E0602`; on by default) | yes | yes |
 | `-Wshadow` | Variable shadowing | no | yes |

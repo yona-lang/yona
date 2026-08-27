@@ -1986,6 +1986,34 @@ TEST_SUITE("Diagnostics") {
     CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(sequence.value().get())).unreachable_clauses == vector<size_t>{1});
   }
 
+  TEST_CASE("Case analysis preserves aliases and sequence shape coverage") {
+    parser::Parser parser;
+    Codegen codegen("structured_case");
+    if (fs::exists(yona::test::lib_dir())) codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    codegen.load_prelude(&parser);
+    auto alias = parser.parse_expression("case Some 1 of whole @ Some _ -> 1; Some 1 -> 2; None -> 3 end", "alias-covered.yona");
+    REQUIRE(alias.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(alias.value().get())).unreachable_clauses == vector<size_t>{1});
+    auto head_tail = parser.parse_expression("case [1] of [x | xs] -> 1; [1 | rest] -> 2; [] -> 3 end", "head-tail-covered.yona");
+    REQUIRE(head_tail.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(head_tail.value().get())).unreachable_clauses == vector<size_t>{1});
+    auto alternatives = parser.parse_expression("case Some 1 of Some _ | None -> 1; None -> 2 end", "alternative-covered.yona");
+    REQUIRE(alternatives.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(alternatives.value().get())).unreachable_clauses == vector<size_t>{1});
+  }
+
+  TEST_CASE("Case analysis keeps partial and guarded arms useful") {
+    parser::Parser parser; Codegen codegen("conservative_case");
+    if (fs::exists(yona::test::lib_dir())) codegen.module_paths_.push_back(fs::canonical(yona::test::lib_dir()).string());
+    codegen.load_prelude(&parser);
+    auto literals = parser.parse_expression("case \"a\" of \"a\" -> 1; \"b\" -> 2; _ -> 3 end", "distinct-literals.yona");
+    REQUIRE(literals.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(literals.value().get())).unreachable_clauses.empty());
+    auto guarded = parser.parse_expression("case Some 1 of Some _ if true -> 1; Some 1 -> 2; None -> 3 end", "guarded-useful.yona");
+    REQUIRE(guarded.has_value());
+    CHECK(codegen.analyze_case_patterns(static_cast<CaseExpr*>(guarded.value().get())).unreachable_clauses.empty());
+  }
+
   TEST_CASE("Parser errors route through DiagnosticEngine") {
     DiagnosticEngine diag;
     string source = "let x = in 42";

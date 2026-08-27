@@ -220,6 +220,7 @@ struct Analysis::Impl {
 
     void reset() {
         diag = compiler::DiagnosticEngine();
+        diag.enable_warning(compiler::WarningFlag::OverlappingPatterns);
         parser = std::make_unique<parser::Parser>();
         if (!codegen)
             codegen = std::make_unique<compiler::codegen::Codegen>("yls", &diag);
@@ -562,6 +563,13 @@ void Analysis::Impl::walk(ast::AstNode* node, std::string_view text, compiler::t
     }
     case ast::AST_CASE_EXPR: {
         auto* c = static_cast<ast::CaseExpr*>(node);
+        const auto analysis = codegen->analyze_case_patterns(c);
+        for (const auto index : analysis.unreachable_clauses) {
+            if (index < c->clauses.size() && c->clauses[index])
+                diag.warning(c->clauses[index]->source_context,
+                             "unreachable pattern: earlier unguarded arms already cover every value it can match",
+                             compiler::WarningFlag::OverlappingPatterns);
+        }
         walk(c->expr, text, tc);
         for (auto* cl : c->clauses) {
             if (!cl)

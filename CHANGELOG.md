@@ -40,6 +40,11 @@
   `--Werror` promotes it). `--require-effect-free` also checks `Bool` cases,
   accepts direct structural recursion through an unguarded constructor match,
   and rejects unproven direct or mutual recursion with E0203.
+- Overlap diagnostics now use a compiler-owned structural pattern analysis:
+  aliases, alternatives, nested constructors, tuples, exact and head–tail
+  sequences, and scalar literals are compared soundly; complete closed root
+  `Bool` and ADT families also make a later catch-all arm unreachable. `yls`
+  publishes the same warning range, so VS Code and Zed receive it through LSP.
 
 ### Changed
 - FetchContent now uses doctest 2.5.3 and CLI11 2.7.2; the Windows

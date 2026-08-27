@@ -292,9 +292,12 @@ with `yonac --require-effect-free`, missing alternatives in registered finite
 ADTs and `Bool` are instead E0203 errors; ordinary compilation keeps them as
 the opt-in `--Wincomplete-patterns` warning. The strict gate also requires a
 conservative direct structural-recursion proof and rejects mutual recursion;
-`--Woverlapping-patterns` identifies arms definitely shadowed by an earlier
-unguarded arm. It does not prove general termination or coverage for arbitrary
-non-ADT patterns.
+`--Woverlapping-patterns` identifies arms provably covered by earlier
+unguarded arms, including aliases, alternatives, nested constructors, tuples,
+exact and head–tail sequences, and scalar literals. It combines complete root
+`Bool` and ADT families, while guards and unsupported/open domains stay
+conservative. It does not prove general termination or coverage for arbitrary
+open-domain patterns.
 
 ## Where to next
 

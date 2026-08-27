@@ -774,3 +774,15 @@ TEST_CASE("Analysis recovers module incomplete function binding") {
     REQUIRE(hover);
     CHECK(hover->contents.find("answer") != std::string::npos);
 }
+
+TEST_CASE("Analysis publishes nested unreachable-pattern warnings") {
+    Analysis a;
+    a.set_module_paths(default_module_paths(""));
+    a.analyze("file:///tmp/overlap.yona", "case Some 1 of Some _ -> 1; Some 1 -> 2; None -> 0 end");
+    auto diags = a.diagnostics();
+    const auto warning = std::find_if(diags.begin(), diags.end(), [](const LspDiagnostic& d) {
+        return d.severity == 2 && d.message.find("unreachable pattern") != std::string::npos;
+    });
+    REQUIRE(warning != diags.end());
+    CHECK(warning->range.start.character > 25);
+}

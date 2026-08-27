@@ -60,7 +60,7 @@ Compiling a module additionally writes an interface file next to the object file
 | `--Werror` | Treat warnings as errors |
 | `-w` | Suppress all warnings |
 | `--Wincomplete-patterns` | Warn when a finite ADT `case` misses constructors (also enabled by `--Wall`) |
-| `--Woverlapping-patterns` | Warn when a case arm is definitely unreachable after an earlier unguarded arm (also enabled by `--Wall`) |
+| `--Woverlapping-patterns` | Warn when earlier unguarded arms cover every value a later case arm can match; aliases, alternatives, nested constructors, tuples, exact/head–tail sequences, scalar literals, and finite ADT/Bool alternatives are analyzed (also enabled by `--Wall`) |
 | `--Wno-refinement` | Skip refinement checking (E0500 nonempty / nonzero proofs) |
 | `--Wno-linear` | Skip linearity checking (E0600 / E0601 / E0602) |
 | `--Wno-linear-leak` | Disable E0602 resource-leak warnings (`-Wlinear-leak`, on by default) |

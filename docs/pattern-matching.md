@@ -138,3 +138,20 @@ classify x = case x of
     _ -> if x > 0 then "positive" else "negative"
 end
 ```
+
+## Unreachable arms
+
+`--Woverlapping-patterns` (also enabled by `--Wall`) warns only when earlier
+unguarded arms cover every value a later arm can match. The analysis follows
+aliases, alternatives, nested constructors, tuples, exact and head–tail
+sequences, and scalar literal patterns; it also combines complete root `Bool`
+and ADT alternatives. Guards and unsupported or open domains do not establish
+coverage, and merely intersecting arms remain valid.
+
+```yona
+case value of
+    Some _ -> 1
+    Some 1 -> 2  # warning: unreachable pattern
+    None -> 0
+end
+```

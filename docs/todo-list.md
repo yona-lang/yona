@@ -3,9 +3,9 @@
 ## Bugs (open)
 
 No known open compiler, runtime, parser, standard-library, build-tool, or test
-harness bugs after the 2026-08-26 foundational-traits and conformance
-verification pass. Capability-dependent platform gaps remain tracked in their
-roadmap sections below.
+harness bugs after the 2026-08-27 pattern-analysis verification pass.
+Capability-dependent platform gaps remain tracked in their roadmap sections
+below.
 
 ## Build warnings
 
@@ -105,12 +105,13 @@ Formal specification (Rocq, parallel research track):
 API (#7) until the audit (#3) and effect-row story (#8) are honest about what
 already works.
 
-- [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — `yonac --require-effect-free` rejects known/open/unknown effect rows, incomplete registered finite-ADT or `Bool` matches, unproven direct recursion, and mutual-recursion cycles (E0203); closed empty export rows persist as `.yonai` `effects -`. #5 remains open for general termination, complete overlap analysis, and arbitrary non-ADT coverage.
+- [ ] **[#5](https://github.com/yona-lang/yona/issues/76) Opt-in totality / effect-freedom** — `yonac --require-effect-free` rejects known/open/unknown effect rows, incomplete registered finite-ADT or `Bool` matches, unproven direct recursion, and mutual-recursion cycles (E0203); closed empty export rows persist as `.yonai` `effects -`. #5 remains open for general termination and arbitrary open-domain coverage.
   - [x] Closed-empty-row effect-freedom gate + `.yonai` `effects -` propagation (2026-08-24)
   - [x] Finite-ADT case exhaustiveness warnings (`--Wincomplete-patterns`, 2026-08-24)
   - [x] Strict finite-ADT exhaustiveness in `--require-effect-free` (2026-08-24)
   - [x] `Bool` coverage, definitely-unreachable arm warning, and conservative structural-recursion gate (2026-08-24)
-  - [ ] General termination, complete overlap analysis, and arbitrary non-ADT coverage for a full totality claim
+  - [x] Sound structural overlap analysis for aliases, alternatives, nested constructors, tuples, exact sequences, head–tail sequences, scalar literals, and closed root families (2026-08-27)
+  - [ ] General termination and arbitrary open-domain coverage for a full totality claim
 - [ ] **[#4](https://github.com/yona-lang/yona/issues/75) Deterministic evaluator (CTE)** — after #5 and either #7 or a documented typechecked-AST subset. Pure total exprs only; no macros / arbitrary native at compile time.
 - [ ] **`Linear FileHandle` (and other resources) for real** — today `.yonai`
   marks `openFile` / `spawn` / sockets / channel ends as bare `LINEAR`
@@ -162,7 +163,7 @@ Related docs: [type-checker-design.md](./type-checker-design.md),
 
 ### Suggested next steps (rolling)
 
-- [ ] **Next language work: [#5](https://github.com/yona-lang/yona/issues/76) totality obligations** — expand beyond the landed effect-freedom, finite-domain coverage, conservative recursion, and definitely-unreachable-arm gates with general termination, complete overlap, and arbitrary non-ADT coverage. Follow with **`Linear FileHandle` for real**. Formal spec track: Phase 0 of
+- [ ] **Next language work: [#5](https://github.com/yona-lang/yona/issues/76) totality obligations** — expand beyond the landed effect-freedom, finite-domain coverage, conservative recursion, and sound structural unreachable-arm analysis with general termination and arbitrary open-domain coverage. Follow with **`Linear FileHandle` for real**. Formal spec track: Phase 0 of
   [2026-08-17-yona-rocq-formalization.md](./superpowers/plans/2026-08-17-yona-rocq-formalization.md).
 
 High leverage after the audit: `&T` **/ borrow types**
@@ -376,9 +377,9 @@ with **async**, **task groups**, and **channels**, not compete with them.
   #11 finite-ADT `--Wincomplete-patterns`; #6 opaque exports; and #7 typed-core
   C++/C ABI. See `docs/type-system-status.md` for evidence and remaining work.
 - [x] #5 slices: closed-empty effect rows, strict finite-ADT/`Bool` case
-  exhaustiveness, conservative direct-recursion checks, and definitely-unreachable
-  case-arm diagnostics under `--require-effect-free` (E0203). General termination,
-  complete overlap, and arbitrary non-ADT coverage remain active work.
+  exhaustiveness, conservative direct-recursion checks, and sound structural
+  unreachable case-arm diagnostics under `--require-effect-free` (E0203). General
+  termination and arbitrary open-domain coverage remain active work.
 - [x] Full frontend + LLVM codegen pipeline (modules, generics, traits, ADTs)
 - [x] Effects + async + structured concurrency foundations
 - [x] Persistent collections + RC/arena/perceus optimizations
