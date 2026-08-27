@@ -379,7 +379,11 @@ bool Codegen::is_heap_value(const TypedValue& value) const {
 }
 
 bool Codegen::block_has_terminator(const BasicBlock* block) const {
-    return block && !block->empty() && block->getTerminator() != nullptr;
+    // LLVM 23's BasicBlock::getTerminator() now asserts unless the last
+    // instruction is already a terminator.  A non-empty block can still be a
+    // fall-through block while a case arm or frame cleanup is being emitted,
+    // so establish that precondition without calling getTerminator first.
+    return block && !block->empty() && block->back().isTerminator();
 }
 
 Instruction* Codegen::block_terminator(BasicBlock* block) const {

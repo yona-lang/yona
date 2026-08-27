@@ -98,11 +98,10 @@
   official LLVM package *before* loading `LLVMConfig.cmake`. It discovers normal
   installations first and uses the project's pinned CMake source fallback only
   when dependency fetching is enabled; no external package manager is required.
-- The Windows-LLVM prerequisite contract now forces its isolated mock package
-  instead of inheriting a host `LLVM_DIR`. Code generation also treats an empty
-  LLVM basic block as an unterminated fall-through block before querying its
-  terminator, keeping derived Prelude functions valid with LLVM 23 on native
-  Windows and Apple Silicon.
+- The Windows-LLVM prerequisite contract now loads its isolated mock package
+  directly instead of inheriting a host `LLVM_DIR`. Code generation now checks
+  whether a basic block ends in a terminator before querying it, keeping derived
+  Prelude functions valid with LLVM 23 on native Windows and Apple Silicon.
 - Windows async worker exception boundaries now use the shared target-aware
   SJLJ abstraction, so native ARM64 builds do not rely on the unsupported
   x64-only compiler builtin.

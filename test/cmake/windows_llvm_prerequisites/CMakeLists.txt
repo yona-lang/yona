@@ -96,15 +96,13 @@ if(NOT _dia_location STREQUAL _fake_dia)
 endif()
 
 # This is a contract test of our mock package, not a probe of whichever LLVM
-# the host happens to export through CMAKE_PREFIX_PATH/LLVM_DIR.  The parent
-# build may already cache LLVM_DIR (for example Homebrew on macOS), so replace
-# that cache entry as well as the normal variable. `LLVM_DIR` is the
-# configuration-file directory (not a package prefix), so it must remain in
-# CMake's normal config-package lookup path. Homebrew's LLVMConfig runs compile
-# checks and cannot be evaluated by this LANGUAGES NONE project.
-set(LLVM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mock-llvm" CACHE PATH
-    "Mock LLVM package used by the prerequisite contract" FORCE)
-find_package(LLVM CONFIG REQUIRED)
+# the host happens to export through CMAKE_PREFIX_PATH/LLVM_DIR.  Loading the
+# fixture directly is intentional: `find_package` may prefer an already loaded
+# host package in an enclosing configure, and host LLVMConfig files can run
+# compiler checks which this LANGUAGES NONE test deliberately does not enable.
+# The source-order assertion above independently verifies that the production
+# build uses find_package(LLVM CONFIG REQUIRED) after preparing its targets.
+include("${CMAKE_CURRENT_SOURCE_DIR}/mock-llvm/LLVMConfig.cmake")
 if(NOT LLVM_PACKAGE_VERSION STREQUAL "test")
   message(FATAL_ERROR
     "The Windows LLVM prerequisite contract must load its mock LLVMConfig.cmake, "
