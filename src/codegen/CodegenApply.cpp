@@ -2307,7 +2307,11 @@ TypedValue Codegen::codegen_apply(ApplyExpr* node) {
         const std::string temporary_name = "__expression_callee";
         auto previous = named_values_.find(temporary_name);
         std::optional<TypedValue> saved;
-        if (previous != named_values_.end()) saved = previous->second;
+        std::optional<ActiveTypedValueSnapshot> saved_snapshot;
+        if (previous != named_values_.end()) {
+            saved = previous->second;
+            saved_snapshot.emplace(*this, *saved);
+        }
         named_values_[temporary_name] = callee_value;
         auto result = codegen_higher_order_call(temporary_name, all_args);
         // A literal lambda allocates its closure for this application. Values

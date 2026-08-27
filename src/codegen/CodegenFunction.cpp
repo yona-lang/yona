@@ -670,6 +670,7 @@ TypedValue Codegen::codegen_function_def(FunctionExpr* node, const std::string& 
         auto saved_block = builder_->GetInsertBlock();
         auto saved_point = builder_->GetInsertPoint();
         auto saved_values = named_values_;
+        ActiveNamedValueSnapshot saved_values_snapshot(*this, saved_values);
         auto saved_di_scope = debug_.scope;
         auto saved_debug_loc = builder_->getCurrentDebugLocation();
         // Nested LLVM functions must not inherit the enclosing function's
@@ -1231,6 +1232,7 @@ Codegen::CompiledFunction Codegen::compile_function(
     auto saved_block = builder_->GetInsertBlock();
     auto saved_point = builder_->GetInsertPoint();
     auto saved_values = named_values_;
+    ActiveNamedValueSnapshot saved_values_snapshot(*this, saved_values);
     auto saved_di_scope = debug_.scope;
     auto saved_debug_loc = builder_->getCurrentDebugLocation();
     auto saved_outer_arena = current_arena_;

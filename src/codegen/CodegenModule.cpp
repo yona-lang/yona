@@ -1764,6 +1764,34 @@ void Codegen::GenfnNameIsolation::restore() {
     cg.types_.adt_constructors = std::move(saved_adt_constructors);
 }
 
+Codegen::ActiveNamedValueSnapshot::ActiveNamedValueSnapshot(
+    Codegen& cg, NamedValueBindings& bindings)
+    : cg_(cg), bindings_(bindings) {
+    cg_.active_named_value_snapshots_.push_back(&bindings_);
+}
+
+Codegen::ActiveNamedValueSnapshot::~ActiveNamedValueSnapshot() {
+    const auto active = std::find(cg_.active_named_value_snapshots_.begin(),
+                                  cg_.active_named_value_snapshots_.end(),
+                                  &bindings_);
+    if (active != cg_.active_named_value_snapshots_.end())
+        cg_.active_named_value_snapshots_.erase(active);
+}
+
+Codegen::ActiveTypedValueSnapshot::ActiveTypedValueSnapshot(
+    Codegen& cg, TypedValue& value)
+    : cg_(cg), value_(value) {
+    cg_.active_typed_value_snapshots_.push_back(&value_);
+}
+
+Codegen::ActiveTypedValueSnapshot::~ActiveTypedValueSnapshot() {
+    const auto active = std::find(cg_.active_typed_value_snapshots_.begin(),
+                                  cg_.active_typed_value_snapshots_.end(),
+                                  &value_);
+    if (active != cg_.active_typed_value_snapshots_.end())
+        cg_.active_typed_value_snapshots_.erase(active);
+}
+
 void Codegen::migrate_function_references(Function* obsolete,
                                           Function* replacement) {
     if (!obsolete || !replacement || obsolete == replacement) return;
@@ -1781,6 +1809,14 @@ void Codegen::migrate_function_references(Function* obsolete,
 
     migrate_bindings(named_values_);
     migrate_functions(compiled_functions_);
+    for (auto* bindings : active_named_value_snapshots_) {
+        if (bindings)
+            migrate_bindings(*bindings);
+    }
+    for (auto* value : active_typed_value_snapshots_) {
+        if (value && value->val == obsolete)
+            value->val = replacement;
+    }
     for (auto* isolation : active_genfn_isolations_) {
         if (!isolation) continue;
         migrate_bindings(isolation->saved_named_values);
@@ -1813,6 +1849,7 @@ void Codegen::register_sibling_genfns(const std::string& mangled) {
     // `sortBy`'s `[pivot|rest]` clause and the sibling is compiled as a
     // dummy-INT closure (`undefined function 'cmp'`).
     auto saved_nv = named_values_;
+    ActiveNamedValueSnapshot saved_nv_snapshot(*this, saved_nv);
     named_values_.clear();
     const auto root_source_it = imports_.imported_sources.find(mangled);
     std::vector<std::string> reachable_sources;

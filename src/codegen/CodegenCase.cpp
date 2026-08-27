@@ -1131,6 +1131,7 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
              (pat->get_type() == AST_PATTERN_VALUE &&
               std::get_if<IdentifierExpr*>(&static_cast<PatternValue*>(pat)->expr) != nullptr));
         auto arm_named_values = named_values_;
+        ActiveNamedValueSnapshot arm_named_values_snapshot(*this, arm_named_values);
         auto body_bb = BasicBlock::Create(*context_, "case.body." + std::to_string(i), fn);
         auto next_bb = (!catch_all && i + 1 < node->clauses.size())
             ? BasicBlock::Create(*context_, "case.next." + std::to_string(i+1), fn)

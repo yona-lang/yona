@@ -16,14 +16,16 @@
   preceding prefix-based version instead imported host Homebrew LLVM and tried
   to compile C/C++ probes in a `LANGUAGES NONE` project. Repro: GitHub Actions
   run `33086185959`, Linux ARM64 Debug job `98566337918`.
-- [ ] **Nested sequence equality can restore a retired imported-GENFN
-  function handle.** `Std\\Regex.findAll ... == [["1"], ["22"]]` causes an
-  imported-GENFN isolation scope to restore an old `Array_Seq_element__get`
-  cache entry after its provisional return ABI was rebuilt; LLVM then asserts
-  while reading that erased `Function*`. Repro: GitHub Actions run
-  `33086185959`, Linux ARM64 Debug job `98566337918`, or the
-  `Imported nested sequence equality preserves generic specializations`
-  doctest before the snapshot-migration fix.
+- [ ] **Nested codegen scopes can restore retired provisional LLVM function
+  handles.** An inferred body may refine a provisional return ABI while an
+  imported-GENFN isolation or ordinary nested function/lambda scope still
+  holds a `named_values_` or compiled-function snapshot; restoring it later
+  resurrects an erased `Function*` and LLVM crashes. Repro: `Std\\Regex.findAll
+  ... == [["1"], ["22"]]` for imported-GENFN scopes, or GitHub Actions run
+  `33088429955`, Windows ARM64 Debug job `98574371139`, test `Logical
+  composition normalizes higher-order Bool results` (SIGSEGV). Migrate every
+  active compiler-cache and value-scope snapshot before erasing the
+  provisional function.
 - [ ] **Prelude compilation can leave case bodies unterminated on native
   Windows LLVM.** Building the deterministic `Prelude.obj` invokes `yonac`
   successfully until module verification reports unterminated `case.body.*`

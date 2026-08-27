@@ -635,6 +635,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr* node) {
         builder_->SetInsertPoint(body_bb);
         auto* elem = builder_->CreateCall(rt_.seq_get_, {src_ptr, idx_phi}, "par_elem");
         auto saved_nv = named_values_;
+        ActiveNamedValueSnapshot saved_nv_snapshot(*this, saved_nv);
         CType elem_type = (!src.subtypes.empty()) ? src.subtypes[0] : CType::INT;
         named_values_[var_name] = {elem, elem_type};
 
@@ -750,6 +751,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr* node) {
 
             // Bind variable and evaluate reducer
             auto saved_nv = named_values_;
+            ActiveNamedValueSnapshot saved_nv_snapshot(*this, saved_nv);
             named_values_[var_name] = {elem, CType::INT};
             auto body_val = codegen(node->reducerExpr);
             Value* body_i64 = body_val.val;
@@ -821,6 +823,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr* node) {
         auto* next_cur = builder_->CreateCall(rt_.seq_tail_, {cur_phi}, "cur.next");
 
         auto saved = named_values_;
+        ActiveNamedValueSnapshot saved_snapshot(*this, saved);
         named_values_[var_name] = {elem, CType::INT};
 
         auto body_val = codegen(node->reducerExpr);
@@ -874,6 +877,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr* node) {
         auto* elem = builder_->CreateCall(rt_.seq_get_, {src_ptr, i_phi}, "elem");
 
         auto saved = named_values_;
+        ActiveNamedValueSnapshot saved_snapshot(*this, saved);
         named_values_[var_name] = {elem, CType::INT};
         auto guard_val = codegen(ext->condition);
         Value* guard_bool = guard_val.val;
@@ -960,6 +964,7 @@ TypedValue Codegen::codegen_set_generator(SetGeneratorExpr* node) {
     auto* elem = builder_->CreateCall(rt_.seq_get_, {src_ptr, i_phi}, "elem");
 
     auto saved = named_values_;
+    ActiveNamedValueSnapshot saved_snapshot(*this, saved);
     named_values_[var_name] = {elem, CType::INT};
 
     auto body_val = codegen(node->reducerExpr);
@@ -1030,6 +1035,7 @@ TypedValue Codegen::codegen_dict_generator(DictGeneratorExpr* node) {
     auto* elem = builder_->CreateCall(rt_.seq_get_, {src_ptr, i_phi}, "elem");
 
     auto saved = named_values_;
+    ActiveNamedValueSnapshot saved_snapshot(*this, saved);
     named_values_[var_name] = {elem, CType::INT};
 
     auto key_val = codegen(node->reducerExpr->key);
@@ -1132,6 +1138,7 @@ TypedValue Codegen::codegen_fused_seq_generator(SeqGeneratorExpr* outer,
     auto* next_cur = builder_->CreateCall(rt_.seq_tail_, {cur_phi}, "fuse.next_cur");
 
     auto saved = named_values_;
+    ActiveNamedValueSnapshot saved_snapshot(*this, saved);
     named_values_[inner_var] = {elem, CType::INT};
 
     // Track blocks that branch to next_bb with unchanged wi

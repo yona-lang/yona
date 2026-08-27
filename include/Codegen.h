@@ -267,7 +267,8 @@ private:
     unsigned genfn_isolation_depth_ = 0;
 
     // Scope: variable name → typed value
-    std::unordered_map<std::string, TypedValue> named_values_;
+    using NamedValueBindings = std::unordered_map<std::string, TypedValue>;
+    NamedValueBindings named_values_;
 
     // Deferred functions: name → AST (compiled at call site)
     std::unordered_map<std::string, DeferredFunction> deferred_functions_;
@@ -905,6 +906,34 @@ private:
     /// while such a scope is active, so those snapshots must be migrated too
     /// or their later restoration would resurrect a dangling Function*.
     std::vector<GenfnNameIsolation*> active_genfn_isolations_;
+    /// Ordinary nested compilation scopes also save and later restore lexical
+    /// bindings.  Keep their snapshots live while codegen recurses so ABI
+    /// refinement can migrate retired LLVM Function handles before a parent
+    /// scope restores one.
+    struct ActiveNamedValueSnapshot {
+        ActiveNamedValueSnapshot(Codegen& cg, NamedValueBindings& bindings);
+        ~ActiveNamedValueSnapshot();
+        ActiveNamedValueSnapshot(const ActiveNamedValueSnapshot&) = delete;
+        ActiveNamedValueSnapshot& operator=(const ActiveNamedValueSnapshot&) = delete;
+
+    private:
+        Codegen& cg_;
+        NamedValueBindings& bindings_;
+    };
+    std::vector<NamedValueBindings*> active_named_value_snapshots_;
+    /// A few expression scopes restore one temporary binding rather than an
+    /// entire lexical map.  Track those values by the same lifetime rule.
+    struct ActiveTypedValueSnapshot {
+        ActiveTypedValueSnapshot(Codegen& cg, TypedValue& value);
+        ~ActiveTypedValueSnapshot();
+        ActiveTypedValueSnapshot(const ActiveTypedValueSnapshot&) = delete;
+        ActiveTypedValueSnapshot& operator=(const ActiveTypedValueSnapshot&) = delete;
+
+    private:
+        Codegen& cg_;
+        TypedValue& value_;
+    };
+    std::vector<TypedValue*> active_typed_value_snapshots_;
     void migrate_function_references(llvm::Function* obsolete,
                                      llvm::Function* replacement);
     /// Register same-module GENFN siblings as deferred functions so a

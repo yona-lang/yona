@@ -2035,6 +2035,7 @@ TypedValue Codegen::codegen_with(WithExpr* node) {
 
     std::string var_name = node->name->value;
     auto saved_values = named_values_;
+    ActiveNamedValueSnapshot saved_values_snapshot(*this, saved_values);
     named_values_[var_name] = resource;
 
     // Helper to emit close call using the resolved trait method

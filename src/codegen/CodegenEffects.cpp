@@ -123,6 +123,7 @@ TypedValue Codegen::codegen_handle(HandleExpr* node) {
 
         auto sb = builder_->GetInsertBlock(); auto sp = builder_->GetInsertPoint();
         auto saved = named_values_;
+        ActiveNamedValueSnapshot saved_snapshot(*this, saved);
 
         builder_->SetInsertPoint(BasicBlock::Create(*context_, "entry", fn));
         auto arg_it = fn->arg_begin();
@@ -159,6 +160,7 @@ TypedValue Codegen::codegen_handle(HandleExpr* node) {
     for (auto* clause : node->clauses) {
         if (clause->is_return_clause && body_result) {
             auto saved = named_values_;
+            ActiveNamedValueSnapshot saved_snapshot(*this, saved);
             named_values_[clause->return_binding] = body_result;
             body_result = codegen(clause->body);
             named_values_ = saved;
