@@ -98,3 +98,7 @@ release archives.
 - The grammar sync, VS Code tests, Zed extension check, Tree-sitter test, site
   build (70 pages), and workflow YAML validation pass locally.
 - Hosted Windows x64/ARM64 and macOS ARM64 execution remains the final gate.
+- The Windows-LLVM mock contract is also verified with a pre-populated invalid
+  `LLVM_DIR`, and the shared SJLJ header passes a syntax-only
+  `aarch64-pc-windows-msvc` Clang probe. Native Windows ARM64 execution remains
+  the authoritative runtime check.

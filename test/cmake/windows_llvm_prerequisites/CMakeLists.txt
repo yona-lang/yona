@@ -98,14 +98,13 @@ endif()
 # This is a contract test of our mock package, not a probe of whichever LLVM
 # the host happens to export through CMAKE_PREFIX_PATH/LLVM_DIR.  The parent
 # build may already cache LLVM_DIR (for example Homebrew on macOS), so replace
-# that cache entry as well as the normal variable and prohibit default package
-# search paths.  Homebrew's LLVMConfig runs compile checks and cannot be
-# evaluated by this LANGUAGES NONE project.
+# that cache entry as well as the normal variable. `LLVM_DIR` is the
+# configuration-file directory (not a package prefix), so it must remain in
+# CMake's normal config-package lookup path. Homebrew's LLVMConfig runs compile
+# checks and cannot be evaluated by this LANGUAGES NONE project.
 set(LLVM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mock-llvm" CACHE PATH
     "Mock LLVM package used by the prerequisite contract" FORCE)
-find_package(LLVM CONFIG REQUIRED
-  PATHS "${LLVM_DIR}"
-  NO_DEFAULT_PATH)
+find_package(LLVM CONFIG REQUIRED)
 if(NOT LLVM_PACKAGE_VERSION STREQUAL "test")
   message(FATAL_ERROR
     "The Windows LLVM prerequisite contract must load its mock LLVMConfig.cmake, "

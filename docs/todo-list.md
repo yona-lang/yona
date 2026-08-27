@@ -29,6 +29,11 @@
   `Eq_Option__eq`), and Debug may assert while querying a missing terminator.
   Repro: GitHub Actions run `33082841451`, Windows x64 Release job
   `98554422796` and Windows x64 Debug job `98554422665`.
+- [ ] **The Windows async runtime uses an x64-only setjmp builtin.**
+  `src/runtime/platform/async_win32.c` calls `__builtin_setjmp`, which Clang
+  rejects for the native ARM64 MSVC target before the runtime can build.
+  Repro: GitHub Actions run `33084292747`, Windows ARM64 Debug job
+  `98559587583` (`__builtin_setjmp is not supported for the current target`).
 
 The full doctest/CTest suite passes on Linux; native Apple Silicon and Windows
 ARM64 execution remains a hosted-CI verification item under Distribution

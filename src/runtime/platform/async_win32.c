@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <windows.h>
 
+#include "yona/runtime/sjlj.h"
+
 void yona_rt_arena_destroy(void* arena_ptr);
 
 #define YONA_POOL_SIZE 8
@@ -313,11 +315,11 @@ static DWORD WINAPI yona_pool_worker_win32(void* unused) {
 			continue;
 		}
 
-		/* __builtin_setjmp pairs with yona_rt_raise's __builtin_longjmp; see
-		 * src/runtime/exceptions.c for the SJLJ buffer rationale (avoids MSVC
-		 * SEH unwinding which corrupts our cross-frame longjmp). */
+		/* This pairs with yona_rt_raise's SJLJ longjmp; see exceptions.c. The
+		 * shared macro uses the target-compatible AArch64 implementation when
+		 * Clang lacks its normal SJLJ builtin (native Windows ARM64). */
 		void* jmp = yona_rt_try_push();
-		if (__builtin_setjmp((void**)jmp) == 0) {
+		if (yona_sjlj_setjmp(jmp) == 0) {
 			int64_t result = task->thunk ? task->thunk() : task->fn(task->arg);
 			yona_rt_try_end();
 			fulfill_promise(task, result, 0);

@@ -20,6 +20,7 @@ def main() -> int:
     ci = (ROOT / ".github/workflows/cmake-multi-platform.yml").read_text()
     release = (ROOT / ".github/workflows/release.yml").read_text()
     msi = (ROOT / "packaging/windows/build-msi.ps1").read_text()
+    async_win32 = (ROOT / "src/runtime/platform/async_win32.c").read_text()
     failures: list[str] = []
 
     require(
@@ -93,6 +94,15 @@ def main() -> int:
         "MSI script must validate the x64|arm64 architecture parameter.",
         failures,
     )
+
+    require(
+        async_win32,
+        r'#include "yona/runtime/sjlj\.h".*?yona_sjlj_setjmp\(jmp\)',
+        "Windows async workers must use the shared target-aware SJLJ helper.",
+        failures,
+    )
+    if re.search(r"\b__builtin_setjmp\s*\(", async_win32):
+        failures.append("Windows async workers must not call the x64-only __builtin_setjmp directly.")
     require(
         msi,
         r"\$architectureOutDir = Join-Path \$absOutDir \$Architecture.*?"

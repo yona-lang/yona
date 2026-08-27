@@ -103,6 +103,9 @@
   LLVM basic block as an unterminated fall-through block before querying its
   terminator, keeping derived Prelude functions valid with LLVM 23 on native
   Windows and Apple Silicon.
+- Windows async worker exception boundaries now use the shared target-aware
+  SJLJ abstraction, so native ARM64 builds do not rely on the unsupported
+  x64-only compiler builtin.
 - Fresh-clone test builds now generate their Prelude object in the build tree,
   track every standard-library fixture source, and enforce a source/expected
   contract for every codegen fixture. LSP fixture navigation resolves the
