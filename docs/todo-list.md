@@ -2,9 +2,30 @@
 
 ## Bugs (open)
 
-No known project-owned bug is currently open. The full doctest/CTest suite
-passes on Linux; native Apple Silicon and Windows ARM64 execution remains a
-hosted-CI verification item under Distribution readiness.
+- [ ] **Official Windows LLVM archives require zstd before import.** Both
+  `windows-2025` x64 and `windows-11-vs2026-arm` ARM64 CI configure jobs fail
+  with `LLVMExports.cmake: LLVMSupport link interface contains
+  zstd::libzstd_static, but the target was not found`, because the project
+  prepares `ZLIB::ZLIB` and DIA but not LLVM's zstd prerequisite before
+  `find_package(LLVM CONFIG REQUIRED)`. Repro: GitHub Actions run
+  `33078505123`, jobs `98538991570` and `98538991588`.
+- [ ] **Windows-LLVM prerequisite contract accidentally imports host LLVM.**
+  `test/cmake/windows_llvm_prerequisites` prepends a noncanonical mock prefix,
+  so Homebrew LLVM wins on macOS and its config tries to compile C/C++ probes
+  even though the contract project declares `LANGUAGES NONE`. Repro: GitHub
+  Actions run `33078505123`, macOS ARM64 jobs `98538991755` and `98538991995`;
+  `cmake_windows_llvm_prerequisites` fails with `CXX: needs to be enabled`.
+- [ ] **Nested sequence equality can emit an invalid imported-GENFN call and
+  crash fixture tests.** `Std\\Regex.findAll ... == [["1"], ["22"]]` produces
+  calls to a two-argument `seqEqBy` specialization with only the two sequence
+  operands (the comparator is lost), failing LLVM verification and then
+  segfaulting. Repro: GitHub Actions run `33078505123`, Linux Release job
+  `98538992088` (`regex_find_all_equal`) and macOS ARM64 Release job
+  `98538991995`.
+
+The full doctest/CTest suite passes on Linux; native Apple Silicon and Windows
+ARM64 execution remains a hosted-CI verification item under Distribution
+readiness.
 
 Capability-dependent platform gaps remain tracked in their roadmap sections
 below.

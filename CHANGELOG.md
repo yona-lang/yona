@@ -94,7 +94,7 @@
   same-named local module functions during dependency-SCC discovery, and
   package-qualified selective imports preserve the package/module separator
   when locating interfaces.
-- Windows CMake now provides the Zlib and DIA SDK targets required by the
+- Windows CMake now provides the Zlib, zstd, and DIA SDK targets required by the
   official LLVM package *before* loading `LLVMConfig.cmake`. It discovers normal
   installations first and uses the project's pinned CMake source fallback only
   when dependency fetching is enabled; no external package manager is required.

@@ -77,13 +77,24 @@ release archives.
   no-vcpkg toolchain policy.
 - [ ] Mark the misleading macOS architecture bug fixed only after matrix and
   packaging validation passes.
-- [ ] Run `pnpm exec astro build` and `git diff --check`.
+- [x] Run `pnpm exec astro build` and `git diff --check`.
 
 ### Task 4: Final verification
 
-- [ ] Run Linux configure/build, focused CMake/packaging tests, full doctest,
+- [x] Run Linux configure/build, focused CMake/packaging tests, full doctest,
   `ctest --preset unit-tests-linux --output-on-failure`, editor checks, and
   static workflow validation.
 - [ ] Use the next GitHub Actions run as the native Windows ARM64/macOS ARM64
   execution verification; report any runner-only issue with its exact log.
-- [ ] Make the one final commit only when every local check is green.
+- [x] Make the one final commit only when every local check is green.
+
+### Local verification (2026-08-27)
+
+- Debug and fresh Release compiler builds pass the imported nested-sequence
+  equality regression at `-O0` through `-O3`; the full Debug doctest run has
+  674 cases and 171,056 assertions.
+- `ctest --preset unit-tests-linux --output-on-failure` passes all six targets,
+  including the native-ARM64 packaging and Windows-LLVM prerequisite contracts.
+- The grammar sync, VS Code tests, Zed extension check, Tree-sitter test, site
+  build (70 pages), and workflow YAML validation pass locally.
+- Hosted Windows x64/ARM64 and macOS ARM64 execution remains the final gate.

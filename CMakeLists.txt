@@ -73,7 +73,7 @@ endif()
 
 # Prefer distro / Homebrew packages. FetchContent is a last resort for the
 # project's pinned third-party build dependencies (including the Windows LLVM
-# package's Zlib prerequisite). Packaging passes -DYONA_FETCH_DEPS=OFF.
+# package's Zlib/zstd prerequisites). Packaging passes -DYONA_FETCH_DEPS=OFF.
 option(YONA_FETCH_DEPS "Fetch pinned dependencies when no system CMake package is found" ON)
 # Distro packages copy binaries from the build tree (no cmake --install). Linking
 # the shared in-tree DSO embeds that directory as DT_RUNPATH; Fedora check-rpaths
@@ -209,6 +209,49 @@ if(WIN32)
 				"LLVM's Windows CMake package requires ZLIB::ZLIB, but ZLIB was not found. "
 				"Install zlib with a CMake package, or configure with -DYONA_FETCH_DEPS=ON "
 				"to build the pinned zlib dependency.")
+		endif()
+	endif()
+
+	# LLVM 23's official Windows exports also name the upstream zstd target
+	# directly.  Define it before loading LLVMConfig.cmake: CMake validates
+	# imported link interfaces while the package is read, so it is too late to
+	# repair this after find_package(LLVM).
+	find_package(zstd CONFIG QUIET)
+	if(NOT TARGET zstd::libzstd_static)
+		if(YONA_FETCH_DEPS)
+			find_package(Git QUIET)
+			if(NOT Git_FOUND)
+				message(FATAL_ERROR
+					"zstd was not found and git is unavailable for FetchContent. "
+					"Install zstd with a CMake package that provides zstd::libzstd_static, "
+					"or install git and configure with -DYONA_FETCH_DEPS=ON.")
+			endif()
+			message(STATUS "zstd not found; fetching zstd v1.5.7 for LLVM")
+			set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+			set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+			set(ZSTD_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+			set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+			set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
+			FetchContent_Declare(
+				yona_zstd
+				QUIET
+				GIT_REPOSITORY https://github.com/facebook/zstd.git
+				GIT_TAG v1.5.7
+				GIT_SHALLOW TRUE
+				SOURCE_SUBDIR build/cmake
+			)
+			FetchContent_MakeAvailable(yona_zstd)
+			if(TARGET libzstd_static)
+				add_library(zstd::libzstd_static ALIAS libzstd_static)
+			else()
+				message(FATAL_ERROR
+					"Fetched zstd v1.5.7 did not define the expected libzstd_static target.")
+			endif()
+		else()
+			message(FATAL_ERROR
+				"LLVM's Windows CMake package requires zstd::libzstd_static, but zstd was not found. "
+				"Install zstd with a CMake package, or configure with -DYONA_FETCH_DEPS=ON "
+				"to build the pinned zstd dependency.")
 		endif()
 	endif()
 

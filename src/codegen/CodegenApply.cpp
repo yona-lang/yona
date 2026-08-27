@@ -652,7 +652,13 @@ void Codegen::precompile_function_args(EvaluatedArgs& args, const std::string& c
                 }
                 std::vector<TypedValue> hint_args;
                 std::vector<std::optional<LambdaArgumentHint>> checked_hints;
-                if (type_checker_) {
+                // The source of an imported generic function is reparsed after
+                // type checking. Its AST nodes are not owned by the original
+                // type checker, whose node-keyed cache can otherwise hand us
+                // stale (and, after allocator reuse, unrelated) type hints.
+                // Inside the isolation scope, use the imported signature and
+                // concrete call-site identities above instead.
+                if (type_checker_ && genfn_isolation_depth_ == 0) {
                     auto* checked = type_checker_->zonk(
                         type_checker_->type_of(def_it->second.ast));
                     for (size_t pi = 0; pi < def_it->second.param_names.size() &&

@@ -57,10 +57,15 @@ yona_require_file_omits("${_setup_llvm_action}" "vcpkg")
 
 file(READ "${YONA_SOURCE_DIR}/CMakeLists.txt" _top_level_cmake)
 string(FIND "${_top_level_cmake}" "find_package(ZLIB QUIET)" _zlib_position)
+string(FIND "${_top_level_cmake}" "find_package(zstd CONFIG QUIET)" _zstd_position)
+string(FIND "${_top_level_cmake}" "zstd::libzstd_static" _zstd_target_position)
 string(FIND "${_top_level_cmake}" "yona_prepare_llvm_dia_sdk()" _dia_position)
 string(FIND "${_top_level_cmake}" "find_package(LLVM CONFIG REQUIRED)" _llvm_position)
-if(_zlib_position LESS 0 OR _dia_position LESS 0 OR _llvm_position LESS 0 OR
-   _zlib_position GREATER _llvm_position OR _dia_position GREATER _llvm_position)
+if(_zlib_position LESS 0 OR _zstd_position LESS 0 OR _zstd_target_position LESS 0 OR
+   _dia_position LESS 0 OR _llvm_position LESS 0 OR
+   _zlib_position GREATER _llvm_position OR _zstd_position GREATER _llvm_position OR
+   _zstd_target_position GREATER _llvm_position OR
+   _dia_position GREATER _llvm_position)
   message(FATAL_ERROR
     "Windows LLVM prerequisite targets must be prepared before find_package(LLVM)")
 endif()
@@ -69,6 +74,7 @@ set(_fake_dia "${CMAKE_CURRENT_BINARY_DIR}/diaguids.lib")
 file(WRITE "${_fake_dia}" "")
 set(YONA_DIA_SDK_LIBRARY "${_fake_dia}" CACHE FILEPATH "" FORCE)
 add_library(ZLIB::ZLIB INTERFACE IMPORTED GLOBAL)
+add_library(zstd::libzstd_static INTERFACE IMPORTED GLOBAL)
 
 include("${YONA_SOURCE_DIR}/cmake/YonaLlvmWindowsDia.cmake")
 set(CMAKE_GENERATOR_PLATFORM "ARM64")
@@ -89,5 +95,14 @@ if(NOT _dia_location STREQUAL _fake_dia)
     "DIASDK::Diaguids location mismatch: expected '${_fake_dia}', got '${_dia_location}'")
 endif()
 
-list(PREPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/mock-llvm")
+# This is a contract test of our mock package, not a probe of whichever LLVM
+# the host happens to export through CMAKE_PREFIX_PATH/LLVM_DIR.  Point config
+# mode at the mock explicitly; Homebrew's LLVMConfig runs compile checks and
+# cannot be evaluated by this LANGUAGES NONE project.
+set(LLVM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mock-llvm")
 find_package(LLVM CONFIG REQUIRED)
+if(NOT LLVM_PACKAGE_VERSION STREQUAL "test")
+  message(FATAL_ERROR
+    "The Windows LLVM prerequisite contract must load its mock LLVMConfig.cmake, "
+    "not a host LLVM installation")
+endif()

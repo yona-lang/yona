@@ -150,6 +150,22 @@ in render (run (
   }
 }
 
+TEST_CASE("Imported nested sequence equality preserves generic specializations") {
+  const string source = R"(
+import compile, findAll from Std\Regex in
+findAll (compile "[0-9]+") "a1b22" == [["1"], ["22"]]
+)";
+  // The imported Regex implementation calls generic sequence equality both
+  // for the outer result and for its inner string matches. Exercise every
+  // optimization pipeline: a mismatched cached specialization used to emit a
+  // two-argument call to the three-argument `seqEqBy` implementation.
+  for (int opt_level = 0; opt_level <= 3; ++opt_level) {
+    CAPTURE(opt_level);
+    CHECK(compile_and_run(source, nullptr, nullptr, "imported_nested_seq_eq",
+                          nullptr, opt_level) == "true");
+  }
+}
+
 static string read_file(const fs::path &path);
 
 static string trim_cell(string value) {

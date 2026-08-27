@@ -290,7 +290,12 @@ TypedValue Codegen::codegen_comparison(AstNode* left_node, AstNode* right_node, 
     if (!left || !right) return {};
 
     auto attach_adt_arguments = [&](TypedValue& value, AstNode* source) {
-        if (!type_checker_ || !source)
+        // Imported GENFN bodies are reparsed after the importing module was
+        // checked. Their node addresses must never be used to query that
+        // checker's pointer-keyed cache: allocator reuse can turn a lookup
+        // into unrelated semantic arguments and select the wrong generic
+        // specialization.
+        if (!type_checker_ || genfn_isolation_depth_ != 0 || !source)
             return;
         auto* inferred = type_checker_->zonk(type_checker_->type_of(source));
         if (!inferred) return;

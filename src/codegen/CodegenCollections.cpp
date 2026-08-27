@@ -253,7 +253,9 @@ TypedValue Codegen::codegen_set(SetExpr* node) {
         if (contextual_expected_node_ == node &&
             contextual_expected_type_ == CType::DICT)
             inferred_dict = true;
-        if (type_checker_) {
+        // See CodegenExpr::codegen_comparison: only ASTs from the checked
+        // importing module may consult the type checker's pointer-keyed map.
+        if (type_checker_ && genfn_isolation_depth_ == 0) {
             auto* inferred = type_checker_->zonk(type_checker_->type_of(node));
             inferred_dict = inferred_dict || (inferred &&
                 ((inferred->tag == typechecker::MonoType::App &&
