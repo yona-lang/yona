@@ -900,6 +900,13 @@ private:
         GenfnNameIsolation(const GenfnNameIsolation&) = delete;
         GenfnNameIsolation& operator=(const GenfnNameIsolation&) = delete;
     };
+    /// Every active imported-GENFN isolation owns snapshots of compiler
+    /// bindings.  ABI refinement may replace a provisional LLVM Function
+    /// while such a scope is active, so those snapshots must be migrated too
+    /// or their later restoration would resurrect a dangling Function*.
+    std::vector<GenfnNameIsolation*> active_genfn_isolations_;
+    void migrate_function_references(llvm::Function* obsolete,
+                                     llvm::Function* replacement);
     /// Register same-module GENFN siblings as deferred functions so a
     /// remonomorphized export can call unexported helpers.
     void register_sibling_genfns(const std::string& mangled);

@@ -1588,17 +1588,35 @@ Codegen::CompiledFunction Codegen::compile_function(
         }
 
         if (body_tv.val->getType() != ret_type) {
-            // Remove the function and recreate with correct return type.
-            // Phase 3: the frame alloca lives in the old fn's entry block;
-            // erasing the fn destroys it. Must nullptr before erase.
-            // Snapshot the LLVM type first: eraseFromParent() deletes the
-            // body instruction, so body_tv.val->getType() is a UAF (null
-            // on Darwin allocators; often still readable on Linux).
+            // A body can refine an unannotated or polymorphic result from the
+            // conservative i64 provisional ABI to Bool, Float, or a heap
+            // pointer.  That provisional function has not escaped to another
+            // LLVM function (checked above), but it is already referenced by
+            // compiler-owned scopes and specialization-cache entries.  Never
+            // erase it before every such reference has moved to the
+            // replacement: stale Function* values are use-after-free and may
+            // look like unrelated LLVM Values after allocator reuse.
             LType* actual_ret_ty = body_tv.val->getType();
-            current_frame_alloca_ = nullptr;
-            fn->eraseFromParent();
+            auto* obsolete_fn = fn;
             auto new_fn_type = llvm::FunctionType::get(actual_ret_ty, param_types, false);
-            fn = Function::Create(new_fn_type, Function::InternalLinkage, name, module_.get());
+            auto* replacement = Function::Create(
+                new_fn_type, Function::InternalLinkage,
+                name + ".abi_rebuild", module_.get());
+
+            auto migrate_bindings = [&](auto& bindings) {
+                for (auto& [_, value] : bindings)
+                    if (value.val == obsolete_fn)
+                        value.val = replacement;
+            };
+            migrate_bindings(saved_values);
+            migrate_function_references(obsolete_fn, replacement);
+
+            // Phase 3: the frame alloca lives in the old fn's entry block;
+            // erasing it destroys that alloca and every provisional-body use.
+            current_frame_alloca_ = nullptr;
+            obsolete_fn->eraseFromParent();
+            replacement->setName(name);
+            fn = replacement;
 
             // Re-attach debug info to the recreated function
             if (debug_.enabled && debug_.builder && debug_.file) {

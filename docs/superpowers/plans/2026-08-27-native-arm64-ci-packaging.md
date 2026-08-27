@@ -102,3 +102,8 @@ release archives.
   `LLVM_DIR`, and the shared SJLJ header passes a syntax-only
   `aarch64-pc-windows-msvc` Clang probe. Native Windows ARM64 execution remains
   the authoritative runtime check.
+- The imported nested-sequence equality regression now exercises a function
+  whose provisional ABI is rebuilt inside a nested GENFN isolation scope. The
+  full Debug doctest run verifies that every active cache snapshot is migrated
+  before the retired LLVM function is erased; native ARM64 CI remains the
+  architecture-diverse execution gate for this lifetime path.

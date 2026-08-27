@@ -84,6 +84,10 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
+- Imported-GENFN isolation now migrates every active compiler-cache and scope
+  snapshot when a deferred function refines its provisional return ABI. This
+  prevents nested generic sequence equality from restoring an erased LLVM
+  `Function*` and crashing in LLVM's function-type validation.
 - Native Windows builds no longer redefine `WIN32_LEAN_AND_MEAN` after CMake
   has already supplied it globally, keeping the new ARM64 and x64 CI logs free
   of avoidable compiler warnings.

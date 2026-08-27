@@ -6,6 +6,7 @@
 
 #include "Codegen.h"
 #include "Parser.h"
+#include <algorithm>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
@@ -1692,6 +1693,7 @@ Codegen::GenfnNameIsolation::GenfnNameIsolation(Codegen& cg, std::string mangled
     saved_deferred_functions = cg.deferred_functions_;
     saved_named_values = cg.named_values_;
     saved_adt_constructors = cg.types_.adt_constructors;
+    cg.active_genfn_isolations_.push_back(this);
     cg.imports_.extern_functions.clear();
     auto sep = mangled.rfind("__");
     std::string module_prefix = (sep == std::string::npos) ? "" : mangled.substr(0, sep + 2);
@@ -1737,6 +1739,10 @@ Codegen::GenfnNameIsolation::GenfnNameIsolation(Codegen& cg, std::string mangled
 void Codegen::GenfnNameIsolation::restore() {
     if (restored) return;
     restored = true;
+    const auto active = std::find(cg.active_genfn_isolations_.begin(),
+                                  cg.active_genfn_isolations_.end(), this);
+    if (active != cg.active_genfn_isolations_.end())
+        cg.active_genfn_isolations_.erase(active);
     --cg.genfn_isolation_depth_;
     cg.compiled_functions_ = std::move(saved_compiled_functions);
     for (auto it = cg.deferred_functions_.begin();
@@ -1756,6 +1762,30 @@ void Codegen::GenfnNameIsolation::restore() {
     cg.named_values_ = std::move(saved_named_values);
     cg.imports_.extern_functions = std::move(saved_externs);
     cg.types_.adt_constructors = std::move(saved_adt_constructors);
+}
+
+void Codegen::migrate_function_references(Function* obsolete,
+                                          Function* replacement) {
+    if (!obsolete || !replacement || obsolete == replacement) return;
+
+    auto migrate_bindings = [&](auto& bindings) {
+        for (auto& [_, value] : bindings)
+            if (value.val == obsolete)
+                value.val = replacement;
+    };
+    auto migrate_functions = [&](auto& functions) {
+        for (auto& [_, compiled] : functions)
+            if (compiled.fn == obsolete)
+                compiled.fn = replacement;
+    };
+
+    migrate_bindings(named_values_);
+    migrate_functions(compiled_functions_);
+    for (auto* isolation : active_genfn_isolations_) {
+        if (!isolation) continue;
+        migrate_bindings(isolation->saved_named_values);
+        migrate_functions(isolation->saved_compiled_functions);
+    }
 }
 
 void Codegen::install_private_genfn_ctors(const std::string& mangled) {

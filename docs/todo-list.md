@@ -9,19 +9,21 @@
   prepares `ZLIB::ZLIB` and DIA but not LLVM's zstd prerequisite before
   `find_package(LLVM CONFIG REQUIRED)`. Repro: GitHub Actions run
   `33078505123`, jobs `98538991570` and `98538991588`.
-- [ ] **Windows-LLVM prerequisite contract accidentally imports host LLVM.**
-  `test/cmake/windows_llvm_prerequisites` prepends a noncanonical mock prefix,
-  so Homebrew LLVM wins on macOS and its config tries to compile C/C++ probes
-  even though the contract project declares `LANGUAGES NONE`. Repro: GitHub
-  Actions run `33078505123`, macOS ARM64 jobs `98538991755` and `98538991995`;
-  `cmake_windows_llvm_prerequisites` fails with `CXX: needs to be enabled`.
-- [ ] **Nested sequence equality can emit an invalid imported-GENFN call and
-  crash fixture tests.** `Std\\Regex.findAll ... == [["1"], ["22"]]` produces
-  calls to a two-argument `seqEqBy` specialization with only the two sequence
-  operands (the comparator is lost), failing LLVM verification and then
-  segfaulting. Repro: GitHub Actions run `33078505123`, Linux Release job
-  `98538992088` (`regex_find_all_equal`) and macOS ARM64 Release job
-  `98538991995`.
+- [ ] **Windows-LLVM prerequisite contract is not hermetic on a clean
+  checkout.** The direct mock-config fixture is ignored by the repository-wide
+  `*.cmake` rule, so CI cannot load
+  `test/cmake/windows_llvm_prerequisites/mock-llvm/LLVMConfig.cmake`; the
+  preceding prefix-based version instead imported host Homebrew LLVM and tried
+  to compile C/C++ probes in a `LANGUAGES NONE` project. Repro: GitHub Actions
+  run `33086185959`, Linux ARM64 Debug job `98566337918`.
+- [ ] **Nested sequence equality can restore a retired imported-GENFN
+  function handle.** `Std\\Regex.findAll ... == [["1"], ["22"]]` causes an
+  imported-GENFN isolation scope to restore an old `Array_Seq_element__get`
+  cache entry after its provisional return ABI was rebuilt; LLVM then asserts
+  while reading that erased `Function*`. Repro: GitHub Actions run
+  `33086185959`, Linux ARM64 Debug job `98566337918`, or the
+  `Imported nested sequence equality preserves generic specializations`
+  doctest before the snapshot-migration fix.
 - [ ] **Prelude compilation can leave case bodies unterminated on native
   Windows LLVM.** Building the deterministic `Prelude.obj` invokes `yonac`
   successfully until module verification reports unterminated `case.body.*`
@@ -44,8 +46,15 @@ below.
 
 ## Build warnings
 
-No known project-owned build warnings. Third-party dependency warnings must be
-re-evaluated when their pinned release changes.
+- [ ] **The checked-in C++ baseline is not clang-format clean.** The current
+  project formatter reports broad violations in untouched `include/Codegen.h`
+  and `src/codegen/CodegenModule.cpp`, so formatting a focused change would
+  create unrelated whole-file churn. Repro: `clang-format --dry-run --Werror
+  include/Codegen.h src/codegen/CodegenModule.cpp`. Normalize the baseline in a
+  dedicated mechanical change after agreeing the pinned formatter version.
+
+No known project-owned compiler warnings. Third-party dependency warnings must
+be re-evaluated when their pinned release changes.
 
 ## Current Snapshot
 
