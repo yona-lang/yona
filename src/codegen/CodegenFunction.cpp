@@ -34,6 +34,53 @@ static constexpr int YONA_MAX_FRAME_DROPS = 16;
 using namespace llvm;
 using LType = llvm::Type;
 
+/// Keep a retired provisional function callable while its replacement takes
+/// over the semantic ABI. Compiler state migrates to the replacement, but a
+/// nested lowering may still hold an untracked raw LLVM Function* temporarily.
+/// A small legacy trampoline makes that handle safe without guessing which
+/// transient C++ container owns it. Internal direct functions only differ in
+/// return representation at this point; arguments retain the same ABI.
+static Value* encode_legacy_return(IRBuilder<>& builder, Value* value,
+                                   LType* legacy_type) {
+    if (value->getType() == legacy_type) return value;
+    if (legacy_type->isPointerTy()) {
+        if (value->getType()->isPointerTy()) return value;
+        if (value->getType()->isIntegerTy())
+            return builder.CreateIntToPtr(value, legacy_type, "abi_legacy_ptr");
+        if (value->getType()->isDoubleTy()) {
+            auto* bits = builder.CreateBitCast(value, LType::getInt64Ty(builder.getContext()),
+                                               "abi_legacy_float_bits");
+            return builder.CreateIntToPtr(bits, legacy_type, "abi_legacy_ptr");
+        }
+    }
+    if (legacy_type->isIntegerTy()) {
+        if (value->getType()->isPointerTy())
+            return builder.CreatePtrToInt(value, legacy_type, "abi_legacy_i");
+        if (value->getType()->isIntegerTy())
+            return builder.CreateZExtOrTrunc(value, legacy_type, "abi_legacy_i");
+        if (value->getType()->isDoubleTy()) {
+            auto* bits = builder.CreateBitCast(value, LType::getInt64Ty(builder.getContext()),
+                                               "abi_legacy_float_bits");
+            return builder.CreateZExtOrTrunc(bits, legacy_type, "abi_legacy_i");
+        }
+    }
+    if (legacy_type->isDoubleTy()) {
+        if (value->getType()->isDoubleTy()) return value;
+        Value* bits = value;
+        if (bits->getType()->isPointerTy())
+            bits = builder.CreatePtrToInt(bits, LType::getInt64Ty(builder.getContext()),
+                                          "abi_legacy_ptr_bits");
+        else if (bits->getType()->isIntegerTy())
+            bits = builder.CreateZExtOrTrunc(bits, LType::getInt64Ty(builder.getContext()),
+                                             "abi_legacy_i_bits");
+        return builder.CreateBitCast(bits, legacy_type, "abi_legacy_float");
+    }
+    // Aggregate ABI refinement cannot have a well-typed stale direct caller:
+    // preserve IR validity for a diagnostic/recovery path rather than
+    // manufacturing an invalid bitcast.
+    return UndefValue::get(legacy_type);
+}
+
 std::string Codegen::source_type_descriptor(const types::Type& type) const {
     if (const auto* builtin = std::get_if<types::BuiltinType>(&type)) {
         switch (*builtin) {
@@ -1613,11 +1660,30 @@ Codegen::CompiledFunction Codegen::compile_function(
             migrate_bindings(saved_values);
             migrate_function_references(obsolete_fn, replacement);
 
-            // Phase 3: the frame alloca lives in the old fn's entry block;
-            // erasing it destroys that alloca and every provisional-body use.
+            // Phase 3: the frame alloca lives in the provisional body's entry
+            // block. Replace that body with a legacy ABI trampoline instead
+            // of destroying the Function object: raw LLVM Function* values
+            // can exist transiently in nested lowering state outside the
+            // persistent caches migrated above.
             current_frame_alloca_ = nullptr;
-            obsolete_fn->eraseFromParent();
+            const std::string legacy_name = name + ".abi_legacy";
+            obsolete_fn->setName(legacy_name);
+            obsolete_fn->setLinkage(Function::InternalLinkage);
             replacement->setName(name);
+            obsolete_fn->deleteBody();
+            auto* legacy_entry = BasicBlock::Create(*context_, "entry", obsolete_fn);
+            IRBuilder<> legacy_builder(legacy_entry);
+            std::vector<Value*> legacy_args;
+            legacy_args.reserve(obsolete_fn->arg_size());
+            for (auto& arg : obsolete_fn->args()) legacy_args.push_back(&arg);
+            auto* replacement_call = legacy_builder.CreateCall(replacement, legacy_args,
+                                                                "abi_replacement");
+            if (obsolete_fn->getReturnType()->isVoidTy())
+                legacy_builder.CreateRetVoid();
+            else
+                legacy_builder.CreateRet(encode_legacy_return(
+                    legacy_builder, replacement_call, obsolete_fn->getReturnType()));
+            legacy_abi_trampolines_.push_back(obsolete_fn);
             fn = replacement;
 
             // Re-attach debug info to the recreated function

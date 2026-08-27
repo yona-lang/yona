@@ -902,9 +902,9 @@ private:
         GenfnNameIsolation& operator=(const GenfnNameIsolation&) = delete;
     };
     /// Every active imported-GENFN isolation owns snapshots of compiler
-    /// bindings.  ABI refinement may replace a provisional LLVM Function
-    /// while such a scope is active, so those snapshots must be migrated too
-    /// or their later restoration would resurrect a dangling Function*.
+    /// bindings. ABI refinement may replace a provisional LLVM Function while
+    /// such a scope is active, so those snapshots must be migrated too; a
+    /// retained legacy ABI trampoline also protects transient raw handles.
     std::vector<GenfnNameIsolation*> active_genfn_isolations_;
     /// Ordinary nested compilation scopes also save and later restore lexical
     /// bindings.  Keep their snapshots live while codegen recurses so ABI
@@ -934,6 +934,11 @@ private:
         TypedValue& value_;
     };
     std::vector<TypedValue*> active_typed_value_snapshots_;
+    /// Provisional ABI wrappers must never become module exports: their names
+    /// are compiler implementation details and may repeat across separately
+    /// compiled modules.
+    std::vector<llvm::Function*> legacy_abi_trampolines_;
+    void seal_legacy_abi_trampolines();
     void migrate_function_references(llvm::Function* obsolete,
                                      llvm::Function* replacement);
     /// Register same-module GENFN siblings as deferred functions so a

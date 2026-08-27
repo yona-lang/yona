@@ -166,6 +166,16 @@ findAll (compile "[0-9]+") "a1b22" == [["1"], ["22"]]
   }
 }
 
+TEST_CASE("ABI refinement preserves a legacy function shell") {
+  // A body may refine the provisional i64 return ABI to Bool after nested
+  // lowering has temporarily copied the function pointer. The old shell must
+  // remain a valid internal trampoline rather than a freed LLVM Value.
+  const auto ir = compile_to_ir("let f x = x == 0 in f 1", 0);
+  CHECK(ir != "CODEGEN_ERROR");
+  CHECK(ir.find("define internal fastcc i64 @f.abi_legacy") != string::npos);
+  CHECK(ir.find("call fastcc i1 @f(i64 %x)") != string::npos);
+}
+
 static string read_file(const fs::path &path);
 
 static string trim_cell(string value) {

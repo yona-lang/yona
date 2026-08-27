@@ -650,6 +650,7 @@ Module* Codegen::compile(AstNode* node) {
         std::cerr << "Module verification failed:\n" << err << "\n";
         return nullptr;
     }
+    seal_legacy_abi_trampolines();
     optimize();
     err.clear();
     if (verifyModule(*module_, &os)) {
@@ -1692,6 +1693,8 @@ Module* Codegen::compile_module(ModuleDecl* mod) {
         return nullptr;
 
     finalize_debug_info();
+
+    seal_legacy_abi_trampolines();
 
     // Verify
     std::string err;

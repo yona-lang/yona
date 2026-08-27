@@ -24,8 +24,8 @@
   ... == [["1"], ["22"]]` for imported-GENFN scopes, or GitHub Actions run
   `33088429955`, Windows ARM64 Debug job `98574371139`, test `Logical
   composition normalizes higher-order Bool results` (SIGSEGV). Migrate every
-  active compiler-cache and value-scope snapshot before erasing the
-  provisional function.
+  active compiler-cache and value-scope snapshot and retain a legacy ABI
+  trampoline instead of erasing the provisional function.
 - [ ] **Prelude compilation can leave case bodies unterminated on native
   Windows LLVM.** Building the deterministic `Prelude.obj` invokes `yonac`
   successfully until module verification reports unterminated `case.body.*`

@@ -1792,6 +1792,13 @@ Codegen::ActiveTypedValueSnapshot::~ActiveTypedValueSnapshot() {
         cg_.active_typed_value_snapshots_.erase(active);
 }
 
+void Codegen::seal_legacy_abi_trampolines() {
+    for (auto* trampoline : legacy_abi_trampolines_) {
+        if (trampoline && trampoline->getParent() == module_.get())
+            trampoline->setLinkage(Function::InternalLinkage);
+    }
+}
+
 void Codegen::migrate_function_references(Function* obsolete,
                                           Function* replacement) {
     if (!obsolete || !replacement || obsolete == replacement) return;

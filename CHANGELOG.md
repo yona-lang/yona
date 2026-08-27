@@ -84,6 +84,9 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
+- Deferred-function ABI refinement now retains an internal legacy trampoline
+  while moving compiler caches to the typed implementation. Nested lowering
+  can therefore never dereference a freed provisional LLVM `Function*`.
 - Imported-GENFN isolation now migrates every active compiler-cache and scope
   snapshot when a deferred function refines its provisional return ABI. This
   prevents nested generic sequence equality from restoring an erased LLVM

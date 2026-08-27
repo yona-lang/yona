@@ -105,6 +105,6 @@ release archives.
 - The imported nested-sequence equality regression now exercises a function
   whose provisional ABI is rebuilt inside a nested GENFN isolation scope. The
   full Debug doctest run verifies that every active cache and ordinary lexical
-  value-scope snapshot is migrated before the retired LLVM function is erased;
-  native ARM64 CI remains the architecture-diverse execution gate for this
-  lifetime path.
+  value-scope snapshot is migrated while the retired ABI remains a valid
+  internal trampoline; native ARM64 CI remains the architecture-diverse
+  execution gate for this lifetime path.
