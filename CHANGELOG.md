@@ -84,6 +84,9 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
+- Native Windows builds no longer redefine `WIN32_LEAN_AND_MEAN` after CMake
+  has already supplied it globally, keeping the new ARM64 and x64 CI logs free
+  of avoidable compiler warnings.
 - Effect inference now uses a dedicated lossless constraint solver: independent
   higher-order callback rows form a true union rather than dropping or
   equating a later source; handlers mask symbolically; recursive bodies use

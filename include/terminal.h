@@ -29,7 +29,9 @@
 #define FULL_BLOCK '='
 
 #if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #define VC_EXTRALEAN
 #include <Windows.h>
 #else
