@@ -110,6 +110,7 @@ release archives.
   execution gate for this lifetime path.
 - The current native rerun (`33091447933`) still exposes a Windows-only
   ABI/linker failure. Fixture links now rerun with stderr visible after a
-  failure so the next native run identifies the failing COFF symbol rather
-  than reducing the result to `LINK_ERROR`; this issue remains open until the
-  Windows x64 and ARM64 jobs pass.
+  failure, and `yonac` registers LLVM's native crash stack tracer, so the next
+  run identifies the failing COFF symbol or compiler frame rather than
+  reducing the result to `LINK_ERROR` or `Access violation`; this issue remains
+  open until the Windows x64 and ARM64 jobs pass.

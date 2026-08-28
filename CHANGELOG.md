@@ -85,8 +85,9 @@
 
 ### Fixed
 - Fixture links that fail in doctest now rerun once with linker stderr visible,
-  so native CI reports the concrete linker failure instead of only
-  `LINK_ERROR`.
+  and `yonac` prints an LLVM stack trace on a native crash, so CI reports the
+  concrete linker failure or compiler frame rather than only `LINK_ERROR` or
+  `Access violation`.
 - Deferred-function ABI refinement now retains an internal legacy trampoline
   while moving compiler caches to the typed implementation. Nested lowering
   can therefore never dereference a freed provisional LLVM `Function*`.

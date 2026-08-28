@@ -46,6 +46,7 @@
 #include "version.h"
 #include "yona_vulkan_link_cfg.h"
 #include <CLI/CLI.hpp>
+#include <llvm/Support/Signals.h>
 
 using namespace std;
 using namespace yona;
@@ -487,6 +488,11 @@ static vector<filesystem::path> discover_sysroots(const char *argv0, const strin
 }
 
 int main(int argc, char *argv[]) {
+  // Keep compiler failures diagnosable on every native platform. In particular,
+  // Windows otherwise reports a bare "Access violation" without the LLVM/C++
+  // frames needed to repair a code-generation failure.
+  llvm::sys::PrintStackTraceOnErrorSignal(argc > 0 ? argv[0] : "yonac");
+
   CLI::App app{"yonac — Yona compiler"};
 
   string input_file;
