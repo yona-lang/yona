@@ -2,6 +2,16 @@
 
 ## Bugs (open)
 
+- [ ] **Windows in-process LLD passes the bundled PCRE2 archive with shell
+  quotes embedded in its argv element.** `yonac` builds
+  `pcre2_link_arg = q_cmd_path(...)` for the external compiler command and
+  reuses it for the direct `lld::lldMain` argv; LLD therefore tries to open a
+  filename containing `"`. Repro: GitHub Actions run `33166617297`, Windows
+  ARM64 Debug job `98833447234`, `validate-linker-modes.ps1` reports
+  `could not open '".../runtime/yona_pcre2.lib"': invalid argument`. Keep raw
+  filesystem paths for in-process linker arguments and apply shell quoting only
+  when constructing the external command; add an architecture-independent
+  regression to the linker-mode contract.
 - [ ] **Native Windows LLVM crashes when branch-transfer cleanup analyzes an
   incomplete CFG.** `transfer_scope_exit` builds a function-wide
   `llvm::DominatorTree` while nested lowering can still leave an enclosing

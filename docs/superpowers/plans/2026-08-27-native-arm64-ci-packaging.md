@@ -117,8 +117,10 @@ release archives.
 - The public `Std\Regex` interface now pulls a pinned PCRE2 10.47 static
   archive into the runtime sysroot whenever a system package is unavailable.
   `yonac` resolves that archive relative to its selected sysroot, and the
-  Windows test helper compiles/links the same fallback. Native Windows remains
-  the final target-ABI verification gate.
+  Windows test helper compiles/links the same fallback. Its in-process LLD
+  argv receives the archive's raw path (external compiler commands keep their
+  shell quoting). Native Windows remains the final target-ABI verification
+  gate.
 - Native LLVM 23 cannot analyze an expression's temporary `case`, `if`, or
   `try/catch` CFG while nested lowering leaves successors detached or
   unterminated. Branch-transfer cleanup now queues its asymmetric drops and

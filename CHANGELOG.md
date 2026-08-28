@@ -91,6 +91,9 @@
 - Windows x64 and ARM64 builds now bundle pinned PCRE2 10.47 beside the
   runtime archive, so every released `Std\Regex` interface has its matching
   C runtime symbols without vcpkg or a host PCRE2 installation.
+- In-process LLD now receives the bundled PCRE2 archive as a raw argv path;
+  the external compiler path remains shell-quoted. This keeps the native
+  Windows linker-mode validation independent of path quoting.
 - Fixture links that fail in doctest now rerun once with linker stderr visible,
   and `yonac` prints an LLVM stack trace on a native crash, so CI reports the
   concrete linker failure or compiler frame rather than only `LINK_ERROR` or

@@ -980,6 +980,12 @@ int main(int argc, char *argv[]) {
 
 #ifdef YONAC_EXE_LINK_PCRE2
   const string packaged_pcre2 = find_packaged_pcre2_archive(sysroots);
+  // In-process LLD receives an argv vector, not a shell command: keep a raw
+  // filesystem path here. The external compiler command below still needs its
+  // separately quoted spelling.
+  const string pcre2_lld_arg = packaged_pcre2.empty()
+      ? "-lpcre2-8"
+      : packaged_pcre2;
 #ifdef _WIN32
   if (packaged_pcre2.empty()) {
     diag.error(SourceLocation::unknown(), compiler::ErrorCode::E0401,
@@ -1178,7 +1184,7 @@ int main(int argc, char *argv[]) {
       lld_args.push_back(a);
 #endif
 #ifdef YONAC_EXE_LINK_PCRE2
-    lld_args.push_back(pcre2_link_arg);
+    lld_args.push_back(pcre2_lld_arg);
 #endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {
