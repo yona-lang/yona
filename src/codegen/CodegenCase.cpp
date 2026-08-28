@@ -1068,7 +1068,6 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
     }
 
     auto fn = builder_->GetInsertBlock()->getParent();
-    auto merge_bb = BasicBlock::Create(*context_, "case.end");
     std::vector<std::pair<TypedValue, BasicBlock*>> results;
 
     // Transfer reconciliation may need the sequence value in an arm which
@@ -1111,9 +1110,6 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
             }
         }
     }
-    BasicBlock* impossible_match_bb = finite_constructor_match
-        ? BasicBlock::Create(*context_, "case.impossible", fn) : nullptr;
-
     // Wrap the arm loop in a transfer scope. Each arm is a branch; if
     // some arms transfer a seq (e.g. head-tail consume or passing the
     // scrutinee to a consumer) and others don't, the transfer_scope
@@ -1121,7 +1117,14 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
     // seq transfers at merge reflect "transferred on all live
     // paths" without leaking on the non-transfer paths. This is the
     // case-arm extension of the codegen_if per-branch scoping.
+    // Start before creating any case CFG block.  Nested control flow may
+    // reconcile transfers before this case finishes lowering, and LLVM's
+    // function-wide DominatorTree requires every reachable successor to
+    // already have a parent Function.
     transfer_scope_enter();
+    auto merge_bb = BasicBlock::Create(*context_, "case.end", fn);
+    BasicBlock* impossible_match_bb = finite_constructor_match
+        ? BasicBlock::Create(*context_, "case.impossible", fn) : nullptr;
 
     for (size_t i = 0; i < node->clauses.size(); i++) {
         auto* clause = node->clauses[i];
@@ -1378,12 +1381,9 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
         builder_->CreateUnreachable();
     }
 
-    // Arm terminators already branch to `merge_bb`.  Reconciliation below
-    // builds a dominator tree to prove that a compensating drop is valid; a
-    // detached successor is malformed CFG and crashes LLVM 23's SemiNCA
-    // builder on native Windows.  Attach the merge before that analysis, but
-    // only after transfer_scope_enter() has taken its pre-branch snapshot.
-    fn->insert(fn->end(), merge_bb);
+    // Arm terminators already branch to `merge_bb`, which was attached when
+    // the transfer scope started so nested reconciliation always sees valid
+    // CFG.
     transfer_scope_exit();
     builder_->SetInsertPoint(merge_bb);
     if (results.empty()) return {};

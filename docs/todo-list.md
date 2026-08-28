@@ -3,16 +3,16 @@
 ## Bugs (open)
 
 - [ ] **Native Windows LLVM crashes while branch-transfer cleanup builds a
-  dominator tree over a detached merge block.** `codegen_case` and
-  `codegen_if` emit live arm branches to a detached `case.end` / `ifcont`,
-  then `transfer_scope_exit` constructs `llvm::DominatorTree` before attaching
-  that successor to its parent function. LLVM 23 on Windows dereferences the
-  malformed CFG. Repro: GitHub Actions run `33163369108`, Windows x64 Debug
-  job `98822887564`, building `tools/yona/main.yona`; stack includes
+  dominator tree over an enclosing detached CFG successor.** An inner case can
+  call `transfer_scope_exit` while an outer `if`, `case`, or `try/catch` still
+  has a reachable `ifcont`, `case.end`, or `try.merge` block detached from its
+  function. LLVM 23's function-wide `DominatorTree` then dereferences malformed
+  CFG. Repro: GitHub Actions run `33165276750`, Windows ARM64 Debug job
+  `98829080034`, building `tools/yls/main.yona`; stack includes
   `DominatorTree::CalculateFromScratch` and
-  `Codegen::transfer_scope_exit` (`CodegenExpr.cpp:677`). Attach every merge
-  block before branch-transfer dominance reconciliation, while retaining the
-  transfer-scope entry snapshot before branch blocks are created.
+  `Codegen::transfer_scope_exit` (`CodegenExpr.cpp:677`). Create every live
+  successor with its parent function before lowering nested expressions; where
+  a transfer scope applies, retain its pre-branch snapshot first.
 - [ ] **Native Windows CI publishes the public `Std\\Regex` interface without
   its PCRE2 runtime.** The Windows presets skip optional PCRE2 because a
   standard runner has neither `pkg-config` nor a discoverable PCRE2 install,

@@ -119,7 +119,8 @@ release archives.
   `yonac` resolves that archive relative to its selected sysroot, and the
   Windows test helper compiles/links the same fallback. Native Windows remains
   the final target-ABI verification gate.
-- Native LLVM 23 also requires every `case`/`if` merge successor to be attached
-  before branch-transfer cleanup asks LLVM for dominance. This preserves the
-  existing pre-branch ownership snapshot while keeping the temporary CFG valid
-  for Windows' SemiNCA dominator implementation.
+- Native LLVM 23 also requires every reachable `case`, `if`, and `try/catch`
+  successor to have a parent function before nested branch-transfer cleanup
+  asks LLVM for dominance. This preserves the existing pre-branch ownership
+  snapshot while keeping the temporary CFG valid for Windows' SemiNCA dominator
+  implementation.

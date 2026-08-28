@@ -1405,9 +1405,13 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     // blocks so the branches are correctly identified as "inside-scope".
     transfer_scope_enter();
 
+    // Every successor must be owned by its Function before it is reachable.
+    // A nested case can reconcile transfers while this if is still being
+    // lowered; that reconciliation builds a function-wide DominatorTree and
+    // LLVM assumes every successor it visits has a parent Function.
     auto then_bb = BasicBlock::Create(*context_, "then", fn);
-    auto else_bb = BasicBlock::Create(*context_, "else");
-    auto merge_bb = BasicBlock::Create(*context_, "ifcont");
+    auto else_bb = BasicBlock::Create(*context_, "else", fn);
+    auto merge_bb = BasicBlock::Create(*context_, "ifcont", fn);
     builder_->CreateCondBr(cond.val, then_bb, else_bb);
 
     builder_->SetInsertPoint(then_bb);
@@ -1424,7 +1428,6 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     }
     transfer_branch_end(then_end);
 
-    fn->insert(fn->end(), else_bb);
     builder_->SetInsertPoint(else_bb);
     transfer_branch_begin();
     auto else_tv = codegen(node->elseExpr);
@@ -1439,15 +1442,6 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     }
     transfer_branch_end(else_end);
 
-    fn->insert(fn->end(), merge_bb);
-    // transfer_scope_exit() performs real dominance checks before inserting
-    // compensating drops.  The branch terminators above already target this
-    // merge block, so it must belong to the function before LLVM builds the
-    // dominator tree.  Keeping it detached until after reconciliation leaves
-    // a successor with no parent and LLVM 23's SemiNCA builder crashes on
-    // native Windows.  The transfer scope was entered before either branch
-    // block was created, so attaching the merge here cannot contaminate its
-    // pre-scope ordinal snapshot.
     transfer_scope_exit();
     builder_->SetInsertPoint(merge_bb);
     unsigned phi_count = (then_end ? 1 : 0) + (else_end ? 1 : 0);
@@ -1774,9 +1768,13 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     auto i32_ty = LType::getInt32Ty(*context_);
     auto i64_ty = LType::getInt64Ty(*context_);
 
+    // Keep every live successor in the Function while lowering nested
+    // expressions.  A nested transfer reconciliation constructs a
+    // function-wide DominatorTree, which cannot safely traverse a detached
+    // merge block reached from try/catch code.
     auto try_bb = BasicBlock::Create(*context_, "try.body", fn);
     auto catch_bb = BasicBlock::Create(*context_, "catch.entry", fn);
-    auto merge_bb = BasicBlock::Create(*context_, "try.merge");
+    auto merge_bb = BasicBlock::Create(*context_, "try.merge", fn);
 
     // SJLJ try-entry. We deliberately bypass the C runtime's setjmp/longjmp:
     // on Windows MSVC, setjmp records SEH unwind state and longjmp walks the
@@ -1935,7 +1933,6 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     }
 
     // Merge
-    fn->insert(fn->end(), merge_bb);
     builder_->SetInsertPoint(merge_bb);
 
     if (catch_results.empty()) {
