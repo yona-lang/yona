@@ -643,6 +643,11 @@ std::string Codegen::mangle_trait_instance_method(
 Module* Codegen::compile(AstNode* node) {
     auto fn = codegen_main(node);
     if (!fn) return nullptr;
+    // Transfer reconciliation records drops while nested control-flow is
+    // still under construction. Materialize them only after every generated
+    // function has a complete CFG, so LLVM dominance analysis never sees a
+    // detached or unterminated successor.
+    flush_pending_transfer_drops();
     finalize_debug_info();
     std::string err;
     raw_string_ostream os(err);

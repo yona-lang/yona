@@ -394,10 +394,13 @@ private:
     //     codegen(branch)               — populates seq transfers
     //     transfer_branch_end(exit_bb)  — record this branch's set
     //   transfer_scope_exit()           — compute asymmetric transfers,
-    //                                      emit rc_dec before each
+    //                                      queue rc_dec before each
     //                                      non-transferring branch's
     //                                      terminator, union into
     //                                      seq transfers
+    //   flush_pending_transfer_drops()  — once function CFG construction is
+    //                                      complete, prove dominance and emit
+    //                                      the queued rc_decs
     //
     // INVARIANT (load-bearing, do not break without updating this doc):
     //   transfer_scope_enter() MUST run before any branch BasicBlock is
@@ -410,8 +413,9 @@ private:
     //   defined inside it would get rc_dec'd from sibling branches
     //   that never reach them — leading to pool UAF.
     //
-    //   The fix for that bug in codegen_if: moved transfer_scope_enter()
-    //   up above BasicBlock::Create calls. See CodegenExpr.cpp.
+    //   Dominance is deliberately deferred until the function CFG is complete:
+    //   nested lowering can temporarily leave an enclosing successor detached
+    //   or unterminated, neither of which LLVM's DominatorTree accepts.
     struct TransferScope {
         std::unordered_set<llvm::Value*> entry_snapshot;
         uint64_t pre_scope_block_ordinal = 0;
@@ -423,10 +427,18 @@ private:
     };
     std::vector<TransferScope> transfer_scope_stack_;
 
+    struct PendingTransferDrop {
+        llvm::Value* value = nullptr;
+        llvm::BasicBlock* exit_bb = nullptr;
+    };
+    std::vector<PendingTransferDrop> pending_transfer_drops_;
+
     void transfer_scope_enter();
     void transfer_branch_begin();
     void transfer_branch_end(llvm::BasicBlock* exit_bb);
     void transfer_scope_exit();
+    void flush_pending_transfer_drops();
+    void discard_pending_transfer_drops(llvm::Function* function);
     bool is_cross_branch_droppable(llvm::Value* v, uint64_t pre_scope_block_ordinal);
     void refresh_transfer_block_ordinals(llvm::Function* fn);
 

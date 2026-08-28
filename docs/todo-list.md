@@ -2,17 +2,16 @@
 
 ## Bugs (open)
 
-- [ ] **Native Windows LLVM crashes while branch-transfer cleanup builds a
-  dominator tree over an enclosing detached CFG successor.** An inner case can
-  call `transfer_scope_exit` while an outer `if`, `case`, or `try/catch` still
-  has a reachable `ifcont`, `case.end`, or `try.merge` block detached from its
-  function. LLVM 23's function-wide `DominatorTree` then dereferences malformed
-  CFG. Repro: GitHub Actions run `33165276750`, Windows ARM64 Debug job
-  `98829080034`, building `tools/yls/main.yona`; stack includes
-  `DominatorTree::CalculateFromScratch` and
-  `Codegen::transfer_scope_exit` (`CodegenExpr.cpp:677`). Create every live
-  successor with its parent function before lowering nested expressions; where
-  a transfer scope applies, retain its pre-branch snapshot first.
+- [ ] **Native Windows LLVM crashes when branch-transfer cleanup analyzes an
+  incomplete CFG.** `transfer_scope_exit` builds a function-wide
+  `llvm::DominatorTree` while nested lowering can still leave an enclosing
+  `if`, `case`, or `try/catch` successor detached or unterminated. LLVM 23's
+  SemiNCA implementation dereferences the malformed block. Repro: GitHub
+  Actions run `33165983040`, Windows ARM64 Debug job `98831384283`, building
+  `tools/yls/main.yona`; stack includes `DominatorTree::CalculateFromScratch`
+  and `Codegen::transfer_scope_exit` (`CodegenExpr.cpp:677`). Queue asymmetric
+  branch drops, then build dominance only after code generation has completed
+  each function CFG; discard queued drops when ABI refinement replaces a body.
 - [ ] **Native Windows CI publishes the public `Std\\Regex` interface without
   its PCRE2 runtime.** The Windows presets skip optional PCRE2 because a
   standard runner has neither `pkg-config` nor a discoverable PCRE2 install,

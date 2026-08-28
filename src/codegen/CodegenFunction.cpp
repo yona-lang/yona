@@ -1670,6 +1670,10 @@ Codegen::CompiledFunction Codegen::compile_function(
             obsolete_fn->setName(legacy_name);
             obsolete_fn->setLinkage(Function::InternalLinkage);
             replacement->setName(name);
+            // The first body is about to be replaced by a legacy trampoline.
+            // Its deferred transfer drops point at instructions that are being
+            // destroyed, so discard them before deleting that CFG.
+            discard_pending_transfer_drops(obsolete_fn);
             obsolete_fn->deleteBody();
             auto* legacy_entry = BasicBlock::Create(*context_, "entry", obsolete_fn);
             IRBuilder<> legacy_builder(legacy_entry);

@@ -84,10 +84,10 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
-- Control-flow lowering now attaches every reachable `if`, `case`, and
-  `try/catch` successor to its function before nested branch-transfer cleanup
-  queries LLVM dominance, preventing native Windows LLVM 23 from traversing
-  malformed CFG while compiling the bundled Yona tools.
+- Branch-transfer cleanup now queues asymmetric sequence drops until function
+  CFG construction completes, then proves dominance before inserting them.
+  This prevents native Windows LLVM 23 from analyzing detached or unterminated
+  `if`, `case`, and `try/catch` successors while compiling the bundled tools.
 - Windows x64 and ARM64 builds now bundle pinned PCRE2 10.47 beside the
   runtime archive, so every released `Std\Regex` interface has its matching
   C runtime symbols without vcpkg or a host PCRE2 installation.

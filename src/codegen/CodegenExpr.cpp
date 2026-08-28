@@ -7,6 +7,7 @@
 
 #include "Codegen.h"
 #include "typechecker/TypeChecker.h"
+#include <algorithm>
 #include <llvm/IR/Dominators.h>
 #include "analysis/BorrowEscapeAnalysis.h"
 #include <llvm/IR/Constants.h>
@@ -669,19 +670,13 @@ void Codegen::transfer_scope_exit() {
         for (auto& b : scope.branches) {
             if (!b.exit_bb) continue;
             if (b.transfers.count(v)) continue;
-            // Ordinal filtering rejects values introduced after the scope,
-            // but a pre-scope block can still sit on only one control-flow
-            // path. Require actual dominance before inserting a compensating
-            // drop in this sibling exit block.
-            if (auto* inst = llvm::dyn_cast<llvm::Instruction>(v)) {
-                llvm::DominatorTree dominators(*b.exit_bb->getParent());
-                if (!dominators.dominates(inst, block_terminator(b.exit_bb)))
-                    continue;
-            }
-            auto saved_ip = builder_->saveIP();
-            builder_->SetInsertPoint(block_terminator(b.exit_bb));
-            emit_rc_dec(v, CType::SEQ);
-            builder_->restoreIP(saved_ip);
+            // A pre-scope block can still sit on only one control-flow path,
+            // so this needs a real dominance proof.  Do not construct a
+            // DominatorTree while nested codegen still owns incomplete outer
+            // CFG blocks; LLVM assumes every block it visits has a terminator.
+            // The function-finalization pass below performs the same proof
+            // once all control-flow construction has finished.
+            pending_transfer_drops_.push_back({v, b.exit_bb});
         }
     }
 
@@ -692,6 +687,54 @@ void Codegen::transfer_scope_exit() {
     for (auto& b : scope.branches) {
         if (!b.exit_bb) continue;
         for (auto* v : b.transfers) mark_transferred(v, TransferDomain::Seq);
+    }
+}
+
+void Codegen::discard_pending_transfer_drops(llvm::Function* function) {
+    pending_transfer_drops_.erase(
+        std::remove_if(pending_transfer_drops_.begin(), pending_transfer_drops_.end(),
+                       [function](const PendingTransferDrop& drop) {
+                           return drop.exit_bb && drop.exit_bb->getParent() == function;
+                       }),
+        pending_transfer_drops_.end());
+}
+
+void Codegen::flush_pending_transfer_drops() {
+    std::unordered_map<llvm::Function*, std::vector<PendingTransferDrop>> by_function;
+    for (const auto& drop : pending_transfer_drops_) {
+        if (!drop.value || !drop.exit_bb) continue;
+        if (auto* function = drop.exit_bb->getParent())
+            by_function[function].push_back(drop);
+    }
+    pending_transfer_drops_.clear();
+
+    for (auto& [function, drops] : by_function) {
+        // A malformed function is rejected by module verification below. More
+        // importantly, do not ask LLVM to analyze a partially constructed CFG
+        // and turn that diagnostic into an access violation on Windows.
+        bool complete_cfg = !function->empty();
+        for (auto& block : *function) {
+            if (!block_has_terminator(&block)) {
+                complete_cfg = false;
+                break;
+            }
+        }
+        if (!complete_cfg) continue;
+
+        llvm::DominatorTree dominators(*function);
+        for (const auto& drop : drops) {
+            auto* terminator = block_terminator(drop.exit_bb);
+            if (!terminator) continue;
+            if (auto* instruction = llvm::dyn_cast<llvm::Instruction>(drop.value)) {
+                if (instruction->getFunction() != function ||
+                    !dominators.dominates(instruction, terminator))
+                    continue;
+            }
+            auto saved_ip = builder_->saveIP();
+            builder_->SetInsertPoint(terminator);
+            emit_rc_dec(drop.value, CType::SEQ);
+            builder_->restoreIP(saved_ip);
+        }
     }
 }
 
@@ -1405,13 +1448,9 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     // blocks so the branches are correctly identified as "inside-scope".
     transfer_scope_enter();
 
-    // Every successor must be owned by its Function before it is reachable.
-    // A nested case can reconcile transfers while this if is still being
-    // lowered; that reconciliation builds a function-wide DominatorTree and
-    // LLVM assumes every successor it visits has a parent Function.
     auto then_bb = BasicBlock::Create(*context_, "then", fn);
-    auto else_bb = BasicBlock::Create(*context_, "else", fn);
-    auto merge_bb = BasicBlock::Create(*context_, "ifcont", fn);
+    auto else_bb = BasicBlock::Create(*context_, "else");
+    auto merge_bb = BasicBlock::Create(*context_, "ifcont");
     builder_->CreateCondBr(cond.val, then_bb, else_bb);
 
     builder_->SetInsertPoint(then_bb);
@@ -1428,6 +1467,7 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     }
     transfer_branch_end(then_end);
 
+    fn->insert(fn->end(), else_bb);
     builder_->SetInsertPoint(else_bb);
     transfer_branch_begin();
     auto else_tv = codegen(node->elseExpr);
@@ -1442,6 +1482,7 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     }
     transfer_branch_end(else_end);
 
+    fn->insert(fn->end(), merge_bb);
     transfer_scope_exit();
     builder_->SetInsertPoint(merge_bb);
     unsigned phi_count = (then_end ? 1 : 0) + (else_end ? 1 : 0);
@@ -1768,13 +1809,9 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     auto i32_ty = LType::getInt32Ty(*context_);
     auto i64_ty = LType::getInt64Ty(*context_);
 
-    // Keep every live successor in the Function while lowering nested
-    // expressions.  A nested transfer reconciliation constructs a
-    // function-wide DominatorTree, which cannot safely traverse a detached
-    // merge block reached from try/catch code.
     auto try_bb = BasicBlock::Create(*context_, "try.body", fn);
     auto catch_bb = BasicBlock::Create(*context_, "catch.entry", fn);
-    auto merge_bb = BasicBlock::Create(*context_, "try.merge", fn);
+    auto merge_bb = BasicBlock::Create(*context_, "try.merge");
 
     // SJLJ try-entry. We deliberately bypass the C runtime's setjmp/longjmp:
     // on Windows MSVC, setjmp records SEH unwind state and longjmp walks the
@@ -1933,6 +1970,7 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr* node) {
     }
 
     // Merge
+    fn->insert(fn->end(), merge_bb);
     builder_->SetInsertPoint(merge_bb);
 
     if (catch_results.empty()) {

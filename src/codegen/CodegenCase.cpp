@@ -1116,13 +1116,10 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
     // exit emits compensating rc_decs in the non-transferring arms so
     // seq transfers at merge reflect "transferred on all live
     // paths" without leaking on the non-transfer paths. This is the
-    // case-arm extension of the codegen_if per-branch scoping.
-    // Start before creating any case CFG block.  Nested control flow may
-    // reconcile transfers before this case finishes lowering, and LLVM's
-    // function-wide DominatorTree requires every reachable successor to
-    // already have a parent Function.
+    // case-arm extension of the codegen_if per-branch scoping. Start before
+    // creating any case CFG block so its ordinal snapshot excludes all arms.
     transfer_scope_enter();
-    auto merge_bb = BasicBlock::Create(*context_, "case.end", fn);
+    auto merge_bb = BasicBlock::Create(*context_, "case.end");
     BasicBlock* impossible_match_bb = finite_constructor_match
         ? BasicBlock::Create(*context_, "case.impossible", fn) : nullptr;
 
@@ -1381,9 +1378,9 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
         builder_->CreateUnreachable();
     }
 
-    // Arm terminators already branch to `merge_bb`, which was attached when
-    // the transfer scope started so nested reconciliation always sees valid
-    // CFG.
+    // Transfer reconciliation defers dominance-sensitive drops until all CFG
+    // construction is complete, so the merge can now be attached normally.
+    fn->insert(fn->end(), merge_bb);
     transfer_scope_exit();
     builder_->SetInsertPoint(merge_bb);
     if (results.empty()) return {};
