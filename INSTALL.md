@@ -27,10 +27,11 @@ The rest of this file is for **building from source**.
 
 All platforms require:
 - **LLVM** for the codegen backend: **22+** recommended (see `CLAUDE.md`); **16+** may work if `find_package(LLVM)` succeeds with your toolchain. **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle. CI (`.github/actions/setup-llvm`) uses the runner image where it is enough: Ubuntu 26.04 already has Clang 22 and only needs `llvm-22-dev`; macOS needs Homebrew `llvm` (Apple Clang has no `LLVMConfig.cmake`); Windows downloads the latest official archive because the image’s Chocolatey LLVM is not a complete tree.
-- **CMake 3.10+** and **Ninja** (for building from source; on **Windows** use the **Windows** section: Ninja + Clang from a prebuilt LLVM + MSVC toolset)
+- **CMake 3.15+** and **Ninja** (for building from source; on **Windows** use the **Windows** section: Ninja + Clang from a prebuilt LLVM + MSVC toolset)
 - **C++23 capable compiler** (clang recommended; Windows presets use Clang with the MSVC linker)
-- **PCRE2** (optional, for `Std\Regex`; on Windows provide a normal CMake-discoverable
-  installation or leave the optional module disabled)
+- **PCRE2** for `Std\Regex`. CMake prefers a normal platform package; with the
+  default `-DYONA_FETCH_DEPS=ON`, it otherwise builds the project-pinned
+  PCRE2 10.47 fallback. This project never uses vcpkg.
 
 ## Linux (Fedora/RHEL)
 
@@ -126,11 +127,12 @@ Intel macOS artifact. The MSI flow is defined under
   Extract it to a short path such as `C:\LLVM`. This avoids link errors from
   LLVM builds produced against unrelated Visual Studio paths (see
   *Troubleshooting* below).
-- **Optional — PCRE2** for `Std\Regex`: there is no `pkg-config` on a typical Windows
-  developer shell, so CMake usually skips PCRE2 unless its headers and library are
-  discoverable through the normal compiler/CMake search paths (for example, a
-  manually installed build exposed through `CMAKE_PREFIX_PATH`). The rest of the
-  compiler and runtime still build without it.
+- **PCRE2** for `Std\Regex` is bundled from the project-pinned 10.47 source
+  fallback by the default `-DYONA_FETCH_DEPS=ON` configuration. The resulting
+  static archive is placed in the runtime sysroot, so installed `yonac` can
+  link Regex programs without vcpkg or a separate system installation. If you
+  deliberately build with `-DYONA_FETCH_DEPS=OFF`, provide a normal
+  CMake-discoverable PCRE2 installation instead.
 
 The CMake toolchain reads `LLVM_INSTALL_PREFIX` from CMake cache or the environment (CI sets both). Do **not** rely on a guessed install path. Set `LLVM_INSTALL_PREFIX` to the extracted tree (for example `C:\LLVM`). **Spell the path correctly** in user and machine environment variables; a typo leaves `find_package(LLVM)` searching an empty prefix.
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10...4.0)
+cmake_minimum_required(VERSION 3.15...4.0)
 project(YonaWindowsLlvmPrerequisitesTest LANGUAGES NONE)
 
 if(NOT DEFINED YONA_SOURCE_DIR)
@@ -56,6 +56,17 @@ yona_require_file_contains("${_setup_llvm_action}" "-print-target-triple")
 yona_require_file_omits("${_setup_llvm_action}" "vcpkg")
 
 file(READ "${YONA_SOURCE_DIR}/CMakeLists.txt" _top_level_cmake)
+foreach(_pcre_contract
+    "find_package(PCRE2 QUIET CONFIG COMPONENTS 8BIT)"
+    "PCRE2::8BIT"
+    "PCRE2Project/pcre2"
+    "pcre2-10.47"
+    "YONA_PCRE2_RUNTIME_ARCHIVE"
+    "PCRE2_STATIC"
+    "yona_runtime_pcre2"
+    "YONAC_EXE_LINK_PCRE2")
+  yona_require_file_contains("${YONA_SOURCE_DIR}/CMakeLists.txt" "${_pcre_contract}")
+endforeach()
 string(FIND "${_top_level_cmake}" "find_package(ZLIB QUIET)" _zlib_position)
 string(FIND "${_top_level_cmake}" "find_package(zstd CONFIG QUIET)" _zstd_position)
 string(FIND "${_top_level_cmake}" "zstd::libzstd_static" _zstd_target_position)

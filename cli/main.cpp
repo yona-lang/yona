@@ -209,6 +209,23 @@ static vector<filesystem::path> embedded_runtime_sources(const filesystem::path 
   return sources;
 }
 
+/** A pinned PCRE2 fallback is copied next to the packaged runtime archive.
+ * Keep this lookup relative to the selected sysroot so installed Windows
+ * compilers never depend on a package manager or a build-tree path. */
+static string find_packaged_pcre2_archive(const vector<filesystem::path> &sysroots) {
+  for (const auto &root : sysroots) {
+    for (const auto &base : {root / "runtime", root / "lib" / "yona" / "runtime"}) {
+      for (const auto *name : {"yona_pcre2.lib", "yona_pcre2.a"}) {
+        const auto candidate = base / name;
+        std::error_code error;
+        if (filesystem::exists(candidate, error) && !error)
+          return filesystem::weakly_canonical(candidate, error).string();
+      }
+    }
+  }
+  return {};
+}
+
 static bool artifact_stale_against_sources(const filesystem::path &artifact, const vector<filesystem::path> &sources) {
   if (!filesystem::exists(artifact))
     return true;
@@ -961,6 +978,23 @@ int main(int argc, char *argv[]) {
 
   bool have_packaged_runtime = find_packaged_runtime_objects();
 
+#ifdef YONAC_EXE_LINK_PCRE2
+  const string packaged_pcre2 = find_packaged_pcre2_archive(sysroots);
+#ifdef _WIN32
+  if (packaged_pcre2.empty()) {
+    diag.error(SourceLocation::unknown(), compiler::ErrorCode::E0401,
+               "packaged PCRE2 archive is missing from the runtime sysroot; "
+               "rebuild with the pinned Std\\Regex dependency");
+    return 1;
+  }
+  const string pcre2_link_arg = q_cmd_path(filesystem::path(packaged_pcre2));
+#else
+  const string pcre2_link_arg = packaged_pcre2.empty()
+      ? "-lpcre2-8"
+      : q_cmd_path(filesystem::path(packaged_pcre2));
+#endif
+#endif
+
   // Find runtime source and compile to both .o (for linking) and .bc (for LTO) if needed.
   if (!have_packaged_runtime) {
     rt_obj_is_archive = false;
@@ -1144,7 +1178,7 @@ int main(int argc, char *argv[]) {
       lld_args.push_back(a);
 #endif
 #ifdef YONAC_EXE_LINK_PCRE2
-    lld_args.push_back("-lpcre2-8");
+    lld_args.push_back(pcre2_link_arg);
 #endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {
@@ -1197,6 +1231,9 @@ int main(int argc, char *argv[]) {
       link_cmd += " " + q_cmd_path(filesystem::path(prelude_obj));
 #ifdef _WIN32
     link_cmd += " -o " + q_cmd_path(filesystem::path(output_file)) + " -lws2_32 -ldbghelp";
+#ifdef YONAC_EXE_LINK_PCRE2
+    link_cmd += " " + pcre2_link_arg;
+#endif
     {
       string vk_lib = yona_windows_vulkan_import_lib_path();
       if (!vk_lib.empty())
@@ -1209,7 +1246,7 @@ int main(int argc, char *argv[]) {
     link_cmd += " -lm -lpthread -rdynamic";
 #endif
 #ifdef YONAC_EXE_LINK_PCRE2
-    link_cmd += " -lpcre2-8";
+    link_cmd += " " + pcre2_link_arg;
 #endif
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {

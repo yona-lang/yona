@@ -7,7 +7,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 ### Prerequisites
 
 - LLVM 22+ (Fedora: `sudo dnf install llvm llvm-devel llvm-libs cmake ninja-build cli11-devel doctest-devel pcre2-devel lld-devel`)
-- CMake 3.10+, Ninja
+- CMake 3.15+, Ninja
 - C++23 capable compiler
 - Optional — `Std\GPU` Vulkan **discovery** probe (Linux/macOS): Vulkan SDK / loader so CMake finds `Vulkan::Vulkan` (Fedora: `sudo dnf install vulkan-devel vulkan-loader-devel`; macOS: `brew install molten-vk vulkan-headers vulkan-loader`). Without it, GPU counts stay at zero. After installing those packages, run **`cmake --preset …` again**; the configure log should show `Found Vulkan — Std\GPU gpu_stub will link the loader on this platform`. On macOS the runtime `dlopen`s Homebrew/SDK `libvulkan.1.dylib` or `libMoltenVK.dylib` and enables portability instance/device extensions. Metal usually has no `shaderInt64`; `hasGpu` is still 1 when the device is ready, and IntArray GPU kernels use i32 when values fit. User-facing compute (`mapGPU`, `Promise`, fences) is specified in `docs/design-gpu-async.md` and is not in the stdlib surface yet.
 

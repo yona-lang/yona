@@ -114,3 +114,12 @@ release archives.
   run identifies the failing COFF symbol or compiler frame rather than
   reducing the result to `LINK_ERROR` or `Access violation`; this issue remains
   open until the Windows x64 and ARM64 jobs pass.
+- The public `Std\Regex` interface now pulls a pinned PCRE2 10.47 static
+  archive into the runtime sysroot whenever a system package is unavailable.
+  `yonac` resolves that archive relative to its selected sysroot, and the
+  Windows test helper compiles/links the same fallback. Native Windows remains
+  the final target-ABI verification gate.
+- Native LLVM 23 also requires every `case`/`if` merge successor to be attached
+  before branch-transfer cleanup asks LLVM for dominance. This preserves the
+  existing pre-branch ownership snapshot while keeping the temporary CFG valid
+  for Windows' SemiNCA dominator implementation.

@@ -2,6 +2,28 @@
 
 ## Bugs (open)
 
+- [ ] **Native Windows LLVM crashes while branch-transfer cleanup builds a
+  dominator tree over a detached merge block.** `codegen_case` and
+  `codegen_if` emit live arm branches to a detached `case.end` / `ifcont`,
+  then `transfer_scope_exit` constructs `llvm::DominatorTree` before attaching
+  that successor to its parent function. LLVM 23 on Windows dereferences the
+  malformed CFG. Repro: GitHub Actions run `33163369108`, Windows x64 Debug
+  job `98822887564`, building `tools/yona/main.yona`; stack includes
+  `DominatorTree::CalculateFromScratch` and
+  `Codegen::transfer_scope_exit` (`CodegenExpr.cpp:677`). Attach every merge
+  block before branch-transfer dominance reconciliation, while retaining the
+  transfer-scope entry snapshot before branch blocks are created.
+- [ ] **Native Windows CI publishes the public `Std\\Regex` interface without
+  its PCRE2 runtime.** The Windows presets skip optional PCRE2 because a
+  standard runner has neither `pkg-config` nor a discoverable PCRE2 install,
+  yet `lib/Std/Regex.yonai` remains importable. A program using it then links
+  against absent `yona_Std_Regex__compile` / `yona_Std_Regex__findAll` symbols.
+  Repro: GitHub Actions run `33163203895`, Windows ARM64 Debug job
+  `98822357844`, `Imported nested sequence equality preserves generic
+  specializations`. Supply a project-pinned PCRE2 CMake fallback (never
+  vcpkg), propagate its `PCRE2_STATIC` ABI definition into directly compiled
+  runtime/test objects, or remove the module and interface together when
+  explicitly disabled.
 - [ ] **Official Windows LLVM archives require zstd before import.** Both
   `windows-2025` x64 and `windows-11-vs2026-arm` ARM64 CI configure jobs fail
   with `LLVMExports.cmake: LLVMSupport link interface contains

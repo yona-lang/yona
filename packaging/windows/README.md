@@ -38,7 +38,8 @@ both the isolated staging directory and WiX package architecture.
 - The file payload is taken from the staged layout:
   - `bin/` (`yonac.exe`, `yona.exe`, `yona-repl.exe`, `yls.exe`)
   - `lib/Std/`
-  - `runtime/`
+  - `runtime/` (including the pinned `yona_pcre2.lib` archive required by
+    public `Std\Regex` programs)
   - `src/runtime/` (for advanced fallback workflows)
   - `include/yona/runtime/`
   - top-level docs/license files

@@ -1373,14 +1373,18 @@ TypedValue Codegen::codegen_case(CaseExpr* node) {
             builder_->SetInsertPoint(next_bb);
     }
 
-    transfer_scope_exit();
-
     if (impossible_match_bb) {
         builder_->SetInsertPoint(impossible_match_bb);
         builder_->CreateUnreachable();
     }
 
+    // Arm terminators already branch to `merge_bb`.  Reconciliation below
+    // builds a dominator tree to prove that a compensating drop is valid; a
+    // detached successor is malformed CFG and crashes LLVM 23's SemiNCA
+    // builder on native Windows.  Attach the merge before that analysis, but
+    // only after transfer_scope_enter() has taken its pre-branch snapshot.
     fn->insert(fn->end(), merge_bb);
+    transfer_scope_exit();
     builder_->SetInsertPoint(merge_bb);
     if (results.empty()) return {};
 

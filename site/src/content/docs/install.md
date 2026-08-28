@@ -69,9 +69,11 @@ sudo apt install ./dist/debian/yona_0.1.3-1_amd64.deb
 Prerequisites on all platforms:
 
 - **LLVM 22+** recommended (16+ may work when `find_package(LLVM)` succeeds)
-- **CMake 3.10+** and **Ninja**
+- **CMake 3.15+** and **Ninja**
 - A **C++23** compiler (Clang recommended)
-- **PCRE2** (optional — enables `Std\Regex`)
+- **PCRE2** for `Std\Regex`. CMake uses a normal system package when present,
+  otherwise its default dependency fallback builds pinned PCRE2 10.47; no
+  vcpkg is used.
 
 ### Fedora / RHEL
 

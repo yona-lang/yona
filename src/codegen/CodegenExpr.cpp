@@ -1439,9 +1439,16 @@ TypedValue Codegen::codegen_if(IfExpr* node) {
     }
     transfer_branch_end(else_end);
 
-    transfer_scope_exit();
-
     fn->insert(fn->end(), merge_bb);
+    // transfer_scope_exit() performs real dominance checks before inserting
+    // compensating drops.  The branch terminators above already target this
+    // merge block, so it must belong to the function before LLVM builds the
+    // dominator tree.  Keeping it detached until after reconciliation leaves
+    // a successor with no parent and LLVM 23's SemiNCA builder crashes on
+    // native Windows.  The transfer scope was entered before either branch
+    // block was created, so attaching the merge here cannot contaminate its
+    // pre-scope ordinal snapshot.
+    transfer_scope_exit();
     builder_->SetInsertPoint(merge_bb);
     unsigned phi_count = (then_end ? 1 : 0) + (else_end ? 1 : 0);
     if (phi_count == 0) {

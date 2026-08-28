@@ -1,7 +1,10 @@
 # CMakeList.txt : CMake project for yona, include source and define
 # project specific logic here.
 #
-cmake_minimum_required(VERSION 3.10..4.0)
+# PCRE2 10.47, our pinned public Std\Regex fallback, requires CMake 3.15.
+# Keep the project requirement aligned with the dependency used by the default
+# configuration instead of advertising a version that cannot configure it.
+cmake_minimum_required(VERSION 3.15..4.0)
 
 # Set policy for MSVC runtime library selection
 if(POLICY CMP0091)
@@ -75,6 +78,9 @@ endif()
 # project's pinned third-party build dependencies (including the Windows LLVM
 # package's Zlib/zstd prerequisites). Packaging passes -DYONA_FETCH_DEPS=OFF.
 option(YONA_FETCH_DEPS "Fetch pinned dependencies when no system CMake package is found" ON)
+# CI and release verification use this to exercise the same self-contained
+# PCRE2 path required by Windows without perturbing other package discovery.
+option(YONA_FORCE_BUNDLED_PCRE2 "Use pinned PCRE2 instead of a system package" OFF)
 # Distro packages copy binaries from the build tree (no cmake --install). Linking
 # the shared in-tree DSO embeds that directory as DT_RUNPATH; Fedora check-rpaths
 # rejects it and the RPM would not ship libyona_lib.so. Packaging passes ON.
@@ -114,15 +120,109 @@ else()
 		"(or pass -DYONA_FETCH_DEPS=ON to clone it).")
 endif()
 
-# PCRE2 for regex module (optional)
-find_package(PkgConfig)
-if(PkgConfig_FOUND)
-    pkg_check_modules(PCRE2 libpcre2-8)
+# PCRE2 backs the public Std\Regex module. Prefer the platform package where
+# it is available, but make Windows releases self-contained with one pinned
+# static archive. A public .yonai must never outlive the runtime symbols it
+# declares; this deliberately does not use vcpkg.
+set(YONA_PCRE2_TARGET "")
+set(YONA_PCRE2_INCLUDE_DIRS "")
+set(YONA_PCRE2_CFLAGS "")
+set(YONA_PCRE2_BUNDLED_STATIC OFF)
+if(NOT YONA_FORCE_BUNDLED_PCRE2)
+    # PCRE2's own config package exposes PCRE2::8BIT.  Prefer it on every
+    # platform so a manually installed Windows package is a supported normal
+    # CMake dependency too; requesting static linkage makes its ABI safe to
+    # copy next to the compiler's runtime sysroot.
+    set(PCRE2_USE_STATIC_LIBS ON)
+    find_package(PCRE2 QUIET CONFIG COMPONENTS 8BIT)
+    if(TARGET PCRE2::8BIT)
+        get_target_property(_yona_pcre2_type PCRE2::8BIT TYPE)
+        if(WIN32 AND NOT _yona_pcre2_type STREQUAL "STATIC_LIBRARY")
+            message(STATUS
+                "Found shared PCRE2 CMake target; using the pinned static fallback for a self-contained Windows runtime")
+        else()
+            set(YONA_PCRE2_TARGET PCRE2::8BIT)
+            get_target_property(YONA_PCRE2_INCLUDE_DIRS PCRE2::8BIT
+                INTERFACE_INCLUDE_DIRECTORIES)
+            if(YONA_PCRE2_INCLUDE_DIRS STREQUAL "YONA_PCRE2_INCLUDE_DIRS-NOTFOUND")
+                set(YONA_PCRE2_INCLUDE_DIRS "")
+            endif()
+            get_target_property(_yona_pcre2_defs PCRE2::8BIT
+                INTERFACE_COMPILE_DEFINITIONS)
+            if(_yona_pcre2_defs STREQUAL "_yona_pcre2_defs-NOTFOUND")
+                set(_yona_pcre2_defs "")
+            endif()
+            foreach(_yona_pcre2_include IN LISTS YONA_PCRE2_INCLUDE_DIRS)
+                list(APPEND YONA_PCRE2_CFLAGS "-I${_yona_pcre2_include}")
+            endforeach()
+            foreach(_yona_pcre2_def IN LISTS _yona_pcre2_defs)
+                # Config packages may expose generator expressions that make
+                # sense only for CMake targets.  The packaged runtime is
+                # compiled directly, so forward only literal C preprocessor
+                # definitions (notably PCRE2_STATIC).
+                if(_yona_pcre2_def MATCHES "^[A-Za-z_][A-Za-z0-9_]*(=.*)?$")
+                    list(APPEND YONA_PCRE2_CFLAGS "-D${_yona_pcre2_def}")
+                endif()
+            endforeach()
+            if(_yona_pcre2_type STREQUAL "STATIC_LIBRARY")
+                set(YONA_PCRE2_BUNDLED_STATIC ON)
+            endif()
+            message(STATUS "Found CMake PCRE2 8-bit target")
+        endif()
+    endif()
+
+    # pkg-config is the normal Unix discovery route.  Windows has no
+    # dependency on it: its static CMake target/fallback is copied into the
+    # runtime sysroot instead.
+    if(NOT YONA_PCRE2_TARGET AND NOT WIN32)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(PCRE2 QUIET IMPORTED_TARGET libpcre2-8)
+        endif()
+        if(PCRE2_FOUND)
+            set(YONA_PCRE2_TARGET PkgConfig::PCRE2)
+            set(YONA_PCRE2_INCLUDE_DIRS ${PCRE2_INCLUDE_DIRS})
+            set(YONA_PCRE2_CFLAGS ${PCRE2_CFLAGS})
+            message(STATUS "Found system PCRE2: ${PCRE2_LIBRARIES}")
+        endif()
+    endif()
 endif()
-if(PCRE2_FOUND)
-    message(STATUS "Found PCRE2: ${PCRE2_LIBRARIES}")
+if(YONA_PCRE2_TARGET)
+    set(PCRE2_FOUND TRUE)
+elseif(YONA_FETCH_DEPS)
+    message(STATUS "PCRE2 not found; fetching pinned PCRE2 10.47 for Std\\Regex")
+    set(BUILD_STATIC_LIBS ON CACHE BOOL "Build static libraries." FORCE)
+    set(PCRE2_BUILD_PCRE2_8 ON CACHE BOOL "Build the PCRE2 8-bit library." FORCE)
+    set(PCRE2_BUILD_PCRE2_16 OFF CACHE BOOL "Disable the PCRE2 16-bit library." FORCE)
+    set(PCRE2_BUILD_PCRE2_32 OFF CACHE BOOL "Disable the PCRE2 32-bit library." FORCE)
+    set(PCRE2_STATIC_PIC ON CACHE BOOL "Build the static PCRE2 archive with PIC." FORCE)
+    set(PCRE2_BUILD_PCRE2GREP OFF CACHE BOOL "Do not build pcre2grep." FORCE)
+    set(PCRE2_BUILD_TESTS OFF CACHE BOOL "Do not build upstream PCRE2 tests." FORCE)
+    set(PCRE2_SUPPORT_JIT ON CACHE BOOL "Enable PCRE2 JIT support." FORCE)
+    FetchContent_Declare(
+        yona_pcre2
+        URL https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.gz
+        URL_HASH SHA256=c08ae2388ef333e8403e670ad70c0a11f1eed021fd88308d7e02f596fcd9dc16
+    )
+    FetchContent_MakeAvailable(yona_pcre2)
+    if(NOT TARGET pcre2-8-static)
+        message(FATAL_ERROR "Fetched PCRE2 10.47 did not define pcre2-8-static.")
+    endif()
+    set(PCRE2_FOUND TRUE)
+    set(YONA_PCRE2_TARGET pcre2-8-static)
+    set(YONA_PCRE2_INCLUDE_DIRS "${yona_pcre2_BINARY_DIR}/interface")
+    # PCRE2's public static target propagates this definition to normal CMake
+    # consumers. The packaged runtime object is compiled directly, so carry
+    # it explicitly as well; otherwise Windows headers declare `__imp_`
+    # imports that cannot be satisfied by the bundled static archive.
+    set(YONA_PCRE2_CFLAGS
+        "-I${yona_pcre2_BINARY_DIR}/interface"
+        "-DPCRE2_STATIC")
+    set(YONA_PCRE2_BUNDLED_STATIC ON)
 else()
-    message(STATUS "PCRE2 not found — Std\\Regex module will not be available")
+    message(FATAL_ERROR
+        "PCRE2 is required for the public Std\\Regex module. Install a normal PCRE2 package, "
+        "or configure with -DYONA_FETCH_DEPS=ON to build pinned PCRE2 10.47 (never vcpkg).")
 endif()
 
 # Vulkan for Std\GPU — gpu_stub lazy device + f64 fence path (Unix + Windows when found)
@@ -404,8 +504,8 @@ if(WIN32)
 	target_link_libraries(yona_lib_static PRIVATE ws2_32 dbghelp)
 endif()
 if(PCRE2_FOUND)
-    target_link_libraries(yona_lib_static PRIVATE ${PCRE2_LIBRARIES})
-    target_include_directories(yona_lib_static PRIVATE ${PCRE2_INCLUDE_DIRS})
+    target_link_libraries(yona_lib_static PRIVATE ${YONA_PCRE2_TARGET})
+    target_include_directories(yona_lib_static PRIVATE ${YONA_PCRE2_INCLUDE_DIRS})
 endif()
 if(Vulkan_FOUND)
     target_compile_definitions(yona_lib_static PRIVATE YONA_HAS_VULKAN=1)
@@ -430,8 +530,8 @@ if(WIN32)
 	target_link_libraries(yona_lib PRIVATE ws2_32 dbghelp)
 endif()
 if(PCRE2_FOUND)
-    target_link_libraries(yona_lib PRIVATE ${PCRE2_LIBRARIES})
-    target_include_directories(yona_lib PRIVATE ${PCRE2_INCLUDE_DIRS})
+    target_link_libraries(yona_lib PRIVATE ${YONA_PCRE2_TARGET})
+    target_include_directories(yona_lib PRIVATE ${YONA_PCRE2_INCLUDE_DIRS})
 endif()
 if(Vulkan_FOUND)
     target_compile_definitions(yona_lib PRIVATE YONA_HAS_VULKAN=1)
@@ -486,13 +586,33 @@ if(Vulkan_FOUND AND NOT WIN32)
 	# cli/main.cpp: yonac-linked exe pulls vk* from gpu_stub → link libvulkan.
 	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_POSIX_VULKAN=1)
 endif()
-if(PCRE2_FOUND AND NOT WIN32)
+if(PCRE2_FOUND)
 	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_PCRE2=1)
 endif()
 
 # Prebuilt runtime artifacts for packaged/sysroot-first toolchain flow.
 set(YONA_RUNTIME_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/runtime")
 set(YONA_RUNTIME_MAIN_OBJ "${YONA_RUNTIME_ARTIFACT_DIR}/compiled_runtime.o")
+set(YONA_PCRE2_RUNTIME_ARCHIVE "")
+if(YONA_PCRE2_BUNDLED_STATIC)
+	# `yonac` links user programs after installation, outside CMake's target
+	# graph. Copy the exact static dependency beside the runtime archive so the
+	# compiler can resolve it through its sysroot on Windows (and any other
+	# fallback build) without assuming a host package manager.
+	set(YONA_PCRE2_RUNTIME_ARCHIVE
+		"${YONA_RUNTIME_ARTIFACT_DIR}/yona_pcre2${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	add_custom_command(
+		OUTPUT "${YONA_PCRE2_RUNTIME_ARCHIVE}"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${YONA_RUNTIME_ARTIFACT_DIR}"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"$<TARGET_FILE:${YONA_PCRE2_TARGET}>"
+			"${YONA_PCRE2_RUNTIME_ARCHIVE}"
+		DEPENDS ${YONA_PCRE2_TARGET}
+		COMMENT "Bundling pinned PCRE2 runtime archive"
+		VERBATIM
+	)
+	add_custom_target(yona_runtime_pcre2 DEPENDS "${YONA_PCRE2_RUNTIME_ARCHIVE}")
+endif()
 set(YONA_EMBEDDED_RUNTIME_SOURCES
 	"${PROJECT_SOURCE_DIR}/src/compiled_runtime.c"
 	"${PROJECT_SOURCE_DIR}/src/runtime/seq.c"
@@ -530,7 +650,7 @@ endforeach()
 
 set(_YONA_CR_CCFLAGS -I${PROJECT_SOURCE_DIR}/src -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_CURRENT_BINARY_DIR}/include)
 if(PCRE2_FOUND)
-	list(APPEND _YONA_CR_CCFLAGS ${PCRE2_CFLAGS} -DYONA_EMBEDDED_PCRE2=1)
+	list(APPEND _YONA_CR_CCFLAGS ${YONA_PCRE2_CFLAGS} -DYONA_EMBEDDED_PCRE2=1)
 endif()
 if(Vulkan_FOUND)
 	list(APPEND _YONA_CR_CCFLAGS -I${YONA_VK_HEADER_DIR} -DYONA_HAS_VULKAN=1)
@@ -568,6 +688,9 @@ endforeach()
 add_custom_target(yona_runtime_objects
 	DEPENDS "${YONA_RUNTIME_MAIN_OBJ}" ${YONA_RUNTIME_PLATFORM_OBJS}
 )
+if(TARGET yona_runtime_pcre2)
+	add_dependencies(yona_runtime_objects yona_runtime_pcre2)
+endif()
 
 add_library(yona_runtime_static STATIC
 	"${PROJECT_SOURCE_DIR}/src/compiled_runtime.c"
@@ -576,7 +699,8 @@ add_library(yona_runtime_static STATIC
 if(PCRE2_FOUND)
 	target_sources(yona_runtime_static PRIVATE
 		"${PROJECT_SOURCE_DIR}/src/runtime/regex.c")
-	target_include_directories(yona_runtime_static PRIVATE ${PCRE2_INCLUDE_DIRS})
+	target_include_directories(yona_runtime_static PRIVATE ${YONA_PCRE2_INCLUDE_DIRS})
+	target_link_libraries(yona_runtime_static PRIVATE ${YONA_PCRE2_TARGET})
 endif()
 set_target_properties(yona_runtime_static PROPERTIES
 	OUTPUT_NAME yona_runtime
@@ -597,6 +721,9 @@ if(YONA_ENABLE_VULKAN)
 endif()
 if(WIN32)
 	target_link_libraries(yona_runtime_static PRIVATE ws2_32 dbghelp)
+endif()
+if(TARGET yona_runtime_pcre2)
+	add_dependencies(yona_runtime_static yona_runtime_pcre2)
 endif()
 
 add_dependencies(yonac yona_runtime_objects yona_runtime_static)
@@ -619,6 +746,12 @@ add_dependencies(yona-repl yona_runtime_objects yona_runtime_static)
 set(YONA_TEST_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/test_artifacts")
 set(YONA_TEST_PRELUDE_OBJECT "${YONA_TEST_ARTIFACT_DIR}/Prelude${CMAKE_C_OUTPUT_EXTENSION}")
 set(YONA_TEST_PRELUDE_INTERFACE "${YONA_TEST_ARTIFACT_DIR}/Prelude.yonai")
+set(YONA_TEST_PCRE2_INCLUDE_DIR "")
+if(YONA_PCRE2_INCLUDE_DIRS)
+	list(GET YONA_PCRE2_INCLUDE_DIRS 0 YONA_TEST_PCRE2_INCLUDE_DIR)
+endif()
+set(YONA_TEST_PCRE2_ARCHIVE "${YONA_PCRE2_RUNTIME_ARCHIVE}")
+set(YONA_TEST_PCRE2_CFLAGS "${YONA_PCRE2_CFLAGS}")
 add_custom_command(
 	OUTPUT "${YONA_TEST_PRELUDE_OBJECT}"
 	BYPRODUCTS "${YONA_TEST_PRELUDE_INTERFACE}"

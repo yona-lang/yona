@@ -311,6 +311,15 @@ inline std::filesystem::path regex_obj_path() {
 }
 
 inline std::string pcre_cflags() {
+    const std::filesystem::path configured_archive(YONA_TEST_PCRE2_ARCHIVE);
+    if (!configured_archive.empty() && std::filesystem::exists(configured_archive)) {
+        std::string configured_flags(YONA_TEST_PCRE2_CFLAGS);
+        std::replace(configured_flags.begin(), configured_flags.end(), ';', ' ');
+        if (!configured_flags.empty()) return " " + configured_flags;
+        const std::filesystem::path configured_include(YONA_TEST_PCRE2_INCLUDE_DIR);
+        if (!configured_include.empty() && std::filesystem::exists(configured_include / "pcre2.h"))
+            return std::string(" -I") + qpath(configured_include);
+    }
     std::string pc = popen_trim("pkg-config --cflags libpcre2-8 2>/dev/null");
     if (!pc.empty()) return " " + pc;
     const std::string brew = discovered_homebrew_prefix();
@@ -341,6 +350,9 @@ inline bool ensure_regex_obj(std::filesystem::path& out_path) {
 }
 
 inline std::string pcre_link_flags() {
+    const std::filesystem::path configured_archive(YONA_TEST_PCRE2_ARCHIVE);
+    if (!configured_archive.empty() && std::filesystem::exists(configured_archive))
+        return qpath(configured_archive);
     std::string pc = popen_trim("pkg-config --libs libpcre2-8 2>/dev/null");
     if (!pc.empty()) return pc;
     const std::string brew = discovered_homebrew_prefix();
