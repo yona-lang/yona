@@ -21,13 +21,6 @@
   `doctest_tests`. Capture native stacks and compare optimized versus debug
   behavior before fixing the recursive trait/runtime path; do not disable the
   fixture or treat the two symptoms as proven equivalent.
-- [ ] **The Windows-LLVM DIA contract assumes ARM64 while CTest configures with
-  the host Visual Studio generator.** `cmake_windows_llvm_prerequisites` sets
-  `CMAKE_GENERATOR_PLATFORM` after `project()` and expects `arm64`, but native
-  x64 CI observes the generator platform as empty and fails the contract.
-  Repro: GitHub Actions run `33167091803`, Windows x64 Debug job `98834979501`.
-  Test the DIA architecture helper with an explicit injectable target-platform
-  input, without depending on the host generator's immutable platform.
 The full doctest/CTest suite passes on Linux. Native Apple Silicon CI passes;
 the unresolved Windows-only failures above are paused pending hands-on Windows
 diagnosis.

@@ -123,9 +123,11 @@
   installations first and uses the project's pinned CMake source fallback only
   when dependency fetching is enabled; no external package manager is required.
 - The Windows-LLVM prerequisite contract now loads its isolated mock package
-  directly instead of inheriting a host `LLVM_DIR`. Code generation now checks
-  whether a basic block ends in a terminator before querying it, keeping derived
-  Prelude functions valid with LLVM 23 on native Windows and Apple Silicon.
+  directly instead of inheriting a host `LLVM_DIR`, and injects its test target
+  architecture rather than mutating an already-selected Visual Studio generator.
+  Code generation now checks whether a basic block ends in a terminator before
+  querying it, keeping derived Prelude functions valid with LLVM 23 on native
+  Windows and Apple Silicon.
 - Windows async worker exception boundaries now use the shared target-aware
   SJLJ abstraction, so native ARM64 builds do not rely on the unsupported
   x64-only compiler builtin.

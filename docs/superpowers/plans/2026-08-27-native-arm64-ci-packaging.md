@@ -75,8 +75,8 @@ release archives.
 
 - [x] Document native Windows ARM64 and macOS ARM64 release file names and the
   no-vcpkg toolchain policy.
-- [ ] Mark the misleading macOS architecture bug fixed only after matrix and
-  packaging validation passes.
+- [x] Mark the misleading macOS architecture bug fixed after the explicit ARM64
+  matrix and packaging validation passed.
 - [x] Run `pnpm exec astro build` and `git diff --check`.
 
 ### Task 4: Final verification
@@ -98,6 +98,12 @@ release archives.
 - The grammar sync, VS Code tests, Zed extension check, Tree-sitter test, site
   build (70 pages), and workflow YAML validation pass locally.
 - Hosted Windows x64/ARM64 and macOS ARM64 execution remains the final gate.
+- GitHub Actions run `33167091803` confirms that macOS ARM64 Debug/Release and
+  all Linux jobs pass. Windows x64/ARM64 configure, build, language-server
+  smoke, and both linker modes pass; only the independently tracked Windows
+  runtime-fixture failures remain. The DIA prerequisite contract now passes an
+  explicit architecture to its pure-CMake helper rather than attempting to
+  mutate the immutable Visual Studio generator platform after `project()`.
 - The Windows-LLVM mock contract is also verified with a pre-populated invalid
   `LLVM_DIR`, and the shared SJLJ header passes a syntax-only
   `aarch64-pc-windows-msvc` Clang probe. Native Windows ARM64 execution remains

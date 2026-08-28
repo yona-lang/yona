@@ -91,12 +91,10 @@ add_library(ZLIB::ZLIB INTERFACE IMPORTED GLOBAL)
 add_library(zstd::libzstd_static INTERFACE IMPORTED GLOBAL)
 
 include("${YONA_SOURCE_DIR}/cmake/YonaLlvmWindowsDia.cmake")
-set(CMAKE_GENERATOR_PLATFORM "ARM64")
-yona_dia_sdk_arch(_arm64_dia_arch)
+yona_dia_sdk_arch(_arm64_dia_arch "ARM64")
 if(NOT _arm64_dia_arch STREQUAL "arm64")
   message(FATAL_ERROR "The ARM64 DIA SDK lookup must use DIA SDK/lib/arm64")
 endif()
-set(CMAKE_GENERATOR_PLATFORM "")
 yona_prepare_llvm_dia_sdk()
 
 if(NOT TARGET DIASDK::Diaguids)

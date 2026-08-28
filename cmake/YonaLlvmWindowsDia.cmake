@@ -6,8 +6,14 @@ set(YONA_DIA_SDK_LIBRARY "" CACHE FILEPATH
     "Full path to the Visual Studio DIA SDK diaguids.lib used by LLVM")
 
 function(yona_dia_sdk_arch out_var)
-  set(_platform "${CMAKE_GENERATOR_PLATFORM}")
-  if(DEFINED CMAKE_VS_PLATFORM_NAME AND CMAKE_VS_PLATFORM_NAME)
+  # An explicit platform lets the CMake-only contract test cover ARM64 without
+  # changing the already-selected Visual Studio generator platform. Production
+  # callers intentionally omit it and use CMake's target-platform metadata.
+  set(_platform "${ARGV1}")
+  if(NOT _platform)
+    set(_platform "${CMAKE_GENERATOR_PLATFORM}")
+  endif()
+  if(NOT _platform AND DEFINED CMAKE_VS_PLATFORM_NAME AND CMAKE_VS_PLATFORM_NAME)
     set(_platform "${CMAKE_VS_PLATFORM_NAME}")
   endif()
   if(NOT _platform AND DEFINED CMAKE_SYSTEM_PROCESSOR AND CMAKE_SYSTEM_PROCESSOR)
