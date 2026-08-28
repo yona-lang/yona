@@ -23,9 +23,13 @@
   resurrects an erased `Function*` and LLVM crashes. Repro: `Std\\Regex.findAll
   ... == [["1"], ["22"]]` for imported-GENFN scopes, or GitHub Actions run
   `33088429955`, Windows ARM64 Debug job `98574371139`, test `Logical
-  composition normalizes higher-order Bool results` (SIGSEGV). Migrate every
-  active compiler-cache and value-scope snapshot and retain a legacy ABI
-  trampoline instead of erasing the provisional function.
+  composition normalizes higher-order Bool results` (SIGSEGV). The first
+  trampoline attempt also leaves cross-module Windows links as `LINK_ERROR`
+  (`Imported nested sequence equality preserves generic specializations` in
+  Windows ARM64 Debug), so its symbol visibility must be verified in emitted
+  COFF objects. Migrate every active compiler-cache and value-scope snapshot
+  and retain a legacy ABI trampoline instead of erasing the provisional
+  function.
 - [ ] **Prelude compilation can leave case bodies unterminated on native
   Windows LLVM.** Building the deterministic `Prelude.obj` invokes `yonac`
   successfully until module verification reports unterminated `case.body.*`

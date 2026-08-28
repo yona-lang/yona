@@ -84,6 +84,9 @@
   `--Werror` still promotes them to errors.
 
 ### Fixed
+- Fixture links that fail in doctest now rerun once with linker stderr visible,
+  so native CI reports the concrete linker failure instead of only
+  `LINK_ERROR`.
 - Deferred-function ABI refinement now retains an internal legacy trampoline
   while moving compiler caches to the typed implementation. Nested lowering
   can therefore never dereference a freed provisional LLVM `Function*`.

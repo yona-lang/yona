@@ -14,6 +14,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <utility>
 #include <string>
@@ -293,8 +294,16 @@ inline bool link_objs_to_exe(const std::vector<std::filesystem::path>& objs,
     cmd << " -lm -lpthread -rdynamic";
 #endif
     if (!extra_libs.empty()) cmd << " " << extra_libs;
-    cmd << err_null();
-    return sh(cmd.str()) == 0;
+    const std::string command = cmd.str();
+    if (sh(command + err_null()) == 0)
+        return true;
+
+    // Fixture failures used to be reported only as LINK_ERROR because the first
+    // invocation intentionally hides noisy linker output.  Keep successful
+    // runs quiet, but make the failed command actionable on every platform.
+    std::cerr << "Yona fixture link failed; rerunning with linker diagnostics:\n";
+    (void)sh(command);
+    return false;
 }
 
 inline std::filesystem::path regex_obj_path() {

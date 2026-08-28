@@ -108,3 +108,8 @@ release archives.
   value-scope snapshot is migrated while the retired ABI remains a valid
   internal trampoline; native ARM64 CI remains the architecture-diverse
   execution gate for this lifetime path.
+- The current native rerun (`33091447933`) still exposes a Windows-only
+  ABI/linker failure. Fixture links now rerun with stderr visible after a
+  failure so the next native run identifies the failing COFF symbol rather
+  than reducing the result to `LINK_ERROR`; this issue remains open until the
+  Windows x64 and ARM64 jobs pass.
