@@ -2,81 +2,35 @@
 
 ## Bugs (open)
 
-- [ ] **Windows in-process LLD passes the bundled PCRE2 archive with shell
-  quotes embedded in its argv element.** `yonac` builds
-  `pcre2_link_arg = q_cmd_path(...)` for the external compiler command and
-  reuses it for the direct `lld::lldMain` argv; LLD therefore tries to open a
-  filename containing `"`. Repro: GitHub Actions run `33166617297`, Windows
-  ARM64 Debug job `98833447234`, `validate-linker-modes.ps1` reports
-  `could not open '".../runtime/yona_pcre2.lib"': invalid argument`. Keep raw
-  filesystem paths for in-process linker arguments and apply shell quoting only
-  when constructing the external command; add an architecture-independent
-  regression to the linker-mode contract.
-- [ ] **Native Windows LLVM crashes when branch-transfer cleanup analyzes an
-  incomplete CFG.** `transfer_scope_exit` builds a function-wide
-  `llvm::DominatorTree` while nested lowering can still leave an enclosing
-  `if`, `case`, or `try/catch` successor detached or unterminated. LLVM 23's
-  SemiNCA implementation dereferences the malformed block. Repro: GitHub
-  Actions run `33165983040`, Windows ARM64 Debug job `98831384283`, building
-  `tools/yls/main.yona`; stack includes `DominatorTree::CalculateFromScratch`
-  and `Codegen::transfer_scope_exit` (`CodegenExpr.cpp:677`). Queue asymmetric
-  branch drops, then build dominance only after code generation has completed
-  each function CFG; discard queued drops when ABI refinement replaces a body.
-- [ ] **Native Windows CI publishes the public `Std\\Regex` interface without
-  its PCRE2 runtime.** The Windows presets skip optional PCRE2 because a
-  standard runner has neither `pkg-config` nor a discoverable PCRE2 install,
-  yet `lib/Std/Regex.yonai` remains importable. A program using it then links
-  against absent `yona_Std_Regex__compile` / `yona_Std_Regex__findAll` symbols.
-  Repro: GitHub Actions run `33163203895`, Windows ARM64 Debug job
-  `98822357844`, `Imported nested sequence equality preserves generic
-  specializations`. Supply a project-pinned PCRE2 CMake fallback (never
-  vcpkg), propagate its `PCRE2_STATIC` ABI definition into directly compiled
-  runtime/test objects, or remove the module and interface together when
-  explicitly disabled.
-- [ ] **Official Windows LLVM archives require zstd before import.** Both
-  `windows-2025` x64 and `windows-11-vs2026-arm` ARM64 CI configure jobs fail
-  with `LLVMExports.cmake: LLVMSupport link interface contains
-  zstd::libzstd_static, but the target was not found`, because the project
-  prepares `ZLIB::ZLIB` and DIA but not LLVM's zstd prerequisite before
-  `find_package(LLVM CONFIG REQUIRED)`. Repro: GitHub Actions run
-  `33078505123`, jobs `98538991570` and `98538991588`.
-- [ ] **Windows-LLVM prerequisite contract is not hermetic on a clean
-  checkout.** The direct mock-config fixture is ignored by the repository-wide
-  `*.cmake` rule, so CI cannot load
-  `test/cmake/windows_llvm_prerequisites/mock-llvm/LLVMConfig.cmake`; the
-  preceding prefix-based version instead imported host Homebrew LLVM and tried
-  to compile C/C++ probes in a `LANGUAGES NONE` project. Repro: GitHub Actions
-  run `33086185959`, Linux ARM64 Debug job `98566337918`.
-- [ ] **Nested codegen scopes can restore retired provisional LLVM function
-  handles.** An inferred body may refine a provisional return ABI while an
-  imported-GENFN isolation or ordinary nested function/lambda scope still
-  holds a `named_values_` or compiled-function snapshot; restoring it later
-  resurrects an erased `Function*` and LLVM crashes. Repro: `Std\\Regex.findAll
-  ... == [["1"], ["22"]]` for imported-GENFN scopes, or GitHub Actions run
-  `33088429955`, Windows ARM64 Debug job `98574371139`, test `Logical
-  composition normalizes higher-order Bool results` (SIGSEGV). The first
-  trampoline attempt also leaves cross-module Windows links as `LINK_ERROR`
-  (`Imported nested sequence equality preserves generic specializations` in
-  Windows ARM64 Debug), so its symbol visibility must be verified in emitted
-  COFF objects. Migrate every active compiler-cache and value-scope snapshot
-  and retain a legacy ABI trampoline instead of erasing the provisional
-  function.
-- [ ] **Prelude compilation can leave case bodies unterminated on native
-  Windows LLVM.** Building the deterministic `Prelude.obj` invokes `yonac`
-  successfully until module verification reports unterminated `case.body.*`
-  blocks across derived trait methods (for example `Hash_FileMode__hash` and
-  `Eq_Option__eq`), and Debug may assert while querying a missing terminator.
-  Repro: GitHub Actions run `33082841451`, Windows x64 Release job
-  `98554422796` and Windows x64 Debug job `98554422665`.
-- [ ] **The Windows async runtime uses an x64-only setjmp builtin.**
-  `src/runtime/platform/async_win32.c` calls `__builtin_setjmp`, which Clang
-  rejects for the native ARM64 MSVC target before the runtime can build.
-  Repro: GitHub Actions run `33084292747`, Windows ARM64 Debug job
-  `98559587583` (`__builtin_setjmp is not supported for the current target`).
-
-The full doctest/CTest suite passes on Linux; native Apple Silicon and Windows
-ARM64 execution remains a hosted-CI verification item under Distribution
-readiness.
+- [ ] **Windows iterator fixtures cannot read their scratch file.**
+  `iterator_file_lines` and `iterator_gen_lines` expect `42` and `14` but get
+  empty output under `tests.exe`, although they pass on Linux. Repro: GitHub
+  Actions run `33167091803`, Windows x64 Debug job `98834979501`, CTest
+  `doctest_tests`. Make fixture scratch paths and the `Std\\File` runtime use a
+  portable, shared temporary-file location rather than a POSIX-only spelling.
+- [ ] **Windows `Std\\Convert` rejects the Bool case expected by its conformance
+  suite.** `foundation_Convert_test` reports one failure for “Parse Bool is
+  explicit and case sensitive” (`16 passed, 1 failed`) only on Windows.
+  Repro: GitHub Actions run `33167091803`, Windows x64 Debug job `98834979501`.
+  Compare the runtime/parser result contract and make it platform-independent.
+- [ ] **Windows `foundation_Traits_test` has configuration-dependent failures.**
+  The stdlib conformance fixture crashes with `SIGSEGV - Stack overflow` in
+  x64/ARM64 Debug, while x64 Release completes with a report-contract mismatch.
+  Repro: GitHub Actions run `33167091803`, Windows x64 Debug job `98834979501`,
+  ARM64 Debug job `98834979553`, and x64 Release job `98834979687`, CTest
+  `doctest_tests`. Capture native stacks and compare optimized versus debug
+  behavior before fixing the recursive trait/runtime path; do not disable the
+  fixture or treat the two symptoms as proven equivalent.
+- [ ] **The Windows-LLVM DIA contract assumes ARM64 while CTest configures with
+  the host Visual Studio generator.** `cmake_windows_llvm_prerequisites` sets
+  `CMAKE_GENERATOR_PLATFORM` after `project()` and expects `arm64`, but native
+  x64 CI observes the generator platform as empty and fails the contract.
+  Repro: GitHub Actions run `33167091803`, Windows x64 Debug job `98834979501`.
+  Test the DIA architecture helper with an explicit injectable target-platform
+  input, without depending on the host generator's immutable platform.
+The full doctest/CTest suite passes on Linux. Native Apple Silicon CI passes;
+the unresolved Windows-only failures above are paused pending hands-on Windows
+diagnosis.
 
 Capability-dependent platform gaps remain tracked in their roadmap sections
 below.
