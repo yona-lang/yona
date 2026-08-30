@@ -8,7 +8,7 @@
 # Stage 2: Minimal runtime with yonac + yona + stdlib
 
 # ===== Build stage =====
-FROM fedora:43 AS builder
+FROM fedora:44 AS builder
 
 RUN dnf install -y \
     llvm llvm-devel llvm-libs llvm-static \
