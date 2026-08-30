@@ -172,7 +172,11 @@ inline std::vector<std::string> platform_sources() {
 }
 
 inline int sh(const std::string& cmd) {
+#ifdef _WIN32
+    return std::system(wrap_for_cmd_c(cmd).c_str());
+#else
     return std::system(cmd.c_str());
+#endif
 }
 
 /* Paths of compiled_runtime.o then each platform .o (only existing platform sources). */
@@ -285,8 +289,13 @@ inline bool link_objs_to_exe(const std::vector<std::filesystem::path>& objs,
     for (const auto& o : objs) cmd << " " << qpath(o);
     cmd << " -o " << qpath(exe_out);
 #ifdef _WIN32
-    /* lld-link (Clang's default Windows linker) requires an explicit subsystem. */
-    cmd << " -lws2_32 -ldbghelp -Xlinker /SUBSYSTEM:CONSOLE";
+    /* lld-link (Clang's default Windows linker) requires an explicit subsystem.
+     * Embed an asInvoker manifest as well: without requestedExecutionLevel,
+     * Windows' installer-detection heuristic can classify ordinary generated
+     * fixture executables as requiring elevation based on their code/data. */
+    cmd << " -lws2_32 -ldbghelp -Xlinker /SUBSYSTEM:CONSOLE"
+        << " -Xlinker /MANIFEST:EMBED"
+        << " -Xlinker " << qarg("/MANIFESTUAC:level='asInvoker' uiAccess='false'");
 #elif defined(__APPLE__)
     /* ELF treats undefined weak symbols as NULL; ld64 needs an explicit allow. */
     cmd << " -lpthread -Wl,-U,_yona_regex_free_code";
@@ -427,6 +436,9 @@ inline void rewrite_codegen_fixture_tmp_paths(std::string& s) {
 
 inline std::string popen_read_all(const std::filesystem::path& exe) {
     std::string cmd = qpath(exe) + err_null();
+#ifdef _WIN32
+    cmd = wrap_for_cmd_c(cmd);
+#endif
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe) return "RUN_ERROR";
     std::string result;

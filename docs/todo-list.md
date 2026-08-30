@@ -6,27 +6,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
-- [ ] **Windows iterator fixtures cannot read their scratch file.**
-  `iterator_file_lines` and `iterator_gen_lines` expect `42` and `14` but get
-  empty output under `tests.exe`, although they pass on Linux. Repro: GitHub
-  Actions run `33167091803`, Windows x64 Debug job `98834979501`, CTest
-  `doctest_tests`. Make fixture scratch paths and the `Std\File` runtime use a
-  portable, shared temporary-file location rather than a POSIX-only spelling.
-
 - [ ] **Windows `Std\Convert` rejects the Bool case expected by its conformance
   suite.** `foundation_Convert_test` reports one failure for “Parse Bool is
   explicit and case sensitive” (`16 passed, 1 failed`) only on Windows.
   Repro: GitHub Actions run `33167091803`, Windows x64 Debug job `98834979501`.
   Compare the runtime/parser result contract and make it platform-independent.
-
-- [ ] **Windows `foundation_Traits_test` has configuration-dependent failures.**
-  The stdlib conformance fixture crashes with `SIGSEGV - Stack overflow` in
-  x64/ARM64 Debug, while x64 Release completes with a report-contract mismatch.
-  Repro: GitHub Actions run `33167091803`, Windows x64 Debug job `98834979501`,
-  ARM64 Debug job `98834979553`, and x64 Release job `98834979687`, CTest
-  `doctest_tests`. Capture native stacks and compare optimized versus debug
-  behavior before fixing the recursive trait/runtime path; do not disable the
-  fixture or treat the two symptoms as proven equivalent.
 
 ## Build quality
 

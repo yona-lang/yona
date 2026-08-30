@@ -3,6 +3,7 @@
 
 #include "Codegen.h"
 #include "Diagnostic.h"
+#include "repo_paths.h"
 #include "typechecker/EffectSolver.h"
 #include "typechecker/InferType.h"
 #include "typechecker/ModuleFunctionDependencies.h"
@@ -919,7 +920,7 @@ check message condition = if condition then message else ""
   TEST_CASE("Parser retains both Dict parameters in instance method signatures") {
     yona::parser::Parser parser;
     yona::compiler::codegen::Codegen bootstrap("dict_signature_bootstrap");
-    bootstrap.module_paths_.push_back("lib");
+    bootstrap.module_paths_.push_back(yona::test::lib_dir().string());
     bootstrap.load_prelude(&parser);
     auto result = parser.parse_module(R"(
 module Test\DictSignature
@@ -3322,7 +3323,7 @@ TEST_SUITE("LinearityChecker") {
     TypeChecker checker(diagnostics);
     yona::parser::Parser parser;
     yona::compiler::codegen::Codegen bootstrap("concurrency_markers");
-    bootstrap.module_paths_.push_back("lib");
+    bootstrap.module_paths_.push_back(yona::test::lib_dir().string());
     bootstrap.load_prelude(&parser, &checker);
     checker.set_import_type_source(&bootstrap.import_types_);
     std::istringstream input(source);
@@ -3399,7 +3400,7 @@ end
     TypeChecker checker(diagnostics);
     yona::parser::Parser parser;
     yona::compiler::codegen::Codegen bootstrap("marker_derive");
-    bootstrap.module_paths_.push_back("lib");
+    bootstrap.module_paths_.push_back(yona::test::lib_dir().string());
     bootstrap.load_prelude(&parser, &checker);
     auto parsed = parser.parse_module(R"(
 module Test\MarkerDerive
@@ -3416,7 +3417,7 @@ type Packet value = Packet value deriving Send, Shareable
     TypeChecker checker(diagnostics);
     yona::parser::Parser parser;
     yona::compiler::codegen::Codegen bootstrap("marker_reject");
-    bootstrap.module_paths_.push_back("lib");
+    bootstrap.module_paths_.push_back(yona::test::lib_dir().string());
     bootstrap.load_prelude(&parser, &checker);
     auto parsed = parser.parse_module(R"(
 module Test\MarkerReject

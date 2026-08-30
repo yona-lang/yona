@@ -18,8 +18,13 @@ namespace {
 
 std::string read_prelude_file(const fs::path& path) {
     std::ifstream input(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(input),
-            std::istreambuf_iterator<char>()};
+    std::string contents{std::istreambuf_iterator<char>(input),
+                         std::istreambuf_iterator<char>()};
+    // Interface files are written through a text stream, so Windows stores
+    // CRLF. Keep content assertions and bootstrap equality platform-neutral.
+    for (size_t pos = 0; (pos = contents.find("\r\n", pos)) != std::string::npos;)
+        contents.erase(pos, 1);
+    return contents;
 }
 
 bool compile_prelude_interface(const std::string& source,

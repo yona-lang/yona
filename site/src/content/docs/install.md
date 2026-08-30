@@ -119,7 +119,15 @@ complete LLVM archive — **`clang+llvm-*-x86_64-pc-windows-msvc`** for x64 or
 toolset and Windows SDK. Extract it to a short path and set
 `LLVM_INSTALL_PREFIX` to its root (the directory containing `bin`, `lib`,
 `include`). A Clang-only installer omits libraries that `find_package(LLVM)`
-requires.
+requires. If neither `LLVM_INSTALL_PREFIX` nor `LLVM_DIR` is set, Windows
+presets assume `C:\Program Files\LLVM`; `LLVM_DIR`, when set, must be
+`C:\Program Files\LLVM\lib\cmake\llvm` (the directory that contains
+`LLVMConfig.cmake`), not the installation root.
+
+On a fresh build directory the Windows presets use `clang.exe` and
+`clang++.exe` from that complete LLVM installation. An ARM64 Visual Studio
+Developer PowerShell remains required to provide the matching Windows SDK and
+linker environment.
 
 Tagged releases publish `yona-<version>-windows-x64.{zip,msi}` and
 `yona-<version>-windows-arm64.{zip,msi}`.

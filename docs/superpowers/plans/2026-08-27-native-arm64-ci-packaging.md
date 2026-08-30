@@ -41,6 +41,9 @@ release archives.
   architecture; failure to find an ARM64 archive is a configuration error.
 - [x] Add a structural CMake/action regression for the ARM64 target contract,
   run it red before implementation and green afterward.
+- [x] Default Windows LLVM discovery to `C:\Program Files\LLVM`, normalize a
+  root-valued `LLVM_DIR`, and diagnose incomplete Clang-only installations.
+- [x] Quote full `YONAC_CC` compiler paths in Windows `yonac` shell-outs.
 
 ### Task 2: Run native ARM64 CI and package matching release artifacts
 
@@ -132,3 +135,14 @@ release archives.
   unterminated. Branch-transfer cleanup now queues its asymmetric drops and
   proves dominance only after each function CFG is complete, preserving the
   existing pre-branch ownership snapshot without invoking SemiNCA early.
+- The Windows Debug `foundation_Traits_test` crash was a compiler stack-depth
+  bug: a long left-associated `++` chain recursively traversed its left spine
+  in both type inference and lowering. Both passes now process that spine
+  iteratively; the native ARM64 focused fixture passes.
+- Generated Windows fixture executables now carry an embedded `asInvoker`
+  manifest, avoiding installer-heuristic elevation failures. The Windows line
+  iterator state also reserves its native finalizer field, matching the shared
+  runtime ABI and allowing deterministic cleanup on ARM64.
+- Prelude-dependent compiler tests now use the configured absolute library
+  path, and generated-interface assertions normalize CRLF, matching CTest's
+  build-directory execution on Windows.

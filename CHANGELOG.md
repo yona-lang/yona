@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Changed
+- Windows CMake presets now fall back to `C:\Program Files\LLVM` when neither
+  `LLVM_INSTALL_PREFIX` nor `LLVM_DIR` is configured, while preserving explicit
+  cache and environment overrides. Fresh Windows configurations also select
+  Clang from that complete LLVM tree unless a compiler is explicitly chosen.
+
+### Fixed
+- `yonac` now quotes a full `YONAC_CC` path when shelling out on Windows, so
+  builds work when LLVM is installed below `C:\Program Files`.
+- Windows doctest fixture compilation likewise supports a space-containing
+  `YONAC_CC` path.
+- Long left-associated `++` expressions now type-check and lower iteratively,
+  preventing the Windows Debug stack overflow in `foundation_Traits_test`.
+- Windows-generated doctest executables now embed an explicit `asInvoker`
+  manifest, preventing installer detection from spuriously requiring elevation.
+- Windows file-line iterators now preserve the native-state finalizer slot,
+  preventing teardown crashes in iterator fixtures.
+- Compiler tests now resolve the Prelude from the configured repository path
+  and normalize generated-interface newlines, so they are independent of the
+  CTest working directory and Windows CRLF translation.
+
 ### Added
 - Trait-aware `yls` symbols, navigation, completion, semantic tokens, and
   safe instance-explanation actions. The public `tree-sitter-yona` grammar

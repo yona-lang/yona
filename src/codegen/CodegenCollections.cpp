@@ -10,7 +10,9 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
+#include <algorithm>
 #include <iostream>
+#include <vector>
 
 namespace yona::compiler::codegen {
 using namespace llvm;
@@ -456,6 +458,43 @@ TypedValue Codegen::codegen_cons(ConsLeftExpr* node) {
 }
 
 TypedValue Codegen::codegen_join(JoinExpr* node) {
+    // The parser makes ++ chains left-associative. Lower the left spine
+    // iteratively: recursively lowering a long sequence of joins can exhaust
+    // the comparatively small Windows Debug stack.
+    if (dynamic_cast<JoinExpr*>(node->left)) {
+        std::vector<ExprNode*> operands;
+        ExprNode* current = node;
+        while (auto* join = dynamic_cast<JoinExpr*>(current)) {
+            operands.push_back(join->right);
+            current = join->left;
+        }
+        operands.push_back(current);
+        std::reverse(operands.begin(), operands.end());
+
+        auto joined = codegen(operands.front());
+        if (!joined) return {};
+        for (size_t i = 1; i < operands.size(); ++i) {
+            set_debug_loc(operands[i]->source_context);
+            auto right = codegen(operands[i]);
+            if (!right) return {};
+            if (joined.type == CType::STRING || right.type == CType::STRING) {
+                auto as_str = [&](const TypedValue& tv) -> Value* {
+                    if (tv.val->getType()->isPointerTy()) return tv.val;
+                    return builder_->CreateIntToPtr(tv.val, PointerType::get(*context_, 0));
+                };
+                joined = {builder_->CreateCall(rt_.string_concat_, {as_str(joined), as_str(right)}),
+                          CType::STRING};
+            } else {
+                auto as_seq = [&](const TypedValue& tv) -> Value* {
+                    if (tv.val->getType()->isPointerTy()) return tv.val;
+                    return builder_->CreateIntToPtr(tv.val, PointerType::get(*context_, 0));
+                };
+                joined = {builder_->CreateCall(rt_.seq_join_, {as_seq(joined), as_seq(right)}), CType::SEQ};
+            }
+        }
+        return joined;
+    }
+
     set_debug_loc(node->source_context);
     auto left = codegen(node->left);
     auto right = codegen(node->right);

@@ -72,7 +72,33 @@ static string shell_stderr_null() {
 #endif
 }
 
-static string q_cmd_path(const filesystem::path &p) { return "\"" + p.string() + "\""; }
+static string q_cmd_path(const filesystem::path &p) { return "\"" + p.lexically_normal().generic_string() + "\""; }
+
+// `system()` invokes cmd.exe on Windows. Its leading-quote rule strips the
+// outer quotes unless the complete command is wrapped, so a compiler installed
+// below "Program Files" would otherwise be executed as `C:/Program`.
+static string system_command(string command) {
+#ifdef _WIN32
+  constexpr string_view stderr_null = " 2>nul";
+  string redirect;
+  if (command.size() >= stderr_null.size() &&
+      command.compare(command.size() - stderr_null.size(), stderr_null.size(), stderr_null) == 0) {
+    redirect = string(stderr_null);
+    command.resize(command.size() - stderr_null.size());
+  }
+  if (!command.empty() && command.front() == '"')
+    command = "\"" + command + "\"";
+  return command + redirect;
+#else
+  return command;
+#endif
+}
+
+static int run_system_command(string command) { return system(system_command(std::move(command)).c_str()); }
+
+static string q_cmd_executable(const char *executable) {
+  return q_cmd_path(filesystem::path(executable));
+}
 
 #ifndef _WIN32
 /** Directory that contains libvulkan for -L / rpath.
@@ -1038,16 +1064,16 @@ int main(int argc, char *argv[]) {
 
       if (need_rt) {
         const char *cc = yonac_cc_exe();
-        string main_cmd = string(cc) + " -c " + q_cmd_path(candidate) + i_flags + " -o " + q_cmd_path(filesystem::path(rt_obj)) + shell_stderr_null();
-        if (system(main_cmd.c_str()) != 0) {
+        string main_cmd = q_cmd_executable(cc) + " -c " + q_cmd_path(candidate) + i_flags + " -o " + q_cmd_path(filesystem::path(rt_obj)) + shell_stderr_null();
+        if (run_system_command(std::move(main_cmd)) != 0) {
           cerr << "Error: failed to compile compiled_runtime.c (set YONAC_CC or install clang in PATH)" << endl;
           return 1;
         }
         for (size_t i = 0; i < plat_pf.size(); ++i) {
           auto plat_src = root / "src" / "runtime" / "platform" / plat_pf[i];
           string plat_cmd =
-              string(cc) + " -c " + q_cmd_path(plat_src) + i_flags + " -o " + q_cmd_path(filesystem::path(plat_obj_paths[i])) + shell_stderr_null();
-          if (system(plat_cmd.c_str()) != 0) {
+              q_cmd_executable(cc) + " -c " + q_cmd_path(plat_src) + i_flags + " -o " + q_cmd_path(filesystem::path(plat_obj_paths[i])) + shell_stderr_null();
+          if (run_system_command(std::move(plat_cmd)) != 0) {
             cerr << "Error: failed to compile runtime platform " << plat_pf[i] << endl;
             return 1;
           }
@@ -1057,7 +1083,7 @@ int main(int argc, char *argv[]) {
           string merged = rt_obj + ".merged";
           string merge_cmd = string(cc) + " -r " + q_cmd_path(filesystem::path(rt_obj)) + " " + q_cmd_path(filesystem::path(plat_obj_paths[i])) +
                              " -o " + q_cmd_path(filesystem::path(merged)) + shell_stderr_null();
-          if (system(merge_cmd.c_str()) != 0) {
+          if (run_system_command(std::move(merge_cmd)) != 0) {
             cerr << "Error: failed to merge runtime objects" << endl;
             return 1;
           }
@@ -1080,18 +1106,17 @@ int main(int argc, char *argv[]) {
       bool need_bc = artifact_stale_against_sources(filesystem::path(rt_bc), runtime_sources);
       if (need_bc) {
         string bc_main = rt_bc + ".main";
-        string bc_cmd = string(yonac_cc_exe()) + " -emit-llvm -O2 -c " + q_cmd_path(candidate) + i_flags + " -o " +
+        string bc_cmd = q_cmd_executable(yonac_cc_exe()) + " -emit-llvm -O2 -c " + q_cmd_path(candidate) + i_flags + " -o " +
                         q_cmd_path(filesystem::path(bc_main)) + shell_stderr_null();
-        system(bc_cmd.c_str());
+        run_system_command(std::move(bc_cmd));
 
         vector<string> bc_files = {bc_main};
         for (const char *pf : platform_runtime_sources) {
           auto plat_src = root / "src" / "runtime" / "platform" / pf;
           if (filesystem::exists(plat_src)) {
             string plat_bc = rt_bc + "." + string(pf) + ".bc";
-            system((string(yonac_cc_exe()) + " -emit-llvm -O2 -c " + q_cmd_path(plat_src) + i_flags + " -o " + q_cmd_path(filesystem::path(plat_bc)) +
-                    shell_stderr_null())
-                       .c_str());
+            run_system_command(q_cmd_executable(yonac_cc_exe()) + " -emit-llvm -O2 -c " + q_cmd_path(plat_src) + i_flags + " -o " +
+                               q_cmd_path(filesystem::path(plat_bc)) + shell_stderr_null());
             bc_files.push_back(plat_bc);
           }
         }
@@ -1099,7 +1124,7 @@ int main(int argc, char *argv[]) {
         for (const auto &f : bc_files)
           link_bc += " " + q_cmd_path(filesystem::path(f));
         link_bc += " -o " + q_cmd_path(filesystem::path(rt_bc)) + shell_stderr_null();
-        system(link_bc.c_str());
+        run_system_command(std::move(link_bc));
         for (const auto &f : bc_files)
           filesystem::remove(f);
       }
@@ -1220,7 +1245,7 @@ int main(int argc, char *argv[]) {
 
   if (!used_inprocess || link_result != 0) {
     const char *cc_link = yonac_cc_exe();
-    string link_cmd = string(cc_link) + " " + q_cmd_path(filesystem::path(obj_file));
+    string link_cmd = q_cmd_executable(cc_link) + " " + q_cmd_path(filesystem::path(obj_file));
     if (linker_selection.use_bundled_lld) {
       link_cmd += " -fuse-ld=lld -B" + q_cmd_path(linker_selection.bundled_lld_path.parent_path());
     }
@@ -1268,7 +1293,7 @@ int main(int argc, char *argv[]) {
 #endif
     link_cmd += " -o " + q_cmd_path(filesystem::path(output_file));
 #endif
-    link_result = system(link_cmd.c_str());
+    link_result = run_system_command(std::move(link_cmd));
   }
   filesystem::remove(obj_file);
 

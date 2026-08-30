@@ -134,7 +134,17 @@ Intel macOS artifact. The MSI flow is defined under
   deliberately build with `-DYONA_FETCH_DEPS=OFF`, provide a normal
   CMake-discoverable PCRE2 installation instead.
 
-The CMake toolchain reads `LLVM_INSTALL_PREFIX` from CMake cache or the environment (CI sets both). Do **not** rely on a guessed install path. Set `LLVM_INSTALL_PREFIX` to the extracted tree (for example `C:\LLVM`). **Spell the path correctly** in user and machine environment variables; a typo leaves `find_package(LLVM)` searching an empty prefix.
+The CMake toolchain reads `LLVM_INSTALL_PREFIX` and `LLVM_DIR` from the CMake
+cache or environment (CI sets the prefix explicitly). If neither is set, the
+Windows presets default `LLVM_INSTALL_PREFIX` to `C:\Program Files\LLVM` and
+derive `LLVM_DIR` as `C:\Program Files\LLVM\lib\cmake\llvm`. `LLVM_DIR` names
+the directory containing `LLVMConfig.cmake`, not the LLVM installation root.
+Override the prefix when the complete archive is extracted elsewhere (for
+example `C:\LLVM`). **Spell the path correctly** in user and machine
+environment variables; a typo leaves `find_package(LLVM)` searching an empty
+prefix. On a fresh Windows build directory, the presets select `clang.exe` and
+`clang++.exe` from that LLVM tree unless `CC`/`CXX` or CMake compiler cache
+variables explicitly choose another compiler.
 
 The official LLVM package declares Zlib and DIA SDK targets in its CMake
 metadata. Yona resolves Zlib through ordinary `find_package(ZLIB)` discovery;
@@ -192,7 +202,7 @@ Binaries are written under the selected preset directory (for example,
 `out\build\x64-release\` or `out\build\arm64-release\`), including
 `yonac.exe`, `yona.exe`, and `yona_lib.dll`.
 
-**`yonac` linking a full executable (not `--emit-obj` / `--emit-ir`):** the CLI shells out to compile `src/compiled_runtime.c` and the platform layer, then link. On Windows it uses **`clang`** by default (or **`YONAC_CC`** if set) and links **`ws2_32`** / **`dbghelp`**. Put the same LLVM `bin` directory on `PATH`, or set `YONAC_CC` to the full path of `clang.exe` so the subprocess can find the compiler. Optional LTO uses **`llvm-link.exe`** next to that `clang` when `YONAC_CC` is set.
+**`yonac` linking a full executable (not `--emit-obj` / `--emit-ir`):** the CLI shells out to compile `src/compiled_runtime.c` and the platform layer, then link. On Windows it uses **`clang`** by default (or **`YONAC_CC`** if set) and links **`ws2_32`** / **`dbghelp`**. Put the same LLVM `bin` directory on `PATH`, or set `YONAC_CC` to the full path of `clang.exe` so the subprocess can find the compiler. Full paths containing spaces, including `C:\Program Files\LLVM\bin\clang.exe`, are supported. Optional LTO uses **`llvm-link.exe`** next to that `clang` when `YONAC_CC` is set.
 
 **Linker mode selection:** `yonac` supports `--linker-mode auto|bundled|system|inprocess` (or `YONAC_LINKER_MODE`). In `auto`, it prefers bundled `lld` when found under discovered sysroots (`bin/` or `llvm/bin/`) and falls back to the system toolchain linker. Use `bundled` to require packaged `lld` (hard error if missing), `system` to force external linker behavior, or `inprocess` to request embedded-linker mode when available. Embedded-linker wiring is gated by CMake option `YONA_ENABLE_INPROCESS_LLD` (default `ON`), but CMake may auto-disable it when required dependencies are missing on the current toolchain (for example, MSVC-compatible LibXml2 for LLVM Windows manifest support). When unavailable, `inprocess` falls back to the external path with a warning unless `YONAC_REQUIRE_INPROCESS_LLD=1` is set, in which case compile/link fails hard. The REPL (`yona`) currently reads `YONAC_LINKER_MODE` as well.
 

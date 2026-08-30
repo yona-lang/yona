@@ -1743,6 +1743,46 @@ std::string TypeChecker::op_name(AstNodeType type) {
 
 MonoTypePtr TypeChecker::infer_binary(BinaryOpExpr* node,
                                        std::shared_ptr<TypeEnv> env, int level) {
+    // The parser makes ++ chains left-associative. Infer the left spine
+    // iteratively so long normal concatenations do not consume one native
+    // stack frame per operand in Windows Debug builds.
+    if (node->get_type() == AST_JOIN_EXPR && dynamic_cast<JoinExpr*>(node->left)) {
+        std::vector<ExprNode*> operands;
+        ExprNode* current = node;
+        while (auto* join = dynamic_cast<JoinExpr*>(current)) {
+            operands.push_back(join->right);
+            current = join->left;
+        }
+        operands.push_back(current);
+        std::reverse(operands.begin(), operands.end());
+
+        auto* result = infer(operands.front(), env, level);
+        const auto is_string = [](MonoTypePtr type) {
+            return type && type->tag == MonoType::Con && type->con == TyCon::String;
+        };
+        for (size_t i = 1; i < operands.size(); ++i) {
+            auto* right_type = infer(operands[i], env, level);
+            if (is_string(unifier_.resolve(result)) || is_string(unifier_.resolve(right_type))) {
+                auto* string = arena_.make_con(TyCon::String);
+                unifier_.unify(result, string, node->source_context,
+                               "in operator ++ (both operands must be String or both Seq)");
+                unifier_.unify(right_type, string, node->source_context,
+                               "in operator ++ (both operands must be String or both Seq)");
+                result = string;
+            } else {
+                auto* element = arena_.fresh_var(level);
+                uf_.add_var(element->var_id, level);
+                auto* sequence = arena_.make_app("Seq", {element});
+                unifier_.unify(result, sequence, node->source_context,
+                               "in operator ++ (left sequence)");
+                unifier_.unify(right_type, sequence, node->source_context,
+                               "in operator ++ (right sequence)");
+                result = unifier_.resolve(sequence);
+            }
+        }
+        return result;
+    }
+
     auto* left_type = infer(node->left, env, level);
     auto* right_type = infer(node->right, env, level);
 

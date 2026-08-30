@@ -693,6 +693,7 @@ int64_t* yona_platform_list_dir(const char* path) {
 #define LINE_ITER_BUF_SIZE 65536
 
 typedef struct {
+	void (*finalize)(void*);
 	int fd;
 	char* buf;
 	size_t buf_pos;

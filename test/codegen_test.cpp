@@ -1512,7 +1512,7 @@ extern read : Int -> Result (String, String) = "yona_Test_ExternResult__read"
     REQUIRE(mod_result.has_value());
 
     Codegen mod_codegen("extern_result_mod");
-    mod_codegen.module_paths_ = {"lib"};
+    mod_codegen.module_paths_ = {yona::test::lib_dir().string()};
     mod_codegen.load_prelude(&p);
     auto mod = mod_codegen.compile_module(mod_result.value().get());
     REQUIRE(mod != nullptr);
