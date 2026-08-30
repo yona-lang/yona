@@ -24,7 +24,7 @@
 # startsWith / endsWith take the needle first: startsWith "module" s.
 
 import getArgs, executablePath, run, execArgs, exit, yonaVersion, tempFile from Std\Process,
-       isTty, eprintln, println, readStdin, stdinFd from Std\IO,
+       isTty, eprintln, println, readStdin, stdinFd from Std\Io,
        exists, writeFile, remove, readFile from Std\File,
        join, dirname from Std\Path,
        startsWith, endsWith, drop, charAt from Std\String,

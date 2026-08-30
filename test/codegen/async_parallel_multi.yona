@@ -1,4 +1,0 @@
-extern async yona_test_slow_add : Int -> Int -> Int in
-let a = yona_test_slow_add 10 20 in
-let b = yona_test_slow_add 30 40 in
-a + b

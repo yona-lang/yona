@@ -26,7 +26,7 @@ The rest of this file is for **building from source**.
 ## Prerequisites (source build)
 
 All platforms require:
-- **LLVM** for the codegen backend: **22+** recommended (see `CLAUDE.md`); **16+** may work if `find_package(LLVM)` succeeds with your toolchain. **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle. CI (`.github/actions/setup-llvm`) uses the runner image where it is enough: Ubuntu 26.04 already has Clang 22 and only needs `llvm-22-dev`; macOS needs Homebrew `llvm` (Apple Clang has no `LLVMConfig.cmake`); Windows downloads the latest official archive because the image’s Chocolatey LLVM is not a complete tree.
+- **LLVM** for the codegen backend: **22+** (see `AGENTS.md`). **Windows:** use the official **`clang+llvm-*-windows-msvc`** bundle. CI (`.github/actions/setup-llvm`) uses the runner image where it is enough: Ubuntu 26.04 already has Clang 22 and only needs `llvm-22-dev`; macOS needs Homebrew `llvm` (Apple Clang has no `LLVMConfig.cmake`); Windows downloads the latest official archive because the image’s Chocolatey LLVM is not a complete tree.
 - **CMake 3.15+** and **Ninja** (for building from source; on **Windows** use the **Windows** section: Ninja + Clang from a prebuilt LLVM + MSVC toolset)
 - **C++23 capable compiler** (clang recommended; Windows presets use Clang with the MSVC linker)
 - **PCRE2** for `Std\Regex`. CMake prefers a normal platform package; with the
@@ -47,13 +47,30 @@ cd yona
 cmake --preset x64-release-linux
 cmake --build --preset build-release-linux
 
-# Install (optional)
-sudo install -m755 out/build/x64-release-linux/yonac /usr/local/bin/
-sudo install -m755 out/build/x64-release-linux/yona /usr/local/bin/
-sudo install -m755 out/build/x64-release-linux/yona-repl /usr/local/bin/
-sudo install -m755 out/build/x64-release-linux/yls /usr/local/bin/
-sudo cp -r lib/Std /usr/local/lib/yona/lib/
+# Install compiler, runtime, standard library, and CMake package
+sudo cmake --install out/build/x64-release-linux
 ```
+
+## Use an installed Yona toolchain from CMake
+
+`cmake --install` packages `yonac`, the runtime archive, the standard library,
+and `YonaConfig.cmake`. A downstream project can compile Yona source without
+discovering individual runtime paths or assembling a shell command:
+
+```cmake
+find_package(Yona CONFIG REQUIRED)
+
+yona_add_executable(app
+  SOURCE App.yona
+  INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/interfaces)
+```
+
+The `app` target is part of the normal build and exposes its program path as the
+`YONA_EXECUTABLE` target property. `yona_add_module()` produces a module object
+and its `.yonai` interface, exposed as `YONA_OBJECT` and `YONA_INTERFACE`.
+When the package prefix is not already discoverable, configure the consumer
+with `-DYona_DIR=/path/to/lib/cmake/Yona`. See the public [CMake integration
+reference](site/src/content/docs/reference/cmake.md) for complete examples.
 
 ## Linux (Ubuntu/Debian)
 
@@ -78,7 +95,7 @@ brew install akovari/tap/yona
 This is a **source** formula: it compiles against Homebrew `llvm`, `lld`, `pcre2`, and `cli11` (Apple Silicon and Intel; Linuxbrew too). Wrappers on `PATH` set `YONA_HOME` and `YONAC_CC` so keg-only LLVM is used when compiling Yona programs.
 
 ```bash
-# Optional Std\GPU Vulkan (MoltenVK on macOS)
+# Optional Std\Gpu Vulkan (MoltenVK on macOS)
 brew install akovari/tap/yona --with-vulkan
 
 # Build the git master branch
@@ -100,7 +117,7 @@ cmake --preset arm64-release-macos
 cmake --build --preset build-release-macos-arm64
 ```
 
-Optional **`Std\GPU` Vulkan** (MoltenVK): `brew install molten-vk vulkan-headers vulkan-loader`, then configure with `-DYONA_ENABLE_VULKAN=ON`. CMake finds `vulkan/vulkan.h` and `libvulkan` / `libMoltenVK` via `VULKAN_SDK` and `HOMEBREW_PREFIX` or `brew --prefix`. The runtime `dlopen`s those discovered dirs (and bare loader names) and, if unset, hints `VK_ICD_FILENAMES` at a MoltenVK ICD json CMake or the env prefix located. Metal typically lacks `shaderInt64`; `hasGpu` is still true when the device is ready, and IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit. `vulkanStatus` can be `vulkan-device`. See `docs/gpu-architecture.md` and `docs/gpu-vulkan-implementation-plan.md` §11.
+Optional **`Std\Gpu` Vulkan** (MoltenVK): `brew install molten-vk vulkan-headers vulkan-loader`, then configure with `-DYONA_ENABLE_VULKAN=ON`. CMake finds `vulkan/vulkan.h` and `libvulkan` / `libMoltenVK` via `VULKAN_SDK` and `HOMEBREW_PREFIX` or `brew --prefix`. The runtime `dlopen`s those discovered dirs (and bare loader names) and, if unset, hints `VK_ICD_FILENAMES` at a MoltenVK ICD json CMake or the env prefix located. Metal typically lacks `shaderInt64`; `hasGpu` is still true when the device is ready, and IntArray `mapAdd` / `mapMul` / `reduceSum` / `filterGreaterThan` use i32 when values fit. `vulkanStatus` can be `vulkan-device`. See `docs/gpu-architecture.md` and `docs/gpu-vulkan-implementation-plan.md`.
 
 ## Windows
 
@@ -167,10 +184,21 @@ CMake’s imported targets expect a coherent install, including at minimum under
 
 If **`LLVM_INSTALL_PREFIX`** points at an LLVM **library** tree **without** Clang in `bin\`, set **`CC`** / **`CXX`** (or CMake **`-D CMAKE_C_COMPILER=…` `-D CMAKE_CXX_COMPILER=…`**) to a separate **`clang.exe` / `clang++.exe`** from another full install, and keep **`LLVM_INSTALL_PREFIX`** on the tree that contains **`lib/cmake/llvm/LLVMConfig.cmake`**.
 
-#### `YONAC_CC` and doctest (`tests.exe`)
+#### `YONAC_CC` and generated-program tests (`tests.exe`)
 
-The C++ **doctest** harness compiles `src/compiled_runtime.c` and platform sources via `system()` / `cmd`. Set **`YONAC_CC`** to the full path of **`clang.exe`** used for those subprocesses (CTest on Windows should inherit the same env you use for CMake, or set it explicitly). The harness **quotes** `YONAC_CC` when building commands; if you run an **older** `tests.exe` without that fix, use an **8.3 short path** (e.g. `C:\PROGRA~1\LLVM\bin\clang.exe`) or put **`clang.exe`** on **`PATH`** so the default compiler name resolves. Optional Vulkan scratch builds also honor **`YONA_COMPILE_GPU_VULKAN`** and **`VULKAN_SDK`** (see `CLAUDE.md` / `docs/gpu-architecture.md`).
-When CMake finds Vulkan, **`yonac`**-linked programmes use **`gpu_stub`** Vulkan entry points for **`Std\GPU` float** natives. On Windows, **`yonac`** prefers the **`vulkan-1.lib`** path recorded at CMake configure time (same as the **`Vulkan::Vulkan`** target); if that file is missing at link time, set **`VULKAN_SDK`** to the LunarG root so **`Lib/vulkan-1.lib`** resolves. Unix builds that define **`YONAC_EXE_LINK_POSIX_VULKAN`** pass **`-L`** (CMake-recorded lib dir, else **`VULKAN_SDK/lib`** or **`$HOMEBREW_PREFIX/lib`**) and **`-lvulkan`**. On macOS they also set **`rpath`** to that directory so **`libvulkan`** resolves at launch.
+The C++ **doctest** harness links generated fixture objects against the
+build-graph-provided `yona_runtime` archive. Set **`YONAC_CC`** to the full
+path of the matching **`clang.exe`** when it is not already on `PATH`; the
+driver is used only for the final fixture link and receives an exact argument
+vector. The runtime itself is never rebuilt by the test process.
+When CMake finds Vulkan, **`yonac`**-linked programs use the Vulkan-enabled
+**`yona_runtime`** archive for **`Std\Gpu`** native operations. On Windows,
+**`yonac`** prefers the **`vulkan-1.lib`** path recorded at CMake configure time
+(the same library used by **`Vulkan::Vulkan`**); if that file is missing at link
+time, set **`VULKAN_SDK`** to the LunarG root so **`Lib/vulkan-1.lib`** resolves.
+Unix links use the CMake-recorded library directory, then
+**`VULKAN_SDK/lib`** or **`$HOMEBREW_PREFIX/lib`**, and add **`rpath`** on
+macOS so the selected loader resolves at launch.
 
 ### 2. Configure and build (PowerShell)
 
@@ -202,21 +230,30 @@ Binaries are written under the selected preset directory (for example,
 `out\build\x64-release\` or `out\build\arm64-release\`), including
 `yonac.exe`, `yona.exe`, and `yona_lib.dll`.
 
-**`yonac` linking a full executable (not `--emit-obj` / `--emit-ir`):** the CLI shells out to compile `src/compiled_runtime.c` and the platform layer, then link. On Windows it uses **`clang`** by default (or **`YONAC_CC`** if set) and links **`ws2_32`** / **`dbghelp`**. Put the same LLVM `bin` directory on `PATH`, or set `YONAC_CC` to the full path of `clang.exe` so the subprocess can find the compiler. Full paths containing spaces, including `C:\Program Files\LLVM\bin\clang.exe`, are supported. Optional LTO uses **`llvm-link.exe`** next to that `clang` when `YONAC_CC` is set.
+**`yonac` linking a full executable (not `--emit-obj` / `--emit-ir`):** the
+CLI links the generated object with the canonical runtime archive discovered
+under the selected sysroot. On Windows it uses **`clang`** by default (or
+**`YONAC_CC`** if set) as the final linker driver and adds **`ws2_32`** /
+**`dbghelp`**. Put the same LLVM `bin` directory on `PATH`, or set `YONAC_CC`
+to the full path of `clang.exe`. Paths containing spaces are passed as literal
+argv entries; no command shell is involved.
 
 **Linker mode selection:** `yonac` supports `--linker-mode auto|bundled|system|inprocess` (or `YONAC_LINKER_MODE`). In `auto`, it prefers bundled `lld` when found under discovered sysroots (`bin/` or `llvm/bin/`) and falls back to the system toolchain linker. Use `bundled` to require packaged `lld` (hard error if missing), `system` to force external linker behavior, or `inprocess` to request embedded-linker mode when available. Embedded-linker wiring is gated by CMake option `YONA_ENABLE_INPROCESS_LLD` (default `ON`), but CMake may auto-disable it when required dependencies are missing on the current toolchain (for example, MSVC-compatible LibXml2 for LLVM Windows manifest support). When unavailable, `inprocess` falls back to the external path with a warning unless `YONAC_REQUIRE_INPROCESS_LLD=1` is set, in which case compile/link fails hard. The REPL (`yona`) currently reads `YONAC_LINKER_MODE` as well.
 
-**Prebuilt runtime artifacts:** build outputs now include precompiled runtime files under `out\build\<preset>\runtime\`:
-- `compiled_runtime.o`
-- `crt_<platform-file>.o` objects (for per-OS runtime TUs)
+**Canonical runtime artifact:** every build produces exactly one aggregate
+runtime archive under `out\build\<preset>\runtime\`:
+
 - `yona_runtime.lib` (Windows) or `libyona_runtime.a` (Unix)
+- `yona_pcre2.lib` / `yona_pcre2.a` only when the pinned static PCRE2
+  dependency is bundled
 
-Release packaging and distro packages copy this `runtime/` directory into the Yona sysroot so `yonac`/`yona` can consume prebuilt runtime artifacts directly.
+Release packaging installs the archive under `lib/yona/runtime` (or the
+equivalent distribution sysroot `runtime/` directory) and installs public C
+headers under `include/yona/Runtime`. Runtime sources and intermediate objects
+are never part of an installed distribution.
 
-**Distribution policy assumption:** standard end-user workflows should not require
-an external C compiler. Runtime/stdlib artifacts are expected to be prebuilt and
-packaged. External system compiler usage is considered an explicit advanced
-fallback for development/customization scenarios.
+Normal end-user workflows do not require a C compiler to build the runtime.
+A linker driver is still required when external linker mode is selected.
 
 ### 3. Tests (Windows)
 
@@ -305,4 +342,7 @@ $env:YONAC_CC = "${env:LLVM_INSTALL_PREFIX}\bin\clang.exe"   # or any full path 
 .\out\build\x64-release\tests.exe
 ```
 
-If **`clang`** is not on **`PATH`**, set **`YONAC_CC`** as above so codegen/link tests can compile the runtime objects (see **Complete Windows LLVM tree** and **`YONAC_CC` and doctest** in the Windows section).
+If **`clang`** is not on **`PATH`**, set **`YONAC_CC`** as above so codegen
+tests can link their generated objects against the canonical runtime archive
+(see **Complete Windows LLVM tree** and **`YONAC_CC` and generated-program
+tests** in the Windows section).

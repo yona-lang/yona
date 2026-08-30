@@ -14,7 +14,7 @@ Launchpad builders compile from source against Ubuntu’s `llvm-dev` (Noble: LLV
 ## Fedora Copr
 
 - Project: [kovariadam/yona](https://copr.fedorainfracloud.org/coprs/kovariadam/yona/)
-- Spec: [copr/yona.spec](copr/yona.spec) (same content as [../packaging/yona.spec](../packaging/yona.spec))
+- Spec: [../packaging/yona.spec](../packaging/yona.spec)
 
 ## Arch (AUR)
 

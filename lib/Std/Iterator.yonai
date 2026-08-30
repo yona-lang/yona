@@ -1,14 +1,15 @@
-FN yona_Std_Iterator__foldLeft 3 ADT(Iterator,VAR(element)) FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))) VAR(acc) -> VAR(acc) effects |
-FN yona_Std_Iterator__fromByteArray 1 BYTE_ARRAY -> ADT(Iterator,INT) retadt Iterator
-FN yona_Std_Iterator__fromFloatArray 1 FLOAT_ARRAY -> ADT(Iterator,FLOAT) retadt Iterator
-FN yona_Std_Iterator__fromIntArray 1 INT_ARRAY -> ADT(Iterator,INT) retadt Iterator
-FN yona_Std_Iterator__fromSeq 1 Seq(VAR(element)) -> ADT(Iterator,VAR(element)) retadt Iterator
-FN yona_Std_Iterator__next 1 ADT(Iterator,VAR(element)) -> ADT(Option,VAR(element)) retadt Option borrow 1 effects -
-FN yona_Std_Iterator__toSeq 1 ADT(Iterator,VAR(element)) -> Seq(VAR(element)) effects |
-GENFN_CTOR yona_Std_Iterator__collect Iterator Iterator 0 1 1 1 recursive fieldname:_0 field:FUNCTION:ADT:Option contract:F(N(%28%29);N(Option,N(a)))
-GENFN_CTOR yona_Std_Iterator__collect None Option 1 0 2 1
-GENFN_CTOR yona_Std_Iterator__collect Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Iterator__collect collect
+MODULE Std\Iterator
+FN foldLeft 3 ADT(Iterator,VAR(element)) FUNCTION(VAR(acc),FUNCTION(VAR(element),VAR(acc))) VAR(acc) -> VAR(acc) effects |
+FN fromByteArray 1 BYTE_ARRAY -> ADT(Iterator,INT)
+FN fromFloatArray 1 FLOAT_ARRAY -> ADT(Iterator,FLOAT)
+FN fromIntArray 1 INT_ARRAY -> ADT(Iterator,INT)
+FN fromSeq 1 Seq(VAR(element)) -> ADT(Iterator,VAR(element))
+FN next 1 ADT(Iterator,VAR(element)) -> ADT(Option,VAR(element)) borrow 1 effects -
+FN toSeq 1 ADT(Iterator,VAR(element)) -> Seq(VAR(element)) effects |
+GENFN_CTOR collect Iterator Iterator 0 1 1 1 recursive fields _0:FUNCTION(UNIT,ADT(Option,VAR(a)))
+GENFN_CTOR collect Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR collect None Option 1 0 2 1
+GENFN_BEGIN collect collect
 collect : Iterator element -> Seq element -> Seq element
 collect iterator accumulator =
     case next iterator of
@@ -16,10 +17,10 @@ collect iterator accumulator =
         None -> reverseInto accumulator []
     end
 GENFN_END
-GENFN_CTOR yona_Std_Iterator__foldLeft Iterator Iterator 0 1 1 1 recursive fieldname:_0 field:FUNCTION:ADT:Option contract:F(N(%28%29);N(Option,N(a)))
-GENFN_CTOR yona_Std_Iterator__foldLeft None Option 1 0 2 1
-GENFN_CTOR yona_Std_Iterator__foldLeft Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Iterator__foldLeft foldLeft
+GENFN_CTOR foldLeft Iterator Iterator 0 1 1 1 recursive fields _0:FUNCTION(UNIT,ADT(Option,VAR(a)))
+GENFN_CTOR foldLeft Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR foldLeft None Option 1 0 2 1
+GENFN_BEGIN foldLeft foldLeft
 foldLeft : Iterator element -> (acc -> element -> acc) -> acc -> acc
 foldLeft iterator folder accumulator =
     case next iterator of
@@ -27,13 +28,13 @@ foldLeft iterator folder accumulator =
         None -> accumulator
     end
 GENFN_END
-GENFN_DEP yona_Std_Iterator__next nextNative FN yona_Std_Iterator__nextNative 1 ADT(Iterator,VAR(element)) -> ADT(Option,VAR(element)) retadt Option
-GENFN_CTOR yona_Std_Iterator__next Iterator Iterator 0 1 1 1 recursive fieldname:_0 field:FUNCTION:ADT:Option contract:F(N(%28%29);N(Option,N(a)))
-GENFN_BEGIN yona_Std_Iterator__next next
+GENFN_DEP next nextNative NATIVE YonaStdIteratorNextNative FN 1 ADT(Iterator,VAR(element)) -> ADT(Option,VAR(element))
+GENFN_CTOR next Iterator Iterator 0 1 1 1 recursive fields _0:FUNCTION(UNIT,ADT(Option,VAR(a)))
+GENFN_BEGIN next next
 next : Iterator element -> Option element
 next @borrow iterator = nextNative iterator
 GENFN_END
-GENFN_BEGIN yona_Std_Iterator__reverseInto reverseInto
+GENFN_BEGIN reverseInto reverseInto
 reverseInto : Seq element -> Seq element -> Seq element
 reverseInto values accumulator =
     case values of
@@ -41,8 +42,8 @@ reverseInto values accumulator =
         [] -> accumulator
     end
 GENFN_END
-GENFN_CTOR yona_Std_Iterator__toSeq Iterator Iterator 0 1 1 1 recursive fieldname:_0 field:FUNCTION:ADT:Option contract:F(N(%28%29);N(Option,N(a)))
-GENFN_BEGIN yona_Std_Iterator__toSeq toSeq
+GENFN_CTOR toSeq Iterator Iterator 0 1 1 1 recursive fields _0:FUNCTION(UNIT,ADT(Option,VAR(a)))
+GENFN_BEGIN toSeq toSeq
 toSeq : Iterator element -> Seq element
 toSeq iterator = collect iterator []
 GENFN_END

@@ -1,6 +1,6 @@
-import type { APIRoute } from 'astro';
-import { llmsFile } from '../lib/llms';
+import type { APIRoute } from "astro";
+import { llmsFile } from "../lib/llms";
 
 export const prerender = true;
 
-export const GET: APIRoute = () => llmsFile('llms.txt');
+export const GET: APIRoute = () => llmsFile("llms.txt");

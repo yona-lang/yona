@@ -1,4 +1,0 @@
-case typeOf {1: 2, 3: 4} of
-    TDict -> 1
-    _ -> 0
-end

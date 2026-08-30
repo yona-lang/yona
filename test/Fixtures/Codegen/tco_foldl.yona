@@ -1,0 +1,2 @@
+let myFoldl fn acc seq = case seq of [] -> acc; [h|t] -> myFoldl fn (fn acc h) t end in
+myFoldl (\a b -> a + b) 0 [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

@@ -18,10 +18,10 @@ compiler/runtime fixtures supplement these public-API tests.
 | Std.FloatArray | runtime | codecs/FloatArray_test | fill, persistent set, map, fold |
 | Std.Format | pure | pure/Format_test | placeholders, order, brace escapes, extra arguments |
 | Std.Function | pure | pure/Function_test | combinators, pipelines, fixed points |
-| Std.GPU | gpu | gpu/GPU_test | backend and capability probes |
+| Std.Gpu | gpu | gpu/gpu_test | backend and capability probes |
 | Std.Http | network | network/Http_test | response construction and parsing |
 | Std.IntArray | runtime | codecs/IntArray_test | conversion, persistent set, map/filter/fold/slice |
-| Std.IO | runtime | runtime/IO_test | descriptor constants and tty query |
+| Std.Io | runtime | runtime/io_test | descriptor constants and tty query |
 | Std.Iterator | pure | foundation/Iterator_test | stateful traversal, folds, native adapters, heap-element materialization |
 | Std.Json | runtime | codecs/Json_test | nested parse/stringify, invalid syntax, scalars |
 | Std.List | pure | pure/Core_test | map/filter/fold/slice/reverse/sort/zip/find |

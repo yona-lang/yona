@@ -46,9 +46,8 @@ The Prelude exports these language-foundation traits:
 - `Send a` and `Shareable a`: compiler-recognized marker traits used at task,
   channel, and parallel-comprehension boundaries.
 
-`Array` remains as the indexed-access compatibility trait for this release.
-Its overlap with `Sized` and `Iterable` is documented; a later removal is an
-API migration, not part of equality correctness.
+`Array` is the canonical indexed-access trait. Its overlap with `Sized` and
+`Iterable` is documented and is independent of equality correctness.
 
 `Functor`, `Applicative`, `Monad`, and similar higher-kinded abstractions are
 not introduced until Yona can quantify over type constructors. Encoding them

@@ -8,7 +8,7 @@
    that interface without registering constructors.
 3. [x] Ensure parser/typechecker/codegen imports only see constructors serialized
    by the interface. Add producer/consumer tests for smart constructors,
-   forbidden construction/pattern matching, and transparent compatibility.
+   forbidden construction/pattern matching, and transparent exported types.
 4. [x] Update syntax/specification/type-system docs, roadmap, and changelog; run
    the focused test suite and module compilation fixtures.
 

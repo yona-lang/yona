@@ -1,0 +1,5 @@
+let intMatch = case typeOf 42 of TypeInt -> 1; _ -> 0 end in
+let strMatch = case typeOf "hi" of TypeString -> 2; _ -> 0 end in
+let seqMatch = case typeOf [1] of TypeSeq -> 3; _ -> 0 end in
+let dictMatch = case typeOf {1: 2} of TypeDict -> 4; _ -> 0 end in
+intMatch + strMatch + seqMatch + dictMatch

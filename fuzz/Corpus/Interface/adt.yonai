@@ -1,0 +1,4 @@
+MODULE Fuzz\Adt
+ADT Option 2 1 params a
+  CTOR Some 0 1 fields value:VAR(a)
+  CTOR None 1 0

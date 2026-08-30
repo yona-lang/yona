@@ -1,16 +1,17 @@
-FN yona_Std_Option__filter 2 FUNCTION(VAR(a),BOOL) ADT(Option,VAR(a)) -> ADT(Option,VAR(a)) retadt Option borrow 10 effects | hof
-FN yona_Std_Option__flatMap 2 FUNCTION(VAR(a),ADT(Option,VAR(b))) ADT(Option,VAR(a)) -> ADT(Option,VAR(b)) retadt Option borrow 10 effects | hof
-FN yona_Std_Option__fold 3 VAR(b) FUNCTION(VAR(a),VAR(b)) ADT(Option,VAR(a)) -> VAR(b) retadt b borrow 010 effects |
-FN yona_Std_Option__isNone 1 ADT(Option,VAR(a)) -> BOOL effects -
-FN yona_Std_Option__isSome 1 ADT(Option,VAR(a)) -> BOOL effects -
-FN yona_Std_Option__map 2 FUNCTION(VAR(a),VAR(b)) ADT(Option,VAR(a)) -> ADT(Option,VAR(b)) retadt Option borrow 10 effects | hof
-FN yona_Std_Option__orElse 2 ADT(Option,VAR(a)) ADT(Option,VAR(a)) -> ADT(Option,VAR(a)) retadt Option effects -
-FN yona_Std_Option__toResult 2 INT ADT -> TUPLE effects -
-FN yona_Std_Option__unwrapOr 2 VAR(a) ADT(Option,VAR(a)) -> VAR(a) retadt a effects -
-FN yona_Std_Option__zip 2 ADT(Option,VAR(a)) ADT(Option,VAR(b)) -> ADT(Option,TUPLE(VAR(a),VAR(b))) retadt Option effects -
-GENFN_CTOR yona_Std_Option__filter None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__filter Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__filter filter
+MODULE Std\Option
+FN filter 2 FUNCTION(VAR(a),BOOL) ADT(Option,VAR(a)) -> ADT(Option,VAR(a)) borrow 10 effects | hof
+FN flatMap 2 FUNCTION(VAR(a),ADT(Option,VAR(b))) ADT(Option,VAR(a)) -> ADT(Option,VAR(b)) borrow 10 effects | hof
+FN fold 3 VAR(b) FUNCTION(VAR(a),VAR(b)) ADT(Option,VAR(a)) -> VAR(b) borrow 010 effects |
+FN isNone 1 ADT(Option,VAR(a)) -> BOOL effects -
+FN isSome 1 ADT(Option,VAR(a)) -> BOOL effects -
+FN map 2 FUNCTION(VAR(a),VAR(b)) ADT(Option,VAR(a)) -> ADT(Option,VAR(b)) borrow 10 effects | hof
+FN orElse 2 ADT(Option,VAR(a)) ADT(Option,VAR(a)) -> ADT(Option,VAR(a)) effects -
+FN toResult 2 INT ADT -> TUPLE effects -
+FN unwrapOr 2 VAR(a) ADT(Option,VAR(a)) -> VAR(a) effects -
+FN zip 2 ADT(Option,VAR(a)) ADT(Option,VAR(b)) -> ADT(Option,TUPLE(VAR(a),VAR(b))) effects -
+GENFN_CTOR filter Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR filter None Option 1 0 2 1
+GENFN_BEGIN filter filter
 filter : (a -> Bool) -> Option a -> Option a
 filter pred opt =
     case opt of
@@ -18,9 +19,9 @@ filter pred opt =
         None       -> None
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__flatMap None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__flatMap Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__flatMap flatMap
+GENFN_CTOR flatMap Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR flatMap None Option 1 0 2 1
+GENFN_BEGIN flatMap flatMap
 flatMap : (a -> Option b) -> Option a -> Option b
 flatMap fn opt =
     case opt of
@@ -28,9 +29,9 @@ flatMap fn opt =
         None       -> None
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__fold None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__fold Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__fold fold
+GENFN_CTOR fold Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR fold None Option 1 0 2 1
+GENFN_BEGIN fold fold
 fold : b -> (a -> b) -> Option a -> b
 fold onNone onSome opt =
     case opt of
@@ -38,9 +39,9 @@ fold onNone onSome opt =
         None       -> onNone
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__isNone None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__isNone Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__isNone isNone
+GENFN_CTOR isNone Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR isNone None Option 1 0 2 1
+GENFN_BEGIN isNone isNone
 isNone : Option a -> Bool
 isNone opt =
     case opt of
@@ -48,9 +49,9 @@ isNone opt =
         Some _ -> false
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__isSome None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__isSome Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__isSome isSome
+GENFN_CTOR isSome Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR isSome None Option 1 0 2 1
+GENFN_BEGIN isSome isSome
 isSome : Option a -> Bool
 isSome opt =
     case opt of
@@ -58,9 +59,9 @@ isSome opt =
         None   -> false
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__map None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__map Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__map map
+GENFN_CTOR map Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR map None Option 1 0 2 1
+GENFN_BEGIN map map
 map : (a -> b) -> Option a -> Option b
 map fn opt =
     case opt of
@@ -68,9 +69,9 @@ map fn opt =
         None       -> None
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__orElse None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__orElse Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__orElse orElse
+GENFN_CTOR orElse Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR orElse None Option 1 0 2 1
+GENFN_BEGIN orElse orElse
 orElse : Option a -> Option a -> Option a
 orElse alternative opt =
     case opt of
@@ -78,18 +79,18 @@ orElse alternative opt =
         None       -> alternative
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__toResult None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__toResult Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__toResult toResult
+GENFN_CTOR toResult Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR toResult None Option 1 0 2 1
+GENFN_BEGIN toResult toResult
 toResult err opt =
     case opt of
         Some value -> (:ok, value)
         None       -> (:err, err)
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__unwrapOr None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__unwrapOr Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__unwrapOr unwrapOr
+GENFN_CTOR unwrapOr Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR unwrapOr None Option 1 0 2 1
+GENFN_BEGIN unwrapOr unwrapOr
 unwrapOr : a -> Option a -> a
 unwrapOr default opt =
     case opt of
@@ -97,9 +98,9 @@ unwrapOr default opt =
         None       -> default
     end
 GENFN_END
-GENFN_CTOR yona_Std_Option__zip None Option 1 0 2 1
-GENFN_CTOR yona_Std_Option__zip Some Option 0 1 2 1 fieldname:_0 field:INT
-GENFN_BEGIN yona_Std_Option__zip zip
+GENFN_CTOR zip Some Option 0 1 2 1 fields _0:INT
+GENFN_CTOR zip None Option 1 0 2 1
+GENFN_BEGIN zip zip
 zip : Option a -> Option b -> Option (a, b)
 zip optA optB =
     case optA of

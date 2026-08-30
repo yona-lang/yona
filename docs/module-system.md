@@ -37,8 +37,8 @@ Exported functions use C-ABI name mangling for cross-language linking:
 
 | Yona | Mangled symbol |
 |------|---------------|
-| `Std\List::map` | `yona_Std_List__map` |
-| `Test\Math::add` | `yona_Test_Math__add` |
+| `Std\List::map` | `YonaStdListMap` |
+| `Test\Math::add` | `YonaTestMathAdd` |
 
 This enables linking Yona modules with C, Rust, and Go code.
 
@@ -115,7 +115,7 @@ in
 Source (.yona)
     |
     v
-Parser.parse_module() --> ModuleDecl AST
+Parser.parseModule() --> ParsedModule (SourceManager + ModuleDecl AST)
     |
     v
 Codegen.compile_module()
@@ -133,7 +133,7 @@ Codegen.compile_module()
 Source (.yona)
     |
     v
-Parser.parse_input() --> Expression AST
+Parser.parseExpression() --> ParsedExpression (SourceManager + expression AST)
     |
     v
 Codegen.compile() --> wraps in main(), links with runtime
@@ -172,8 +172,8 @@ Text-based format describing module exports:
 ```
 ADT TypeName variant_count max_arity [recursive]
 CTOR ConstructorName tag arity [fields name:TYPE ...]
-FN yona_Pkg_Mod__func param_count TYPE1 TYPE2 -> RETURN_TYPE [borrow MASK]
-AFN yona_Pkg_Mod__func param_count TYPE1 -> RETURN_TYPE   (async, runs in thread pool)
+FN YonaPkgModFunc param_count TYPE1 TYPE2 -> RETURN_TYPE [borrow MASK]
+AFN YonaPkgModFunc param_count TYPE1 -> RETURN_TYPE   (async, runs in thread pool)
 TRAIT TraitName type_param method_count
   METHOD method_name
 INSTANCE TraitName TypeName

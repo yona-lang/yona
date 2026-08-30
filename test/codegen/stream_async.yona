@@ -1,2 +1,0 @@
-import range, map, async, toSeq from Std\Stream in
-toSeq (async (map (\x -> x * 10) (range 1 6)))

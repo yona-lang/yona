@@ -106,4 +106,5 @@ The instance key is `"Trait:Type1:Type2"`. Multi-param traits are used for:
 - `Iterable a b` — collection `a` produces elements of type `b`
 - `Convertible a b` — type `a` can be converted to type `b`
 
-All single-parameter traits continue to work unchanged (backward compatible).
+Single-parameter traits use the same canonical parameter-vector representation
+as multi-parameter traits.

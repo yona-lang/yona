@@ -1,21 +1,23 @@
 ---
 title: Syntax and evaluation
-description: Yona's lexical rules, literals, and evaluation model — everything is an expression, evaluated strictly.
+description:
+  Yona's lexical rules, literals, and evaluation model — everything is an
+  expression, evaluated strictly.
 ---
 
-Yona is an expression language: there are no statements. A program is a
-single expression, and evaluating it produces the program's result. This
-page covers the lexical ground rules — how expressions begin and end, what
-literals look like, and how they evaluate.
+Yona is an expression language: there are no statements. A program is a single
+expression, and evaluating it produces the program's result. This page covers
+the lexical ground rules — how expressions begin and end, what literals look
+like, and how they evaluate.
 
 `#` starts a line comment, so a Unix shebang `#!/usr/bin/env yona` is legal
 source and is ignored by the compiler.
 
 ## Everything is an expression
 
-Every construct — `if`, `case`, `let`, `do`, function bodies — is an
-expression with a value. There is no `return` keyword and no reason to pad
-a body with a dummy `0`: a function's value *is* the value of its body.
+Every construct — `if`, `case`, `let`, `do`, function bodies — is an expression
+with a value. There is no `return` keyword and no reason to pad a body with a
+dummy `0`: a function's value _is_ the value of its body.
 
 ```yona
 let status = if ready then :ok else :waiting in
@@ -28,14 +30,14 @@ label   # => "ready" (when ready is true)
 
 ## Strict evaluation
 
-Yona evaluates strictly: arguments are evaluated before a function is
-applied, and `let` bindings are evaluated when bound, not when first used.
-Order among *independent* `let` bindings is not guaranteed (independent
-asynchronous bindings may even run in parallel); when side-effect order
-matters, use a `do` block, whose expressions always run top to bottom.
+Yona evaluates strictly: arguments are evaluated before a function is applied,
+and `let` bindings are evaluated when bound, not when first used. Order among
+_independent_ `let` bindings is not guaranteed (independent asynchronous
+bindings may even run in parallel); when side-effect order matters, use a `do`
+block, whose expressions always run top to bottom.
 
 ```yona
-import print from Std\IO in
+import print from Std\Io in
 do
     print "first"     # guaranteed to run before the next line
     print "second"
@@ -44,8 +46,8 @@ end
 
 ## Newlines and semicolons
 
-Newlines are significant tokens. A newline (or an equivalent `;`) terminates
-an expression in the three places where consecutive expressions can appear:
+Newlines are significant tokens. A newline (or an equivalent `;`) terminates an
+expression in the three places where consecutive expressions can appear:
 
 - arms of a `case` expression,
 - steps of a `do` block,
@@ -74,8 +76,8 @@ let list = [
 ] in list        # => [1, 2, 3, 4, 5, 6]
 ```
 
-2. After a binary operator or a continuation token (`->`, `=`, `,`), so a
-   line ending in an operator continues on the next line:
+1. After a binary operator or a continuation token (`->`, `=`, `,`), so a line
+   ending in an operator continues on the next line:
 
 ```yona
 let total = price +
@@ -83,17 +85,17 @@ let total = price +
   shipping in total
 ```
 
-Implementation note. The lexer tracks bracket depth and the previous token
-to decide whether a newline is a delimiter or whitespace; inside a
-`case`/`do` block nested in brackets, newlines still reach the parser as
-clause separators. This is what allows juxtaposition application (`f x y`)
-without ambiguity at expression boundaries.
+Implementation note. The lexer tracks bracket depth and the previous token to
+decide whether a newline is a delimiter or whitespace; inside a `case`/`do`
+block nested in brackets, newlines still reach the parser as clause separators.
+This is what allows juxtaposition application (`f x y`) without ambiguity at
+expression boundaries.
 
 ## Comments
 
-Line comments start with `#`. Doc comments start with `##` and are attached
-to the following definition (the stdlib's API reference is generated from
-them). Block comments use `/* … */` and nest.
+Line comments start with `#`. Doc comments start with `##` and are attached to
+the following definition (the stdlib's API reference is generated from them).
+Block comments use `/* … */` and nest.
 
 ```yona
 # a line comment
@@ -107,8 +109,8 @@ double x = x * 2
 double 21   # => 42
 ```
 
-Never write `--` for a comment — `--` is the remove operator (`a -- b`
-drops elements of `b` from `a`), not a comment introducer.
+Never write `--` for a comment — `--` is the remove operator (`a -- b` drops
+elements of `b` from `a`), not a comment introducer.
 
 ## Literals
 
@@ -135,8 +137,8 @@ readability.
 
 ### Strings
 
-Strings are written in double quotes and support the usual escapes
-(`\"`, `\\`, `\n`, `\t`, …).
+Strings are written in double quotes and support the usual escapes (`\"`, `\\`,
+`\n`, `\t`, …).
 
 ```yona
 "Hello, World!"
@@ -145,9 +147,9 @@ Strings are written in double quotes and support the usual escapes
 
 Strings interpolate expressions in braces: `{name}` for a plain variable,
 `{(expr)}` — with parentheses — for anything containing operators or
-application. Non-string values are converted automatically.
-Empty braces (`{}`) remain ordinary text for formatting placeholders. Double
-a brace (`{{` or `}}`) when it must be literal next to an interpolation.
+application. Non-string values are converted automatically. Empty braces (`{}`)
+remain ordinary text for formatting placeholders. Double a brace (`{{` or `}}`)
+when it must be literal next to an interpolation.
 
 ```yona
 let name = "World" in "Hello {name}!"   # => "Hello World!"
@@ -166,8 +168,8 @@ false
 
 ### Unit
 
-`()` is the unit value — the empty tuple, used where there is nothing
-meaningful to return.
+`()` is the unit value — the empty tuple, used where there is nothing meaningful
+to return.
 
 ```yona
 ()   # => ()
@@ -175,8 +177,8 @@ meaningful to return.
 
 ### Symbols
 
-Symbols are interned constants written as `:snake_case`. Two occurrences of
-the same symbol are always the same value.
+Symbols are interned constants written as `:snake_case`. Two occurrences of the
+same symbol are always the same value.
 
 ```yona
 :ok
@@ -184,9 +186,9 @@ the same symbol are always the same value.
 :not_found
 ```
 
-Implementation note. Symbols are interned to 64-bit integer IDs at compile
-time, so comparing two symbols is a single integer comparison, and pattern
-matching on symbols compiles to an integer switch. See
+Implementation note. Symbols are interned to 64-bit integer IDs at compile time,
+so comparing two symbols is a single integer comparison, and pattern matching on
+symbols compiles to an integer switch. See
 [Pattern matching](/learn/pattern-matching/).
 
 ## Conditionals
@@ -200,8 +202,8 @@ else if x < 0 then "negative"
 else "zero"
 ```
 
-Prefer `case` over long `if`/`else` chains when you are matching on the
-shape of a value — see [Pattern matching](/learn/pattern-matching/).
+Prefer `case` over long `if`/`else` chains when you are matching on the shape of
+a value — see [Pattern matching](/learn/pattern-matching/).
 
 ## Operator precedence
 
@@ -222,14 +224,14 @@ From highest to lowest binding strength:
 13. Bitwise XOR (`^`)
 14. Bitwise OR (`|`)
 15. Membership (`in`) — also the `let`/`with` terminator; parenthesize
-    membership in a then/else or nested-`let` body that is a let-binding
-    RHS: `then (2 in xs)`. `if 2 in xs then …` is fine.
+    membership in a then/else or nested-`let` body that is a let-binding RHS:
+    `then (2 in xs)`. `if 2 in xs then …` is fine.
 16. Logical AND (`&&`)
 17. Logical OR (`||`)
 18. Pipe (`|>`, `<|`)
 
-Function application binds tighter than every binary operator, so
-`f x + g y` parses as `(f x) + (g y)`:
+Function application binds tighter than every binary operator, so `f x + g y`
+parses as `(f x) + (g y)`:
 
 ```yona
 let f x = x * 10, g y = y + 1 in
@@ -244,4 +246,5 @@ The full grammar and operator semantics are in the
 - [Functions](/learn/functions/) — definitions, lambdas, application, pipes.
 - [Pattern matching](/learn/pattern-matching/) — `case` and every pattern form.
 - [Types and data](/learn/types/) — inference, ADTs, records, traits.
-- [Collections](/learn/collections/) — sequences, dictionaries, sets, generators.
+- [Collections](/learn/collections/) — sequences, dictionaries, sets,
+  generators.

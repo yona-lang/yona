@@ -1,0 +1,6 @@
+# Hosted runner labels introduced after actionlint 1.7.12's built-in catalog.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+    - ubuntu-26.04-arm
+    - windows-11-vs2026-arm

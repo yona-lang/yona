@@ -40,7 +40,7 @@ Both reads happen concurrently. The compiler handles the rest.
 
 ```yona
 -- These functions are marked IO in .yonai:
--- IO yona_Std_File__readFile 1 STRING -> STRING
+-- IO YonaStdFileReadFile 1 STRING -> STRING
 -- The codegen emits a direct call that returns a uring ID,
 -- then inserts io_await at the use site.
 ```
@@ -49,18 +49,18 @@ Both reads happen concurrently. The compiler handles the rest.
 
 ```yona
 -- These functions are marked AFN in .yonai:
--- AFN yona_Std_Process__exec 1 STRING -> STRING
+-- AFN exec 2 STRING SEQ -> STRING
 -- The codegen wraps the call in thread pool submission,
 -- then inserts async_await at the use site.
 ```
 
 ### Per-OS backend status
 
-| OS | IO backend | `yona_rt_io_await` source | Notes |
+| OS | IO backend | `YonaRuntimeIoAwait` source | Notes |
 |----|------------|---------------------------|-------|
-| Linux | io_uring submit + completion | `src/runtime/platform/file_linux.c` | Native submit-and-return for file/net operations. |
-| Windows | IOCP submit + `io_await` completion (with direct-result fallback where ordering-sensitive) | `src/runtime/platform/file_windows.c` | `Std\Net` data/control paths run on overlapped Winsock + IOCP; file submit APIs preserve Linux-compatible semantics with direct-result IDs where needed. |
-| macOS | kqueue submit + completion (file workers + socket readiness) | `src/runtime/platform/file_macos.c` | Same submit-and-return IDs as Linux; `kq_await` in `kqueue_macos.c`. |
+| Linux | io_uring submit + completion | `src/Runtime/Platform/FileLinux.c` | Native submit-and-return for file/net operations. |
+| Windows | IOCP submit + `io_await` completion (with direct-result fallback where ordering-sensitive) | `src/Runtime/Platform/FileWindows.c` | `Std\Net` data/control paths run on overlapped Winsock + IOCP; file submit APIs preserve Linux-compatible semantics with direct-result IDs where needed. |
+| macOS | kqueue submit + completion (file workers + socket readiness) | `src/Runtime/Platform/FileMacOs.c` | Same submit-and-return IDs as Linux; `YonaRuntimeKqueueAwait` in `KqueueMacOs.c`. |
 
 ### Auto-Await
 
@@ -80,9 +80,9 @@ The Process module uses thread pool async for non-blocking subprocess execution:
 
 ```yona
 import exec from Std\Process in
-let a = exec "make build",
-    b = exec "make test",
-    c = exec "make lint"
+let a = exec "make" ["build"],
+    b = exec "make" ["test"],
+    c = exec "make" ["lint"]
 in (a, b, c)
 -- All three commands run in parallel
 ```
@@ -91,7 +91,7 @@ in (a, b, c)
 
 1. **IO functions** submit to io_uring via raw syscalls (no liburing dependency)
 2. **AFN functions** submit to a fixed-size work-stealing thread pool
-3. **auto_await** in the codegen checks if a `TypedValue` has `CType::PROMISE` and inserts the appropriate await call (`yona_rt_io_await` or `yona_rt_async_await`)
+3. **auto_await** in the codegen checks if a `TypedValue` has `CType::PROMISE` and inserts the appropriate await call (`YonaRuntimeIoAwait` or `YonaRuntimeTaskAwait`)
 4. When io_uring is unavailable (containers, low-memory), functions fall back to blocking I/O with transparent direct result registration
 
 ## Comparison

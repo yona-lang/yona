@@ -1,0 +1,11 @@
+import channel, send, recv, close from Std\Channel in
+let (senderLinear, receiverLinear) = channel 1 in
+case senderLinear of Linear sender ->
+case receiverLinear of Linear receiver ->
+    let _ = send sender "owned" in
+    let _ = close sender in
+    case recv receiver of
+        Some value -> value
+        None -> "missing"
+    end
+end end

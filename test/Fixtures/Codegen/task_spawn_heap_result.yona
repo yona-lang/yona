@@ -1,0 +1,1 @@
+import spawn from Std\Task in spawn (\() -> "owned across task")

@@ -3,7 +3,7 @@
 Push a version tag to trigger [.github/workflows/release.yml](../.github/workflows/release.yml):
 
 ```bash
-# VERSION file and dist/copr/yona.spec Version: must match the tag
+# VERSION file and packaging/yona.spec Version: must match the tag
 git tag v0.1.3
 git push origin v0.1.3
 ```
@@ -34,7 +34,7 @@ API token (same as winetop): https://copr.fedorainfracloud.org/api/ — values g
 
 #### Recommended chroots (v1)
 
-Match [kovariadam/winetop](https://copr.fedorainfracloud.org/coprs/kovariadam/winetop/) **but start x86_64-only**. `dist/copr/yona.spec` runs `cmake --preset x64-release-linux`, which is the x86_64 Linux preset. aarch64 will mis-build until the spec picks `arm64-release-linux` on that arch.
+Match [kovariadam/winetop](https://copr.fedorainfracloud.org/coprs/kovariadam/winetop/) **but start x86_64-only**. `packaging/yona.spec` runs `cmake --preset x64-release-linux`, which is the x86_64 Linux preset. aarch64 will mis-build until the spec picks `arm64-release-linux` on that arch.
 
 | Enable now | Chroot | LLVM on that Fedora (approx.) |
 |------------|--------|-------------------------------|
@@ -70,13 +70,13 @@ copr-cli create yona \
 
 `buildscm --commit` uses the spec from that git commit, but `%prep` still unpacks GitHub `Source0` for `Version:` (the `v*` tarball). Rebuilding `v0.1.1` against an updated spec on `master` still compiles the tagged CMakeLists (which always cloned CLI11). Native `cli11-devel` + `-DYONA_FETCH_DEPS=OFF` apply once a newer tag includes the CMake changes.
 
-v0.1.2 Copr (`10875811`) failed Fedora `check-rpaths` because `yonac`/`yona` had a DT_RUNPATH into the mock BUILD dir (CMake's rpath for in-tree `libyona_lib.so`). `dist/copr/yona.spec` `Release: 2` installs that DSO into `%{_libdir}` when needed, passes `-DCMAKE_SKIP_BUILD_RPATH=ON`, and `patchelf --remove-rpath`. From v0.1.3, packaging also passes `-DYONA_LINK_STATIC_CLI=ON` so the CLI does not need the DSO. Rebuild 0.1.2 from master with:
+v0.1.2 Copr (`10875811`) failed Fedora `check-rpaths` because `yonac`/`yona` had a DT_RUNPATH into the mock BUILD dir (CMake's rpath for in-tree `libyona_lib.so`). `packaging/yona.spec` `Release: 2` installs that DSO into `%{_libdir}` when needed, passes `-DCMAKE_SKIP_BUILD_RPATH=ON`, and `patchelf --remove-rpath`. From v0.1.3, packaging also passes `-DYONA_LINK_STATIC_CLI=ON` so the CLI does not need the DSO. Rebuild 0.1.2 from master with:
 
 ```bash
 copr-cli buildscm kovariadam/yona \
   --clone-url https://github.com/yona-lang/yona.git \
   --commit master \
-  --spec dist/copr/yona.spec \
+  --spec packaging/yona.spec \
   --enable-net on
 ```
 
@@ -118,7 +118,7 @@ copr-cli modify yona \
 copr-cli buildscm kovariadam/yona \
   --clone-url https://github.com/yona-lang/yona.git \
   --commit master \
-  --spec dist/copr/yona.spec \
+  --spec packaging/yona.spec \
   --enable-net on
 ```
 
@@ -216,7 +216,7 @@ Expected names: `AUR_SSH_PRIVATE_KEY`, `COPR_LOGIN`, `COPR_TOKEN`, `COPR_USERNAM
 ## Version bump checklist (each release)
 
 1. `VERSION` file
-2. `dist/copr/yona.spec` and `packaging/yona.spec` `Version:`
+2. `packaging/yona.spec` `Version:`
 3. `packaging/debian/changelog` (Launchpad CI keeps this when the upstream version matches the tag; otherwise it writes `${VERSION}-1`)
 4. `CHANGELOG.md`
 5. Tag `vX.Y.Z` and push

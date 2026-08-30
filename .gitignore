@@ -1,27 +1,22 @@
-# Build directories
+# Out-of-tree builds and generated CMake/Ninja state
 /out/
 /build/
 /cmake-build*/
 [Dd]ebug/
 [Rr]elease/
-
-# CMake
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
+install_manifest.txt
 compile_commands.json
-*.cmake
-!CMakeLists.txt
-!cmake/*.cmake
-
-# Ninja
 .ninja_deps
 .ninja_log
 build.ninja
 
-# Build artifacts
+# Native build artifacts
 *.o
+*.obj
 *.a
 *.so
 *.dylib
@@ -32,55 +27,52 @@ build.ninja
 /tests
 /yonac
 /libyona.*
+a.out
 
-# IDE
-.vs/
-.vscode/
-.idea/
+# Compiler/runtime crash and profiling output
+erl_crash.dump
+erl_crash.*
+/core
+/core.*
+*.profraw
+*.profdata
+/coverage/
+/.quality/
+
+# Editors and operating systems
+/.vs/
+/.vscode/
+/.idea/
 *.user
 *.suo
-.claude/
-
-# macOS
+/.claude/
 .DS_Store
 
-# Dependencies
-vcpkg_installed/
+# Dependencies and language caches
+/vcpkg_installed/
 node_modules/
-
-# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
 
-# Logs
+# Logs and temporary files
 *.log
-
-# Temporary files
 *.tmp
 *~
 *.swp
 debug_*
 
-# Public docs site (Astro Starlight)
+# Public documentation site outputs
 site/dist/
 site/.astro/
 site/.cache/
 site/src/content/docs/stdlib/
 site/generated/llms/
 
-# Test outputs
+# Test and benchmark outputs. Yona source is intentionally never ignored.
 test/_scratch/
-
-*.yona
-!test/code/*.yona
-!test/code/**/*.yona
-!test/codegen/*.yona
-!test/stdlib/**/*.yona
-!lib/**/*.yona
-!tools/**/*.yona
-!bench/**/*.yona
-!scripts/**/*.yona
-a.out
 bench/history.jsonl
 bench/data/large_text.txt
 bench/data/chunk_*.txt

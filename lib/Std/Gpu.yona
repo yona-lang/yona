@@ -1,0 +1,408 @@
+## Std\Gpu — accelerated columnar execution.
+##
+## The initial backend is portable CPU execution over `IntArray` columns. It
+## keeps explicit upload/materialize boundaries so programs are ready for future
+## Vulkan or vendor-backed device storage without changing the high-level API.
+## With CMake `-DYONA_ENABLE_VULKAN=ON`, optional Vulkan compute can handle `mapAdd`,
+## `mapMul`, `mapSquare`, `reduceSum`, `filterGreaterThan`, and `filterLessThan`
+## (see `docs/gpu-architecture.md`).
+## `mapAdd`/`mapMul`/`mapSquare`/`reduceSum`/`filterGreaterThan`/`filterLessThan`
+## prefer device-local SSBOs with staging when VRAM allows; set
+## `YONA_GPU_VULKAN_HOST_SSBO=1` to force host-visible mapped storage.
+## Filter kernels use GPU mark + GPU inclusive prefix + exclusive indices +
+## GPU scatter when enabled (`YONA_GPU_VULKAN_FILTER` or `YONA_GPU_VULKAN_COMPUTE`).
+##
+## User-facing `mapGpu` / `reduceGpu` dispatch a **fixed kernel library** via
+## op ADTs (`IntMapOp` / `IntReduceOp` / `FloatMapOp` / `FloatReduceOp`) — not
+## arbitrary Yona lambdas to SPIR-V (see `docs/design-gpu-async.md` §2).
+## `mapReduceGraphGpu` batches map stages (+ reduce) into one Vulkan submit with
+## synchronization2 barriers when the device supports it.
+##
+## Transparent lowering: `Std\IntArray` / `Std\FloatArray` `map` / `filter` /
+## `foldl` whose lambdas match the fixed kernel library (`x + k`, `x - k`,
+## `0 - x`, `x * k`, `x * x`, `x > k`, `x < k`, sum) compile to the same runtime ABI as
+## `mapAdd` / `mapMul` / `mapSquare` / `filterGreaterThan` / `filterLessThan` /
+## `reduceSum` / `mapFloatGpu` / `reduceFloatGpu`. Device vs CPU is decided at run time
+## (`YONA_GPU_VULKAN_MIN_LEN` for IntArray kernels; float uses the Vulkan device
+## when init succeeds, else CPU). Disable with `yonac --no-accelerator-lowering`.
+## Arbitrary lambdas stay on the host closure path by default; `yonac
+## --strict-accelerator` rejects them (E0700) instead of silently keeping the
+## host path.
+##
+## `PinnedFloats` prefers Vulkan host-visible mapped memory when the Vulkan
+## device is up; set `YONA_GPU_PINNED_HOST_MALLOC=1` to force malloc. CPU↔GPU
+## float pipelines use `gpuFloatChannel` + `drainMapFloatGpu` (Std\Channel).
+## Typed failures: `GpuIssue` + `checkGpu` / `withGpuIssue` from this module
+## (Result-style; no `perform` in native bindings). `raiseGpu` /
+## `withGpuFallback` `perform Gpu.*`; GENFN remonomorphization inside a user
+## `handle` binds the caller's clauses (effect rows on `.yonai`). Direct
+## use-site `perform Gpu.oom` / `Gpu.deviceLost` / `Gpu.fail` still works.
+module Std\Gpu
+
+export type Buffer
+export type IntMapOp
+export type IntReduceOp
+export type FloatMapOp
+export type FloatReduceOp
+export type PinnedFloats
+export type GpuIssue
+export backendName, vulkanStatus, vulkanLastNote, vulkanLastIssueKind, hasGpu, hasSimd, vulkanAvailable, vulkanTimelineSemaphore
+export available, physicalDeviceCount
+export upload, materialize, length
+export mapAdd, mapMul, mapSquare, filterGreaterThan, filterLessThan, reduceSum
+export mapGpu, reduceGpu, mapFloatGpu, reduceFloatGpu, mapReduceGraphGpu
+export allocPinnedFloats, closePinnedFloats, pinnedLength, pinnedGet, pinnedSet
+export pinnedToFloatArray, copyFloatArrayToPinned, pinnedBackend, mapFloatPinnedGpu
+export gpuFloatChannel, drainMapFloatGpu
+export gpuLastIssue, checkGpu, withGpuIssue, raiseGpu, withGpuFallback
+export floatArrayMul2Async, floatArrayScaleAsync
+
+## Opaque accelerator buffer. The CPU backend stores an owned IntArray copy.
+type Buffer = Buffer IntArray
+
+## Fixed int map kernels (constructor tag is the runtime discriminant).
+type IntMapOp = Add Int | Mul Int | Square
+
+## Fixed int reduce kernels.
+type IntReduceOp = Sum
+
+## Fixed float map kernels.
+type FloatMapOp = Scale Float | Mul2
+
+## Fixed float reduce kernels.
+type FloatReduceOp = FloatSum
+
+## Host contiguous float staging (handle). Prefer `Linear` wrapping at call
+## sites; call `closePinnedFloats` when finished. Prefers Vulkan host-visible
+## mapped memory when `YonaRuntimeGpuVulkanContextInitialize` succeeds; otherwise malloc.
+## Override with `YONA_GPU_PINNED_HOST_MALLOC=1`. Query via `pinnedBackend`.
+type PinnedFloats = PinnedFloats Int
+
+## Classified GPU failure from `vulkanLastIssueKind` (0/1/2/3).
+type GpuIssue = GpuOk | GpuOom | GpuDeviceLost | GpuOther Int
+
+extern rawBackendName       : Int -> String   = "YonaStdGpuRawBackendName"
+extern rawVulkanStatus      : Int -> String   = "YonaStdGpuRawVulkanStatus"
+extern rawVulkanLastNote    : Int -> String   = "YonaStdGpuRawVulkanLastNote"
+extern rawHasGpu            : Int -> Bool     = "YonaStdGpuRawHasGpu"
+extern rawHasSimd           : Int -> Bool     = "YonaStdGpuRawHasSimd"
+extern rawVulkanAvailable   : Int -> Bool     = "YonaStdGpuRawVulkanAvailable"
+extern rawVulkanTimelineSemaphore : Int -> Bool = "YonaStdGpuRawVulkanTimelineSemaphore"
+extern rawVulkanLastIssueKind     : Int -> Int    = "YonaStdGpuRawVulkanLastIssueKind"
+extern rawUpload            : IntArray -> IntArray = "YonaStdGpuRawUpload"
+extern rawMaterialize       : IntArray -> IntArray = "YonaStdGpuRawMaterialize"
+extern rawLength            : IntArray -> Int = "YonaStdGpuRawLength"
+extern rawMapAdd            : Int -> IntArray -> IntArray = "YonaStdGpuRawMapAdd"
+extern rawMapMul            : Int -> IntArray -> IntArray = "YonaStdGpuRawMapMul"
+extern rawMapSquare         : IntArray -> IntArray = "YonaStdGpuRawMapSquare"
+extern rawFilterGreaterThan : Int -> IntArray -> IntArray = "YonaStdGpuRawFilterGreaterThan"
+extern rawFilterLessThan    : Int -> IntArray -> IntArray = "YonaStdGpuRawFilterLessThan"
+extern rawReduceSum         : IntArray -> Int = "YonaStdGpuRawReduceSum"
+extern rawMapFloatOp        : FloatMapOp -> FloatArray -> FloatArray = "YonaStdGpuRawMapFloatOp"
+extern rawReduceFloatGpu    : FloatArray -> Float = "YonaStdGpuRawReduceFloatGpu"
+extern rawMapReduceGraph    : IntArray -> IntArray -> Int = "YonaStdGpuRawMapReduceGraph"
+extern rawAllocPinnedFloats : Int -> Int = "YonaStdGpuRawAllocPinnedFloats"
+extern rawClosePinnedFloats : Int -> Int = "YonaStdGpuRawClosePinnedFloats"
+extern rawPinnedLength      : Int -> Int = "YonaStdGpuRawPinnedLength"
+extern rawPinnedGet         : Int -> Int -> Float = "YonaStdGpuRawPinnedGet"
+extern rawPinnedSet         : Int -> Int -> Float -> Int = "YonaStdGpuRawPinnedSet"
+extern rawPinnedToFloatArray : Int -> FloatArray = "YonaStdGpuRawPinnedToFloatArray"
+extern rawCopyFloatArrayToPinned : FloatArray -> Int -> Int = "YonaStdGpuRawCopyFloatArrayToPinned"
+extern rawPinnedBackend     : Int -> String = "YonaStdGpuRawPinnedBackend"
+extern rawMapFloatPinnedOp  : FloatMapOp -> Int -> Int = "YonaStdGpuRawMapFloatPinnedOp"
+
+## Active backend name. Currently `cpu-simd` or `cpu-scalar`.
+backendName : String
+backendName = rawBackendName 0
+
+## Vulkan status string: `vulkan-unavailable`, `vulkan-loader`, or `vulkan-device`
+## (device only when built with Vulkan headers and init succeeded).
+vulkanStatus : String
+vulkanStatus = rawVulkanStatus 0
+
+## Short hint from the last failed Vulkan init, opt-in int column GPU attempt,
+## async **`vkWaitForFences`**, or other **`VkResult`** failures on the **`Std\Gpu`**
+## float path / test dispatch (`src/Runtime/Gpu/Stub.c`). After a successful device init
+## without **`shaderInt64`** (typical MoltenVK / Metal), records that IntArray
+## GPU kernels use i32 when values fit. Empty after int64-capable success or when
+## Vulkan was not compiled in. Same source as the C **`YonaRuntimeGpuVulkanDeviceLastNote()`**
+## helper.
+vulkanLastNote : String
+vulkanLastNote = rawVulkanLastNote 0
+
+## True when Vulkan is enabled at build, not disabled by `YONA_GPU_DISABLE_VULKAN`,
+## and device init succeeds. IntArray kernels use i64 when `shaderInt64` is
+## available, otherwise i32 when values fit. Result is cached until
+## `YonaRuntimeGpuVulkanDeviceShutdown()`.
+hasGpu : Bool
+hasGpu = rawHasGpu 0
+
+## True when the CPU backend was built with a known SIMD baseline.
+hasSimd : Bool
+hasSimd = rawHasSimd 0
+
+## True when a Vulkan loader is visible to the process (`vulkan-1.dll`,
+## `libvulkan.so.1`, or on macOS `libvulkan.1.dylib` / `libMoltenVK.dylib`
+## via `VULKAN_SDK`, `HOMEBREW_PREFIX`, or the lib dir CMake recorded).
+vulkanAvailable : Bool
+vulkanAvailable = rawVulkanAvailable 0
+
+## 0 = no classified **VkResult** yet; 1 = out-of-memory; 2 = device lost; 3 = other
+## (updated with **`vulkanLastNote`** when the runtime records a **`VkResult`**).
+vulkanLastIssueKind : Int
+vulkanLastIssueKind = rawVulkanLastIssueKind 0
+
+## True when device init succeeded (see **`hasGpu`** / **`vulkanStatus`**) and the
+## probe finds timeline semaphores: Vulkan 1.2+ **`timelineSemaphore`** via **`vkGetPhysicalDeviceFeatures2`**
+## (Vulkan 12 feature chain), or **`VK_KHR_timeline_semaphore`** in the device's extension list
+## (Vulkan 1.0/1.1 stacks that expose the capability only as an extension). When
+## **`VK_KHR_synchronization2`** is enabled on the lazily initialized Vulkan device, async
+## float compute may wait on a **timeline semaphore** instead of a fence (**`YONA_GPU_ASYNC_TIMELINE=0`**
+## forces fence synchronization).
+vulkanTimelineSemaphore : Bool
+vulkanTimelineSemaphore = rawVulkanTimelineSemaphore 0
+
+## Integer discovery ABI (`YonaStdGpu*` in `src/Runtime/Gpu/Cpu.c`; full Vulkan
+## probe in `src/Runtime/Gpu/Stub.c` when linked).
+extern rawStdGpuAvailable : Int -> Bool = "YonaStdGpuAvailable"
+extern rawStdGpuPhysicalDeviceCount : Int -> Int = "YonaStdGpuPhysicalDeviceCount"
+
+available : () -> Bool
+available () = rawStdGpuAvailable 0
+
+physicalDeviceCount : () -> Int
+physicalDeviceCount () = rawStdGpuPhysicalDeviceCount 0
+
+## Copy a host IntArray into accelerator-owned storage.
+upload : IntArray -> Buffer
+upload values = Buffer (rawUpload values)
+
+## Copy accelerator-owned storage back to a host IntArray.
+materialize : Buffer -> IntArray
+materialize buffer =
+    case buffer of
+        Buffer values -> rawMaterialize values
+    end
+
+## Number of elements in the buffer.
+length : Buffer -> Int
+length buffer =
+    case buffer of
+        Buffer values -> rawLength values
+    end
+
+## Add a constant to every element. Vulkan path when `YONA_GPU_VULKAN_MAPADD=1`
+## or `YONA_GPU_VULKAN_COMPUTE=1` and length ≥ min (default 4096; see docs).
+mapAdd : Int -> Buffer -> Buffer
+mapAdd delta buffer =
+    case buffer of
+        Buffer values -> Buffer (rawMapAdd delta values)
+    end
+
+## Multiply every element by a constant. Vulkan when `YONA_GPU_VULKAN_MAPMUL=1`
+## or `YONA_GPU_VULKAN_COMPUTE=1` (min length env vars in docs).
+mapMul : Int -> Buffer -> Buffer
+mapMul factor buffer =
+    case buffer of
+        Buffer values -> Buffer (rawMapMul factor values)
+    end
+
+## Keep values greater than the threshold. Vulkan when `YONA_GPU_VULKAN_FILTER`
+## or `YONA_GPU_VULKAN_COMPUTE=1` and length thresholds are met (`docs/gpu-architecture.md`).
+filterGreaterThan : Int -> Buffer -> Buffer
+filterGreaterThan threshold buffer =
+    case buffer of
+        Buffer values -> Buffer (rawFilterGreaterThan threshold values)
+    end
+
+## Keep values strictly less than the threshold. Vulkan when `YONA_GPU_VULKAN_FILTER`
+## or `YONA_GPU_VULKAN_COMPUTE=1` (same min-length env as `filterGreaterThan`).
+filterLessThan : Int -> Buffer -> Buffer
+filterLessThan threshold buffer =
+    case buffer of
+        Buffer values -> Buffer (rawFilterLessThan threshold values)
+    end
+
+## Square every element (`x * x`). Vulkan when `YONA_GPU_VULKAN_MAPMUL=1` or
+## `YONA_GPU_VULKAN_COMPUTE=1` (same min-length env as `mapMul`).
+mapSquare : Buffer -> Buffer
+mapSquare buffer =
+    case buffer of
+        Buffer values -> Buffer (rawMapSquare values)
+    end
+
+## Sum all values. Vulkan when `YONA_GPU_VULKAN_REDUCE=1` or
+## `YONA_GPU_VULKAN_COMPUTE=1` (min length in docs); else SIMD/scalar CPU.
+reduceSum : Buffer -> Int
+reduceSum buffer =
+    case buffer of
+        Buffer values -> rawReduceSum values
+    end
+
+## Type-directed int map over a `Buffer` (fixed kernel library).
+mapGpu : IntMapOp -> Buffer -> Buffer
+mapGpu op buffer =
+    case op of
+        Add d -> mapAdd d buffer
+        Mul f -> mapMul f buffer
+        Square -> mapSquare buffer
+    end
+
+## Type-directed int reduce over a `Buffer`.
+reduceGpu : IntReduceOp -> Buffer -> Int
+reduceGpu op buffer =
+    case op of
+        Sum -> reduceSum buffer
+    end
+
+## Type-directed float map (GPU scale kernel when available, else CPU).
+mapFloatGpu : FloatMapOp -> FloatArray -> FloatArray
+mapFloatGpu op arr = rawMapFloatOp op arr
+
+## Type-directed float reduce (GPU block-reduce when the Vulkan device is up,
+## else CPU).
+reduceFloatGpu : FloatReduceOp -> FloatArray -> Float
+reduceFloatGpu op arr =
+    case op of
+        FloatSum -> rawReduceFloatGpu arr
+    end
+
+## Encode `IntMapOp` stages as an IntArray of (op, arg) pairs: op 0 = Add, 1 = Mul, 2 = Square.
+encodeIntMapStages stages =
+    import fromSeq from Std\IntArray in
+    import foldr from Std\List in
+    fromSeq (foldr (\op acc ->
+        case op of
+            Add d -> 0 :: (d :: acc)
+            Mul f -> 1 :: (f :: acc)
+            Square -> 2 :: (0 :: acc)
+        end) [] stages)
+
+## One-submit map chain then `reduceSum` when the Vulkan graph path is available;
+## otherwise applies maps then reduce on the CPU/backend path.
+mapReduceGraphGpu stages buffer =
+    case buffer of
+        Buffer values -> rawMapReduceGraph (encodeIntMapStages stages) values
+    end
+
+## Allocate `n` contiguous floats (Vulkan-mapped when available, else malloc).
+allocPinnedFloats : Int -> PinnedFloats
+allocPinnedFloats n = PinnedFloats (rawAllocPinnedFloats n)
+
+## Release pinned storage.
+closePinnedFloats : PinnedFloats -> Int
+closePinnedFloats pf =
+    case pf of
+        PinnedFloats h -> rawClosePinnedFloats h
+    end
+
+pinnedLength : PinnedFloats -> Int
+pinnedLength pf =
+    case pf of
+        PinnedFloats h -> rawPinnedLength h
+    end
+
+pinnedGet : PinnedFloats -> Int -> Float
+pinnedGet pf i =
+    case pf of
+        PinnedFloats h -> rawPinnedGet h i
+    end
+
+pinnedSet : PinnedFloats -> Int -> Float -> Int
+pinnedSet pf i v =
+    case pf of
+        PinnedFloats h -> rawPinnedSet h i v
+    end
+
+pinnedToFloatArray : PinnedFloats -> FloatArray
+pinnedToFloatArray pf =
+    case pf of
+        PinnedFloats h -> rawPinnedToFloatArray h
+    end
+
+copyFloatArrayToPinned : FloatArray -> PinnedFloats -> Int
+copyFloatArrayToPinned arr pf =
+    case pf of
+        PinnedFloats h -> rawCopyFloatArrayToPinned arr h
+    end
+
+## `"vulkan-mapped"` or `"host-malloc"` (or `"invalid"`).
+pinnedBackend : PinnedFloats -> String
+pinnedBackend pf =
+    case pf of
+        PinnedFloats h -> rawPinnedBackend h
+    end
+
+## In-place float map on pinned storage (GPU scale when available, else CPU).
+mapFloatPinnedGpu : FloatMapOp -> PinnedFloats -> Int
+mapFloatPinnedGpu op pf =
+    case pf of
+        PinnedFloats h -> rawMapFloatPinnedOp op h
+    end
+
+## Bounded `FloatArray` channel for CPU→GPU pipelines (`Std\Channel`).
+extern gpuFloatChannel : Int -> (Linear (Sender FloatArray), Linear (Receiver FloatArray)) = "YonaStdGpuGpuFloatChannel"
+
+## Drain `rx` until closed: `mapFloatGpu op` each chunk and `send` to `tx`.
+## Returns the number of chunks processed.
+drainMapFloatGpu op rx tx =
+    import send, recv from Std\Channel in
+    case recv rx of
+        None -> 0
+        Some chunk ->
+            let mapped = mapFloatGpu op chunk in
+            let _ = send tx mapped in
+            1 + drainMapFloatGpu op rx tx
+    end
+
+## Map `vulkanLastIssueKind` to `GpuIssue`.
+gpuLastIssue =
+    case vulkanLastIssueKind of
+        0 -> GpuOk
+        1 -> GpuOom
+        2 -> GpuDeviceLost
+        code -> GpuOther code
+    end
+
+## `Ok 0` when the last classified Vulkan issue is none; else `Err` with `GpuIssue`.
+checkGpu =
+    case vulkanLastIssueKind of
+        0 -> Ok 0
+        1 -> Err GpuOom
+        2 -> Err GpuDeviceLost
+        code -> Err (GpuOther code)
+    end
+
+## Branch on the last classified Vulkan issue without string-parsing `vulkanLastNote`.
+withGpuIssue onOk onIssue =
+    case vulkanLastIssueKind of
+        0 -> onOk ()
+        1 -> onIssue GpuOom
+        2 -> onIssue GpuDeviceLost
+        code -> onIssue (GpuOther code)
+    end
+
+## Convert `GpuIssue` to `perform Gpu.*`. Designed for a user `handle` at the
+## use site: GENFN remonomorphizes this body so `perform` binds the caller's
+## clauses. The precompiled module object raises `:UnhandledEffect` if invoked
+## with no handler (stdlib kernels still return `GpuIssue` / `Result`).
+raiseGpu issue =
+    case issue of
+        GpuOk -> ()
+        GpuOom -> perform Gpu.oom ()
+        GpuDeviceLost -> perform Gpu.deviceLost ()
+        GpuOther code -> perform Gpu.fail code
+    end
+
+## Run `action`, then `raiseGpu` on the last classified Vulkan issue (`GpuOk` is a no-op).
+withGpuFallback action =
+    let result = action () in
+    let _ = raiseGpu gpuLastIssue in
+    result
+
+## Experimental: in-place x2 on `FloatArray` via native promise (see `docs/design-gpu-async.md`).
+## The C wrapper creates the `VkDevice`/pools on first use (`YonaRuntimeGpuVulkanContextInitialize`) when built with Vulkan.
+extern native floatArrayMul2Async : FloatArray -> Int = "YonaStdGpuFloatArrayMul2Async"
+
+## In-place multiply each element by `scale` (same Vulkan path as `floatArrayMul2Async`).
+extern native floatArrayScaleAsync : Float -> FloatArray -> Int = "YonaStdGpuFloatArrayScaleAsync"

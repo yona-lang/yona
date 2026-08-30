@@ -31,10 +31,10 @@ An opaque type may appear in public function signatures and trait instances.
 The trait declaration or methods themselves are unaffected; clients can use a
 public trait operation only when its normal constraints are satisfied.
 
-## Interfaces and compatibility
+## Canonical interfaces
 
 `.yonai` writes `ADT T ... opaque` and omits the following `CTOR` records for
-that type. Older interfaces lacking `opaque` retain transparent behavior.
+that type. A declaration without `opaque` is transparent.
 Importers therefore cannot register hidden constructor names in their parser,
 type checker, or code generator. Changing a transparent export to opaque is a
 source-breaking API change for clients that construct or pattern-match it.

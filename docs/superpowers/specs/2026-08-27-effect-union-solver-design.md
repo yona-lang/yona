@@ -3,7 +3,7 @@
 ## Decision
 
 Replace the type checker's one-tail effect rows with a dedicated effect-constraint
-solver. This is a soundness migration, not a compatibility workaround: a helper
+solver. This is a soundness correction: a helper
 which invokes callbacks with independent rows `rho` and `sigma` has effect
 `rho ∪ sigma`, which cannot be represented as labels plus one tail.
 
@@ -21,8 +21,8 @@ summary; it never equates independent callback rows.
   by a true row-equality constraint.
 - `DerivedLeast`: a function-body or recursive-SCC summary. It is the least
   fixed point of local labels and inclusion edges.
-- `RigidOpaque`: an imported legacy/missing open row. It remains open and can
-  neither be closed nor rebound by local inference.
+- `RigidOpaque`: an imported interface with an unspecified open row. It remains
+  open and can neither be closed nor rebound by local inference.
 - `Join`: the associative, commutative, idempotent union of effects.
 - `Mask`: a symbolic handler subtraction edge. It removes handled labels from
   a source summary after instantiation rather than only labels known eagerly.
@@ -53,21 +53,18 @@ interface emission—uses this query. There is no first-rest fallback.
    helper applications cannot share mutable effect state.
 5. A handler is a symbolic mask. It can eliminate a callback effect that is
    unknown at helper definition time but becomes known at call time.
-6. Imports preserve the complete normalized effect scheme. Legacy open
-   metadata is a `RigidOpaque` leaf; new interfaces serialize every structural
-   arrow path plus stable shared flexible/opaque projections, masks, labels,
-   and closed rows. Raw solver node IDs are never part of the file format.
+6. Imports preserve the complete normalized effect scheme. Interfaces
+   serialize every structural arrow path plus stable shared flexible/opaque
+   projections, masks, labels, and closed rows. Raw solver node IDs are never
+   part of the file format.
 
-## Compatibility
+## Canonical interfaces
 
-Existing closed `.yonai` rows (`effects -` and known labels) map directly to
-closed graph terms. Existing open/legacy rows map conservatively to
-`RigidOpaque`. New interfaces use a versioned deterministic effect-scheme
-encoding; old readers retain a conservative open summary rather than accepting
-an unknown effect-free export.
-
-Typed-core ABI v1 continues to print the normalized summary. A later ABI may
-expose the symbolic graph, but no existing typed-core consumer is broken.
+`.yonai` rows use one deterministic effect-scheme encoding. Closed rows and
+open graph terms are serialized by the same writer, and readers do not select
+behavior by a format marker. Typed core prints the normalized summary; exposing
+additional symbolic structure requires changing the canonical adapter and its
+consumers together.
 
 ## Required evidence
 
@@ -78,5 +75,5 @@ expose the symbolic graph, but no existing typed-core consumer is broken.
   recursive HOFs remain open in strict mode.
 - Imports, aliases, partial applications, handlers, nested handlers, typed
   core, E0202, `.yonai` round trips, and `--require-effect-free` agree.
-- Legacy interfaces remain conservative and all normal type/CLI/codegen tests
-  continue to pass.
+- Canonical interfaces require structural type descriptors and reject missing
+  or malformed fields; all normal type/CLI/codegen tests continue to pass.

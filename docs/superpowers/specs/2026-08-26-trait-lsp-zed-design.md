@@ -79,7 +79,7 @@ sync, and server configuration. Zed receives manifest/grammar/discovery smoke
 checks from repository CI. Both editors are validated against the same
 `yls --stdio` executable rather than duplicated mock servers.
 
-## Documentation and Compatibility
+## Documentation and editor behavior
 
 The editor guide documents both clients, their installation and configuration,
 and the exact supported semantic features. The CLI reference describes

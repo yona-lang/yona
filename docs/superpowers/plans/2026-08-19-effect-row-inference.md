@@ -1,13 +1,15 @@
 # Effect-row inference (#8) — implementation plan
 
-**Status (2026-08-20):** Slices 1–3 **shipped** — local inference, handler
+**Status (2026-08-27):** Superseded by the canonical effect-union solver in
+`2026-08-27-effect-union-solver.md`. Slices 1–3 originally shipped local
+inference, handler
 subtract, pretty-print, `.yonai` `effects` (closed labels + open `|rN` /
 per-param rows), E0202 with perform-origin spans, HOF open-rest threading,
 recursion least-fixed-point unify. Follow-up after the `in` terminator
 parse fix: `perform State.get ()` is 0-arg (Unit is not a payload);
 recursive self-apply skips `apply_callee_effects`; two-function HOFs
 keep independent rests; `ρ ~ {L | ρ}` closes the rest instead of E0101.
-#8 acceptance is met; empty-row totality is
+# 8 acceptance is met; empty-row totality is
 [#5](https://github.com/yona-lang/yona/issues/76), parsed `effect`
 decls are [#9](https://github.com/yona-lang/yona/issues/80).
 
@@ -19,8 +21,8 @@ covering `handle`.
 
 ## Slice 1 (this change)
 
-1. **Representation** — `Arrow` carries sorted `Effect.op` labels + optional open
-   `effect_rest` row variable (closed when `effect_rest == nullptr`).
+1. **Representation** — `Arrow` carries one solver-owned `EffectRef`; closed
+   labels, open variables, joins, and masks are nodes in that solver.
 2. **Inference** — ambient escaping row while inferring; `perform` adds
    unhandled ops; `handle` subtracts covered ops; function arrows capture body
    row; apply unions callee latent effects; branches share ambient (union).
@@ -37,7 +39,7 @@ covering `handle`.
 ## Non-goals (later slices)
 
 - Parsed `effect` decls (#9)
-- Dynamic runtime handler search for `perform` inside precompiled `Std\GPU`
+- Dynamic runtime handler search for `perform` inside precompiled `Std\Gpu`
   bodies (codegen); rows make types honest first
 - Totality / empty-row gate (#5)
 - Arbitrary-lambda SPIR-V
@@ -67,7 +69,7 @@ handler elimination tests, `.yonai` round-trip, E0202 with call-site context.
    self-only rests on recursive bindings are closed so pure `let f x = f …`
    is not `!{|r}`.
 4. **Tests** — `Effect row: HOF *`, `Effect row: recursive *`,
-   `Unifier: effect-row occurs *` in `test/type_checker_test.cpp`.
+   `Unifier: effect-row occurs *` in `test/Semantics/TypeCheckerTest.cpp`.
 
 ## Slice 3 (open-row `.yonai` + E0202 origins, 2026-08-19)
 

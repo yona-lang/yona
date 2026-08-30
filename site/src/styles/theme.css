@@ -1,236 +1,199 @@
-/* ---------------------------------------------------------------------------
- * Yona — "Vellum & Ember" theme
- *
- * Light: warm paper, warm ink, copper accent.
- * Dark:  deep umber, parchment text, ember accent.
- * Display: Fraunces. Body: Source Sans 3. Code: IBM Plex Mono.
- * ------------------------------------------------------------------------- */
-
 :root {
-	--sl-font: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
-	--sl-font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
-	--yona-display: 'Fraunces', Georgia, serif;
+  --sl-font: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --sl-text-h1: 2.55rem;
+  --sl-text-h2: 1.6rem;
+  --sl-text-h3: 1.2rem;
+  --sl-line-height: 1.65;
 
-	/* type scale: slightly larger measure, calmer headings */
-	--sl-text-h1: 2.4rem;
-	--sl-text-h2: 1.6rem;
-	--sl-text-h3: 1.25rem;
-	--sl-line-height: 1.65;
+  --sl-color-accent-low: #142846;
+  --sl-color-accent: #48a9f8;
+  --sl-color-accent-high: #b9e2ff;
+  --sl-color-white: #edf4ff;
+  --sl-color-gray-1: #d7e2f1;
+  --sl-color-gray-2: #b6c6dc;
+  --sl-color-gray-3: #8a9bb5;
+  --sl-color-gray-4: #5d6d86;
+  --sl-color-gray-5: #36445a;
+  --sl-color-gray-6: #202b3b;
+  --sl-color-gray-7: #161f2c;
+  --sl-color-black: #0c121b;
+  --sl-color-bg-nav: #101925;
+  --sl-color-bg-sidebar: #101925;
+  --sl-color-hairline: #2b3b52;
+  --sl-color-hairline-light: #202e42;
 }
 
-/* ----------------------------- dark (default) --------------------------- */
-:root {
-	/* ember accent on deep umber */
-	--sl-color-accent-low: #3a2417;
-	--sl-color-accent: #c96f3b;
-	--sl-color-accent-high: #f0b98e;
-
-	--sl-color-white: #f0e9dd;
-	--sl-color-gray-1: #e6ddce;
-	--sl-color-gray-2: #c8bfae;
-	--sl-color-gray-3: #a09684;
-	--sl-color-gray-4: #6b6255;
-	--sl-color-gray-5: #453e35;
-	--sl-color-gray-6: #2a241e;
-	--sl-color-gray-7: #1f1a15;
-	--sl-color-black: #171310;
-
-	--sl-color-bg-nav: #1b1611;
-	--sl-color-bg-sidebar: #1b1611;
-	--sl-color-hairline: #322a22;
-	--sl-color-hairline-light: #2a241e;
+:root[data-theme="light"] {
+  --sl-color-accent-low: #d9ecff;
+  --sl-color-accent: #0969ba;
+  --sl-color-accent-high: #06477f;
+  --sl-color-white: #132238;
+  --sl-color-gray-1: #263950;
+  --sl-color-gray-2: #465d78;
+  --sl-color-gray-3: #697f98;
+  --sl-color-gray-4: #9aacc0;
+  --sl-color-gray-5: #c9d7e5;
+  --sl-color-gray-6: #e5eef6;
+  --sl-color-gray-7: #f3f7fb;
+  --sl-color-black: #fbfdff;
+  --sl-color-bg-nav: #f8fbff;
+  --sl-color-bg-sidebar: #f8fbff;
+  --sl-color-hairline: #c7d7e7;
+  --sl-color-hairline-light: #dce7f1;
 }
 
-/* ------------------------------- light ---------------------------------- */
-:root[data-theme='light'] {
-	/* copper accent on warm paper */
-	--sl-color-accent-low: #f3ddcd;
-	--sl-color-accent: #a5512b;
-	--sl-color-accent-high: #7c3a1d;
-
-	--sl-color-white: #221c15;
-	--sl-color-gray-1: #33291f;
-	--sl-color-gray-2: #4c4136;
-	--sl-color-gray-3: #6f6355;
-	--sl-color-gray-4: #9c9082;
-	--sl-color-gray-5: #cdc3b4;
-	--sl-color-gray-6: #ece4d6;
-	--sl-color-gray-7: #f5efe4;
-	--sl-color-black: #faf6ee;
-
-	--sl-color-bg-nav: #f7f1e6;
-	--sl-color-bg-sidebar: #f7f1e6;
-	--sl-color-hairline: #ddd2c0;
-	--sl-color-hairline-light: #e8dfd0;
-}
-
-/* --------------------------- editorial details --------------------------- */
-
-/* Display face for headings and the site title */
 h1,
 h2,
 h3,
 .site-title span,
 .hero h1 {
-	font-family: var(--yona-display);
-	font-weight: 600;
-	letter-spacing: -0.01em;
+  font-family: var(--sl-font-mono);
+  font-weight: 500;
+  letter-spacing: -0.035em;
 }
 
-h1 {
-	font-weight: 700;
+h1::before,
+.hero h1::before {
+  color: var(--sl-color-accent);
+  content: "> ";
 }
 
-/* Generous reading measure */
 .sl-markdown-content {
-	max-width: 46rem;
-	font-size: 1.0625rem;
+  max-width: 48rem;
+  font-size: 1.04rem;
 }
 
-/* Quiet sidebar: no boxes, just type */
-.sidebar-content summary .group-label span {
-	font-family: var(--yona-display);
-	font-size: var(--sl-text-sm);
-	font-weight: 600;
-	letter-spacing: 0.02em;
-	text-transform: uppercase;
-	color: var(--sl-color-gray-3);
-}
-
-/* Inline code: subtle warm chip */
 .sl-markdown-content code:not(:is(pre code)) {
-	background: color-mix(in srgb, var(--sl-color-accent) 9%, transparent);
-	border-radius: 0.25rem;
-	padding: 0.1em 0.3em;
+  background: color-mix(in srgb, var(--sl-color-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sl-color-accent) 22%, transparent);
+  border-radius: 0.22rem;
+  padding: 0.08em 0.28em;
 }
 
-/* Hero */
 .hero {
-	padding-block: 3rem;
+  padding-block: 3.5rem;
 }
+
 .hero .tagline {
-	font-size: 1.2rem;
-	color: var(--sl-color-gray-2);
-	max-width: 38rem;
+  color: var(--sl-color-gray-2);
+  font-size: 1.18rem;
+  max-width: 44rem;
 }
+
 .hero h1 {
-	font-size: clamp(2.6rem, 6vw, 4rem);
-	line-height: 1.08;
+  font-size: clamp(2.35rem, 5vw, 4rem);
+  line-height: 1.08;
 }
 
-/* Status badges used across feature pages */
+.sidebar-content summary .group-label span {
+  color: var(--sl-color-gray-3);
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.sl-markdown-content table {
+  display: table;
+  font-size: 0.94rem;
+}
+
+.sl-markdown-content th {
+  color: var(--sl-color-gray-1);
+  font-family: var(--sl-font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
 .yona-status {
-	display: inline-block;
-	font-family: var(--sl-font-mono);
-	font-size: 0.72rem;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
-	border-radius: 999px;
-	padding: 0.15em 0.7em;
-	border: 1px solid var(--sl-color-hairline);
-	vertical-align: middle;
+  display: inline-block;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.2rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 0.12em 0.5em;
+  text-transform: uppercase;
+  vertical-align: middle;
 }
+
 .yona-status--stable {
-	color: #3c7a3f;
-	border-color: color-mix(in srgb, #3c7a3f 40%, transparent);
-	background: color-mix(in srgb, #3c7a3f 8%, transparent);
+  background: color-mix(in srgb, #45d493 12%, transparent);
+  border-color: color-mix(in srgb, #45d493 45%, transparent);
+  color: #45d493;
 }
+
 .yona-status--partial {
-	color: var(--sl-color-accent);
-	border-color: color-mix(in srgb, var(--sl-color-accent) 40%, transparent);
-	background: color-mix(in srgb, var(--sl-color-accent) 8%, transparent);
+  background: color-mix(in srgb, var(--sl-color-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--sl-color-accent) 45%, transparent);
+  color: var(--sl-color-accent);
 }
+
 .yona-status--planned {
-	color: var(--sl-color-gray-3);
-	background: color-mix(in srgb, var(--sl-color-gray-3) 8%, transparent);
+  background: color-mix(in srgb, var(--sl-color-gray-3) 10%, transparent);
+  color: var(--sl-color-gray-3);
 }
 
-/* Footer hairline */
 footer.sl-flex {
-	border-top: 1px solid var(--sl-color-hairline-light);
-	padding-top: 1rem;
+  border-top: 1px solid var(--sl-color-hairline-light);
+  padding-top: 1rem;
 }
-
-/* --------------------- stdlib API reference --------------------- */
 
 .sl-markdown-content:has(.stdlib-api) {
-	max-width: 52rem;
-}
-
-.sl-markdown-content .stdlib-api .sl-heading-wrapper {
-	--sl-anchor-icon-gap: 0.55em;
+  max-width: 54rem;
 }
 
 .sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h2 {
-	font-family: var(--sl-font);
-	font-size: 0.72rem;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--sl-color-gray-3);
-	border-bottom: 1px solid var(--sl-color-hairline);
-	padding-bottom: 0.45rem;
-	margin-top: 2.4rem;
-	margin-bottom: 0.4rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  color: var(--sl-color-gray-3);
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  margin-bottom: 0.4rem;
+  margin-top: 2.4rem;
+  padding-bottom: 0.45rem;
+  text-transform: uppercase;
 }
 
 .sl-markdown-content .stdlib-api h2 {
-	font-family: inherit;
-	font-size: inherit;
-	font-weight: inherit;
-	letter-spacing: inherit;
-	text-transform: inherit;
-	color: inherit;
-	margin: 0;
-	padding-block: 0;
-	padding-inline-start: 0;
-	border: none;
+  color: inherit;
+  font: inherit;
+  margin: 0;
+  padding: 0;
 }
 
 .sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h3 {
-	font-family: var(--sl-font-mono);
-	font-size: 0.92rem;
-	font-weight: 500;
-	letter-spacing: 0;
-	line-height: 1.45;
-	margin-top: 1.6rem;
-	margin-bottom: 0.75rem;
-	padding: 0.55rem 0.85rem;
-	border: 1px solid var(--sl-color-hairline);
-	border-radius: 0.3rem;
-	background: color-mix(in srgb, var(--sl-color-gray-6) 70%, transparent);
-	scroll-margin-top: 6rem;
+  background: color-mix(in srgb, var(--sl-color-gray-6) 65%, transparent);
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.25rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.45;
+  margin-bottom: 0.75rem;
+  margin-top: 1.6rem;
+  padding: 0.55rem 0.85rem;
+  scroll-margin-top: 6rem;
 }
 
-.sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h2 + .sl-heading-wrapper.level-h3 {
-	margin-top: 0.85rem;
-}
-
-.sl-markdown-content .stdlib-api h3 {
-	font-family: inherit;
-	font-size: inherit;
-	font-weight: inherit;
-	letter-spacing: inherit;
-	line-height: inherit;
-	margin: 0;
-	padding-block: 0;
-	padding-inline-start: 0;
-	border: none;
-	background: none;
-	scroll-margin-top: 6rem;
-}
-
+.sl-markdown-content .stdlib-api h3,
 .sl-markdown-content .stdlib-api h3 code {
-	background: none;
-	padding: 0;
-	font-size: inherit;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  margin: 0;
+  padding: 0;
 }
 
-.sl-markdown-content .stdlib-api .sl-heading-wrapper.level-h3 + div.expressive-code {
-	margin-top: 0.35rem;
-	margin-bottom: 0.9rem;
-}
-
-.sl-markdown-content .stdlib-api table {
-	font-size: 0.92rem;
+.sl-markdown-content
+  .stdlib-api
+  .sl-heading-wrapper.level-h3
+  + div.expressive-code {
+  margin-bottom: 0.9rem;
+  margin-top: 0.35rem;
 }

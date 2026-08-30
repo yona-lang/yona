@@ -21,7 +21,7 @@
 There are **35** Yona programs under `bench/`. The runner compares each
 against C, Erlang, Haskell, Java, Node.js, and Python **when** a matching
 reference exists, compiles, and matches the `.expected` output (see tables
-for `—` where a language is skipped). References live in `bench/reference/`.
+for `—` where a language is skipped). References live in `bench/Reference/`.
 
 ## Startup-adjusted numbers
 

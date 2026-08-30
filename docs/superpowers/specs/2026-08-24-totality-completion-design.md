@@ -56,7 +56,7 @@ produce E0203.
 This is a conservative syntactic termination check, not a general termination
 prover. It does not change normal compilation or introduce annotations.
 
-## Diagnostics and compatibility
+## Diagnostics and default behavior
 
 - Default compilation behavior is preserved.
 - `--Wall` enables overlap and incompleteness warnings; `--Werror` promotes

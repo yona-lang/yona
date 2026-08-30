@@ -2,10 +2,10 @@
 
 UTF-8 byte offsets ↔ LSP UTF-16 positions.
 
-Matches the C++ `yls` mapper (`include/lsp/Utf16.h`): 0-based line,
+Matches the C++ `yls` mapper (`include/yona/Lsp/Utf16.h`): 0-based line,
 UTF-16 code-unit column, CRLF as one line break, non-BMP scalars as
 two units. The same functions are the documented C ABI in
-`include/yona/runtime/utf16.h`.
+`include/yona/Runtime/Codecs/Utf16.h`.
 
 ## Functions
 

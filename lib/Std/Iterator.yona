@@ -7,11 +7,11 @@ module Std\Iterator
 export fromSeq, fromByteArray, fromIntArray, fromFloatArray
 export next, foldLeft, toSeq
 
-extern fromSeq : Seq element -> Iterator element = "yona_Std_Iterator__fromSeq"
-extern fromByteArray : ByteArray -> Iterator Int = "yona_Std_Iterator__fromByteArray"
-extern fromIntArray : IntArray -> Iterator Int = "yona_Std_Iterator__fromIntArray"
-extern fromFloatArray : FloatArray -> Iterator Float = "yona_Std_Iterator__fromFloatArray"
-extern nextNative : Iterator element -> Option element = "yona_Std_Iterator__nextNative"
+extern fromSeq : Seq element -> Iterator element = "YonaStdIteratorFromSeq"
+extern fromByteArray : ByteArray -> Iterator Int = "YonaStdIteratorFromByteArray"
+extern fromIntArray : IntArray -> Iterator Int = "YonaStdIteratorFromIntArray"
+extern fromFloatArray : FloatArray -> Iterator Float = "YonaStdIteratorFromFloatArray"
+extern nextNative : Iterator element -> Option element = "YonaStdIteratorNextNative"
 
 ## Advance an iterator once.
 next : Iterator element -> Option element

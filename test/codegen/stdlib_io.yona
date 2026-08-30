@@ -1,1 +1,0 @@
-import println from Std\IO in do println "io test"; 0 end

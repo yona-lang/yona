@@ -1,7 +1,0 @@
-import bracket, range, map, toSeq from Std\Stream in
-import println from Std\IO in
-let
-    acq = \u -> do println "acquire"; 10 end,
-    rel = \r -> do println "release"; 0 end,
-    prod = \r -> map (\x -> x + r) (range 1 4)
-in toSeq (bracket acq rel prod)

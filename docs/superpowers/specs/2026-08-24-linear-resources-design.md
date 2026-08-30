@@ -57,7 +57,7 @@ entry points matching the standard-library ABI; typed Yona declarations—not
 raw integer declarations—form the only public boundary. Platform networking
 and process implementations retain their native fd/handle representation.
 
-## Migration and compatibility
+## Canonical boundary
 
 This is intentionally breaking. `stdinFd`, `stdoutFd`, `stderrFd`, raw
 channel helpers, and public resource functions typed with `Int` are removed or

@@ -7,7 +7,7 @@ Classifications: `implemented` | `partial` | `design-only` | `missing`.
 
 Pipeline (expression programs **and** modules): parse → `TypeChecker` →
 **blocking** `RefinementChecker` + `LinearityChecker` → codegen
-([`cli/main.cpp`](../cli/main.cpp)). `--Wno-refinement` / `--Wno-linear`
+([`cli/Main.cpp`](../cli/Main.cpp)). `--Wno-refinement` / `--Wno-linear`
 skip those overlays. Leaks are **E0602** (`-Wlinear-leak`, default on).
 
 Date: 2026-08-27. HEAD at audit: current working tree plus this document.
@@ -29,15 +29,17 @@ Date: 2026-08-27. HEAD at audit: current working tree plus this document.
 | `-Wunmatched-adt` | n/a | n/a | implemented | n/a | n/a | implemented | **implemented** |
 | Case exhaustiveness (`--Wincomplete-patterns`) | n/a | n/a | missing | implemented | n/a | implemented | **partial** (finite ADTs + `Bool`; limited unreachable-arm diagnostics) |
 
-`MonoType` tags are `Var | Con | App | Arrow | MTuple | MRecord | ERow`
-([`include/typechecker/InferType.h`](../include/typechecker/InferType.h)).
-`Arrow` carries a solver-owned effect reference. The checker keeps effect
-aggregation separate from value-type equality: joins preserve every independent
-source, masks model handlers symbolically, and equality is an explicit solver
-constraint. Diagnostics pretty-print the normalized summary as `!{…}`.
-Closed summaries write to `.yonai` as `FN … effects Fs.read`; new interfaces
-also carry a versioned `effectscheme v2` normal form for every arrow, shared
-open source, and mask. A missing `effects` field is unknown, not pure.
+`MonoType` tags are `Var | Con | App | Arrow | MTuple | MRecord`
+([`include/yona/Model/InferType.h`](../include/yona/Model/InferType.h)).
+`Arrow` carries the sole effect representation: a solver-owned `EffectRef`.
+There is no effect-row value type or duplicate projection. The checker
+keeps effect aggregation separate from value-type equality: joins preserve
+every independent source, masks model handlers symbolically, and equality is an
+explicit solver constraint. Diagnostics pretty-print the normalized summary as
+`!{…}`.
+Closed summaries write to `.yonai` as `FN … effects Fs.read`; interfaces also
+carry a canonical `effectscheme` normal form for every arrow, shared open
+source, and mask. A missing `effects` field is unknown, not pure.
 `MRecord.row_rest` is a **record** row, not an effect row.
 
 ---
@@ -49,14 +51,14 @@ row (known labels + optional open rest).
 
 | Layer | Status | Evidence |
 |-------|--------|----------|
-| Parser | partial | `YPERFORM` / `YHANDLE` ([`src/Lexer.cpp`](../src/Lexer.cpp)); `parse_perform_expr` / `parse_handle_expr` ([`src/parser/ParserExpr.cpp`](../src/parser/ParserExpr.cpp)). Token `YEFFECT` is **never consumed**. No `effect Name … end` / `export effect`. |
-| AST | partial | `PerformExpr`, `HandleExpr`, `HandlerClause`, unused `EffectDeclNode` ([`include/ast.h`](../include/ast.h)). Parser never builds `EffectDeclNode`. |
-| Typechecker | partial | `register_effect` / `infer_perform` / `infer_handle` ([`src/typechecker/TypeChecker.cpp`](../src/typechecker/TypeChecker.cpp)). Direct unhandled `perform` → `-Wunhandled-effect`; uncovered application → **E0202**. The solver preserves independent higher-order rows, recursive least cells, and symbolic handler masks. Unknown operations still receive fresh structural types because parsed effect declarations do not exist. |
-| Codegen | partial | [`src/codegen/CodegenEffects.cpp`](../src/codegen/CodegenEffects.cpp): lookup `handler_stack_`; resume is identity `i64(i64)`, not a captured continuation. Unhandled `perform` is a string error, not `E0200`. Result typed `CType::INT`. |
-| `.yonai` | partial | `FN` / `AFN` / `IO` / `NAT` append a readable `effects Op,…` summary and new files append `effectscheme v2`, a deterministic normalized schema for all arrow effects. Old open metadata imports conservatively. There is still no `EFFECT` keyword or parsed effect declaration. |
-| Tests | partial | Typechecker cases below; fixtures `test/codegen/effect_*.yona`. |
+| Parser | partial | `YPERFORM` / `YHANDLE` ([`src/Syntax/Lexer.cpp`](../src/Syntax/Lexer.cpp)); `parse_perform_expr` / `parse_handle_expr` ([`src/Syntax/ParserExpr.cpp`](../src/Syntax/ParserExpr.cpp)). Token `YEFFECT` is **never consumed**. No `effect Name … end` / `export effect`. |
+| AST | partial | `PerformExpr`, `HandleExpr`, `HandlerClause`, unused `EffectDeclNode` ([`include/yona/Syntax/Ast.h`](../include/yona/Syntax/Ast.h)). Parser never builds `EffectDeclNode`. |
+| Typechecker | partial | `register_effect` / `infer_perform` / `infer_handle` ([`src/Semantics/TypeChecker.cpp`](../src/Semantics/TypeChecker.cpp)). Direct unhandled `perform` → `-Wunhandled-effect`; uncovered application → **E0202**. The solver preserves independent higher-order rows, recursive least cells, and symbolic handler masks. Unknown operations still receive fresh structural types because parsed effect declarations do not exist. |
+| Codegen | partial | [`src/Codegen/CodegenEffects.cpp`](../src/Codegen/CodegenEffects.cpp): lookup `handler_stack_`; resume is identity `i64(i64)`, not a captured continuation. Unhandled `perform` is a string error, not `E0200`. Result typed `CType::INT`. |
+| `.yonai` | partial | `FN` / `AFN` / `IO` / `NAT` append a readable `effects Op,…` summary and `effectscheme`, the deterministic normalized schema for all arrow effects. There is still no `EFFECT` keyword or parsed effect declaration. |
+| Tests | partial | Typechecker cases below; fixtures `test/Fixtures/Codegen/effect_*.yona`. |
 
-**Positive:** `test/codegen/effect_simple_get.yona` → `42`
+**Positive:** `test/Fixtures/Codegen/effect_simple_get.yona` → `42`
 
 ```yona
 handle perform State.get () with
@@ -66,7 +68,7 @@ end
 ```
 
 **Negative:** `TEST_CASE("Effect: perform arg type mismatch is an error")`
-in [`test/type_checker_test.cpp`](../test/type_checker_test.cpp)
+in [`test/Semantics/TypeCheckerTest.cpp`](../test/Semantics/TypeCheckerTest.cpp)
 (`perform State.put "hello"` vs `put : Int -> ()`).
 Unhandled perform: `TEST_CASE("Effect: unhandled perform produces warning")`.
 
@@ -117,11 +119,11 @@ or imported opaque sources remain open. Type schemes freeze every arrow root
 as one effect graph and instantiate fresh roots together, preserving sharing
 without leaking mutable effect state across sibling uses.
 
-New `.yonai` files append `effectscheme v2`: a deterministic normalized scheme
+`.yonai` files append `effectscheme`: a deterministic normalized scheme
 for every structural arrow path, known labels, shared flexible/opaque sources,
 and masks. Import reconstructs and clones it over the structural signature.
-The readable `effects` field remains for compatibility. Legacy open metadata
-becomes opaque and a missing row remains unknown, never pure.
+The readable `effects` field is the normalized human-readable summary. A
+missing row remains unknown, never pure.
 
 **Still missing:** parsed `effect` declarations
 ([#9](https://github.com/yona-lang/yona/issues/80)); captured/delimited
@@ -154,10 +156,10 @@ obligations keep [#5](https://github.com/yona-lang/yona/issues/76) open.
 |-------|--------|----------|
 | Parser | implemented | Record literals / types ([`docs/row-polymorphism.md`](row-polymorphism.md), parser type/expr paths) |
 | AST | implemented | Record expr + `MRecord` |
-| Typechecker | implemented | `MRecord` + `row_rest` unify ([`src/typechecker/Unification.cpp`](../src/typechecker/Unification.cpp)) |
+| Typechecker | implemented | `MRecord` + `row_rest` unify ([`src/Semantics/Unification.cpp`](../src/Semantics/Unification.cpp)) |
 | Codegen | implemented | Record construction / field access |
 | `.yonai` | partial | Function types do not print open row variables; records work as values |
-| Tests | implemented | Record cases in `test/type_checker_test.cpp` / codegen record fixtures |
+| Tests | implemented | Record cases in `test/Semantics/TypeCheckerTest.cpp` / codegen record fixtures |
 
 **Positive:** `{ name = "Alice", age = 30 }` field access (docs + tests).
 **Negative:** missing-field / type mismatch on records in the typechecker suite.
@@ -174,7 +176,7 @@ This is **not** [#8](https://github.com/yona-lang/yona/issues/79).
 |-------|--------|----------|
 | Parser | implemented | Ordinary constructor `Linear` |
 | AST | implemented | ADT, no linear node |
-| Typechecker | partial | [`src/typechecker/LinearityChecker.cpp`](../src/typechecker/LinearityChecker.cpp). Not part of `MonoType`. Walks `FunctionExpr` bodies, `WithExpr`, and module functions / instance methods. CLI **aborts** on E0600/E0601 (`--Wno-linear` skips). |
+| Typechecker | partial | [`src/Semantics/LinearityChecker.cpp`](../src/Semantics/LinearityChecker.cpp). Not part of `MonoType`. Walks `FunctionExpr` bodies, `WithExpr`, and module functions / instance methods. CLI **aborts** on E0600/E0601 (`--Wno-linear` skips). |
 | Codegen | implemented | RC ADT, no linear IR |
 | `.yonai` | missing | No consume/obligation metadata |
 | Tests | partial | Unit tests below; codegen `closure_captures_linear.yona` |
@@ -196,10 +198,10 @@ that linear values cannot be captured in closures; the capture fixture compiles.
 
 | Layer | Status | Evidence |
 |-------|--------|----------|
-| Parser | implemented | `{ var : T \| pred }` ([`src/parser/ParserType.cpp`](../src/parser/ParserType.cpp)) |
-| AST | implemented | `RefinedType` / `RefinePredicate` ([`include/types.h`](../include/types.h)) |
-| Typechecker | partial | [`src/typechecker/RefinementChecker.cpp`](../src/typechecker/RefinementChecker.cpp) only. No `MonoType` refinement. Aliases `NonEmpty` / `Port` / `NonZero` parse; **not** enforced at signatures. `register_refined_type` unused by CLI. Walks module function bodies. **Blocking** (`yonac` exits non-zero; `--Wno-refinement` skips). |
-| Codegen | implemented | Erase to base type ([`src/Codegen.cpp`](../src/Codegen.cpp)) |
+| Parser | implemented | `{ var : T \| pred }` ([`src/Syntax/ParserType.cpp`](../src/Syntax/ParserType.cpp)) |
+| AST | implemented | `RefinedType` / `RefinePredicate` ([`include/yona/Model/Types.h`](../include/yona/Model/Types.h)) |
+| Typechecker | partial | [`src/Semantics/RefinementChecker.cpp`](../src/Semantics/RefinementChecker.cpp) only. No `MonoType` refinement. Aliases `NonEmpty` / `Port` / `NonZero` parse; **not** enforced at signatures. `register_refined_type` unused by CLI. Walks module function bodies. **Blocking** (`yonac` exits non-zero; `--Wno-refinement` skips). |
+| Codegen | implemented | Erase to base type ([`src/Codegen/Codegen.cpp`](../src/Codegen/Codegen.cpp)) |
 | `.yonai` | missing | No predicates |
 | Tests | partial | Unit E0500 tests; codegen `seq_head_tail.yona` is **runtime**, not a `yonac` failure |
 
@@ -221,9 +223,9 @@ nonempty seqs; nonzero `/` on `AST_DIVIDE_EXPR`.
 |-------|-----------|-------------------------------------|
 | Parser | implemented (`@borrow` on params) | missing (`&` is `&&` / `YAND`) |
 | AST | `FunctionExpr::param_borrow` | no `MBorrow` |
-| Typechecker | **E0603** ([`src/typechecker/TypeChecker.cpp`](../src/typechecker/TypeChecker.cpp) `check_param_borrow_annotations`; escape via [`BorrowEscapeAnalysis`](../include/analysis/BorrowEscapeAnalysis.h)) | missing |
-| Codegen | Same skip-DUP as inference ([`src/codegen/CodegenExpr.cpp`](../src/codegen/CodegenExpr.cpp)) | design-only |
-| `.yonai` | `borrow 01…` bitmask ([`src/codegen/CodegenModule.cpp`](../src/codegen/CodegenModule.cpp)) | no `&` in printed types |
+| Typechecker | **E0603** ([`src/Semantics/TypeChecker.cpp`](../src/Semantics/TypeChecker.cpp) `check_param_borrow_annotations`; escape via [`BorrowEscapeAnalysis`](../include/yona/Semantics/BorrowEscapeAnalysis.h)) | missing |
+| Codegen | Same skip-DUP as inference ([`src/Codegen/CodegenExpr.cpp`](../src/Codegen/CodegenExpr.cpp)) | design-only |
+| `.yonai` | `borrow 01…` bitmask ([`src/Codegen/CodegenModule.cpp`](../src/Codegen/CodegenModule.cpp)) | no `&` in printed types |
 | Tests | implemented | none |
 
 **Positive:** `TEST_CASE("@borrow accepted when parameter is only read")`;
@@ -244,8 +246,8 @@ Cross-module monomorphization source plus inferred borrow **bitmask** on `FN`
 lines. HM does not reconstruct `&T` from `.yonai`.
 
 **Positive:** `Interface files preserve inferred borrow metadata`
-([`test/codegen_test.cpp`](../test/codegen_test.cpp)); GENFN round-trip in
-[`test/trait_test.cpp`](../test/trait_test.cpp).
+([`test/Codegen/CodegenTest.cpp`](../test/Codegen/CodegenTest.cpp)); GENFN round-trip in
+[`test/Semantics/TraitTest.cpp`](../test/Semantics/TraitTest.cpp).
 **Negative:** none required beyond missing `&` syntax (design-only).
 
 ---
@@ -254,14 +256,14 @@ lines. HM does not reconstruct `&T` from `.yonai`.
 
 **`-Wunmatched-adt` — implemented.** Discarded `Option`/`Result`/other ADTs
 in non-final `do` steps and `let _ = …`
-([`RefinementChecker.cpp`](../src/typechecker/RefinementChecker.cpp)).
+([`RefinementChecker.cpp`](../src/Semantics/RefinementChecker.cpp)).
 `-Wall` enables it.
 
 **Positive:** `let r = Option does not warn`.
 **Negative:** `discarded Option in do warns`; `let _ = Option warns`.
 
 **Case exhaustiveness — finite ADTs and `Bool` implemented.**
-[`CodegenCase.cpp`](../src/codegen/CodegenCase.cpp) emits a structured
+[`CodegenCase.cpp`](../src/Codegen/CodegenCase.cpp) emits a structured
 `--Wincomplete-patterns` warning (also enabled by `--Wall`) for constructors
 missing from a closed ADT `case`. A wildcard arm is exhaustive; a guarded arm
 does not prove coverage. `--Werror` promotes the warning to a failing build.
@@ -335,7 +337,7 @@ flowchart TD
 
 | Work | Issue / note | Independent? |
 |------|----------------|--------------|
-| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yona/issues/79) | Implemented 2026-08-27 (lossless joins/masks/SCC cells, cloned schemes, `effectscheme v2`); parsed effect declarations remain separate #9 work |
+| Effect-row inference + `.yonai` | [#8](https://github.com/yona-lang/yona/issues/79) | Implemented 2026-08-27 (lossless joins/masks/SCC cells and cloned schemes); parsed effect declarations remain separate #9 work |
 | Opaque exported types | [#6](https://github.com/yona-lang/yona/issues/77) | Done 2026-08-24 (`export type T opaque`; hidden constructor interface rows) |
 | Totality / empty row | [#5](https://github.com/yona-lang/yona/issues/76) | After #8 |
 | Typed-core | [#7](https://github.com/yona-lang/yona/issues/78) | Arch after audit; API after #8 |

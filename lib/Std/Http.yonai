@@ -1,29 +1,30 @@
+MODULE Std\Http
 ADT Method 7 0
-CTOR GET 0 0
-CTOR POST 1 0
-CTOR PUT 2 0
-CTOR DELETE 3 0
-CTOR PATCH 4 0
-CTOR HEAD 5 0
-CTOR OPTIONS 6 0
+  CTOR Get 0 0
+  CTOR Post 1 0
+  CTOR Put 2 0
+  CTOR Delete 3 0
+  CTOR Patch 4 0
+  CTOR Head 5 0
+  CTOR Options 6 0
 ADT Request 1 4
-CTOR Request 0 4 fields method:ADT@N(Method) path:STRING@N(String) headers:INT@N(Int) body:STRING@N(String)
+  CTOR Request 0 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
 ADT Response 1 3
-CTOR Response 0 3 fields status:INT@N(Int) rawHeaders:STRING@N(String) body:STRING@N(String)
-FN yona_Std_Http__formatRequest 2 STRING ADT(Request) -> STRING borrow 11 effects -
-FN yona_Std_Http__get 3 STRING INT STRING -> ADT(Response) retadt Response effects -
-FN yona_Std_Http__notFound 0 -> ADT(Response) retadt Response effects -
-FN yona_Std_Http__ok 1 STRING -> ADT(Response) retadt Response effects -
-FN yona_Std_Http__parseResponse 1 STRING -> ADT(Response) retadt Response effects -
-FN yona_Std_Http__post 4 STRING INT STRING STRING -> ADT(Response) retadt Response effects -
-FN yona_Std_Http__request 4 ADT(Method) STRING INT STRING -> ADT(Request) retadt Request effects -
-FN yona_Std_Http__response 2 INT STRING -> ADT(Response) retadt Response effects -
-FN yona_Std_Http__send 3 STRING INT ADT(Request) -> ADT(Response) retadt Response effects -
-FN yona_Std_Http__serve 3 STRING INT FUNCTION(ADT(Request),ADT(Response)) -> INT effects |
-FN yona_Std_Http__serverError 0 -> ADT(Response) retadt Response effects -
-GENFN_CTOR yona_Std_Http__formatRequest Request Request 0 4 1 4 fieldname:method field:ADT shape:ADT contract:N(Method) fieldname:path field:STRING shape:STRING contract:N(String) fieldname:headers field:INT shape:INT contract:N(Int) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Http__formatRequest Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__formatRequest formatRequest
+  CTOR Response 0 3 fields status:INT rawHeaders:STRING body:STRING
+FN formatRequest 2 STRING ADT(Request) -> STRING borrow 11 effects -
+FN get 3 STRING INT STRING -> ADT(Response) effects -
+FN notFound 0 -> ADT(Response) effects -
+FN ok 1 STRING -> ADT(Response) effects -
+FN parseResponse 1 STRING -> ADT(Response) effects -
+FN post 4 STRING INT STRING STRING -> ADT(Response) effects -
+FN request 4 ADT(Method) STRING INT STRING -> ADT(Request) effects -
+FN response 2 INT STRING -> ADT(Response) effects -
+FN send 3 STRING INT ADT(Request) -> ADT(Response) effects -
+FN serve 3 STRING INT FUNCTION(ADT(Request),ADT(Response)) -> INT effects |
+FN serverError 0 -> ADT(Response) effects -
+GENFN_CTOR formatRequest Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR formatRequest Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN formatRequest formatRequest
 formatRequest : String -> Request -> String
 formatRequest host req =
     import length from Std\String in
@@ -37,26 +38,26 @@ formatRequest host req =
     else
         method ++ " " ++ p ++ " HTTP/1.1\r\nHost: " ++ host ++ "\r\nUser-Agent: Yona\r\nConnection: close\r\n\r\n"
 GENFN_END
-GENFN_CTOR yona_Std_Http__get GET Method 0 0 7 0
-GENFN_CTOR yona_Std_Http__get POST Method 1 0 7 0
-GENFN_CTOR yona_Std_Http__get Request Request 0 4 1 4 fieldname:method field:ADT shape:ADT contract:N(Method) fieldname:path field:STRING shape:STRING contract:N(String) fieldname:headers field:INT shape:INT contract:N(Int) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Http__get Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__get get
+GENFN_CTOR get Get Method 0 0 7 0
+GENFN_CTOR get Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR get Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_CTOR get Post Method 1 0 7 0
+GENFN_BEGIN get get
 get : String -> Int -> String -> Response
-get host port path = send host port (Request { method = GET, path = path, headers = 0, body = "" })
+get host port path = send host port (Request { method = Get, path = path, headers = 0, body = "" })
 GENFN_END
-GENFN_CTOR yona_Std_Http__notFound Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__notFound notFound
+GENFN_CTOR notFound Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN notFound notFound
 notFound = Response { status = 404, rawHeaders = "", body = "Not Found" }
 GENFN_END
-GENFN_CTOR yona_Std_Http__ok Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__ok ok
+GENFN_CTOR ok Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN ok ok
 ok : String -> Response
 ok body = Response { status = 200, rawHeaders = "", body = body }
 GENFN_END
-GENFN_CTOR yona_Std_Http__parseResponse GET Method 0 0 7 0
-GENFN_CTOR yona_Std_Http__parseResponse Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__parseResponse parseResponse
+GENFN_CTOR parseResponse Get Method 0 0 7 0
+GENFN_CTOR parseResponse Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN parseResponse parseResponse
 parseResponse : String -> Response
 parseResponse raw =
     import substring, indexOf, drop from Std\String in
@@ -68,29 +69,29 @@ parseResponse raw =
     else
         Response { status = status, rawHeaders = "", body = "" }
 GENFN_END
-GENFN_CTOR yona_Std_Http__post POST Method 1 0 7 0
-GENFN_CTOR yona_Std_Http__post Request Request 0 4 1 4 fieldname:method field:ADT shape:ADT contract:N(Method) fieldname:path field:STRING shape:STRING contract:N(String) fieldname:headers field:INT shape:INT contract:N(Int) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Http__post Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__post post
+GENFN_CTOR post Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR post Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_CTOR post Post Method 1 0 7 0
+GENFN_BEGIN post post
 post : String -> Int -> String -> String -> Response
-post host port path body = send host port (Request { method = POST, path = path, headers = 0, body = body })
+post host port path body = send host port (Request { method = Post, path = path, headers = 0, body = body })
 GENFN_END
-GENFN_CTOR yona_Std_Http__request Request Request 0 4 1 4 fieldname:method field:ADT shape:ADT contract:N(Method) fieldname:path field:STRING shape:STRING contract:N(String) fieldname:headers field:INT shape:INT contract:N(Int) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__request request
+GENFN_CTOR request Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_BEGIN request request
 request : Method -> String -> Int -> String -> Request
 request method path headers body = Request { method = method, path = path, headers = headers, body = body }
 GENFN_END
-GENFN_CTOR yona_Std_Http__response Request Request 0 4 1 4 fieldname:method field:ADT shape:ADT contract:N(Method) fieldname:path field:STRING shape:STRING contract:N(String) fieldname:headers field:INT shape:INT contract:N(Int) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Http__response Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__response response
+GENFN_CTOR response Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR response Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN response response
 response : Int -> String -> Response
 response status body = Response { status = status, rawHeaders = "", body = body }
 GENFN_END
-GENFN_CTOR yona_Std_Http__send GET Method 0 0 7 0
-GENFN_CTOR yona_Std_Http__send Linear Linear 0 1 1 1 fieldname:_0 field:INT contract:N(a)
-GENFN_CTOR yona_Std_Http__send Request Request 0 4 1 4 fieldname:method field:ADT shape:ADT contract:N(Method) fieldname:path field:STRING shape:STRING contract:N(String) fieldname:headers field:INT shape:INT contract:N(Int) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Http__send Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__send send
+GENFN_CTOR send Get Method 0 0 7 0
+GENFN_CTOR send Linear Linear 0 1 1 1 fields _0:VAR(a)
+GENFN_CTOR send Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR send Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN send send
 send : String -> Int -> Request -> Response
 send host port req =
     import tcpConnect, send as netSend, recv, close from Std\Net in
@@ -103,10 +104,10 @@ send host port req =
         end
     end
 GENFN_END
-GENFN_CTOR yona_Std_Http__serve Linear Linear 0 1 1 1 fieldname:_0 field:INT contract:N(a)
-GENFN_CTOR yona_Std_Http__serve Request Request 0 4 1 4 fieldname:method field:ADT shape:ADT contract:N(Method) fieldname:path field:STRING shape:STRING contract:N(String) fieldname:headers field:INT shape:INT contract:N(Int) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Http__serve Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__serve serve
+GENFN_CTOR serve Linear Linear 0 1 1 1 fields _0:VAR(a)
+GENFN_CTOR serve Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR serve Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN serve serve
 serve : String -> Int -> (Request -> Response) -> Int
 serve host port handler =
     import tcpListen from Std\Net in
@@ -114,7 +115,7 @@ serve host port handler =
         Linear listener -> serveLoop listener handler
     end
 GENFN_END
-GENFN_CTOR yona_Std_Http__serverError Response Response 0 3 1 3 fieldname:status field:INT shape:INT contract:N(Int) fieldname:rawHeaders field:STRING shape:STRING contract:N(String) fieldname:body field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Http__serverError serverError
+GENFN_CTOR serverError Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN serverError serverError
 serverError = Response { status = 500, rawHeaders = "", body = "Internal Server Error" }
 GENFN_END

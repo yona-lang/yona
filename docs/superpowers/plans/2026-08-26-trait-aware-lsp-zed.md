@@ -7,9 +7,9 @@
 **Goal:** Make Yona's foundational traits discoverable and navigable through
 `yls`, and ship a first-class Zed client that launches that same server.
 
-**Architecture:** Extend the editor-neutral typed occurrence model with a
-stable semantic identity and trait metadata, then make existing LSP queries
-consume it. Keep VS Code and Zed transport-only clients. Zed requires a
+**Architecture:** Use the shared `SemanticModel` as the compiler-owned source
+of stable binding identity and trait metadata, then project it through existing
+LSP queries. Keep VS Code and Zed transport-only clients. Zed requires a
 Tree-sitter grammar, so the implementation will publish a dedicated
 `yona-lang/tree-sitter-yona` grammar repository and a dedicated
 `yona-lang/zed-yona` extension repository, while the existing TextMate grammar
@@ -21,7 +21,8 @@ Tree-sitter, Rust/WASI Zed Extension API, TypeScript, CMake/Ninja, Python 3.
 ## Global Constraints
 
 - Work directly on `master`; do not change `VERSION`.
-- Keep `yls` as the only semantic authority; no editor-specific typechecking.
+- Keep `yona_semantics` as the only semantic authority; `yls` and editors do
+  not implement separate binding resolution or typechecking.
 - All LSP positions and edit ranges remain UTF-16 and end-exclusive.
 - Source, imported `.yonai`, and Prelude contracts must behave consistently.
 - Preserve full-document reparsing and recovered-prefix queries for malformed buffers.
@@ -35,13 +36,13 @@ Tree-sitter, Rust/WASI Zed Extension API, TypeScript, CMake/Ninja, Python 3.
 ## Target file structure
 
 ```text
-include/typed_core/Query.h             # semantic identity + trait relationships
-src/lsp/Analysis.cpp                   # trait-aware index and query behavior
-src/lsp/Server.cpp                     # semantic-token legend/capabilities
-test/lsp_test.cpp                      # protocol-level trait regressions
+include/yona/Semantics/SemanticModel.h  # semantic identity + trait relationships
+src/Lsp/Analysis.cpp                   # trait-aware index and query behavior
+src/Lsp/Server.cpp                     # semantic-token legend/capabilities
+test/Lsp/LspTest.cpp                      # protocol-level trait regressions
 editors/tree-sitter-yona/              # publishable Tree-sitter grammar source
 editors/zed/                           # publishable Zed extension source
-scripts/check-zed-extension.py         # manifest/grammar/discovery package smoke
+scripts/check_zed_extension.py         # manifest/grammar/discovery package smoke
 .github/workflows/cmake-multi-platform.yml
 docs/superpowers/specs/2026-08-26-trait-lsp-zed-design.md
 docs/superpowers/plans/2026-08-26-trait-aware-lsp-zed.md
@@ -51,18 +52,18 @@ docs/todo-list.md CHANGELOG.md docs/* site/src/content/docs/*
 ### Task 1: Give LSP occurrences stable trait-aware identities
 
 **Files:**
-- Modify: `include/typed_core/Query.h`
-- Modify: `src/lsp/Analysis.cpp`
-- Test: `test/lsp_test.cpp`
+- Modify: `include/yona/Semantics/SemanticModel.h`
+- Modify: `src/Lsp/Analysis.cpp`
+- Test: `test/Lsp/LspTest.cpp`
 
 **Consumes:** `ast::TraitDeclNode::{name,type_params,methods,superclasses}` and
 `ast::InstanceDeclNode::{trait_name,type_names,constraints,methods}`.
 
-**Produces:** `typed_core::Symbol` and internal `Occurrence` fields
-`semantic_id`, `detail`, and `container`; identity is
-`<origin-module-or-local>::<declaration-kind>::<owner>::<name>`.
+**Produces:** `semantics::SemanticOccurrence` fields `Binding`, `Detail`, and
+`Container`; `Binding` is a strong model-local `BindingId`, while import origin
+and display metadata remain separate values.
 
-- [ ] **Step 1: Write failing local trait-index tests.**
+- [x] **Step 1: Write failing local trait-index tests.**
 
   Add a module with `trait Eq a; eq : a -> a -> Bool; end` and an `instance Eq
   Int`; assert document symbols contain `Eq` as `interface`, `eq` as
@@ -70,7 +71,7 @@ docs/todo-list.md CHANGELOG.md docs/* site/src/content/docs/*
   its container. Assert hover on each contains its category and complete
   signature/head.
 
-- [ ] **Step 2: Run the regression and confirm the current index lacks method
+- [x] **Step 2: Run the regression and confirm the current index lacks method
   and instance metadata.**
 
   Run: `./out/build/x64-debug-linux/tests -tc='LSP trait symbols*'`
@@ -78,10 +79,10 @@ docs/todo-list.md CHANGELOG.md docs/* site/src/content/docs/*
   Expected: FAIL because `AST_TRAIT_DECL` only adds `Eq` and instance text is
   represented as an unrelated interface occurrence.
 
-- [ ] **Step 3: Implement the semantic model and AST walk.**
+- [x] **Step 3: Implement the semantic model and AST walk.**
 
-  Add `detail`, `container`, and `semantic_id` to `typed_core::Symbol` and the
-  internal occurrence. Add helpers that format:
+  Add detail, container, and strong `BindingId` data to the shared semantic
+  occurrence. Add helpers that format:
 
   ```cpp
   trait Eq a where Ord a
@@ -95,29 +96,27 @@ docs/todo-list.md CHANGELOG.md docs/* site/src/content/docs/*
   whose selection range is the trait name and whose identity includes the
   formatted head; walk methods with `container` set to that head. Make all
   name comparisons in definition/references/highlight/rename compare
-  `semantic_id`, not display spelling.
+  `BindingId`, not display spelling.
 
-- [ ] **Step 4: Run focused LSP tests and commit.**
+- [x] **Step 4: Run focused LSP tests.**
 
   Run: `cmake --build --preset build-debug-linux -j2 && ./out/build/x64-debug-linux/tests -tc='LSP trait symbols*'`
 
   Expected: PASS.
 
-  Commit: `git add include/typed_core/Query.h src/lsp/Analysis.cpp test/lsp_test.cpp && git commit -m 'feat: index trait declarations in yls'`
-
 ### Task 2: Expose trait semantics through all established LSP operations
 
 **Files:**
-- Modify: `src/lsp/Analysis.cpp`
-- Modify: `src/lsp/Server.cpp`
-- Test: `test/lsp_test.cpp`
+- Modify: `src/Lsp/Analysis.cpp`
+- Modify: `src/Lsp/Server.cpp`
+- Test: `test/Lsp/LspTest.cpp`
 
 **Consumes:** Task 1 semantic IDs and trait symbols.
 
 **Produces:** trait-aware hover, signature help, completion detail, semantic
 tokens, navigation, references, rename, and explain-instance code actions.
 
-- [ ] **Step 1: Add failing protocol regressions.**
+- [x] **Step 1: Add failing protocol regressions.**
 
   Add source tests that assert: `Ord` hover displays its superclass and
   `compare : a -> a -> Ordering`; an `Eq (Dict String Int)` occurrence defines
@@ -129,13 +128,13 @@ tokens, navigation, references, rename, and explain-instance code actions.
   assert its action title is `Explain trait instance E....` and invokes
   `yona.explain`.
 
-- [ ] **Step 2: Run the focused tests and confirm failures.**
+- [x] **Step 2: Run the focused tests and confirm failures.**
 
   Run: `./out/build/x64-debug-linux/tests -tc='LSP trait operations*'`
 
   Expected: FAIL on method identity, completion kind/detail, and trait-action title.
 
-- [ ] **Step 3: Implement the query projections.**
+- [x] **Step 3: Implement the query projections.**
 
   Render hover as `kind name`, then `detail`, then the declaration type;
   use `container` in document/workspace symbols and completion details. Map
@@ -146,19 +145,19 @@ tokens, navigation, references, rename, and explain-instance code actions.
   selection code, emit the existing safe explain command with title
   `Explain trait instance <code>`; never synthesize an instance edit.
 
-- [ ] **Step 4: Verify request dispatch and commit.**
+- [x] **Step 4: Verify request dispatch and commit.**
 
   Run: `cmake --build --preset build-debug-linux -j2 && ./out/build/x64-debug-linux/tests -tc='LSP trait operations*'`
 
   Expected: PASS.
 
-  Commit: `git add src/lsp/Analysis.cpp src/lsp/Server.cpp test/lsp_test.cpp && git commit -m 'feat: expose trait semantics through yls'`
+  Commit: `git add src/Lsp/Analysis.cpp src/Lsp/Server.cpp test/Lsp/LspTest.cpp && git commit -m 'feat: expose trait semantics through yls'`
 
 ### Task 3: Cover imported contracts, UTF-16, and recovery
 
 **Files:**
-- Modify: `test/lsp_test.cpp`
-- Modify: `scripts/ci/smoke-yls.py`
+- Modify: `test/Lsp/LspTest.cpp`
+- Modify: `scripts/ci/smoke_yls.py`
 
 **Consumes:** Task 2 query behavior.
 
@@ -194,7 +193,7 @@ incomplete buffers preserve the same identity and UTF-16 ranges.
 
   Expected: PASS.
 
-  Commit: `git add test/lsp_test.cpp scripts/ci/smoke-yls.py src/lsp/Analysis.cpp && git commit -m 'test: cover imported trait contracts in yls'`
+  Commit: `git add test/Lsp/LspTest.cpp scripts/ci/smoke_yls.py src/Lsp/Analysis.cpp && git commit -m 'test: cover imported trait contracts in yls'`
 
 ### Task 4: Ship a Zed language extension and Tree-sitter grammar
 
@@ -204,7 +203,7 @@ incomplete buffers preserve the same identity and UTF-16 ranges.
 - Create: `test/tree-sitter/traits.yona`, `test/tree-sitter/traits.expected`
 - Create: `editors/zed/extension.toml`, `editors/zed/Cargo.toml`, `editors/zed/src/lib.rs`
 - Create: `editors/zed/languages/yona/config.toml`, `editors/zed/languages/yona/highlights.scm`, `editors/zed/languages/yona/brackets.scm`, `editors/zed/languages/yona/outline.scm`, `editors/zed/languages/yona/indents.scm`, `editors/zed/languages/yona/semantic_token_rules.json`
-- Create: `scripts/check-zed-extension.py`
+- Create: `scripts/check_zed_extension.py`
 - Modify: `.github/workflows/cmake-multi-platform.yml`
 
 **Consumes:** the pinned `yona-lang/tree-sitter-yona` revision and `yls --stdio`
@@ -218,14 +217,14 @@ server discovery: configured `YONA_LSP_PATH`, `yls` in `PATH`, then
 
   Add a corpus covering modules/imports, `trait`, multi-parameter `instance`,
   `Ordering` constructors, ADTs, interpolation, comments, tuples/records,
-  and malformed input. Make `check-zed-extension.py` parse TOML, require
+  and malformed input. Make `check_zed_extension.py` parse TOML, require
   `Yona`/`.yona`/`.yonai`, verify all declared query files exist, require a
   full 40-character grammar revision, and assert Rust discovery order in
   `src/lib.rs`.
 
 - [ ] **Step 2: Run checks and confirm they fail before the package exists.**
 
-  Run: `python3 scripts/check-zed-extension.py`
+  Run: `python3 scripts/check_zed_extension.py`
 
   Expected: FAIL because `editors/zed/extension.toml` is absent.
 
@@ -271,12 +270,12 @@ server discovery: configured `YONA_LSP_PATH`, `yls` in `PATH`, then
 
 - [ ] **Step 5: Validate package, grammar, and CI, then commit.**
 
-  Run: `tree-sitter test && python3 scripts/check-zed-extension.py && python3 scripts/check-zed-extension.py --check-generated && git diff --check`
+  Run: `tree-sitter test && python3 scripts/check_zed_extension.py && python3 scripts/check_zed_extension.py --check-generated && git diff --check`
 
-  Expected: PASS. Add `python3 scripts/check-zed-extension.py --check-generated`
+  Expected: PASS. Add `python3 scripts/check_zed_extension.py --check-generated`
   to the Linux CI grammar step.
 
-  Commit: `git add grammar.js package.json src/parser.c src/node-types.json queries test/tree-sitter editors/zed scripts/check-zed-extension.py .github/workflows/cmake-multi-platform.yml && git commit -m 'feat: add Zed language extension'`
+  Commit: `git add grammar.js package.json src/parser.c src/node-types.json queries test/tree-sitter editors/zed scripts/check_zed_extension.py .github/workflows/cmake-multi-platform.yml && git commit -m 'feat: add Zed language extension'`
 
 ### Task 5: Synchronize VS Code validation, documentation, and release readiness
 
@@ -324,7 +323,7 @@ with the finished roadmap item removed.
   cmake --build --preset build-debug-linux -j2
   ctest --preset unit-tests-linux --output-on-failure
   (cd editors/vscode && npm ci && npm test && npm run lint)
-  python3 scripts/check-zed-extension.py --check-generated
+  python3 scripts/check_zed_extension.py --check-generated
   pnpm --dir site build
   git diff --check
   ```
@@ -349,6 +348,6 @@ with the finished roadmap item removed.
   verification command is named. `GRAMMAR_REV` is resolved only after the
   grammar commit exists, so the checked-in manifest receives an immutable
   forty-character SHA rather than a branch name.
-- **Type consistency:** `semantic_id`, `detail`, and `container` are produced
+- **Type consistency:** `BindingId`, `Detail`, and `Container` are produced
   in Task 1 and are the only trait identity inputs used by Task 2/3. Zed
   always launches the existing `yls --stdio` and never imports LSP C++ code.

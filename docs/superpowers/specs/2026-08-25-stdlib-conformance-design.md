@@ -65,7 +65,7 @@ test/stdlib/
   codecs/Json_test.yona
   runtime/File_test.yona
   platform/Net_test.yona
-  accelerator/GPU_test.yona
+  accelerator/gpu_test.yona
 ```
 
 Every script imports `case`, `check`, `equalBy`, `run`, and `render` from
@@ -109,11 +109,11 @@ Each manifest entry must cover applicable categories:
 The rollout starts with pure modules (Bool, Option, Result, Pair, Tuple,
 Function, Collection, List, Range, Math, Constants, String, Format, Set, and
 Dict), then arrays/codecs (ByteArray, IntArray, FloatArray, Encoding, Crypto,
-Json, Regex, Path), then runtime/resource modules (File, IO, Process, Time,
+Json, Regex, Path), then runtime/resource modules (File, Io, Process, Time,
 Random, Channel, Task, Parallel, Stream), then platform/GPU modules (Net,
-Http, GPU, Log, Types). Existing fixtures migrate only when the new suite
+Http, Gpu, Log, Types). Existing fixtures migrate only when the new suite
 expresses the same behavior more clearly; compiler-specific codegen fixtures
-stay in `test/codegen/`.
+stay in `test/Fixtures/Codegen/`.
 
 ## CI and documentation
 

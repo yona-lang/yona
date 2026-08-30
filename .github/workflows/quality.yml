@@ -1,0 +1,174 @@
+name: Local Quality Gate
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-quality:
+    name: Formatting and analysis
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up LLVM
+        uses: ./.github/actions/setup-llvm
+        with:
+          llvm-major: "22"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-quality.txt
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          version: 10.15.0
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Install free local quality tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${LLVM_MAJOR}" = "22"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            "clang-tools-${LLVM_MAJOR}" cppcheck iwyu shellcheck \
+            libvulkan-dev vulkan-validationlayers
+          python -m pip install --requirement requirements-quality.txt
+          pnpm --dir site install --frozen-lockfile
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.14.0
+          cargo install typos-cli --version 1.50.0 --locked
+          curl --fail --location --output /tmp/glslang.zip \
+            https://github.com/KhronosGroup/glslang/archive/refs/tags/16.1.0.zip
+          echo \
+            "a8b7e8511b00a8626f9f00c955e852c376d2880c435e94ee0ecdf4c8f8167392  /tmp/glslang.zip" \
+            | sha256sum --check --strict
+          unzip -q /tmp/glslang.zip -d /tmp
+          cmake -S /tmp/glslang-16.1.0 -B /tmp/glslang-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DENABLE_GLSLANG_BINARIES=ON \
+            -DENABLE_OPT=OFF -DENABLE_HLSL=OFF
+          cmake --build /tmp/glslang-build --target glslang-standalone \
+            --parallel 2
+          echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
+          echo "/tmp/glslang-build/StandAlone" >> "${GITHUB_PATH}"
+
+      - name: Install PowerShell analyzer
+        shell: pwsh
+        run: >-
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Scope
+          CurrentUser -Force -Repository PSGallery
+
+      - name: Configure and build
+        run: |
+          cmake --preset x64-debug-linux
+          cmake --build --preset build-debug-linux --parallel 2
+
+      - name: Formatting and repository contracts
+        run: |
+          python scripts/quality.py format-check
+          python scripts/quality.py hygiene
+          python scripts/quality.py naming
+          python scripts/quality.py architecture
+          python scripts/quality.py generated
+          python scripts/quality.py symbols \
+            --build-dir out/build/x64-debug-linux
+          python scripts/quality.py yona-style \
+            --build-dir out/build/x64-debug-linux --jobs 2
+
+      - name: Native interface and clang-tidy checks
+        run: |
+          python scripts/quality.py headers \
+            --build-dir out/build/x64-debug-linux --jobs 2
+          python scripts/quality.py tidy \
+            --build-dir out/build/x64-debug-linux --jobs 2
+
+      - name: Independent analyzers
+        run: >-
+          python scripts/quality.py analyze --build-dir
+          out/build/x64-debug-linux --jobs 2
+
+  instrumented-quality:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ASan, UBSan, LSan, and TSan
+            command: sanitize
+          - name: Parser and runtime fuzz smoke
+            command: fuzz-check
+          - name: Critical-path coverage
+            command: coverage
+          - name: Vulkan validation
+            command: vulkan
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up LLVM
+        uses: ./.github/actions/setup-llvm
+        with:
+          llvm-major: "22"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Vulkan validation stack
+        if: matrix.command == 'vulkan'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libvulkan-dev mesa-vulkan-drivers vulkan-tools \
+            vulkan-validationlayers
+
+      - name: Configure dependency source tree
+        run: cmake --preset x64-debug-linux
+
+      - name: Run ${{ matrix.name }}
+        run: >-
+          python scripts/quality.py ${{ matrix.command }} --build-dir
+          out/build/x64-debug-linux --preset x64-debug-linux --jobs 2
+
+  quality:
+    name: Quality
+    if: always()
+    needs: [static-quality, instrumented-quality]
+    runs-on: ubuntu-26.04
+    permissions: {}
+    steps:
+      - name: Require every local quality check
+        env:
+          STATIC_RESULT: ${{ needs.static-quality.result }}
+          INSTRUMENTED_RESULT: ${{ needs.instrumented-quality.result }}
+        run: |
+          test "${STATIC_RESULT}" = "success"
+          test "${INSTRUMENTED_RESULT}" = "success"

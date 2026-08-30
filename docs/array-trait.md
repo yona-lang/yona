@@ -84,10 +84,10 @@ To add a new type as an `Array` instance:
 1. Add the trait instance to `lib/Prelude.yonai`:
    ```
    INSTANCE Array MyType
-     IMPL length yona_Prelude__Array_MyType__length
-     IMPL get yona_Prelude__Array_MyType__get
+     IMPL length YonaPreludeArrayMyTypeLength
+     IMPL get YonaPreludeArrayMyTypeGet
    ```
-2. Implement the wrapper functions in `src/compiled_runtime.c` taking
-   `int64_t` (boxed pointer) args.
-3. To support polymorphic `foldl`, add a case to `yona_Std_List__foldl`
+2. Implement the wrapper functions in the owning runtime component, using the
+   canonical typed value descriptors for managed arguments.
+3. To support polymorphic `foldl`, add a case to `YonaStdListFoldl`
    that detects your type's RC tag and dispatches to the specialized fold.

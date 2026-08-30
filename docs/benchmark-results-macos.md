@@ -9,8 +9,8 @@
 - `export YONAC_CC=$(command -v clang)`  # Homebrew LLVM 22.1.8
 - `python3 bench/runner.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O 2 --compare "c,erl,java,hs,js,py" --json --save`
 - Raw output: `bench/macos-full-bench-2026-08-17-n10.log`
-- Machine-readable: `bench/macos-full-bench-2026-08-17-n10.json`
-- GPU crossover: `bench/macos-gpu-compare-2026-08-17-n10.json`, `bench/macos-gpu-bench-meta-2026-08-17.json`
+- Machine-readable: `bench/Generated/Results/macos-full-bench-2026-08-17-n10.json`
+- GPU crossover: `bench/Generated/Results/macos-gpu-compare-2026-08-17-n10.json`, `bench/Generated/Results/macos-gpu-bench-meta-2026-08-17.json`
 
 **Compilers / Runtimes**:
 - Yona `-O2` (debug `yonac`, LLVM 22.1.8), CMake Vulkan ON
@@ -104,7 +104,7 @@ The runner reports adjusted values (`app_time = max(total - startup, 0.01ms)`).
 | file_parallel_read_large | 126 | 35.3 | 0.01 | — | 226 | 27.3 | 40.7 |
 | file_readlines_large | 348 | 129 | 336 | 124 | 607 | 713 | 561 |
 
-## Std\GPU accelerators (adjusted ms)
+## Std\Gpu accelerators (adjusted ms)
 
 | Benchmark | Yona | C | Erlang | Haskell | Java | Node.js | Python |
 |-----------|-----:|--:|-------:|--------:|-----:|--------:|-------:|
@@ -138,9 +138,9 @@ The table below summarizes per-runtime peak RSS across benchmark rows.
 | Node.js | 43.6 | 47.9 | 217.3 |
 | Python | 14.2 | 14.9 | 119.5 |
 
-## Std\GPU / Vulkan crossover (this machine)
+## Std\Gpu / Vulkan crossover (this machine)
 
-Captured with `python3 bench/run_gpu_compare.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O2 --json-report`.
+Captured with `python3 bench/run_gpu_compare.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O2 --json`.
 Device: Apple M3 via MoltenVK (no `shaderInt64` / typically no `shaderFloat64`; IntArray uses i32 when values fit, float scale uses f32).
 
 | Benchmark | CPU avg (ms) | GPU avg (ms) | Status |
@@ -165,7 +165,7 @@ See `docs/gpu-transparent-lowering.md` for how this feeds the crossover cost mod
 - This report uses warm-cache behavior for file workloads.
 - Startup RSS values are cached per runtime; rerun after toolchain/runtime changes.
 - `yonac` used here is the native Apple Silicon debug macOS build (`arm64-debug-macos`) with `-DYONA_ENABLE_VULKAN=ON`.
-- The main `bench/runner.py` matrix does not force CPU or Vulkan; accelerator rows use default `Std\GPU` discovery.
+- The main `bench/runner.py` matrix does not force CPU or Vulkan; accelerator rows use default `Std\Gpu` discovery.
 - Erlang/OTP 29 is on PATH; cells are `—` only when that row has no working `.erl` reference.
 - Erlang cold-start is ~686 ms (BEAM boot). Most short rows clamp to the `0.01ms` adjusted floor; prefer raw times in the JSON for those cells.
 - Comparison cells are `—` when a reference failed to compile, produced the wrong stdout, or has no implementation for that row.

@@ -71,30 +71,30 @@ pfor (\item -> upload item) items
 
 ## Architecture
 
-### Task Group Runtime (`src/runtime/platform/async_posix.c` / `async_win32.c`)
+### Task Group Runtime (`src/Runtime/Concurrency/AsyncPosix.c` / `AsyncWin32.c`)
 
 ```c
 typedef struct yona_task_group {
     int cancelled;           // atomic flag
     int pending_count;       // atomic count of incomplete children
-    yona_promise_t** children;  // thread pool promises
+    YonaTask** children;  // thread pool promises
     uint64_t* io_children;     // io_uring operation IDs
     int64_t first_error;       // error symbol from first failure
     const char* first_error_msg;
     void* arena;               // bump arena for parent-thread scope (see below)
-} yona_task_group_t;
+} YonaTaskGroup;
 ```
 
 API:
-- `yona_rt_group_begin()` — create a group
-- `yona_rt_group_attach_arena(group, arena)` — attach bump arena created with `yona_rt_arena_create` (codegen for multi-binding `let`)
-- `yona_rt_group_register(group, promise)` — add thread-pool child
-- `yona_rt_group_register_io(group, io_id)` — add io_uring child
-- `yona_rt_group_cancel(group)` — set cancelled flag
-- `yona_rt_group_is_cancelled(group)` — check flag (for Cancel.check)
-- `yona_rt_group_await_all(group)` — wait for all children, re-raise first error
-- `yona_rt_group_end(group)` — destroy attached arena (if any), mutex/cond, free group
-- `yona_rt_group_arena_bind_push(group)` / `yona_rt_group_arena_bind_pop()` — TLS stack keyed by `yona_try_depth` so `yona_rt_raise` can call `yona_rt_group_end` for in-flight groups before `longjmp` (success path pops after `group_end`)
+- `YonaRuntimeTaskGroupBegin()` — create a group
+- `YonaRuntimeTaskGroupAttachArena(group, arena)` — attach bump arena created with `YonaRuntimeArenaCreate` (codegen for multi-binding `let`)
+- `YonaRuntimeTaskGroupRegister(group, promise)` — add thread-pool child
+- `YonaRuntimeTaskGroupRegisterIo(group, io_id)` — add io_uring child
+- `YonaRuntimeTaskGroupCancel(group)` — set cancelled flag
+- `YonaRuntimeTaskGroupIsCancelled(group)` — check flag (for Cancel.check)
+- `YonaRuntimeTaskGroupAwaitAll(group)` — wait for all children, re-raise first error
+- `YonaRuntimeTaskGroupEnd(group)` — destroy attached arena (if any), mutex/cond, free group
+- `YonaRuntimeTaskGroupArenaBindPush(group)` / `YonaRuntimeTaskGroupArenaBindPop()` — TLS stack keyed by `yona_try_depth` so `YonaRuntimeRaise` can call `YonaRuntimeTaskGroupEnd` for in-flight groups before `longjmp` (success path pops after `group_end`)
 
 ### Worker Error Capture
 
@@ -103,22 +103,22 @@ Worker threads wrap task execution in `setjmp`. On exception:
 2. Group cancelled flag set → siblings skip execution
 3. `group_await_all` re-raises the error on the caller's thread
 
-### io_uring Cancellation (`include/yona/runtime/uring.h`)
+### io_uring Cancellation (`include/yona/Runtime/Platform/IoUring.h`)
 
-When a group is cancelled, `ring_cancel(target_id)` submits `IORING_OP_ASYNC_CANCEL` SQEs for each pending io_uring operation. The kernel cancels in-flight operations, which complete with `res = -ECANCELED`. The await path handles this by cleaning up the I/O context.
+When a group is cancelled, `YonaRuntimeIoUringCancel(target_id)` submits `IORING_OP_ASYNC_CANCEL` SQEs for each pending io_uring operation. The kernel cancels in-flight operations, which complete with `res = -ECANCELED`. The await path handles this by cleaning up the I/O context.
 
 ### Codegen Integration
 
-In `codegen_let` (`src/codegen/CodegenExpr.cpp`):
+In `codegen_let` (`src/Codegen/CodegenExpr.cpp`):
 1. Multi-binding let blocks emit `group_begin()` before alias codegen
 2. A **task-group bump arena** is always created (`arena_create`), attached with `group_attach_arena`, and registered via `group_arena_bind_push` for exception-safe teardown
 3. `current_arena_` points at that arena for **alias codegen and the let body**, so non-escaping heap (`analyze_let_escaping`) bump-allocates into the group arena
-4. Async calls use grouped variants (`async_call_grouped`) — worker threads do **not** receive the parent arena (v1); async RHS stay on `rc_alloc`
+4. Async calls use grouped variants (`async_call_grouped`) — worker threads do **not** receive the parent arena; async RHS stay on `YonaRuntimeAllocate`
 5. On fall-through: `group_await_all()` → `cleanup_let_scope` (skips `rc_dec` for arena payloads) → `group_arena_bind_pop` → `group_end()` (destroys arena + frees group)
-6. If the body already terminated (`raise`, etc.), await/cleanup/end are skipped in IR; `yona_rt_raise` walks the bind stack and calls `group_end` for each deeper task group before `longjmp`
+6. If the body already terminated (`raise`, etc.), await/cleanup/end are skipped in IR; `YonaRuntimeRaise` walks the bind stack and calls `group_end` for each deeper task group before `longjmp`
 7. `current_group_` tracks the active group (like `handler_stack_` for effects)
 
-Benchmark: `bench/concurrency/task_group_arena.yona` (one outer two-binding `let` with small seq literals, then 50k iterations of an inner tail-recursive counter) plus `bench/reference/task_group_arena.c` for a stack-only C baseline.
+Benchmark: `bench/concurrency/task_group_arena.yona` (one outer two-binding `let` with small seq literals, then 50k iterations of an inner tail-recursive counter) plus `bench/Reference/TaskGroupArena.c` for a stack-only C baseline.
 
 ## Comparison
 

@@ -108,7 +108,7 @@ do
 end
 
 -- Process: spawn, use, wait
-let proc = spawn "ls -la" in
+let proc = spawn "ls" ["-la"] in
 let output = readAll proc in         -- borrow
 do
     wait proc                        -- consume
@@ -135,18 +135,18 @@ end
 ## Composing with Effects
 
 ```yona
-effect NetIO
+effect NetIo
     connect : String -> Int -> Linear Int
     send : Int -> String -> Int
     close : Int -> ()
 end
 
 fetchData host port =
-    let conn = perform NetIO.connect host port in
+    let conn = perform NetIo.connect host port in
     case conn of
         Linear fd ->
-            let data = perform NetIO.send fd "GET / HTTP/1.1\r\n" in
-            do; perform NetIO.close fd; data; end
+            let data = perform NetIo.send fd "GET / HTTP/1.1\r\n" in
+            do; perform NetIo.close fd; data; end
     end
 ```
 
@@ -158,7 +158,7 @@ fetchData host port =
 
 **No uniqueness types**: Yona's RC system already provides unique-owner in-place mutation when `rc==1`. Static uniqueness tracking would add complexity for zero performance gain.
 
-**No linear closures** (v1): Closures cannot capture linear values. Use `with` blocks for resource-scoped operations.
+**No linear closures:** Closures cannot capture linear values. Use `with` blocks for resource-scoped operations.
 
 ## Architecture
 

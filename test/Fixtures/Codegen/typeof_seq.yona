@@ -1,0 +1,4 @@
+case typeOf [1, 2, 3] of
+    TypeSeq -> 1
+    _ -> 0
+end

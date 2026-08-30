@@ -7,7 +7,6 @@ YONAC="${BUILD_DIR}/yonac"
 CC="${YONAC_CC:-${CC:-clang}}"
 
 test -x "${YONAC}"
-test -f "${BUILD_DIR}/runtime/compiled_runtime.o"
 test -f "${BUILD_DIR}/runtime/libyona_runtime.a"
 
 INPROC_ACTIVE="$(awk -F= '/^YONA_INPROCESS_LLD_AVAILABLE:BOOL=/{print $2}' "${BUILD_DIR}/CMakeCache.txt" | tr -d '\r')"

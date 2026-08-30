@@ -1,9 +1,10 @@
-FN yona_Std_Set__insert 2 Set(VAR(element)) VAR(element) -> Set(VAR(element))
-FN yona_Std_Set__contains 2 Set(VAR(element)) VAR(element) -> BOOL
-FN yona_Std_Set__size 1 Set(VAR(element)) -> INT
-FN yona_Std_Set__elements 1 Set(VAR(element)) -> Seq(VAR(element))
-FN yona_Std_Set__union 2 Set(VAR(element)) Set(VAR(element)) -> Set(VAR(element))
-FN yona_Std_Set__intersection 2 Set(VAR(element)) Set(VAR(element)) -> Set(VAR(element))
-FN yona_Std_Set__difference 2 Set(VAR(element)) Set(VAR(element)) -> Set(VAR(element))
-FN yona_Std_Set__iterator 1 Set(VAR(element)) -> ADT(Iterator,VAR(element)) retadt Iterator
-FN yona_Std_Set__forEach 2 FUNCTION(VAR(element),UNIT) Set(VAR(element)) -> UNIT
+MODULE Std\Set
+FN contains 2 Set(VAR(element)) VAR(element) -> BOOL
+FN difference 2 Set(VAR(element)) Set(VAR(element)) -> Set(VAR(element))
+FN elements 1 Set(VAR(element)) -> Seq(VAR(element))
+FN forEach 2 FUNCTION(VAR(element),UNIT) Set(VAR(element)) -> UNIT
+FN insert 2 Set(VAR(element)) VAR(element) -> Set(VAR(element))
+FN intersection 2 Set(VAR(element)) Set(VAR(element)) -> Set(VAR(element))
+FN iterator 1 Set(VAR(element)) -> ADT(Iterator,VAR(element))
+FN size 1 Set(VAR(element)) -> INT
+FN union 2 Set(VAR(element)) Set(VAR(element)) -> Set(VAR(element))

@@ -5,18 +5,18 @@ paths and the current async backend state.
 
 ## Runtime units
 
-- `src/runtime/platform/file_windows.c`
-- `src/runtime/platform/net_windows.c`
-- `src/runtime/platform/os_windows.c`
-- `src/runtime/platform/async_win32.c`
-- `src/runtime/platform/channel_win32.c`
+- `src/Runtime/Platform/FileWindows.c`
+- `src/Runtime/Platform/NetWindows.c`
+- `src/Runtime/Platform/OsWindows.c`
+- `src/Runtime/Concurrency/AsyncWin32.c`
+- `src/Runtime/Concurrency/ChannelWin32.c`
 
 All of the above implement the portable ABI from
-`include/yona/runtime/platform.h`.
+`include/yona/Runtime/Platform/Api.h`.
 
 ## Async model on Windows
 
-`yona_rt_io_await()` is implemented in `file_windows.c` and serves two ID types:
+`YonaRuntimeIoAwait()` is implemented in `FileWindows.c` and serves two ID types:
 
 - **IOCP-backed pending operations** for overlapped file/socket submits.
 - **Direct/offload result IDs** for operations that complete via a registered
@@ -27,8 +27,8 @@ side-effect ordering must match existing semantics.
 
 ## File/path status
 
-- `yona_platform_read_file_submit`: IOCP-backed overlapped path with fallback.
-- `yona_platform_write_file_submit`: direct-result submit.
+- `YonaRuntimePlatformSubmitFileRead`: IOCP-backed overlapped path with fallback.
+- `YonaRuntimePlatformSubmitFileWrite`: direct-result submit.
 - FD submit APIs are currently direct-result based and preserve side-effect
   ordering semantics expected by existing tests.
 
@@ -47,12 +47,14 @@ side-effect ordering must match existing semantics.
 
 - Winsock startup is guarded by `InitOnceExecuteOnce`.
 - Socket handles are represented as `int64_t` through `(intptr_t)` casts.
-- Current process stdlib behavior is implemented in `os_windows.c`; async pipe
+- Current process stdlib behavior is implemented in
+  `src/Runtime/Platform/OsWindows.c`; async pipe
   behavior follows the same submit/await contract as other runtime paths.
 
 ## Cancellation and task groups
 
 Structured concurrency and cancellation are implemented in
-`async_win32.c`/`channel_win32.c` and interact with runtime exception unwind.
+`src/Runtime/Concurrency/AsyncWin32.c` and `ChannelWin32.c`, and interact with
+runtime exception unwind.
 Task-group arena lifecycle and raise-unwind parity are tested in
 `PerceusExceptionCleanup`.

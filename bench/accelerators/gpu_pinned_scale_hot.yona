@@ -1,12 +1,12 @@
 import fill from Std\FloatArray in
-import allocPinnedFloats, copyFloatArrayToPinned, mapFloatPinnedGPU, Scale, pinnedToFloatArray, closePinnedFloats, reduceFloatGPU, FSum from Std\GPU in
+import allocPinnedFloats, copyFloatArrayToPinned, mapFloatPinnedGpu, Scale, pinnedToFloatArray, closePinnedFloats, reduceFloatGpu, FloatSum from Std\Gpu in
 let n = 4096 in
 let a = fill n 1.0 in
 let p = allocPinnedFloats n in
 let _ = copyFloatArrayToPinned a p in
-let _ = mapFloatPinnedGPU (Scale 2.0) p in
+let _ = mapFloatPinnedGpu (Scale 2.0) p in
 let b = pinnedToFloatArray p in
-let total = reduceFloatGPU FSum b in
+let total = reduceFloatGpu FloatSum b in
 let _ = closePinnedFloats p in
 ## Expect 4096 * 2.0 = 8192
 total

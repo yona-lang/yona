@@ -1,1 +1,0 @@
-extern async yona_test_slow_identity : Int -> Int in yona_test_slow_identity 42

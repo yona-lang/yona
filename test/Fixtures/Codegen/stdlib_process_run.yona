@@ -1,0 +1,2 @@
+import run from Std\Process in
+run "/bin/sh" ["-c", "exit 7"]

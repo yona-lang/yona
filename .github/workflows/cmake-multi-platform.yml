@@ -2,9 +2,9 @@ name: CMake Multi-Platform Build
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: ["master", "main"]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: ["master", "main"]
 
 jobs:
   build:
@@ -70,115 +70,122 @@ jobs:
             arch: arm64
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-    - name: Check TextMate grammar sync
-      if: runner.os == 'Linux'
-      run: ./scripts/check-yona-grammar.sh
+      - name: Check TextMate grammar sync
+        if: runner.os == 'Linux'
+        run: ./scripts/check-yona-grammar.sh
 
-    - name: Set up LLVM
-      uses: ./.github/actions/setup-llvm
-      with:
-        windows-architecture: ${{ matrix.arch }}
+      - name: Set up LLVM
+        uses: ./.github/actions/setup-llvm
+        with:
+          windows-architecture: ${{ matrix.arch }}
 
-    - name: Configure
-      run: cmake --preset ${{ matrix.configure_preset }}
+      - name: Configure
+        run: cmake --preset ${{ matrix.configure_preset }}
 
-    - name: Build
-      run: cmake --build --preset ${{ matrix.build_preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.build_preset }}
 
-    - name: Smoke yls
-      if: success()
-      shell: bash
-      run: |
-        PY="$(command -v python3 || command -v python)"
-        YLS="out/build/${{ matrix.build_dir }}/yls"
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          YLS="${YLS}.exe"
-        fi
-        "$PY" scripts/ci/smoke-yls.py "$YLS"
-
-    - name: Smoke yls-yona
-      if: success()
-      shell: bash
-      run: |
-        PY="$(command -v python3 || command -v python)"
-        YLSY="out/build/${{ matrix.build_dir }}/yls-yona"
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          YLSY="${YLSY}.exe"
-        fi
-        "$PY" scripts/ci/smoke-yls-yona.py "$YLSY"
-
-    - name: Report embedded LLD
-      if: success()
-      shell: bash
-      run: |
-        PY="$(command -v python3 || command -v python)"
-        "$PY" scripts/ci/report-embedded-lld.py "out/build/${{ matrix.build_dir }}/CMakeCache.txt" "${{ matrix.name }}"
-
-    - name: Validate linker modes
-      if: success() && runner.os != 'Windows'
-      run: bash scripts/ci/validate-linker-modes.sh "out/build/${{ matrix.build_dir }}"
-
-    - name: Validate linker modes
-      if: success() && runner.os == 'Windows'
-      shell: pwsh
-      run: ./scripts/ci/validate-linker-modes.ps1 -BuildDir "out/build/${{ matrix.build_dir }}"
-
-    - name: Test
-      if: success()
-      run: ctest --test-dir "out/build/${{ matrix.build_dir }}" --output-on-failure --output-junit "${{ github.workspace }}/test-results.xml"
-
-    - name: Collect test results
-      if: always()
-      shell: bash
-      run: |
-        mkdir -p collected-results
-        if [ -f test-results.xml ]; then
-          cp test-results.xml collected-results/
-        fi
-        for f in "out/build/${{ matrix.build_dir }}"/doctest*.xml; do
-          if [ -f "$f" ]; then
-            cp "$f" collected-results/
+      - name: Smoke yls
+        if: success()
+        shell: bash
+        run: |
+          PY="$(command -v python3 || command -v python)"
+          YLS="out/build/${{ matrix.build_dir }}/yls"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            YLS="${YLS}.exe"
           fi
-        done
+          "$PY" scripts/ci/smoke-yls.py "$YLS"
 
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results-${{ matrix.name }}
-        path: collected-results/*
-        if-no-files-found: ignore
-
-    - name: Parse test results
-      if: always()
-      shell: bash
-      run: |
-        PY="$(command -v python3 || command -v python)"
-        files=()
-        for f in collected-results/doctest*.xml collected-results/test-results.xml; do
-          if [ -f "$f" ]; then
-            files+=("$f")
+      - name: Smoke yls-yona
+        if: success()
+        shell: bash
+        run: |
+          PY="$(command -v python3 || command -v python)"
+          YLSY="out/build/${{ matrix.build_dir }}/yls-yona"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            YLSY="${YLSY}.exe"
           fi
-        done
-        if [ "${#files[@]}" -eq 0 ]; then
-          echo "No JUnit XML to summarize" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
-        fi
-        "$PY" scripts/ci/summarize-junit.py --title "${{ matrix.name }}" "${files[@]}"
+          "$PY" scripts/ci/smoke-yls-yona.py "$YLSY"
 
-    - name: Test report
-      uses: dorny/test-reporter@v1
-      if: always()
-      with:
-        name: Tests - ${{ matrix.name }}
-        path: collected-results/doctest*.xml
-        reporter: java-junit
-        fail-on-error: 'false'
-        fail-on-empty: 'false'
+      - name: Report embedded LLD
+        if: success()
+        shell: bash
+        run: |
+          PY="$(command -v python3 || command -v python)"
+          "$PY" scripts/ci/report-embedded-lld.py "out/build/${{ matrix.build_dir }}/CMakeCache.txt" "${{ matrix.name }}"
+
+      - name: Validate linker modes
+        if: success() && runner.os != 'Windows'
+        run:
+          bash scripts/ci/validate-linker-modes.sh "out/build/${{
+          matrix.build_dir }}"
+
+      - name: Validate linker modes
+        if: success() && runner.os == 'Windows'
+        shell: pwsh
+        run:
+          ./scripts/ci/validate-linker-modes.ps1 -BuildDir "out/build/${{
+          matrix.build_dir }}"
+
+      - name: Test
+        if: success()
+        run:
+          ctest --test-dir "out/build/${{ matrix.build_dir }}"
+          --output-on-failure --output-junit "${{ github.workspace
+          }}/test-results.xml"
+
+      - name: Collect test results
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p collected-results
+          if [ -f test-results.xml ]; then
+            cp test-results.xml collected-results/
+          fi
+          for f in "out/build/${{ matrix.build_dir }}"/doctest*.xml; do
+            if [ -f "$f" ]; then
+              cp "$f" collected-results/
+            fi
+          done
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.name }}
+          path: collected-results/*
+          if-no-files-found: ignore
+
+      - name: Parse test results
+        if: always()
+        shell: bash
+        run: |
+          PY="$(command -v python3 || command -v python)"
+          files=()
+          for f in collected-results/doctest*.xml collected-results/test-results.xml; do
+            if [ -f "$f" ]; then
+              files+=("$f")
+            fi
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No JUnit XML to summarize" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          "$PY" scripts/ci/summarize-junit.py --title "${{ matrix.name }}" "${files[@]}"
+
+      - name: Test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Tests - ${{ matrix.name }}
+          path: collected-results/doctest*.xml
+          reporter: java-junit
+          fail-on-error: "false"
+          fail-on-empty: "false"
 
   test-summary:
     name: Test Summary
@@ -186,66 +193,66 @@ jobs:
     runs-on: ubuntu-26.04
     if: always()
     steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-    - name: Download all test results
-      uses: actions/download-artifact@v4
-      with:
-        pattern: test-results-*
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
 
-    - name: Create test summary
-      run: |
-        files=()
-        for dir in test-results-*; do
-          [ -d "$dir" ] || continue
-          found=0
-          for f in "$dir"/doctest*.xml; do
-            if [ -f "$f" ]; then
-              files+=("$f")
-              found=1
+      - name: Create test summary
+        run: |
+          files=()
+          for dir in test-results-*; do
+            [ -d "$dir" ] || continue
+            found=0
+            for f in "$dir"/doctest*.xml; do
+              if [ -f "$f" ]; then
+                files+=("$f")
+                found=1
+              fi
+            done
+            if [ "$found" -eq 0 ] && [ -f "$dir/test-results.xml" ]; then
+              files+=("$dir/test-results.xml")
             fi
           done
-          if [ "$found" -eq 0 ] && [ -f "$dir/test-results.xml" ]; then
-            files+=("$dir/test-results.xml")
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No test-results.xml artifacts" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-        done
-        if [ "${#files[@]}" -eq 0 ]; then
-          echo "No test-results.xml artifacts" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
-        fi
-        python3 scripts/ci/summarize-junit.py --table "${files[@]}"
+          python3 scripts/ci/summarize-junit.py --table "${files[@]}"
 
   # Package only. Marketplace / Open VSX publish lives in release.yml (v* tags).
   vscode-extension:
     name: VS Code extension
     runs-on: ubuntu-26.04
     steps:
-    - uses: actions/checkout@v5
-      with:
-        persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
-    - name: Check TextMate grammar sync
-      run: ./scripts/check-yona-grammar.sh
+      - name: Check TextMate grammar sync
+        run: ./scripts/check-yona-grammar.sh
 
-    - uses: actions/setup-node@v5
-      with:
-        node-version: "22"
-        cache: npm
-        cache-dependency-path: editors/vscode/package-lock.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
 
-    - name: Test and package VSIX
-      working-directory: editors/vscode
-      run: |
-        npm ci
-        npm run lint
-        npm test
-        npm run vsix
+      - name: Test and package VSIX
+        working-directory: editors/vscode
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run vsix
 
-    - name: Upload VSIX
-      uses: actions/upload-artifact@v4
-      with:
-        name: yona-vscode-vsix
-        path: editors/vscode/*.vsix
-        if-no-files-found: error
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: yona-vscode-vsix
+          path: editors/vscode/*.vsix
+          if-no-files-found: error

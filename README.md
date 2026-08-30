@@ -106,8 +106,8 @@ in map (\x -> x * 2) (Some 21)
 ```yona
 -- Transparent async: independent bindings run in parallel
 import exec from Std\Process in
-let a = exec "echo hello",
-    b = exec "echo world"
+let a = exec "echo" ["hello"],
+    b = exec "echo" ["world"]
 in a ++ " " ++ b
 -- Both commands run concurrently via thread pool
 ```
@@ -143,12 +143,12 @@ end
 | `Std\Regex` | compile, matches, find, findAll, replace, replaceAll, split |
 | `Std\File` | readFile, writeFile, exists, readLines, listDir |
 | `Std\Process` | spawn, exec, readLine, readAll, wait, kill, writeStdin |
-| `Std\IO` | print, println, eprint, eprintln, readLine, isTty, flush (non-blocking via io_uring) |
+| `Std\Io` | print, println, eprint, eprintln, readLine, isTty, flush (non-blocking via io_uring) |
 | `Std\Json` | parse, stringify |
 | `Std\Net` | connect, accept, send, recv |
 | `Std\Option` | Some, None, map, unwrapOr |
 | `Std\Result` | Ok, Err, map, mapErr, unwrapOr |
-| `Std\Stream` | range, map, filter, take, chunksOf, bracket, async, buffered |
+| `Std\Stream` | range, map, filter, take, chunksOf, bracket |
 | `Std\Channel` | channel, send, recv, close (bounded, linear endpoints) |
 | `Std\Task` | spawn, await |
 | `Std\Constants\{Num,Math,Platform}` | intMax, pi, pageSize, endianness |
@@ -174,7 +174,7 @@ Benchmarks vs equivalent C (gcc -O2), 10 iterations:
 
 Full table: [docs/todo-list.md](docs/todo-list.md#benchmark-results). Reference
 impls in C, Erlang, Haskell, Java, JavaScript, Python under
-[`bench/reference/`](bench/reference/).
+[`bench/Reference/`](bench/Reference/).
 
 ## Architecture
 
@@ -221,8 +221,8 @@ cmake --build --preset build-debug-linux
 # Run tests
 ctest --preset unit-tests-linux
 
-# Run benchmarks (compare vs C; add --compare-erl or --compare=c,erl for Erlang too)
-python3 bench/runner.py --compare-c -n 10
+# Run benchmarks (compare against C; use --compare c,erl for Erlang too)
+python3 bench/runner.py --compare c -n 10
 
 # Format code
 ./scripts/format.sh

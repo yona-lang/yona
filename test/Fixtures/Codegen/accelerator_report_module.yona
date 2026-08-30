@@ -1,0 +1,5 @@
+module Test\AccelReportMod
+
+export f
+
+f xs = import upload from Std\Gpu in upload xs

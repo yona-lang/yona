@@ -1,17 +1,40 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
+# All hooks are repository-local: installing and running them needs no network.
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
+  - repo: local
     hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: mixed-line-ending
-        args: [--fix=lf]
-    -   id: check-yaml
-    -   id: check-added-large-files
-# -   repo: https://github.com/pocc/pre-commit-hooks
-#     rev: v1.3.5
-#     hooks:
-#         - id: clang-format
-#         - id: clang-tidy
+      - id: yona-text-hygiene
+        name: text hygiene
+        entry: python scripts/quality.py hygiene
+        language: system
+        pass_filenames: true
+        types: [file]
+      - id: yona-format-check
+        name: canonical formatting
+        entry: python scripts/quality.py format-check
+        language: system
+        pass_filenames: true
+        types: [file]
+      - id: yona-naming
+        name: paths, headers, and Yona module names
+        entry: python scripts/check_naming.py
+        language: system
+        pass_filenames: true
+        types: [file]
+      - id: yona-architecture
+        name: canonical component graph
+        entry: python scripts/quality.py architecture
+        language: system
+        pass_filenames: false
+        files: ^cmake/YonaComponents\.cmake$
+      - id: yona-generated-shaders
+        name: deterministic GPU shader fragments
+        entry: python scripts/quality.py generated
+        language: system
+        pass_filenames: false
+        files: ^(scripts/generate_gpu_shaders\.py|src/Runtime/Generated/.*\.(comp|inc))$
+      - id: yona-source-style
+        name: compiler-backed Yona source style
+        entry: python scripts/quality.py yona-style
+        language: system
+        pass_filenames: true
+        files: \.yona$

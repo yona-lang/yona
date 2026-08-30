@@ -4,19 +4,19 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'site/**'
-      - 'docs/api/**'
-      - 'lib/Std/**'
-      - 'scripts/gendocs.py'
-      - '.github/workflows/docs-site.yml'
+      - "site/**"
+      - "docs/api/**"
+      - "lib/Std/**"
+      - "scripts/gendocs.py"
+      - ".github/workflows/docs-site.yml"
   pull_request:
     branches: [master, main]
     paths:
-      - 'site/**'
-      - 'docs/api/**'
-      - 'lib/Std/**'
-      - 'scripts/gendocs.py'
-      - '.github/workflows/docs-site.yml'
+      - "site/**"
+      - "docs/api/**"
+      - "lib/Std/**"
+      - "scripts/gendocs.py"
+      - ".github/workflows/docs-site.yml"
   workflow_dispatch:
 
 concurrency:
@@ -95,6 +95,9 @@ jobs:
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT || 'yona-lang' }} --branch=${{ github.head_ref || github.ref_name }}
+          accountId:
+            ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command:
+            pages deploy dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT
+            || 'yona-lang' }} --branch=${{ github.head_ref || github.ref_name }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}

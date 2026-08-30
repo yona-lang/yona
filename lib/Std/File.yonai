@@ -1,19 +1,20 @@
-IO yona_Std_File__readFile 1 STRING -> STRING
-IO yona_Std_File__writeFile 2 STRING STRING -> BOOL
-FN yona_Std_File__appendFile 2 STRING STRING -> BOOL
-FN yona_Std_File__exists 1 STRING -> BOOL
-FN yona_Std_File__remove 1 STRING -> BOOL
-FN yona_Std_File__size 1 STRING -> INT
-FN yona_Std_File__listDir 1 STRING -> SEQ
-FN yona_Std_File__readLines 1 STRING -> ADT retadt Iterator
-IO yona_Std_File__readFileBytes 1 STRING -> BYTE_ARRAY
-FN yona_Std_File__writeFileBytes 2 STRING BYTE_ARRAY -> BOOL
-FN yona_Std_File__openFile 2 STRING ADT -> LINEAR(ADT(FileHandle))
-FN yona_Std_File__closeFileHandle 1 INT -> UNIT
-IO yona_Std_File__readBytes 2 INT INT -> BYTE_ARRAY
-IO yona_Std_File__writeBytes 2 INT INT -> INT
-FN yona_Std_File__seek 3 INT INT ADT -> INT
-FN yona_Std_File__tell 1 INT -> INT
-FN yona_Std_File__flush 1 INT -> BOOL
-FN yona_Std_File__truncate 2 INT INT -> BOOL
-FN yona_Std_File__readChunks 2 INT INT -> ADT retadt Iterator
+MODULE Std\File
+FN appendFile 2 STRING STRING -> BOOL
+FN closeFileHandle 1 INT -> UNIT
+FN exists 1 STRING -> BOOL
+FN flush 1 INT -> BOOL
+FN listDir 1 STRING -> SEQ
+FN openFile 2 STRING ADT -> LINEAR(ADT(FileHandle))
+IO readBytes 2 INT INT -> BYTE_ARRAY
+FN readChunks 2 INT INT -> ADT(Iterator)
+IO readFile 1 STRING -> STRING
+IO readFileBytes 1 STRING -> BYTE_ARRAY
+FN readLines 1 STRING -> ADT(Iterator)
+FN remove 1 STRING -> BOOL
+FN seek 3 INT INT ADT -> INT
+FN size 1 STRING -> INT
+FN tell 1 INT -> INT
+FN truncate 2 INT INT -> BOOL
+IO writeBytes 2 INT INT -> INT
+IO writeFile 2 STRING STRING -> BOOL
+FN writeFileBytes 2 STRING BYTE_ARRAY -> BOOL

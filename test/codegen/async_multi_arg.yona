@@ -1,2 +1,0 @@
-extern async yona_test_slow_add : Int -> Int -> Int in
-yona_test_slow_add 10 20

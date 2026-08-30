@@ -9,7 +9,7 @@ and a simple server (serve). All networking via io_uring.
 
 ### Method
 
-`type Method = GET | POST | PUT | DELETE | PATCH | HEAD | OPTIONS`
+`type Method = Get | Post | Put | Delete | Patch | Head | Options`
 
 HTTP method.
 
@@ -65,7 +65,7 @@ Create a request with defaults.
 Send an HTTP request to host:port and return the Response.
 
 ```
-send "example.com" 80 (request GET "/" 0 "")
+send "example.com" 80 (request Get "/" 0 "")
 ```
 
 ### `parseResponse : String -> Response`
@@ -98,10 +98,10 @@ Create a simple 200 OK response.
 ok "Hello, World!"
 ```
 
-### `notFound : Adt(Response)`
+### `notFound : Response`
 
 Create a 404 Not Found response.
 
-### `serverError : Adt(Response)`
+### `serverError : Response`
 
 Create a 500 Internal Server Error response.

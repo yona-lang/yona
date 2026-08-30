@@ -1,0 +1,8 @@
+import withGpuIssue, GpuOk, GpuOom, GpuDeviceLost from Std\Gpu in
+withGpuIssue (\_ -> 0) (\issue ->
+    case issue of
+        GpuOk -> 0
+        GpuOom -> 1
+        GpuDeviceLost -> 2
+        _ -> 3
+    end)

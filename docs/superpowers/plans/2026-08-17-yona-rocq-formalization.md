@@ -19,9 +19,9 @@
 
 ## Why this shape
 
-- The implemented checker is HM + ADTs + rows + effect rows + traits + refinements + linearity ([include/typechecker/InferType.h](../../../include/typechecker/InferType.h), [docs/type-checker-design.md](../../type-checker-design.md)). Several features are partially implemented (GitHub [#3](https://github.com/yona-lang/yona/issues/74) audit). Formalizing forces the honest answer #3 asks for.
+- The implemented checker is HM + ADTs + rows + effect rows + traits + refinements + linearity ([include/yona/Model/InferType.h](../../../include/yona/Model/InferType.h), [docs/type-checker-design.md](../../type-checker-design.md)). Several features are partially implemented (GitHub [#3](https://github.com/yona-lang/yona/issues/74) audit). Formalizing forces the honest answer #3 asks for.
 - The typed-core interface (GitHub [#7](https://github.com/yona-lang/yona/issues/78)) is the bridge for differential testing: the compiler dumps typed judgments, the extracted verified checker re-validates them.
-- Yona's refinement language ([docs/refinement-types.md](../../refinement-types.md), `RefinePredicate` in [include/types.h](../../../include/types.h)) is deliberately finite (literal comparisons + boolean combinators + `LengthGt`) — decidable without SMT, so a fully verified refinement checker is achievable.
+- Yona's refinement language ([docs/refinement-types.md](../../refinement-types.md), `RefinePredicate` in [include/yona/Model/Types.h](../../../include/yona/Model/Types.h)) is deliberately finite (literal comparisons + boolean combinators + `LengthGt`) — decidable without SMT, so a fully verified refinement checker is achievable.
 
 ## Toolchain
 
@@ -72,7 +72,7 @@ The kernel every later feature builds on. Features: Int/Float/Bool/String/Symbol
 
 - [ ] `infer : env -> term -> option scheme` extracted to OCaml (MetaRocq verified extraction).
 - [ ] Compiler side: JSON dump of resolved AST + inferred types for the core fragment (feeds the extracted checker). **Textual** `yonac --emit-typed-core` landed 2026-08-21 (`docs/typed-core.md`); JSON wire format still deferred per #7.
-- [ ] Harness runs every `test/codegen/*.yona` fixture through both checkers; disagreement = bug in one of them. QuickChick fuzzes random terms for agreement.
+- [ ] Harness runs every `test/Fixtures/Codegen/*.yona` fixture through both checkers; disagreement = bug in one of them. QuickChick fuzzes random terms for agreement.
 
 ### Phase 4 — Type-system extensions (one module each)
 

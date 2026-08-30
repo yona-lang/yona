@@ -20,9 +20,9 @@
 ### Task 1: Share finite-ADT coverage analysis
 
 **Files:**
-- Modify: `include/Codegen.h:155-170, 640-675`
-- Modify: `src/codegen/CodegenCase.cpp:530-625`
-- Test: `test/codegen_test.cpp:1303-1360`
+- Modify: `include/yona/Codegen/Codegen.h:155-170, 640-675`
+- Modify: `src/Codegen/CodegenCase.cpp:530-625`
+- Test: `test/Codegen/CodegenTest.cpp:1303-1360`
 
 **Interfaces:**
 - Produces `Codegen::FiniteCaseCoverage { std::string adt_name; std::vector<std::string> missing; }`.
@@ -75,7 +75,7 @@ Replace the inline coverage block in `codegen_case` with:
 ```cpp
 if (diag_ && diag_->warning_enabled(WarningFlag::IncompletePatterns)) {
     if (auto coverage = finite_case_coverage(node))
-        diag_->warning(node->source_context, WarningFlag::IncompletePatterns,
+        diag_->warning(node->Range, WarningFlag::IncompletePatterns,
                        "non-exhaustive pattern match on " + coverage->adt_name +
                        " — missing constructor" +
                        (coverage->missing.size() == 1 ? " " : "s ") +
@@ -93,15 +93,15 @@ the existing warning/wildcard/guarded behavior.
 - [x] **Step 6: Commit Task 1**
 
 ```bash
-git add include/Codegen.h src/codegen/CodegenCase.cpp test/codegen_test.cpp
+git add include/yona/Codegen/Codegen.h src/Codegen/CodegenCase.cpp test/Codegen/CodegenTest.cpp
 git commit -m "refactor: share finite ADT case coverage"
 ```
 
 ### Task 2: Enforce coverage in strict effect-freedom mode
 
 **Files:**
-- Modify: `cli/main.cpp:240-265, 560-630`
-- Test: `test/yona_script_test.cpp:302-340`
+- Modify: `cli/Main.cpp:240-265, 560-630`
+- Test: `test/Toolchain/YonaScriptTest.cpp:302-340`
 
 **Interfaces:**
 - Consumes `Codegen::finite_case_coverage(ast::CaseExpr*)` from Task 1.
@@ -136,18 +136,18 @@ added.
 - [x] **Step 3: Walk ASTs in the strict gate**
 
 Add a local `collect_incomplete_cases(ast::AstNode*, Codegen&, DiagnosticEngine&)`
-visitor in `cli/main.cpp`. It recursively visits expression bodies, case
+visitor in `cli/Main.cpp`. It recursively visits expression bodies, case
 scrutinees, clauses, guards, lets, functions, modules, instance methods, and
 trait defaults. For each `CaseExpr`, call `finite_case_coverage` and emit:
 
 ```cpp
-diag.error(case_expr->source_context, ErrorCode::E0203,
+diag.error(case_expr->Range, ErrorCode::E0203,
            "`--require-effect-free` requires an exhaustive match on " +
            coverage.adt_name + "; missing constructor" + suffix + names);
 ```
 
 Return false from `require_effect_free` when any strict coverage error was
-emitted. Execute this after `Codegen::load_prelude` and after module imports
+emitted. Execute this after `Codegen::loadPrelude` and after module imports
 are registered so constructor metadata is available.
 
 - [x] **Step 4: Run strict CLI tests**
@@ -160,7 +160,7 @@ guarded cases, and module cases fail with E0203.
 - [x] **Step 5: Commit Task 2**
 
 ```bash
-git add cli/main.cpp test/yona_script_test.cpp
+git add cli/Main.cpp test/Toolchain/YonaScriptTest.cpp
 git commit -m "feat: enforce finite ADT coverage in strict totality mode"
 ```
 

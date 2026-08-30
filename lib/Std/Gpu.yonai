@@ -1,0 +1,172 @@
+MODULE Std\Gpu
+ADT Buffer 1 1
+  CTOR Buffer 0 1 fields _0:INT_ARRAY
+ADT FloatMapOp 2 1
+  CTOR Scale 0 1 fields _0:FLOAT
+  CTOR Mul2 1 0
+ADT FloatReduceOp 1 0
+  CTOR FloatSum 0 0
+ADT GpuIssue 4 1
+  CTOR GpuOk 0 0
+  CTOR GpuOom 1 0
+  CTOR GpuDeviceLost 2 0
+  CTOR GpuOther 3 1 fields _0:INT
+ADT IntMapOp 3 1
+  CTOR Add 0 1 fields _0:INT
+  CTOR Mul 1 1 fields _0:INT
+  CTOR Square 2 0
+ADT IntReduceOp 1 0
+  CTOR Sum 0 0
+ADT PinnedFloats 1 1
+  CTOR PinnedFloats 0 1 fields _0:INT
+FN allocPinnedFloats 1 INT -> ADT(PinnedFloats) effects -
+FN available 1 UNIT -> BOOL effects -
+FN backendName 0 -> STRING effects -
+FN checkGpu 0 -> ADT effects -
+FN closePinnedFloats 1 ADT(PinnedFloats) -> INT effects -
+FN copyFloatArrayToPinned 2 ADT(FloatArray) ADT(PinnedFloats) -> INT effects -
+FN drainMapFloatGpu 3 ADT INT INT -> INT effects |
+FN filterGreaterThan 2 INT ADT(Buffer) -> ADT(Buffer) effects -
+FN filterLessThan 2 INT ADT(Buffer) -> ADT(Buffer) effects -
+NAT floatArrayMul2Async 1 FLOAT_ARRAY -> INT
+NAT floatArrayScaleAsync 2 FLOAT FLOAT_ARRAY -> INT
+FN gpuFloatChannel 1 INT -> TUPLE(ADT(Linear,ADT(Sender,ADT(FloatArray))),ADT(Linear,ADT(Receiver,ADT(FloatArray)))) effects -
+FN gpuLastIssue 0 -> ADT effects -
+FN hasGpu 0 -> BOOL effects -
+FN hasSimd 0 -> BOOL effects -
+FN length 1 ADT(Buffer) -> INT effects -
+FN mapAdd 2 INT ADT(Buffer) -> ADT(Buffer) effects -
+FN mapFloatGpu 2 ADT(FloatMapOp) ADT(FloatArray) -> ADT(FloatArray) effects -
+FN mapFloatPinnedGpu 2 ADT(FloatMapOp) ADT(PinnedFloats) -> INT effects -
+FN mapGpu 2 ADT(IntMapOp) ADT(Buffer) -> ADT(Buffer) effects -
+FN mapMul 2 INT ADT(Buffer) -> ADT(Buffer) effects -
+FN mapReduceGraphGpu 2 SEQ ADT -> INT effects -
+FN mapSquare 1 ADT(Buffer) -> ADT(Buffer) effects -
+FN materialize 1 ADT(Buffer) -> ADT(IntArray) effects -
+FN physicalDeviceCount 1 UNIT -> INT effects -
+FN pinnedBackend 1 ADT(PinnedFloats) -> STRING effects -
+FN pinnedGet 2 ADT(PinnedFloats) INT -> FLOAT effects -
+FN pinnedLength 1 ADT(PinnedFloats) -> INT effects -
+FN pinnedSet 3 ADT(PinnedFloats) INT FLOAT -> INT effects -
+FN pinnedToFloatArray 1 ADT(PinnedFloats) -> ADT(FloatArray) effects -
+FN raiseGpu 1 ADT -> UNIT effects Gpu.deviceLost,Gpu.fail,Gpu.oom
+FN reduceFloatGpu 2 ADT(FloatReduceOp) ADT(FloatArray) -> FLOAT effects -
+FN reduceGpu 2 ADT(IntReduceOp) ADT(Buffer) -> INT effects -
+FN reduceSum 1 ADT(Buffer) -> INT effects -
+FN upload 1 ADT(IntArray) -> ADT(Buffer) effects -
+FN vulkanAvailable 0 -> BOOL effects -
+FN vulkanLastIssueKind 0 -> INT effects -
+FN vulkanLastNote 0 -> STRING effects -
+FN vulkanStatus 0 -> STRING effects -
+FN vulkanTimelineSemaphore 0 -> BOOL effects -
+FN withGpuFallback 1 FUNCTION -> UNIT borrow 1 effects Gpu.deviceLost,Gpu.fail,Gpu.oom| hof
+FN withGpuIssue 2 FUNCTION FUNCTION -> UNIT borrow 11 effects | hof
+GENFN_CTOR checkGpu Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR checkGpu Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_CTOR checkGpu GpuOom GpuIssue 1 0 4 1
+GENFN_CTOR checkGpu GpuDeviceLost GpuIssue 2 0 4 1
+GENFN_CTOR checkGpu GpuOther GpuIssue 3 1 4 1 fields _0:INT
+GENFN_BEGIN checkGpu checkGpu
+checkGpu =
+    case vulkanLastIssueKind of
+        0 -> Ok 0
+        1 -> Err GpuOom
+        2 -> Err GpuDeviceLost
+        code -> Err (GpuOther code)
+    end
+GENFN_END
+GENFN_CTOR drainMapFloatGpu Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR drainMapFloatGpu None Option 1 0 2 1
+GENFN_BEGIN drainMapFloatGpu drainMapFloatGpu
+drainMapFloatGpu op rx tx =
+    import send, recv from Std\Channel in
+    case recv rx of
+        None -> 0
+        Some chunk ->
+            let mapped = mapFloatGpu op chunk in
+            let _ = send tx mapped in
+            1 + drainMapFloatGpu op rx tx
+    end
+GENFN_END
+GENFN_CTOR encodeIntMapStages Add IntMapOp 0 1 3 1 fields _0:INT
+GENFN_CTOR encodeIntMapStages Mul IntMapOp 1 1 3 1 fields _0:INT
+GENFN_CTOR encodeIntMapStages Square IntMapOp 2 0 3 1
+GENFN_BEGIN encodeIntMapStages encodeIntMapStages
+encodeIntMapStages stages =
+    import fromSeq from Std\IntArray in
+    import foldr from Std\List in
+    fromSeq (foldr (\op acc ->
+        case op of
+            Add d -> 0 :: (d :: acc)
+            Mul f -> 1 :: (f :: acc)
+            Square -> 2 :: (0 :: acc)
+        end) [] stages)
+GENFN_END
+GENFN_CTOR gpuLastIssue GpuOk GpuIssue 0 0 4 1
+GENFN_CTOR gpuLastIssue Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR gpuLastIssue Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_CTOR gpuLastIssue GpuOom GpuIssue 1 0 4 1
+GENFN_CTOR gpuLastIssue GpuDeviceLost GpuIssue 2 0 4 1
+GENFN_CTOR gpuLastIssue GpuOther GpuIssue 3 1 4 1 fields _0:INT
+GENFN_BEGIN gpuLastIssue gpuLastIssue
+gpuLastIssue =
+    case vulkanLastIssueKind of
+        0 -> GpuOk
+        1 -> GpuOom
+        2 -> GpuDeviceLost
+        code -> GpuOther code
+    end
+GENFN_END
+GENFN_CTOR mapGpu Add IntMapOp 0 1 3 1 fields _0:INT
+GENFN_CTOR mapGpu Buffer Buffer 0 1 1 1 fields _0:INT_ARRAY
+GENFN_CTOR mapGpu Mul IntMapOp 1 1 3 1 fields _0:INT
+GENFN_CTOR mapGpu Square IntMapOp 2 0 3 1
+GENFN_BEGIN mapGpu mapGpu
+mapGpu : IntMapOp -> Buffer -> Buffer
+mapGpu op buffer =
+    case op of
+        Add d -> mapAdd d buffer
+        Mul f -> mapMul f buffer
+        Square -> mapSquare buffer
+    end
+GENFN_END
+GENFN_CTOR raiseGpu GpuOk GpuIssue 0 0 4 1
+GENFN_CTOR raiseGpu GpuOom GpuIssue 1 0 4 1
+GENFN_CTOR raiseGpu GpuDeviceLost GpuIssue 2 0 4 1
+GENFN_CTOR raiseGpu GpuOther GpuIssue 3 1 4 1 fields _0:INT
+GENFN_BEGIN raiseGpu raiseGpu
+raiseGpu issue =
+    case issue of
+        GpuOk -> ()
+        GpuOom -> perform Gpu.oom ()
+        GpuDeviceLost -> perform Gpu.deviceLost ()
+        GpuOther code -> perform Gpu.fail code
+    end
+GENFN_END
+GENFN_CTOR reduceGpu Buffer Buffer 0 1 1 1 fields _0:INT_ARRAY
+GENFN_CTOR reduceGpu Sum IntReduceOp 0 0 1 0
+GENFN_BEGIN reduceGpu reduceGpu
+reduceGpu : IntReduceOp -> Buffer -> Int
+reduceGpu op buffer =
+    case op of
+        Sum -> reduceSum buffer
+    end
+GENFN_END
+GENFN_BEGIN withGpuFallback withGpuFallback
+withGpuFallback action =
+    let result = action () in
+    let _ = raiseGpu gpuLastIssue in
+    result
+GENFN_END
+GENFN_CTOR withGpuIssue GpuOom GpuIssue 1 0 4 1
+GENFN_CTOR withGpuIssue GpuDeviceLost GpuIssue 2 0 4 1
+GENFN_CTOR withGpuIssue GpuOther GpuIssue 3 1 4 1 fields _0:INT
+GENFN_BEGIN withGpuIssue withGpuIssue
+withGpuIssue onOk onIssue =
+    case vulkanLastIssueKind of
+        0 -> onOk ()
+        1 -> onIssue GpuOom
+        2 -> onIssue GpuDeviceLost
+        code -> onIssue (GpuOther code)
+    end
+GENFN_END

@@ -28,7 +28,7 @@ release archives.
 **Files:**
 - Modify: `CMakePresets.json`
 - Modify: `.github/actions/setup-llvm/action.yml`
-- Modify: `test/cmake/windows_llvm_prerequisites/CMakeLists.txt`
+- Modify: `test/CMake/WindowsLlvmPrerequisites/CMakeLists.txt`
 
 - [x] Add `arm64-debug` / `arm64-release` Windows configure presets plus
   matching build and CTest presets, with distinct `out/build/arm64-*` paths.

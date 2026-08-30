@@ -14,7 +14,7 @@
           "type": "STRING"
         },
         "CMAKE_TOOLCHAIN_FILE": {
-          "value": "${sourceDir}/cmake/windows-llvm-toolchain.cmake",
+          "value": "${sourceDir}/cmake/WindowsLlvmToolchain.cmake",
           "type": "FILEPATH"
         }
       },
@@ -33,7 +33,7 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_TOOLCHAIN_FILE": {
-          "value": "${sourceDir}/cmake/linux-llvm-toolchain.cmake",
+          "value": "${sourceDir}/cmake/LinuxLlvmToolchain.cmake",
           "type": "FILEPATH"
         }
       },
@@ -52,7 +52,7 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_TOOLCHAIN_FILE": {
-          "value": "${sourceDir}/cmake/homebrew-llvm-toolchain.cmake",
+          "value": "${sourceDir}/cmake/HomebrewLlvmToolchain.cmake",
           "type": "FILEPATH"
         },
         "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -fuse-ld=lld",

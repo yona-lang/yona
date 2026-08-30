@@ -1,5 +1,5 @@
 import fromSeq from Std\IntArray in
-import upload, mapAdd, reduceSum from Std\GPU in
+import upload, mapAdd, reduceSum from Std\Gpu in
 let build n acc = if n <= 0 then acc else build (n - 1) (n :: acc) in
 let input = fromSeq (build 10000 []) in
 let buffer = upload input in

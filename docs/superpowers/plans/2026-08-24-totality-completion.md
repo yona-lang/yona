@@ -23,9 +23,9 @@
 ### Task 1: Shared overlap and finite-domain analysis
 
 **Files:**
-- Modify: `include/Codegen.h`
-- Modify: `src/codegen/CodegenCase.cpp`
-- Test: `test/codegen_test.cpp`
+- Modify: `include/yona/Codegen/Codegen.h`
+- Modify: `src/Codegen/CodegenCase.cpp`
+- Test: `test/Codegen/CodegenTest.cpp`
 
 **Interfaces:**
 - Produces `Codegen::CasePatternAnalysis { std::vector<size_t> unreachable_clauses; std::optional<FiniteCaseCoverage> incomplete; }`.
@@ -83,16 +83,16 @@ Expected: Diagnostics suite passes, including old ADT wildcard/guarded cases and
 - [x] **Step 6: Commit Task 1**
 
 ```bash
-git add include/Codegen.h src/codegen/CodegenCase.cpp test/codegen_test.cpp
+git add include/yona/Codegen/Codegen.h src/Codegen/CodegenCase.cpp test/Codegen/CodegenTest.cpp
 git commit -m "feat: analyze finite case coverage and overlaps"
 ```
 
 ### Task 2: Emit overlap warnings and enforce Bool strict coverage
 
 **Files:**
-- Modify: `src/codegen/CodegenCase.cpp`
-- Modify: `cli/main.cpp`
-- Test: `test/yona_script_test.cpp`
+- Modify: `src/Codegen/CodegenCase.cpp`
+- Modify: `cli/Main.cpp`
+- Test: `test/Toolchain/YonaScriptTest.cpp`
 
 **Interfaces:**
 - Consumes `Codegen::analyze_case_patterns`.
@@ -128,7 +128,7 @@ Immediately after shared case analysis in `Codegen::codegen_case`, emit one
 warning for each unreachable index:
 
 ```cpp
-diag_->warning(node->clauses[index]->source_context,
+diag_->warning(node->clauses[index]->Range,
                "unreachable pattern: an earlier unguarded arm already covers it",
                WarningFlag::OverlappingPatterns);
 ```
@@ -150,15 +150,15 @@ Expected: opt-in warnings only in warning mode; E0203 only in strict mode; `--We
 - [x] **Step 6: Commit Task 2**
 
 ```bash
-git add src/codegen/CodegenCase.cpp cli/main.cpp test/yona_script_test.cpp
+git add src/Codegen/CodegenCase.cpp cli/Main.cpp test/Toolchain/YonaScriptTest.cpp
 git commit -m "feat: diagnose overlapping finite patterns"
 ```
 
 ### Task 3: Structural direct-recursion termination gate
 
 **Files:**
-- Modify: `cli/main.cpp`
-- Test: `test/yona_script_test.cpp`
+- Modify: `cli/Main.cpp`
+- Test: `test/Toolchain/YonaScriptTest.cpp`
 
 **Interfaces:**
 - Produces `bool require_structural_termination(ast::AstNode*, DiagnosticEngine&)`.
@@ -192,7 +192,7 @@ component with more than one function, emit E0203 at each participating
 function declaration:
 
 ```cpp
-diag.error(function->source_context, ErrorCode::E0203,
+diag.error(function->Range, ErrorCode::E0203,
            "`--require-effect-free` cannot prove mutual recursion involving '" +
            function->name + "'");
 ```
@@ -201,7 +201,7 @@ Pass only singleton components with a self-edge to the structural checker.
 
 - [x] **Step 4: Collect structural descendants per function body**
 
-In `cli/main.cpp`, add a small lexical analyzer that receives a function's
+In `cli/Main.cpp`, add a small lexical analyzer that receives a function's
 parameter names, enters each unguarded `CaseExpr` clause, and records names
 bound by a constructor subpattern or `[head | tail]` pattern as descendants of
 the matched parameter. Recurse through `let`, `if`, `do`, nested case bodies,
@@ -214,7 +214,7 @@ the current function name. Require at least one argument to be a recorded
 descendant of the corresponding parameter. If not, emit:
 
 ```cpp
-diag.error(apply->source_context, ErrorCode::E0203,
+diag.error(apply->Range, ErrorCode::E0203,
            "`--require-effect-free` cannot prove structural termination of '" +
            function->name + "'");
 ```
@@ -230,7 +230,7 @@ Expected: structural list recursion passes; original-argument, numeric, and mutu
 - [x] **Step 7: Commit Task 3**
 
 ```bash
-git add cli/main.cpp test/yona_script_test.cpp
+git add cli/Main.cpp test/Toolchain/YonaScriptTest.cpp
 git commit -m "feat: require structural recursion in totality mode"
 ```
 

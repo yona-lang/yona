@@ -1,7 +1,39 @@
+# Yona's canonical native formatting requires clang-format 22.1.x.
 ---
 Language: Cpp
 BasedOnStyle: LLVM
 Standard: Latest
-ColumnLimit: 150
+
+ColumnLimit: 80
+IndentWidth: 2
+ContinuationIndentWidth: 4
 TabWidth: 2
+UseTab: Never
+BreakBeforeBraces: Attach
+
+DerivePointerAlignment: false
+PointerAlignment: Right
+ReferenceAlignment: Pointer
+
+IncludeBlocks: Regroup
+SortIncludes: CaseSensitive
+IncludeIsMainRegex: "([-_](test|unittest))?$"
+IncludeCategories:
+  # The implementation's matching header is category 0 automatically.
+  - Regex: '^"'
+    Priority: 1
+    SortPriority: 1
+    CaseSensitive: true
+  - Regex: '^<(llvm|clang|lld)/'
+    Priority: 2
+    SortPriority: 2
+    CaseSensitive: true
+  - Regex: '^<(CLI|doctest|pcre2|vulkan)(/|\\.h|>)'
+    Priority: 3
+    SortPriority: 3
+    CaseSensitive: true
+  - Regex: '^<'
+    Priority: 4
+    SortPriority: 4
+    CaseSensitive: true
 ...

@@ -7,7 +7,7 @@ that nothing appears in `.yonai` is stale for masks, still true for `&` in
 printed types. Evidence: [type-system-status.md](type-system-status.md) §6–7.
 See [todo-list.md](./todo-list.md) — *Type-level borrows (`&T`)*.
 **Related:** [memory-management.md](./memory-management.md#explicit-borrow),
-`include/analysis/BorrowEscapeAnalysis.h`.
+`include/yona/Semantics/BorrowEscapeAnalysis.h`.
 
 ## 1. Motivation
 
@@ -23,7 +23,7 @@ on every defining clause. A type-level **`&T`** (name TBD; `Borrowed T` as an
 app is equivalent) fixes signatures, tooling, and a single source of truth
 for “pass without claiming ownership / skip Perceus DUP at this boundary.”
 
-## 2. Non-goals (v1)
+## 2. Non-goals
 
 - **Rust-style lifetimes** — no region variables, no borrow checker beyond
   current escape rules extended to types where needed.
@@ -37,13 +37,13 @@ for “pass without claiming ownership / skip Perceus DUP at this boundary.”
   `&FloatArray`, `&(Int, String)` if tuples ever become borrowable.
 - **Parameter and result positions in type signatures** on `let f : …`,
   module `f : …`, `extern`, and trait method signatures.
-- **v1 restriction:** allow `&T` only where `T` is a **heap-shaped** type the
+- **Current restriction:** allow `&T` only where `T` is a **heap-shaped** type the
   runtime already refcounted (`Seq`, `Set`, `Dict`, `String`, ADT, closure,
   `FloatArray`, `IntArray`, … — exact list = types for which `is_heap_type`
   is true in codegen). **Reject** `&Int`, `&Bool` at kind-check (or erase to
   `Int` in a later revision — prefer explicit reject for clarity).
 
-**Relationship to `@borrow` (v1):**
+**Relationship to `@borrow`:**
 
 - **Option A (strict):** if the signature says `&T`, the parameter pattern
   must use `@borrow` (or we infer `@borrow` from `&` and elide the keyword).
@@ -73,12 +73,12 @@ for “pass without claiming ownership / skip Perceus DUP at this boundary.”
   the argument has type `T`, **allow** the call (caller keeps ownership;
   callee gets read-only view — same as today’s borrow path). When the callee
   expects `T` (owned transfer / callee-owns), existing Perceus rules apply.
-- **Subtyping:** minimal v1 can use **unification with a directed coercion**
+- **Subtyping:** the current design can use **unification with a directed coercion**
   only at apply: “`T` flows to `&T`” is allowed; “`&T` flows to `T`” is **not**
   allowed without an explicit copy (future). Document as one-way coercion,
   not a full subtyping lattice.
 - **Return type:** disallow `&T` as the **top-level** result of a function in
-  v1 (no dangling borrowed return). Nested inside `Result (&T) e` is also out
+  the current design (no dangling borrowed return). Nested inside `Result (&T) e` is also out
   until lifetimes exist.
 
 ## 6. Trait and instance methods
@@ -102,8 +102,9 @@ for “pass without claiming ownership / skip Perceus DUP at this boundary.”
 
 - Extend interface text for `GENFN` / typed exports to print `&` in
   parameter positions consistently with source.
-- **Versioning:** if old `.yonai` lacks `&`, treat as owned (`T`); new
-  compiler emits `&` where applicable. Document one-way compatibility.
+- The canonical `.yonai` writer emits `&` wherever the source type is
+  borrowed. The reader rejects incomplete descriptors instead of inferring
+  ownership.
 
 ## 9. `extern` / C ABI
 
@@ -128,5 +129,5 @@ for “pass without claiming ownership / skip Perceus DUP at this boundary.”
 - Should **`&` bind tighter than `->`**? (Proposed: yes — `&T -> U` =
   `(&T) -> U`.)
 - **`&` under type aliases** — resolve alias then borrow, or forbid alias
-  heads in v1?
+  heads in the current design?
 - **Interaction with refinement types** — `{ x : &Seq Int | … }` deferred.

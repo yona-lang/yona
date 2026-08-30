@@ -55,8 +55,12 @@
           "name": "meta.interpolation.yona",
           "begin": "\\{",
           "end": "\\}",
-          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.yona" } },
-          "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.yona" } },
+          "beginCaptures": {
+            "0": { "name": "punctuation.section.interpolation.begin.yona" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.section.interpolation.end.yona" }
+          },
           "patterns": [{ "include": "$self" }]
         }
       ]

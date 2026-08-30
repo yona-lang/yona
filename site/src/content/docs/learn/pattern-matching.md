@@ -1,12 +1,14 @@
 ---
 title: Pattern matching
-description: case expressions and every pattern form — structural decomposition with first-match semantics and exhaustiveness warnings.
+description:
+  case expressions and every pattern form — structural decomposition with
+  first-match semantics and exhaustiveness warnings.
 ---
 
-Pattern matching is how Yona code inspects and decomposes values. It appears
-in `case` expressions, function parameters, `let` bindings, and `catch`
-clauses. A pattern either **matches** a value — binding any variables it
-contains — or fails, in which case matching moves on to the next candidate.
+Pattern matching is how Yona code inspects and decomposes values. It appears in
+`case` expressions, function parameters, `let` bindings, and `catch` clauses. A
+pattern either **matches** a value — binding any variables it contains — or
+fails, in which case matching moves on to the next candidate.
 
 ## Case expressions
 
@@ -18,11 +20,11 @@ case value of
 end
 ```
 
-Arms are tried strictly **top to bottom**; the first pattern that matches
-(and whose guard, if any, passes) selects the arm, and its body becomes the
-value of the whole expression. Later arms are not evaluated. If no arm
-matches at runtime, the program aborts with a match error — so end with a
-`_` arm unless the patterns provably cover every case.
+Arms are tried strictly **top to bottom**; the first pattern that matches (and
+whose guard, if any, passes) selects the arm, and its body becomes the value of
+the whole expression. Later arms are not evaluated. If no arm matches at
+runtime, the program aborts with a match error — so end with a `_` arm unless
+the patterns provably cover every case.
 
 ```yona
 case n of
@@ -36,8 +38,7 @@ end
 
 ### Literals
 
-Integers, floats, strings, characters, booleans, and symbols match by
-equality:
+Integers, floats, strings, characters, booleans, and symbols match by equality:
 
 ```yona
 case status of
@@ -53,8 +54,8 @@ comparison per arm, or a jump table.
 
 ### Variables and wildcard
 
-A lowercase name matches anything and binds it in the arm's body. `_`
-matches anything and binds nothing:
+A lowercase name matches anything and binds it in the arm's body. `_` matches
+anything and binds nothing:
 
 ```yona
 case point of
@@ -107,17 +108,17 @@ case list of
 end
 ```
 
-Implementation note. Taking head and tail of a persistent sequence is O(1),
-so head-tail recursion has no hidden copying cost — see
+Implementation note. Taking head and tail of a persistent sequence is O(1), so
+head-tail recursion has no hidden copying cost — see
 [Collections](/learn/collections/).
 
 ### Constructors (ADTs)
 
 Constructor patterns match a specific variant of an
-[algebraic data type](/learn/types/) and bind its fields positionally.
-Patterns nest arbitrarily. Prelude constructors such as `Some`/`None` work
-in an expression program; your own `type` declarations belong in a
-`module` (see [Modules](/learn/modules/)):
+[algebraic data type](/learn/types/) and bind its fields positionally. Patterns
+nest arbitrarily. Prelude constructors such as `Some`/`None` work in an
+expression program; your own `type` declarations belong in a `module` (see
+[Modules](/learn/modules/)):
 
 ```yona
 let maybeValue = Some 42 in
@@ -142,8 +143,8 @@ end
 
 ### Named fields (records)
 
-ADTs with named fields match with `Constructor { field = pattern, … }`.
-You only name the fields you care about:
+ADTs with named fields match with `Constructor { field = pattern, … }`. You only
+name the fields you care about:
 
 ```yona
 module Demo\People
@@ -163,8 +164,8 @@ end
 
 ### Or-patterns
 
-`|` between patterns matches if any alternative matches. Alternatives share
-one arm body:
+`|` between patterns matches if any alternative matches. Alternatives share one
+arm body:
 
 ```yona
 case x of
@@ -176,8 +177,8 @@ end
 ### Guards
 
 A pattern may carry an `if` guard; the arm is taken only when the pattern
-matches *and* the guard (which may use the pattern's bindings) is true.
-A failed guard falls through to the next arm:
+matches _and_ the guard (which may use the pattern's bindings) is true. A failed
+guard falls through to the next arm:
 
 ```yona
 case x of
@@ -189,8 +190,8 @@ end
 
 ### Typed patterns
 
-`(name : Type)` matches on the *runtime type* of a value from an anonymous
-sum type like `Int | String`, binding it at the annotated type:
+`(name : Type)` matches on the _runtime type_ of a value from an anonymous sum
+type like `Int | String`, binding it at the annotated type:
 
 ```yona
 describe : Int | String -> String
@@ -205,10 +206,10 @@ describe "hello"   # => "text hello"
 
 ### As-bindings <span class="yona-status yona-status--partial">Partial</span>
 
-`name@pattern` matches the pattern and additionally binds the whole value
-to `name`. Parser and type-checker support is in place, but code generation
-for as-bindings in `case` arms is still limited — prefer rebinding
-explicitly when it fails to compile.
+`name@pattern` matches the pattern and additionally binds the whole value to
+`name`. Parser and type-checker support is in place, but code generation for
+as-bindings in `case` arms is still limited — prefer rebinding explicitly when
+it fails to compile.
 
 ```yona
 case xs of
@@ -219,17 +220,16 @@ end
 
 ### Dictionary patterns <span class="yona-status yona-status--partial">Partial</span>
 
-The grammar reserves `{ :key: pattern, … }` for matching dictionary
-entries by key, but compiler support is currently limited. Use
-`Std\Dict::get`/`contains` to inspect dictionaries instead — see
-[Collections](/learn/collections/).
+The grammar reserves `{ :key: pattern, … }` for matching dictionary entries by
+key, but compiler support is currently limited. Use `Std\Dict::get`/`contains`
+to inspect dictionaries instead — see [Collections](/learn/collections/).
 
 ## Patterns outside `case`
 
 ### In `let` bindings
 
-A `let` binding's left-hand side may be a pattern; it destructures the
-value. The pattern must match — a failed `let` pattern is a runtime error.
+A `let` binding's left-hand side may be a pattern; it destructures the value.
+The pattern must match — a failed `let` pattern is a runtime error.
 
 ```yona
 let (a, b) = (1, 2), [h|t] = [10, 20, 30] in
@@ -238,8 +238,8 @@ a + b + h   # => 13
 
 ### In function parameters
 
-Every function parameter is a pattern, and multiple clauses give
-per-constructor definitions (see [Functions](/learn/functions/)):
+Every function parameter is a pattern, and multiple clauses give per-constructor
+definitions (see [Functions](/learn/functions/)):
 
 ```yona
 first pair = case pair of
@@ -256,8 +256,8 @@ end
 
 ### In `catch` clauses
 
-Exceptions are ADT values, and `catch` clauses are patterns over them.
-Unmatched exceptions propagate to the next handler up the stack:
+Exceptions are ADT values, and `catch` clauses are patterns over them. Unmatched
+exceptions propagate to the next handler up the stack:
 
 ```yona
 type Error = RuntimeError String | NotFound String
@@ -289,24 +289,25 @@ end
 A `_` or variable arm makes any match exhaustive. Heed these warnings: a
 non-exhaustive match that falls off the end aborts at runtime. For code checked
 with `yonac --require-effect-free`, missing alternatives in registered finite
-ADTs and `Bool` are instead E0203 errors; ordinary compilation keeps them as
-the opt-in `--Wincomplete-patterns` warning. The strict gate also requires a
-sound structural size-change proof for every local direct or mutual recursive
-SCC. It accepts lexicographic multi-parameter descent when each cycle provably
-decreases through fields or non-empty sequence tails bound by unguarded
-patterns. Numeric decreases, guarded descent, opaque/helper or higher-order
-recursion, incompatible-arity SCCs, and mixed incompatible cycles remain
-conservatively rejected.
+ADTs and `Bool` are instead E0203 errors; ordinary compilation keeps them as the
+opt-in `--Wincomplete-patterns` warning. The strict gate also requires a sound
+structural size-change proof for every local direct or mutual recursive SCC. It
+accepts lexicographic multi-parameter descent when each cycle provably decreases
+through fields or non-empty sequence tails bound by unguarded patterns. Numeric
+decreases, guarded descent, opaque/helper or higher-order recursion,
+incompatible-arity SCCs, and mixed incompatible cycles remain conservatively
+rejected.
 
-`--Woverlapping-patterns` identifies arms provably covered by earlier
-unguarded arms, including aliases, alternatives, nested constructors, tuples,
-exact and head–tail sequences, and scalar literals. It combines complete root
-`Bool` and ADT families, while guards and unsupported/open domains stay
-conservative. It does not prove general termination or coverage for arbitrary
-open-domain patterns.
+`--Woverlapping-patterns` identifies arms provably covered by earlier unguarded
+arms, including aliases, alternatives, nested constructors, tuples, exact and
+head–tail sequences, and scalar literals. It combines complete root `Bool` and
+ADT families, while guards and unsupported/open domains stay conservative. It
+does not prove general termination or coverage for arbitrary open-domain
+patterns.
 
 ## Where to next
 
 - [Types and data](/learn/types/) — defining the ADTs you match on.
 - [Collections](/learn/collections/) — sequence, dict, and set operations.
-- [Language specification](/reference/specification/) — the full pattern grammar.
+- [Language specification](/reference/specification/) — the full pattern
+  grammar.

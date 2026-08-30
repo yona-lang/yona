@@ -1,5 +1,0 @@
-import fromSeq from Std\IntArray in
-import upload, mapGPU, reduceGPU, Square, Sum from Std\GPU in
-let input = fromSeq [1, 2, 3, 4] in
-let buffer = upload input in
-reduceGPU Sum (mapGPU Square buffer)

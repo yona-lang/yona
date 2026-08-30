@@ -7,7 +7,7 @@
 
 - `set YONAC_CC=C:\local\LLVM\bin\clang.exe`
 - `python bench/runner.py --yonac out/build/x64-debug/yonac.exe -n 10 -O 2 --compare "c,erl,java,hs,js,py" --json`
-- Raw output: `bench/windows-full-bench-2026-04-24-n10-v011.json`
+- Raw output: `bench/Generated/Results/windows-full-bench-2026-04-24-n10-summary.json`
 
 ## Summary
 
@@ -131,9 +131,9 @@ Largest improvements:
 
 Additional full reruns were captured to estimate run-to-run variance:
 
-- `bench/windows-full-bench-2026-04-24-n10-v011-run1.json`
-- `bench/windows-full-bench-2026-04-24-n10-v011-run2.json`
-- `bench/windows-full-bench-2026-04-24-n10-v011-run3.json`
+- `bench/Generated/Results/windows-full-bench-2026-04-24-n10-run1.json`
+- `bench/Generated/Results/windows-full-bench-2026-04-24-n10-run2.json`
+- `bench/Generated/Results/windows-full-bench-2026-04-24-n10-run3.json`
 
 All three reruns passed **35/35** on the Yona lane.
 
@@ -152,7 +152,7 @@ Takeaway:
 - Most other large-file rows are reasonably stable (single-digit CV), so trend claims there are more trustworthy.
 - Across all 35 rows, 15/35 are <=10% CV; short-running microbenches remain the noisiest.
 
-## Std\GPU / Vulkan crossover (procedure)
+## Std\Gpu / Vulkan crossover (procedure)
 
 Crossover timings for transparent lowering are **not** part of the main
 `bench/runner.py` matrix: use `bench/run_gpu_compare.py` on this machine (or CI
@@ -161,7 +161,7 @@ with a GPU worker). Recommended capture:
 ```text
 set YONAC_CC=C:\local\LLVM\bin\clang.exe
 py -3 bench/gpu_bench_meta.py > gpu-bench-meta.json
-py -3 bench/run_gpu_compare.py -n 10 -O2 --json-report > gpu-compare-report.json
+py -3 bench/run_gpu_compare.py -n 10 -O2 --json > gpu-compare-report.json
 ```
 
 Archive both JSON files next to a short note (GPU model, driver, integrated vs

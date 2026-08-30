@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import math
 import statistics
 import sys
 from pathlib import Path
@@ -74,7 +73,7 @@ SECTIONS = [
         ],
     ),
     (
-        "Std\\GPU accelerators (adjusted ms)",
+        "Std\\Gpu accelerators (adjusted ms)",
         [
             "accelerators/gpu_map_reduce_hot",
             "accelerators/gpu_map_reduce_10k",
@@ -137,7 +136,14 @@ LABELS = {
     "accelerators/gpu_float_scale_hot": "gpu_float_scale_hot",
 }
 
-LANGS = [("c", "C"), ("erl", "Erlang"), ("hs", "Haskell"), ("java", "Java"), ("js", "Node.js"), ("py", "Python")]
+LANGS = [
+    ("c", "C"),
+    ("erl", "Erlang"),
+    ("hs", "Haskell"),
+    ("java", "Java"),
+    ("js", "Node.js"),
+    ("py", "Python"),
+]
 
 
 def fmt_ms(v):
@@ -174,10 +180,7 @@ def load_json_object(path: Path):
 
 def load_results(path: Path):
     data = load_json_object(path)
-    if "O2" in data:
-        rows = data["O2"]
-    else:
-        rows = next(iter(data.values()))
+    rows = data["O2"] if "O2" in data else next(iter(data.values()))
     by_name = {r["name"]: r for r in rows}
     return rows, by_name
 
@@ -191,13 +194,23 @@ def cell(row, key):
 
 
 def coverage(rows, key):
-    ok = sum(1 for r in rows if r.get("status") == "ok" and f"{key}_avg_ms_adj" in r)
+    ok = sum(
+        1 for r in rows if r.get("status") == "ok" and f"{key}_avg_ms_adj" in r
+    )
     total = sum(1 for r in rows if r.get("status") == "ok")
     return ok, total
 
 
 def main():
-    src = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "bench" / "macos-full-bench-2026-08-17-n10.json"
+    src = (
+        Path(sys.argv[1])
+        if len(sys.argv) > 1
+        else ROOT
+        / "bench"
+        / "Generated"
+        / "Results"
+        / "macos-full-bench-2026-08-17-n10.json"
+    )
     gpu_src = Path(sys.argv[2]) if len(sys.argv) > 2 else None
     rows, by_name = load_results(src)
     yona_ok = sum(1 for r in rows if r.get("status") == "ok")
@@ -210,7 +223,10 @@ def main():
             startup["Yona"] = (r.get("startup_ms"), r.get("startup_rss_kb"))
         for key, label in LANGS:
             if label not in startup and f"{key}_startup_ms" in r:
-                startup[label] = (r.get(f"{key}_startup_ms"), r.get(f"{key}_startup_rss_kb"))
+                startup[label] = (
+                    r.get(f"{key}_startup_ms"),
+                    r.get(f"{key}_startup_rss_kb"),
+                )
 
     cov = []
     for key, label in LANGS:
@@ -222,16 +238,28 @@ def main():
     lines.append("# Benchmark Results - macOS")
     lines.append("")
     lines.append("**Date**: 2026-08-17")
-    lines.append("**Platform**: macOS 27.0 (build 26A5406e, Darwin 27.0.0), Apple M3, 16 GB RAM")
+    lines.append(
+        "**Platform**: macOS 27.0 (build 26A5406e, Darwin 27.0.0), Apple M3, 16 GB RAM"
+    )
     lines.append("")
     lines.append("**Provenance**: Tables regenerated with:")
     lines.append("")
-    lines.append("- `export PATH=\"$(brew --prefix llvm)/bin:$(brew --prefix openjdk)/bin:$PATH\"`")
-    lines.append("- `export YONAC_CC=$(command -v clang)`  # Homebrew LLVM 22.1.8")
-    lines.append("- `python3 bench/runner.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O 2 --compare \"c,erl,java,hs,js,py\" --json --save`")
+    lines.append(
+        '- `export PATH="$(brew --prefix llvm)/bin:$(brew --prefix openjdk)/bin:$PATH"`'
+    )
+    lines.append(
+        "- `export YONAC_CC=$(command -v clang)`  # Homebrew LLVM 22.1.8"
+    )
+    lines.append(
+        '- `python3 bench/runner.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O 2 --compare "c,erl,java,hs,js,py" --json --save`'
+    )
     lines.append("- Raw output: `bench/macos-full-bench-2026-08-17-n10.log`")
-    lines.append("- Machine-readable: `bench/macos-full-bench-2026-08-17-n10.json`")
-    lines.append("- GPU crossover: `bench/macos-gpu-compare-2026-08-17-n10.json`, `bench/macos-gpu-bench-meta-2026-08-17.json`")
+    lines.append(
+        "- Machine-readable: `bench/Generated/Results/macos-full-bench-2026-08-17-n10.json`"
+    )
+    lines.append(
+        "- GPU crossover: `bench/Generated/Results/macos-gpu-compare-2026-08-17-n10.json`, `bench/Generated/Results/macos-gpu-bench-meta-2026-08-17.json`"
+    )
     lines.append("")
     lines.append("**Compilers / Runtimes**:")
     lines.append("- Yona `-O2` (debug `yonac`, LLVM 22.1.8), CMake Vulkan ON")
@@ -244,13 +272,17 @@ def main():
     lines.append("")
     lines.append("## Summary")
     lines.append("")
-    lines.append(f"- **{yona_ok}/{yona_n} benchmarks passing** on macOS (Yona lane).")
+    lines.append(
+        f"- **{yona_ok}/{yona_n} benchmarks passing** on macOS (Yona lane)."
+    )
     lines.append("- Comparison coverage this run: " + ", ".join(cov) + ".")
     lines.append("- Erlang lane included (OTP 29).")
     lines.append("")
     lines.append("## Startup-adjusted numbers")
     lines.append("")
-    lines.append("The runner reports adjusted values (`app_time = max(total - startup, 0.01ms)`).")
+    lines.append(
+        "The runner reports adjusted values (`app_time = max(total - startup, 0.01ms)`)."
+    )
     lines.append("")
     lines.append("### Measured cold-start floors (this machine, this run)")
     lines.append("")
@@ -270,8 +302,12 @@ def main():
     for title, names in SECTIONS:
         lines.append(f"## {title}")
         lines.append("")
-        lines.append("| Benchmark | Yona | C | Erlang | Haskell | Java | Node.js | Python |")
-        lines.append("|-----------|-----:|--:|-------:|--------:|-----:|--------:|-------:|")
+        lines.append(
+            "| Benchmark | Yona | C | Erlang | Haskell | Java | Node.js | Python |"
+        )
+        lines.append(
+            "|-----------|-----:|--:|-------:|--------:|-----:|--------:|-------:|"
+        )
         for name in names:
             row = by_name.get(name)
             label = LABELS.get(name, name.split("/")[-1])
@@ -282,7 +318,7 @@ def main():
         lines.append("")
 
     rss_by_lang = {"Yona": []}
-    for key, label in LANGS:
+    for _key, label in LANGS:
         rss_by_lang[label] = []
     for r in rows:
         if r.get("status") != "ok":
@@ -296,13 +332,27 @@ def main():
 
     lines.append("## Memory (raw peak RSS, MB)")
     lines.append("")
-    lines.append("macOS runner captures per-process peak RSS via `wait4` `ru_maxrss` (bytes → KB).")
-    lines.append("Each row is a **separate process**, so the max is not a leak across the suite.")
-    lines.append("Yona max is `file_readlines_large`: 500k lines / 55 MB file, materialized as")
-    lines.append("`[line for line = iter]` before `foldl` (every line string + seq cell live at once).")
-    lines.append("`file_write_read_large` (~111 MB) holds the 55 MB `readFile` buffer and the re-read copy together.")
-    lines.append("C/Python stream those files; Yona median ~6 MB matches the no-op floor.")
-    lines.append("The table below summarizes per-runtime peak RSS across benchmark rows.")
+    lines.append(
+        "macOS runner captures per-process peak RSS via `wait4` `ru_maxrss` (bytes → KB)."
+    )
+    lines.append(
+        "Each row is a **separate process**, so the max is not a leak across the suite."
+    )
+    lines.append(
+        "Yona max is `file_readlines_large`: 500k lines / 55 MB file, materialized as"
+    )
+    lines.append(
+        "`[line for line = iter]` before `foldl` (every line string + seq cell live at once)."
+    )
+    lines.append(
+        "`file_write_read_large` (~111 MB) holds the 55 MB `readFile` buffer and the re-read copy together."
+    )
+    lines.append(
+        "C/Python stream those files; Yona median ~6 MB matches the no-op floor."
+    )
+    lines.append(
+        "The table below summarizes per-runtime peak RSS across benchmark rows."
+    )
     lines.append("")
     lines.append("| Runtime | Min MB | Median MB | Max MB |")
     lines.append("|---------|-------:|----------:|-------:|")
@@ -322,13 +372,22 @@ def main():
         if isinstance(gpu, list):
             gpu_rows = gpu
         elif isinstance(gpu, dict):
-            gpu_rows = gpu.get("benches") or gpu.get("rows") or gpu.get("results") or []
+            gpu_rows = (
+                gpu.get("benches")
+                or gpu.get("rows")
+                or gpu.get("results")
+                or []
+            )
         else:
             gpu_rows = []
-        lines.append("## Std\\GPU / Vulkan crossover (this machine)")
+        lines.append("## Std\\Gpu / Vulkan crossover (this machine)")
         lines.append("")
-        lines.append("Captured with `python3 bench/run_gpu_compare.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O2 --json-report`.")
-        lines.append("Device: Apple M3 via MoltenVK (no `shaderInt64` / typically no `shaderFloat64`; IntArray uses i32 when values fit, float scale uses f32).")
+        lines.append(
+            "Captured with `python3 bench/run_gpu_compare.py --yonac out/build/arm64-debug-macos/yonac -n 10 -O2 --json`."
+        )
+        lines.append(
+            "Device: Apple M3 via MoltenVK (no `shaderInt64` / typically no `shaderFloat64`; IntArray uses i32 when values fit, float scale uses f32)."
+        )
         lines.append("")
         if gpu_rows:
             lines.append("| Benchmark | CPU avg (ms) | GPU avg (ms) | Status |")
@@ -353,22 +412,44 @@ def main():
         else:
             lines.append(f"See raw report: `{gpu_src.relative_to(ROOT)}`.")
             lines.append("")
-        lines.append("Archive both JSON files next to a short note (GPU model, MoltenVK / Metal).")
-        lines.append("Problem sizes are documented in `bench/README.md` (hot vs `*_10k` / `*_5k` accelerators).")
-        lines.append("See `docs/gpu-transparent-lowering.md` for how this feeds the crossover cost model.")
+        lines.append(
+            "Archive both JSON files next to a short note (GPU model, MoltenVK / Metal)."
+        )
+        lines.append(
+            "Problem sizes are documented in `bench/README.md` (hot vs `*_10k` / `*_5k` accelerators)."
+        )
+        lines.append(
+            "See `docs/gpu-transparent-lowering.md` for how this feeds the crossover cost model."
+        )
         lines.append("")
 
     lines.append("## Caveats")
     lines.append("")
-    lines.append("- Startup-adjusted floor can exaggerate ratios when values clamp to `0.01ms`.")
+    lines.append(
+        "- Startup-adjusted floor can exaggerate ratios when values clamp to `0.01ms`."
+    )
     lines.append("- This report uses warm-cache behavior for file workloads.")
-    lines.append("- Startup RSS values are cached per runtime; rerun after toolchain/runtime changes.")
-    lines.append("- `yonac` used here is the native Apple Silicon debug macOS build (`arm64-debug-macos`) with `-DYONA_ENABLE_VULKAN=ON`.")
-    lines.append("- The main `bench/runner.py` matrix does not force CPU or Vulkan; accelerator rows use default `Std\\GPU` discovery.")
-    lines.append("- Erlang/OTP 29 is on PATH; cells are `—` only when that row has no working `.erl` reference.")
-    lines.append("- Erlang cold-start is ~686 ms (BEAM boot). Most short rows clamp to the `0.01ms` adjusted floor; prefer raw times in the JSON for those cells.")
-    lines.append("- Comparison cells are `—` when a reference failed to compile, produced the wrong stdout, or has no implementation for that row.")
-    lines.append("- MoltenVK / Metal: IntArray GPU kernels use i32 when values fit; float scale uses f32. GPU column includes device submit overhead.")
+    lines.append(
+        "- Startup RSS values are cached per runtime; rerun after toolchain/runtime changes."
+    )
+    lines.append(
+        "- `yonac` used here is the native Apple Silicon debug macOS build (`arm64-debug-macos`) with `-DYONA_ENABLE_VULKAN=ON`."
+    )
+    lines.append(
+        "- The main `bench/runner.py` matrix does not force CPU or Vulkan; accelerator rows use default `Std\\Gpu` discovery."
+    )
+    lines.append(
+        "- Erlang/OTP 29 is on PATH; cells are `—` only when that row has no working `.erl` reference."
+    )
+    lines.append(
+        "- Erlang cold-start is ~686 ms (BEAM boot). Most short rows clamp to the `0.01ms` adjusted floor; prefer raw times in the JSON for those cells."
+    )
+    lines.append(
+        "- Comparison cells are `—` when a reference failed to compile, produced the wrong stdout, or has no implementation for that row."
+    )
+    lines.append(
+        "- MoltenVK / Metal: IntArray GPU kernels use i32 when values fit; float scale uses f32. GPU column includes device submit overhead."
+    )
     lines.append("")
     out = ROOT / "docs" / "benchmark-results-macos.md"
     out.write_text("\n".join(lines))

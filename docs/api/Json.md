@@ -37,7 +37,7 @@ Compact JSON text for `j`.
 stringify (JsonInt 1)   # => "1"
 ```
 
-### `get : String -> Int -> Int`
+### `get : a -> b -> c`
 
 Look up `key` in a JSON object. `None` if `j` is not an object or the key is missing.
 

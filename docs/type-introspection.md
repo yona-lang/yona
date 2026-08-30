@@ -10,40 +10,40 @@ patterns — with **zero runtime cost** for most variants.
 Defined in the Prelude:
 
 ```yona
-type Type = TInt | TFloat | TBool | TString | TSymbol | TUnit
-          | TSeq | TSet | TDict | TTuple | TFunction | TPromise
-          | TByteArray | TIntArray | TFloatArray
-          | TAdt String | TSum | TRecord
+type Type = TypeInt | TypeFloat | TypeBool | TypeString | TypeSymbol | TypeUnit
+          | TypeSeq | TypeSet | TypeDict | TypeTuple | TypeFunction | TypePromise
+          | TypeByteArray | TypeIntArray | TypeFloatArray
+          | TypeAdt String | TypeSum | TypeRecord
 ```
 
-`TAdt` carries the ADT type name as a `String` field — `typeOf (Some 42)`
-returns `TAdt "Option"`.
+`TypeAdt` carries the ADT type name as a `String` field — `typeOf (Some 42)`
+returns `TypeAdt "Option"`.
 
 ## Usage
 
 ```yona
-typeOf 42         -- TInt
-typeOf 3.14       -- TFloat
-typeOf "hello"    -- TString
-typeOf true       -- TBool
-typeOf [1, 2, 3]  -- TSeq
-typeOf {1, 2}     -- TSet
-typeOf {1: 2}     -- TDict
-typeOf (1, 2)     -- TTuple
-typeOf (Some 42)  -- TAdt "Option"
-typeOf None       -- TAdt "Option"
-typeOf (Ok 1)     -- TAdt "Result"
+typeOf 42         -- TypeInt
+typeOf 3.14       -- TypeFloat
+typeOf "hello"    -- TypeString
+typeOf true       -- TypeBool
+typeOf [1, 2, 3]  -- TypeSeq
+typeOf {1, 2}     -- TypeSet
+typeOf {1: 2}     -- TypeDict
+typeOf (1, 2)     -- TypeTuple
+typeOf (Some 42)  -- TypeAdt "Option"
+typeOf None       -- TypeAdt "Option"
+typeOf (Ok 1)     -- TypeAdt "Result"
 ```
 
 ## Pattern Matching
 
 ```yona
 case typeOf x of
-    TInt        -> "an integer"
-    TString     -> "a string"
-    TSeq        -> "a sequence"
-    TDict       -> "a dictionary"
-    TAdt name   -> "an ADT: " ++ name
+    TypeInt        -> "an integer"
+    TypeString     -> "a string"
+    TypeSeq        -> "a sequence"
+    TypeDict       -> "a dictionary"
+    TypeAdt name   -> "an ADT: " ++ name
     _           -> "something else"
 end
 ```
@@ -61,10 +61,10 @@ and no overhead for primitive type variants.
 ```yona
 typeOf 42
 -- compiles to:
-TInt   -- a constant ADT value with tag=0
+TypeInt   -- a constant ADT value with tag=0
 ```
 
-Only `TAdt` carries dynamic data (the type name string), and even that
+Only `TypeAdt` carries dynamic data (the type name string), and even that
 is determined at compile time from the ADT's known type name — the string
 is a global constant.
 
@@ -76,8 +76,8 @@ type the function is compiled with:
 
 ```yona
 let describe x = typeOf x in
-describe 42       -- TInt  (compiles describe with x: Int)
-describe "hello"  -- TInt  (reuses compiled version, NOT TString)
+describe 42       -- TypeInt  (compiles describe with x: Int)
+describe "hello"  -- TypeInt  (reuses compiled version, NOT TypeString)
 ```
 
 This is a consequence of Yona's monomorphization-based generics. To get
@@ -85,8 +85,8 @@ correct type dispatch on each call, write the `typeOf` check at the
 call site rather than inside a shared function:
 
 ```yona
-let int_match = case typeOf 42 of TInt -> 1; _ -> 0 end in
-let str_match = case typeOf "hi" of TString -> 2; _ -> 0 end in
+let int_match = case typeOf 42 of TypeInt -> 1; _ -> 0 end in
+let str_match = case typeOf "hi" of TypeString -> 2; _ -> 0 end in
 int_match + str_match
 ```
 
@@ -97,10 +97,10 @@ an ADT. The ADT approach was chosen for:
 
 - **Exhaustive pattern matching** — compiler can check all variants are handled
 - **Type safety** — `TStrung` is a compile error; `:strung` would silently fail
-- **Structured data** — `TAdt name` carries the type name as a String field
+- **Structured data** — `TypeAdt name` carries the type name as a String field
 - **Idiomatic Yona** — closed sets of values belong in ADTs, symbols are for
   user-defined dynamic tags
-- **Future extensions** — could carry element types: `TSeq Type`, `TDict Type Type`
+- **Future extensions** — could carry element types: `TypeSeq Type`, `TypeDict Type Type`
 
 Symbols remain available for user code that needs lightweight dynamic tags.
 

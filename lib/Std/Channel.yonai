@@ -1,7 +1,8 @@
+MODULE Std\Channel
 ADT Receiver 1 1 params a
-CTOR Receiver 0 1 fields _0:CHANNEL@N(Channel)
+  CTOR Receiver 0 1 fields _0:CHANNEL
 ADT Sender 1 1 params a
-CTOR Sender 0 1 fields _0:CHANNEL@N(Channel)
+  CTOR Sender 0 1 fields _0:CHANNEL
 INSTANCE Send Receiver
   PARAM value
 INSTANCE Send Sender
@@ -10,19 +11,57 @@ INSTANCE Shareable Receiver
   PARAM value
 INSTANCE Shareable Sender
   PARAM value
-FN yona_Std_Channel__capacity 1 ADT(Sender,VAR(value)) -> INT borrow 1 effects -
-FN yona_Std_Channel__channel 1 INT -> TUPLE(ADT(Linear,ADT(Sender,VAR(value))),ADT(Linear,ADT(Receiver,VAR(value)))) effects -
-FN yona_Std_Channel__close 1 ADT(Sender,VAR(value)) -> UNIT borrow 1 effects -
-FN yona_Std_Channel__isClosed 1 ADT(Sender,VAR(value)) -> BOOL borrow 1 effects -
-FN yona_Std_Channel__length 1 ADT(Sender,VAR(value)) -> INT borrow 1 effects -
-FN yona_Std_Channel__recv 1 ADT(Receiver,VAR(value)) -> ADT(Option,VAR(value)) retadt Option borrow 1 effects -
-FN yona_Std_Channel__send 2 ADT(Sender,VAR(value)) VAR(value) -> UNIT borrow 10 effects -
-FN yona_Std_Channel__tryRecv 1 ADT(Receiver,VAR(value)) -> ADT(Option,VAR(value)) retadt Option borrow 1 effects -
-GENFN_DEP yona_Std_Channel__capacity raw_capacity FN yona_Std_Channel__raw_capacity 1 ADT(Channel) -> INT
-GENFN_DEP yona_Std_Channel__channel raw_new FN yona_Std_Channel__raw_new 1 INT -> ADT(Channel)
-GENFN_DEP yona_Std_Channel__close raw_close FN yona_Std_Channel__raw_close 1 ADT(Channel) -> UNIT
-GENFN_DEP yona_Std_Channel__isClosed raw_closed FN yona_Std_Channel__raw_isClosed 1 ADT(Channel) -> BOOL
-GENFN_DEP yona_Std_Channel__length raw_length FN yona_Std_Channel__raw_length 1 ADT(Channel) -> INT
-GENFN_DEP yona_Std_Channel__recv raw_recv FN yona_Std_Channel__raw_recv 1 ADT(Channel) -> ADT(Option,VAR(value)) retadt Option
-GENFN_DEP yona_Std_Channel__send raw_send FN yona_Std_Channel__raw_send 2 ADT(Channel) VAR(value) -> UNIT
-GENFN_DEP yona_Std_Channel__tryRecv raw_try_recv FN yona_Std_Channel__raw_tryRecv 1 ADT(Channel) -> ADT(Option,VAR(value)) retadt Option
+FN capacity 1 ADT(Sender,VAR(value)) -> INT borrow 1 effects - effectscheme $##
+FN channel 1 INT -> TUPLE(ADT(Linear,ADT(Sender,VAR(value))),ADT(Linear,ADT(Receiver,VAR(value))))
+FN close 1 ADT(Sender,VAR(value)) -> UNIT borrow 1 effects - effectscheme $##
+FN isClosed 1 ADT(Sender,VAR(value)) -> BOOL borrow 1 effects - effectscheme $##
+FN length 1 ADT(Sender,VAR(value)) -> INT borrow 1 effects - effectscheme $##
+FN recv 1 ADT(Receiver,VAR(value)) -> ADT(Option,VAR(value)) borrow 1 effects - effectscheme $##
+FN send 2 ADT(Sender,VAR(value)) VAR(value) -> UNIT borrow 10 effects - effectscheme $##;$/r##
+FN tryRecv 1 ADT(Receiver,VAR(value)) -> ADT(Option,VAR(value)) borrow 1 effects - effectscheme $##
+GENFN_DEP capacity rawCapacity NATIVE YonaStdChannelRawCapacity FN 1 ADT(Channel) -> INT
+GENFN_CTOR capacity Sender Sender 0 1 1 1 fields _0:CHANNEL
+GENFN_BEGIN capacity capacity
+capacity : Sender value -> Int
+capacity (Sender raw) = rawCapacity raw
+GENFN_END
+GENFN_DEP close channel YONA Std\Channel channel FN 1 INT -> TUPLE(ADT(Linear,ADT(Sender,VAR(value))),ADT(Linear,ADT(Receiver,VAR(value))))
+GENFN_DEP close rawClose NATIVE YonaStdChannelRawClose FN 1 ADT(Channel) -> UNIT
+GENFN_CTOR close Sender Sender 0 1 1 1 fields _0:CHANNEL
+GENFN_BEGIN close close
+close : Sender value -> Unit
+close (Sender raw) = rawClose raw
+GENFN_END
+GENFN_DEP isClosed rawClosed NATIVE YonaStdChannelRawIsClosed FN 1 ADT(Channel) -> BOOL
+GENFN_CTOR isClosed Sender Sender 0 1 1 1 fields _0:CHANNEL
+GENFN_BEGIN isClosed isClosed
+isClosed : Sender value -> Bool
+isClosed (Sender raw) = rawClosed raw
+GENFN_END
+GENFN_DEP length rawLength NATIVE YonaStdChannelRawLength FN 1 ADT(Channel) -> INT
+GENFN_CTOR length Sender Sender 0 1 1 1 fields _0:CHANNEL
+GENFN_BEGIN length length
+length : Sender value -> Int
+length (Sender raw) = rawLength raw
+GENFN_END
+GENFN_DEP recv rawRecv NATIVE YonaStdChannelRawRecv FN 1 ADT(Channel) -> ADT(Option,VAR(value))
+GENFN_CTOR recv Receiver Receiver 0 1 1 1 fields _0:CHANNEL
+GENFN_BEGIN recv recv
+recv : Receiver value -> Option value
+recv (Receiver raw) = rawRecv raw
+GENFN_END
+GENFN_DEP send channel YONA Std\Channel channel FN 1 INT -> TUPLE(ADT(Linear,ADT(Sender,VAR(value))),ADT(Linear,ADT(Receiver,VAR(value))))
+GENFN_DEP send rawSend NATIVE YonaStdChannelRawSend FN 2 ADT(Channel) VAR(value) -> UNIT
+GENFN_CTOR send Sender Sender 0 1 1 1 fields _0:CHANNEL
+GENFN_CTOR send Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR send None Option 1 0 2 1
+GENFN_BEGIN send send
+send : Sender value -> value -> Unit
+send (Sender raw) value = rawSend raw value
+GENFN_END
+GENFN_DEP tryRecv rawTryRecv NATIVE YonaStdChannelRawTryRecv FN 1 ADT(Channel) -> ADT(Option,VAR(value))
+GENFN_CTOR tryRecv Receiver Receiver 0 1 1 1 fields _0:CHANNEL
+GENFN_BEGIN tryRecv tryRecv
+tryRecv : Receiver value -> Option value
+tryRecv (Receiver raw) = rawTryRecv raw
+GENFN_END

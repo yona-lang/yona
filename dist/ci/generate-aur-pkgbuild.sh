@@ -28,6 +28,8 @@ package() {
   install -Dm755 bin/yona-repl "\$pkgdir/usr/bin/yona-repl"
   install -Dm755 bin/yls "\$pkgdir/usr/bin/yls"
   install -d "\$pkgdir/usr/lib/yona"
-  cp -a lib runtime src include "\$pkgdir/usr/lib/yona/"
+  cp -a lib runtime "\$pkgdir/usr/lib/yona/"
+  install -d "\$pkgdir/usr/include"
+  cp -a include/yona "\$pkgdir/usr/include/"
 }
 EOF

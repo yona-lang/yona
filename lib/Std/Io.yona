@@ -1,0 +1,126 @@
+## Std\Io — non-blocking console and handle-based byte I/O.
+##
+## Every operation that can block on a slow device submits through
+## io_uring (on Linux) or the thread pool (for reads), returns a
+## `Promise`, and auto-awaits at the use site. Synchronous calls:
+## `isTty`, `flush`, `readStdin` (stdin to EOF), and `readExact`
+## (pipe-safe exact-length read for LSP-style framing).
+##
+## Trivial programs stay trivial: `println "hello"` is still one line.
+## The non-blocking machinery is invisible until you put several I/O
+## calls in a let block, at which point the structured-concurrency
+## grouping runs them concurrently.
+##
+## ```
+## import println, readLine from Std\Io in
+## do
+##     println "What is your name?"
+##     case readLine of
+##         Some name -> println "Hello, {name}"
+##         None      -> println "Goodbye."
+##     end
+## end
+## ```
+module Std\Io
+
+export stdinFd, stdoutFd, stderrFd
+export print, println, eprint, eprintln
+export putStr, putStrLn, write
+export readLine, readLineFrom, readStdin, readExact, readExactBytes
+export flush, isTty
+export writeBytes
+
+## File descriptor numbers, exposed as Int so any Std\File handle call
+## that expects `FileHandle` can be wrapped — `FileHandle stdoutFd`
+## builds the Linear-compatible handle — and the raw int is also useful
+## for passing to `write` without constructing the ADT.
+stdinFd  = 0
+stdoutFd = 1
+stderrFd = 2
+
+## ----- Low-level externs ----------------------------------------------------
+##
+## The Yona names are kept short and friendly; native entry points live in the
+## platform I/O component of the canonical runtime archive.
+## All four write primitives are non-blocking (`IO` in .yonai terms) and
+## return a Promise that auto-awaits at the call site. `readLineFd` is
+## `AFN` — thread-pool async — since line-buffering an io_uring read
+## stream remains future work (see `docs/todo-list.md`).
+
+extern io    writeStrNative           : Int -> String -> ()     = "YonaStdIoWriteStr"
+extern io    writeLineNative          : Int -> String -> ()     = "YonaStdIoWriteLine"
+extern async readLineFdNative         : Int -> Option           = "YonaStdIoReadLineFd"
+extern       readStdinNative           : () -> String           = "YonaStdIoReadStdinImpl"
+## Stream `read` of up to `n` bytes (may be short at EOF). Pipe-safe.
+extern       readExactBytes : Int -> Int -> String = "YonaStdIoReadExactBytes"
+## Read exactly `n` bytes from `fd` with stream `read` (not seek/`pread`).
+## Safe on pipes and sockets — required for LSP `Content-Length` framing
+## on stdin. `fd` may be a raw descriptor (`stdinFd`) or a `FileHandle`.
+## On Windows, a raw stdio fd (`0`/`1`/`2`) is switched to binary mode so
+## CRT text-mode CRLF translation cannot desync the frame.
+##
+## ```
+## readExact stdinFd 16
+## ```
+extern       readExact : Int -> Int -> Result (String, String) = "YonaStdIoReadExact"
+## Synchronous write (no Promise/await). Use for pipe-safe LSP framing.
+## On Windows, a raw stdio fd is switched to binary mode (same as
+## `readExact`) so `\r\n` headers stay byte-exact.
+extern       writeBytes : Int -> String -> ()      = "YonaStdIoWriteBytes"
+extern       isTty                     : Int -> Bool             = "YonaStdIoIsTty"
+extern       flushFdNative            : Int -> Bool             = "YonaStdIoFlushFd"
+
+## ----- Output ---------------------------------------------------------------
+
+## Write `s` to stdout. Returns a Promise that resolves when the kernel
+## has accepted the write. Non-blocking.
+print s = writeStrNative stdoutFd s
+
+## Write `s` followed by a newline to stdout. Non-blocking.
+println s = writeLineNative stdoutFd s
+
+## Write `s` to stderr. Non-blocking.
+eprint s = writeStrNative stderrFd s
+
+## Write `s` followed by a newline to stderr. Non-blocking.
+eprintln s = writeLineNative stderrFd s
+
+## Write `s` to an arbitrary fd. Non-blocking.
+putStr fd s = writeStrNative fd s
+
+## Write `s` followed by a newline to an arbitrary fd. Non-blocking.
+putStrLn fd s = writeLineNative fd s
+
+## `write fd s` is an alias for `putStr fd s`. Kept for when you want
+## the "I'm emitting bytes, not printing text" shape at the call site.
+write fd s = writeStrNative fd s
+
+## ----- Input ----------------------------------------------------------------
+
+## Read one line from stdin, stripping trailing '\n' (and any '\r').
+## Returns `Some line` or `None` at EOF. Non-blocking — the read runs
+## on a thread-pool worker.
+readLine = readLineFdNative stdinFd
+
+## Read one line from an arbitrary fd. Same semantics as `readLine`.
+readLineFrom fd = readLineFdNative fd
+
+## Read stdin to EOF as a string. Used when the program source *is*
+## stdin (`yona -` or a pipe); a file script still inherits stdin.
+readStdin = readStdinNative ()
+
+## ----- Handle control -------------------------------------------------------
+
+## `True` if `fd` is attached to a terminal (as opposed to a pipe or file).
+## Useful for turning off colored output or prompting prefixes.
+
+## Force pending writes on `fd` to disk / device (`fsync`). Most
+## io_uring writes are durable on completion so this is rarely needed.
+flush fd = flushFdNative fd
+
+## ----- String formatting ----------------------------------------------------
+##
+## Use Yona's built-in string interpolation — `"n={n} x={x}"` inlines
+## `show n` and `show x` directly. A `format` helper is planned for
+## when the value list is built at runtime (e.g. a `Seq` of show-able
+## items); see `docs/todo-list.md`.

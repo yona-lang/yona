@@ -74,11 +74,11 @@ end
 ```yona
 -- Bad: nesting imports
 import length from Std\String in
-import print from Std\IO in
+import print from Std\Io in
 print (length "hello")
 
 -- Good: comma-separated
-import length from Std\String, print from Std\IO in
+import length from Std\String, print from Std\Io in
 print (length "hello")
 ```
 
@@ -184,6 +184,6 @@ end
 - **Functions**: camelCase (`readFile`, `processItem`)
 - **Types**: PascalCase (`Option`, `Result`, `Person`)
 - **Constructors**: PascalCase (`Some`, `None`, `Ok`, `Err`)
-- **Modules**: PascalCase with backslash separator (`Std\String`, `Std\IO`)
+- **Modules**: PascalCase with backslash separator (`Std\String`, `Std\Io`)
 - **Symbols**: lowercase with colon prefix (`:ok`, `:error`, `:none`)
 - **Type variables**: single lowercase letters (`a`, `b`, `e`)

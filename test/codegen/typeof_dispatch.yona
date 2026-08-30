@@ -1,5 +1,0 @@
-let int_match = case typeOf 42 of TInt -> 1; _ -> 0 end in
-let str_match = case typeOf "hi" of TString -> 2; _ -> 0 end in
-let seq_match = case typeOf [1] of TSeq -> 3; _ -> 0 end in
-let dict_match = case typeOf {1: 2} of TDict -> 4; _ -> 0 end in
-int_match + str_match + seq_match + dict_match

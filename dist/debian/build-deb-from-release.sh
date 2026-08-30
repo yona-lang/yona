@@ -25,7 +25,8 @@ TARBALL="yona-${VERSION}-linux-${TARBALL_ARCH}.tar.gz"
 TARBALL_URL="https://github.com/yona-lang/yona/releases/download/v${VERSION}/${TARBALL}"
 PKGDIR="$WORKDIR/yona_${VERSION}-1_${ARCH}"
 
-mkdir -p "$PKGDIR/DEBIAN" "$PKGDIR/usr/bin" "$PKGDIR/usr/lib/yona" "$PKGDIR/usr/share/doc/yona"
+mkdir -p "$PKGDIR/DEBIAN" "$PKGDIR/usr/bin" "$PKGDIR/usr/lib/yona" \
+  "$PKGDIR/usr/include" "$PKGDIR/usr/share/doc/yona"
 
 echo "Downloading $TARBALL_URL"
 curl -fsSL "$TARBALL_URL" -o "$WORKDIR/$TARBALL"
@@ -40,7 +41,8 @@ fi
 if [ -f "$SRC/bin/yls" ]; then
   install -m 0755 "$SRC/bin/yls" "$PKGDIR/usr/bin/yls"
 fi
-cp -a "$SRC/lib" "$SRC/runtime" "$SRC/src" "$SRC/include" "$PKGDIR/usr/lib/yona/"
+cp -a "$SRC/lib" "$SRC/runtime" "$PKGDIR/usr/lib/yona/"
+cp -a "$SRC/include/yona" "$PKGDIR/usr/include/"
 install -m 0644 "$SRC/README.md" "$PKGDIR/usr/share/doc/yona/README.md"
 if [ -f "$SRC/CHANGELOG.md" ]; then
   install -m 0644 "$SRC/CHANGELOG.md" "$PKGDIR/usr/share/doc/yona/changelog"

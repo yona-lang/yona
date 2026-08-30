@@ -1,1 +1,2 @@
-NAT yona_Std_Task__spawn 1 FUNCTION -> INT
+MODULE Std\Task
+NAT spawn 1 FUNCTION(UNIT,VAR(result)) -> VAR(result)

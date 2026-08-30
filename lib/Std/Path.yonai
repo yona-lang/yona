@@ -1,6 +1,7 @@
-FN yona_Std_Path__join 2 STRING STRING -> STRING
-FN yona_Std_Path__dirname 1 STRING -> STRING
-FN yona_Std_Path__basename 1 STRING -> STRING
-FN yona_Std_Path__extension 1 STRING -> STRING
-FN yona_Std_Path__withExtension 2 STRING STRING -> STRING
-FN yona_Std_Path__isAbsolute 1 STRING -> BOOL
+MODULE Std\Path
+FN basename 1 STRING -> STRING
+FN dirname 1 STRING -> STRING
+FN extension 1 STRING -> STRING
+FN isAbsolute 1 STRING -> BOOL
+FN join 2 STRING STRING -> STRING
+FN withExtension 2 STRING STRING -> STRING

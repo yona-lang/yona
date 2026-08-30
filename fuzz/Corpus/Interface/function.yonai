@@ -1,0 +1,2 @@
+MODULE Fuzz\Function
+FN identity 1 INT -> INT borrow 1

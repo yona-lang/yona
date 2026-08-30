@@ -1,4 +1,5 @@
-FN yona_Std_Random__int 2 INT INT -> INT
-FN yona_Std_Random__float 0 -> FLOAT
-FN yona_Std_Random__choice 1 SEQ -> INT
-FN yona_Std_Random__shuffle 1 SEQ -> SEQ
+MODULE Std\Random
+FN choice 1 SEQ -> INT
+FN float 0 -> FLOAT
+FN int 2 INT INT -> INT
+FN shuffle 1 SEQ -> SEQ

@@ -1,7 +1,0 @@
-import foldr from Std\List,
-       Add, Mul from Std\GPU in
-foldr (\op acc ->
-    case op of
-        Add delta -> 0 :: delta :: acc
-        Mul factor -> 1 :: factor :: acc
-    end) [] [Add 1, Mul 2]

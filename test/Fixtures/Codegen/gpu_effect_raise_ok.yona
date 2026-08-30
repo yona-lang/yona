@@ -1,0 +1,12 @@
+import raiseGpu, GpuOk from Std\Gpu in
+handle
+    do
+        raiseGpu GpuOk
+        0
+    end
+with
+    Gpu.oom () resume -> resume ()
+    Gpu.deviceLost () resume -> resume ()
+    Gpu.fail code resume -> resume ()
+    return val -> val
+end

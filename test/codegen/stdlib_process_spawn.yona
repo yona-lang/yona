@@ -1,7 +1,0 @@
-import spawn, readAll, wait from Std\Process in
-do
-    proc = spawn "echo hello world"
-    out = readAll proc
-    wait proc
-    out
-end

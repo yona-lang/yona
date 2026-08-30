@@ -9,17 +9,34 @@
     "start": "pnpm run dev",
     "build": "pnpm run sync && astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.7",
-    "@fontsource/fraunces": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/source-sans-3": "^5.3.0",
     "astro": "^7.1.6",
     "sharp": "^0.35.3"
   },
+  "devDependencies": {
+    "@typescript-eslint/parser": "8.68.0",
+    "eslint": "10.9.1",
+    "eslint-plugin-astro": "3.1.0",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "globals": "17.11.0",
+    "markdownlint-cli2": "0.23.2",
+    "prettier": "3.9.6",
+    "prettier-plugin-astro": "0.14.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.68.0"
+  },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
   }
 }

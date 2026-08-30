@@ -57,8 +57,8 @@ iterator owns both its state and source for exactly its lifetime.
 
 ### Task 2: Specify operator behavior in tests
 
-**Files:** `test/trait_test.cpp`, `test/type_checker_test.cpp`,
-`test/codegen_test.cpp`, `test/stdlib/pure/Option_test.yona`.
+**Files:** `test/Semantics/TraitTest.cpp`, `test/Semantics/TypeCheckerTest.cpp`,
+`test/Codegen/CodegenTest.cpp`, `test/stdlib/pure/Option_test.yona`.
 
 1. Add failing checker tests that `==` creates `Eq` and ordering creates `Ord`
    obligations, including one actionable missing-instance diagnostic.
@@ -71,10 +71,10 @@ iterator owns both its state and source for exactly its lifetime.
 
 ### Task 3: Model complete trait and instance contracts
 
-**Files:** `include/Codegen.h`, `include/typechecker/TypeChecker.h`,
-`include/typechecker/InferType.h`, `src/Codegen.cpp`,
-`src/typechecker/TypeChecker.cpp`, `src/codegen/CodegenModule.cpp`,
-`test/trait_test.cpp`, `test/module_test.cpp`.
+**Files:** `include/yona/Codegen/Codegen.h`, `include/yona/Semantics/TypeChecker.h`,
+`include/yona/Model/InferType.h`, `src/Codegen/Codegen.cpp`,
+`src/Semantics/TypeChecker.cpp`, `src/Codegen/CodegenModule.cpp`,
+`test/Semantics/TraitTest.cpp`, and `test/Codegen/CodegenTest.cpp`.
 
 1. Test method signatures, superclasses, parameterized heads, constraints, and
    deterministic duplicate-instance rejection.
@@ -85,7 +85,7 @@ iterator owns both its state and source for exactly its lifetime.
 
 ### Task 4: Round-trip contracts through `.yonai`
 
-**Files:** `src/codegen/CodegenModule.cpp`, `docs/module-system.md`,
+**Files:** `src/Codegen/CodegenModule.cpp`, `docs/module-system.md`,
 `site/src/content/docs/guides/modules-interfaces.md`, module/trait tests.
 
 1. Add red cross-module tests for `Eq a => Eq (Option a)` and a two-parameter
@@ -99,8 +99,8 @@ iterator owns both its state and source for exactly its lifetime.
 
 ### Task 5: Elaborate equality through `Eq`
 
-**Files:** `src/typechecker/TypeEnv.cpp`, `src/typechecker/TypeChecker.cpp`,
-`src/codegen/CodegenExpr.cpp`, `src/codegen/CodegenApply.cpp`, diagnostics and
+**Files:** `src/Model/TypeEnv.cpp`, `src/Semantics/TypeChecker.cpp`,
+`src/Codegen/CodegenExpr.cpp`, `src/Codegen/CodegenApply.cpp`, diagnostics and
 error-code docs.
 
 1. Remove the temporary recursive LLVM-struct comparison.
@@ -122,7 +122,7 @@ error-code docs.
 
 ### Task 7: Constrain structural derives
 
-**Files:** derive engine headers/source, `src/Codegen.cpp`, trait tests,
+**Files:** derive engine headers/source, `src/Codegen/Codegen.cpp`, trait tests,
 auto-derive docs and site type guide.
 
 1. Test preservation of field constraints and rejection of function/linear
@@ -136,7 +136,7 @@ auto-derive docs and site type guide.
 ### Task 8: Make `Prelude.yona` the source of truth
 
 **Files:** `lib/Prelude.yona`, generated `lib/Prelude.yonai`,
-`src/compiled_runtime.c`, `CMakeLists.txt`, new `test/prelude_interface_test.cpp`,
+the core runtime component, `CMakeLists.txt`, new `test/Interface/PreludeInterfaceTest.cpp`,
 `docs/prelude.md`.
 
 1. Test that regenerating Prelude produces no semantic interface diff.
@@ -167,7 +167,7 @@ trait/codegen/RC tests.
 1. Test multi-parameter dispatch.
 2. Implement lawful instances for Seq, String, arrays, Set, Dict, Option,
    Result, and finite Iterators where applicable.
-3. Keep specialized APIs as thin compatibility wrappers when useful.
+3. Remove specialized APIs when the foundational trait supplies the operation.
 4. Test empty, singleton, nested, Unicode, and large inputs plus consistency
    between `size`, iteration, and folds.
 
@@ -237,5 +237,5 @@ guides/reference/learn pages, `CHANGELOG.md`, `docs/todo-list.md`.
 5. Run stdlib manifest/conformance and confirm no disabled/skipped tests except
    documented capability probes.
 6. Run API generation and the site build/check.
-7. Review for dead compatibility code, duplicate registries, stale generated
+7. Review for dead adapters, duplicate registries, stale generated
    interfaces, and undocumented behavior.

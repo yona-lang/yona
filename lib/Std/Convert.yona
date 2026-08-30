@@ -9,11 +9,11 @@ export parseInt, parseFloat, parseBool, parseString
 export formatInt, formatFloat, formatBool
 export intToFloat, floatToInt, encodeUtf8, decodeUtf8
 
-extern parseIntNative : String -> Result (Int, ParseError) = "yona_Std_Convert__parseIntNative"
-extern parseFloatNative : String -> Result (Float, ParseError) = "yona_Std_Convert__parseFloatNative"
-extern intToFloatNative : Int -> Result (Float, ConvertError) = "yona_Std_Convert__intToFloatNative"
-extern floatToIntNative : Float -> Result (Int, ConvertError) = "yona_Std_Convert__floatToIntNative"
-extern decodeUtf8Native : ByteArray -> Result (String, ConvertError) = "yona_Std_Convert__decodeUtf8Native"
+extern parseIntNative : String -> Result (Int, ParseError) = "YonaStdConvertParseIntNative"
+extern parseFloatNative : String -> Result (Float, ParseError) = "YonaStdConvertParseFloatNative"
+extern intToFloatNative : Int -> Result (Float, ConvertError) = "YonaStdConvertIntToFloatNative"
+extern floatToIntNative : Float -> Result (Int, ConvertError) = "YonaStdConvertFloatToIntNative"
+extern decodeUtf8Native : ByteArray -> Result (String, ConvertError) = "YonaStdConvertDecodeUtf8Native"
 
 instance From String Int
     convert : String -> Int -> String

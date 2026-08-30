@@ -142,90 +142,90 @@ type StringError = InvalidIndex Int | InvalidUtf8 | ParseError String
 
 # -- Query (all sync, extern C shims) --
 # length : String -> Int
-extern yona_Std_String__length : String -> Int
+extern YonaStdStringLength : String -> Int
 
 # isEmpty : String -> Bool
 isEmpty s = length s == 0
 
 # charAt : Int -> String -> Result Int StringError
 # Returns character code at index, or Err InvalidIndex
-extern yona_Std_String__charAt : Int -> String -> Int
+extern YonaStdStringCharAt : Int -> String -> Int
 # Wrapped to return Result:
 charAt idx s =
   let len = length s in
   if idx < 0 || idx >= len then Err (InvalidIndex idx)
-  else Ok (yona_Std_String__charAt idx s)
+  else Ok (YonaStdStringCharAt idx s)
 
 # indexOf : String -> String -> Int
 # Returns index of first occurrence, -1 if not found
-extern yona_Std_String__indexOf : String -> String -> Int
+extern YonaStdStringIndexOf : String -> String -> Int
 
 # lastIndexOf : String -> String -> Int
-extern yona_Std_String__lastIndexOf : String -> String -> Int
+extern YonaStdStringLastIndexOf : String -> String -> Int
 
 # contains : String -> String -> Bool
 contains needle haystack = indexOf needle haystack >= 0
 
 # startsWith : String -> String -> Bool
-extern yona_Std_String__startsWith : String -> String -> Bool
+extern YonaStdStringStartsWith : String -> String -> Bool
 
 # endsWith : String -> String -> Bool
-extern yona_Std_String__endsWith : String -> String -> Bool
+extern YonaStdStringEndsWith : String -> String -> Bool
 
 # -- Transform (sync) --
-extern yona_Std_String__toUpperCase : String -> String
-extern yona_Std_String__toLowerCase : String -> String
-extern yona_Std_String__trim : String -> String
-extern yona_Std_String__trimStart : String -> String
-extern yona_Std_String__trimEnd : String -> String
-extern yona_Std_String__reverse : String -> String
-extern yona_Std_String__repeat : Int -> String -> String
+extern YonaStdStringToUpperCase : String -> String
+extern YonaStdStringToLowerCase : String -> String
+extern YonaStdStringTrim : String -> String
+extern YonaStdStringTrimStart : String -> String
+extern YonaStdStringTrimEnd : String -> String
+extern YonaStdStringReverse : String -> String
+extern YonaStdStringRepeat : Int -> String -> String
 
 # padStart : Int -> String -> String -> String
 # padStart targetLen padChar str
-extern yona_Std_String__padStart : Int -> String -> String -> String
+extern YonaStdStringPadStart : Int -> String -> String -> String
 
 # padEnd : Int -> String -> String -> String
-extern yona_Std_String__padEnd : Int -> String -> String -> String
+extern YonaStdStringPadEnd : Int -> String -> String -> String
 
 # replace : String -> String -> String -> String
 # replace needle replacement haystack
-extern yona_Std_String__replace : String -> String -> String -> String
+extern YonaStdStringReplace : String -> String -> String -> String
 
 # replaceAll : String -> String -> String -> String
-extern yona_Std_String__replaceAll : String -> String -> String -> String
+extern YonaStdStringReplaceAll : String -> String -> String -> String
 
 # -- Decompose / Compose (sync) --
 
 # split : String -> String -> Seq
 # split delimiter str -> list of substrings
-extern yona_Std_String__split : String -> String -> Seq
+extern YonaStdStringSplit : String -> String -> Seq
 
 # join : String -> Seq -> String
 # join separator parts -> concatenated string
-extern yona_Std_String__join : String -> Seq -> String
+extern YonaStdStringJoin : String -> Seq -> String
 
 # chars : String -> Seq
 # Returns sequence of character codes (Int)
-extern yona_Std_String__chars : String -> Seq
+extern YonaStdStringChars : String -> Seq
 
 # fromChars : Seq -> String
-extern yona_Std_String__fromChars : Seq -> String
+extern YonaStdStringFromChars : Seq -> String
 
 # bytes : String -> Seq
 # UTF-8 byte sequence
-extern yona_Std_String__bytes : String -> Seq
+extern YonaStdStringBytes : String -> Seq
 
 # fromBytes : Seq -> Result String StringError
-extern yona_Std_String__fromBytes : Seq -> String
+extern YonaStdStringFromBytes : Seq -> String
 
 # substring : Int -> Int -> String -> String
 # substring start length str
-extern yona_Std_String__substring : Int -> Int -> String -> String
+extern YonaStdStringSubstring : Int -> Int -> String -> String
 
 # slice : Int -> Int -> String -> String
 # slice start end str (supports negative indices)
-extern yona_Std_String__slice : Int -> Int -> String -> String
+extern YonaStdStringSlice : Int -> Int -> String -> String
 
 # take : Int -> String -> String
 take n s = substring 0 n s
@@ -255,16 +255,16 @@ dropWhile pred s =
   in fromChars (go cs)
 
 # -- Conversion (sync) --
-extern yona_Std_String__toInt : String -> Int
-extern yona_Std_String__toFloat : String -> Float
-extern yona_Std_String__fromInt : Int -> String
-extern yona_Std_String__fromFloat : Float -> String
+extern YonaStdStringToInt : String -> Int
+extern YonaStdStringToFloat : String -> Float
+extern YonaStdStringFromInt : Int -> String
+extern YonaStdStringFromFloat : Float -> String
 
 # Safe versions returning Result
-toInt s = try Ok (yona_Std_String__toInt s) catch _ -> Err (ParseError s) end
-toFloat s = try Ok (yona_Std_String__toFloat s) catch _ -> Err (ParseError s) end
-fromInt n = yona_Std_String__fromInt n
-fromFloat f = yona_Std_String__fromFloat f
+toInt s = try Ok (YonaStdStringToInt s) catch _ -> Err (ParseError s) end
+toFloat s = try Ok (YonaStdStringToFloat s) catch _ -> Err (ParseError s) end
+fromInt n = YonaStdStringFromInt n
+fromFloat f = YonaStdStringFromFloat f
 
 # -- Builder (sync, for efficient string concatenation) --
 # Builder is represented as a Seq of String fragments
@@ -287,17 +287,17 @@ decodeUtf8 bs = try Ok (fromBytes bs) catch _ -> Err InvalidUtf8 end
 # -- Formatting --
 # format : String -> Seq -> String
 # Positional: format "Hello {0}, you are {1}" ["world", "cool"]
-extern yona_Std_String__format : String -> Seq -> String
+extern YonaStdStringFormat : String -> Seq -> String
 
 end
 ```
 
 ---
 
-## Std\IO
+## Std\Io
 
 ```yona
-module Std\IO exports
+module Std\Io exports
   # Console
   print, println, readLine, eprint, eprintln,
   # Streams
@@ -311,25 +311,25 @@ module Std\IO exports
   readLineBuffered, writeBuffered, flushBuffered
 as
 
-type IOError = IOError { message : String, code : Int }
+type IoError = IoError { message : String, code : Int }
 type Stream = StreamIn Int | StreamOut Int | StreamErr Int
 
 # -- Console I/O (all async) --
 
 # print : String -> Unit
-extern async yona_Std_IO__print : String -> Unit
+extern async YonaStdIoPrint : String -> Unit
 
 # println : String -> Unit
-extern async yona_Std_IO__println : String -> Unit
+extern async YonaStdIoPrintln : String -> Unit
 
 # readLine : Unit -> String
-extern async yona_Std_IO__readLine : Unit -> String
+extern async YonaStdIoReadLine : Unit -> String
 
 # eprint : String -> Unit
-extern async yona_Std_IO__eprint : String -> Unit
+extern async YonaStdIoEprint : String -> Unit
 
 # eprintln : String -> Unit
-extern async yona_Std_IO__eprintln : String -> Unit
+extern async YonaStdIoEprintln : String -> Unit
 
 # -- Standard Streams --
 # These return opaque stream handles (Int)
@@ -343,24 +343,24 @@ stdout = StreamOut 1
 # stderr : Stream
 stderr = StreamErr 2
 
-# streamWrite : String -> Stream -> Result Unit IOError
-extern async yona_Std_IO__streamWrite : String -> Int -> Int
+# streamWrite : String -> Stream -> Result Unit IoError
+extern async YonaStdIoStreamWrite : String -> Int -> Int
 
-# streamWriteLine : String -> Stream -> Result Unit IOError
+# streamWriteLine : String -> Stream -> Result Unit IoError
 streamWriteLine s stream = streamWrite (s ++ "\n") stream
 
-# streamRead : Int -> Stream -> Result String IOError
+# streamRead : Int -> Stream -> Result String IoError
 # Read up to n bytes from stream
-extern async yona_Std_IO__streamRead : Int -> Int -> String
+extern async YonaStdIoStreamRead : Int -> Int -> String
 
-# streamReadLine : Stream -> Result String IOError
-extern async yona_Std_IO__streamReadLine : Int -> String
+# streamReadLine : Stream -> Result String IoError
+extern async YonaStdIoStreamReadLine : Int -> String
 
-# streamFlush : Stream -> Result Unit IOError
-extern async yona_Std_IO__streamFlush : Int -> Unit
+# streamFlush : Stream -> Result Unit IoError
+extern async YonaStdIoStreamFlush : Int -> Unit
 
-# streamClose : Stream -> Result Unit IOError
-extern async yona_Std_IO__streamClose : Int -> Unit
+# streamClose : Stream -> Result Unit IoError
+extern async YonaStdIoStreamClose : Int -> Unit
 
 # -- Buffered I/O --
 # BufferedReader/Writer wrap a stream handle with a buffer size
@@ -384,14 +384,14 @@ bufferedWriter size stream =
     _ -> raise (:io_error, "Cannot create writer from input stream")
   end
 
-# readLineBuffered : BufferedReader -> Result String IOError
-extern async yona_Std_IO__readLineBuffered : Int -> Int -> String
+# readLineBuffered : BufferedReader -> Result String IoError
+extern async YonaStdIoReadLineBuffered : Int -> Int -> String
 
-# writeBuffered : String -> BufferedWriter -> Result Unit IOError
-extern async yona_Std_IO__writeBuffered : String -> Int -> Int -> Unit
+# writeBuffered : String -> BufferedWriter -> Result Unit IoError
+extern async YonaStdIoWriteBuffered : String -> Int -> Int -> Unit
 
-# flushBuffered : BufferedWriter -> Result Unit IOError
-extern async yona_Std_IO__flushBuffered : Int -> Unit
+# flushBuffered : BufferedWriter -> Result Unit IoError
+extern async YonaStdIoFlushBuffered : Int -> Unit
 
 end
 ```
@@ -436,7 +436,7 @@ type FileError
   | AlreadyExists String
   | IsDirectory String
   | NotDirectory String
-  | IOError { message : String, path : String }
+  | IoError { message : String, path : String }
 
 type OpenMode = ReadOnly | WriteOnly | ReadWrite | Append
 
@@ -458,12 +458,12 @@ type FileStat = FileStat {
 # -- Read entire file (async) --
 
 # readFile : String -> Result String FileError
-extern async yona_Std_File__readFile : String -> String
-readFile path = try Ok (yona_Std_File__readFile path)
+extern async YonaStdFileReadFile : String -> String
+readFile path = try Ok (YonaStdFileReadFile path)
   catch _ -> Err (NotFound path) end
 
 # readBytes : String -> Result Seq FileError
-extern async yona_Std_File__readBytes : String -> Seq
+extern async YonaStdFileReadBytes : String -> Seq
 
 # readLines : String -> Result Seq FileError
 # Returns Seq of String (one per line)
@@ -476,121 +476,121 @@ readLines path =
 # -- Write entire file (async) --
 
 # writeFile : String -> String -> Result Unit FileError
-extern async yona_Std_File__writeFile : String -> String -> Unit
+extern async YonaStdFileWriteFile : String -> String -> Unit
 
 # writeBytes : String -> Seq -> Result Unit FileError
-extern async yona_Std_File__writeBytes : String -> Seq -> Unit
+extern async YonaStdFileWriteBytes : String -> Seq -> Unit
 
 # appendFile : String -> String -> Result Unit FileError
-extern async yona_Std_File__appendFile : String -> String -> Unit
+extern async YonaStdFileAppendFile : String -> String -> Unit
 
 # -- Streaming file I/O (async) --
 
 # open : String -> OpenMode -> Result FileHandle FileError
-extern async yona_Std_File__open : String -> Int -> Int
+extern async YonaStdFileOpen : String -> Int -> Int
 
 # close : FileHandle -> Result Unit FileError
-extern async yona_Std_File__close : Int -> Unit
+extern async YonaStdFileClose : Int -> Unit
 
 # read : Int -> FileHandle -> Result String FileError
 # Read up to n bytes
-extern async yona_Std_File__read : Int -> Int -> String
+extern async YonaStdFileRead : Int -> Int -> String
 
 # write : String -> FileHandle -> Result Unit FileError
-extern async yona_Std_File__write : String -> Int -> Unit
+extern async YonaStdFileWrite : String -> Int -> Unit
 
 # seek : Int -> FileHandle -> Result Unit FileError
-extern async yona_Std_File__seek : Int -> Int -> Unit
+extern async YonaStdFileSeek : Int -> Int -> Unit
 
 # tell : FileHandle -> Result Int FileError
-extern async yona_Std_File__tell : Int -> Int
+extern async YonaStdFileTell : Int -> Int
 
 # flush : FileHandle -> Result Unit FileError
-extern async yona_Std_File__flush : Int -> Unit
+extern async YonaStdFileFlush : Int -> Unit
 
 # -- File queries (async) --
 
 # exists : String -> Bool
-extern async yona_Std_File__exists : String -> Bool
+extern async YonaStdFileExists : String -> Bool
 
 # isFile : String -> Bool
-extern async yona_Std_File__isFile : String -> Bool
+extern async YonaStdFileIsFile : String -> Bool
 
 # isDir : String -> Bool
-extern async yona_Std_File__isDir : String -> Bool
+extern async YonaStdFileIsDir : String -> Bool
 
 # isSymlink : String -> Bool
-extern async yona_Std_File__isSymlink : String -> Bool
+extern async YonaStdFileIsSymlink : String -> Bool
 
 # size : String -> Result Int FileError
-extern async yona_Std_File__size : String -> Int
+extern async YonaStdFileSize : String -> Int
 
 # modifiedTime : String -> Result Int FileError
-extern async yona_Std_File__modifiedTime : String -> Int
+extern async YonaStdFileModifiedTime : String -> Int
 
 # createdTime : String -> Result Int FileError
-extern async yona_Std_File__createdTime : String -> Int
+extern async YonaStdFileCreatedTime : String -> Int
 
 # -- Directory operations (async) --
 
 # listDir : String -> Result Seq FileError
-extern async yona_Std_File__listDir : String -> Seq
+extern async YonaStdFileListDir : String -> Seq
 
 # listDirRecursive : String -> Result Seq FileError
-extern async yona_Std_File__listDirRecursive : String -> Seq
+extern async YonaStdFileListDirRecursive : String -> Seq
 
 # mkdir : String -> Result Unit FileError
-extern async yona_Std_File__mkdir : String -> Unit
+extern async YonaStdFileMkdir : String -> Unit
 
 # mkdirp : String -> Result Unit FileError
 # Create directory and all parents
-extern async yona_Std_File__mkdirp : String -> Unit
+extern async YonaStdFileMkdirp : String -> Unit
 
 # rmdir : String -> Result Unit FileError
-extern async yona_Std_File__rmdir : String -> Unit
+extern async YonaStdFileRmdir : String -> Unit
 
 # -- File manipulation (async) --
 
 # remove : String -> Result Unit FileError
-extern async yona_Std_File__remove : String -> Unit
+extern async YonaStdFileRemove : String -> Unit
 
 # rename : String -> String -> Result Unit FileError
-extern async yona_Std_File__rename : String -> String -> Unit
+extern async YonaStdFileRename : String -> String -> Unit
 
 # copy : String -> String -> Result Unit FileError
-extern async yona_Std_File__copy : String -> String -> Unit
+extern async YonaStdFileCopy : String -> String -> Unit
 
 # symlink : String -> String -> Result Unit FileError
-extern async yona_Std_File__symlink : String -> String -> Unit
+extern async YonaStdFileSymlink : String -> String -> Unit
 
 # readLink : String -> Result String FileError
-extern async yona_Std_File__readLink : String -> String
+extern async YonaStdFileReadLink : String -> String
 
 # -- Path operations (sync, pure) --
 
 # joinPath : String -> String -> String
-extern yona_Std_File__joinPath : String -> String -> String
+extern YonaStdFileJoinPath : String -> String -> String
 
 # dirName : String -> String
-extern yona_Std_File__dirName : String -> String
+extern YonaStdFileDirName : String -> String
 
 # baseName : String -> String
-extern yona_Std_File__baseName : String -> String
+extern YonaStdFileBaseName : String -> String
 
 # extension : String -> String
-extern yona_Std_File__extension : String -> String
+extern YonaStdFileExtension : String -> String
 
 # withExtension : String -> String -> String
-extern yona_Std_File__withExtension : String -> String -> String
+extern YonaStdFileWithExtension : String -> String -> String
 
 # absolutePath : String -> Result String FileError
-extern async yona_Std_File__absolutePath : String -> String
+extern async YonaStdFileAbsolutePath : String -> String
 
 # relativePath : String -> String -> String
-extern yona_Std_File__relativePath : String -> String -> String
+extern YonaStdFileRelativePath : String -> String -> String
 
 # normalize : String -> String
-extern yona_Std_File__normalize : String -> String
+extern YonaStdFileNormalize : String -> String
 
 # pathSeparator : String
 pathSeparator = "/"
@@ -605,23 +605,23 @@ isRelative p = !(isAbsolute p)
 
 # tempFile : String -> Result (String, FileHandle) FileError
 # tempFile prefix -> (path, handle)
-extern async yona_Std_File__tempFile : String -> Int
+extern async YonaStdFileTempFile : String -> Int
 
 # tempDir : String -> Result String FileError
 # tempDir prefix -> path
-extern async yona_Std_File__tempDir : String -> String
+extern async YonaStdFileTempDir : String -> String
 
 # -- Watch (async) --
 # watch : String -> (FileEvent -> Unit) -> Result Unit FileError
 # Watches path for changes, calls callback on events
-extern async yona_Std_File__watch : String -> Int -> Unit
+extern async YonaStdFileWatch : String -> Int -> Unit
 
 # -- Permissions (async) --
 # permissions : String -> Result Int FileError  (unix mode bits)
-extern async yona_Std_File__permissions : String -> Int
+extern async YonaStdFilePermissions : String -> Int
 
 # setPermissions : String -> Int -> Result Unit FileError
-extern async yona_Std_File__setPermissions : String -> Int -> Unit
+extern async YonaStdFileSetPermissions : String -> Int -> Unit
 
 end
 ```
@@ -656,7 +656,7 @@ type NetError
   | AddrInUse String
   | AddrNotAvailable String
   | DnsError String
-  | NetIOError { message : String, code : Int }
+  | NetIoError { message : String, code : Int }
 
 type SocketAddr = SocketAddr { host : String, port : Int }
 
@@ -682,31 +682,31 @@ port sa = sa.port
 
 # tcpListen : String -> Int -> Result TcpListener NetError
 # tcpListen host port
-extern async yona_Std_Net__tcpListen : String -> Int -> Int
+extern async YonaStdNetTcpListen : String -> Int -> Int
 
 # tcpAccept : TcpListener -> Result TcpStream NetError
 # Blocks until a connection arrives
-extern async yona_Std_Net__tcpAccept : Int -> Int
+extern async YonaStdNetTcpAccept : Int -> Int
 
 # -- TCP Client (async) --
 
 # tcpConnect : String -> Int -> Result TcpStream NetError
 # tcpConnect host port
-extern async yona_Std_Net__tcpConnect : String -> Int -> Int
+extern async YonaStdNetTcpConnect : String -> Int -> Int
 
 # tcpRead : Int -> TcpStream -> Result String NetError
 # Read up to n bytes
-extern async yona_Std_Net__tcpRead : Int -> Int -> String
+extern async YonaStdNetTcpRead : Int -> Int -> String
 
 # tcpWrite : String -> TcpStream -> Result Unit NetError
-extern async yona_Std_Net__tcpWrite : String -> Int -> Unit
+extern async YonaStdNetTcpWrite : String -> Int -> Unit
 
 # tcpClose : TcpStream -> Result Unit NetError
-extern async yona_Std_Net__tcpClose : Int -> Unit
+extern async YonaStdNetTcpClose : Int -> Unit
 
 # tcpSetTimeout : Int -> TcpStream -> Result Unit NetError
 # Set read/write timeout in milliseconds
-extern async yona_Std_Net__tcpSetTimeout : Int -> Int -> Unit
+extern async YonaStdNetTcpSetTimeout : Int -> Int -> Unit
 
 # tcpLocalAddr : TcpStream -> SocketAddr
 tcpLocalAddr stream = stream.localAddr
@@ -717,28 +717,28 @@ tcpRemoteAddr stream = stream.remoteAddr
 # -- UDP (async) --
 
 # udpBind : String -> Int -> Result UdpSocket NetError
-extern async yona_Std_Net__udpBind : String -> Int -> Int
+extern async YonaStdNetUdpBind : String -> Int -> Int
 
 # udpSendTo : String -> SocketAddr -> UdpSocket -> Result Int NetError
 # Returns bytes sent
-extern async yona_Std_Net__udpSendTo : String -> String -> Int -> Int -> Int
+extern async YonaStdNetUdpSendTo : String -> String -> Int -> Int -> Int
 
 # udpRecvFrom : Int -> UdpSocket -> Result (String, SocketAddr) NetError
 # Read up to n bytes, returns (data, sender_addr)
-extern async yona_Std_Net__udpRecvFrom : Int -> Int -> Int
+extern async YonaStdNetUdpRecvFrom : Int -> Int -> Int
 
 # udpClose : UdpSocket -> Result Unit NetError
-extern async yona_Std_Net__udpClose : Int -> Unit
+extern async YonaStdNetUdpClose : Int -> Unit
 
 # -- DNS (async) --
 
 # resolve : String -> Result SocketAddr NetError
 # Returns first resolved address
-extern async yona_Std_Net__resolve : String -> String
+extern async YonaStdNetResolve : String -> String
 
 # resolveAll : String -> Result Seq NetError
 # Returns all resolved addresses
-extern async yona_Std_Net__resolveAll : String -> Seq
+extern async YonaStdNetResolveAll : String -> Seq
 
 end
 ```
@@ -751,7 +751,7 @@ end
 module Std\Http exports
   # Request types
   Request, request,
-  Method, GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS,
+  Method, Get, Post, Put, Delete, Patch, Head, Options,
   withMethod, withHeader, withHeaders, withBody, withTimeout,
   withFollowRedirects, withBasicAuth, withBearerToken,
   # Response types
@@ -776,9 +776,9 @@ type HttpError
   | TlsError String
   | InvalidUrl String
   | TooManyRedirects String
-  | HttpIOError { message : String, code : Int }
+  | HttpIoError { message : String, code : Int }
 
-type Method = GET | POST | PUT | DELETE | PATCH | HEAD | OPTIONS
+type Method = Get | Post | Put | Delete | Patch | Head | Options
 
 type Request = Request {
   method : Method,
@@ -803,7 +803,7 @@ type StreamingResponse = StreamingResponse { handle : Int, statusCode : Int, res
 # request : String -> Request
 # Creates a GET request to the given URL
 request url = Request {
-  method = GET,
+  method = Get,
   url = url,
   hdrs = [],
   reqBody = "",
@@ -877,7 +877,7 @@ isServerError resp = resp.statusCode >= 500 && resp.statusCode < 600
 
 # send : Request -> Result Response HttpError
 # The primary function -- sends any request
-extern async yona_Std_Http__send : Int -> Int
+extern async YonaStdHttpSend : Int -> Int
 
 # Convenience wrappers:
 
@@ -885,29 +885,29 @@ extern async yona_Std_Http__send : Int -> Int
 get url = send (request url)
 
 # post : String -> String -> Result Response HttpError
-post url reqBody = send (request url |> withMethod POST |> withBody reqBody)
+post url reqBody = send (request url |> withMethod Post |> withBody reqBody)
 
 # put : String -> String -> Result Response HttpError
-put url reqBody = send (request url |> withMethod PUT |> withBody reqBody)
+put url reqBody = send (request url |> withMethod Put |> withBody reqBody)
 
 # delete : String -> Result Response HttpError
-delete url = send (request url |> withMethod DELETE)
+delete url = send (request url |> withMethod Delete)
 
 # patch : String -> String -> Result Response HttpError
-patch url reqBody = send (request url |> withMethod PATCH |> withBody reqBody)
+patch url reqBody = send (request url |> withMethod Patch |> withBody reqBody)
 
 # -- Streaming (async) --
 
 # sendStreaming : Request -> Result StreamingResponse HttpError
 # Returns a streaming handle for large response bodies
-extern async yona_Std_Http__sendStreaming : Int -> Int
+extern async YonaStdHttpSendStreaming : Int -> Int
 
 # readChunk : Int -> StreamingResponse -> Result String HttpError
 # Read up to n bytes from streaming response
-extern async yona_Std_Http__readChunk : Int -> Int -> String
+extern async YonaStdHttpReadChunk : Int -> Int -> String
 
 # closeStream : StreamingResponse -> Result Unit HttpError
-extern async yona_Std_Http__closeStream : Int -> Unit
+extern async YonaStdHttpCloseStream : Int -> Unit
 
 # -- HTTP Server (async) --
 
@@ -953,7 +953,7 @@ withResponseBody b rb = rb { rbBody = b }
 # serve : ServerConfig -> Seq -> Result Server HttpError
 # serve config routes -> starts listening
 # Each route is (method_string, path_pattern, handler_function)
-extern async yona_Std_Http__serve : Int -> Int
+extern async YonaStdHttpServe : Int -> Int
 
 # respond : Int -> String -> String -> Response
 respond code contentType content =
@@ -1015,15 +1015,15 @@ type JsonError
 # -- Parse / Stringify (sync) --
 
 # parse : String -> Result Json JsonError
-extern yona_Std_Json__parse : String -> Int
+extern YonaStdJsonParse : String -> Int
 # Wrapped for Result type
 
 # stringify : Json -> String
-extern yona_Std_Json__stringify : Int -> String
+extern YonaStdJsonStringify : Int -> String
 
 # prettyPrint : Int -> Json -> String
 # prettyPrint indentSize json
-extern yona_Std_Json__prettyPrint : Int -> Int -> String
+extern YonaStdJsonPrettyPrint : Int -> Int -> String
 
 # -- Construction (sync, pure) --
 
@@ -1224,7 +1224,7 @@ type ProcessError
   = SpawnFailed String
   | NotRunning Int
   | SignalFailed { signal : Int, pid : Int }
-  | ProcessIOError String
+  | ProcessIoError String
 
 type Process = Process {
   handle : Int,
@@ -1242,45 +1242,45 @@ type Signal = SIGTERM | SIGKILL | SIGINT | SIGHUP
 
 # spawn : String -> Seq -> Result Process ProcessError
 # spawn command args
-extern async yona_Std_Process__spawn : String -> Int -> Int
+extern async YonaStdProcessSpawn : String -> Int -> Int
 
 # spawnShell : String -> Result Process ProcessError
 # Run command through shell
-extern async yona_Std_Process__spawnShell : String -> Int
+extern async YonaStdProcessSpawnShell : String -> Int
 
 # -- Process I/O (async) --
 
 # writeStdin : String -> Process -> Result Unit ProcessError
-extern async yona_Std_Process__writeStdin : String -> Int -> Unit
+extern async YonaStdProcessWriteStdin : String -> Int -> Unit
 
 # readStdout : Int -> Process -> Result String ProcessError
 # Read up to n bytes
-extern async yona_Std_Process__readStdout : Int -> Int -> String
+extern async YonaStdProcessReadStdout : Int -> Int -> String
 
 # readStderr : Int -> Process -> Result String ProcessError
-extern async yona_Std_Process__readStderr : Int -> Int -> String
+extern async YonaStdProcessReadStderr : Int -> Int -> String
 
 # closeStdin : Process -> Result Unit ProcessError
-extern async yona_Std_Process__closeStdin : Int -> Unit
+extern async YonaStdProcessCloseStdin : Int -> Unit
 
 # -- Control (async) --
 
 # wait : Process -> Result ExitStatus ProcessError
 # Block until process exits
-extern async yona_Std_Process__wait : Int -> Int
+extern async YonaStdProcessWait : Int -> Int
 
 # kill : Process -> Result Unit ProcessError
 # Send SIGKILL
-extern async yona_Std_Process__kill : Int -> Unit
+extern async YonaStdProcessKill : Int -> Unit
 
 # isAlive : Process -> Bool
-extern async yona_Std_Process__isAlive : Int -> Bool
+extern async YonaStdProcessIsAlive : Int -> Bool
 
 # pid : Process -> Int
 pid proc = proc.procPid
 
 # sendSignal : Signal -> Process -> Result Unit ProcessError
-extern async yona_Std_Process__sendSignal : Int -> Int -> Unit
+extern async YonaStdProcessSendSignal : Int -> Int -> Unit
 
 # -- Convenience (async) --
 
@@ -1291,7 +1291,7 @@ exec cmd args =
     Ok proc ->
       case wait proc of
         Ok (ExitStatus { code = 0 }) -> readStdout 1048576 proc
-        Ok (ExitStatus { code = c }) -> Err (ProcessIOError ("Exit code: " ++ fromInt c))
+        Ok (ExitStatus { code = c }) -> Err (ProcessIoError ("Exit code: " ++ fromInt c))
         Err e -> Err e
       end
     Err e -> Err e
@@ -1299,7 +1299,7 @@ exec cmd args =
 
 # execWithStatus : String -> Seq -> Result (Int, String, String) ProcessError
 # Returns (exitCode, stdout, stderr)
-extern async yona_Std_Process__execWithStatus : String -> Int -> Int
+extern async YonaStdProcessExecWithStatus : String -> Int -> Int
 
 # execCapture : String -> Result String ProcessError
 # Run shell command and capture output
@@ -1315,22 +1315,22 @@ execCapture cmd =
 # -- Current Process (sync unless noted) --
 
 # getArgs : Unit -> Seq
-extern yona_Std_Process__getArgs : Unit -> Seq
+extern YonaStdProcessGetArgs : Unit -> Seq
 
 # getEnv : String -> Option String
-extern yona_Std_Process__getEnv : String -> String
+extern YonaStdProcessGetEnv : String -> String
 
 # setEnv : String -> String -> Unit
-extern yona_Std_Process__setEnv : String -> String -> Unit
+extern YonaStdProcessSetEnv : String -> String -> Unit
 
 # unsetEnv : String -> Unit
-extern yona_Std_Process__unsetEnv : String -> Unit
+extern YonaStdProcessUnsetEnv : String -> Unit
 
 # getCwd : Unit -> String
-extern yona_Std_Process__getCwd : Unit -> String
+extern YonaStdProcessGetCwd : Unit -> String
 
 # exit : Int -> Unit
-extern yona_Std_Process__exit : Int -> Unit
+extern YonaStdProcessExit : Int -> Unit
 
 end
 ```
@@ -1364,52 +1364,52 @@ type CryptoError
 # All hash functions take a String and return hex-encoded digest
 
 # sha256 : String -> String
-extern yona_Std_Crypto__sha256 : String -> String
+extern YonaStdCryptoSha256 : String -> String
 
 # sha512 : String -> String
-extern yona_Std_Crypto__sha512 : String -> String
+extern YonaStdCryptoSha512 : String -> String
 
 # sha1 : String -> String
-extern yona_Std_Crypto__sha1 : String -> String
+extern YonaStdCryptoSha1 : String -> String
 
 # md5 : String -> String
-extern yona_Std_Crypto__md5 : String -> String
+extern YonaStdCryptoMd5 : String -> String
 
 # sha256Bytes : Seq -> String
 # Hash raw byte sequence
-extern yona_Std_Crypto__sha256Bytes : Seq -> String
+extern YonaStdCryptoSha256Bytes : Seq -> String
 
 # sha512Bytes : Seq -> String
-extern yona_Std_Crypto__sha512Bytes : Seq -> String
+extern YonaStdCryptoSha512Bytes : Seq -> String
 
 # -- HMAC (sync) --
 
 # hmacSha256 : String -> String -> String
 # hmacSha256 key message -> hex digest
-extern yona_Std_Crypto__hmacSha256 : String -> String -> String
+extern YonaStdCryptoHmacSha256 : String -> String -> String
 
 # hmacSha512 : String -> String -> String
-extern yona_Std_Crypto__hmacSha512 : String -> String -> String
+extern YonaStdCryptoHmacSha512 : String -> String -> String
 
 # -- Random (sync -- uses OS entropy) --
 
 # randomBytes : Int -> Seq
 # Generate n cryptographically secure random bytes
-extern yona_Std_Crypto__randomBytes : Int -> Seq
+extern YonaStdCryptoRandomBytes : Int -> Seq
 
 # randomInt : Int -> Int -> Int
 # Random integer in [min, max)
-extern yona_Std_Crypto__randomInt : Int -> Int -> Int
+extern YonaStdCryptoRandomInt : Int -> Int -> Int
 
 # randomFloat : Unit -> Float
 # Random float in [0.0, 1.0)
-extern yona_Std_Crypto__randomFloat : Unit -> Float
+extern YonaStdCryptoRandomFloat : Unit -> Float
 
 # -- UUID (sync) --
 
 # uuid4 : Unit -> String
 # Generate random UUID v4
-extern yona_Std_Crypto__uuid4 : Unit -> String
+extern YonaStdCryptoUuid4 : Unit -> String
 
 # uuidFromString : String -> Result String CryptoError
 uuidFromString s =
@@ -1423,7 +1423,7 @@ uuidToString uuid = uuid
 
 # secureCompare : String -> String -> Bool
 # Constant-time string comparison (prevents timing attacks)
-extern yona_Std_Crypto__secureCompare : String -> String -> Bool
+extern YonaStdCryptoSecureCompare : String -> String -> Bool
 
 end
 ```
@@ -1454,52 +1454,52 @@ type EncodingError
 # -- Base64 (sync) --
 
 # base64Encode : String -> String
-extern yona_Std_Encoding__base64Encode : String -> String
+extern YonaStdEncodingBase64Encode : String -> String
 
 # base64Decode : String -> Result String EncodingError
-extern yona_Std_Encoding__base64Decode : String -> String
+extern YonaStdEncodingBase64Decode : String -> String
 # Wrapped: returns Result
 
 # base64UrlEncode : String -> String
 # URL-safe base64 (uses - and _ instead of + and /)
-extern yona_Std_Encoding__base64UrlEncode : String -> String
+extern YonaStdEncodingBase64UrlEncode : String -> String
 
 # base64UrlDecode : String -> Result String EncodingError
-extern yona_Std_Encoding__base64UrlDecode : String -> String
+extern YonaStdEncodingBase64UrlDecode : String -> String
 
 # -- Hex (sync) --
 
 # hexEncode : String -> String
 # Encode string to hex representation
-extern yona_Std_Encoding__hexEncode : String -> String
+extern YonaStdEncodingHexEncode : String -> String
 
 # hexDecode : String -> Result String EncodingError
-extern yona_Std_Encoding__hexDecode : String -> String
+extern YonaStdEncodingHexDecode : String -> String
 
 # -- URL encoding (sync) --
 
 # urlEncode : String -> String
 # Percent-encode a full URL
-extern yona_Std_Encoding__urlEncode : String -> String
+extern YonaStdEncodingUrlEncode : String -> String
 
 # urlDecode : String -> Result String EncodingError
-extern yona_Std_Encoding__urlDecode : String -> String
+extern YonaStdEncodingUrlDecode : String -> String
 
 # urlEncodeComponent : String -> String
 # Encode a single query component (more aggressive than urlEncode)
-extern yona_Std_Encoding__urlEncodeComponent : String -> String
+extern YonaStdEncodingUrlEncodeComponent : String -> String
 
 # urlDecodeComponent : String -> Result String EncodingError
-extern yona_Std_Encoding__urlDecodeComponent : String -> String
+extern YonaStdEncodingUrlDecodeComponent : String -> String
 
 # -- HTML escaping (sync) --
 
 # htmlEscape : String -> String
 # Escapes <, >, &, ", '
-extern yona_Std_Encoding__htmlEscape : String -> String
+extern YonaStdEncodingHtmlEscape : String -> String
 
 # htmlUnescape : String -> String
-extern yona_Std_Encoding__htmlUnescape : String -> String
+extern YonaStdEncodingHtmlUnescape : String -> String
 
 end
 ```
@@ -1541,26 +1541,26 @@ type BufferedChannel = BufferedChannel { handle : Int, capacity : Int }
 
 # channel : Unit -> Channel
 # Unbuffered (synchronous) channel
-extern yona_Std_Concurrent__channel : Unit -> Int
+extern YonaStdConcurrentChannel : Unit -> Int
 
 # bufferedChannel : Int -> BufferedChannel
 # Buffered channel with given capacity
-extern yona_Std_Concurrent__bufferedChannel : Int -> Int
+extern YonaStdConcurrentBufferedChannel : Int -> Int
 
 # send : a -> Channel -> Result Unit ConcurrentError
 # Blocks until receiver is ready (unbuffered) or buffer has space (buffered)
-extern async yona_Std_Concurrent__send : Int -> Int -> Unit
+extern async YonaStdConcurrentSend : Int -> Int -> Unit
 
 # receive : Channel -> Result a ConcurrentError
 # Blocks until a value is available
-extern async yona_Std_Concurrent__receive : Int -> Int
+extern async YonaStdConcurrentReceive : Int -> Int
 
 # tryReceive : Channel -> Option a
 # Non-blocking receive, returns None if nothing available
-extern yona_Std_Concurrent__tryReceive : Int -> Int
+extern YonaStdConcurrentTryReceive : Int -> Int
 
 # closeChannel : Channel -> Unit
-extern yona_Std_Concurrent__closeChannel : Int -> Unit
+extern YonaStdConcurrentCloseChannel : Int -> Unit
 
 # -- Semaphore (async) --
 
@@ -1568,16 +1568,16 @@ type Semaphore = Semaphore { handle : Int, permits : Int }
 
 # semaphore : Int -> Semaphore
 # Create with n permits
-extern yona_Std_Concurrent__semaphore : Int -> Int
+extern YonaStdConcurrentSemaphore : Int -> Int
 
 # acquire : Semaphore -> Result Unit ConcurrentError
-extern async yona_Std_Concurrent__acquire : Int -> Unit
+extern async YonaStdConcurrentAcquire : Int -> Unit
 
 # release : Semaphore -> Unit
-extern yona_Std_Concurrent__release : Int -> Unit
+extern YonaStdConcurrentRelease : Int -> Unit
 
 # tryAcquire : Semaphore -> Bool
-extern yona_Std_Concurrent__tryAcquire : Int -> Bool
+extern YonaStdConcurrentTryAcquire : Int -> Bool
 
 # withSemaphore : Semaphore -> (Unit -> a) -> Result a ConcurrentError
 # Acquire, run function, release (even on exception)
@@ -1597,68 +1597,68 @@ withSemaphore sem fn =
 type AtomicInt = AtomicInt { handle : Int }
 
 # atomicInt : Int -> AtomicInt
-extern yona_Std_Concurrent__atomicInt : Int -> Int
+extern YonaStdConcurrentAtomicInt : Int -> Int
 
 # atomicLoad : AtomicInt -> Int
-extern yona_Std_Concurrent__atomicLoad : Int -> Int
+extern YonaStdConcurrentAtomicLoad : Int -> Int
 
 # atomicStore : Int -> AtomicInt -> Unit
-extern yona_Std_Concurrent__atomicStore : Int -> Int -> Unit
+extern YonaStdConcurrentAtomicStore : Int -> Int -> Unit
 
 # atomicAdd : Int -> AtomicInt -> Int
 # Returns previous value
-extern yona_Std_Concurrent__atomicAdd : Int -> Int -> Int
+extern YonaStdConcurrentAtomicAdd : Int -> Int -> Int
 
 # atomicSub : Int -> AtomicInt -> Int
-extern yona_Std_Concurrent__atomicSub : Int -> Int -> Int
+extern YonaStdConcurrentAtomicSub : Int -> Int -> Int
 
 # atomicCompareAndSwap : Int -> Int -> AtomicInt -> Bool
 # atomicCompareAndSwap expected desired atomic -> succeeded?
-extern yona_Std_Concurrent__atomicCAS : Int -> Int -> Int -> Bool
+extern YonaStdConcurrentAtomicCAS : Int -> Int -> Int -> Bool
 
 # -- STM (Software Transactional Memory) --
 
 type TVar = TVar { handle : Int }
 
 # tvar : a -> TVar
-extern yona_Std_Concurrent__tvar : Int -> Int
+extern YonaStdConcurrentTvar : Int -> Int
 
 # readTVar : TVar -> a
 # Only valid inside atomically
-extern yona_Std_Concurrent__readTVar : Int -> Int
+extern YonaStdConcurrentReadTVar : Int -> Int
 
 # writeTVar : a -> TVar -> Unit
-extern yona_Std_Concurrent__writeTVar : Int -> Int -> Unit
+extern YonaStdConcurrentWriteTVar : Int -> Int -> Unit
 
 # atomically : (Unit -> a) -> a
 # Execute STM transaction
-extern yona_Std_Concurrent__atomically : Int -> Int
+extern YonaStdConcurrentAtomically : Int -> Int
 
 # retry : Unit -> a
 # Retry current STM transaction (block until a TVar changes)
-extern yona_Std_Concurrent__retry : Unit -> Int
+extern YonaStdConcurrentRetry : Unit -> Int
 
 # -- Utilities (async) --
 
 # sleep : Int -> Unit
 # Sleep for n milliseconds
-extern async yona_Std_Concurrent__sleep : Int -> Unit
+extern async YonaStdConcurrentSleep : Int -> Unit
 
 # timeout : Int -> (Unit -> a) -> Result a ConcurrentError
 # Run function with timeout in milliseconds
-extern async yona_Std_Concurrent__timeout : Int -> Int -> Int
+extern async YonaStdConcurrentTimeout : Int -> Int -> Int
 
 # race : Seq -> a
 # Run multiple thunks concurrently, return first to complete
-extern async yona_Std_Concurrent__race : Seq -> Int
+extern async YonaStdConcurrentRace : Seq -> Int
 
 # all : Seq -> Seq
 # Run multiple thunks concurrently, wait for all results
-extern async yona_Std_Concurrent__all : Seq -> Seq
+extern async YonaStdConcurrentAll : Seq -> Seq
 
 # any : Seq -> a
 # Run multiple thunks, return first successful result
-extern async yona_Std_Concurrent__any : Seq -> Int
+extern async YonaStdConcurrentAny : Seq -> Int
 
 # -- Timer --
 
@@ -1666,14 +1666,14 @@ type Timer = Timer { handle : Int }
 
 # setInterval : Int -> (Unit -> Unit) -> Timer
 # Run function every n milliseconds
-extern yona_Std_Concurrent__setInterval : Int -> Int -> Int
+extern YonaStdConcurrentSetInterval : Int -> Int -> Int
 
 # setTimeout : Int -> (Unit -> Unit) -> Timer
 # Run function after n milliseconds
-extern yona_Std_Concurrent__setTimeout : Int -> Int -> Int
+extern YonaStdConcurrentSetTimeout : Int -> Int -> Int
 
 # cancel : Timer -> Unit
-extern yona_Std_Concurrent__cancel : Int -> Unit
+extern YonaStdConcurrentCancel : Int -> Unit
 
 end
 ```
@@ -1784,11 +1784,11 @@ unique seq =
 
 # sortBy : (a -> a -> Int) -> Seq -> Seq
 # Comparison function returns negative, 0, or positive
-extern yona_Std_Collection__sortBy : Int -> Seq -> Seq
+extern YonaStdCollectionSortBy : Int -> Seq -> Seq
 
 # groupBy : (a -> k) -> Seq -> Seq
 # Returns Seq of (key, Seq) pairs
-extern yona_Std_Collection__groupBy : Int -> Seq -> Seq
+extern YonaStdCollectionGroupBy : Int -> Seq -> Seq
 
 # partition : (a -> Bool) -> Seq -> (Seq, Seq)
 # Split into (matching, not-matching)
@@ -1822,7 +1822,7 @@ scanl fn acc seq =
   end)
 
 # scanr : (a -> b -> b) -> b -> Seq -> Seq
-extern yona_Std_Collection__scanr : Int -> Int -> Seq -> Seq
+extern YonaStdCollectionScanr : Int -> Int -> Seq -> Seq
 
 # findIndex : (a -> Bool) -> Seq -> Option Int
 findIndex pred seq =
@@ -1843,107 +1843,107 @@ intercalate sep seqs = List.flatten (intersperse sep seqs)
 # -- Dict operations (sync, C shims) --
 
 # dictGet : a -> Dict -> Option b
-extern yona_Std_Collection__dictGet : Int -> Int -> Int
+extern YonaStdCollectionDictGet : Int -> Int -> Int
 
 # dictPut : a -> b -> Dict -> Dict
-extern yona_Std_Collection__dictPut : Int -> Int -> Int -> Int
+extern YonaStdCollectionDictPut : Int -> Int -> Int -> Int
 
 # dictRemove : a -> Dict -> Dict
-extern yona_Std_Collection__dictRemove : Int -> Int -> Int
+extern YonaStdCollectionDictRemove : Int -> Int -> Int
 
 # dictMerge : Dict -> Dict -> Dict
 # Right-biased merge
-extern yona_Std_Collection__dictMerge : Int -> Int -> Int
+extern YonaStdCollectionDictMerge : Int -> Int -> Int
 
 # dictKeys : Dict -> Seq
-extern yona_Std_Collection__dictKeys : Int -> Seq
+extern YonaStdCollectionDictKeys : Int -> Seq
 
 # dictValues : Dict -> Seq
-extern yona_Std_Collection__dictValues : Int -> Seq
+extern YonaStdCollectionDictValues : Int -> Seq
 
 # dictEntries : Dict -> Seq
 # Returns Seq of (key, value) tuples
-extern yona_Std_Collection__dictEntries : Int -> Seq
+extern YonaStdCollectionDictEntries : Int -> Seq
 
 # dictFromEntries : Seq -> Dict
-extern yona_Std_Collection__dictFromEntries : Seq -> Int
+extern YonaStdCollectionDictFromEntries : Seq -> Int
 
 # dictMap : (a -> b -> c) -> Dict -> Dict
-extern yona_Std_Collection__dictMap : Int -> Int -> Int
+extern YonaStdCollectionDictMap : Int -> Int -> Int
 
 # dictFilter : (a -> b -> Bool) -> Dict -> Dict
-extern yona_Std_Collection__dictFilter : Int -> Int -> Int
+extern YonaStdCollectionDictFilter : Int -> Int -> Int
 
 # dictFold : (acc -> a -> b -> acc) -> acc -> Dict -> acc
-extern yona_Std_Collection__dictFold : Int -> Int -> Int -> Int
+extern YonaStdCollectionDictFold : Int -> Int -> Int -> Int
 
 # dictContainsKey : a -> Dict -> Bool
-extern yona_Std_Collection__dictContainsKey : Int -> Int -> Bool
+extern YonaStdCollectionDictContainsKey : Int -> Int -> Bool
 
 # dictSize : Dict -> Int
-extern yona_Std_Collection__dictSize : Int -> Int
+extern YonaStdCollectionDictSize : Int -> Int
 
 # dictIsEmpty : Dict -> Bool
 dictIsEmpty d = dictSize d == 0
 
 # dictUpdate : a -> (Option b -> Option b) -> Dict -> Dict
-extern yona_Std_Collection__dictUpdate : Int -> Int -> Int -> Int
+extern YonaStdCollectionDictUpdate : Int -> Int -> Int -> Int
 
 # dictMapKeys : (a -> c) -> Dict -> Dict
-extern yona_Std_Collection__dictMapKeys : Int -> Int -> Int
+extern YonaStdCollectionDictMapKeys : Int -> Int -> Int
 
 # dictMapValues : (b -> c) -> Dict -> Dict
-extern yona_Std_Collection__dictMapValues : Int -> Int -> Int
+extern YonaStdCollectionDictMapValues : Int -> Int -> Int
 
 # -- Set operations (sync, C shims) --
 
 # setAdd : a -> Set -> Set
-extern yona_Std_Collection__setAdd : Int -> Int -> Int
+extern YonaStdCollectionSetAdd : Int -> Int -> Int
 
 # setRemove : a -> Set -> Set
-extern yona_Std_Collection__setRemove : Int -> Int -> Int
+extern YonaStdCollectionSetRemove : Int -> Int -> Int
 
 # setUnion : Set -> Set -> Set
-extern yona_Std_Collection__setUnion : Int -> Int -> Int
+extern YonaStdCollectionSetUnion : Int -> Int -> Int
 
 # setIntersection : Set -> Set -> Set
-extern yona_Std_Collection__setIntersection : Int -> Int -> Int
+extern YonaStdCollectionSetIntersection : Int -> Int -> Int
 
 # setDifference : Set -> Set -> Set
-extern yona_Std_Collection__setDifference : Int -> Int -> Int
+extern YonaStdCollectionSetDifference : Int -> Int -> Int
 
 # setSymDifference : Set -> Set -> Set
 setSymDifference a b = setUnion (setDifference a b) (setDifference b a)
 
 # setIsSubset : Set -> Set -> Bool
-extern yona_Std_Collection__setIsSubset : Int -> Int -> Bool
+extern YonaStdCollectionSetIsSubset : Int -> Int -> Bool
 
 # setIsSuperset : Set -> Set -> Bool
 setIsSuperset a b = setIsSubset b a
 
 # setMap : (a -> b) -> Set -> Set
-extern yona_Std_Collection__setMap : Int -> Int -> Int
+extern YonaStdCollectionSetMap : Int -> Int -> Int
 
 # setFilter : (a -> Bool) -> Set -> Set
-extern yona_Std_Collection__setFilter : Int -> Int -> Int
+extern YonaStdCollectionSetFilter : Int -> Int -> Int
 
 # setFold : (acc -> a -> acc) -> acc -> Set -> acc
-extern yona_Std_Collection__setFold : Int -> Int -> Int -> Int
+extern YonaStdCollectionSetFold : Int -> Int -> Int -> Int
 
 # setSize : Set -> Int
-extern yona_Std_Collection__setSize : Int -> Int
+extern YonaStdCollectionSetSize : Int -> Int
 
 # setIsEmpty : Set -> Bool
 setIsEmpty s = setSize s == 0
 
 # setToList : Set -> Seq
-extern yona_Std_Collection__setToList : Int -> Seq
+extern YonaStdCollectionSetToList : Int -> Seq
 
 # setFromList : Seq -> Set
-extern yona_Std_Collection__setFromList : Seq -> Int
+extern YonaStdCollectionSetFromList : Seq -> Int
 
 # setContains : a -> Set -> Bool
-extern yona_Std_Collection__setContains : Int -> Int -> Bool
+extern YonaStdCollectionSetContains : Int -> Int -> Bool
 
 # -- Priority Queue (pure Yona, heap-based via ADT) --
 
@@ -2185,15 +2185,15 @@ formatEntry fmt entry =
 # -- Output (async, internal) --
 writeOutput out text =
   case out of
-    StdoutOutput -> IO.print text
-    StderrOutput -> IO.eprint text
+    StdoutOutput -> Io.print text
+    StderrOutput -> Io.eprint text
     FileOutput path -> File.appendFile path text
   end
 
 # -- Global logger --
 # The global logger is stored as a mutable reference (C shim)
-extern yona_Std_Log__setDefault : Int -> Unit
-extern yona_Std_Log__getDefault : Unit -> Int
+extern YonaStdLogSetDefault : Int -> Unit
+extern YonaStdLogGetDefault : Unit -> Int
 
 end
 ```
@@ -2207,12 +2207,12 @@ These examples demonstrate how the modules compose together for real-world tasks
 ### Example 1: HTTP API Client
 
 ```yona
-import send, request, withMethod, POST, withHeader, withBody, body, status from Std\Http in
+import send, request, withMethod, Post, withHeader, withBody, body, status from Std\Http in
 import parse, getString, getInt from Std\Json in
 
 let apiCall =
   request "https://api.example.com/users"
-  |> withMethod POST
+  |> withMethod Post
   |> withHeader "Content-Type" "application/json"
   |> withBody "{\"name\": \"Alice\", \"age\": 30}"
   |> send
@@ -2351,32 +2351,36 @@ Files that can be implemented entirely in Yona without C shims:
 3. `Std\Log` -- pure Yona with calls to existing IO
 
 ### Phase 2: String and Encoding (C shims, sync)
-4. `Std\String` -- C shims using standard C library (strlen, strstr, strtok, etc.)
-5. `Std\Encoding` -- C shims for base64 (custom), URL encoding (custom), HTML escaping
+1. `Std\String` -- C shims using standard C library (strlen, strstr, strtok, etc.)
+2. `Std\Encoding` -- C shims for base64 (custom), URL encoding (custom), HTML escaping
 
 ### Phase 3: I/O Foundation (C shims, async)
-6. `Std\IO` -- C shims wrapping POSIX read/write/fdopen
-7. `Std\File` -- C shims wrapping POSIX open/read/write/stat/opendir
-8. `Std\Process` -- C shims wrapping fork/exec/waitpid/pipe
+1. `Std\Io` -- C shims wrapping POSIX read/write/fdopen
+2. `Std\File` -- C shims wrapping POSIX open/read/write/stat/opendir
+3. `Std\Process` -- C shims wrapping fork/exec/waitpid/pipe
 
 ### Phase 4: Networking (C shims, async)
-9. `Std\Net` -- C shims wrapping POSIX socket/bind/listen/accept/connect
-10. `Std\Http` -- C shims wrapping libcurl (client) and custom HTTP parser (server)
+1. `Std\Net` -- C shims wrapping POSIX socket/bind/listen/accept/connect
+2. `Std\Http` -- C shims wrapping libcurl (client) and custom HTTP parser (server)
 
 ### Phase 5: Data Formats and Security
-11. `Std\Json` -- C shims wrapping cJSON or a custom parser
-12. `Std\Crypto` -- C shims wrapping OpenSSL or libsodium
+ 1. `Std\Json` -- C shims wrapping cJSON or a custom parser
+ 2. `Std\Crypto` -- C shims wrapping OpenSSL or libsodium
 
 ### Phase 6: Concurrency Primitives
-13. `Std\Concurrent` -- C shims wrapping pthreads (channels, semaphores, atomics)
+ 1. `Std\Concurrent` -- C shims wrapping pthreads (channels, semaphores, atomics)
 
 ### Critical Implementation Notes
 
-1. **C shim naming convention**: Functions follow `yona_Std_ModuleName__functionName` as observed in `compiled_runtime.c`.
+1. **Native shim naming convention**: Public functions use the canonical
+   `YonaStdModuleNameFunctionName` export form and live in their owning runtime
+   component.
 
-2. **Async functions**: The existing thread pool in `compiled_runtime.c` uses `yona_rt_async_call_thunk` for multi-arg async. All async stdlib functions will use this same mechanism.
+2. **Async functions**: Task contexts own their arguments and cross the runtime
+   boundary through opaque task handles; no invocation state is stored in
+   process globals.
 
-3. **ADT construction/destruction in C**: The runtime already has `yona_rt_adt_alloc`, `yona_rt_adt_get_tag`, `yona_rt_adt_get_field`, `yona_rt_adt_set_field`. C shims that return ADT values (like `Result`) will need to construct these at the C level, or alternatively return raw values and let the Yona wrapper construct the ADT.
+3. **ADT construction/destruction in C**: The runtime already has `YonaRuntimeAdtAllocate`, `YonaRuntimeAdtGetTag`, `YonaRuntimeAdtGetField`, `YonaRuntimeAdtSetField`. C shims that return ADT values (like `Result`) will need to construct these at the C level, or alternatively return raw values and let the Yona wrapper construct the ADT.
 
 4. **Error handling strategy**: For C shims, the recommended approach is to have the C function return a sentinel value (e.g., NULL pointer for errors) and have the Yona wrapper function construct the `Result` ADT. This avoids C code needing to know ADT layout.
 
@@ -2387,8 +2391,9 @@ Files that can be implemented entirely in Yona without C shims:
 ---
 
 ### Critical Files for Implementation
-- `/home/adam/source/repos/yonac-llvm/src/compiled_runtime.c` -- All C shims for stdlib functions must be added here, following the existing naming convention (`yona_Std_Module__function`)
+- `src/Runtime/` -- Add unavoidable native entry points to the focused core,
+  collection, concurrency, platform, codec, GPU, or stdlib-native component
 - `/home/adam/source/repos/yonac-llvm/lib/Std/Result.yona` -- Foundation type used by every other module; needs `flatMap`, `collect`, `sequence` additions
 - `/home/adam/source/repos/yonac-llvm/lib/Std/Option.yona` -- Foundation type; needs `flatMap`, `filter`, `toResult` additions
-- `/home/adam/source/repos/yonac-llvm/src/Codegen.cpp` -- The codegen must handle module-level `extern async` declarations and ensure `.yonai` interface files carry the async/sync distinction and return type metadata for cross-module calls
+- `/home/adam/source/repos/yonac-llvm/src/Codegen/Codegen.cpp` -- The codegen must handle module-level `extern async` declarations and ensure `.yonai` interface files carry the async/sync distinction and return type metadata for cross-module calls
 - `/home/adam/source/repos/yonac-llvm/docs/language-syntax.md` -- Reference for all syntax forms (ADT named fields, `case`/`end`, `do`/`end`, `try`/`catch`/`end`, pipe `|>`, string interpolation `{expr}`, imports) that the stdlib must conform to

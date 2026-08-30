@@ -6,6 +6,251 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+### Frontend correctness audit (2026-08-30)
+
+- [ ] **Generic functions reconstructed from `.yonai` can lose their native
+  Prelude dependency bindings.** Repro: run
+  `ctest --test-dir out/build/release-gate-x64 -R doctest_tests`; generic
+  String/Foldable bodies report `undefined function 'primitiveSizeString'` or
+  `primitiveGetString` while recompiling their serialized source. The reader,
+  generic isolation, and native-dependency registration must retain the
+  `GENFN_DEP ... NATIVE YonaRuntime...` bindings through reparsing.
+
+- [ ] **The stream module lowering path can leave an unterminated LLVM basic
+  block.** Repro: run the `Lazy stream takeStream` doctest; LLVM rejects
+  `takeStream__genfn_0_12_Stream` because `%case.impossible` has no
+  terminator. Fix the exhaustive-case lowering path before code emission.
+
+- [ ] **The current channel fixture suite does not satisfy its typed ownership
+  contract.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`; the
+  channel fixtures return `RUN_ERROR` or reject inferred payloads as
+  non-concrete. Reconcile channel creation, payload descriptors, and the
+  canonical `Std\Channel` interfaces.
+
+- [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
+  boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
+  `binary_chunks`, `binary_seek`, and `binary_write_read` report an expected
+  `Int` where their live `Linear FileHandle` is passed. Preserve the resource
+  type through the native binary I/O interface and codegen call lowering.
+
+- [ ] **Lifted dictionary trait code can crash during ownership lowering.**
+  Repro: run `tests.exe -tc="Fixture-based codegen tests"`; the
+  `dict_lifted_trait_lifetime` fixture terminates with `SIGSEGV`. Audit the
+  lifted trait materialization and dictionary-value ownership path before
+  enabling the fixture suite as a release gate.
+
+- [ ] **ABI refinement no longer emits the canonical refined call form.**
+  Repro: run `tests.exe -tc="ABI refinement leaves one canonical function"`;
+  the generated IR no longer contains `call fastcc i1 @f(i64 %x)`. Reconcile
+  refined function declaration and call lowering, then update the regression
+  only if the canonical ABI intentionally changed.
+
+- [ ] **Effectful file fixtures lose their `Fs.read` handler context.**
+  Repro: run `tests.exe -tc="Fixture-based codegen tests"`; file-oriented
+  fixture expressions report unhandled `Fs.read` [E0202] despite being run
+  under their expected handler path. Preserve the effect environment through
+  imported/fixture compilation.
+
+- [x] **A bundled-PCRE2 CMake install could fail before exporting the Yona
+  package.** Repro: configure without a system PCRE2, build `yonac`, then run
+  `cmake --install`; PCRE2's install script requires `pcre2-posixd.lib` even
+  though the Yona target graph does not need it. Fixed by excluding all
+  FetchContent dependency installation rules from the Yona package.
+
+- [x] **Public semantic/source headers fail when Windows `min`/`max` macros
+  are visible.** Repro: compile a translation unit that includes `Windows.h`
+  before `yona/Semantics/RefinementChecker.h`; `numeric_limits::min()` and
+  `max()` are expanded as function-like macros. Fixed by using the standard
+  macro-safe parenthesized calls in RefinementChecker and SourceManager; the
+  standalone Windows header audit now succeeds.
+
+- [x] **`ThreadPool::submit_async<void>` does not compile.** Repro: call
+  `ThreadPool Pool(1); Pool.submit_async<void>([] {});`; the template passes a
+  void expression to `std::promise<void>::set_value`. Fixed with a compile-time
+  void branch that invokes the task before fulfilling the promise; the focused
+  Support regression waits on the returned `future<void>`.
+
+- [x] **The public `first_defined_optional<T>` template is not defined for
+  callers.** Repro: include `yona/Syntax/Utils.h`, call
+  `first_defined_optional<int>({1, std::nullopt})`, and link; the definition is
+  hidden in `Utils.cpp`, which explicitly instantiates only `std::any`. Fixed
+  by removing the unused declaration, implementation, and lone instantiation
+  from the clean-slate public surface.
+
+- [x] **Terminal size probing returns indeterminate dimensions when the OS
+  query fails.** Repro: redirect stdout to a file on Windows and call
+  `terminal::getTerminalSize()`; `GetConsoleScreenBufferInfo` can fail while
+  the function still reads the uninitialized `ScreenBufferInfo` fields. Fixed
+  by checking the Windows handle and query result before reading it; the
+  focused Windows regression verifies the invalid-handle result is `{0, 0}`.
+
+- [x] **Native-promise interface generation erases a generic result
+  descriptor.** Repro: compile `extern native spawn : (() -> result) -> result`
+  and inspect the generated `.yonai`; the promise lowering records a concrete
+  machine type instead of `VAR(result)`. Fixed by preserving the semantic
+  return descriptor through interface emission; the checked-in `Std\\Task`
+  interface now regenerates byte-for-byte with its generic result type.
+
+- [x] **Grouped GPU failures can complete an unregistered task.** Repro: pass
+  a task group to an unavailable GPU operation and end the group; the immediate
+  failure path creates and completes a task without first registering it in
+  the group. Fixed by registering every grouped task before either dispatch or
+  immediate completion and by handling registration failure explicitly; the
+  focused GPU group regression awaits the retained result before group teardown.
+
+- [x] **The LSP JSON parser accepts trailing non-whitespace after a value.**
+  Repro: `Json::parse("true trailing", &Error)` returns `true` without setting
+  `Error` because the parser never verifies that the input was exhausted.
+  Fixed by requiring input exhaustion after trailing whitespace and clearing
+  stale caller error text; the focused LSP JSON regression covers both cases.
+
+- [x] **The packaged `Std\\Json` interface contradicted its constructor
+  metadata.** Repro: call `interface::readModule("lib/Std/Json.yonai")`; the
+  canonical reader rejects maximum arity zero because six `Json` constructors
+  have one field. Fixed by deriving the canonical maximum arity from the
+  constructors; the packaged-interface regression validates every checked-in
+  interface structurally and deterministically.
+
+- [x] **SemanticModel facts extraction crashes on case patterns and linear
+  bindings.** Repro: run `tests -ts=TypedCoreC`; constructing the shared model
+  for `case value of Some item -> item end` or `let value = Linear 1 in value`
+  throws `std::bad_function_call` while TypedCore is collecting node facts.
+  Fixed by supplying total empty constructor-catalog callbacks when semantic
+  indexing has no module catalog; direct SemanticModel and TypedCore
+  regressions cover constructor and linear case patterns.
+
+- [x] **Recursive `Stream a` nominal types fail to unify with themselves.**
+  Repro: compile `lib/Std/Stream.yona -I lib --emit-obj`; the type checker
+  reports repeated E0100 diagnostics such as `Stream a vs Stream a` for
+  `singleton`, `fromSeq`, `range`, and the remaining stream combinators. Fixed
+  by retaining named type arguments in recursive function fields; the focused
+  type-checker regression covers `() -> Stream a`.
+
+- [x] **`Std\\Stream.async` captures a non-shareable stream in `Task.spawn`.**
+  Repro: compile `lib/Std/Stream.yona -I lib --emit-obj`; after recursive
+  nominal field inference succeeds, the `spawn (\\_ -> drive s)` producer is
+  rejected with E0105 because `Stream a` has no lawful `Shareable` instance.
+  Fixed by removing `async` and `buffered`: the canonical closure-backed stream
+  is intentionally task-local, and concurrent pipelines use typed channels.
+
+- [x] **Case pattern inference forces every arm to the first payload shape.**
+  Repro: compile `lib/Std/Collection.yona -I lib --emit-obj`; `unfold` accepts
+  the `:some, (value, nextSeed)` arm but rejects the alternate `:none` symbol
+  arm with E0100, claiming the pattern must also be a `(Symbol, (a, b))` tuple.
+  Fixed by making the canonical producer contract
+  `(state -> Option (value, state))`; `Some` and `None` now share one lawful
+  nominal result type and the stdlib fixture covers the countdown case.
+
+- [x] **Expression-scoped externs cannot separate a local name from the C
+  contract symbol.** Repro: parse
+  `extern async testSlowAdd : Int -> Int = "YonaTestSlowAdd" in testSlowAdd 1`;
+  the parser requires `in` immediately after the type and rejects the canonical
+  local-name/contract-name form already supported by module externs. Fixed by
+  accepting the contractual string after `=` and retaining it in the extern
+  AST; the parser regression verifies both names.
+
+- [x] **Accelerator diagnostics retained a pre-normalization FQN segment.**
+  Repro: emit an accelerator report for `Std\Gpu::mapAdd 1 buffer`; imported
+  calls are recognized, but the direct FQN call is omitted because the module
+  matcher still compares against the pre-normalization uppercase segment. Fixed
+  by recognizing only the canonical `Std\Gpu` FQN; the accelerator-report
+  regression covers the direct module-call AST.
+
+- [x] **Package-qualified module calls are rejected as expressions.**
+  Repro: parse `Std\Gpu::available ()`; `Parser::parseExpression` rejects the
+  backslash-qualified module before it can construct the existing
+  `FqnExpr`/`ModuleCall` AST. Fixed by parsing a backslash-qualified FQN before
+  the shared `::` token can be interpreted as sequence cons and preserving the
+  resulting `ModuleCall` when building an application.
+
+- [x] **Pattern literals use an invalid type-erasure cast and identifier patterns
+  leak their AST node.** Repro: parse `case 1 of 1 -> 1 end`; the parser
+  `reinterpret_cast`s `IntegerExpr *` to the unrelated
+  `LiteralExpr<void *> *` specialization, and `PatternValue` later deletes
+  through that type while never deleting its `IdentifierExpr *` alternative.
+
+- [x] **Invalid field-update targets release their AST before the downcast is
+  validated.** Repro: parse `(identity value) { field = 1 }`; `parse_expr`
+  calls `left.release()` before `dynamic_cast<IdentifierExpr *>`, leaking the
+  expression when the cast fails.
+
+- [x] **Borrow/last-use analysis skips pattern-alias RHSs and guards.** Repro:
+  parse `let (head, tail) = pair in pair` or
+  `case value of item if consume value -> item end`; reference counting omits
+  the alias RHS or guard and can incorrectly classify the binding as borrowed
+  or single-use.
+
+- [x] **LSP local-symbol queries conflate shadowed lexical bindings.** Repro:
+  on `let value = 1 in let value = 2 in value`, definition, references,
+  highlights, and rename match both `value` declarations because identity is
+  based only on the spelling and import origin.
+
+- [x] **CLI and REPL compilation/execution pass user-controlled values through
+  a shell command.** Repro: invoke `yonac` with an output or input path
+  containing shell metacharacters, or enter an expression in `yona-repl` while
+  its temporary path contains metacharacters; the tools build command strings
+  for `system()`/`popen()` instead of passing exact argument vectors. The same
+  issue affected `Std\Process.exec`, `spawn`, and the compiler test harness;
+  all compiler, runtime, and test process paths now pass executable/argument
+  vectors without an implicit shell.
+
+- [x] **Every code-generation session leaks its LLVM target machine.** Repro:
+  repeatedly construct and destroy `Codegen` under LeakSanitizer; each
+  `Target::createTargetMachine` allocation remains live because `Codegen`
+  stores the owning result in a raw pointer and uses a default destructor.
+  Fixed by making the target machine a `unique_ptr`; the lifetime regression
+  constructs and destroys a complete code-generation session under LSan.
+
+- [x] **Multi-argument async calls share mutable LLVM globals between
+  invocations.** Repro: launch the same generated multi-argument async function
+  concurrently with distinct arguments; `CodegenApply.cpp` stores arguments in
+  per-callsite globals before submitting a zero-argument thunk, so a later call
+  can overwrite values before an earlier worker loads them. Fixed by allocating
+  an invocation-owned argument context and submitting a context-aware wrapper;
+  overlapping calls no longer share argument storage, and every completion,
+  failure, and cancellation path destroys its context.
+
+### Runtime correctness implementation
+
+- [x] **`Std\Gpu.gpuFloatChannel` left its payload type unconstrained.**
+  Repro: run `yonac lib/Std/Gpu.yona -I lib --emit-obj`; typed channel
+  lowering rejects `gpuFloatChannel n = channel n` because it cannot construct
+  the required concrete payload descriptor, despite the public API documenting
+  a `FloatArray` channel. Fixed with the explicit
+  `Int -> (Linear (Sender FloatArray), Linear (Receiver FloatArray))` contract
+  and a concrete native constructor that always uses the RC payload
+  descriptor; `gpu_float_channel.yona` covers the imported API.
+
+- [x] **Linearity reports a consumed imported channel receiver as leaked.**
+  Repro: compile `test/Fixtures/Codegen/gpu_float_channel.yona`; `rl` is immediately
+  consumed by `case rl of Linear receiver -> ... end`, but E0602 still warns
+  that the binding at `let (sl, rl) = gpuFloatChannel 4` was not consumed.
+  Fixed by propagating every unanimously consumed live binding out of a case,
+  including consumption performed by nested cases; divergent branches still
+  report E0601.
+
+- [x] **Channel buffers erase payload ownership.** Repro: send an RC-managed
+  value into a channel, drop both channel endpoints without receiving it, and
+  observe that `src/Runtime/Concurrency/ChannelPosix.c` and `ChannelWin32.c`
+  free only the ring buffer and
+  never release the buffered value. Repro for the corresponding codegen
+  erasure: send and receive `"owned"`; the received `Some String` is lowered as
+  `Int` and fails LLVM verification when printed.
+
+- [x] **The POSIX I/O registry loses colliding requests after deletion.**
+  Repro: store contexts for IDs `1` and `1 + YONA_IO_CONTEXT_TABLE_SIZE`, take ID `1`,
+  then take the colliding ID; lookup stops at the newly empty first slot.
+
+- [x] **Vulkan shutdown races active device work.** Repro: repeatedly call
+  device/context shutdown on one thread while another thread submits compute or
+  completes an asynchronous fence job; global device handles can be destroyed
+  while the submit/cleanup path is still using them.
+
+- [x] **JSON and regex error paths leak managed allocations.** Repro: stringify
+  nested JSON strings/floats or parse malformed arrays/objects repeatedly, and
+  force a second-pass PCRE2 substitution error; temporary/partial RC values are
+  not released.
+
 - [ ] **Windows `Std\Convert` rejects the Bool case expected by its conformance
   suite.** `foundation_Convert_test` reports one failure for “Parse Bool is
   explicit and case sensitive” (`16 passed, 1 failed`) only on Windows.
@@ -15,10 +260,10 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 ## Build quality
 
 - [ ] **Normalize the checked-in C++ formatting baseline.** The current project
-  formatter reports broad violations in untouched `include/Codegen.h` and
-  `src/codegen/CodegenModule.cpp`, so formatting a focused change creates
+  formatter reports broad violations in untouched `include/yona/Codegen/Codegen.h` and
+  `src/Codegen/CodegenModule.cpp`, so formatting a focused change creates
   unrelated whole-file churn. Repro: `clang-format --dry-run --Werror
-  include/Codegen.h src/codegen/CodegenModule.cpp`. Agree the pinned formatter
+  include/yona/Codegen/Codegen.h src/Codegen/CodegenModule.cpp`. Agree the pinned formatter
   version, then make one dedicated mechanical formatting change.
 
 - [ ] **Relax stream-fusion gating only with benchmark evidence.** Run the full

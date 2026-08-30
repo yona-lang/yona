@@ -61,12 +61,31 @@ set(YONAC_LLVM_VERSION_STRING "${VERSION_STRING}")
 
 # Configure version header
 configure_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/include/version.h.in"
-	"${CMAKE_CURRENT_BINARY_DIR}/include/version.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/include/yona/Support/Version.h.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/include/yona/Support/Version.h"
 	@ONLY
 )
 
 include(FetchContent)
+
+# Dependencies are implementation details of the Yona build. Their install
+# rules must never leak into the Yona package; only the explicitly declared
+# Yona install rules below define the distribution surface.
+macro(yona_fetchcontent_make_available Dependency)
+	set(_yona_saved_skip_install_rules "${CMAKE_SKIP_INSTALL_RULES}")
+	set(CMAKE_SKIP_INSTALL_RULES ON)
+	FetchContent_MakeAvailable(${Dependency})
+	# CMake still emits a parent-level include for every FetchContent binary
+	# directory.  With install rules disabled it does not create that child
+	# script, so provide an explicit no-op instead of allowing dependency install
+	# rules to become part of Yona's package.
+	if(DEFINED ${Dependency}_BINARY_DIR)
+		file(WRITE "${${Dependency}_BINARY_DIR}/cmake_install.cmake"
+			"# ${Dependency} is a build-only dependency; it has no install surface.\n")
+	endif()
+	set(CMAKE_SKIP_INSTALL_RULES "${_yona_saved_skip_install_rules}")
+	unset(_yona_saved_skip_install_rules)
+endmacro()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaHomebrew.cmake")
 yona_homebrew_prefix(YONA_HOMEBREW_PREFIX)
@@ -113,7 +132,7 @@ elseif(YONA_FETCH_DEPS)
 		GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
 		GIT_TAG v2.7.2
 	)
-	FetchContent_MakeAvailable(cli11)
+	yona_fetchcontent_make_available(cli11)
 else()
 	message(FATAL_ERROR
 		"CLI11 not found. Install libcli11-dev, cli11-devel, or Homebrew cli11 "
@@ -204,17 +223,24 @@ elseif(YONA_FETCH_DEPS)
         URL https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.gz
         URL_HASH SHA256=c08ae2388ef333e8403e670ad70c0a11f1eed021fd88308d7e02f596fcd9dc16
     )
-    FetchContent_MakeAvailable(yona_pcre2)
+    yona_fetchcontent_make_available(yona_pcre2)
     if(NOT TARGET pcre2-8-static)
         message(FATAL_ERROR "Fetched PCRE2 10.47 did not define pcre2-8-static.")
     endif()
     set(PCRE2_FOUND TRUE)
     set(YONA_PCRE2_TARGET pcre2-8-static)
+    if(WIN32)
+        # Generated Yona programs use Clang's static UCRT default. The runtime
+        # dependency shipped beside yonac must use the same CRT in every CMake
+        # configuration; a Debug-DLL PCRE archive cannot be linked by users.
+        set_property(TARGET pcre2-8-static PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    endif()
     set(YONA_PCRE2_INCLUDE_DIRS "${yona_pcre2_BINARY_DIR}/interface")
     # PCRE2's public static target propagates this definition to normal CMake
-    # consumers. The packaged runtime object is compiled directly, so carry
-    # it explicitly as well; otherwise Windows headers declare `__imp_`
-    # imports that cannot be satisfied by the bundled static archive.
+    # consumers. Carry it explicitly for generated-program tests as well;
+    # otherwise Windows headers declare `__imp_` imports that cannot be
+    # satisfied by the bundled static archive.
     set(YONA_PCRE2_CFLAGS
         "-I${yona_pcre2_BINARY_DIR}/interface"
         "-DPCRE2_STATIC")
@@ -225,17 +251,17 @@ else()
         "or configure with -DYONA_FETCH_DEPS=ON to build pinned PCRE2 10.47 (never vcpkg).")
 endif()
 
-# Vulkan for Std\GPU — gpu_stub lazy device + f64 fence path (Unix + Windows when found)
+# Vulkan for Std\Gpu — gpu_stub lazy device + f64 fence path (Unix + Windows when found)
 find_package(Vulkan QUIET)
 if(Vulkan_FOUND)
-    message(STATUS "Found Vulkan — Std\\GPU gpu_stub will link the loader on this platform")
+    message(STATUS "Found Vulkan — Std\\Gpu gpu_stub will link the loader on this platform")
     if(Vulkan_INCLUDE_DIRS)
         list(GET Vulkan_INCLUDE_DIRS 0 YONA_VK_HEADER_DIR)
     else()
         set(YONA_VK_HEADER_DIR "${Vulkan_INCLUDE_DIR}")
     endif()
 else()
-    message(STATUS "Vulkan not found — Std\\GPU uses zeroed stub counters only")
+    message(STATUS "Vulkan not found — Std\\Gpu uses zeroed stub counters only")
     set(YONA_VK_HEADER_DIR "")
 endif()
 
@@ -295,7 +321,7 @@ if(WIN32)
 				GIT_TAG v1.3.1
 				GIT_SHALLOW TRUE
 			)
-			FetchContent_MakeAvailable(yona_zlib)
+			yona_fetchcontent_make_available(yona_zlib)
 			if(TARGET zlibstatic)
 				add_library(ZLIB::ZLIB ALIAS zlibstatic)
 			elseif(TARGET zlib)
@@ -340,7 +366,7 @@ if(WIN32)
 				GIT_SHALLOW TRUE
 				SOURCE_SUBDIR build/cmake
 			)
-			FetchContent_MakeAvailable(yona_zstd)
+			yona_fetchcontent_make_available(yona_zstd)
 			if(TARGET libzstd_static)
 				add_library(zstd::libzstd_static ALIAS libzstd_static)
 			else()
@@ -397,14 +423,16 @@ foreach(_yona_icd_root IN LISTS _yona_icd_roots)
 		endif()
 	endforeach()
 endforeach()
+file(MAKE_DIRECTORY
+  "${CMAKE_CURRENT_BINARY_DIR}/include/yona/Runtime/Generated")
 configure_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/yona_vulkan_link_cfg.h.in"
-	"${CMAKE_CURRENT_BINARY_DIR}/include/yona_vulkan_link_cfg.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/VulkanLinkConfig.h.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/include/yona/Runtime/Generated/VulkanLinkConfig.h"
 	@ONLY)
 
-# Verify LLVM version is at least 16
-if(${LLVM_VERSION_MAJOR} LESS 16)
-  message(FATAL_ERROR "LLVM version must be 16 or higher, found ${LLVM_VERSION_MAJOR}")
+# Verify the compiler backend matches the supported LLVM baseline.
+if(${LLVM_VERSION_MAJOR} LESS 22)
+  message(FATAL_ERROR "LLVM version must be 22 or higher, found ${LLVM_VERSION_MAJOR}")
 endif()
 
 # Setup LLVM - use SYSTEM to suppress warnings from LLVM headers
@@ -412,159 +440,56 @@ include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
-
-#set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-#set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-
-file(GLOB_RECURSE all_lib_SRCS CONFIGURE_DEPENDS
-		"${PROJECT_SOURCE_DIR}/include/*.h"
-		"${PROJECT_SOURCE_DIR}/src/*.cpp"
-		"${PROJECT_SOURCE_DIR}/src/*.c"
-)
-# Exclude files #included from compiled_runtime.c
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/seq\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/hamt\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/exceptions\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/closures\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/utf16\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/json\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_device\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_compute\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_vulkan_ops\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_cpu\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/gpu_stub\\.c$")
-# Platform layer: OS TUs (Linux io_uring / macOS kqueue / Windows IOCP)
-# + async/channel sources (#included from compiled_runtime.c only).
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/platform/.*\\.c$")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "src/lsp/")
-list(FILTER all_lib_SRCS EXCLUDE REGEX "include/lsp/")
-set(YONA_PLATFORM_RUNTIME_SOURCES)
-if(WIN32)
-	list(APPEND YONA_PLATFORM_RUNTIME_SOURCES
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/file_windows.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/os_windows.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/net_windows.c"
-	)
-elseif(APPLE)
-	list(APPEND YONA_PLATFORM_RUNTIME_SOURCES
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/kqueue_macos.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/file_macos.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/os_macos.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/net_macos.c"
-	)
-else()
-	list(APPEND YONA_PLATFORM_RUNTIME_SOURCES
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/uring_linux.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/file_linux.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/os_linux.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/net_linux.c"
-	)
-endif()
-list(APPEND all_lib_SRCS ${YONA_PLATFORM_RUNTIME_SOURCES})
-if(NOT PCRE2_FOUND)
-    list(FILTER all_lib_SRCS EXCLUDE REGEX "src/runtime/regex\\.c$")
-endif()
-
-file(GLOB all_TESTS
-		"${PROJECT_SOURCE_DIR}/test/*.h"
-		"${PROJECT_SOURCE_DIR}/test/*.cpp"
-		"${PROJECT_SOURCE_DIR}/test/*.c"
-)
-
-file(GLOB all_yonac_SRCS
-		"${PROJECT_SOURCE_DIR}/include/*.h"
-		"${PROJECT_SOURCE_DIR}/cli/*.cpp"
-		"${PROJECT_SOURCE_DIR}/cli/*.c"
-)
-list(FILTER all_yonac_SRCS EXCLUDE REGEX "cli/yls\\.cpp$")
-
-file(GLOB all_repl_SRCS
-		"${PROJECT_SOURCE_DIR}/include/*.h"
-		"${PROJECT_SOURCE_DIR}/repl/*.cpp"
-)
-
 # Find the libraries that correspond to the LLVM components that we wish to use
 llvm_map_components_to_libnames(llvm_libs Support Core IRReader Passes Target native nativecodegen)
 
-# Add source to this project's executable.
-add_library(yona_lib SHARED ${all_lib_SRCS})
+find_package(Threads REQUIRED)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaComponents.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaFuzzing.cmake")
+include(GNUInstallDirs)
 
-# Static library for tests and for packaged CLI/REPL (YONA_LINK_STATIC_CLI).
-add_library(yona_lib_static STATIC ${all_lib_SRCS})
-target_include_directories(yona_lib_static PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(yona_lib_static PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
-target_include_directories(yona_lib_static PRIVATE ${LLVM_INCLUDE_DIRS})
-target_link_libraries(yona_lib_static PRIVATE ${llvm_libs})
-if(YONA_INPROCESS_LLD_AVAILABLE)
-	target_link_libraries(yona_lib_static PRIVATE ${YONA_INPROCESS_LLD_LIBS})
-	target_compile_definitions(yona_lib_static PRIVATE YONA_ENABLE_INPROCESS_LLD=1)
-endif()
-if(WIN32)
-	target_link_libraries(yona_lib_static PRIVATE ws2_32 dbghelp)
-endif()
-if(PCRE2_FOUND)
-    target_link_libraries(yona_lib_static PRIVATE ${YONA_PCRE2_TARGET})
-    target_include_directories(yona_lib_static PRIVATE ${YONA_PCRE2_INCLUDE_DIRS})
-endif()
-if(Vulkan_FOUND)
-    target_compile_definitions(yona_lib_static PRIVATE YONA_HAS_VULKAN=1)
-    target_link_libraries(yona_lib_static PRIVATE Vulkan::Vulkan)
-endif()
-target_compile_definitions(yona_lib_static PRIVATE YONA_STATIC_BUILD)
-if(YONA_ENABLE_VULKAN)
-	target_include_directories(yona_lib_static PRIVATE ${YONA_VULKAN_INCLUDE_DIR})
-	target_compile_definitions(yona_lib_static PRIVATE YONA_COMPILE_GPU_VULKAN=1)
-endif()
+set(YONA_INSTALL_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
 
-target_include_directories(yona_lib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(yona_lib PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
-target_include_directories(yona_lib PRIVATE ${LLVM_INCLUDE_DIRS})
+install(TARGETS yona_runtime
+	ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/runtime"
+	LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/runtime"
+	RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/runtime")
+install(TARGETS yona_lib
+	EXPORT YonaTargets
+	ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+	LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+	RUNTIME DESTINATION bin
+	INCLUDES DESTINATION include)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/yona/"
+	DESTINATION "include/yona"
+	FILES_MATCHING PATTERN "*.h")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/yona/Support/Version.h"
+	DESTINATION "include/yona/Support")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/lib/"
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/lib"
+	FILES_MATCHING
+	PATTERN "*.yona"
+	PATTERN "*.yonai")
+install(EXPORT YonaTargets
+	FILE YonaTargets.cmake
+	NAMESPACE Yona::
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Yona")
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaConfig.cmake.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/YonaConfig.cmake"
+	INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Yona"
+	NO_SET_AND_CHECK_MACRO)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/YonaConfig.cmake"
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Yona")
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaPackageTools.cmake"
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Yona"
+	RENAME "YonaTools.cmake")
 
-target_link_libraries(yona_lib PRIVATE ${llvm_libs})
-if(YONA_INPROCESS_LLD_AVAILABLE)
-	target_link_libraries(yona_lib PRIVATE ${YONA_INPROCESS_LLD_LIBS})
-	target_compile_definitions(yona_lib PRIVATE YONA_ENABLE_INPROCESS_LLD=1)
-endif()
-if(WIN32)
-	target_link_libraries(yona_lib PRIVATE ws2_32 dbghelp)
-endif()
-if(PCRE2_FOUND)
-    target_link_libraries(yona_lib PRIVATE ${YONA_PCRE2_TARGET})
-    target_include_directories(yona_lib PRIVATE ${YONA_PCRE2_INCLUDE_DIRS})
-endif()
-if(Vulkan_FOUND)
-    target_compile_definitions(yona_lib PRIVATE YONA_HAS_VULKAN=1)
-    target_link_libraries(yona_lib PRIVATE Vulkan::Vulkan)
-endif()
-if(YONA_ENABLE_VULKAN)
-	target_include_directories(yona_lib PRIVATE ${YONA_VULKAN_INCLUDE_DIR})
-	target_compile_definitions(yona_lib PRIVATE YONA_COMPILE_GPU_VULKAN=1)
-endif()
-
-# yona_lib is always SHARED; Windows needs explicit export for C++ symbols linked by yonac/yona.
-if(WIN32)
-	set_target_properties(yona_lib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-endif()
-
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-	set_property(TARGET yona_lib PROPERTY CXX_STANDARD 23)
-endif ()
-
-file(GLOB YONA_LSP_LIB_SRCS "${PROJECT_SOURCE_DIR}/src/lsp/*.cpp")
-add_library(yona_lsp_static STATIC ${YONA_LSP_LIB_SRCS})
-target_include_directories(yona_lsp_static PRIVATE
-	${CMAKE_CURRENT_SOURCE_DIR}/include
-	${CMAKE_CURRENT_BINARY_DIR}/include
-	${LLVM_INCLUDE_DIRS})
-target_compile_definitions(yona_lsp_static PRIVATE YONA_STATIC_BUILD)
-# Do not link yona_lib here: tests already use yona_lib_static. Pulling the
-# shared library onto that executable registers LLVM cl::opt twice.
-
-add_executable(yls "${PROJECT_SOURCE_DIR}/cli/yls.cpp")
+add_executable(yls "${PROJECT_SOURCE_DIR}/cli/Yls.cpp")
+target_sources(yls PRIVATE $<TARGET_OBJECTS:yona_lsp>)
 target_include_directories(yls PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(yls PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
-target_link_libraries(yls PRIVATE yona_lsp_static)
 if(YONA_LINK_STATIC_CLI)
 	target_link_libraries(yls PRIVATE yona_lib_static)
 	target_compile_definitions(yls PRIVATE YONA_STATIC_BUILD)
@@ -573,7 +498,7 @@ else()
 endif()
 
 # Compiler executable
-add_executable(yonac ${all_yonac_SRCS})
+add_executable(yonac "${PROJECT_SOURCE_DIR}/cli/Main.cpp")
 target_include_directories(yonac PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(yonac PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 if(YONA_LINK_STATIC_CLI)
@@ -583,22 +508,18 @@ else()
 	target_link_libraries(yonac PRIVATE yona_lib CLI11::CLI11)
 endif()
 if(Vulkan_FOUND AND NOT WIN32)
-	# cli/main.cpp: yonac-linked exe pulls vk* from gpu_stub → link libvulkan.
+	# cli/Main.cpp: yonac-linked exe pulls vk* from gpu_stub → link libvulkan.
 	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_POSIX_VULKAN=1)
 endif()
 if(PCRE2_FOUND)
 	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_PCRE2=1)
 endif()
 
-# Prebuilt runtime artifacts for packaged/sysroot-first toolchain flow.
-set(YONA_RUNTIME_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/runtime")
-set(YONA_RUNTIME_MAIN_OBJ "${YONA_RUNTIME_ARTIFACT_DIR}/compiled_runtime.o")
+# Copy a bundled PCRE2 archive next to the canonical runtime archive. `yonac`
+# links user programs outside CMake and therefore cannot consume an imported
+# CMake target after installation.
 set(YONA_PCRE2_RUNTIME_ARCHIVE "")
 if(YONA_PCRE2_BUNDLED_STATIC)
-	# `yonac` links user programs after installation, outside CMake's target
-	# graph. Copy the exact static dependency beside the runtime archive so the
-	# compiler can resolve it through its sysroot on Windows (and any other
-	# fallback build) without assuming a host package manager.
 	set(YONA_PCRE2_RUNTIME_ARCHIVE
 		"${YONA_RUNTIME_ARTIFACT_DIR}/yona_pcre2${CMAKE_STATIC_LIBRARY_SUFFIX}")
 	add_custom_command(
@@ -612,124 +533,14 @@ if(YONA_PCRE2_BUNDLED_STATIC)
 		VERBATIM
 	)
 	add_custom_target(yona_runtime_pcre2 DEPENDS "${YONA_PCRE2_RUNTIME_ARCHIVE}")
+	add_dependencies(yona_runtime yona_runtime_pcre2)
+	install(FILES "${YONA_PCRE2_RUNTIME_ARCHIVE}"
+		DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/runtime")
 endif()
-set(YONA_EMBEDDED_RUNTIME_SOURCES
-	"${PROJECT_SOURCE_DIR}/src/compiled_runtime.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/seq.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/hamt.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/exceptions.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/closures.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/utf16.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/json.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_device.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_compute.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_vulkan_ops.c"
-	"${PROJECT_SOURCE_DIR}/src/runtime/gpu_cpu.c"
-)
-if(PCRE2_FOUND)
-	list(APPEND YONA_EMBEDDED_RUNTIME_SOURCES
-		"${PROJECT_SOURCE_DIR}/src/runtime/regex.c")
-endif()
-if(WIN32)
-	list(APPEND YONA_EMBEDDED_RUNTIME_SOURCES
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/async_win32.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/channel_win32.c"
-	)
-else()
-	list(APPEND YONA_EMBEDDED_RUNTIME_SOURCES
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/async_posix.c"
-		"${PROJECT_SOURCE_DIR}/src/runtime/platform/channel_posix.c"
-	)
-endif()
-set(YONA_RUNTIME_PLATFORM_OBJS)
-foreach(_pf IN LISTS YONA_PLATFORM_RUNTIME_SOURCES)
-	get_filename_component(_pf_name "${_pf}" NAME)
-	list(APPEND YONA_RUNTIME_PLATFORM_OBJS "${YONA_RUNTIME_ARTIFACT_DIR}/crt_${_pf_name}.o")
-endforeach()
-
-set(_YONA_CR_CCFLAGS -I${PROJECT_SOURCE_DIR}/src -I${PROJECT_SOURCE_DIR}/include -I${CMAKE_CURRENT_BINARY_DIR}/include)
-if(PCRE2_FOUND)
-	list(APPEND _YONA_CR_CCFLAGS ${YONA_PCRE2_CFLAGS} -DYONA_EMBEDDED_PCRE2=1)
-endif()
-if(Vulkan_FOUND)
-	list(APPEND _YONA_CR_CCFLAGS -I${YONA_VK_HEADER_DIR} -DYONA_HAS_VULKAN=1)
-endif()
-if(YONA_ENABLE_VULKAN)
-	list(APPEND _YONA_CR_CCFLAGS -I${YONA_VULKAN_INCLUDE_DIR} -DYONA_COMPILE_GPU_VULKAN=1)
-endif()
-add_custom_command(
-	OUTPUT "${YONA_RUNTIME_MAIN_OBJ}"
-	COMMAND ${CMAKE_COMMAND} -E make_directory "${YONA_RUNTIME_ARTIFACT_DIR}"
-	COMMAND ${CMAKE_C_COMPILER} -c "${PROJECT_SOURCE_DIR}/src/compiled_runtime.c"
-		${_YONA_CR_CCFLAGS}
-		-o "${YONA_RUNTIME_MAIN_OBJ}"
-	DEPENDS ${YONA_EMBEDDED_RUNTIME_SOURCES}
-	COMMENT "Building packaged runtime object: compiled_runtime.o"
-	VERBATIM
-)
-
-set(_runtime_obj_idx 0)
-foreach(_pf IN LISTS YONA_PLATFORM_RUNTIME_SOURCES)
-	list(GET YONA_RUNTIME_PLATFORM_OBJS ${_runtime_obj_idx} _po)
-	add_custom_command(
-		OUTPUT "${_po}"
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${YONA_RUNTIME_ARTIFACT_DIR}"
-		COMMAND ${CMAKE_C_COMPILER} -c "${_pf}"
-			-I${PROJECT_SOURCE_DIR}/src -I${PROJECT_SOURCE_DIR}/include
-			-o "${_po}"
-		DEPENDS "${_pf}"
-		COMMENT "Building packaged runtime object: ${_po}"
-		VERBATIM
-	)
-	math(EXPR _runtime_obj_idx "${_runtime_obj_idx} + 1")
-endforeach()
-
-add_custom_target(yona_runtime_objects
-	DEPENDS "${YONA_RUNTIME_MAIN_OBJ}" ${YONA_RUNTIME_PLATFORM_OBJS}
-)
-if(TARGET yona_runtime_pcre2)
-	add_dependencies(yona_runtime_objects yona_runtime_pcre2)
-endif()
-
-add_library(yona_runtime_static STATIC
-	"${PROJECT_SOURCE_DIR}/src/compiled_runtime.c"
-	${YONA_PLATFORM_RUNTIME_SOURCES}
-)
-if(PCRE2_FOUND)
-	target_sources(yona_runtime_static PRIVATE
-		"${PROJECT_SOURCE_DIR}/src/runtime/regex.c")
-	target_include_directories(yona_runtime_static PRIVATE ${YONA_PCRE2_INCLUDE_DIRS})
-	target_link_libraries(yona_runtime_static PRIVATE ${YONA_PCRE2_TARGET})
-endif()
-set_target_properties(yona_runtime_static PROPERTIES
-	OUTPUT_NAME yona_runtime
-	ARCHIVE_OUTPUT_DIRECTORY "${YONA_RUNTIME_ARTIFACT_DIR}"
-)
-target_include_directories(yona_runtime_static PRIVATE
-	${CMAKE_CURRENT_SOURCE_DIR}/include
-	${CMAKE_CURRENT_BINARY_DIR}/include
-)
-# gpu_stub compiled into this archive uses vk* imports; exe link resolves them.
-if(Vulkan_FOUND)
-	target_compile_definitions(yona_runtime_static PRIVATE YONA_HAS_VULKAN=1)
-	target_include_directories(yona_runtime_static PRIVATE ${YONA_VK_HEADER_DIR})
-endif()
-if(YONA_ENABLE_VULKAN)
-	target_include_directories(yona_runtime_static PRIVATE ${YONA_VULKAN_INCLUDE_DIR})
-	target_compile_definitions(yona_runtime_static PRIVATE YONA_COMPILE_GPU_VULKAN=1)
-endif()
-if(WIN32)
-	target_link_libraries(yona_runtime_static PRIVATE ws2_32 dbghelp)
-endif()
-if(TARGET yona_runtime_pcre2)
-	add_dependencies(yona_runtime_static yona_runtime_pcre2)
-endif()
-
-add_dependencies(yonac yona_runtime_objects yona_runtime_static)
+add_dependencies(yonac yona_runtime)
 
 # REPL executable (invoked by the Yona-written `yona` runner)
-add_executable(yona-repl ${all_repl_SRCS})
+add_executable(yona-repl "${PROJECT_SOURCE_DIR}/repl/Main.cpp")
 target_include_directories(yona-repl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(yona-repl PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 if(YONA_LINK_STATIC_CLI)
@@ -738,7 +549,46 @@ if(YONA_LINK_STATIC_CLI)
 else()
 	target_link_libraries(yona-repl PRIVATE yona_lib)
 endif()
-add_dependencies(yona-repl yona_runtime_objects yona_runtime_static)
+add_dependencies(yona-repl yona_runtime)
+
+install(TARGETS yonac yona-repl yls
+	RUNTIME DESTINATION bin)
+
+# One local-only quality entry point backs both developer use and CI. These
+# targets never install tools or contact analysis services.
+find_program(YONA_PYTHON_EXECUTABLE NAMES python3 python)
+if(NOT YONA_PYTHON_EXECUTABLE)
+	message(FATAL_ERROR "Python 3 is required for repository quality targets")
+endif()
+foreach(_yona_quality_command IN ITEMS
+	format
+	format-check
+	tidy
+	analyze
+	sanitize
+	coverage
+	fuzz-check
+	architecture
+	generated
+	hygiene
+	headers
+	naming
+	symbols
+	vulkan
+	yona-style
+	quality)
+	if(TARGET ${_yona_quality_command})
+		continue()
+	endif()
+	add_custom_target(${_yona_quality_command}
+		COMMAND "${YONA_PYTHON_EXECUTABLE}"
+			"${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality.py"
+			${_yona_quality_command}
+			--build-dir "${CMAKE_CURRENT_BINARY_DIR}"
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+		USES_TERMINAL
+		VERBATIM)
+endforeach()
 
 # Tests link generated programs against Prelude's exported constructors and
 # functions. Build that object deterministically in the binary tree; never
@@ -771,17 +621,11 @@ add_custom_command(
 add_custom_target(yona_test_prelude_object DEPENDS "${YONA_TEST_PRELUDE_OBJECT}")
 
 # Absolute repo path for tests (fixtures, lib/, src/) regardless of process CWD (e.g. CTest).
-# Generated even when BUILD_TESTING=OFF: the Windows REPL force-includes this header.
+# Generated for repository-aware test helpers.
 configure_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/test/yona_test_config.h.in"
-	"${CMAKE_CURRENT_BINARY_DIR}/test_config/yona_test_config.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/test/Support/YonaTestConfig.h.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/test_config/YonaTestConfig.h"
 	@ONLY)
-
-if(WIN32)
-	# repl uses popen; map to _popen on UCRT (same header as tests).
-	target_compile_options(yona-repl PRIVATE
-		"-include" "${CMAKE_CURRENT_BINARY_DIR}/test_config/yona_test_config.h")
-endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaTools.cmake")
 add_subdirectory(tools)
@@ -806,29 +650,72 @@ elseif(YONA_FETCH_DEPS)
 		GIT_REPOSITORY https://github.com/doctest/doctest.git
 		GIT_TAG        v2.5.3
 	)
-	FetchContent_MakeAvailable(doctest)
+	yona_fetchcontent_make_available(doctest)
 else()
 	message(FATAL_ERROR
 		"doctest not found. Install doctest-dev, doctest-devel, or Homebrew doctest "
 		"(or pass -DYONA_FETCH_DEPS=ON to clone it).")
 endif()
 
-add_executable(
-	tests
-	${all_TESTS}
+add_executable(tests
+	"${PROJECT_SOURCE_DIR}/test/Codegen/AcceleratorLoweringTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Codegen/AdtTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Codegen/CodegenTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Codegen/TypedIrLoweringTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Support/DoctestMain.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Syntax/FormatParserTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/GpuStubTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/GpuVulkanDeviceTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/GpuVulkanMapAddTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/HamtRcTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Syntax/ImportedConstructorParserTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/IoReadExactTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/JsonAbiTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Syntax/LexerTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Toolchain/LinkerPlanTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/TypedIr/TypedIrTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Lsp/LspTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Lsp/ProtocolTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Model/ModuleIdentityTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/NetRuntimeTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Interface/InterfaceFileTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Interface/PreludeInterfaceTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/RuntimeGuardsTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/TaskOwnershipTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Support/SanityTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/SequenceOperationsTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Support/ProcessTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Support/SourceManagerTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Support/TerminalTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Support/ThreadPoolTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Syntax/YonaStyleTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/TerminationAnalysisTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/InterfaceCatalogTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/SemanticModelTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/TraitTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Syntax/TryCatchParserTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/TypeCheckerTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/TypedCore/AbiTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Runtime/Utf16AbiTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Toolchain/YonaScriptTest.cpp"
+	$<TARGET_OBJECTS:yona_lsp>
 )
-add_dependencies(tests yona_test_prelude_object)
+add_dependencies(tests yona_test_prelude_object yona_runtime yls-yona)
 
-# We provide our own main for consistency across all platforms
-target_sources(tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test/doctest_main.cpp)
-
-# Link with doctest and yona_lib_static for tests
-target_link_libraries(tests PRIVATE doctest::doctest yona_lib_static yona_lsp_static)
+target_link_libraries(tests PRIVATE
+	doctest::doctest
+	yona_lib_static
+	yona_runtime
+)
 
 # Define YONA_STATIC_BUILD for tests to avoid DLL export/import issues
-target_compile_definitions(tests PRIVATE YONA_STATIC_BUILD)
+target_compile_definitions(tests PRIVATE
+	YONA_STATIC_BUILD
+	YONA_TEST_CMAKE_EXECUTABLE="${CMAKE_COMMAND}"
+	YONA_TEST_RUNTIME_ARCHIVE="$<TARGET_FILE:yona_runtime>"
+)
 if(YONA_ENABLE_VULKAN)
-	target_compile_definitions(tests PRIVATE YONA_COMPILE_GPU_VULKAN=1)
+	target_compile_definitions(tests PRIVATE YONA_GPU_VULKAN_ENABLED=1)
 endif()
 
 target_include_directories(tests PRIVATE
@@ -836,18 +723,12 @@ target_include_directories(tests PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/test
 	${CMAKE_CURRENT_BINARY_DIR}/test_config)
 
-if(WIN32)
-	# Tests use popen/pclose; force-include maps them to _popen/_pclose on UCRT.
-	target_compile_options(tests PRIVATE
-		"-include" "${CMAKE_CURRENT_BINARY_DIR}/test_config/yona_test_config.h")
-endif()
-
 # Register the test executable with CTest
 add_test(NAME doctest_tests COMMAND tests)
 
 add_test(NAME cmake_windows_llvm_prerequisites
 	COMMAND "${CMAKE_COMMAND}"
-		-S "${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/windows_llvm_prerequisites"
+		-S "${CMAKE_CURRENT_SOURCE_DIR}/test/CMake/WindowsLlvmPrerequisites"
 		-B "${CMAKE_CURRENT_BINARY_DIR}/test-cmake/windows-llvm-prerequisites"
 		-DYONA_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -867,9 +748,25 @@ if(NOT _yona_python3_result EQUAL 0)
 endif()
 add_test(NAME native_arm64_ci_packaging_contract
 	COMMAND "${YONA_PYTHON_EXECUTABLE}"
-		"${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/native_arm64_ci_packaging_contract.py")
+		"${CMAKE_CURRENT_SOURCE_DIR}/test/CMake/native_arm64_ci_packaging_contract.py")
 set_tests_properties(native_arm64_ci_packaging_contract PROPERTIES
 	LABELS "ci-contract")
+
+add_test(NAME installed_consumer_contract
+	COMMAND "${CMAKE_COMMAND}"
+		-DYONA_BUILD_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+		-DYONA_SOURCE_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}
+		-DYONA_INSTALL_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/test-install
+		-DYONA_C_COMPILER=${CMAKE_C_COMPILER}
+		-DYONA_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+		-DYONA_GENERATOR=${CMAKE_GENERATOR}
+		-DYONA_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}
+		-DYONA_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}
+		-DYONA_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+		-DYONA_BUILD_CONFIG=$<CONFIG>
+		-P "${CMAKE_CURRENT_SOURCE_DIR}/test/CMake/InstalledConsumer/RunInstalledConsumer.cmake")
+set_tests_properties(installed_consumer_contract PROPERTIES
+	LABELS "install-contract")
 
 # Set working directory for the test to the binary directory
 set(_yona_path_env "YONA_PATH=${CMAKE_CURRENT_SOURCE_DIR}/test/code:${CMAKE_CURRENT_SOURCE_DIR}/lib")
@@ -881,10 +778,8 @@ if(WIN32)
 		string(APPEND _ctest_base_env ";YONAC_CC=${_cxx_bindir}/clang.exe")
 	endif()
 endif()
-# Full suite: test harness recompiles `compiled_runtime.c`; do not inherit a user/global
-# YONA_COMPILE_GPU_VULKAN=1 + VULKAN_SDK session (would desync with default objects).
 set(_junit_env "YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-results.xml")
-set(_ctest_env "${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0;${_junit_env}")
+set(_ctest_env "${_ctest_base_env};${_junit_env}")
 
 set_tests_properties(doctest_tests PROPERTIES
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -900,9 +795,9 @@ add_test(NAME doctest_stdlib_network
 add_test(NAME doctest_stdlib_gpu
 	COMMAND tests -tc=Stdlib?GPU?conformance?fixtures)
 set(_stdlib_network_env
-	"${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0;YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-stdlib-network-results.xml")
+	"${_ctest_base_env};YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-stdlib-network-results.xml")
 set(_stdlib_gpu_env
-	"${_ctest_base_env};YONA_COMPILE_GPU_VULKAN=0;YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-stdlib-gpu-results.xml")
+	"${_ctest_base_env};YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-stdlib-gpu-results.xml")
 set_tests_properties(doctest_stdlib_network PROPERTIES
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 	LABELS "unit;stdlib-network"
@@ -935,8 +830,7 @@ elseif(UNIX)
 		ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH};${_stdlib_gpu_env}")
 endif()
 
-# Vulkan-only slice: same binary, no YONA_COMPILE_GPU_VULKAN=0 so local SDK matches the
-# Vulkan-enabled objects; filters to gpu/vulkan doctest cases.
+# Vulkan-only slice for the configured Vulkan-enabled objects.
 if(YONA_ENABLE_VULKAN)
 	set(_junit_gpu_env "YONA_DOCTEST_JUNIT=${CMAKE_CURRENT_BINARY_DIR}/doctest-gpu-results.xml")
 	add_test(NAME doctest_gpu_vulkan COMMAND tests -tc=*gpu?vulkan*)
@@ -962,7 +856,7 @@ set_target_properties(tests PROPERTIES
 	VS_DEBUGGER_COMMAND_ARGUMENTS "--reporters=xml"
 )
 add_test(NAME smoke_yls_yona
-	COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/ci/smoke-yls-yona.py"
+	COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/ci/smoke_yls_yona.py"
 		"${CMAKE_CURRENT_BINARY_DIR}/yls-yona${CMAKE_EXECUTABLE_SUFFIX}")
 set_tests_properties(smoke_yls_yona PROPERTIES
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

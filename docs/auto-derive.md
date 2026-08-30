@@ -202,5 +202,5 @@ enabling re-compilation with concrete types at the call site when needed.
 The strategy registry is designed to support user-defined derivable traits
 in the future. When a compile-time evaluator is added, traits will be able
 to declare a `derive` block that templates over ADT structure. The existing
-infrastructure (enriched `AdtInfo` with type params and field type refs,
-`.yonai` metadata) is forward-compatible with this extension.
+infrastructure already carries the required `AdtInfo` type parameters, field
+type references, and `.yonai` metadata.

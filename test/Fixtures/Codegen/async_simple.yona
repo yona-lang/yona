@@ -1,0 +1,1 @@
+extern async testSlowIdentity : Int -> Int = "YonaTestSlowIdentity" in testSlowIdentity 42

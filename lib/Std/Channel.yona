@@ -37,14 +37,17 @@ end
 ## Low-level externs to the C runtime wrappers. The `= "..."` form binds
 ## a Yona-friendly local name to the mangled C ABI symbol so the wrapper
 ## bodies below stay readable.
-extern raw_new      : Int -> Channel        = "yona_Std_Channel__raw_new"
-extern raw_send     : Channel -> value -> ()  = "yona_Std_Channel__raw_send"
-extern raw_recv     : Channel -> Option value = "yona_Std_Channel__raw_recv"
-extern raw_try_recv : Channel -> Option value = "yona_Std_Channel__raw_tryRecv"
-extern raw_close    : Channel -> ()         = "yona_Std_Channel__raw_close"
-extern raw_closed   : Channel -> Bool       = "yona_Std_Channel__raw_isClosed"
-extern raw_length   : Channel -> Int        = "yona_Std_Channel__raw_length"
-extern raw_capacity : Channel -> Int        = "yona_Std_Channel__raw_capacity"
+extern rawSend     : Channel -> value -> ()  = "YonaStdChannelRawSend"
+extern rawRecv     : Channel -> Option value = "YonaStdChannelRawRecv"
+extern rawTryRecv : Channel -> Option value = "YonaStdChannelRawTryRecv"
+extern rawClose    : Channel -> ()         = "YonaStdChannelRawClose"
+extern rawClosed   : Channel -> Bool       = "YonaStdChannelRawIsClosed"
+extern rawLength   : Channel -> Int        = "YonaStdChannelRawLength"
+extern rawCapacity : Channel -> Int        = "YonaStdChannelRawCapacity"
+
+## Compiler-backed constructor. Codegen supplies a hidden payload descriptor
+## after inference has made `value` concrete.
+extern channel : Int -> (Linear (Sender value), Linear (Receiver value)) = "YonaStdChannelChannel"
 
 ## Create a bounded channel with the given buffer capacity. Returns a tuple
 ## of `Linear`-wrapped sender and receiver handles. The linearity checker
@@ -57,36 +60,31 @@ extern raw_capacity : Channel -> Int        = "yona_Std_Channel__raw_capacity"
 ##     ...                 -- use sender / receiver freely
 ## end end
 ## ```
-channel : Int -> (Linear (Sender value), Linear (Receiver value))
-channel n =
-    let raw = raw_new n in
-    (Linear (Sender raw), Linear (Receiver raw))
-
 ## Send a value through a sender. Blocks if the buffer is full.
 send : Sender value -> value -> Unit
-send (Sender raw) value = raw_send raw value
+send (Sender raw) value = rawSend raw value
 
 ## Receive a value. Blocks if the buffer is empty. Returns `Some v` for a
 ## delivered value or `None` once the channel is closed and drained.
 recv : Receiver value -> Option value
-recv (Receiver raw) = raw_recv raw
+recv (Receiver raw) = rawRecv raw
 
 ## Non-blocking receive — returns immediately even if empty.
 tryRecv : Receiver value -> Option value
-tryRecv (Receiver raw) = raw_try_recv raw
+tryRecv (Receiver raw) = rawTryRecv raw
 
 ## Close the sender side. Wakes all blocked sends and recvs.
 close : Sender value -> Unit
-close (Sender raw) = raw_close raw
+close (Sender raw) = rawClose raw
 
 ## Returns true if the channel has been closed.
 isClosed : Sender value -> Bool
-isClosed (Sender raw) = raw_closed raw
+isClosed (Sender raw) = rawClosed raw
 
 ## Current number of buffered elements.
 length : Sender value -> Int
-length (Sender raw) = raw_length raw
+length (Sender raw) = rawLength raw
 
 ## Maximum buffer size (set at creation).
 capacity : Sender value -> Int
-capacity (Sender raw) = raw_capacity raw
+capacity (Sender raw) = rawCapacity raw

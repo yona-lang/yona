@@ -38,23 +38,24 @@ import exit from Std\Process in
 exit 0
 ```
 
-### `exec : String -> String`
+### `exec : String -> [a] -> String`
 
-Execute a shell command and return its stdout as a string. Async.
+Execute a program directly and return its stdout as a string. The argument
+sequence excludes `argv[0]`. Async; no shell is invoked implicitly.
 
 ```yona
 import exec from Std\Process in
-let output = exec "ls -la" in
+let output = exec "ls" ["-la"] in
 println output
 ```
 
-### `execStatus : String -> Int`
+### `execStatus : String -> [a] -> Int`
 
-Execute a shell command and return its exit status code. Async.
+Execute a program directly and return its exit status code. Async.
 
 ```yona
 import execStatus from Std\Process in
-let code = execStatus "make build" in
+let code = execStatus "make" ["build"] in
 println (show code)
 ```
 
@@ -76,13 +77,13 @@ import hostname from Std\Process in
 hostname   # => "myhost"
 ```
 
-### `spawn : String -> Linear a`
+### `spawn : String -> [a] -> Linear b`
 
 Spawn a subprocess without waiting for it to finish. Returns a process handle (Int).
 
 ```yona
 import spawn, wait from Std\Process in
-let proc = spawn "sleep 5" in
+let proc = spawn "sleep" ["5"] in
 let status = wait proc in
 println (show status)
 ```
@@ -93,7 +94,7 @@ Read a single line from the subprocess stdout.
 
 ```yona
 import spawn, readLine from Std\Process in
-let proc = spawn "echo hello" in
+let proc = spawn "echo" ["hello"] in
 readLine proc   # => "hello"
 ```
 
@@ -111,7 +112,7 @@ Send a signal to a subprocess. Returns 0 on success.
 
 ```yona
 import spawn, kill from Std\Process in
-let proc = spawn "sleep 100" in
+let proc = spawn "sleep" ["100"] in
 kill proc 15   # SIGTERM
 ```
 
@@ -129,7 +130,7 @@ Returns the OS process ID of a subprocess.
 
 ```yona
 import spawn, pid from Std\Process in
-let proc = spawn "sleep 10" in
+let proc = spawn "sleep" ["10"] in
 pid proc   # => 12345
 ```
 
@@ -159,10 +160,10 @@ The prefix must not contain path separators.
 
 ### `run : String -> [a] -> Int`
 
-Execute `file` with a full argv vector (no shell). Inherit stdin, stdout,
-and stderr. Wait and return the exit status.
+Execute `file` with an argument sequence that excludes `argv[0]` (no shell).
+Inherit stdin, stdout, and stderr. Wait and return the exit status.
 
 ### `execArgs : String -> [a] -> Int`
 
-Replace the current process with `file` and the given argv (Unix `execve`;
-Windows waits then exits).
+Replace the current process with `file` and the given arguments, excluding
+`argv[0]` (Unix `execve`; Windows waits then exits).

@@ -1,98 +1,99 @@
+MODULE Std\Math
 TRAIT Num a 4
   METHOD abs FUNCTION(VAR(a),VAR(a))
   METHOD max FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a)))
   METHOD min FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a)))
   METHOD negate FUNCTION(VAR(a),VAR(a))
 INSTANCE Num Float
-  IMPL abs Num_Float__abs
-  IMPL max Num_Float__max
-  IMPL min Num_Float__min
-  IMPL negate Num_Float__negate
+  IMPL abs Std\Math Num_Float_abs
+  IMPL max Std\Math Num_Float_max
+  IMPL min Std\Math Num_Float_min
+  IMPL negate Std\Math Num_Float_negate
 INSTANCE Num Int
-  IMPL abs Num_Int__abs
-  IMPL max Num_Int__max
-  IMPL min Num_Int__min
-  IMPL negate Num_Int__negate
-FN Num_Float__abs 1 INT -> FLOAT
-FN Num_Float__max 2 INT INT -> INT
-FN Num_Float__min 2 INT INT -> INT
-FN Num_Float__negate 1 INT -> FLOAT
-FN Num_Int__abs 1 INT -> INT
-FN Num_Int__max 2 INT INT -> INT
-FN Num_Int__min 2 INT INT -> INT
-FN Num_Int__negate 1 INT -> INT
-FN yona_Std_Math__ceil 1 FLOAT -> FLOAT
-FN yona_Std_Math__clamp 3 INT INT INT -> INT effects -
-FN yona_Std_Math__cos 1 FLOAT -> FLOAT
-FN yona_Std_Math__exp 1 FLOAT -> FLOAT
-FN yona_Std_Math__factorial 1 INT -> INT effects -
-FN yona_Std_Math__floor 1 FLOAT -> FLOAT
-FN yona_Std_Math__gcd 2 INT INT -> INT effects |
-FN yona_Std_Math__isEven 1 INT -> BOOL effects -
-FN yona_Std_Math__isOdd 1 INT -> BOOL effects -
-FN yona_Std_Math__log 1 FLOAT -> FLOAT
-FN yona_Std_Math__pi 0 -> FLOAT effects -
-FN yona_Std_Math__pow 2 INT INT -> INT effects |
-FN yona_Std_Math__round 1 FLOAT -> FLOAT
-FN yona_Std_Math__sign 1 INT -> INT effects -
-FN yona_Std_Math__sin 1 FLOAT -> FLOAT
-FN yona_Std_Math__sqrt 1 FLOAT -> FLOAT
-FN yona_Std_Math__tan 1 FLOAT -> FLOAT
-GENFN_BEGIN Num_Float__abs abs
+  IMPL abs Std\Math Num_Int_abs
+  IMPL max Std\Math Num_Int_max
+  IMPL min Std\Math Num_Int_min
+  IMPL negate Std\Math Num_Int_negate
+FN Num_Float_abs 1 INT -> FLOAT
+FN Num_Float_max 2 INT INT -> INT
+FN Num_Float_min 2 INT INT -> INT
+FN Num_Float_negate 1 INT -> FLOAT
+FN Num_Int_abs 1 INT -> INT
+FN Num_Int_max 2 INT INT -> INT
+FN Num_Int_min 2 INT INT -> INT
+FN Num_Int_negate 1 INT -> INT
+FN ceil 1 FLOAT -> FLOAT
+FN clamp 3 INT INT INT -> INT effects -
+FN cos 1 FLOAT -> FLOAT
+FN exp 1 FLOAT -> FLOAT
+FN factorial 1 INT -> INT effects -
+FN floor 1 FLOAT -> FLOAT
+FN gcd 2 INT INT -> INT effects |
+FN isEven 1 INT -> BOOL effects -
+FN isOdd 1 INT -> BOOL effects -
+FN log 1 FLOAT -> FLOAT
+FN pi 0 -> FLOAT effects -
+FN pow 2 INT INT -> INT effects |
+FN round 1 FLOAT -> FLOAT
+FN sign 1 INT -> INT effects -
+FN sin 1 FLOAT -> FLOAT
+FN sqrt 1 FLOAT -> FLOAT
+FN tan 1 FLOAT -> FLOAT
+GENFN_BEGIN Num_Float_abs abs
 abs x = if x < 0.0 then 0.0 - x else x
 GENFN_END
-GENFN_BEGIN Num_Float__max max
+GENFN_BEGIN Num_Float_max max
 max a b = if a > b then a else b
 GENFN_END
-GENFN_BEGIN Num_Float__min min
+GENFN_BEGIN Num_Float_min min
 min a b = if a < b then a else b
 GENFN_END
-GENFN_BEGIN Num_Float__negate negate
+GENFN_BEGIN Num_Float_negate negate
 negate x = 0.0 - x
 GENFN_END
-GENFN_BEGIN Num_Int__abs abs
+GENFN_BEGIN Num_Int_abs abs
 abs x = if x < 0 then 0 - x else x
 GENFN_END
-GENFN_BEGIN Num_Int__max max
+GENFN_BEGIN Num_Int_max max
 max a b = if a > b then a else b
 GENFN_END
-GENFN_BEGIN Num_Int__min min
+GENFN_BEGIN Num_Int_min min
 min a b = if a < b then a else b
 GENFN_END
-GENFN_BEGIN Num_Int__negate negate
+GENFN_BEGIN Num_Int_negate negate
 negate x = 0 - x
 GENFN_END
-GENFN_BEGIN yona_Std_Math__clamp clamp
+GENFN_BEGIN clamp clamp
 clamp lo hi x = if x < lo then lo else if x > hi then hi else x
 GENFN_END
-GENFN_BEGIN yona_Std_Math__factorial factorial
+GENFN_BEGIN factorial factorial
 factorial n =
     if n <= 1 then 1
     else n * (factorial (n - 1))
 GENFN_END
-GENFN_BEGIN yona_Std_Math__gcd gcd
+GENFN_BEGIN gcd gcd
 gcd a b =
     let a2 = abs a in
     let b2 = abs b in
     if b2 == 0 then a2
     else gcd b2 (a2 % b2)
 GENFN_END
-GENFN_BEGIN yona_Std_Math__isEven isEven
+GENFN_BEGIN isEven isEven
 isEven x = x % 2 == 0
 GENFN_END
-GENFN_BEGIN yona_Std_Math__isOdd isOdd
+GENFN_BEGIN isOdd isOdd
 isOdd x = x % 2 != 0
 GENFN_END
-GENFN_BEGIN yona_Std_Math__pi pi
+GENFN_BEGIN pi pi
 pi = 3.141592653589793
 GENFN_END
-GENFN_BEGIN yona_Std_Math__pow pow
+GENFN_BEGIN pow pow
 pow base exp =
     if exp <= 0 then 1
     else if exp % 2 == 0 then
         let half = pow base (exp / 2) in half * half
     else base * (pow base (exp - 1))
 GENFN_END
-GENFN_BEGIN yona_Std_Math__sign sign
+GENFN_BEGIN sign sign
 sign x = if x > 0 then 1 else if x < 0 then 0 - 1 else 0
 GENFN_END

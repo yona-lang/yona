@@ -1,15 +1,16 @@
-FN yona_Std_ByteArray__alloc 1 INT -> BYTE_ARRAY
-FN yona_Std_ByteArray__length 1 BYTE_ARRAY -> INT
-FN yona_Std_ByteArray__get 2 BYTE_ARRAY INT -> INT
-FN yona_Std_ByteArray__set 3 BYTE_ARRAY INT INT -> UNIT
-FN yona_Std_ByteArray__concat 2 BYTE_ARRAY BYTE_ARRAY -> BYTE_ARRAY
-FN yona_Std_ByteArray__slice 3 BYTE_ARRAY INT INT -> BYTE_ARRAY
-FN yona_Std_ByteArray__fromString 1 STRING -> BYTE_ARRAY
-FN yona_Std_ByteArray__toString 1 BYTE_ARRAY -> STRING
-FN yona_Std_ByteArray__fromSeq 1 SEQ -> BYTE_ARRAY
-FN yona_Std_ByteArray__toSeq 1 BYTE_ARRAY -> SEQ
-FN yona_Std_ByteArray__head 1 BYTE_ARRAY -> INT
-FN yona_Std_ByteArray__tail 1 BYTE_ARRAY -> BYTE_ARRAY
-FN yona_Std_ByteArray__join 2 BYTE_ARRAY BYTE_ARRAY -> BYTE_ARRAY
-FN yona_Std_ByteArray__foldl 3 FUNCTION INT BYTE_ARRAY -> INT
-FN yona_Std_ByteArray__map 2 FUNCTION BYTE_ARRAY -> BYTE_ARRAY
+MODULE Std\ByteArray
+FN alloc 1 INT -> BYTE_ARRAY
+FN concat 2 BYTE_ARRAY BYTE_ARRAY -> BYTE_ARRAY
+FN foldl 3 FUNCTION INT BYTE_ARRAY -> INT
+FN fromSeq 1 SEQ -> BYTE_ARRAY
+FN fromString 1 STRING -> BYTE_ARRAY
+FN get 2 BYTE_ARRAY INT -> INT
+FN head 1 BYTE_ARRAY -> INT
+FN join 2 BYTE_ARRAY BYTE_ARRAY -> BYTE_ARRAY
+FN length 1 BYTE_ARRAY -> INT
+FN map 2 FUNCTION BYTE_ARRAY -> BYTE_ARRAY
+FN set 3 BYTE_ARRAY INT INT -> UNIT
+FN slice 3 BYTE_ARRAY INT INT -> BYTE_ARRAY
+FN tail 1 BYTE_ARRAY -> BYTE_ARRAY
+FN toSeq 1 BYTE_ARRAY -> SEQ
+FN toString 1 BYTE_ARRAY -> STRING

@@ -1,0 +1,7 @@
+import spawn, pid, wait from Std\Process in
+do
+    proc = spawn "sleep" ["0"]
+    p = pid proc
+    wait proc
+    if p > 0 then "ok" else "fail"
+end

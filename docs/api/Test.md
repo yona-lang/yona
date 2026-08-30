@@ -8,7 +8,7 @@ so a suite runs every case and reports all failures in declaration order.
 
 ```yona
 import testCase, check, equalBy, run, render from Std\Test,
-println from Std\IO
+println from Std\Io
 in
 let intEqual a b = a == b,
 cases = [

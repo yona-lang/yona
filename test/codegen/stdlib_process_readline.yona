@@ -1,8 +1,0 @@
-import spawn, readLine, wait from Std\Process in
-do
-    proc = spawn "echo line1; echo line2; echo line3"
-    l1 = readLine proc
-    l2 = readLine proc
-    wait proc
-    l1 ++ " " ++ l2
-end

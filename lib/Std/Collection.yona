@@ -17,16 +17,19 @@ iterate n fn seed =
     else seed :: (iterate (n - 1) fn (fn seed))
 
 ## Generates a sequence from a seed using a producer function.
-## `fn seed` returns `(:some, (value, next_seed))` to continue, `:none` to stop.
+## `fn seed` returns `Some (value, nextSeed)` to continue, `None` to stop.
 ##
 ## ```
-## unfold (\n -> if n > 0 then (:some, (n, n - 1)) else :none) 5
+## unfold (\n -> if n > 0 then Some (n, n - 1) else None) 5
 ## # => [5, 4, 3, 2, 1]
 ## ```
+unfold : (state -> Option (value, state)) -> state -> Seq value
 unfold fn seed =
     case fn seed of
-        (:some, (value, next)) -> value :: (unfold fn next)
-        :none -> []
+        Some pair -> case pair of
+            (value, next) -> value :: (unfold fn next)
+        end
+        None -> []
     end
 
 ## Creates a sequence of `n` copies of `value`.
@@ -54,10 +57,10 @@ tabulate n fn =
 ## window 2 [1, 2, 3, 4]   # => [[1, 2], [2, 3], [3, 4]]
 ## ```
 window size seq =
-    let take_n n s = if n <= 0 then [] else case s of [] -> []; [h|t] -> h :: (take_n (n - 1) t) end in
+    let takeN n s = if n <= 0 then [] else case s of [] -> []; [h|t] -> h :: (takeN (n - 1) t) end in
     let len s = case s of [] -> 0; [_|t] -> 1 + (len t) end in
     if (len seq) < size then []
-    else (take_n size seq) :: (window size (case seq of [_|t] -> t end))
+    else (takeN size seq) :: (window size (case seq of [_|t] -> t end))
 
 ## Splits a sequence into chunks of size `size`.
 ##
@@ -65,11 +68,11 @@ window size seq =
 ## chunks 2 [1, 2, 3, 4, 5]   # => [[1, 2], [3, 4], [5]]
 ## ```
 chunks size seq =
-    let take_n n s = if n <= 0 then [] else case s of [] -> []; [h|t] -> h :: (take_n (n - 1) t) end in
-    let drop_n n s = if n <= 0 then s else case s of [] -> []; [_|t] -> drop_n (n - 1) t end in
+    let takeN n s = if n <= 0 then [] else case s of [] -> []; [h|t] -> h :: (takeN (n - 1) t) end in
+    let dropN n s = if n <= 0 then s else case s of [] -> []; [_|t] -> dropN (n - 1) t end in
     case seq of
         [] -> []
-        _  -> (take_n size seq) :: (chunks size (drop_n size seq))
+        _  -> (takeN size seq) :: (chunks size (dropN size seq))
     end
 
 ## Returns consecutive pairs from a sequence.

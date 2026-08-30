@@ -1,0 +1,15 @@
+## Std\Task — descriptor-owned structured task spawning.
+##
+## `spawn action` submits a zero-argument closure to the runtime worker pool.
+## The compiler supplies a hidden ownership descriptor for the inferred result
+## type. Heap results stay alive until their transparent await transfers them
+## to the caller; grouped tasks retain an observed result independently of
+## group cleanup. Exceptions and cancellation complete without fabricating a
+## payload. Submission and completion are thread-safe.
+module Std\Task
+
+export spawn
+
+## Run `action` concurrently and transparently await its result at first use.
+## Submission failure raises through the normal native-promise call path.
+extern native spawn : (() -> result) -> result = "YonaStdTaskSpawn"

@@ -29,21 +29,21 @@ type Json =
 ## ```
 ## parse "{\"id\":1}"   # => Ok (JsonObject [("id", JsonInt 1)])
 ## ```
-extern parse : String -> Result = "yona_Std_Json__parse"
+extern parse : String -> Result = "YonaStdJsonParse"
 
 ## Compact JSON text for `j`.
 ##
 ## ```
 ## stringify (JsonInt 1)   # => "1"
 ## ```
-extern stringify : Json -> String = "yona_Std_Json__stringify"
+extern stringify : Json -> String = "YonaStdJsonStringify"
 
-extern stringifyString : String -> String = "yona_Std_Json__stringifyString"
-extern stringifyBool : Bool -> String = "yona_Std_Json__stringifyBool"
-extern stringifyFloat : Float -> String = "yona_Std_Json__stringifyFloat"
-extern null : String = "yona_Std_Json__null"
-extern parseInt : String -> Int = "yona_Std_Json__parseInt"
-extern parseFloat : String -> Float = "yona_Std_Json__parseFloat"
+extern stringifyString : String -> String = "YonaStdJsonStringifyString"
+extern stringifyBool : Bool -> String = "YonaStdJsonStringifyBool"
+extern stringifyFloat : Float -> String = "YonaStdJsonStringifyFloat"
+extern null : String = "YonaStdJsonNull"
+extern parseInt : String -> Int = "YonaStdJsonParseInt"
+extern parseFloat : String -> Float = "YonaStdJsonParseFloat"
 
 ## Look up `key` in a JSON object. `None` if `j` is not an object or the key is missing.
 get j key =

@@ -1,3 +1,4 @@
-FN yona_Std_Utf16__offsetToLine 2 STRING INT -> INT
-FN yona_Std_Utf16__offsetToCharacter 2 STRING INT -> INT
-FN yona_Std_Utf16__positionToOffset 3 STRING INT INT -> INT
+MODULE Std\Utf16
+FN offsetToCharacter 2 STRING INT -> INT
+FN offsetToLine 2 STRING INT -> INT
+FN positionToOffset 3 STRING INT INT -> INT

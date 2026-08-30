@@ -134,5 +134,5 @@ Trait methods have deferred constraints that are solved after inference:
 7. **Effects**: perform/handle checking, lossless latent-effect inference,
    E0202, recursive SCC cells, and `.yonai` schemes [implemented]; parsed
    declarations and captured continuations remain [partial]
-8. **Codegen Integration**: wired into cli/main.cpp pipeline [done]
+8. **Codegen Integration**: wired into cli/Main.cpp pipeline [done]
 9. **Error Polish**: "did you mean?" suggestions, context strings, source display [done]

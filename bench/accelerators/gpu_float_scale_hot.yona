@@ -1,5 +1,5 @@
 import fill from Std\FloatArray in
-import floatArrayScaleAsync from Std\GPU in
+import floatArrayScaleAsync from Std\Gpu in
 let n = 100000 in
 let xs = fill n 1.5 in
 floatArrayScaleAsync 2.0 xs

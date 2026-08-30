@@ -1,6 +1,7 @@
-FN yona_Std_Log__debug 1 STRING -> UNIT
-FN yona_Std_Log__info 1 STRING -> UNIT
-FN yona_Std_Log__warn 1 STRING -> UNIT
-FN yona_Std_Log__error 1 STRING -> UNIT
-FN yona_Std_Log__setLevel 1 INT -> UNIT
-FN yona_Std_Log__getLevel 0 -> INT
+MODULE Std\Log
+FN debug 1 STRING -> UNIT
+FN error 1 STRING -> UNIT
+FN getLevel 0 -> INT
+FN info 1 STRING -> UNIT
+FN setLevel 1 INT -> UNIT
+FN warn 1 STRING -> UNIT

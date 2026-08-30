@@ -16,14 +16,14 @@ export pathMax, nameMax
 export endianness, isLittleEndian
 export osName, arch
 
-extern yona_platform_page_size        : Int -> Int
-extern yona_platform_cache_line_size  : Int -> Int
-extern yona_platform_path_max         : Int -> Int
-extern yona_platform_name_max         : Int -> Int
-extern yona_platform_cpu_count        : Int -> Int
-extern yona_platform_is_little_endian : Int -> Int
-extern yona_platform_os_name          : Int -> String
-extern yona_platform_arch             : Int -> String
+extern platformPageSizeNative        : Int -> Int    = "YonaRuntimePlatformPageSize"
+extern platformCacheLineSizeNative   : Int -> Int    = "YonaRuntimePlatformCacheLineSize"
+extern platformPathMaxNative         : Int -> Int    = "YonaRuntimePlatformMaximumPathLength"
+extern platformNameMaxNative         : Int -> Int    = "YonaRuntimePlatformMaximumNameLength"
+extern platformCpuCountNative        : Int -> Int    = "YonaRuntimePlatformCpuCount"
+extern platformIsLittleEndianNative  : Int -> Int    = "YonaRuntimePlatformIsLittleEndian"
+extern platformOsNameNative          : Int -> String = "YonaRuntimePlatformOsName"
+extern platformArchNative            : Int -> String = "YonaRuntimePlatformArchitecture"
 
 ## Path component separator. `/` on POSIX, `\` on Windows.
 pathSeparator = "/"
@@ -43,30 +43,30 @@ nullDevice = "/dev/null"
 wordSize = 64
 
 ## Host page size in bytes, via `sysconf(_SC_PAGESIZE)`. Usually 4096.
-pageSize = yona_platform_page_size 0
+pageSize = platformPageSizeNative 0
 
 ## L1 data cache line size in bytes. Usually 64. Use for padding hot
 ## atomic fields to avoid false sharing.
-cacheLineSize = yona_platform_cache_line_size 0
+cacheLineSize = platformCacheLineSizeNative 0
 
 ## Number of online CPUs, via `sysconf(_SC_NPROCESSORS_ONLN)`. Useful
 ## as a default for thread-pool sizing.
-cpuCount = yona_platform_cpu_count 0
+cpuCount = platformCpuCountNative 0
 
 ## Filesystem `PATH_MAX`, via `pathconf("/", _PC_PATH_MAX)`.
-pathMax = yona_platform_path_max 0
+pathMax = platformPathMaxNative 0
 
 ## Filesystem component length limit (`NAME_MAX`). 255 on most Linux FSes.
-nameMax = yona_platform_name_max 0
+nameMax = platformNameMaxNative 0
 
 ## `1` for little-endian hosts (x86_64, aarch64-le), `0` for big-endian.
-isLittleEndian = yona_platform_is_little_endian 0
+isLittleEndian = platformIsLittleEndianNative 0
 
 ## Host endianness as a symbol — `:little` or `:big`.
 endianness = if isLittleEndian == 1 then :little else :big
 
 ## OS name from `uname().sysname` — `"Linux"`, `"Darwin"`, `"FreeBSD"`, etc.
-osName = yona_platform_os_name 0
+osName = platformOsNameNative 0
 
 ## Machine architecture from `uname().machine` — `"x86_64"`, `"aarch64"`, etc.
-arch = yona_platform_arch 0
+arch = platformArchNative 0

@@ -21,9 +21,9 @@
 ### Task 0: Preserve nested resource types in `.yonai`
 
 **Files:**
-- Modify: `include/Codegen.h`, `include/typechecker/TypeChecker.h`
-- Modify: `src/codegen/CodegenModule.cpp`, `src/typechecker/TypeChecker.cpp`
-- Test: `test/codegen_test.cpp`, `test/type_checker_test.cpp`
+- Modify: `include/yona/Codegen/Codegen.h`, `include/yona/Semantics/TypeChecker.h`
+- Modify: `src/Codegen/CodegenModule.cpp`, `src/Semantics/TypeChecker.cpp`
+- Test: `test/Codegen/CodegenTest.cpp`, `test/Semantics/TypeCheckerTest.cpp`
 
 **Interfaces:**
 - Produces recursive `.yonai` type descriptors such as `LINEAR(ADT(FileHandle))`.
@@ -37,8 +37,8 @@ that import inference rejects passing it where `Linear Process` is required.
 - [x] **Step 2: Add recursive descriptor serialization and parsing**
 
 Replace marker-only `LINEAR` handling with recursive `LINEAR(...)`, `ADT(...)`,
-and `TUPLE(...)` descriptors. Keep parsing legacy bare `LINEAR` as
-`LINEAR(INT)` while checked-in interfaces migrate.
+and `TUPLE(...)` descriptors. Every checked-in interface uses the complete
+descriptor; bare `LINEAR` is rejected.
 
 - [x] **Step 3: Construct precise imported MonoTypes**
 
@@ -51,7 +51,7 @@ ADT inside `Linear`.
 Run: `cmake --build --preset build-debug-linux --target tests && ./out/build/x64-debug-linux/tests -tc='*yonai*|*LinearityChecker*'`
 
 ```bash
-git add include/Codegen.h include/typechecker/TypeChecker.h src/codegen/CodegenModule.cpp src/typechecker/TypeChecker.cpp test
+git add include/yona/Codegen/Codegen.h include/yona/Semantics/TypeChecker.h src/Codegen/CodegenModule.cpp src/Semantics/TypeChecker.cpp test
 git commit -m "feat: preserve nested interface types"
 ```
 
@@ -62,7 +62,7 @@ git commit -m "feat: preserve nested interface types"
 **Files:**
 - Modify: `lib/Prelude.yona`, `lib/Prelude.yonai`
 - Modify: `lib/Std/File.yonai`, `lib/Std/Process.yonai`, `lib/Std/Net.yonai`, `lib/Std/Channel.yona`, `lib/Std/Channel.yonai`
-- Modify: `src/typechecker/LinearityChecker.cpp`, `test/type_checker_test.cpp`
+- Modify: `src/Semantics/LinearityChecker.cpp`, `test/Semantics/TypeCheckerTest.cpp`
 
 **Interfaces:**
 - Produces `Linear FileHandle`, `Linear Process`, `Linear Socket`, `Linear (Sender a)`, and `Linear (Receiver a)` constructor facts.
@@ -92,8 +92,8 @@ Expected: the new payload-precision and hard-leak assertions fail before interfa
 Write interfaces with payload-bearing forms, for example:
 
 ```text
-FN yona_Std_File__openFile 2 STRING ADT -> LINEAR ADT FileHandle
-FN yona_Std_Process__spawn 1 STRING -> LINEAR ADT Process
+FN YonaStdFileOpenFile 2 STRING ADT -> LINEAR ADT FileHandle
+FN YonaStdProcessSpawn 1 STRING -> LINEAR ADT Process
 ```
 
 Teach the linearity checker to classify only resource constructors as mandatory
@@ -109,16 +109,17 @@ is accepted.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/Prelude.yona lib/Prelude.yonai lib/Std/*.yonai lib/Std/Channel.yona src/typechecker/LinearityChecker.cpp test/type_checker_test.cpp
+git add lib/Prelude.yona lib/Prelude.yonai lib/Std/*.yonai lib/Std/Channel.yona src/Semantics/LinearityChecker.cpp test/Semantics/TypeCheckerTest.cpp
 git commit -m "feat: encode typed linear resource interfaces"
 ```
 
 ### Task 2: Make File and Process APIs transfer ownership
 
 **Files:**
-- Modify: `src/compiled_runtime.c`, `include/yona/runtime/platform.h`
-- Modify: `src/runtime/platform/os_linux.c`, `src/runtime/platform/os_macos.c`, `src/runtime/platform/os_windows.c`
-- Modify: `lib/Std/File.yonai`, `lib/Std/Process.yonai`, `test/codegen/*file*`, `test/*process*`
+- Modify: core runtime component, `include/yona/Runtime/Platform/Api.h`
+- Modify: `src/Runtime/Platform/OsLinux.c`,
+  `src/Runtime/Platform/OsMacOs.c`, `src/Runtime/Platform/OsWindows.c`
+- Modify: `lib/Std/File.yonai`, `lib/Std/Process.yonai`, `test/Fixtures/Codegen/*file*`, `test/*process*`
 
 **Interfaces:**
 - Consumes `Linear FileHandle` / `Linear Process` and produces payload/result pairs for continuing operations.
@@ -152,17 +153,19 @@ descriptor.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/compiled_runtime.c include/yona/runtime/platform.h src/runtime/platform/os_*.c lib/Std/File.yonai lib/Std/Process.yonai test
+git add src/Runtime include/yona/Runtime/Platform/Api.h lib/Std/File.yonai lib/Std/Process.yonai test
 git commit -m "feat: transfer file and process ownership"
 ```
 
 ### Task 3: Make network and channel APIs transfer ownership
 
 **Files:**
-- Modify: `src/runtime/platform/net_linux.c`, `src/runtime/platform/net_macos.c`, `src/runtime/platform/net_windows.c`
-- Modify: `src/runtime/platform/channel_posix.c`, `src/runtime/platform/channel_win32.c`
+- Modify: `src/Runtime/Platform/NetLinux.c`,
+  `src/Runtime/Platform/NetMacOs.c`, `src/Runtime/Platform/NetWindows.c`
+- Modify: `src/Runtime/Concurrency/ChannelPosix.c`,
+  `src/Runtime/Concurrency/ChannelWin32.c`
 - Modify: `lib/Std/Net.yonai`, `lib/Std/Channel.yona`, `lib/Std/Channel.yonai`
-- Modify: `test/net_runtime_test.cpp`, `test/codegen/channel_*.yona`
+- Modify: `test/Runtime/NetRuntimeTest.cpp`, `test/Fixtures/Codegen/channel_*.yona`
 
 **Interfaces:**
 - Socket send/receive and endpoint send/receive preserve ownership by returning the resource.
@@ -195,14 +198,14 @@ resource APIs.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/runtime/platform/net_*.c src/runtime/platform/channel_*.c lib/Std/Net.yonai lib/Std/Channel.yona lib/Std/Channel.yonai test
+git add src/Runtime/Platform/Net*.c src/Runtime/Concurrency/Channel*.c lib/Std/Net.yonai lib/Std/Channel.yona lib/Std/Channel.yonai test
 git commit -m "feat: transfer network and channel ownership"
 ```
 
 ### Task 4: Remove raw stdio surface and complete documentation
 
 **Files:**
-- Modify: `lib/Std/IO.yona`, `lib/Std/IO.yonai`, `tools/yona/main.yona`, `tools/yls/main.yona`
+- Modify: `lib/Std/Io.yona`, `lib/Std/Io.yonai`, `tools/yona/main.yona`, `tools/yls/main.yona`
 - Modify: `docs/linear-types.md`, `docs/api/File.md`, `docs/api/Process.md`, `docs/api/Net.md`, `docs/api/Channel.md`, `docs/todo-list.md`, `CHANGELOG.md`
 - Modify: `site/src/content/docs/guides/memory.md`, `site/src/content/docs/guides/concurrency.md`, `site/src/content/docs/guides/traits.md`, `site/src/content/docs/guides/type-system.md`
 
@@ -240,6 +243,6 @@ Expected: all tests pass and the diff has no whitespace errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add lib/Std/IO.yona lib/Std/IO.yonai tools docs site CHANGELOG.md test
+git add lib/Std/Io.yona lib/Std/Io.yonai tools docs site CHANGELOG.md test
 git commit -m "docs: complete linear resource migration"
 ```

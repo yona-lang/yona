@@ -2,11 +2,11 @@
 
 set -eu
 
-if ! formatter=$(command -v clang-format 2>/dev/null); then
-	echo "error: clang-format is required; install it with your LLVM development tools" >&2
-	exit 127
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if command -v python3 >/dev/null 2>&1; then
+  python_command=python3
+else
+  python_command=python
 fi
 
-echo "Formatting source and header files"
-"$formatter" -i include/*.h src/*.cpp test/*.cpp cli/*.cpp
-echo "Done"
+exec "$python_command" "$script_dir/quality.py" format "$@"

@@ -12,29 +12,11 @@ override_dh_auto_build:
 	cmake --build --preset build-release-linux
 
 override_dh_auto_install:
-	install -Dm755 out/build/x64-release-linux/yonac $(CURDIR)/debian/yona/usr/bin/yonac
-	install -Dm755 out/build/x64-release-linux/yona $(CURDIR)/debian/yona/usr/bin/yona
-	install -Dm755 out/build/x64-release-linux/yona-repl $(CURDIR)/debian/yona/usr/bin/yona-repl
-	install -Dm755 out/build/x64-release-linux/yls $(CURDIR)/debian/yona/usr/bin/yls
-	if [ -e out/build/x64-release-linux/libyona_lib.so ]; then \
-		install -Dm755 out/build/x64-release-linux/libyona_lib.so \
-			$(CURDIR)/debian/yona/usr/lib/$(DEB_HOST_MULTIARCH)/libyona_lib.so; \
-	fi
+	DESTDIR=$(CURDIR)/debian/yona cmake --install out/build/x64-release-linux --prefix /usr
 	patchelf --remove-rpath $(CURDIR)/debian/yona/usr/bin/yonac
 	patchelf --remove-rpath $(CURDIR)/debian/yona/usr/bin/yona
 	patchelf --remove-rpath $(CURDIR)/debian/yona/usr/bin/yona-repl
 	patchelf --remove-rpath $(CURDIR)/debian/yona/usr/bin/yls
-	install -d $(CURDIR)/debian/yona/usr/lib/yona/lib/Std
-	cp -a lib/Std/. $(CURDIR)/debian/yona/usr/lib/yona/lib/Std/
-	install -d $(CURDIR)/debian/yona/usr/lib/yona/src/runtime/platform
-	install -d $(CURDIR)/debian/yona/usr/lib/yona/include/yona/runtime
-	install -d $(CURDIR)/debian/yona/usr/lib/yona/runtime
-	if [ -d out/build/x64-release-linux/runtime ]; then \
-		cp -a out/build/x64-release-linux/runtime/. $(CURDIR)/debian/yona/usr/lib/yona/runtime/; \
-	fi
-	install -Dm644 src/compiled_runtime.c $(CURDIR)/debian/yona/usr/lib/yona/src/
-	cp -a src/runtime/. $(CURDIR)/debian/yona/usr/lib/yona/src/runtime/
-	cp -a include/yona/runtime/. $(CURDIR)/debian/yona/usr/lib/yona/include/yona/runtime/
 
 override_dh_auto_test:
 	# BUILD_TESTING=OFF; no doctest binary in the package build.

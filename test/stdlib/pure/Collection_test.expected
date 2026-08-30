@@ -1,4 +1,5 @@
 PASS iterate includes seed
+PASS unfold consumes Option producers
 PASS replicate empty
 PASS dedup is consecutive
-SUMMARY 3 passed, 0 failed
+SUMMARY 4 passed, 0 failed

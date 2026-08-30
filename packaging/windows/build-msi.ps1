@@ -26,7 +26,6 @@ Require-Path (Join-Path $absBuildDir "yonac.exe") "yonac.exe"
 Require-Path (Join-Path $absBuildDir "yona.exe") "yona.exe"
 Require-Path (Join-Path $absBuildDir "yona-repl.exe") "yona-repl.exe"
 Require-Path (Join-Path $absBuildDir "yls.exe") "yls.exe"
-Require-Path (Join-Path $absBuildDir "runtime") "runtime directory"
 Require-Path $wxsPath "WiX source"
 
 New-Item -ItemType Directory -Path $absOutDir -Force | Out-Null
@@ -36,22 +35,10 @@ if (Test-Path $stageDir) {
 }
 
 New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $stageDir "bin") -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $stageDir "lib\Std") -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $stageDir "runtime") -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $stageDir "src\runtime\platform") -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $stageDir "include\yona\runtime") -Force | Out-Null
-
-Copy-Item (Join-Path $absBuildDir "yonac.exe") (Join-Path $stageDir "bin\yonac.exe")
-Copy-Item (Join-Path $absBuildDir "yona.exe") (Join-Path $stageDir "bin\yona.exe")
-Copy-Item (Join-Path $absBuildDir "yona-repl.exe") (Join-Path $stageDir "bin\yona-repl.exe")
-Copy-Item (Join-Path $absBuildDir "yls.exe") (Join-Path $stageDir "bin\yls.exe")
-Copy-Item (Join-Path $repoRoot "lib\Std\*") (Join-Path $stageDir "lib\Std\") -Recurse -Force
-Copy-Item (Join-Path $absBuildDir "runtime\*") (Join-Path $stageDir "runtime\") -Recurse -Force
-Copy-Item (Join-Path $repoRoot "src\compiled_runtime.c") (Join-Path $stageDir "src\compiled_runtime.c")
-Copy-Item (Join-Path $repoRoot "src\runtime\*") (Join-Path $stageDir "src\runtime\") -Recurse -Force
-Copy-Item (Join-Path $repoRoot "src\runtime\platform\*") (Join-Path $stageDir "src\runtime\platform\") -Recurse -Force
-Copy-Item (Join-Path $repoRoot "include\yona\runtime\*") (Join-Path $stageDir "include\yona\runtime\") -Recurse -Force
+& cmake --install $absBuildDir --prefix $stageDir
+if ($LASTEXITCODE -ne 0) {
+    throw "cmake --install failed with exit code $LASTEXITCODE"
+}
 Copy-Item (Join-Path $repoRoot "LICENSE.txt") (Join-Path $stageDir "LICENSE.txt")
 Copy-Item (Join-Path $repoRoot "README.md") (Join-Path $stageDir "README.md")
 Copy-Item (Join-Path $repoRoot "INSTALL.md") (Join-Path $stageDir "INSTALL.md")

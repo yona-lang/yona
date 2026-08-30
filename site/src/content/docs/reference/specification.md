@@ -1,29 +1,28 @@
 ---
 title: Language specification
 description: >-
-  The normative description of Yona's lexical structure, expressions,
-  patterns, types, and modules, with implementation notes from the reference
-  compiler.
+  The normative description of Yona's lexical structure, expressions, patterns,
+  types, and modules, with implementation notes from the reference compiler.
 ---
 
 This document specifies the Yona language as implemented by the reference
-compiler `yonac`. Normative rules are stated in prose; *implementation notes*
+compiler `yonac`. Normative rules are stated in prose; _implementation notes_
 describe how `yonac` realizes them and are informative, not binding on other
 implementations.
 
-A Yona **program is a single expression**. Compiling a source file that
-contains an expression produces an executable whose exit code is the
-expression's value (for integer results). A source file may instead contain a
-**module declaration**, which compiles to a linkable object file plus an
-interface file (§7).
+A Yona **program is a single expression**. Compiling a source file that contains
+an expression produces an executable whose exit code is the expression's value
+(for integer results). A source file may instead contain a **module
+declaration**, which compiles to a linkable object file plus an interface file
+(§7).
 
 ## 1. Lexical structure
 
 ### 1.1 Source text
 
 Source files are UTF-8. Identifiers are ASCII: functions and variables match
-`[a-z_][A-Za-z0-9_]*` (camelCase by convention), type and constructor names
-and module segments match `[A-Z][A-Za-z0-9_]*` (PascalCase).
+`[a-z_][A-Za-z0-9_]*` (camelCase by convention), type and constructor names and
+module segments match `[A-Z][A-Za-z0-9_]*` (PascalCase).
 
 ### 1.2 Comments
 
@@ -36,11 +35,10 @@ and module segments match `[A-Z][A-Za-z0-9_]*` (PascalCase).
    and may span lines */
 ```
 
-`#` introduces a line comment, including a leading `#!…` shebang line.
-`##` at the start of a line is a documentation
-comment, attached to the following declaration by documentation tooling; to
-the compiler it is an ordinary comment. `/* … */` comments nest and may
-contain newlines.
+`#` introduces a line comment, including a leading `#!…` shebang line. `##` at
+the start of a line is a documentation comment, attached to the following
+declaration by documentation tooling; to the compiler it is an ordinary comment.
+`/* … */` comments nest and may contain newlines.
 
 ### 1.3 Newlines
 
@@ -49,15 +47,15 @@ terminates an expression in the three positions where expression sequences
 occur: **case arms**, **`do`-block steps**, and **module-level function
 bodies**.
 
-A newline is *suppressed* — treated as ordinary whitespace — in exactly these
+A newline is _suppressed_ — treated as ordinary whitespace — in exactly these
 situations:
 
 1. **Inside brackets** `()`, `[]`, `{}`. Bracketed expressions may span any
-   number of lines. Exception: when a `case`, `do`, `with`, or `handle` block
-   is open *inside* the brackets, newlines again act as clause separators, so
-   the block's arms still terminate correctly.
-2. **After a binary operator or continuation token** (`+`, `*`, `->`, `=`,
-   `,`, `|>`, …). This permits natural line continuation:
+   number of lines. Exception: when a `case`, `do`, `with`, or `handle` block is
+   open _inside_ the brackets, newlines again act as clause separators, so the
+   block's arms still terminate correctly.
+2. **After a binary operator or continuation token** (`+`, `*`, `->`, `=`, `,`,
+   `|>`, …). This permits natural line continuation:
 
 ```yona
 let total = price +
@@ -80,19 +78,19 @@ perform handle resume effect for
 
 ### 1.5 Literals
 
-| Form | Examples | Notes |
-|------|----------|-------|
-| Integer | `42`, `-17`, `1_000_000` | 64-bit signed; `_` separators permitted between digits |
-| Float | `3.14`, `-0.5`, `1.23e-4` | IEEE 754 double |
-| String | `"hello"`, `"a\nb"` | UTF-8; escapes `\"` `\\` `\n` `\r` `\t` `\0`; interpolation §3.2 |
-| Character | `'a'`, `'\n'` | single Unicode scalar |
-| Boolean | `true`, `false` | |
-| Unit | `()` | the empty tuple; the type and value of "nothing" |
-| Symbol | `:ok`, `:not_found` | interned atoms, snake_case by convention |
+| Form      | Examples                  | Notes                                                            |
+| --------- | ------------------------- | ---------------------------------------------------------------- |
+| Integer   | `42`, `-17`, `1_000_000`  | 64-bit signed; `_` separators permitted between digits           |
+| Float     | `3.14`, `-0.5`, `1.23e-4` | IEEE 754 double                                                  |
+| String    | `"hello"`, `"a\nb"`       | UTF-8; escapes `\"` `\\` `\n` `\r` `\t` `\0`; interpolation §3.2 |
+| Character | `'a'`, `'\n'`             | single Unicode scalar                                            |
+| Boolean   | `true`, `false`           |                                                                  |
+| Unit      | `()`                      | the empty tuple; the type and value of "nothing"                 |
+| Symbol    | `:ok`, `:not_found`       | interned atoms, snake_case by convention                         |
 
-*Implementation note.* Symbols are interned to 64-bit integer identifiers at
-compile time; symbol comparison is a single integer comparison, and matching
-on symbols compiles to an integer switch.
+_Implementation note._ Symbols are interned to 64-bit integer identifiers at
+compile time; symbol comparison is a single integer comparison, and matching on
+symbols compiles to an integer switch.
 
 ## 2. Values and their syntax
 
@@ -108,13 +106,13 @@ on symbols compiles to an integer switch.
 {}                             # empty dictionary
 ```
 
-Sequences, sets, and dictionaries are **persistent**: every operation returns
-a new value sharing structure with the old one. Tuples are fixed-arity
-product values.
+Sequences, sets, and dictionaries are **persistent**: every operation returns a
+new value sharing structure with the old one. Tuples are fixed-arity product
+values.
 
-*Implementation note.* Small sequences are flat arrays; large ones are
-radix-balanced tries. Dictionaries and sets are hash array mapped tries
-(HAMTs). All share structure on update. See
+_Implementation note._ Small sequences are flat arrays; large ones are
+radix-balanced tries. Dictionaries and sets are hash array mapped tries (HAMTs).
+All share structure on update. See
 [Persistent data structures](/guides/persistent-data-structures/).
 
 ### 2.2 Generators (comprehensions)
@@ -127,13 +125,13 @@ radix-balanced tries. Dictionaries and sets are hash array mapped tries
 [| f x for x = xs ]                    # parallel generator (§6.3)
 ```
 
-The general form is `[expr for pattern = source]` with an optional
-`, if guard`. The `source` is any sequence-valued expression.
+The general form is `[expr for pattern = source]` with an optional `, if guard`.
+The `source` is any sequence-valued expression.
 
-*Implementation note.* Generators compile to counted loops, not closures.
-With a guard, a two-pass strategy first counts matches, then fills the
-result without reallocation. Chained collection pipelines are stream-fused
-into a single loop when the compiler can prove it safe.
+_Implementation note._ Generators compile to counted loops, not closures. With a
+guard, a two-pass strategy first counts matches, then fills the result without
+reallocation. Chained collection pipelines are stream-fused into a single loop
+when the compiler can prove it safe.
 
 ## 3. Expressions
 
@@ -150,9 +148,9 @@ let _ = println "side effect" in 42       # discard binding
 `let bindings in body` introduces bindings scoped to `body`. Bindings are
 separated by commas. A binding's left side is a pattern; a name followed by
 parameter patterns is sugar for binding a lambda. Nested `let` is allowed
-(`let y = let z = 1 in z * 2 in y`); style still prefers one multi-binding
-`let` when the bindings are independent. A type annotation may
-precede a function binding on its own line:
+(`let y = let z = 1 in z * 2 in y`); style still prefers one multi-binding `let`
+when the bindings are independent. A type annotation may precede a function
+binding on its own line:
 
 ```yona
 let add : Int -> Int -> Int
@@ -161,7 +159,7 @@ in add 3 4
 ```
 
 **Evaluation order.** Bindings that depend on earlier bindings observe their
-values. Bindings that are *independent* of one another have **no defined
+values. Bindings that are _independent_ of one another have **no defined
 sequential order** and may be evaluated concurrently (§6.2). Code whose side
 effects require an order must use `do`.
 
@@ -189,10 +187,10 @@ do
 end
 ```
 
-`do … end` evaluates its steps **strictly in textual order**. A step of the
-form `name = expr` binds `name` for subsequent steps. The block's value is
-its last expression. `do` is the sequencing primitive; use it whenever side
-effects must happen in order.
+`do … end` evaluates its steps **strictly in textual order**. A step of the form
+`name = expr` binds `name` for subsequent steps. The block's value is its last
+expression. `do` is the sequencing primitive; use it whenever side effects must
+happen in order.
 
 ### 3.4 `if`
 
@@ -202,8 +200,7 @@ else if x < 0 then "negative"
 else "zero"
 ```
 
-`if` is an expression; both branches are required and must have the same
-type.
+`if` is an expression; both branches are required and must have the same type.
 
 ### 3.5 Functions and lambdas
 
@@ -228,23 +225,23 @@ scale factor x = factor * x
 There is no `name(x, y) -> body` definition form. `name (x, y) = body` is a
 single tuple pattern, not two parameters.
 
-A function of several clauses is matched top to bottom; the first clause
-whose patterns (and guard, if present) match is selected. Functions are
-first-class values; partial application is automatic:
+A function of several clauses is matched top to bottom; the first clause whose
+patterns (and guard, if present) match is selected. Functions are first-class
+values; partial application is automatic:
 
 ```yona
 let add5 = add 5 in add5 10    # => 15
 ```
 
-**Zero-arity functions auto-evaluate** when referenced by name (Yona is
-strict). To pass one as a value, wrap it in a thunk: `\-> f`.
+**Zero-arity functions auto-evaluate** when referenced by name (Yona is strict).
+To pass one as a value, wrap it in a thunk: `\-> f`.
 
 ### 3.6 Application
 
-Application is by **juxtaposition** — `f x y`. `f(x)` is the same as
-`f x`. `f(x, y)` applies `f` to the tuple `(x, y)`; it is not a
-two-argument call. Juxtaposition binds tighter than every binary operator:
-`f x + g y` parses as `(f x) + (g y)`.
+Application is by **juxtaposition** — `f x y`. `f(x)` is the same as `f x`.
+`f(x, y)` applies `f` to the tuple `(x, y)`; it is not a two-argument call.
+Juxtaposition binds tighter than every binary operator: `f x + g y` parses as
+`(f x) + (g y)`.
 
 Pipes reverse application order for pipeline style:
 
@@ -253,10 +250,10 @@ value |> stage1 |> stage2      # stage2 (stage1 value)
 stage2 <| stage1 <| value      # the same, right-to-left
 ```
 
-*Implementation note.* `yonac` compiles functions by **deferred
-monomorphization**: a definition is stored as a typed AST and compiled at
-each call site where concrete argument types are known. Closures capture
-free variables in a heap environment; a closure value is
+_Implementation note._ `yonac` compiles functions by **deferred
+monomorphization**: a definition is stored as a typed AST and compiled at each
+call site where concrete argument types are known. Closures capture free
+variables in a heap environment; a closure value is
 `{fn_ptr, ret_tag, arity, captures…}`.
 
 ### 3.7 `case`
@@ -269,11 +266,11 @@ case value of
 end
 ```
 
-`case scrutinee of clauses end` evaluates the scrutinee once, then tests
-clauses top to bottom (§4 defines patterns). The first matching clause's
-body is the expression's value. All clause bodies must have the same type.
-If no clause matches at runtime, the program aborts with a match error;
-the compiler warns when it can prove a constructor uncovered.
+`case scrutinee of clauses end` evaluates the scrutinee once, then tests clauses
+top to bottom (§4 defines patterns). The first matching clause's body is the
+expression's value. All clause bodies must have the same type. If no clause
+matches at runtime, the program aborts with a match error; the compiler warns
+when it can prove a constructor uncovered.
 
 ### 3.8 `with` (resources)
 
@@ -285,17 +282,17 @@ with handle = tcpConnect "localhost" 8080 in
 
 `with name = resource in body` evaluates `resource`, binds it to `name`,
 evaluates `body`, and then releases the resource by calling the `Closeable`
-trait's `close` method — resolved statically for the resource's type. Using
-a value whose type does not implement `Closeable` is a compile-time error.
+trait's `close` method — resolved statically for the resource's type. Using a
+value whose type does not implement `Closeable` is a compile-time error.
 
-*Current limitation.* Release is guaranteed when `body` completes normally.
-If an exception propagates out of `body`, `close` is **not** currently
-invoked on the unwind path.
+_Current limitation._ Release is guaranteed when `body` completes normally. If
+an exception propagates out of `body`, `close` is **not** currently invoked on
+the unwind path.
 
 ### 3.9 Exceptions
 
 ```yona
-type Error = NotFound String | IOError String
+type Error = NotFound String | IoError String
 
 raise (NotFound "config.toml")
 
@@ -303,15 +300,14 @@ try
     riskyOperation ()
 catch
     NotFound path -> "missing: " ++ path
-    IOError msg   -> "io: " ++ msg
+    IoError msg   -> "io: " ++ msg
     _             -> "unknown failure"
 end
 ```
 
-Exception values are ordinary ADT values. `raise` throws; `try … catch …
-end` matches the raised value against clauses like a `case`. An unmatched
-exception propagates; an uncaught exception terminates the program with a
-stack trace.
+Exception values are ordinary ADT values. `raise` throws; `try … catch … end`
+matches the raised value against clauses like a `case`. An unmatched exception
+propagates; an uncaught exception terminates the program with a stack trace.
 
 ### 3.10 Algebraic effects <span class="yona-status yona-status--partial">Partial</span>
 
@@ -326,23 +322,23 @@ end
 
 `perform Effect.op arg` requests the operation `Effect.op` from the nearest
 enclosing `handle` that covers it. A handler clause receives the operation's
-argument and a `resume` continuation; `return val -> …` transforms the
-handled expression's normal result.
+argument and a `resume` continuation; `return val -> …` transforms the handled
+expression's normal result.
 
-Function types carry a **latent effect expression** listing known operations
-and any independent open sources: `Int -> !{State.get} Int`. `handle`
-symbolically masks the operations it covers; application joins a callee's
-expression into the caller without equating independent callbacks. Applying a
-function whose row is not fully covered at the top level is error **E0202**,
-reported at the introducing `perform` with a note at the application site.
-Pure recursive components use a least-derived summary; imported and
-higher-order unknown sources remain open.
+Function types carry a **latent effect expression** listing known operations and
+any independent open sources: `Int -> !{State.get} Int`. `handle` symbolically
+masks the operations it covers; application joins a callee's expression into the
+caller without equating independent callbacks. Applying a function whose row is
+not fully covered at the top level is error **E0202**, reported at the
+introducing `perform` with a note at the application site. Pure recursive
+components use a least-derived summary; imported and higher-order unknown
+sources remain open.
 
-*Current limitations.* Handlers are shallow, in-scope dispatch: `resume` is
-an identity continuation, not a captured delimited continuation. `effect`
-declarations do not parse yet; operations are identified by their
-`Effect.op` label at `perform` sites. See
-[Effects](/learn/effects/) for the practical guide.
+_Current limitations._ Handlers are shallow, in-scope dispatch: `resume` is an
+identity continuation, not a captured delimited continuation. `effect`
+declarations do not parse yet; operations are identified by their `Effect.op`
+label at `perform` sites. See [Effects](/learn/effects/) for the practical
+guide.
 
 ### 3.11 `extern` (C FFI)
 
@@ -355,68 +351,68 @@ extern async readFile : String -> String in
 readFile "data.txt"            # non-blocking; auto-awaited at use
 ```
 
-`extern name : Type in body` declares an external C symbol with a Yona type;
-the linker resolves it. Type mapping: `Int` ↔ `i64`, `Float` ↔ `double`,
-`Bool` ↔ `i1`, `String` ↔ `char*`. Curried annotation `A -> B -> C` denotes
-a two-argument C function returning `C`. The `async` modifier submits the
-call to the runtime's thread pool and yields a promise, awaited
-transparently at use sites (§6.2).
+`extern name : Type in body` declares an external C symbol with a Yona type; the
+linker resolves it. Type mapping: `Int` ↔ `i64`, `Float` ↔ `double`, `Bool` ↔
+`i1`, `String` ↔ `char*`. Curried annotation `A -> B -> C` denotes a
+two-argument C function returning `C`. The `async` modifier submits the call to
+the runtime's thread pool and yields a promise, awaited transparently at use
+sites (§6.2).
 
 ## 4. Patterns
 
-| Pattern | Example | Matches |
-|---------|---------|---------|
-| Literal | `42`, `"hi"`, `:ok`, `true` | that exact value |
-| Variable | `x` | anything; binds `x` |
-| Wildcard | `_` | anything; binds nothing |
-| Tuple | `(a, _, c)` | tuples of that arity |
-| Sequence | `[]`, `[x]`, `[a, b]` | sequences of that exact length |
-| Head–tail | `[h \| t]`, `[a, b \| rest]` | non-empty sequences; `t`/`rest` bind the remainder |
-| Constructor | `Some x`, `Rect w h` | values built by that constructor |
-| Record | `Person{name: n}` | matches named fields; others ignored |
-| Dictionary | `{"key": v}` | dictionaries containing the key |
-| As-binding | `[h \| t] as whole` | matches the inner pattern and binds the whole value |
-| Or-pattern | `:a \| :b -> …` | either alternative; both must bind the same names |
-| Guard | `n if n > 0 -> …` | pattern matches *and* guard is true |
+| Pattern     | Example                      | Matches                                             |
+| ----------- | ---------------------------- | --------------------------------------------------- |
+| Literal     | `42`, `"hi"`, `:ok`, `true`  | that exact value                                    |
+| Variable    | `x`                          | anything; binds `x`                                 |
+| Wildcard    | `_`                          | anything; binds nothing                             |
+| Tuple       | `(a, _, c)`                  | tuples of that arity                                |
+| Sequence    | `[]`, `[x]`, `[a, b]`        | sequences of that exact length                      |
+| Head–tail   | `[h \| t]`, `[a, b \| rest]` | non-empty sequences; `t`/`rest` bind the remainder  |
+| Constructor | `Some x`, `Rect w h`         | values built by that constructor                    |
+| Record      | `Person{name: n}`            | matches named fields; others ignored                |
+| Dictionary  | `{"key": v}`                 | dictionaries containing the key                     |
+| As-binding  | `[h \| t] as whole`          | matches the inner pattern and binds the whole value |
+| Or-pattern  | `:a \| :b -> …`              | either alternative; both must bind the same names   |
+| Guard       | `n if n > 0 -> …`            | pattern matches _and_ guard is true                 |
 
 Patterns appear in `case` clauses, function parameters, `let` bindings, and
-`catch` clauses. Matching is left-to-right, top-to-bottom, with no
-backtracking within a clause.
+`catch` clauses. Matching is left-to-right, top-to-bottom, with no backtracking
+within a clause.
 
 ## 5. Operators
 
-Precedence, highest to lowest; all binary operators are left-associative
-except `**`, `::`, and the arrows:
+Precedence, highest to lowest; all binary operators are left-associative except
+`**`, `::`, and the arrows:
 
-| Level | Operators | Meaning |
-|-------|-----------|---------|
-| 1 | `.` | field access |
-| 2 | juxtaposition | function application |
-| 3 | `**` | power |
-| 4 | `!` `~` unary `-` | logical not, bitwise not, negation |
-| 5 | `*` `/` `%` | multiplicative |
-| 6 | `+` `-` | additive |
-| 7 | `<<` `>>` `>>>` | shifts |
-| 8 | `++` `--` | concatenation; remove elements of the right from the left |
-| 9 | `::` `:>` | cons (prepend); append (snoc) |
-| 10 | `<` `>` `<=` `>=` | comparison |
-| 11 | `==` `!=` | equality |
-| 12 | `&` | bitwise and |
-| 13 | `^` | bitwise xor |
-| 14 | `\|` | bitwise or |
-| 15 | `in` | membership (seq/set element, dict key) |
-| 16 | `&&` | logical and (short-circuit) |
-| 17 | `\|\|` | logical or (short-circuit) |
-| 18 | `\|>` `<\|` | pipes |
+| Level | Operators         | Meaning                                                   |
+| ----- | ----------------- | --------------------------------------------------------- |
+| 1     | `.`               | field access                                              |
+| 2     | juxtaposition     | function application                                      |
+| 3     | `**`              | power                                                     |
+| 4     | `!` `~` unary `-` | logical not, bitwise not, negation                        |
+| 5     | `*` `/` `%`       | multiplicative                                            |
+| 6     | `+` `-`           | additive                                                  |
+| 7     | `<<` `>>` `>>>`   | shifts                                                    |
+| 8     | `++` `--`         | concatenation; remove elements of the right from the left |
+| 9     | `::` `:>`         | cons (prepend); append (snoc)                             |
+| 10    | `<` `>` `<=` `>=` | comparison                                                |
+| 11    | `==` `!=`         | equality                                                  |
+| 12    | `&`               | bitwise and                                               |
+| 13    | `^`               | bitwise xor                                               |
+| 14    | `\|`              | bitwise or                                                |
+| 15    | `in`              | membership (seq/set element, dict key)                    |
+| 16    | `&&`              | logical and (short-circuit)                               |
+| 17    | `\|\|`            | logical or (short-circuit)                                |
+| 18    | `\|>` `<\|`       | pipes                                                     |
 
 Sequence-specific operators: `x :: xs` prepends, `xs :> x` appends, and
 `xs ++ ys` concatenates. `a -- b` removes every element of `b` from `a`
-(sequence difference; set difference on sets). `x in coll` is a membership
-test on a sequence or set, or a key test on a dictionary. The same keyword
-closes `let` and `with`, so membership in a let-binding RHS that is itself
-a `let`, `if` then/else, `lambda`, `perform` argument, `raise`, or `with`
-body must be parenthesized: `then (2 in xs)`, `let z = 1 in (2 in xs)`.
-`if 2 in xs then …` is fine — the condition is not a terminator context.
+(sequence difference; set difference on sets). `x in coll` is a membership test
+on a sequence or set, or a key test on a dictionary. The same keyword closes
+`let` and `with`, so membership in a let-binding RHS that is itself a `let`,
+`if` then/else, `lambda`, `perform` argument, `raise`, or `with` body must be
+parenthesized: `then (2 in xs)`, `let z = 1 in (2 in xs)`. `if 2 in xs then …`
+is fine — the condition is not a terminator context.
 
 ## 6. Evaluation model
 
@@ -424,17 +420,16 @@ body must be parenthesized: `then (2 in xs)`, `let z = 1 in (2 in xs)`.
 
 Yona is strictly evaluated: arguments are evaluated before application, and
 bindings before their bodies — with the single systematic exception of
-asynchronous values (§6.2). There is no lazy evaluation; laziness is
-expressed explicitly with thunks (`\-> e`) or `Iterator`/`Std\Stream`
-pipelines.
+asynchronous values (§6.2). There is no lazy evaluation; laziness is expressed
+explicitly with thunks (`\-> e`) or `Iterator`/`Std\Stream` pipelines.
 
 ### 6.2 Transparent asynchrony
 
-Functions that perform I/O (and `extern async` functions) return a
-**promise** internally. The type system tracks promises invisibly: when a
-promise appears where its underlying value is required — as an operator
-operand, function argument, or condition — the compiler inserts an await
-coercion. Users never write `async` or `await`, and no function is "colored".
+Functions that perform I/O (and `extern async` functions) return a **promise**
+internally. The type system tracks promises invisibly: when a promise appears
+where its underlying value is required — as an operator operand, function
+argument, or condition — the compiler inserts an await coercion. Users never
+write `async` or `await`, and no function is "colored".
 
 Because `let` bindings without mutual dependencies have no defined order,
 independent asynchronous bindings are **submitted before any is awaited**:
@@ -446,33 +441,33 @@ let
 in a ++ b                      # both awaited here; elapsed ≈ max, not sum
 ```
 
-*Implementation note.* On Linux, file and network I/O submit to io_uring;
+_Implementation note._ On Linux, file and network I/O submit to io_uring;
 CPU-bound async work runs on a work-stealing thread pool. Buffers passed to
 in-flight kernel operations are pinned. See
 [Concurrency in depth](/guides/concurrency/).
 
 ### 6.3 Parallel generators
 
-`[| f x for x = xs ]` evaluates `f` over the elements concurrently on the
-thread pool and preserves order in the result.
+`[| f x for x = xs ]` evaluates `f` over the elements concurrently on the thread
+pool and preserves order in the result.
 
 ### 6.4 Memory
 
-Values are managed by **atomic reference counting** with recursive
-destructors; there is no tracing garbage collector and no stop-the-world
-pause. The compiler applies Perceus-style ownership transfer (callee-owns
-calling convention), uniqueness-based in-place mutation for uniquely owned
-values, and escape analysis that arena-allocates values proven not to
-escape. See [Memory and linearity](/guides/memory/).
+Values are managed by **atomic reference counting** with recursive destructors;
+there is no tracing garbage collector and no stop-the-world pause. The compiler
+applies Perceus-style ownership transfer (callee-owns calling convention),
+uniqueness-based in-place mutation for uniquely owned values, and escape
+analysis that arena-allocates values proven not to escape. See
+[Memory and linearity](/guides/memory/).
 
 ## 7. Types
 
 ### 7.1 Inference
 
 The type system is Hindley–Milner: every expression has a principal type,
-inferred without annotations. Optional annotations (`name : Type` preceding
-a definition) are checked, not trusted. Polymorphic functions are compiled
-by monomorphization — one native instantiation per concrete type used.
+inferred without annotations. Optional annotations (`name : Type` preceding a
+definition) are checked, not trusted. Polymorphic functions are compiled by
+monomorphization — one native instantiation per concrete type used.
 
 ### 7.2 Algebraic data types
 
@@ -484,17 +479,16 @@ type Lazy a = Cons a (() -> Lazy a) | Empty       # function-typed field
 type Person = Person { name : String, age : Int } # named fields
 ```
 
-Constructors are first-class functions. Named-field types support dot
-access, record patterns, and functional update:
+Constructors are first-class functions. Named-field types support dot access,
+record patterns, and functional update:
 
 ```yona
 let p = Person { name = "Ada", age = 36 } in
 (p.name, p { age = 37 })
 ```
 
-*Implementation note.* Non-recursive ADTs compile to flat
-`{tag, payload}` structs; recursive ADTs and ADTs with function-typed
-fields are heap-allocated.
+_Implementation note._ Non-recursive ADTs compile to flat `{tag, payload}`
+structs; recursive ADTs and ADTs with function-typed fields are heap-allocated.
 
 ### 7.3 Traits <span class="yona-status yona-status--stable">Stable</span>
 
@@ -518,29 +512,28 @@ end
 ```
 
 Traits are type classes resolved **statically**: each call site compiles the
-concrete instance directly (monomorphization), with no runtime dispatch
-cost. Instances are always public; `export trait Name` exports a
-declaration. Equality operators select `Eq`; relational operators select
-`Ord` and interpret `Less | Equal | Greater`. The Prelude's collection,
-algebra, conversion, parsing, and erased concurrency marker traits use the
-same resolution model. See [Traits](/guides/traits/).
+concrete instance directly (monomorphization), with no runtime dispatch cost.
+Instances are always public; `export trait Name` exports a declaration. Equality
+operators select `Eq`; relational operators select `Ord` and interpret
+`Less | Equal | Greater`. The Prelude's collection, algebra, conversion,
+parsing, and erased concurrency marker traits use the same resolution model. See
+[Traits](/guides/traits/).
 
 ### 7.4 Effect rows <span class="yona-status yona-status--partial">Partial</span>
 
 Function arrows carry a normalized effect expression such as
 `a -> !{State.get} Int`. Effects are inferred, losslessly unioned at
 application, symbolically masked by `handle`, and propagated through `.yonai`
-interfaces. New interfaces write `effectscheme v2`, which preserves all arrow
-positions, independent open sources, and masks; legacy open metadata imports
-conservatively. §3.10 lists current limitations.
+interfaces. The canonical `effectscheme` field preserves all arrow positions,
+independent open sources, and masks. §3.10 lists current limitations.
 
 ### 7.5 Linear types <span class="yona-status yona-status--partial">Partial</span>
 
-`Linear a` marks values that must be consumed **exactly once**: file
-handles, sockets, process handles, channel endpoints. The linearity checker
-rejects duplication and silent dropping; `with` is the idiomatic consumer.
-`@borrow` marks parameters that use a linear value without consuming it.
-See [Memory and linearity](/guides/memory/).
+`Linear a` marks values that must be consumed **exactly once**: file handles,
+sockets, process handles, channel endpoints. The linearity checker rejects
+duplication and silent dropping; `with` is the idiomatic consumer. `@borrow`
+marks parameters that use a linear value without consuming it. See
+[Memory and linearity](/guides/memory/).
 
 ### 7.6 Row-polymorphic records <span class="yona-status yona-status--stable">Stable</span>
 
@@ -569,12 +562,11 @@ perimeter s = case s of
 end
 ```
 
-A module is a **top-level declaration** — not an expression — and extends to
-end of file. `export` statements name exported functions; `export type T`
-exports a type with all its constructors. `export type T opaque` exports only
-the nominal type, hiding its constructors from importers; `export f from
-Other\Module` re-exports. Module names are backslash-separated paths
-(`Std\List`).
+A module is a **top-level declaration** — not an expression — and extends to end
+of file. `export` statements name exported functions; `export type T` exports a
+type with all its constructors. `export type T opaque` exports only the nominal
+type, hiding its constructors from importers; `export f from Other\Module`
+re-exports. Module names are backslash-separated paths (`Std\List`).
 
 Imports are expressions:
 
@@ -585,10 +577,10 @@ import Std\Math in …                         # whole module
 Std\List::map (\x -> x + 1) [1, 2, 3]        # fully qualified, no import
 ```
 
-*Implementation note.* A module compiles to a native object file with
-C-ABI exports (mangled `yona_Pkg_Mod__func`) and a `.yonai` **interface
-file** carrying types, effect summaries/schemes, linearity, and — for generic functions —
-the source text itself (`GENFN`), so a caller with new concrete types can
+_Implementation note._ A module compiles to a native object file with C-ABI
+exports (mangled `YonaPkgModFunc`) and a `.yonai` **interface file** carrying
+types, effect summaries/schemes, linearity, and — for generic functions — the
+source text itself (`GENFN`), so a caller with new concrete types can
 re-monomorphize the function locally. `yonac -I path` adds interface search
 paths. See [Modules and interfaces](/guides/modules-interfaces/).
 
@@ -596,5 +588,5 @@ paths. See [Modules and interfaces](/guides/modules-interfaces/).
 
 Compiler diagnostics carry stable codes (`E0100`-style, `W…` for warnings).
 `yonac --explain E0202` prints the full explanation for a code. The
-[error code index](/reference/error-codes/) lists user-facing codes and
-their meanings.
+[error code index](/reference/error-codes/) lists user-facing codes and their
+meanings.

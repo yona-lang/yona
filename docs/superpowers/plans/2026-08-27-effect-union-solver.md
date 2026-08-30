@@ -20,8 +20,7 @@ core, CMake/Ninja.
   callback tails merely to form a union.
 - No `VERSION` bump, no vcpkg, no fallback that drops a tail or widens every
   union to an unstructured unknown row.
-- Preserve source-compatible closed interfaces and import legacy open metadata
-  conservatively.
+- Emit and import the canonical normalized effect graph conservatively.
 - Test first: each new behaviour must be observed RED before its implementation.
 - Update `docs/todo-list.md`, `CHANGELOG.md`, public effect/type-system docs,
   and this plan in the final change.
@@ -31,10 +30,10 @@ core, CMake/Ninja.
 ### Task 1: Define and test the effect algebra
 
 **Files:**
-- Create: `include/typechecker/EffectSolver.h`
-- Create: `src/typechecker/EffectSolver.cpp`
+- Create: `include/yona/Model/EffectSolver.h`
+- Create: `src/Model/EffectSolver.cpp`
 - Modify: `CMakeLists.txt`
-- Modify: `test/type_checker_test.cpp`
+- Modify: `test/Semantics/TypeCheckerTest.cpp`
 
 - [x] Add solver-only doctests for ACI joins, duplicate-label elimination,
   flexible equality, derived least fixed points, opaque leaves, masks, and
@@ -48,27 +47,30 @@ core, CMake/Ninja.
 ### Task 2: Cut arrows and unification over to effect references
 
 **Files:**
-- Modify: `include/typechecker/InferType.h`
-- Modify: `include/typechecker/TypeArena.h`
-- Modify: `src/typechecker/TypeArena.cpp`
-- Modify: `include/typechecker/Unification.h`
-- Modify: `src/typechecker/Unification.cpp`
-- Modify: `test/type_checker_test.cpp`
+- Modify: `include/yona/Model/InferType.h`
+- Modify: `include/yona/Model/TypeArena.h`
+- Modify: `src/Model/TypeArena.cpp`
+- Modify: `include/yona/Semantics/Unification.h`
+- Modify: `src/Semantics/Unification.cpp`
+- Modify: `test/Semantics/TypeCheckerTest.cpp`
 
 - [x] Add RED coverage for genuine arrow-effect equality, incompatible closed
   rows, and pretty-printing a normalized multi-source row.
 - [x] Replace `arrow_effects`/`effect_rest` and `ERow` value-type unification
   with `EffectRef` equality delegated to the solver.
+- [x] Delete the transitional `ERow` payload, row-conversion and synchronization
+  APIs, fallback paths, and bridge tests; keep `EffectRef` as the sole
+  arrow-effect representation.
 - [x] Preserve value occurs checks and levels while collecting/freezing the
   effect graph separately; run existing effect-row tests green.
 
 ### Task 3: Convert inference, handlers, and recursive SCCs
 
 **Files:**
-- Modify: `include/typechecker/TypeChecker.h`
-- Modify: `src/typechecker/TypeChecker.cpp`
-- Modify: `test/type_checker_test.cpp`
-- Modify: `test/yona_script_test.cpp`
+- Modify: `include/yona/Semantics/TypeChecker.h`
+- Modify: `src/Semantics/TypeChecker.cpp`
+- Modify: `test/Semantics/TypeCheckerTest.cpp`
+- Modify: `test/Toolchain/YonaScriptTest.cpp`
 
 - [x] Add RED regressions for independent callback union, three callbacks,
   source-order invariance, symbolic handler subtraction, and recursive-SCC
@@ -84,27 +86,27 @@ core, CMake/Ninja.
 ### Task 4: Clone schemes and round-trip interfaces
 
 **Files:**
-- Modify: `include/typechecker/InferType.h`
-- Modify: `src/typechecker/TypeChecker.cpp`
-- Modify: `include/Codegen.h`
-- Modify: `src/codegen/CodegenModule.cpp`
+- Modify: `include/yona/Model/InferType.h`
+- Modify: `src/Semantics/TypeChecker.cpp`
+- Modify: `include/yona/Codegen/Codegen.h`
+- Modify: `src/Codegen/CodegenModule.cpp`
 - Modify: interface parser/emitter files discovered by the existing `.yonai`
   effect tests
-- Modify: `test/type_checker_test.cpp`
-- Modify: `test/trait_test.cpp`
+- Modify: `test/Semantics/TypeCheckerTest.cpp`
+- Modify: `test/Semantics/TraitTest.cpp`
 
-- [x] Add RED round trips for a two-callback exported helper and for legacy
-  `effects |` imports; assert separate graph variables survive instantiation.
-- [x] Serialize a versioned deterministic effect-scheme representation, clone
-  it on import, and map old interfaces to safe closed/opaque terms.
+- [x] Add RED round trips for a two-callback exported helper and for imported
+  open `effects |` rows; assert separate graph variables survive instantiation.
+- [x] Serialize the deterministic effect-scheme representation and clone it on
+  import with safe closed/opaque terms.
 - [x] Verify cross-module callbacks, selective/wildcard imports, and normal
   trait/interface suites.
 
 ### Task 5: Route all consumers through one summary and finish
 
 **Files:**
-- Modify: `src/typed_core/Analyze.cpp`
-- Modify: `cli/main.cpp` only if deferred effect obligations require it
+- Modify: `src/TypedCore/Analyze.cpp`
+- Modify: `cli/Main.cpp` only if deferred effect obligations require it
 - Modify: `docs/error-codes.md`
 - Modify: `docs/type-system-status.md`
 - Modify: `docs/todo-list.md`

@@ -16,10 +16,10 @@ are synchronized and verified together.
 ## Global Constraints
 
 - Test semantics, test composition, and failures are implemented in Yona; C++ only compiles, executes, discovers, and validates scripts.
-- Retain compiler/codegen fixtures in `test/codegen/`; do not rewrite them as library tests.
+- Retain compiler/codegen fixtures in `test/Fixtures/Codegen/`; do not rewrite them as library tests.
 - `test/stdlib/manifest.md` lists every row in `docs/api/README.md`; a missing script or expected report is a test failure.
 - Default CTest runs all pure and portable runtime suites. Network and Vulkan device suites are required in capable CI jobs and locally skip only after an explicit capability probe.
-- All filesystem/process tests use `test/_scratch` paths rewritten by `test/yona_link_util.hpp` and leave no files behind.
+- All filesystem/process tests use `test/_scratch` paths rewritten by `test/Toolchain/YonaLinkUtil.h` and leave no files behind.
 - Use test-first changes, update `CHANGELOG.md`, `docs/todo-list.md`, generated API docs, and `site/src/content/docs/stdlib/test.md` in the same change.
 - Run `ctest --preset unit-tests-linux --output-on-failure` and `git diff --check` before every commit.
 
@@ -29,7 +29,7 @@ are synchronized and verified together.
 
 **Files:**
 - Modify: `lib/Std/Test.yona`, `lib/Std/Test.yonai`
-- Modify: `test/codegen_test.cpp`
+- Modify: `test/Codegen/CodegenTest.cpp`
 - Create: `test/stdlib/framework/Test_test.yona`, `test/stdlib/framework/Test_test.expected`
 - Modify: `docs/api/Test.md`, `docs/api/README.md`, `site/src/content/docs/stdlib/test.md`, `CHANGELOG.md`
 
@@ -84,7 +84,10 @@ equalBy message equals expected actual =
 testCase name body = TestCase name body
 ```
 
-Implement `run` with `Std\List.foldl`: call every thunk exactly once, retain failures in declaration order, and return counts plus rendered failure details. Implement `render` with stable `PASS`, `FAIL`, and `SUMMARY` lines. Retain compatibility aliases only when they can be expressed using `check`/`equalBy`; otherwise remove the old assertion API because this is a breaking cleanup.
+Implement `run` with `Std\List.foldl`: call every thunk exactly once, retain
+failures in declaration order, and return counts plus rendered failure details.
+Implement `render` with stable `PASS`, `FAIL`, and `SUMMARY` lines. Expose only
+the canonical `check`/`equalBy` assertion API.
 
 - [x] **Step 4: Make generated interface metadata match the new API**
 
@@ -92,7 +95,7 @@ Compile `lib/Std/Test.yona` with `yonac`, replace `lib/Std/Test.yonai`, and run 
 
 - [x] **Step 5: Teach the fixture executor to discover `test/stdlib` recursively**
 
-In `test/codegen_test.cpp`, extract the current fixture iteration into a helper accepting a root directory. Use `fs::recursive_directory_iterator`, accept only `.yona` files with an adjacent `.expected`, derive a unique artifact suffix from the root-relative path with separators changed to `_`, and register `test/codegen` plus `test/stdlib` in separate doctest suites. Preserve existing scratch-path rewriting and stdin/environment special cases.
+In `test/Codegen/CodegenTest.cpp`, extract the current fixture iteration into a helper accepting a root directory. Use `fs::recursive_directory_iterator`, accept only `.yona` files with an adjacent `.expected`, derive a unique artifact suffix from the root-relative path with separators changed to `_`, and register `test/Fixtures/Codegen` plus `test/stdlib` in separate doctest suites. Preserve existing scratch-path rewriting and stdin/environment special cases.
 
 - [x] **Step 6: Verify green and document**
 
@@ -105,7 +108,7 @@ Update `docs/api/Test.md`, the API index count/description, and the public `stdl
 - [x] **Step 7: Commit**
 
 ```bash
-git add lib/Std/Test.yona lib/Std/Test.yonai test/codegen_test.cpp test/stdlib/framework docs/api/Test.md docs/api/README.md site/src/content/docs/stdlib/test.md CHANGELOG.md
+git add lib/Std/Test.yona lib/Std/Test.yonai test/Codegen/CodegenTest.cpp test/stdlib/framework docs/api/Test.md docs/api/README.md site/src/content/docs/stdlib/test.md CHANGELOG.md
 git commit -m "feat: add yona stdlib test contract"
 ```
 
@@ -113,7 +116,7 @@ git commit -m "feat: add yona stdlib test contract"
 
 **Files:**
 - Create: `test/stdlib/manifest.md`
-- Modify: `test/codegen_test.cpp`
+- Modify: `test/Codegen/CodegenTest.cpp`
 - Modify: `docs/todo-list.md`, `CHANGELOG.md`
 
 **Interfaces:**
@@ -133,8 +136,8 @@ Expected: FAIL because the manifest and module scripts do not exist.
 - [x] **Step 3: Create the complete manifest and placeholder-free scripts**
 
 Create a row for every `Std` module: Bool, ByteArray, Channel, Collection,
-Crypto, Dict, Encoding, File, FloatArray, Format, Function, GPU, Http,
-IntArray, IO, Json, List, Log, Math, Net, Option, Pair, Parallel, Path,
+Crypto, Dict, Encoding, File, FloatArray, Format, Function, Gpu, Http,
+IntArray, Io, Json, List, Log, Math, Net, Option, Pair, Parallel, Path,
 Process, Random, Range, Regex, Result, Set, Stream, String, Task, Test, Time,
 Tuple, Types, and Utf16. Each script must contain at least one real named
 contract case; scripts are expanded in Tasks 3–6, never empty placeholders.
@@ -151,7 +154,7 @@ function is already exhaustively tested.
 Run: `ctest --preset unit-tests-linux --output-on-failure`
 
 ```bash
-git add test/stdlib/manifest.md test/stdlib test/codegen_test.cpp docs/todo-list.md CHANGELOG.md
+git add test/stdlib/manifest.md test/stdlib test/Codegen/CodegenTest.cpp docs/todo-list.md CHANGELOG.md
 git commit -m "test: require stdlib conformance manifest"
 ```
 
@@ -232,8 +235,8 @@ git commit -m "test: cover stdlib codecs and arrays"
 ### Task 5: Cover portable runtime, resource, and concurrency modules
 
 **Files:**
-- Create: `test/stdlib/runtime/{File,IO,Process,Time,Random,Channel,Task,Parallel,Stream,Log}_test.yona` and matching `.expected`
-- Modify: `test/codegen_test.cpp`, `test/yona_link_util.hpp`, `test/stdlib/manifest.md`, `docs/todo-list.md`, `CHANGELOG.md`
+- Create: `test/stdlib/runtime/{File,Io,Process,Time,Random,Channel,Task,Parallel,Stream,Log}_test.yona` and matching `.expected`
+- Modify: `test/Codegen/CodegenTest.cpp`, `test/Toolchain/YonaLinkUtil.h`, `test/stdlib/manifest.md`, `docs/todo-list.md`, `CHANGELOG.md`
 
 **Interfaces:**
 - Runtime scripts use scratch-isolated paths and verify normal, error, cleanup, ordering, and cross-module behavior.
@@ -266,7 +269,7 @@ making any implementation change.
 Run: `ctest --preset unit-tests-linux --output-on-failure`
 
 ```bash
-git add lib/Std src/runtime test/stdlib/runtime test/codegen_test.cpp test/yona_link_util.hpp test/stdlib/manifest.md docs/todo-list.md CHANGELOG.md
+git add lib/Std src/Runtime test/stdlib/runtime test/Codegen/CodegenTest.cpp test/Toolchain/YonaLinkUtil.h test/stdlib/manifest.md docs/todo-list.md CHANGELOG.md
 git commit -m "test: cover portable stdlib runtime contracts"
 ```
 
@@ -274,7 +277,7 @@ git commit -m "test: cover portable stdlib runtime contracts"
 
 **Files:**
 - Create: `test/stdlib/network/{Net,Http}_test.yona` and matching `.expected`
-- Create: `test/stdlib/gpu/GPU_test.yona` and matching `.expected`
+- Create: `test/stdlib/gpu/gpu_test.yona` and matching `.expected`
 - Modify: `CMakeLists.txt`, `.github/workflows/cmake-multi-platform.yml`, `test/stdlib/manifest.md`, `docs/todo-list.md`, `CHANGELOG.md`
 
 **Interfaces:**
@@ -311,7 +314,7 @@ git commit -m "test: add capable stdlib network and gpu tiers"
 
 **Files:**
 - Modify: `docs/api/Test.md`, `docs/api/README.md`, `site/src/content/docs/stdlib/test.md`, `site/src/content/docs/stdlib/index.md`, `docs/todo-list.md`, `CHANGELOG.md`
-- Test: `test/codegen_test.cpp`
+- Test: `test/Codegen/CodegenTest.cpp`
 
 **Interfaces:**
 - Public docs specify how users write and run Yona tests, and the manifest test proves every public module owns a suite.
@@ -334,6 +337,6 @@ capable-CI behavior.
 Run: `python3 scripts/gendocs.py && cmake --build --preset build-debug-linux && ctest --preset unit-tests-linux --output-on-failure && git diff --check`
 
 ```bash
-git add docs site test/codegen_test.cpp CHANGELOG.md
+git add docs site test/Codegen/CodegenTest.cpp CHANGELOG.md
 git commit -m "docs: complete stdlib conformance guide"
 ```

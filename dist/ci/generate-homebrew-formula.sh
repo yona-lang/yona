@@ -25,7 +25,7 @@ class Yona < Formula
     regex(/^v?(\\d+(?:\\.\\d+)+)\$/i)
   end
 
-  option "with-vulkan", "Enable Std\\\\GPU Vulkan support (MoltenVK on macOS)"
+  option "with-vulkan", "Enable Std\\\\Gpu Vulkan support (MoltenVK on macOS)"
 
   depends_on "cmake" => :build
   depends_on "ninja" => :build
@@ -64,28 +64,18 @@ class Yona < Formula
       -DCMAKE_INSTALL_RPATH=#{rpath};#{llvm.opt_lib}
     ]
     args << if OS.mac?
-      "-DCMAKE_TOOLCHAIN_FILE=#{buildpath}/cmake/homebrew-llvm-toolchain.cmake"
+      "-DCMAKE_TOOLCHAIN_FILE=#{buildpath}/cmake/HomebrewLlvmToolchain.cmake"
     else
-      "-DCMAKE_TOOLCHAIN_FILE=#{buildpath}/cmake/linux-llvm-toolchain.cmake"
+      "-DCMAKE_TOOLCHAIN_FILE=#{buildpath}/cmake/LinuxLlvmToolchain.cmake"
     end
     args << "-DYONA_ENABLE_VULKAN=ON" if build.with?("vulkan")
 
     system "cmake", "-S", ".", "-B", "build", *std_cmake_args, *args
     system "cmake", "--build", "build"
 
-    lib.install "build/#{shared_library("yona_lib")}"
+    system "cmake", "--install", "build", "--prefix", prefix
+
     libexec.install "build/yonac", "build/yona", "build/yona-repl", "build/yls"
-
-    sysroot = lib/"yona"
-    (sysroot/"lib").mkpath
-    cp_r "lib/Std", sysroot/"lib"
-    (sysroot/"lib").install "lib/Prelude.yona", "lib/Prelude.yonai"
-
-    (sysroot/"src").install "src/compiled_runtime.c"
-    (sysroot/"src/runtime").install Dir["src/runtime/*.c", "src/runtime/*.h"]
-    (sysroot/"src/runtime/platform").install Dir["src/runtime/platform/*"]
-    (sysroot/"include/yona/runtime").install Dir["include/yona/runtime/*.h"]
-    (sysroot/"runtime").install Dir["build/runtime/*"]
 
     env = {
       PATH:       "#{llvm.opt_bin}:#{lld.opt_bin}:\\\$PATH",

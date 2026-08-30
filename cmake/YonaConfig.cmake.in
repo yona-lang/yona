@@ -1,0 +1,31 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/YonaTargets.cmake")
+
+set(Yona_SYSROOT "${PACKAGE_PREFIX_DIR}/@YONA_INSTALL_LIBDIR@/yona")
+set(Yona_COMPILER_EXECUTABLE
+  "${PACKAGE_PREFIX_DIR}/bin/yonac${CMAKE_EXECUTABLE_SUFFIX}")
+
+if(NOT EXISTS "${Yona_COMPILER_EXECUTABLE}")
+  set(Yona_FOUND FALSE)
+  set(Yona_NOT_FOUND_MESSAGE
+    "Yona compiler executable is missing: ${Yona_COMPILER_EXECUTABLE}")
+  return()
+endif()
+
+if(NOT EXISTS "${Yona_SYSROOT}/lib/Prelude.yonai")
+  set(Yona_FOUND FALSE)
+  set(Yona_NOT_FOUND_MESSAGE
+    "Yona standard-library sysroot is missing: ${Yona_SYSROOT}/lib/Prelude.yonai")
+  return()
+endif()
+
+if(NOT TARGET Yona::yonac)
+  add_executable(Yona::yonac IMPORTED GLOBAL)
+  set_target_properties(Yona::yonac PROPERTIES
+    IMPORTED_LOCATION "${Yona_COMPILER_EXECUTABLE}")
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/YonaTools.cmake")
+
+check_required_components(Yona)

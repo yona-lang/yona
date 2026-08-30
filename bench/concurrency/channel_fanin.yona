@@ -2,22 +2,22 @@ import channel, send, recv, close from Std\Channel in
 import spawn from Std\Task in
 let (sl, rl) = channel 32 in
 let (csl, crl) = channel 4 in
-case sl of Linear work_sender ->
-case rl of Linear work_receiver ->
-case csl of Linear coord_sender ->
-case crl of Linear coord_receiver ->
-    let push_a n = if n > 2500 then send coord_sender 1
-                   else let _ = send work_sender n in push_a (n + 1),
-        push_b n = if n > 5000 then send coord_sender 1
-                   else let _ = send work_sender n in push_b (n + 1),
-        waiter acc = case recv coord_receiver of
-            Some _ -> if acc + 1 >= 2 then close work_sender else waiter (acc + 1)
+case sl of Linear workSender ->
+case rl of Linear workReceiver ->
+case csl of Linear coordSender ->
+case crl of Linear coordReceiver ->
+    let pushA n = if n > 2500 then send coordSender 1
+                   else let _ = send workSender n in pushA (n + 1),
+        pushB n = if n > 5000 then send coordSender 1
+                   else let _ = send workSender n in pushB (n + 1),
+        waiter acc = case recv coordReceiver of
+            Some _ -> if acc + 1 >= 2 then close workSender else waiter (acc + 1)
             None   -> 0
         end,
-        _ = spawn (\() -> push_a 1),
-        _ = spawn (\() -> push_b 2501),
+        _ = spawn (\() -> pushA 1),
+        _ = spawn (\() -> pushB 2501),
         _ = spawn (\() -> waiter 0),
-        consume acc = case recv work_receiver of
+        consume acc = case recv workReceiver of
             Some v -> consume (acc + v)
             None   -> acc
         end

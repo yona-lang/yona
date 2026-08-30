@@ -37,9 +37,9 @@ both the isolated staging directory and WiX package architecture.
 - `bin` is appended to system `PATH` via MSI environment table.
 - The file payload is taken from the staged layout:
   - `bin/` (`yonac.exe`, `yona.exe`, `yona-repl.exe`, `yls.exe`)
-  - `lib/Std/`
-  - `runtime/` (including the pinned `yona_pcre2.lib` archive required by
-    public `Std\Regex` programs)
-  - `src/runtime/` (for advanced fallback workflows)
-  - `include/yona/runtime/`
+  - `lib/` (`Prelude` plus `Std/`)
+  - `runtime/yona_runtime.lib` (the canonical runtime archive)
+  - `runtime/yona_pcre2.lib` (the pinned dependency required by public
+    `Std\Regex` programs)
+  - `include/yona/Runtime/` (public runtime headers grouped by component)
   - top-level docs/license files

@@ -1,4 +1,4 @@
 import readLines from Std\File, length from Std\String in
-let my_foldl fn acc seq = case seq of [] -> acc; [h|t] -> my_foldl fn (fn acc h) t end,
+let myFoldl fn acc seq = case seq of [] -> acc; [h|t] -> myFoldl fn (fn acc h) t end,
     lengths = [length line for line = readLines "bench/data/bench_text.txt"]
-in my_foldl (\a b -> a + b) 0 lengths
+in myFoldl (\a b -> a + b) 0 lengths

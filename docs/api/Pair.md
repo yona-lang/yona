@@ -15,7 +15,7 @@ A pair with named fields.
 
 ## Functions
 
-### `pair : a -> b -> Pair c d`
+### `pair : a -> b -> Pair`
 
 Creates a pair from two values.
 
@@ -79,7 +79,7 @@ Converts to a tuple `(a, b)`.
 toTuple (pair 1 2)   # => (1, 2)
 ```
 
-### `fromTuple : (a, b) -> Pair c d`
+### `fromTuple : (a, b) -> Pair`
 
 Creates a pair from a tuple.
 

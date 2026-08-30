@@ -1,0 +1,2 @@
+let applyTwice f x = f (f x) in
+applyTwice (\n -> n + 1) 40

@@ -43,9 +43,10 @@ COPY --from=builder /build/out/build/x64-release-linux/yls /usr/local/bin/yls
 # Copy standard library
 COPY --from=builder /build/lib /usr/local/lib/yona/lib
 
-# Copy runtime source (needed for LTO compilation)
-COPY --from=builder /build/src/compiled_runtime.c /usr/local/lib/yona/src/compiled_runtime.c
-COPY --from=builder /build/src/runtime /usr/local/lib/yona/src/runtime
+# Copy the canonical runtime archive and its public headers. The installed
+# compiler never rebuilds runtime sources.
+COPY --from=builder /build/out/build/x64-release-linux/runtime/libyona_runtime.a /usr/local/lib/yona/runtime/libyona_runtime.a
+COPY --from=builder /build/include/yona/Runtime /usr/local/include/yona/Runtime
 
 # Default module search path
 ENV YONA_LIB=/usr/local/lib/yona/lib

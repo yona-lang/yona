@@ -1,0 +1,4 @@
+case typeOf "hello" of
+    TypeString -> 1
+    _ -> 0
+end

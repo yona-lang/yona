@@ -1,44 +1,45 @@
+MODULE Std\Test
 ADT TestCase 1 2 recursive
-CTOR TestCase 0 2 fields name:STRING@N(String) thunk:FUNCTION@F(N(%28%29);N(TestResult)):ADT:TestResult
+  CTOR TestCase 0 2 fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
 ADT TestReport 1 3
-CTOR TestReport 0 3 fields passed:INT@N(Int) failed:INT@N(Int) lines:SEQ@N(Seq,N(String))
+  CTOR TestReport 0 3 fields passed:INT failed:INT lines:Seq(STRING)
 ADT TestResult 2 1
-CTOR Pass 0 1 fields _0:STRING@N(String)
-CTOR Fail 1 1 fields _0:STRING@N(String)
-FN yona_Std_Test__check 2 STRING BOOL -> ADT(TestResult) retadt TestResult effects -
-FN yona_Std_Test__equalBy 4 STRING FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) VAR(a) VAR(a) -> ADT(TestResult) retadt TestResult borrow 0100 effects |
-FN yona_Std_Test__fail 1 STRING -> ADT(TestResult) retadt TestResult effects -
-FN yona_Std_Test__pass 1 STRING -> ADT(TestResult) retadt TestResult effects -
-FN yona_Std_Test__render 1 ADT(TestReport) -> STRING effects -
-FN yona_Std_Test__run 1 Seq(ADT(TestCase)) -> ADT(TestReport) retadt TestReport effects |
-FN yona_Std_Test__testCase 2 STRING FUNCTION(UNIT,ADT(TestResult)) -> ADT(TestCase) retadt TestCase effects -
-GENFN_CTOR yona_Std_Test__check Fail TestResult 1 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Test__check Pass TestResult 0 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Test__check check
+  CTOR Pass 0 1 fields _0:STRING
+  CTOR Fail 1 1 fields _0:STRING
+FN check 2 STRING BOOL -> ADT(TestResult) borrow 01 effects - effectscheme $##;$/r##
+FN equalBy 4 STRING FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) VAR(a) VAR(a) -> ADT(TestResult) borrow 0100 effects - effectscheme $##;$/r##;$/r/p##;$/r/p/r##;$/r/r##;$/r/r/r##
+FN fail 1 STRING -> ADT(TestResult) effects - effectscheme $##
+FN pass 1 STRING -> ADT(TestResult) effects - effectscheme $##
+FN render 1 ADT(TestReport) -> STRING effects - effectscheme $##
+FN run 1 Seq(ADT(TestCase)) -> ADT(TestReport) effects | effectscheme $##o0|f1
+FN testCase 2 STRING FUNCTION(UNIT,ADT(TestResult)) -> ADT(TestCase) effects - effectscheme $##;$/r##;$/r/p##
+GENFN_CTOR check Pass TestResult 0 1 2 1 fields _0:STRING
+GENFN_CTOR check Fail TestResult 1 1 2 1 fields _0:STRING
+GENFN_BEGIN check check
 check : String -> Bool -> TestResult
 check message condition =
     if condition then Pass message else Fail message
 GENFN_END
-GENFN_CTOR yona_Std_Test__equalBy Fail TestResult 1 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Test__equalBy Pass TestResult 0 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Test__equalBy equalBy
+GENFN_CTOR equalBy Pass TestResult 0 1 2 1 fields _0:STRING
+GENFN_CTOR equalBy Fail TestResult 1 1 2 1 fields _0:STRING
+GENFN_BEGIN equalBy equalBy
 equalBy : String -> (a -> a -> Bool) -> a -> a -> TestResult
 equalBy message equals expected actual =
     if equals expected actual then Pass message else Fail message
 GENFN_END
-GENFN_CTOR yona_Std_Test__fail Fail TestResult 1 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Test__fail Pass TestResult 0 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Test__fail fail
+GENFN_CTOR fail Pass TestResult 0 1 2 1 fields _0:STRING
+GENFN_CTOR fail Fail TestResult 1 1 2 1 fields _0:STRING
+GENFN_BEGIN fail fail
 fail : String -> TestResult
 fail message = Fail message
 GENFN_END
-GENFN_CTOR yona_Std_Test__pass Pass TestResult 0 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_BEGIN yona_Std_Test__pass pass
+GENFN_CTOR pass Pass TestResult 0 1 2 1 fields _0:STRING
+GENFN_BEGIN pass pass
 pass : String -> TestResult
 pass message = Pass message
 GENFN_END
-GENFN_CTOR yona_Std_Test__render TestReport TestReport 0 3 1 3 fieldname:passed field:INT shape:INT contract:N(Int) fieldname:failed field:INT shape:INT contract:N(Int) fieldname:lines field:SEQ shape:SEQ contract:N(Seq,N(String))
-GENFN_BEGIN yona_Std_Test__render render
+GENFN_CTOR render TestReport TestReport 0 3 1 3 fields passed:INT failed:INT lines:Seq(STRING)
+GENFN_BEGIN render render
 render : TestReport -> String
 render report =
     import join from Std\String, intToString from Std\Types in
@@ -52,17 +53,17 @@ render report =
             end
     end
 GENFN_END
-GENFN_CTOR yona_Std_Test__run TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING shape:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult shape:Fn(ADT(TestResult)) contract:F(N(%28%29);N(TestResult))
-GENFN_CTOR yona_Std_Test__run TestReport TestReport 0 3 1 3 fieldname:passed field:INT shape:INT contract:N(Int) fieldname:failed field:INT shape:INT contract:N(Int) fieldname:lines field:SEQ shape:SEQ contract:N(Seq,N(String))
-GENFN_BEGIN yona_Std_Test__run run
+GENFN_CTOR run TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_CTOR run TestReport TestReport 0 3 1 3 fields passed:INT failed:INT lines:Seq(STRING)
+GENFN_BEGIN run run
 run : Seq TestCase -> TestReport
 run cases = runCases cases 0 0 []
 GENFN_END
-GENFN_CTOR yona_Std_Test__runCases Fail TestResult 1 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Test__runCases Pass TestResult 0 1 2 1 field:STRING shape:STRING contract:N(String)
-GENFN_CTOR yona_Std_Test__runCases TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING shape:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult shape:Fn(ADT(TestResult)) contract:F(N(%28%29);N(TestResult))
-GENFN_CTOR yona_Std_Test__runCases TestReport TestReport 0 3 1 3 fieldname:passed field:INT shape:INT contract:N(Int) fieldname:failed field:INT shape:INT contract:N(Int) fieldname:lines field:SEQ shape:SEQ contract:N(Seq,N(String))
-GENFN_BEGIN yona_Std_Test__runCases runCases
+GENFN_CTOR runCases Pass TestResult 0 1 2 1 fields _0:STRING
+GENFN_CTOR runCases TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_CTOR runCases TestReport TestReport 0 3 1 3 fields passed:INT failed:INT lines:Seq(STRING)
+GENFN_CTOR runCases Fail TestResult 1 1 2 1 fields _0:STRING
+GENFN_BEGIN runCases runCases
 runCases : Seq TestCase -> Int -> Int -> Seq String -> TestReport
 runCases cases passed failed lines =
     import reverse from Std\List in
@@ -77,8 +78,8 @@ runCases cases passed failed lines =
             end
     end
 GENFN_END
-GENFN_CTOR yona_Std_Test__testCase TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING shape:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult shape:Fn(ADT(TestResult)) contract:F(N(%28%29);N(TestResult))
-GENFN_BEGIN yona_Std_Test__testCase testCase
+GENFN_CTOR testCase TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_BEGIN testCase testCase
 testCase : String -> (() -> TestResult) -> TestCase
 testCase name thunk = TestCase { name = name, thunk = thunk }
 GENFN_END

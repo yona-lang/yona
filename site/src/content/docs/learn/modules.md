@@ -1,18 +1,20 @@
 ---
 title: Modules
-description: Declaring modules, exporting functions and types, importing as an expression, and fully qualified calls.
+description:
+  Declaring modules, exporting functions and types, importing as an expression,
+  and fully qualified calls.
 ---
 
-A Yona module is a named collection of functions and types that compiles to
-a native object file. Modules are **top-level declarations**, not
-expressions — they cannot be passed around, returned, or stored in data
-structures. One file, one module.
+A Yona module is a named collection of functions and types that compiles to a
+native object file. Modules are **top-level declarations**, not expressions —
+they cannot be passed around, returned, or stored in data structures. One file,
+one module.
 
 ## Declaring a module
 
-A module file starts with `module Pkg\Name` and **ends at end-of-file** —
-there is no closing `end` keyword. The name is a fully qualified name (FQN)
-with backslash-separated package segments:
+A module file starts with `module Pkg\Name` and **ends at end-of-file** — there
+is no closing `end` keyword. The name is a fully qualified name (FQN) with
+backslash-separated package segments:
 
 ```yona
 module Data\Geometry
@@ -36,9 +38,9 @@ end
 square x = x * x
 ```
 
-Everything after the exports is ordinary Yona: type declarations and
-function definitions. Anything not listed in an `export` statement is
-private to the module.
+Everything after the exports is ordinary Yona: type declarations and function
+definitions. Anything not listed in an `export` statement is private to the
+module.
 
 ## Exports
 
@@ -63,8 +65,8 @@ The three forms, precisely:
   constructors; expose smart constructors and observers instead.
 - **Re-exports:** `export f, g from Other\Mod` republishes names defined in
   another module as if they were defined here. Importers depend only on the
-  re-exporting module. The re-exporting module may also use those names in
-  its own definitions:
+  re-exporting module. The re-exporting module may also use those names in its
+  own definitions:
 
 ```yona
 module Std\Convenience
@@ -77,10 +79,9 @@ double x = add x x    # re-exported names are usable locally
 
 ## Imports are expressions
 
-`import … in body` brings names into scope **for the body expression only**
-— it is scoped like `let`, not a file-level statement. This means imports
-can appear anywhere an expression can, and their scope is exactly as large
-as you make it.
+`import … in body` brings names into scope **for the body expression only** — it
+is scoped like `let`, not a file-level statement. This means imports can appear
+anywhere an expression can, and their scope is exactly as large as you make it.
 
 ### Selective import
 
@@ -92,8 +93,7 @@ area (Circle 1.0)
 
 ### Aliased import
 
-Rename on import with `as` — useful for avoiding clashes or shortening
-names:
+Rename on import with `as` — useful for avoiding clashes or shortening names:
 
 ```yona
 import area as shapeArea from Data\Geometry in
@@ -110,8 +110,8 @@ import Data\Geometry in
 area (Circle 1.0) + perimeter (Rect 2.0 3.0)
 ```
 
-Prefer selective imports in anything but throwaway code; they document
-where each name comes from.
+Prefer selective imports in anything but throwaway code; they document where
+each name comes from.
 
 ### Multi-module imports
 
@@ -121,7 +121,7 @@ idiomatic form — do not nest `import` expressions:
 ```yona
 import
   area from Data\Geometry,
-  println from Std\IO
+  println from Std\Io
 in
 do
     println "computing"
@@ -131,16 +131,16 @@ end
 
 ## Fully qualified calls
 
-`Pkg\Mod::func` calls an exported function directly, **with no import at
-all**. The compiler auto-loads the module's interface:
+`Pkg\Mod::func` calls an exported function directly, **with no import at all**.
+The compiler auto-loads the module's interface:
 
 ```yona
 Std\List::map (\x -> x + 1) [1, 2, 3]
 # => [2, 3, 4]
 ```
 
-FQN calls suit one-off uses; switch to an import when a module is used more
-than a couple of times in the same expression.
+FQN calls suit one-off uses; switch to an import when a module is used more than
+a couple of times in the same expression.
 
 ## How `yonac` compiles a module
 
@@ -151,28 +151,28 @@ yonac -o Geometry.o Data/Geometry.yona
 # produces Geometry.o (native object) + Data/Geometry.yonai (interface)
 ```
 
-- **The object file (`.o`)** contains native code with C-ABI exports.
-  Names are mangled predictably — `Data\Geometry::area` becomes
-  `yona_Data_Geometry__area` — so Yona modules link with C (and anything
-  with a C FFI) through the ordinary system linker.
+- **The object file (`.o`)** contains native code with C-ABI exports. Names are
+  mangled predictably — `Data\Geometry::area` becomes `YonaDataGeometryArea` —
+  so Yona modules link with C (and anything with a C FFI) through the ordinary
+  system linker.
 - **The interface file (`.yonai`)** is a text file describing the exported
-  functions' signatures, ADT definitions, traits, and inferred effect rows.
-  It is what makes cross-module calls *type-checked*: when you import a
-  module, the compiler reads its `.yonai`, not its source. Exported
-  functions also embed their source text in the interface, so generic
-  functions can be re-specialized at call sites whose types differ from the
-  pre-compiled signature (cross-module monomorphization).
+  functions' signatures, ADT definitions, traits, and inferred effect rows. It
+  is what makes cross-module calls _type-checked_: when you import a module, the
+  compiler reads its `.yonai`, not its source. Exported functions also embed
+  their source text in the interface, so generic functions can be re-specialized
+  at call sites whose types differ from the pre-compiled signature (cross-module
+  monomorphization).
 
 When resolving `import Data\Geometry`, the compiler looks for
-`Data/Geometry.yonai` in the `-I` search paths, then next to the input
-file, then in the current directory:
+`Data/Geometry.yonai` in the `-I` search paths, then next to the input file,
+then in the current directory:
 
 ```bash
 yonac -I ./lib -I "$YONA_HOME/lib" -o program main.yona
 ```
 
-Modules must be compiled in dependency order — circular module dependencies
-are not supported.
+Modules must be compiled in dependency order — circular module dependencies are
+not supported.
 
 For the interface file format, borrow inference metadata, and the details of
 cross-module generics, see
@@ -212,6 +212,5 @@ yonac -I . -o main main.yona
 ```
 
 The exported `Counter` constructor is available to `main.yona` because
-`export type Counter` exports the type with its constructors; `bump`'s
-pattern match on `Counter n` in an importing module would work the same
-way.
+`export type Counter` exports the type with its constructors; `bump`'s pattern
+match on `Counter n` in an importing module would work the same way.

@@ -1,0 +1,2 @@
+let alwaysRaise xs = raise 42 in
+try alwaysRaise [1, 2, 3] catch _ -> 99 end

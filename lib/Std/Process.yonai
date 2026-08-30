@@ -1,22 +1,23 @@
-FN yona_Std_Process__getenv 1 STRING -> STRING
-FN yona_Std_Process__getcwd 0 -> STRING
-FN yona_Std_Process__exit 1 INT -> INT
-AFN yona_Std_Process__exec 1 STRING -> STRING
-AFN yona_Std_Process__execStatus 1 STRING -> INT
-FN yona_Std_Process__setenv 2 STRING STRING -> INT
-FN yona_Std_Process__hostname 0 -> STRING
-FN yona_Std_Process__spawn 1 STRING -> LINEAR
-FN yona_Std_Process__readLine 1 INT -> STRING
-AFN yona_Std_Process__readAll 1 INT -> STRING
-AFN yona_Std_Process__wait 1 INT -> INT
-FN yona_Std_Process__kill 2 INT INT -> INT
-FN yona_Std_Process__writeStdin 2 INT STRING -> INT
-FN yona_Std_Process__closeStdin 1 INT -> INT
-FN yona_Std_Process__pid 1 INT -> INT
-FN yona_Std_Process__getArgs 0 -> SEQ
-FN yona_Std_Process__executablePath 0 -> STRING
-FN yona_Std_Process__yonaVersion 0 -> STRING
-FN yona_Std_Process__tempDir 0 -> STRING
-FN yona_Std_Process__tempFile 2 STRING STRING -> STRING
-FN yona_Std_Process__run 2 STRING SEQ -> INT
-FN yona_Std_Process__execArgs 2 STRING SEQ -> INT
+MODULE Std\Process
+FN closeStdin 1 INT -> INT
+AFN exec 2 STRING SEQ -> STRING
+FN execArgs 2 STRING SEQ -> INT
+AFN execStatus 2 STRING SEQ -> INT
+FN executablePath 0 -> STRING
+FN exit 1 INT -> INT
+FN getArgs 0 -> SEQ
+FN getcwd 0 -> STRING
+FN getenv 1 STRING -> STRING
+FN hostname 0 -> STRING
+FN kill 2 INT INT -> INT
+FN pid 1 INT -> INT
+AFN readAll 1 INT -> STRING
+FN readLine 1 INT -> STRING
+FN run 2 STRING SEQ -> INT
+FN setenv 2 STRING STRING -> INT
+FN spawn 2 STRING SEQ -> LINEAR
+FN tempDir 0 -> STRING
+FN tempFile 2 STRING STRING -> STRING
+AFN wait 1 INT -> INT
+FN writeStdin 2 INT STRING -> INT
+FN yonaVersion 0 -> STRING

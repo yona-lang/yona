@@ -1,12 +1,14 @@
 ---
 title: Collections
-description: Persistent sequences, dictionaries, and sets — structural sharing, operators, generators, and the core stdlib functions.
+description:
+  Persistent sequences, dictionaries, and sets — structural sharing, operators,
+  generators, and the core stdlib functions.
 ---
 
 Yona's built-in collections — sequences, dictionaries, and sets — are
 **persistent**: every operation returns a new value and never modifies the
-original. Versions share structure, so "copying" is cheap, and any value can
-be handed to another thread without defensive copies or locks.
+original. Versions share structure, so "copying" is cheap, and any value can be
+handed to another thread without defensive copies or locks.
 
 ## Literals
 
@@ -20,14 +22,13 @@ be handed to another thread without defensive copies or locks.
 [1..10]                      # integer range sequence
 ```
 
-Empty braces `{}` denote the empty hash trie, which serves as both the
-empty dictionary and the empty set — the first insertion determines which
-you have.
+Empty braces `{}` denote the empty hash trie, which serves as both the empty
+dictionary and the empty set — the first insertion determines which you have.
 
 ## Structural sharing
 
-An "update" allocates only the path from the root to the change; everything
-else is shared with the original:
+An "update" allocates only the path from the root to the change; everything else
+is shared with the original:
 
 ```yona
 import put from Std\Dict in
@@ -37,19 +38,19 @@ let updated = put original 4 "four" in
 # They share the subtrees holding keys 1–3.
 ```
 
-Because values never change in place, equality of versions is structural
-and old versions remain valid — undo stacks and snapshots are free.
+Because values never change in place, equality of versions is structural and old
+versions remain valid — undo stacks and snapshots are free.
 
 ## Sequences
 
-Sequence literals are written `[1, 2, 3]`. Prepending, head, and tail are
-O(1); indexing is O(1) for small sequences and O(log₃₂ n) for large ones.
+Sequence literals are written `[1, 2, 3]`. Prepending, head, and tail are O(1);
+indexing is O(1) for small sequences and O(log₃₂ n) for large ones.
 
-Implementation note. Sequences use a hybrid representation: up to 32
-elements live in a flat array with an offset-based O(1) tail; larger
-sequences become a radix-balanced trie with a head chain that absorbs
-prepends. When a sequence's reference count is 1, cons and tail mutate in
-place, making recursive list processing nearly allocation-free.
+Implementation note. Sequences use a hybrid representation: up to 32 elements
+live in a flat array with an offset-based O(1) tail; larger sequences become a
+radix-balanced trie with a head chain that absorbs prepends. When a sequence's
+reference count is 1, cons and tail mutate in place, making recursive list
+processing nearly allocation-free.
 
 ### Sequence operators
 
@@ -62,9 +63,9 @@ place, making recursive list processing nearly allocation-free.
 ```
 
 `::` is right-associative, so `1 :: 2 :: [3]` is `[1, 2, 3]`. `:>` is
-left-associative. `--` keeps the order of the left collection and drops
-every element that appears in the right (set difference on sets). `x in d`
-tests whether `x` is a key of dictionary `d`.
+left-associative. `--` keeps the order of the left collection and drops every
+element that appears in the right (set difference on sets). `x in d` tests
+whether `x` is a key of dictionary `d`.
 
 ## Dictionaries
 
@@ -82,16 +83,15 @@ size d2            # => 3
 keys d2            # => [10, 20, 30]  (order not specified)
 ```
 
-`get` never throws — it takes a default to return for missing keys.
-For streaming access, `entries`, `keysIter`, and `values` return
-`Iterator`s that walk the trie with O(1) memory per element; `forEach`
-applies a two-argument callback to every entry. Full API:
-[Std\Dict](/stdlib/dict/).
+`get` never throws — it takes a default to return for missing keys. For
+streaming access, `entries`, `keysIter`, and `values` return `Iterator`s that
+walk the trie with O(1) memory per element; `forEach` applies a two-argument
+callback to every entry. Full API: [Std\Dict](/stdlib/dict/).
 
 Implementation note. Dictionaries are Hash Array Mapped Tries (HAMT) with
-splitmix64 hashing — at most 7 levels deep. Inserts into a node with
-reference count 1 mutate in place, so building a large dict in a loop
-allocates only for trie growth, not per insert.
+splitmix64 hashing — at most 7 levels deep. Inserts into a node with reference
+count 1 mutate in place, so building a large dict in a loop allocates only for
+trie growth, not per insert.
 
 ## Sets
 
@@ -114,9 +114,9 @@ Inserting an element that is already present is a no-op. Full API:
 
 ## Generators (comprehensions)
 
-A generator builds a collection from a source sequence or iterator. The
-general form is `[expr for pattern = source]`, with an optional guard
-introduced by `, if`:
+A generator builds a collection from a source sequence or iterator. The general
+form is `[expr for pattern = source]`, with an optional guard introduced by
+`, if`:
 
 ```yona
 [x * 2 for x = [1, 2, 3]]                  # => [2, 4, 6]
@@ -137,14 +137,14 @@ Guards work in all three:
 ```
 
 Implementation note. Generators compile to counted loops, not chains of
-closures. A guarded generator uses two passes — count matches, then fill —
-so the result is allocated exactly once.
+closures. A guarded generator uses two passes — count matches, then fill — so
+the result is allocated exactly once.
 
 ### Parallel generators
 
-`[| … ]` evaluates the body for each element **concurrently** on the
-runtime's thread pool, collecting results in order. If any task fails, the
-remaining tasks are cancelled:
+`[| … ]` evaluates the body for each element **concurrently** on the runtime's
+thread pool, collecting results in order. If any task fails, the remaining tasks
+are cancelled:
 
 ```yona
 [| x * 2 for x = [1, 2, 3, 4, 5] ]     # => [2, 4, 6, 8, 10]
@@ -152,14 +152,13 @@ remaining tasks are cancelled:
 ```
 
 Use it for I/O-bound or CPU-heavy per-element work; for trivial bodies the
-sequential form is faster. See the
-[concurrency guide](/learn/concurrency/).
+sequential form is faster. See the [concurrency guide](/learn/concurrency/).
 
 ## Stream fusion
 
 When a generator is bound in a `let` and consumed exactly once by another
-generator, the compiler **fuses** the two into a single loop — the
-intermediate sequence is never materialized:
+generator, the compiler **fuses** the two into a single loop — the intermediate
+sequence is never materialized:
 
 ```yona
 let nums = [1, 2, 3, 4, 5] in
@@ -167,9 +166,9 @@ let doubled = [x * 2 for x = nums] in     # fused into the next line
 [x for x = doubled, if x > 4]             # => [6, 8, 10] — one loop, no temp list
 ```
 
-Write map/filter pipelines naturally; the staging costs nothing as long as
-each intermediate binding is used exactly once. A binding referenced more
-than once is materialized as a real sequence.
+Write map/filter pipelines naturally; the staging costs nothing as long as each
+intermediate binding is used exactly once. A binding referenced more than once
+is materialized as a real sequence.
 
 ## Core Std\List functions
 
@@ -198,11 +197,11 @@ find (\x -> x > 3) [1, 2, 5, 4]           # => (:some, 5)
 flatten [[1, 2], [3], [4, 5]]             # => [1, 2, 3, 4, 5]
 ```
 
-`foldl` is tail-recursive — use it for aggregation over long sequences.
-`head` and `tail` crash on empty input; prefer pattern matching with a
-`[]` case (see [Pattern matching](/learn/pattern-matching/)). The full
-list — `any`, `all`, `flatMap`, `enumerate`, `intersperse`, `scanl`,
-`groupBy`, and more — is in [Std\List](/stdlib/list/).
+`foldl` is tail-recursive — use it for aggregation over long sequences. `head`
+and `tail` crash on empty input; prefer pattern matching with a `[]` case (see
+[Pattern matching](/learn/pattern-matching/)). The full list — `any`, `all`,
+`flatMap`, `enumerate`, `intersperse`, `scanl`, `groupBy`, and more — is in
+[Std\List](/stdlib/list/).
 
 ## Choosing a collection
 
@@ -210,15 +209,13 @@ list — `any`, `all`, `flatMap`, `enumerate`, `intersperse`, `scanl`,
   cons/head/tail.
 - **Dictionary** — keyed lookup. O(1) amortized get/put.
 - **Set** — membership and set algebra. O(1) amortized insert/contains.
-- **Tuple** — a fixed number of possibly differently-typed values; not
-  iterable.
+- **Tuple** — a fixed number of possibly differently-typed values; not iterable.
 
 ## Where to next
 
 - [Persistent data structures guide](/guides/persistent-data-structures/) —
   representations, complexity tables, and benchmarks.
-- [Std\List](/stdlib/list/), [Std\Dict](/stdlib/dict/),
-  [Std\Set](/stdlib/set/) — complete APIs, and the rest of the
-  [standard library](/stdlib/).
-- [Pattern matching](/learn/pattern-matching/) — destructuring sequences
-  and tuples.
+- [Std\List](/stdlib/list/), [Std\Dict](/stdlib/dict/), [Std\Set](/stdlib/set/)
+  — complete APIs, and the rest of the [standard library](/stdlib/).
+- [Pattern matching](/learn/pattern-matching/) — destructuring sequences and
+  tuples.

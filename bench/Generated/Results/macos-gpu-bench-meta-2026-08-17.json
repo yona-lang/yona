@@ -1,0 +1,78 @@
+{
+  "schema": "yona.gpu_bench_meta",
+  "benches": [
+    {
+      "file": "bench/accelerators/gpu_columnar_pipeline.yona",
+      "build_n": 20000,
+      "filter_thresholds": [
+        20000
+      ],
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    },
+    {
+      "file": "bench/accelerators/gpu_columnar_pipeline_5k.yona",
+      "build_n": 5000,
+      "filter_thresholds": [
+        5000
+      ],
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    },
+    {
+      "file": "bench/accelerators/gpu_filter_10k.yona",
+      "build_n": 10000,
+      "filter_thresholds": [
+        5000
+      ],
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    },
+    {
+      "file": "bench/accelerators/gpu_filter_hot.yona",
+      "build_n": 100000,
+      "filter_thresholds": [
+        50000
+      ],
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    },
+    {
+      "file": "bench/accelerators/gpu_float_scale_hot.yona",
+      "build_n": null,
+      "filter_thresholds": null,
+      "let_binding_ints": [
+        100000
+      ],
+      "let_binding_int_max": 100000
+    },
+    {
+      "file": "bench/accelerators/gpu_map_reduce_10k.yona",
+      "build_n": 10000,
+      "filter_thresholds": null,
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    },
+    {
+      "file": "bench/accelerators/gpu_map_reduce_hot.yona",
+      "build_n": 100000,
+      "filter_thresholds": null,
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    },
+    {
+      "file": "bench/accelerators/gpu_materialize_sum.yona",
+      "build_n": 20000,
+      "filter_thresholds": null,
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    },
+    {
+      "file": "bench/accelerators/gpu_materialize_sum_5k.yona",
+      "build_n": 5000,
+      "filter_thresholds": null,
+      "let_binding_ints": null,
+      "let_binding_int_max": null
+    }
+  ]
+}

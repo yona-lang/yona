@@ -1,0 +1,4 @@
+import fromSeq from Std\IntArray in
+import upload, mapReduceGraphGpu, Add, Square from Std\Gpu in
+let buffer = upload (fromSeq [1, 2, 3, 4]) in
+mapReduceGraphGpu [Add 1, Square] buffer

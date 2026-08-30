@@ -1,4 +1,0 @@
-case typeOf 42 of
-    TInt -> 1
-    _ -> 0
-end

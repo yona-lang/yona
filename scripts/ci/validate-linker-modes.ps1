@@ -6,7 +6,6 @@ param(
 $ErrorActionPreference = "Stop"
 $yonac = Join-Path $BuildDir "yonac.exe"
 if (-not (Test-Path $yonac)) { throw "missing $yonac" }
-if (-not (Test-Path (Join-Path $BuildDir "runtime/compiled_runtime.o"))) { throw "missing runtime/compiled_runtime.o" }
 if (-not (Test-Path (Join-Path $BuildDir "runtime/yona_runtime.lib"))) { throw "missing runtime/yona_runtime.lib" }
 
 if (-not $env:YONAC_CC) { $env:YONAC_CC = "clang" }

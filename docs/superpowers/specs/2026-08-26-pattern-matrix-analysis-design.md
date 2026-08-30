@@ -63,9 +63,9 @@ struct PatternAnalysis {
 };
 ```
 
-Existing `Codegen::analyze_case_patterns` remains the compatibility entry
-point, delegates to the new module, and code generation consumes its result
-only for diagnostics. LLVM control-flow generation is unchanged.
+`Codegen::analyze_case_patterns` delegates to the shared module, and code
+generation consumes its result only for diagnostics. LLVM control-flow
+generation is unchanged.
 
 ## Diagnostics
 

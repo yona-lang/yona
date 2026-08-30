@@ -1,2 +1,0 @@
-let always_raise xs = raise 42 in
-try always_raise [1, 2, 3] catch _ -> 99 end

@@ -1,0 +1,2 @@
+import available, physicalDeviceCount from Std\Gpu in
+physicalDeviceCount () * 10 + (if available () then 1 else 0)

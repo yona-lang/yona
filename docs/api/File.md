@@ -73,7 +73,7 @@ import listDir from Std\File in
 listDir "/tmp"   # => ["file1.txt", "file2.txt", ...]
 ```
 
-### `readLines : String -> Iterator a`
+### `readLines : String -> Iterator`
 
 Returns an `Iterator String` that yields lines from the file lazily.
 Uses O(1) memory per element.
@@ -104,7 +104,7 @@ import fromSeq from Std\ByteArray in
 writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 ```
 
-### `openFile : String -> FileMode -> Linear(Adt(Filehandle))`
+### `openFile : String -> FileMode -> Linear Filehandle`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
 It returns an owning `Linear FileHandle`, not a raw descriptor. Match the
@@ -158,7 +158,7 @@ Flush buffered writes for a file handle. Returns `true` on success.
 
 Truncate a file to the given length. Returns `true` on success.
 
-### `readChunks : Int -> Int -> Iterator a`
+### `readChunks : Int -> Int -> Iterator`
 
 Read data from a file handle in chunks of `chunkSize` bytes.
 Returns a handle for chunked reading.

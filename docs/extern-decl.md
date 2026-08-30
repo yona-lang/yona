@@ -41,15 +41,15 @@ Pick this whenever the C symbol you actually want to call shouldn't be the
 identifier users type. The classic cases:
 
 **1. Wrapping the Yona runtime.** The C runtime exports
-mangled symbols like `yona_Std_Channel__channel`. You don't want every
+mangled symbols like `YonaStdChannelChannel`. You don't want every
 caller in `Std/Channel.yona` to repeat that string — alias once, then use
 the clean local name everywhere:
 
 ```yona
 module Std\Channel
-extern raw_new  : Int -> Channel        = "yona_Std_Channel__channel"
-extern raw_send : Channel -> Int -> ()  = "yona_Std_Channel__send"
-extern raw_recv : Channel -> Option     = "yona_Std_Channel__recv"
+extern raw_new  : Int -> Channel        = "YonaStdChannelChannel"
+extern raw_send : Channel -> Int -> ()  = "YonaStdChannelSend"
+extern raw_recv : Channel -> Option     = "YonaStdChannelRecv"
 
 channel n = let r = raw_new n in (Linear (Sender r), Linear (Receiver r))
 send s v  = case s of Sender raw -> raw_send raw v end
@@ -59,16 +59,16 @@ The wrapper functions get the natural names; the extern declarations
 quarantine the C ABI mangling at the top of the file.
 
 **2. The extern *is* the public API.** When the wrapper would be a pure
-trampoline like `compile pattern = yona_regex_compile pattern`, just give
+trampoline like `compile pattern = YonaStdRegexCompile pattern`, just give
 the extern the public name directly. There's nothing useful in the
 trampoline:
 
 ```yona
 module Std\Regex
 export compile, matches, find
-extern compile : String -> Int          = "yona_regex_compile"
-extern matches : Int -> String -> Bool  = "yona_regex_matches"
-extern find    : Int -> String -> Seq   = "yona_regex_find"
+extern compile : String -> Int          = "YonaStdRegexCompile"
+extern matches : Int -> String -> Bool  = "YonaStdRegexMatches"
+extern find    : Int -> String -> Seq   = "YonaStdRegexFind"
 ```
 
 This collapses two declarations per function (extern + wrapper) into one.
@@ -92,7 +92,7 @@ extern openFile : String -> String -> Int = "fopen64"
 ### Async form — `extern async NAME : TYPE`
 
 Adding `async` marks the call as thread-pool async: the codegen wraps
-the call in `yona_rt_async_call` and the result is a `Promise`, transparent
+the call in `YonaRuntimeAsyncCall` and the result is a `Promise`, transparent
 to callers via auto-await. Combinable with the alias form.
 
 ```yona
@@ -108,7 +108,7 @@ be pure noise. The bare form is the common case; the alias form is the
 escape hatch.
 
 **Why not auto-mangle to the module's namespace?** A naïve
-`extern channel : ...` could expand to `yona_Std_Channel__channel`
+`extern channel : ...` could expand to `YonaStdChannelChannel`
 behind the scenes, which would save keystrokes when wrapping the Yona
 runtime. The cost: the source language gets coupled to a specific C ABI
 mangling scheme, the rule has to be explained, and call sites that don't

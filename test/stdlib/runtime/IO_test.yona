@@ -1,9 +1,0 @@
-import stdinFd, stdoutFd, stderrFd, isTty from Std\IO,
-       testCase, check, run, render from Std\Test
-in
-let cases = [
-    testCase "IO exposes conventional descriptors" (\_ ->
-        check "descriptors" (stdinFd == 0 && stdoutFd == 1 && stderrFd == 2)),
-    testCase "IO reports tty state" (\_ ->
-        check "tty query" (isTty stdoutFd == isTty stdoutFd))
-] in render (run cases)

@@ -1,17 +1,18 @@
-FN yona_Std_Result__andThen 2 FUNCTION(VAR(a),ADT(Result,VAR(b),VAR(e))) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(b),VAR(e)) retadt Result borrow 10 effects | hof
-FN yona_Std_Result__flatMap 2 FUNCTION(VAR(a),ADT(Result,VAR(b),VAR(e))) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(b),VAR(e)) retadt Result borrow 10 effects | hof
-FN yona_Std_Result__flatten 1 ADT(Result,ADT(Result,VAR(a),VAR(e)),VAR(e)) -> ADT(Result,VAR(a),VAR(e)) retadt Result effects -
-FN yona_Std_Result__fold 3 FUNCTION(VAR(e),VAR(b)) FUNCTION(VAR(a),VAR(b)) ADT(Result,VAR(a),VAR(e)) -> VAR(b) retadt b borrow 110 effects | hof
-FN yona_Std_Result__isErr 1 ADT(Result,VAR(a),VAR(e)) -> BOOL effects -
-FN yona_Std_Result__isOk 1 ADT(Result,VAR(a),VAR(e)) -> BOOL effects -
-FN yona_Std_Result__map 2 FUNCTION(VAR(a),VAR(b)) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(b),VAR(e)) retadt Result borrow 10 effects | hof
-FN yona_Std_Result__mapErr 2 FUNCTION(VAR(e),VAR(f)) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(a),VAR(f)) retadt Result borrow 10 effects | hof
-FN yona_Std_Result__orElse 2 FUNCTION(VAR(e),ADT(Result,VAR(a),VAR(f))) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(a),VAR(f)) retadt Result borrow 10 effects | hof
-FN yona_Std_Result__toOption 1 ADT(Result,VAR(a),VAR(e)) -> ADT(Option,VAR(a)) retadt Option effects -
-FN yona_Std_Result__unwrapOr 2 VAR(a) ADT(Result,VAR(a),VAR(e)) -> VAR(a) retadt a effects -
-GENFN_CTOR yona_Std_Result__andThen Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__andThen Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__andThen andThen
+MODULE Std\Result
+FN andThen 2 FUNCTION(VAR(a),ADT(Result,VAR(b),VAR(e))) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(b),VAR(e)) borrow 10 effects | hof
+FN flatMap 2 FUNCTION(VAR(a),ADT(Result,VAR(b),VAR(e))) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(b),VAR(e)) borrow 10 effects | hof
+FN flatten 1 ADT(Result,ADT(Result,VAR(a),VAR(e)),VAR(e)) -> ADT(Result,VAR(a),VAR(e)) effects -
+FN fold 3 FUNCTION(VAR(e),VAR(b)) FUNCTION(VAR(a),VAR(b)) ADT(Result,VAR(a),VAR(e)) -> VAR(b) borrow 110 effects | hof
+FN isErr 1 ADT(Result,VAR(a),VAR(e)) -> BOOL effects -
+FN isOk 1 ADT(Result,VAR(a),VAR(e)) -> BOOL effects -
+FN map 2 FUNCTION(VAR(a),VAR(b)) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(b),VAR(e)) borrow 10 effects | hof
+FN mapErr 2 FUNCTION(VAR(e),VAR(f)) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(a),VAR(f)) borrow 10 effects | hof
+FN orElse 2 FUNCTION(VAR(e),ADT(Result,VAR(a),VAR(f))) ADT(Result,VAR(a),VAR(e)) -> ADT(Result,VAR(a),VAR(f)) borrow 10 effects | hof
+FN toOption 1 ADT(Result,VAR(a),VAR(e)) -> ADT(Option,VAR(a)) effects -
+FN unwrapOr 2 VAR(a) ADT(Result,VAR(a),VAR(e)) -> VAR(a) effects -
+GENFN_CTOR andThen Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR andThen Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN andThen andThen
 andThen : (a -> Result (b, e)) -> Result (a, e) -> Result (b, e)
 andThen fn r =
     case r of
@@ -19,9 +20,9 @@ andThen fn r =
         Err e    -> Err e
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__flatMap Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__flatMap Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__flatMap flatMap
+GENFN_CTOR flatMap Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR flatMap Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN flatMap flatMap
 flatMap : (a -> Result (b, e)) -> Result (a, e) -> Result (b, e)
 flatMap fn r =
     case r of
@@ -29,11 +30,11 @@ flatMap fn r =
         Err e    -> Err e
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__flatten Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__flatten None Option 1 0 2 1
-GENFN_CTOR yona_Std_Result__flatten Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_CTOR yona_Std_Result__flatten Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__flatten flatten
+GENFN_CTOR flatten Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR flatten Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR flatten Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_CTOR flatten None Option 1 0 2 1
+GENFN_BEGIN flatten flatten
 flatten : Result (Result (a, e), e) -> Result (a, e)
 flatten r =
     case r of
@@ -44,9 +45,9 @@ flatten r =
         Err e -> Err e
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__fold Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__fold Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__fold fold
+GENFN_CTOR fold Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR fold Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN fold fold
 fold : (e -> b) -> (a -> b) -> Result (a, e) -> b
 fold onErr onOk r =
     case r of
@@ -54,9 +55,9 @@ fold onErr onOk r =
         Err e -> onErr e
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__isErr Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__isErr Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__isErr isErr
+GENFN_CTOR isErr Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR isErr Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN isErr isErr
 isErr : Result (a, e) -> Bool
 isErr r =
     case r of
@@ -64,9 +65,9 @@ isErr r =
         Ok _  -> false
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__isOk Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__isOk Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__isOk isOk
+GENFN_CTOR isOk Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR isOk Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN isOk isOk
 isOk : Result (a, e) -> Bool
 isOk r =
     case r of
@@ -74,9 +75,9 @@ isOk r =
         Err _ -> false
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__map Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__map Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__map map
+GENFN_CTOR map Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR map Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN map map
 map : (a -> b) -> Result (a, e) -> Result (b, e)
 map fn r =
     case r of
@@ -84,9 +85,9 @@ map fn r =
         Err e    -> Err e
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__mapErr Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__mapErr Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__mapErr mapErr
+GENFN_CTOR mapErr Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR mapErr Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN mapErr mapErr
 mapErr : (e -> f) -> Result (a, e) -> Result (a, f)
 mapErr fn r =
     case r of
@@ -94,9 +95,9 @@ mapErr fn r =
         Ok v  -> Ok v
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__orElse Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__orElse Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__orElse orElse
+GENFN_CTOR orElse Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR orElse Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN orElse orElse
 orElse : (e -> Result (a, f)) -> Result (a, e) -> Result (a, f)
 orElse fn r =
     case r of
@@ -104,11 +105,11 @@ orElse fn r =
         Err e -> fn e
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__toOption Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__toOption None Option 1 0 2 1
-GENFN_CTOR yona_Std_Result__toOption Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_CTOR yona_Std_Result__toOption Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__toOption toOption
+GENFN_CTOR toOption Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR toOption Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR toOption Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_CTOR toOption None Option 1 0 2 1
+GENFN_BEGIN toOption toOption
 toOption : Result (a, e) -> Option a
 toOption r =
     case r of
@@ -116,9 +117,9 @@ toOption r =
         Err _    -> None
     end
 GENFN_END
-GENFN_CTOR yona_Std_Result__unwrapOr Err Result 1 1 2 1 fieldname:_0 field:INT contract:N(e)
-GENFN_CTOR yona_Std_Result__unwrapOr Ok Result 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_Result__unwrapOr unwrapOr
+GENFN_CTOR unwrapOr Ok Result 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR unwrapOr Err Result 1 1 2 1 fields _0:VAR(e)
+GENFN_BEGIN unwrapOr unwrapOr
 unwrapOr : a -> Result (a, e) -> a
 unwrapOr default r =
     case r of

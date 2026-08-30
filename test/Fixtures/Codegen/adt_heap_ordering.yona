@@ -1,0 +1,6 @@
+import println from Std\Io in do
+    println (show (compare 1 2 == Less))
+    println (show (Less < Greater))
+    println (show (foldLeft (Some 4) (\sum value -> sum + value) 3))
+    0
+end

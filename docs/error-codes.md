@@ -200,7 +200,8 @@ LLVM could not produce an object file. This is usually an internal compiler erro
 ### E0401 — Linking failed
 
 The system linker (`cc`) failed to produce an executable. Common causes:
-- Missing runtime library (`compiled_runtime.o`)
+- Missing canonical runtime archive (`yona_runtime.lib` on Windows or
+  `libyona_runtime.a` on Unix)
 - Undefined symbols from missing module imports
 - System linker not installed
 

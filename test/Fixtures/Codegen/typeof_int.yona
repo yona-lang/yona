@@ -1,0 +1,4 @@
+case typeOf 42 of
+    TypeInt -> 1
+    _ -> 0
+end

@@ -1,5 +1,6 @@
-FN yona_Std_Types__toInt 1 STRING -> INT
-FN yona_Std_Types__toFloat 1 STRING -> FLOAT
-FN yona_Std_Types__intToString 1 INT -> STRING
-FN yona_Std_Types__floatToString 1 FLOAT -> STRING
-FN yona_Std_Types__boolToString 1 BOOL -> STRING
+MODULE Std\Types
+FN boolToString 1 BOOL -> STRING
+FN floatToString 1 FLOAT -> STRING
+FN intToString 1 INT -> STRING
+FN toFloat 1 STRING -> FLOAT
+FN toInt 1 STRING -> INT

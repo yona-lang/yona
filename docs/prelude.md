@@ -77,15 +77,16 @@ Equality and relational operators select these contracts statically:
 
 ### Unified Loading
 
-`load_prelude(parser, type_checker)` is the single entry point. It reads
-`Prelude.yonai` and automatically populates all subsystems:
+Prelude loading reads `Prelude.yonai` once and automatically populates all
+subsystems:
 
-1. **Codegen**: `register_all_imports("Prelude")` — functions available by local name
-2. **Parser**: `register_constructor()` for each ADT — enables pattern matching
-3. **Type checker**: `register_adt()` + `register_trait_method()` — type inference
-4. **Linker**: `Prelude.o` linked with executables
+1. **Codegen**: functions become available by local name.
+2. **Parser**: every ADT constructor becomes available to pattern matching.
+3. **Type checker**: ADTs, traits, methods, and instances become available to
+   inference.
+4. **Linker**: the CMake-generated Prelude object is linked with executables.
 
-No manual registration in `cli/main.cpp`, `Parser.cpp`, or anywhere else.
+No manual per-subsystem registration is required.
 
 ### Coexistence with Std Modules
 
@@ -98,10 +99,12 @@ No manual registration in `cli/main.cpp`, `Parser.cpp`, or anywhere else.
 2. Recompile: `yonac lib/Prelude.yona && mv Prelude.yonai lib/`
 3. Rebuild compiler. Done.
 
-**For C-backed functions:**
-1. Add implementation in `src/compiled_runtime.c`
+**For native-backed functions:**
+1. Add the implementation to its owning `src/Runtime/` component
 2. Declare the `extern` and its exact type in `lib/Prelude.yona`
-3. Regenerate `lib/Prelude.yonai` and `lib/Prelude.o`
+3. Regenerate `lib/Prelude.yonai`; CMake builds the matching object in its
+   configured build tree.
 4. Rebuild. Done.
 
-No other files need changes — `load_prelude()` reads .yonai automatically.
+No other files need changes; the canonical Prelude interface is loaded
+automatically.

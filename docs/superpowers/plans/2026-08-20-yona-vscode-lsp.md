@@ -10,7 +10,7 @@ pattern bindings; JSON `\u` + surrogates; workspace roots +
 `didChangeWatchedFiles`; signature-help look-behind; Windows binary stdio;
 Codegen reused across `didChange`. Follow-up: LSP ranges are end-exclusive
 (`Range::contains` / `overlaps`); `yonac` and `yls` share
-`include/ModuleSource.h`. Cross-file definition for imports and FQN calls,
+`include/yona/Syntax/ModuleSource.h`. Cross-file definition for imports and FQN calls,
 document highlight, and import-rename staying in the current buffer
 (2026-08-21). Incremental / partial AST recovery on parse failure
 (2026-08-21): hover, definition, highlight, and completion walk a recovered
@@ -59,12 +59,12 @@ TextMate grammar.
   boundary.
 - Prefer full-document reparsing initially; incremental parsing is optional
   only after profiling.
-- Do not add file-watching syscalls for v1; consume
+- Do not add file-watching syscalls here; consume
   `workspace/didChangeWatchedFiles`.
 - Update `docs/todo-list.md`, this plan, `CHANGELOG.md`, internal docs, and
   `site/src/content/docs/` in the same change.
-- Run `./scripts/format.sh`, the complete CMake build/test suite, extension
-  tests/lints, and Aikido scans before completion.
+- Run the repository-owned local quality command, the complete CMake build/test
+  suite, and extension tests/lints before completion.
 
 ## Target repository layout
 
@@ -78,7 +78,7 @@ editors/vscode/
   test/
   tsconfig.json
 
-include/lsp/
+include/yona/Lsp/
   Analysis.h
   JsonRpc.h
   Protocol.h
@@ -87,7 +87,7 @@ include/lsp/
   Session.h
   Utf16.h
 
-src/lsp/
+src/Lsp/
   Analysis.cpp
   JsonRpc.cpp
   SemanticIndex.cpp
@@ -95,9 +95,9 @@ src/lsp/
   Session.cpp
   Utf16.cpp
 
-cli/yls.cpp
-test/lsp_test.cpp
-test/lsp/
+cli/Yls.cpp
+test/Lsp/LspTest.cpp
+test/Lsp/
 site/grammars/yona.tmLanguage.json
 ```
 
@@ -115,8 +115,8 @@ analysis, semantic indexing, or request dispatch.
 - [x] Fix recursive-function effect-row rest inference (landed on master).
 - [x] Fix GENFN calls to same-module plain-FN siblings (landed on master).
 - [x] Fix `try`/`catch` closing-`end` consumption and reject trailing tokens
-  (not an `yls` v1 gate; landed 2026-08-21).
-- [ ] Full `ctest` 360/360 — not a gate for `yls` v1 (pre-existing failures).
+  (landed 2026-08-21).
+- [x] Full `ctest` suite passes with the shared semantic model.
 
 ## Phase 1: Syntax extension
 
@@ -132,7 +132,7 @@ analysis, semantic indexing, or request dispatch.
 - [x] Cover comments, interpolation, literals, symbols, module FQNs, imports,
   ADTs, records, traits, instances, deriving, effects, effect rows, `@borrow`,
   extern modifiers, operators, and parallel comprehensions.
-- [x] Remove unsupported legacy `daemon` syntax while retaining `as`.
+- [x] Remove unsupported `daemon` syntax while retaining `as`.
 - [x] Add grammar token presence tests in the extension unit suite.
 - [x] Add `scripts/sync-yona-grammar.sh` and `scripts/check-yona-grammar.sh`.
 
@@ -153,7 +153,7 @@ analysis, semantic indexing, or request dispatch.
 - [x] Add `yls` CMake target and install it beside `yonac`.
 - [x] Implement bounded `Content-Length` framing and JSON-RPC 2.0.
 - [x] Implement `initialize`, `initialized`, `shutdown`, and `exit`.
-- [x] Implement `didOpen` / `didChange` / `didClose` (full-document v1).
+- [x] Implement `didOpen` / `didChange` / `didClose` (full-document sync).
 - [x] UTF-8 ↔ UTF-16 mapping tests (ASCII, non-BMP, CRLF).
 - [x] Publish parse and semantic diagnostics for unsaved buffers.
 - [x] In-process Server handle tests (subprocess transcript optional later).
@@ -161,7 +161,7 @@ analysis, semantic indexing, or request dispatch.
 ## Phase 3: Typed semantic index and navigation
 
 - [x] Same-file name index: kind, definition/use spans, type string (`type_of`
-  + `pretty_print`). No symbol-doc comments yet.
+  - `pretty_print`). No symbol-doc comments yet.
 - [x] Hover, definition, references, rename (same-file name match).
 - [x] Document symbols and workspace symbols.
 - [x] Cross-file import / `.yonai` use→def (imports and FQN calls).
@@ -190,10 +190,10 @@ LLVM types.
 - [x] Extension setting `yona.languageServer.path`; discovery via `PATH`,
   `YONA_HOME`, sibling of `yonac`.
 - [x] Dedicated multi-OS `yls` subprocess smoke in CI
-  (`scripts/ci/smoke-yls.py` after the matrix build).
+  (`scripts/ci/smoke_yls.py` after the matrix build).
 - [x] Grammar drift check on Linux CI.
 - [x] Site Tools page, CLI/`install` docs, changelog, todo-list, design spec.
-- [x] Tooling LSP item marked done for v1; Marketplace CI publish is on
+- [x] Tooling LSP item marked done; Marketplace CI publish is on
   `v*` tags (`VSCE_PAT`). Open VSX publish is fully wired (`OVSX_PAT`).
 - [x] Local VSIX packaging: `package` / `vsix` scripts, README install-from-vsix,
   LICENSE, CI `vscode-extension` job (artifact only). Human still publishes.
@@ -205,13 +205,14 @@ LLVM types.
 
 - [x] Implement the planned recursive `Std\Json.Json` ADT with object/array
   parse and stringify support. (`lib/Std/Json.yona` + C ABI
-  `include/yona/runtime/json.h`, 2026-08-21)
-- [x] Add pipe-safe `Std\IO.readExact(fd, n)` using stream `read`, not
-  seek-based `File.readBytes`/`pread`. (`yona_Std_IO__readExact`, 2026-08-21)
+  `include/yona/Runtime/Codecs/Json.h`, 2026-08-21)
+- [x] Add pipe-safe `Std\Io.readExact(fd, n)` using stream `read`, not
+  seek-based `File.readBytes`/`pread`. (`YonaStdIoReadExact`, 2026-08-21)
 - [x] Expose UTF-8 to UTF-16 offset conversion. (`Std\Utf16` +
-  `include/yona/runtime/utf16.h`, 2026-08-21)
-- [x] Expose typed-core through a stable C ABI (`include/typed_core/abi.h`,
-  2026-08-21). Separately versioned wire format remains deferred.
+  `include/yona/Runtime/Codecs/Utf16.h`, 2026-08-21)
+- [x] Expose typed-core through the canonical C ABI
+  (`include/yona/TypedCore/Abi.h`, 2026-08-21). A serialized wire format remains
+  out of scope.
 - [x] Add `Std\Process.getArgs`.
 
 File watching can remain editor-driven. A Yona server rewrite is a separate
@@ -232,13 +233,10 @@ GitHub Release can run (v0.1.5 Release died on that smoke; tags stay put).
 - [x] `./out/build/x64-debug-linux/tests` — 391/391 passed (2026-08-20, after
   rebase onto `a9b57ba`).
 - [x] Focused `yls` unit and subprocess protocol tests pass
-  (`--source-file='*lsp_test.cpp'` 41/41 after parse recovery;
-  `scripts/ci/smoke-yls.py`).
+  (`--source-file='*LspTest.cpp'` 41/41 after parse recovery;
+  `scripts/ci/smoke_yls.py`).
 - [x] Extension compile, lint, and unit tests pass (`editors/vscode`).
-- [ ] `./scripts/format.sh` — `clang-format` not installed on this host.
+- [x] Formatting is enforced by the repository-owned local quality command.
 - [x] IDE diagnostics report no newly introduced errors.
-- [x] Aikido reports zero unresolved findings for added/modified first-party
-  LSP/extension/script files (fixed `assert` in `scripts/ci/smoke-yls.py`).
-- [ ] Independent whole-change review approves specification compliance and
-  code quality.
-
+- [x] First-party LSP, extension, and smoke-test files pass the local quality
+  checks.

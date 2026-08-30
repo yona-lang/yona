@@ -23,17 +23,19 @@ EXTERN = re.compile(
     r"^extern(?:\s+(?:io|async|native))?\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(.*?)(?:\s*=\s*\".*\")?\s*$"
 )
 TRAIT_METHOD = re.compile(r"^\s+([a-z][a-zA-Z0-9_]*)\s*:\s*(.+)$")
-LEGACY_FN = re.compile(
+DOCUMENTED_FN = re.compile(
     r"^### `([^`]+)`\n\n```(?:yona)?\n([\s\S]*?)\n```\n",
     re.MULTILINE,
 )
-LEGACY_TYPE = re.compile(
+DOCUMENTED_TYPE = re.compile(
     r"^### `type ([A-Z][a-zA-Z0-9_]*)([^`]*)`\n",
     re.MULTILINE,
 )
 YONAI_FN = re.compile(r"^(?:FN|IO|AFN|NAT)\s+(\S+)\s+(\d+)\s*(.*)$")
 
-SIMPLE_RHS = re.compile(r"^(?:0|[1-9][0-9]*|[0-9]+\.[0-9]+|true|false|\(\)|\"[^\"]*\")$")
+SIMPLE_RHS = re.compile(
+    r"^(?:0|[1-9][0-9]*|[0-9]+\.[0-9]+|true|false|\(\)|\"[^\"]*\")$"
+)
 
 STRING_PARAM_NAMES = {
     "s",
@@ -108,7 +110,7 @@ def compact_rhs(rhs: str) -> str | None:
 
 
 def parse_yonai(path: Path) -> dict[str, dict]:
-    """Map exported function name -> {params, ret, retadt} from a .yonai file."""
+    """Map exported function names to canonical parameter/return descriptors."""
     if not path.exists():
         return {}
     out: dict[str, dict] = {}
@@ -128,29 +130,24 @@ def parse_yonai(path: Path) -> dict[str, dict]:
         elif len(params) > arity:
             params = params[:arity]
         rtoks = right.split()
-        retadt = None
         ret: list[str] = []
         i = 0
         while i < len(rtoks):
             tok = rtoks[i]
-            if tok in ("borrow", "effects"):
+            if tok in ("borrow", "effects", "effectscheme", "hof"):
                 break
-            if tok == "retadt":
-                i += 1
-                if i < len(rtoks):
-                    retadt = rtoks[i]
-                i += 1
-                continue
             ret.append(tok)
             i += 1
-        out[name] = {"params": params, "ret": ret, "retadt": retadt}
+        out[name] = {"params": params, "ret": ret}
     return out
 
 
 def type_arities_from_defs(types: list[dict]) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for t in types:
-        m = re.match(r"^type\s+([A-Z][a-zA-Z0-9_]*)((?:\s+[a-z])*)", t["definition"])
+        m = re.match(
+            r"^type\s+([A-Z][a-zA-Z0-9_]*)((?:\s+[a-z])*)", t["definition"]
+        )
         if m:
             out[m.group(1)] = m.group(2).split()
     return out
@@ -159,7 +156,6 @@ def type_arities_from_defs(types: list[dict]) -> dict[str, list[str]]:
 def pretty_arrow(
     params: list[str],
     ret: list[str],
-    retadt: str | None,
     type_arities: dict[str, list[str]] | None,
     *,
     fn_name: str = "",
@@ -205,6 +201,52 @@ def pretty_arrow(
             return f"{name} {prefer}"
         return name + " " + " ".join(fresh() for _ in range(arity))
 
+    descriptor_variables: dict[str, str] = {}
+
+    def descriptor_parts(text: str) -> list[str]:
+        parts: list[str] = []
+        depth = 0
+        start = 0
+        for index, char in enumerate(text):
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+            elif char == "," and depth == 0:
+                parts.append(text[start:index])
+                start = index + 1
+        parts.append(text[start:])
+        return [part for part in parts if part]
+
+    def descriptor(text: str) -> str:
+        if text in CONCRETE_CTYPES:
+            return CONCRETE_CTYPES[text]
+        if "(" not in text or not text.endswith(")"):
+            return "".join(part.title() for part in text.split("_"))
+        name, body = text.split("(", 1)
+        arguments = descriptor_parts(body[:-1])
+        rendered = [descriptor(argument) for argument in arguments]
+        if name == "VAR":
+            variable = arguments[0] if arguments else "value"
+            if variable not in descriptor_variables:
+                descriptor_variables[variable] = fresh()
+            return descriptor_variables[variable]
+        if name == "FUNCTION":
+            return "(" + " -> ".join(rendered) + ")"
+        if name == "TUPLE":
+            return "(" + ", ".join(rendered) + ")"
+        if name == "Seq":
+            return "[" + (rendered[0] if rendered else fresh()) + "]"
+        if name == "Set":
+            return "Set " + (rendered[0] if rendered else fresh())
+        if name == "Dict":
+            return "Dict " + " ".join(rendered or [fresh(), fresh()])
+        if name == "LINEAR":
+            return "Linear " + (rendered[0] if rendered else fresh())
+        if name == "ADT":
+            return " ".join(rendered)
+        return name + (" " + " ".join(rendered) if rendered else "")
+
     if fn_name == "channel" and ret and ret[0] == "TUPLE":
         return "Int -> (Linear (Sender a), Linear (Receiver a))"
 
@@ -224,7 +266,16 @@ def pretty_arrow(
         return f"({a} -> {r}) -> Set {a} -> ()"
 
     def one(tok: str, *, is_ret: bool = False, pname: str = "") -> str:
-        nonlocal fn_dom, fn_rng, seq_from_dom_used, set_elem, dict_k, dict_v, dict_int_n
+        nonlocal \
+            fn_dom, \
+            fn_rng, \
+            seq_from_dom_used, \
+            set_elem, \
+            dict_k, \
+            dict_v, \
+            dict_int_n
+        if "(" in tok and tok.endswith(")"):
+            return descriptor(tok)
         if tok == "FUNCTION":
             if fn_name in FILTER_FNS:
                 fn_dom = fresh()
@@ -270,11 +321,19 @@ def pretty_arrow(
                 return slot
             if dict_k and is_ret and fn_name == "get":
                 return dict_v
-            if fn_name in ("send", "close", "isClosed", "length", "capacity") and "Sender" in type_arities and not is_ret:
+            if (
+                fn_name in ("send", "close", "isClosed", "length", "capacity")
+                and "Sender" in type_arities
+                and not is_ret
+            ):
                 if pname in ("v", "x", "val", "value"):
                     return option_payload()
                 return named_adt("Sender", option_payload())
-            if fn_name in ("recv", "tryRecv") and "Receiver" in type_arities and not is_ret:
+            if (
+                fn_name in ("recv", "tryRecv")
+                and "Receiver" in type_arities
+                and not is_ret
+            ):
                 return named_adt("Receiver", option_payload())
             if fn_name == "openFile" and is_ret:
                 return "FileHandle"
@@ -297,20 +356,12 @@ def pretty_arrow(
         if tok == "ADT":
             if fn_name == "openFile" and not is_ret:
                 return "FileMode"
-            if is_ret and retadt == "Iterator" and set_elem:
-                return f"Iterator {set_elem}"
-            if is_ret and retadt == "Iterator" and dict_k:
-                if fn_name == "values":
-                    return f"Iterator {dict_v}"
-                if fn_name in ("entries", "iterator"):
-                    return f"Iterator ({dict_k}, {dict_v})"
-                return f"Iterator {dict_k}"
-            if is_ret and not retadt and fn_name in ITER_FNS:
+            if is_ret and fn_name in ITER_FNS:
                 return f"Iterator {fresh()}"
-            name = retadt if (is_ret and retadt) else primary
+            name = primary
             if not name and pname in OPT_PARAM_NAMES:
                 name = "Option"
-            if name == "Option" or (is_ret and retadt == "Option"):
+            if name == "Option":
                 prefer = (fn_rng if is_ret else fn_dom) or option_payload()
                 return named_adt("Option", prefer)
             if name:
@@ -321,7 +372,10 @@ def pretty_arrow(
             return CONCRETE_CTYPES[tok]
         return "".join(p.title() for p in tok.split("_"))
 
-    parts = [one(t, pname=param_names[i] if i < len(param_names) else "") for i, t in enumerate(params)]
+    parts = [
+        one(t, pname=param_names[i] if i < len(param_names) else "")
+        for i, t in enumerate(params)
+    ]
     if not ret:
         ret_s = fresh()
     elif ret[0] == "TUPLE" and len(ret) > 1:
@@ -339,7 +393,9 @@ def parse_export_names(line: str) -> tuple[str, list[str]]:
     if line.startswith("export trait "):
         return "trait", [line[len("export trait ") :].split()[0]]
     if line.startswith("export "):
-        names = [n.strip() for n in line[len("export ") :].split(",") if n.strip()]
+        names = [
+            n.strip() for n in line[len("export ") :].split(",") if n.strip()
+        ]
         return "fn", names
     return "", []
 
@@ -378,7 +434,11 @@ def trait_name(definition: str) -> str:
     return m.group(1) if m else definition.split()[1]
 
 
-def signature_of(fn: dict, yonai: dict[str, dict] | None = None, type_arities: dict[str, list[str]] | None = None) -> str:
+def signature_of(
+    fn: dict,
+    yonai: dict[str, dict] | None = None,
+    type_arities: dict[str, list[str]] | None = None,
+) -> str:
     """Always `name : T1 -> T2 -> R`, never a parameter list."""
     name = fn["name"]
     nparams = 0
@@ -395,9 +455,7 @@ def signature_of(fn: dict, yonai: dict[str, dict] | None = None, type_arities: d
 
     if fn.get("type_sig"):
         sig = fn["type_sig"]
-        if ":" not in sig:
-            sig = f"{name} : {sig}"
-        elif not sig.startswith(name):
+        if ":" not in sig or not sig.startswith(name):
             sig = f"{name} : {sig}"
         return with_const(sig)
 
@@ -406,7 +464,6 @@ def signature_of(fn: dict, yonai: dict[str, dict] | None = None, type_arities: d
         body = pretty_arrow(
             y["params"],
             y["ret"],
-            y.get("retadt"),
             type_arities,
             fn_name=name,
             param_names=pnames,
@@ -422,7 +479,9 @@ def signature_of(fn: dict, yonai: dict[str, dict] | None = None, type_arities: d
     return with_const(f"{name} : {body}")
 
 
-def upsert_function(functions: list[dict], by_name: dict[str, dict], entry: dict) -> None:
+def upsert_function(
+    functions: list[dict], by_name: dict[str, dict], entry: dict
+) -> None:
     name = entry["name"]
     existing = by_name.get(name)
     if existing is None:
@@ -433,7 +492,10 @@ def upsert_function(functions: list[dict], by_name: dict[str, dict], entry: dict
         existing["type_sig"] = entry["type_sig"]
     if entry.get("lhs") and not existing.get("lhs"):
         existing["lhs"] = entry["lhs"]
-    if entry.get("simple_rhs") is not None and existing.get("simple_rhs") is None:
+    if (
+        entry.get("simple_rhs") is not None
+        and existing.get("simple_rhs") is None
+    ):
         existing["simple_rhs"] = entry["simple_rhs"]
     if entry.get("doc") and not existing.get("doc"):
         existing["doc"] = entry["doc"]
@@ -564,7 +626,11 @@ def parse_module(path: Path) -> dict:
             continue
 
         fn = FN_START.match(line)
-        if fn and not line.startswith("export") and not line.startswith("module"):
+        if (
+            fn
+            and not line.startswith("export")
+            and not line.startswith("module")
+        ):
             name = fn.group(1)
             rest = fn.group(2)
             if rest.lstrip().startswith(":"):
@@ -629,9 +695,15 @@ def parse_module(path: Path) -> dict:
         functions = [f for f in functions if not is_internal(f["name"])]
 
     if module["exported_types"]:
-        module["types"] = [t for t in module["types"] if t["name"] in module["exported_types"]]
+        module["types"] = [
+            t for t in module["types"] if t["name"] in module["exported_types"]
+        ]
     if module["exported_traits"]:
-        module["traits"] = [t for t in module["traits"] if t["name"] in module["exported_traits"]]
+        module["traits"] = [
+            t
+            for t in module["traits"]
+            if t["name"] in module["exported_traits"]
+        ]
 
     module["functions"] = functions
     return module
@@ -703,7 +775,7 @@ def render_module(module: dict) -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
-def compact_legacy(text: str) -> str:
+def compact_existing_doc(text: str) -> str:
     """Turn heading + implementation fence into a one-line signature."""
 
     def fn_sub(m: re.Match) -> str:
@@ -712,16 +784,24 @@ def compact_legacy(text: str) -> str:
         first = re.sub(r"\s*=\s*$", "", first)
         return f"### {name}\n\n`{first}`\n\n"
 
-    text = LEGACY_FN.sub(fn_sub, text)
-    text = LEGACY_TYPE.sub(r"### \1\n\n`type \1\2`\n", text)
+    text = DOCUMENTED_FN.sub(fn_sub, text)
+    text = DOCUMENTED_TYPE.sub(r"### \1\n\n`type \1\2`\n", text)
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
-HEADING_SIG = re.compile(r"^### ([a-z][a-zA-Z0-9_]*)\n\n`([^`]+)`\n", re.MULTILINE)
-HEADING_TYPED = re.compile(r"^### `([a-z][a-zA-Z0-9_]*) : [^`]+`\n", re.MULTILINE)
+HEADING_SIG = re.compile(
+    r"^### ([a-z][a-zA-Z0-9_]*)\n\n`([^`]+)`\n", re.MULTILINE
+)
+HEADING_TYPED = re.compile(
+    r"^### `([a-z][a-zA-Z0-9_]*) : [^`]+`\n", re.MULTILINE
+)
 
 
-def apply_yonai_sigs(text: str, yonai: dict[str, dict], type_arities: dict[str, list[str]] | None = None) -> str:
+def apply_yonai_sigs(
+    text: str,
+    yonai: dict[str, dict],
+    type_arities: dict[str, list[str]] | None = None,
+) -> str:
     """Replace parameter-list signatures with `name : T1 -> T2 -> R` from .yonai."""
 
     def pretty_of(name: str) -> str | None:
@@ -731,7 +811,6 @@ def apply_yonai_sigs(text: str, yonai: dict[str, dict], type_arities: dict[str, 
         return pretty_arrow(
             y["params"],
             y["ret"],
-            y.get("retadt"),
             type_arities,
             fn_name=name,
         )
@@ -772,7 +851,7 @@ def first_sentence(module_doc: list[str]) -> str:
     return desc
 
 
-def parse_legacy_index_row(path: Path) -> dict | None:
+def parse_existing_index_row(path: Path) -> dict | None:
     text = path.read_text()
     heading = re.match(r"^#\s+(.+)$", text, re.MULTILINE)
     if not heading:
@@ -782,7 +861,12 @@ def parse_legacy_index_row(path: Path) -> dict | None:
     paras = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
     desc = ""
     for p in paras:
-        if p.startswith("#") or p.startswith("|") or p.startswith("```") or p.startswith("**"):
+        if (
+            p.startswith("#")
+            or p.startswith("|")
+            or p.startswith("```")
+            or p.startswith("**")
+        ):
             continue
         desc = p.split("\n", 1)[0]
         if ". " in desc:
@@ -790,11 +874,19 @@ def parse_legacy_index_row(path: Path) -> dict | None:
         break
     n_fn = len(re.findall(r"^### ", text, re.MULTILINE))
     # types/traits use ### too; count Functions-section headings only
-    fn_section = re.search(r"^## Functions\n([\s\S]*?)(?=^## |\Z)", text, re.MULTILINE)
+    fn_section = re.search(
+        r"^## Functions\n([\s\S]*?)(?=^## |\Z)", text, re.MULTILINE
+    )
     if fn_section:
         n_fn = len(re.findall(r"^### ", fn_section.group(1), re.MULTILINE))
-    type_section = re.search(r"^## Types\n([\s\S]*?)(?=^## |\Z)", text, re.MULTILINE)
-    n_ty = len(re.findall(r"^### ", type_section.group(1), re.MULTILINE)) if type_section else 0
+    type_section = re.search(
+        r"^## Types\n([\s\S]*?)(?=^## |\Z)", text, re.MULTILINE
+    )
+    n_ty = (
+        len(re.findall(r"^### ", type_section.group(1), re.MULTILINE))
+        if type_section
+        else 0
+    )
     return {
         "title": title,
         "file": path.name,
@@ -827,18 +919,20 @@ def main() -> None:
     for md in sorted(OUT_DIR.glob("*.md")):
         if md.name in written or md.name == "README.md":
             continue
-        compacted = compact_legacy(md.read_text())
+        compacted = compact_existing_doc(md.read_text())
         yonai = parse_yonai(LIB_DIR / (md.stem + ".yonai"))
         compacted = apply_yonai_sigs(compacted, yonai)
         if compacted != md.read_text():
             md.write_text(compacted)
-        row = parse_legacy_index_row(md)
+        row = parse_existing_index_row(md)
         if row:
             leftover_rows.append(row)
-            print(f"  {row['title']}: {row['functions']} functions (legacy)")
+            print(f"  {row['title']}: {row['functions']} functions")
 
     index = ["# Yona Standard Library API Reference", ""]
-    n_fn = sum(len(m["functions"]) for m in modules) + sum(r["functions"] for r in leftover_rows)
+    n_fn = sum(len(m["functions"]) for m in modules) + sum(
+        r["functions"] for r in leftover_rows
+    )
     n_mod = len(modules) + len(leftover_rows)
     index.append(f"{n_fn} public functions across {n_mod} modules.")
     index.append("")

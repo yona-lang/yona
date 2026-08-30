@@ -68,10 +68,10 @@ type Whence = SeekSet | SeekCur | SeekEnd
 
 ## Compile-time type representation returned by typeOf.
 ## Use case-of pattern matching for type-based dispatch.
-type Type = TInt | TFloat | TBool | TString | TSymbol | TUnit
-          | TSeq | TSet | TDict | TTuple | TFunction | TPromise
-          | TByteArray | TIntArray | TFloatArray
-          | TAdt String | TSum | TRecord
+type Type = TypeInt | TypeFloat | TypeBool | TypeString | TypeSymbol | TypeUnit
+          | TypeSeq | TypeSet | TypeDict | TypeTuple | TypeFunction | TypePromise
+          | TypeByteArray | TypeIntArray | TypeFloatArray
+          | TypeAdt String | TypeSum | TypeRecord
           deriving Eq, Ord, Hash, Show, Send, Shareable
 
 ## Equality. Implementations must be reflexive, symmetric, and transitive.
@@ -96,7 +96,7 @@ trait Show a
 end
 
 ## Random-access finite values. Prefer `Sized`, `Iterable`, and `Foldable` in
-## generic APIs; Array remains the indexed compatibility contract.
+## generic APIs; `Array` is the indexed contract.
 trait Array array element
     length : array -> Int
     get : array -> Int -> element
@@ -211,38 +211,38 @@ end
 instance Shareable left, Shareable right => Shareable (Tuple left right)
 end
 
-extern primitiveEqInt : Int -> Int -> Bool = "yona_Prelude__Eq_Int__eq"
-extern primitiveEqFloat : Float -> Float -> Bool = "yona_Prelude__Eq_Float__eq"
-extern primitiveEqBool : Bool -> Bool -> Bool = "yona_Prelude__Eq_Bool__eq"
-extern primitiveEqString : String -> String -> Bool = "yona_Prelude__Eq_String__eq"
-extern primitiveEqSymbol : Symbol -> Symbol -> Bool = "yona_Prelude__Eq_Symbol__eq"
+extern primitiveEqInt : Int -> Int -> Bool = "YonaRuntimeEqIntEq"
+extern primitiveEqFloat : Float -> Float -> Bool = "YonaRuntimeEqFloatEq"
+extern primitiveEqBool : Bool -> Bool -> Bool = "YonaRuntimeEqBoolEq"
+extern primitiveEqString : String -> String -> Bool = "YonaRuntimeEqStringEq"
+extern primitiveEqSymbol : Symbol -> Symbol -> Bool = "YonaRuntimeEqSymbolEq"
 
-extern primitiveCompareInt : Int -> Int -> Int = "yona_Prelude__Ord_Int__compare"
-extern primitiveCompareFloat : Float -> Float -> Int = "yona_Prelude__Ord_Float__compare"
-extern primitiveCompareBool : Bool -> Bool -> Int = "yona_Prelude__Ord_Bool__compare"
-extern primitiveCompareString : String -> String -> Int = "yona_Prelude__Ord_String__compare"
+extern primitiveCompareInt : Int -> Int -> Int = "YonaRuntimeOrdIntCompare"
+extern primitiveCompareFloat : Float -> Float -> Int = "YonaRuntimeOrdFloatCompare"
+extern primitiveCompareBool : Bool -> Bool -> Int = "YonaRuntimeOrdBoolCompare"
+extern primitiveCompareString : String -> String -> Int = "YonaRuntimeOrdStringCompare"
 
-extern primitiveHashInt : Int -> Int = "yona_Prelude__Hash_Int__hash"
-extern primitiveHashFloat : Float -> Int = "yona_Prelude__Hash_Float__hash"
-extern primitiveHashBool : Bool -> Int = "yona_Prelude__Hash_Bool__hash"
-extern primitiveHashString : String -> Int = "yona_Prelude__Hash_String__hash"
-extern primitiveHashSymbol : Symbol -> Int = "yona_Prelude__Hash_Symbol__hash"
+extern primitiveHashInt : Int -> Int = "YonaRuntimeHashIntHash"
+extern primitiveHashFloat : Float -> Int = "YonaRuntimeHashFloatHash"
+extern primitiveHashBool : Bool -> Int = "YonaRuntimeHashBoolHash"
+extern primitiveHashString : String -> Int = "YonaRuntimeHashStringHash"
+extern primitiveHashSymbol : Symbol -> Int = "YonaRuntimeHashSymbolHash"
 
-extern primitiveShowInt : Int -> String = "yona_Prelude__Show_Int__show"
-extern primitiveShowFloat : Float -> String = "yona_Prelude__Show_Float__show"
-extern primitiveShowBool : Bool -> String = "yona_Prelude__Show_Bool__show"
-extern primitiveShowString : String -> String = "yona_Prelude__Show_String__show"
-extern primitiveShowSymbol : Symbol -> String = "yona_Prelude__Show_Symbol__show"
-extern primitiveSizeString : String -> Int = "yona_Prelude__Array_String__length"
-extern primitiveSizeSeq : Seq a -> Int = "yona_Prelude__Array_Seq__length"
-extern primitiveGetString : String -> Int -> Int = "yona_Prelude__Array_String__get"
-extern primitiveGetSeq : Seq element -> Int -> element = "yona_Prelude__Array_Seq__get"
-extern primitiveSizeByteArray : ByteArray -> Int = "yona_Prelude__Array_ByteArray__length"
-extern primitiveGetByteArray : ByteArray -> Int -> Int = "yona_Prelude__Array_ByteArray__get"
-extern primitiveSizeIntArray : IntArray -> Int = "yona_Prelude__Array_IntArray__length"
-extern primitiveGetIntArray : IntArray -> Int -> Int = "yona_Prelude__Array_IntArray__get"
-extern primitiveSizeFloatArray : FloatArray -> Int = "yona_Prelude__Array_FloatArray__length"
-extern primitiveGetFloatArray : FloatArray -> Int -> Float = "yona_Prelude__Array_FloatArray__get"
+extern primitiveShowInt : Int -> String = "YonaRuntimeShowIntShow"
+extern primitiveShowFloat : Float -> String = "YonaRuntimeShowFloatShow"
+extern primitiveShowBool : Bool -> String = "YonaRuntimeShowBoolShow"
+extern primitiveShowString : String -> String = "YonaRuntimeShowStringShow"
+extern primitiveShowSymbol : Symbol -> String = "YonaRuntimeShowSymbolShow"
+extern primitiveSizeString : String -> Int = "YonaRuntimeArrayStringLength"
+extern primitiveSizeSeq : Seq a -> Int = "YonaRuntimeArraySeqLength"
+extern primitiveGetString : String -> Int -> Int = "YonaRuntimeArrayStringGet"
+extern primitiveGetSeq : Seq element -> Int -> element = "YonaRuntimeArraySeqGet"
+extern primitiveSizeByteArray : ByteArray -> Int = "YonaRuntimeArrayByteArrayLength"
+extern primitiveGetByteArray : ByteArray -> Int -> Int = "YonaRuntimeArrayByteArrayGet"
+extern primitiveSizeIntArray : IntArray -> Int = "YonaRuntimeArrayIntArrayLength"
+extern primitiveGetIntArray : IntArray -> Int -> Int = "YonaRuntimeArrayIntArrayGet"
+extern primitiveSizeFloatArray : FloatArray -> Int = "YonaRuntimeArrayFloatArrayLength"
+extern primitiveGetFloatArray : FloatArray -> Int -> Float = "YonaRuntimeArrayFloatArrayGet"
 
 ordering value = if value < 0 then Less else if value > 0 then Greater else Equal
 

@@ -1,6 +1,6 @@
 # Yona Standard Library API Reference
 
-437 public functions across 40 modules.
+436 public functions across 40 modules.
 
 | Module | Functions | Types | Description |
 |--------|-----------|-------|-------------|
@@ -16,10 +16,10 @@
 | [Std.FloatArray](FloatArray.md) | 11 | 0 | Contiguous unboxed array of `Float` (64-bit double) values. |
 | [Std.Format](Format.md) | 1 | 0 | Format -- string formatting with positional placeholders. |
 | [Std.Function](Function.md) | 8 | 0 | Function combinators — identity, composition, application, flipping. |
-| [Std.GPU](GPU.md) | 43 | 7 | Std\GPU — accelerated columnar execution. |
+| [Std.Gpu](Gpu.md) | 42 | 7 | Std\Gpu — accelerated columnar execution. |
 | [Std.Http](Http.md) | 11 | 3 | HTTP client and server — built on Std\Net and Std\String. |
 | [Std.IntArray](IntArray.md) | 15 | 0 | Contiguous unboxed array of `Int` values. |
-| [Std.IO](IO.md) | 18 | 0 | Std\IO — non-blocking console and handle-based byte I/O. |
+| [Std.Io](Io.md) | 18 | 0 | Std\Io — non-blocking console and handle-based byte I/O. |
 | [Std.Iterator](Iterator.md) | 7 | 0 | Stateful pull-iterator adapters and consumers. |
 | [Std.Json](Json.md) | 11 | 1 | Recursive JSON values — object/array parse and stringify. |
 | [Std.List](List.md) | 29 | 0 | Sequence (list) operations — map, filter, fold, sort, and more. |
@@ -37,11 +37,10 @@
 | [Std.Result](Result.md) | 11 | 0 | Error handling — represents either success (`Ok value`) or failure (`Err error`). |
 | [Std.Set](Set.md) | 9 | 0 | Set — persistent set backed by a Hash Array Mapped Trie (HAMT). |
 | [Std.String](String.md) | 27 | 0 | String -- string manipulation and conversion. |
-| [Std.Task](Task.md) | 1 | 0 | Task spawning for concurrent execution. |
+| [Std.Task](Task.md) | 1 | 0 | Std\Task — descriptor-owned structured task spawning. |
 | [Std.Test](Test.md) | 7 | 3 | Yona-native test cases, reports, and assertions. |
 | [Std.Time](Time.md) | 6 | 0 | Time -- timestamps, sleeping, and elapsed time measurement. |
 | [Std.TraitLaws](TraitLaws.md) | 6 | 0 | Reusable executable laws for foundational trait instances. |
 | [Std.Tuple](Tuple.md) | 9 | 0 | Operations on 2-tuples (pairs). |
 | [Std.Types](Types.md) | 5 | 0 | Types -- runtime type conversions. |
 | [Std.Utf16](Utf16.md) | 3 | 0 | UTF-8 byte offsets ↔ LSP UTF-16 positions. |
-

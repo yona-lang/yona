@@ -1,6 +1,8 @@
 ---
 title: Editor and language server
-description: Syntax highlighting and semantic features for Yona in VS Code and other LSP clients.
+description:
+  Syntax highlighting and semantic features for Yona in VS Code and other LSP
+  clients.
 ---
 
 Yona ships a TextMate grammar and a language server named **`yls`**.
@@ -34,15 +36,15 @@ The extension lives in the compiler repository at `editors/vscode`.
    `npm run compile`, or install a packaged `.vsix` when one is published.
 3. Open a `.yona` or `.yonai` file.
 
-The extension starts `yls --stdio`. If the server is missing, highlighting
-still works and a warning is shown.
+The extension starts `yls --stdio`. If the server is missing, highlighting still
+works and a warning is shown.
 
 ### Settings
 
-| Setting | Meaning |
-|---------|---------|
+| Setting                    | Meaning                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `yona.languageServer.path` | Absolute path to `yls`. Empty: search `PATH`, then `$YONA_HOME/bin/yls`, then the directory that contains `yonac`. |
-| `yona.trace.server` | `off`, `messages`, or `verbose` LSP tracing (vscode-languageclient). |
+| `yona.trace.server`        | `off`, `messages`, or `verbose` LSP tracing (vscode-languageclient).                                               |
 
 Do not hard-code Homebrew or `/usr/local` prefixes. Discovery uses the
 environment and sibling binaries.
@@ -52,15 +54,15 @@ environment and sibling binaries.
 - Syntax highlighting (shared grammar with the documentation site)
 - Comments, brackets, and `end`-aware indentation
 - Diagnostics from parse, type, refinement, and linearity checking
-- Hover, go-to-definition, highlight, and completion still work on a
-  prefix that parsed when the buffer is incomplete (`let answer = 42 in`,
-  a trailing operator, unfinished `do` / `if` / `case`). The squiggle
-  stays the original parse error; recovery does not replace it.
-- Hover types, go-to-definition (same file, imported names, and
-  `Module.fn` calls), find references, document highlight,
-  rename (imported names are renamed only in the current file)
-- Modules that start with `#` / `##` documentation are analyzed as modules
-  (same rule as `yonac`)
+- Hover, go-to-definition, highlight, and completion still work on a prefix that
+  parsed when the buffer is incomplete (`let answer = 42 in`, a trailing
+  operator, unfinished `do` / `if` / `case`). The squiggle stays the original
+  parse error; recovery does not replace it.
+- Hover types, go-to-definition (same file, imported names, and `Module.fn`
+  calls), find references, document highlight, rename (imported names are
+  renamed only in the current file)
+- Modules that start with `#` / `##` documentation are analyzed as modules (same
+  rule as `yonac`)
 - Workspace folder roots are searched for modules; open buffers refresh when
   watched `.yona` / `.yonai` files change
 - Completion, document/workspace symbols, semantic tokens
@@ -76,13 +78,13 @@ yls --stdio
 
 Optional `-I path` adds a module search directory, matching `yonac -I`.
 
-A Yona-written transport slice, `yls-yona`, speaks `Content-Length`
-JSON-RPC over stdio (`initialize`, `didOpen`, `shutdown`, `exit`) using
-`Std\IO.readExact` / `writeBytes`, `Std\Json`, and `Std\Utf16`. Hover and
-definition still need the C++ `yls` binary, which remains the editor
-default. Build it with CMake target `yls-yona`; smoke:
-`python3 scripts/ci/smoke-yls-yona.py out/build/x64-debug-linux/yls-yona`.
-On Windows, `readExact` / `writeBytes` put CRT stdio in binary mode so
+A Yona-written transport slice, `yls-yona`, speaks `Content-Length` JSON-RPC
+over stdio (`initialize`, `didOpen`, `shutdown`, `exit`) using
+`Std\Io.readExact` / `writeBytes`, `Std\Json`, and `Std\Utf16`. Hover and
+definition still need the C++ `yls` binary, which remains the editor default.
+Build it with CMake target `yls-yona`; smoke:
+`python3 scripts/ci/smoke_yls_yona.py out/build/x64-debug-linux/yls-yona`. On
+Windows, `readExact` / `writeBytes` put CRT stdio in binary mode so
 `Content-Length` `\r\n` framing stays byte-exact.
 
 ## Grammar source of truth
@@ -105,17 +107,16 @@ npm test
 npm run vsix
 ```
 
-Then **Extensions: Install from VSIX…** and choose `yona-<version>.vsix`.
-Pull requests and pushes to `master`/`main` also build that artifact
+Then **Extensions: Install from VSIX…** and choose `yona-<version>.vsix`. Pull
+requests and pushes to `master`/`main` also build that artifact
 (`vscode-extension` job in CMake Multi-Platform) and do not publish it.
 
-Release CI publishes the same VSIX to the Visual Studio Marketplace when a
-`v*` tag is pushed (Release workflow jobs `vscode-vsix` then
-`publish-marketplace`). `vsce publish --packagePath` reads `VSCE_PAT` from
-the environment. Open VSX (`publish-openvsx`) runs
-`ovsx publish --packagePath` for publisher `yona-lang` with repository
-secret `OVSX_PAT`. The job is still skipped if that secret is unset so
-the workflow stays green. The `yona-lang` namespace is claimed on
+Release CI publishes the same VSIX to the Visual Studio Marketplace when a `v*`
+tag is pushed (Release workflow jobs `vscode-vsix` then `publish-marketplace`).
+`vsce publish --packagePath` reads `VSCE_PAT` from the environment. Open VSX
+(`publish-openvsx`) runs `ovsx publish --packagePath` for publisher `yona-lang`
+with repository secret `OVSX_PAT`. The job is still skipped if that secret is
+unset so the workflow stays green. The `yona-lang` namespace is claimed on
 [Open VSX](https://open-vsx.org/). Tag version must match
 `editors/vscode/package.json`.
 

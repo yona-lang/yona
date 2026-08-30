@@ -1,12 +1,13 @@
-IO yona_Std_Net__tcpConnect 2 STRING INT -> LINEAR
-FN yona_Std_Net__tcpListen 2 STRING INT -> LINEAR
-IO yona_Std_Net__tcpAccept 1 INT -> LINEAR
-IO yona_Std_Net__send 2 INT STRING -> INT
-IO yona_Std_Net__recv 2 INT INT -> STRING
-IO yona_Std_Net__sendBytes 2 INT BYTE_ARRAY -> INT
-IO yona_Std_Net__recvBytes 2 INT INT -> BYTE_ARRAY
-FN yona_Std_Net__close 1 INT -> INT
-FN yona_Std_Net__udpBind 2 STRING INT -> LINEAR
-FN yona_Std_Net__udpSendTo 4 INT STRING INT STRING -> INT
-FN yona_Std_Net__udpRecv 2 INT INT -> STRING
-FN yona_Std_Net__peerAddress 1 INT -> STRING
+MODULE Std\Net
+FN close 1 INT -> INT
+FN peerAddress 1 INT -> STRING
+IO recv 2 INT INT -> STRING
+IO recvBytes 2 INT INT -> BYTE_ARRAY
+IO send 2 INT STRING -> INT
+IO sendBytes 2 INT BYTE_ARRAY -> INT
+IO tcpAccept 1 INT -> LINEAR
+IO tcpConnect 2 STRING INT -> LINEAR
+FN tcpListen 2 STRING INT -> LINEAR
+FN udpBind 2 STRING INT -> LINEAR
+FN udpRecv 2 INT INT -> STRING
+FN udpSendTo 4 INT STRING INT STRING -> INT

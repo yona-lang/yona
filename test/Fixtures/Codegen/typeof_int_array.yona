@@ -1,0 +1,5 @@
+import fromSeq from Std\IntArray in
+case typeOf (fromSeq [1, 2, 3]) of
+    TypeIntArray -> 1
+    _ -> 0
+end

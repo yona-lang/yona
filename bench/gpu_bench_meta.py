@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Extract coarse metadata from Std\\GPU accelerator benches (crossover notes).
+Extract coarse metadata from Std\\Gpu accelerator benches (crossover notes).
 
 Scans bench/accelerators/gpu_*.yona for `build N` list size, optional
 `filterGreaterThan T`, and `let x = N in` numeric bindings (float-scale benches).
-Intended to be pasted next to run_gpu_compare.py
---json-report output (see docs/gpu-transparent-lowering.md).
+Intended to be pasted next to `run_gpu_compare.py --json` output (see
+docs/gpu-transparent-lowering.md).
 
 Usage:
   python3 bench/gpu_bench_meta.py
@@ -47,7 +47,9 @@ def main() -> int:
     if not paths:
         paths = sorted(BENCH_DIR.glob("gpu_*.yona"))
     out = [scrape(p) for p in paths if p.suffix == ".yona" and p.is_file()]
-    print(json.dumps({"schema": "yona.gpu_bench_meta.v1", "benches": out}, indent=2))
+    print(
+        json.dumps({"schema": "yona.gpu_bench_meta", "benches": out}, indent=2)
+    )
     return 0
 
 

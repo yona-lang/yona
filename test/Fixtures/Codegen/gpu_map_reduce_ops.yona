@@ -1,0 +1,9 @@
+import fromSeq from Std\IntArray in
+import upload, mapGpu, reduceGpu, mapReduceGraphGpu, Add, Mul, Sum from Std\Gpu in
+let input = fromSeq [1, 2, 3, 4, 5] in
+let buffer = upload input in
+let shifted = mapGpu (Add 1) buffer in
+let doubled = mapGpu (Mul 2) shifted in
+let viaOps = reduceGpu Sum doubled in
+let viaGraph = mapReduceGraphGpu [Add 1, Mul 2] buffer in
+viaOps * 1000 + viaGraph

@@ -69,7 +69,7 @@ Every heap-allocated value has a 2-word header before the payload:
                                          ^-- pointer returned to user
 ```
 
-- `refcount`: starts at 1 from `rc_alloc`. Atomic increment/decrement.
+- `refcount`: starts at 1 from `YonaRuntimeAllocate`. Atomic increment/decrement.
 - `type_tag_encoded`: lower 8 bits = type tag, upper bits = pool class
   index + 1 (0 = not pooled, 1-4 = pool class 0-3). Encoded via
   `ENCODE_TAG(tag, cls)`, decoded via `DECODE_TAG` / `DECODE_POOL_CLASS`.
@@ -81,15 +81,13 @@ Every heap-allocated value has a 2-word header before the payload:
 | Tag | Name | Description |
 |-----|------|-------------|
 | 1 | `RC_TYPE_SEQ` | Flat sequence |
-| 2 | `RC_TYPE_SET` | Set |
-| 3 | `RC_TYPE_DICT` | Dictionary |
+| 3 | `RC_TYPE_DICT` | HAMT dictionary or set |
 | 4 | `RC_TYPE_ADT` | Algebraic data type (recursive, heap-allocated) |
 | 5 | `RC_TYPE_CLOSURE` | General closure (env-passing) |
 | 6 | `RC_TYPE_STRING` | String |
 | 7 | `RC_TYPE_BOX` | Boxed value (generic) |
 | 8 | `RC_TYPE_BYTES` | Binary data |
 | 9 | `RC_TYPE_TUPLE` | Tuple |
-| 11 | `RC_TYPE_CHUNKED` | Legacy chunked sequence node (unused) |
 | 12 | `RC_TYPE_RBT` | RBT sequence root (head chain + trie + tail buffer) |
 | 13 | `RC_TYPE_RBT_NODE` | RBT internal trie node (32 child pointers) |
 | 14 | `RC_TYPE_RBT_LEAF` | RBT trie leaf (heap_flag + 32 elements) |
@@ -104,16 +102,6 @@ Every heap-allocated value has a 2-word header before the payload:
 - `SEQ_HDR_SIZE = 2` (count + heap_flag)
 - Elements at `payload[SEQ_HDR_SIZE + index]`
 - `heap_flag`: 1 if elements are heap-typed pointers (for recursive rc_dec)
-
-### Chunked Sequence (`RC_TYPE_CHUNKED`)
-```
-[total_length: i64] [offset: i64] [count: i64] [elems: i64 * 32] [next: ptr]
-```
-- Linked list of 32-element chunks
-- `offset`: first valid element index in `elems[]`
-- `count`: number of valid elements from `offset`
-- `next`: RC-managed pointer to the next chunk (or NULL)
-- Structural sharing: `cons` creates a new head chunk pointing to the old
 
 ### Closure (`RC_TYPE_CLOSURE`)
 ```
@@ -138,13 +126,8 @@ Every heap-allocated value has a 2-word header before the payload:
 - Elements at `payload[2 + index]`
 - `heap_mask`: bitmask of heap-typed elements
 
-### Set (`RC_TYPE_SET`)
-```
-[count: i64] [heap_flag: i64] [elem0: i64] [elem1: i64] ...
-```
-- Elements at `payload[2 + index]`
+### Dictionary and Set HAMT (`RC_TYPE_DICT`)
 
-### Dict — HAMT (`RC_TYPE_DICT`)
 ```
 [datamap: i64] [nodemap: i64] [size: i64] [k0: i64] [v0: i64] ... [child0: ptr] ...
 ```
@@ -156,6 +139,8 @@ Every heap-allocated value has a 2-word header before the payload:
 - Hash function: splitmix64 for i64 keys
 - O(1) amortized lookup/insert (max 7 levels)
 - Persistent: insert creates new path-copy nodes, shares structure with old
+- The `YONA_HAMT_FLAG_IS_SET` descriptor bit distinguishes sets; elements are
+  stored as keys with an internal unit value.
 
 ## Atomic Reference Counting
 
@@ -175,10 +160,10 @@ if (old <= 1) { /* free path */ }
 Non-escaping let-bound values are bump-allocated from a per-scope arena
 instead of malloc. The escape analysis in `codegen_let` determines which
 bindings don't escape (not returned, not captured by closures, not passed
-to opaque functions). Non-escaping bindings use `yona_rt_arena_alloc`
+to opaque functions). Non-escaping bindings use `YonaRuntimeArenaAllocate`
 which prepends an RC header with `refcount = INT64_MAX` (sentinel).
 `rc_dec` checks for the sentinel and skips — arena values are freed
-in bulk by `yona_rt_arena_destroy` at scope exit.
+in bulk by `YonaRuntimeArenaDestroy` at scope exit.
 
 Benefits:
 - Bump allocation is ~3x faster than malloc
@@ -189,19 +174,19 @@ Benefits:
 
 Multi-binding `let` blocks (implicit **task group**, see `docs/structured-concurrency.md`)
 always allocate a bump arena on the **parent thread**, attach it to the
-`yona_task_group_t`, and route non-escaping bindings plus the let **body**
+`YonaTaskGroup`, and route non-escaping bindings plus the let **body**
 through `current_arena_` into that arena. On normal completion,
-`yona_rt_group_end` destroys the arena wholesale after `cleanup_let_scope`
+`YonaRuntimeTaskGroupEnd` destroys the arena wholesale after `cleanup_let_scope`
 (so arena-backed seq/tuple/dict payloads are not individually `rc_dec`'d).
 
-On **`raise`**, `yona_rt_raise` (`src/runtime/exceptions.c`) walks a small
+On **`raise`**, `YonaRuntimeRaise` (`src/Runtime/Core/Exceptions.c`) walks a small
 TLS stack of active task groups (recorded at `group_arena_bind_push` time
-with the current `yona_try_depth`) and calls `yona_rt_group_end` for each
+with the current `yona_try_depth`) and calls `YonaRuntimeTaskGroupEnd` for each
 scope being unwound past the target `catch` — so bump memory and the group
 struct are reclaimed even when LLVM never reaches the normal `group_end`
 call site.
 
-Async work scheduled into the thread pool does **not** use this arena (v1);
+Async work scheduled into the thread pool does **not** use this arena;
 only synchronous codegen in the enclosing function uses the bump pointer.
 
 ## Recursive Destructors
@@ -266,9 +251,9 @@ Perceus-linear callee-owns convention:
   return value shows the param was returned to the caller.
 
 **Pattern-match head-tail** (`codegen_pattern_headtail`):
-- Single-use scrut → `yona_rt_seq_tail_consume`. In-place on rc==1,
+- Single-use scrut → `YonaRuntimeSequenceConsumeTail`. In-place on rc==1,
   copy + rc_dec on rc>1.
-- Multi-use scrut → `rc_inc` first, use plain `yona_rt_seq_tail`,
+- Multi-use scrut → `rc_inc` first, use plain `YonaRuntimeSequenceTail`,
   drop both tail and the incremented scrut at arm exit.
 - Empty-seq arm (`[] -> …`): explicit `rc_dec` of the scrutinee at
   the body_bb entry, AND insertion into `transferred_seqs_` so the
@@ -291,10 +276,9 @@ Perceus-linear callee-owns convention:
   branch are never dropped across branches.
 
 **Runtime consume paths** (set/dict):
-- `yona_rt_set_insert` / `yona_rt_dict_put`: after `hamt_put`, if the
+- `YonaRuntimeSetInsert` / `YonaRuntimeDictionaryPut`: after `hamt_put`, if the
   result pointer differs from the input we path-copied — rc_dec the
   old HAMT so the caller's one-ref-in is matched by one-ref-out.
-- `set_ensure_hamt` consumes the flat set on flat→HAMT conversion.
 - Without these, `let a = build N {} in let b = build N {} in …`
   would double-drop: each build level's `%s` could alias the same
   object after in-place mutations, and a deeper level's path-copy
@@ -312,7 +296,7 @@ Perceus-linear callee-owns convention:
 Earlier Perceus attempts on seqs hit "glibc tcache corruption" on
 long seq chains because every allocation went through the tcache
 free-list. The current fix flows `seq_cons` / `seq_tail` ownership
-through `rc_alloc` / `pool_free` with a fixed slab allocator (see
+through `YonaRuntimeAllocate` / `pool_free` with a fixed slab allocator (see
 pool section) that avoids tcache entirely. Combined with the
 `transferred_seqs_` tracking and the fixed `count_identifier_refs`
 traversal (previously dropping arguments inside curried `ExprCall`
@@ -369,7 +353,7 @@ the I/O completes. If the user-side RC frees the buffer before completion,
 the kernel reads freed memory.
 
 Fix: write/send operations copy the content to an RC-managed buffer at
-submit time. The buffer is `rc_dec`'d in the completer (`yona_rt_io_await`)
+submit time. The buffer is `rc_dec`'d in the completer (`YonaRuntimeIoAwait`)
 after the kernel signals completion.
 
 Read/recv buffers are allocated by the runtime (not user-provided), so
@@ -444,7 +428,7 @@ for every async call without significant benefit.
 ## Summary of RC Lifecycle
 
 ```
-Value created:    rc_alloc → pool_alloc(total) → rc=1, type_tag encoded
+Value created:    YonaRuntimeAllocate → pool_alloc(total) → rc=1, type_tag encoded
 Let binding:      no rc change (rc=1 from alloc)
 DUP at call:      rc_inc at call site for named heap args EXCEPT on
                   single-use (SEQ/SET/DICT) or inferred borrowed params.
@@ -475,16 +459,16 @@ Non-escaping:     arena bump-alloc, no per-object RC, bulk free at scope exit
 
 | File | Role |
 |------|------|
-| `src/compiled_runtime.c` | RC infrastructure, pool allocator, arena; `set_insert` / `dict_put` consume paths |
-| `src/runtime/seq.c` | Persistent seq with chunked list, consume variants |
-| `src/runtime/hamt.c` | HAMT put/get/destroy, size-delta tracking for same-key replace |
-| `src/codegen/CodegenUtils.cpp` | `emit_rc_inc`, `emit_rc_dec`, `is_heap_type` |
-| `src/codegen/CodegenExpr.cpp` | Scope-exit RC in `codegen_let`, transfer_scope helpers, Perceus analysis |
-| `src/codegen/CodegenFunction.cpp` | DUP at call sites (single-use detection for SEQ/SET/DICT), DROP at function exit, `transferred_maps_` for extern map ops |
-| `src/codegen/CodegenCase.cpp` | Per-branch transfer_scope for case arms, head-tail consume, empty-arm scrut drop |
-| `src/codegen/CodegenCollections.cpp` | heap_mask for tuples/seqs |
-| `src/codegen/LastUseAnalysis.cpp` | Backward AST walk for last-use detection |
-| `include/LastUseAnalysis.h` | Last-use analysis API |
-| `include/Codegen.h` | `CompiledFunction.closure_env`, `transferred_seqs_`, `transferred_maps_`, `TransferScope` helpers |
-| `src/runtime/platform/file_linux.c` | io_uring buffer pinning (write) |
-| `src/runtime/platform/net_linux.c` | io_uring buffer pinning (send) |
+| `yona_runtime_core` | RC infrastructure, pool allocator, arena, and value descriptors |
+| `src/Runtime/Collections/Sequence.c` | Persistent seq with chunked list, consume variants |
+| `src/Runtime/Collections/Hamt.c` | HAMT put/get/destroy, size-delta tracking for same-key replace |
+| `src/Codegen/CodegenUtils.cpp` | `emit_rc_inc`, `emit_rc_dec`, `is_heap_type` |
+| `src/Codegen/CodegenExpr.cpp` | Scope-exit RC in `codegen_let`, transfer_scope helpers, Perceus analysis |
+| `src/Codegen/CodegenFunction.cpp` | DUP at call sites (single-use detection for SEQ/SET/DICT), DROP at function exit, `transferred_maps_` for extern map ops |
+| `src/Codegen/CodegenCase.cpp` | Per-branch transfer_scope for case arms, head-tail consume, empty-arm scrut drop |
+| `src/Codegen/CodegenCollections.cpp` | heap_mask for tuples/seqs |
+| `src/Codegen/LastUseAnalysis.cpp` | Backward AST walk for last-use detection |
+| `include/yona/Codegen/LastUseAnalysis.h` | Last-use analysis API |
+| `include/yona/Codegen/Codegen.h` | `CompiledFunction.closure_env`, `transferred_seqs_`, `transferred_maps_`, `TransferScope` helpers |
+| `src/Runtime/Platform/FileLinux.c` | io_uring buffer pinning (write) |
+| `src/Runtime/Platform/NetLinux.c` | io_uring buffer pinning (send) |

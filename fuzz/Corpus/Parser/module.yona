@@ -1,0 +1,5 @@
+module Fuzz\Example
+
+export identity
+
+identity value = value

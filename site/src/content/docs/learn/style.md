@@ -1,16 +1,18 @@
 ---
 title: Style
-description: Idiomatic Yona — flat lets, do for effects, with for resources, parallel comprehensions, folds, iterators, and naming conventions.
+description:
+  Idiomatic Yona — flat lets, do for effects, with for resources, parallel
+  comprehensions, folds, iterators, and naming conventions.
 ---
 
-Idiomatic Yona is not just aesthetics: several of these rules change what
-the compiler can do for you. Flat `let` bindings parallelize; nested ones
-serialize. Each rule below shows the bad form, the good form, and why.
+Idiomatic Yona is not just aesthetics: several of these rules change what the
+compiler can do for you. Flat `let` bindings parallelize; nested ones serialize.
+Each rule below shows the bad form, the good form, and why.
 
 ## Never nest `let`
 
-`let` takes multiple comma-separated bindings; nesting buries that and
-hurts readability.
+`let` takes multiple comma-separated bindings; nesting buries that and hurts
+readability.
 
 ```yona
 # Bad — unnecessary nesting
@@ -47,10 +49,10 @@ See [Concurrency](/learn/concurrency/) for the full model.
 
 ## `let` and `do` have different semantics
 
-`let` binds values. Independent right-hand sides may run in parallel and
-are awaited at first use. `do` sequences effects: every step runs strictly
-top to bottom, even when the steps look independent. Combining them is
-valid — and often the right shape — when you want both:
+`let` binds values. Independent right-hand sides may run in parallel and are
+awaited at first use. `do` sequences effects: every step runs strictly top to
+bottom, even when the steps look independent. Combining them is valid — and
+often the right shape — when you want both:
 
 ```yona
 # Good — two reads in flight, then ordered writes
@@ -63,12 +65,12 @@ in do
 end
 ```
 
-Putting those reads in a `do` would serialize them. Putting those writes in
-a multi-binding `let` would allow them to overlap. Use `let` when the
-bindings are values (and may run together); use `do` when *order itself*
-is the point. See [Concurrency](/learn/concurrency/).
+Putting those reads in a `do` would serialize them. Putting those writes in a
+multi-binding `let` would allow them to overlap. Use `let` when the bindings are
+values (and may run together); use `do` when _order itself_ is the point. See
+[Concurrency](/learn/concurrency/).
 
-The anti-pattern is using `let` *as* a sequencer for an unused effect:
+The anti-pattern is using `let` _as_ a sequencer for an unused effect:
 
 ```yona
 # Bad — discard-binding to force an effect
@@ -84,8 +86,8 @@ end
 ```
 
 `do` also takes intermediate bindings (`name = expr`), executed strictly in
-order — the idiomatic shape for a protocol or any sequential I/O where the
-steps depend on each other:
+order — the idiomatic shape for a protocol or any sequential I/O where the steps
+depend on each other:
 
 ```yona
 do
@@ -96,9 +98,9 @@ do
 end
 ```
 
-Do not wrap a single expression in `do`. Do not pad a function or program
-with a dummy last value such as `0` — the last real expression *is* the
-result (`println` already yields `()`).
+Do not wrap a single expression in `do`. Do not pad a function or program with a
+dummy last value such as `0` — the last real expression _is_ the result
+(`println` already yields `()`).
 
 ## Comma-separate imports
 
@@ -108,21 +110,21 @@ benefit.
 ```yona
 # Bad — one import wrapping another
 import length from Std\String in
-import println from Std\IO in
+import println from Std\Io in
 println (length "hello")
 ```
 
 ```yona
 # Good — one import expression, comma-separated clauses
-import length from Std\String, println from Std\IO in
+import length from Std\String, println from Std\Io in
 println (length "hello")
 # 5
 ```
 
 ## Use `with` for resources
 
-Manual close calls are lost on every early exit and exception; `with`
-releases the resource deterministically when the scope exits.
+Manual close calls are lost on every early exit and exception; `with` releases
+the resource deterministically when the scope exits.
 
 ```yona
 # Bad — close is skipped if send raises
@@ -139,9 +141,8 @@ with fd = tcpConnect "localhost" 8080 in
     send fd "hello"
 ```
 
-The resource type must implement `Closeable` — this is verified at compile
-time, so a `with` over a non-resource is an error, not a surprise at
-runtime.
+The resource type must implement `Closeable` — this is verified at compile time,
+so a `with` over a non-resource is an error, not a surprise at runtime.
 
 ## Parallel comprehensions for concurrent work
 
@@ -163,14 +164,14 @@ thread pool; `[| … ]` runs one task per element and keeps result order.
 # => [2, 4, 6, 8, 10]
 ```
 
-Keep the plain form `[ … ]` for cheap pure bodies, where task overhead
-would exceed the work.
+Keep the plain form `[ … ]` for cheap pure bodies, where task overhead would
+exceed the work.
 
 ## `foldl` for aggregation
 
 Hand-rolled non-tail recursion over a sequence grows the call stack;
-`Std\List.foldl` is tail-recursive, which the compiler turns into a loop,
-so it cannot overflow.
+`Std\List.foldl` is tail-recursive, which the compiler turns into a loop, so it
+cannot overflow.
 
 ```yona
 # Bad — deep recursion, stack depth proportional to length
@@ -192,8 +193,8 @@ foldl (\acc x -> acc + x) 0 [1, 2, 3, 4]
 # => 10
 ```
 
-`foldr` exists for the cases that genuinely need right association;
-default to `foldl`.
+`foldr` exists for the cases that genuinely need right association; default to
+`foldl`.
 
 ## Iterators for streaming
 
@@ -212,8 +213,8 @@ import readLines from Std\File, foldl from Std\List in
 foldl (\n _ -> n + 1) 0 [line for line = readLines "big.log"]
 ```
 
-Iterator values feed comprehensions as generator sources; nothing is read
-from the file until the generator pulls it.
+Iterator values feed comprehensions as generator sources; nothing is read from
+the file until the generator pulls it.
 
 ## Naming conventions
 
@@ -235,7 +236,8 @@ case status of :ok -> 1 end  # :snake_case symbols
 ```
 
 - **Functions, variables:** `camelCase` — `readFile`, `processItem`
-- **Modules, types, constructors:** `PascalCase` — `Std\String`, `Option`, `Some`
+- **Modules, types, constructors:** `PascalCase` — `Std\String`, `Option`,
+  `Some`
 - **Symbols:** `:snake_case` — `:ok`, `:not_found`
 - **Type variables:** single lowercase letters — `a`, `b`, `e`
 
@@ -266,10 +268,10 @@ that for natural line continuation instead of escape characters.
 
 ## Use the prelude
 
-`Some`, `None`, `Ok`, `Err`, `Linear`, `Iterator`, `identity`, `const`,
-`flip`, and `compose` are always in scope; importing or re-defining them is
-noise. (Collection functions like `foldl` are not prelude — import them
-from [Std\List](/stdlib/list/).)
+`Some`, `None`, `Ok`, `Err`, `Linear`, `Iterator`, `identity`, `const`, `flip`,
+and `compose` are always in scope; importing or re-defining them is noise.
+(Collection functions like `foldl` are not prelude — import them from
+[Std\List](/stdlib/list/).)
 
 ```yona
 # Bad — shadowing a prelude type with a homemade one
@@ -291,8 +293,8 @@ Prefer `Result a e` (`Ok`/`Err`) for fallible operations and `Option a`
 ## Quick checklist
 
 - Flat `let`, one binding list — independent bindings parallelize.
-- `let` for values, `do` for ordered effects; combining them is fine.
-  Never `let _ = effect`, never a one-line `do`, never a dummy trailing `0`.
+- `let` for values, `do` for ordered effects; combining them is fine. Never
+  `let _ = effect`, never a one-line `do`, never a dummy trailing `0`.
 - One `import`, comma-separated clauses.
 - `with` for anything `Closeable`.
 - `[| … ]` when the body is worth a task; `[ … ]` otherwise.
@@ -302,5 +304,4 @@ Prefer `Result a e` (`Ok`/`Err`) for fallible operations and `Option a`
 - Reach for the prelude before writing it yourself.
 
 For the semantics behind these rules, see [Concurrency](/learn/concurrency/),
-[Modules](/learn/modules/), and the
-[specification](/reference/specification/).
+[Modules](/learn/modules/), and the [specification](/reference/specification/).

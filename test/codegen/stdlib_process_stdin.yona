@@ -1,9 +1,0 @@
-import spawn, writeStdin, closeStdin, readAll, wait from Std\Process in
-do
-    proc = spawn "cat"
-    writeStdin proc "hello from stdin\n"
-    closeStdin proc
-    out = readAll proc
-    wait proc
-    out
-end

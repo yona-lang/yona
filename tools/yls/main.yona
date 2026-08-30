@@ -4,7 +4,7 @@
 # C++ `yls` remains the installed editor default. This binary speaks
 # initialize / initialized / shutdown / exit / textDocument/didOpen.
 # Unknown methods return JSON null (same as C++ yls). Hover, definition,
-# and other compiler queries still need C++ yls: `yona_tc_analyze` lives
+# and other compiler queries still need C++ yls: `YonaTypedCoreAnalyze` lives
 # in yona_lib and is not linked into yonac-built tools.
 #
 # Field reads use `Std\Json.get` / `asString` / `asInt` on the parsed ADT.
@@ -12,7 +12,7 @@
 # 0-arg let bindings are eager CAFs, so usage takes a dummy `_`.
 
 import getArgs, exit, yonaVersion from Std\Process,
-       stdinFd, stdoutFd, writeBytes, readExact, eprintln from Std\IO,
+       stdinFd, stdoutFd, writeBytes, readExact, eprintln from Std\Io,
        parse, stringify, get as jsonGet, asString, asInt, JsonNull, JsonInt, JsonString, JsonArray, JsonObject from Std\Json,
        offsetToLine, offsetToCharacter from Std\Utf16,
        length, drop, take, indexOf, toLowerCase, trim, charAt, endsWith from Std\String,
@@ -84,7 +84,7 @@ let
     end,
 
   storeDoc docs uri text =
-    let _rng = docRange text in (uri, text) :: dropUri docs uri,
+    let rng = docRange text in (uri, text) :: dropUri docs uri,
 
   didOpenFields j =
     case jsonGet j "params" of

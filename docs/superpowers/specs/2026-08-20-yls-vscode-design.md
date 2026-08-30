@@ -7,7 +7,7 @@ Date: 2026-08-20
 Ship a C++23 `yls` language server over stdio JSON-RPC and a thin VS Code
 extension. Semantic queries reuse `Parser`, `TypeChecker`,
 `RefinementChecker`, `LinearityChecker`, and `DiagnosticEngine`. LLVM types
-do not appear in `include/lsp/`.
+do not appear in `include/yona/Lsp/`.
 
 ## Documents
 

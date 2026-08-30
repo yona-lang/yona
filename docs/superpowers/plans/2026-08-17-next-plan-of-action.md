@@ -10,8 +10,10 @@
 
 ## Global Constraints
 
-- Prefer pure Yona over C unless syscalls / layout / measured hot paths require C (`CLAUDE.md` stdlib rule).
-- New language features update lexer → parser → AST → codegen together; AST changes touch `include/ast.h`, `include/ast_visitor.h`, and codegen.
+- Prefer pure Yona over C unless syscalls / layout / measured hot paths require C (`AGENTS.md` stdlib rule).
+- New language features update lexer → parser → AST → codegen together; AST
+  changes touch `include/yona/Syntax/Ast.h`,
+  `include/yona/Syntax/AstVisitor.h`, and codegen.
 - Discoveries that are bugs go into `docs/todo-list.md` with a one-line repro before continuing.
 - When finishing a phase or bugfix, update this plan, `docs/todo-list.md`, and `CHANGELOG.md` in the same change. Do not leave stale checkboxes.
 - Do not silently expand scope past the active phase; open a GitHub issue or todo checkbox instead.
@@ -34,7 +36,7 @@
 
 - Task-group bump arenas + raise unwind (`513ff84`) and nested-fn arena IR isolation
 - Windows parity, transfer-scope O(1) droppability, borrow-aware `.yonai`, `@borrow`, `-Wunmatched-adt`
-- `Std\GPU` columnar API + Vulkan map/mul/reduce/filter, `--emit-accelerator-report`, crossover benches
+- `Std\Gpu` columnar API + Vulkan map/mul/reduce/filter, `--emit-accelerator-report`, crossover benches
 - `extern native` + floatArrayMul2Async; channel deadlock detection
 
 ### Local open work (`docs/todo-list.md`)
@@ -67,7 +69,7 @@ flowchart TD
   A5["#5 Totality check"]
   A7["#7 Typed-core API"]
   A4["#4 CTE evaluator"]
-  GPU[GPU mapGPU / semaphores]
+  GPU[GPU mapGpu / semaphores]
   MAC[macOS platform]
   P0 --> A3
   A3 --> A8
@@ -89,9 +91,10 @@ flowchart TD
 **Goal:** Make `ctest --preset unit-tests-linux` trustworthy on a clean Linux box.
 
 **Files (expected touch set):**
-- Modify: `test/codegen_test.cpp` (fixture runner / tmp path rewrite)
-- Modify or inspect: `test/codegen/binary_seek.yona`, `test/codegen/binary_write_read.yona` (and `.expected`)
-- Modify: `test/net_runtime_test.cpp` and/or `src/runtime/platform/net_linux.c` (or Windows twin if shared)
+- Modify: `test/Codegen/CodegenTest.cpp` (fixture runner / tmp path rewrite)
+- Modify or inspect: `test/Fixtures/Codegen/binary_seek.yona`, `test/Fixtures/Codegen/binary_write_read.yona` (and `.expected`)
+- Modify: `test/Runtime/NetRuntimeTest.cpp` and/or
+  `src/Runtime/Platform/NetLinux.c` (or Windows twin if shared)
 - Modify: `docs/todo-list.md` (mark fixed or refine repro)
 
 ### Task 0.1: Reproduce binary fixture flake
@@ -110,7 +113,7 @@ Expected: at least one failure showing stdout `0`, or document “no flake in 50
 
 - [x] **Step 2: Isolate whether the bug is path rewrite, process cwd, or Binary stdlib**
 
-Inspect `rewrite_codegen_fixture_tmp_paths` in `test/codegen_test.cpp` and confirm scratch files under `/tmp` are unique per run and cleaned. If two tests share a path, fix uniqueness first.
+Inspect `rewrite_codegen_fixture_tmp_paths` in `test/Codegen/CodegenTest.cpp` and confirm scratch files under `/tmp` are unique per run and cleaned. If two tests share a path, fix uniqueness first.
 
 - [x] **Step 3: Fix root cause + add a focused regression**
 
@@ -142,7 +145,8 @@ git commit -m "Fix flaky binary_seek / binary_write_read codegen fixtures"
 
 - [x] **Step 2: Identify use-after-free vs null socket vs thread teardown**
 
-Check accept/connect/send/recv ownership in `src/runtime/platform/net_linux.c` and the test’s handle lifetime.
+Check accept/connect/send/recv ownership in
+`src/Runtime/Platform/NetLinux.c` and the test’s handle lifetime.
 
 - [x] **Step 3: Fix + keep the existing doctest as regression**
 
@@ -165,7 +169,9 @@ Update `docs/todo-list.md` Bugs section checkboxes when fixed.
 **Files:**
 - Create: `docs/type-system-status.md`
 - Modify (status headers only): `docs/effects.md`, `docs/linear-types.md`, `docs/refinement-types.md`, `docs/row-polymorphism.md`, `docs/design-borrow-types.md`, `docs/type-checker-design.md` (as present)
-- Evidence from: `include/typechecker/`, `src/typechecker/`, `src/codegen/CodegenEffects.cpp`, `test/type_checker_test.cpp`
+- Evidence from: `include/yona/Model/`, `include/yona/Semantics/`,
+  `src/Model/`, `src/Semantics/`, `src/Codegen/CodegenEffects.cpp`, and
+  `test/Semantics/TypeCheckerTest.cpp`
 
 ### Task 1.1: Build the matrix skeleton
 
@@ -180,7 +186,7 @@ Columns: Parser | AST | Typechecker | Codegen | `.yonai` | Tests | Classificatio
 Example evidence style (required by #3):
 
 ```markdown
-| Effect handlers | implemented | `src/codegen/CodegenEffects.cpp` | `test/type_checker_test.cpp` (*handle*) |
+| Effect handlers | implemented | `src/Codegen/CodegenEffects.cpp` | `test/Semantics/TypeCheckerTest.cpp` (*handle*) |
 ```
 
 - [x] **Step 3: Mark contradictions**
@@ -214,11 +220,11 @@ Dedicated plan:
 **Goal:** Effect rows are inferred, normalized, written to `.yonai`, restored on import, and checked at call sites.
 
 **Primary files:**
-- `include/types.h`
-- `include/typechecker/TypeChecker.h`, `src/typechecker/TypeChecker.cpp`
+- `include/yona/Model/Types.h`
+- `include/yona/Semantics/TypeChecker.h`, `src/Semantics/TypeChecker.cpp`
 - `.yonai` writer/reader paths (module codegen / interface emit)
 - `docs/effects.md`
-- Tests: `test/type_checker_test.cpp` + new cross-module fixtures under `test/`
+- Tests: `test/Semantics/TypeCheckerTest.cpp` + new cross-module fixtures under `test/`
 
 **Before coding:** write a dedicated plan `docs/superpowers/plans/YYYY-MM-DD-effect-row-inference.md` with TDD fixtures for: sequential union, handler subtraction, open rows on HOFs, deterministic row display, producer/consumer `.yonai` round-trip, negative diagnostic with source of escaping `perform`.
 
@@ -226,7 +232,7 @@ Dedicated plan:
 
 ### Slice 1 checklist (2026-08-19)
 
-- [x] Arrow latent `effect_labels` / open `effect_rest` + `MEffectRow`
+- [x] Arrow latent effects use the canonical solver-owned `EffectRef`
 - [x] Infer: perform / handle / function / apply; pretty `!{…}`
 - [x] Handler subtraction (nested / partial tested)
 - [x] `.yonai` `effects` emit/parse + import → ImportedFnSig
@@ -242,7 +248,7 @@ Dedicated plan:
 
 **Goal:** `export type T opaque` (exact syntax per short design note) hides constructors across modules while smart constructors work.
 
-**Primary files:** module export AST (`include/ast.h`), parser module decls, `.yonai` type export records, pattern match / constructor resolve in typechecker + codegen, docs + cross-module tests.
+**Primary files:** module export AST (`include/yona/Syntax/Ast.h`), parser module decls, `.yonai` type export records, pattern match / constructor resolve in typechecker + codegen, docs + cross-module tests.
 
 **Before coding:** short design note in `docs/` covering visibility, pattern matching, traits, `.yonai`; then a dedicated implementation plan.
 
@@ -273,12 +279,14 @@ function bodies. Termination, overlap freedom, and non-ADT coverage remain open.
 
 **Prerequisite:** Phase 1 done; Phase 2 strongly preferred so effect facts exist.
 
-**Goal:** Versioned in-process C++ API (no LLVM headers in the consumer) + example backend that dumps resolved names/types/effects/linearity/spans.
+**Goal:** Canonical in-process C API (no LLVM headers in the consumer) + example
+backend that dumps resolved names/types/effects/linearity/spans.
 
 **Order inside this phase:**
-1. [x] Architecture doc (ownership, versioning, compatibility) — `docs/typed-core.md`
-2. [x] Minimal traverse + textual summary example — `src/typed_core/PrettyPrint.c` + `yonac --emit-typed-core`
-3. [x] Producer/consumer tests for functions, ADTs, match, effects, generics, imports — `test/typed_core_abi_test.cpp`
+1. [x] Architecture doc (ownership, failure modes, and thread safety) —
+   `docs/typed-core.md`
+2. [x] Minimal traverse + textual summary example — `src/TypedCore/PrettyPrint.c` + `yonac --emit-typed-core`
+3. [x] Producer/consumer tests for functions, ADTs, match, effects, generics, imports — `test/TypedCore/AbiTest.cpp`
 
 **Defer:** wire format serialization.
 
@@ -296,27 +304,27 @@ function bodies. Termination, overlap freedom, and non-ADT coverage remain open.
 
 ## Parallel tracks (do not block Phases 0–2)
 
-### Track G — GPU (`docs/design-gpu-async.md`, todo Std\GPU)
+### Track G — GPU (`docs/design-gpu-async.md`, todo Std\Gpu)
 
-**Status (2026-08-19):** User-facing Track G **surface shipped** (`mapGPU` /
-`reduceGPU` / float variants, `mapReduceGraphGPU`, early cancel, Vulkan-mapped
+**Status (2026-08-19):** User-facing Track G **surface shipped** (`mapGpu` /
+`reduceGpu` / float variants, `mapReduceGraphGpu`, early cancel, Vulkan-mapped
 `PinnedFloats` + channels, transparent fixed-kernel lowering, typed `Gpu`
 perform helpers, `--strict-accelerator` / E0700). Kernel library also lowers
 `x - k` / `0 - x` / `x * x` / `x < k` (`filterLessThan` + `mapSquare` Vulkan).
 `raiseGpu` GENFN + use-site `handle` is the designed library `perform` path.
 **Still open** (see `docs/todo-list.md` *Language — GPU*):
 
-1. [x] `mapGPU` / `reduceGPU` on FloatArray/IntArray (Yona surface + runtime)
+1. [x] `mapGpu` / `reduceGpu` on FloatArray/IntArray (Yona surface + runtime)
 2. [x] Multi-kernel timeline / `VK_KHR_synchronization2` barrier graphs; drop remaining idle waits from hot paths
 3. [x] Tighter task-group cancel of in-flight GPU work
 4. [x] Pinned buffers / multi-stage graphs / transparent lowering (Vulkan-mapped pins +
-   `gpuFloatChannel` / `drainMapFloatGPU` + transparent IntArray/FloatArray kernel rewrite)
+   `gpuFloatChannel` / `drainMapFloatGpu` + transparent IntArray/FloatArray kernel rewrite)
 5. [x] Typed `Gpu` effect ops (`raiseGpu` / `withGpuFallback`; effect-row **#8** shipped 2026-08-19 including open-row `.yonai`)
 6. [x] Honest rejection for arbitrary accelerator lambdas (`--strict-accelerator` / E0700)
 7. [ ] Full **arbitrary-lambda → SPIR-V** compiler (today: expanded fixed library including `x * x` / `filterLessThan` Vulkan + host path or E0700)
 8. [ ] Optional **io_uring / reactor GPU integration** (**research** — no concrete deliverable beyond Option C in `design-gpu-async.md` §3.2)
 9. [ ] **CPU/GPU occupancy / scheduling hints** (**research** — no design deliverable yet)
-10. [x] **`perform Gpu` from `Std\GPU`** — designed path: `GpuIssue` from kernels; `raiseGpu` / `withGpuFallback` GENFN remonomorphize inside user `handle` (2026-08-19). Not a runtime handler stack.
+10. [x] **`perform Gpu` from `Std\Gpu`** — designed path: `GpuIssue` from kernels; `raiseGpu` / `withGpuFallback` GENFN remonomorphize inside user `handle` (2026-08-19). Not a runtime handler stack.
 11. [ ] **macOS / Windows** GPU bench re-capture after Track G (`run_gpu_compare.py` / pinned + filter_lt + map_square rows) — Linux-only agent env; leave for host re-run
 
 ### Track P — Platform / distribution
@@ -333,7 +341,8 @@ perform helpers, `--strict-accelerator` / E0700). Kernel library also lowers
 3. [x] LinearityChecker walk `WithExpr` (`with h = Linear …` tracks + Closeable discharge)
 4. [x] LinearityChecker walk `FunctionExpr` bodies (nested lambdas / local fns / Linear params)
 5. [ ] Supervisors-as-handlers (after structured concurrency cancel story is frozen)
-6. [ ] LSP / package manager — product call; prefer after typed-core (#7) so tools share semantic facts
+6. [ ] Package manager and build tool — define reproducible dependency
+   resolution around the canonical `.yonai` interface.
 
 ---
 
@@ -348,7 +357,8 @@ W1 (Phase 0) and W1–W2 (Phase 1 / #3) are **done** as of 2026-08-18.
 | **W2–W3** | Phase 2 (#8) **or** Track G remaining research | Effect rows round-trip **or** SPIR-V / platform bench re-capture |
 | **W3–W4** | Phase 3A (#6) and/or Phase 3B (#5) design | Opaque types shipping **or** totality design + first checker |
 
-**Default recommendation if only one series can run:**  
+**Default recommendation if only one series can run:**
+
 `Phase 2 (#8) → Phase 3B (#5) → Phase 4 (#7) → Phase 5 (#4)`, with **Track G
 remaining** (SPIR-V / research / platform re-capture) on a second lane.
 Linearity leftovers (`WithExpr` / `FunctionExpr`) can land beside #8.

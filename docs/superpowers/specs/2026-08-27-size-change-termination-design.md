@@ -94,7 +94,7 @@ Test-first coverage includes:
 - module and expression diagnostics, E0203 location/message, LSP publication,
   and full CTest regression coverage.
 
-## Compatibility and documentation
+## Unchanged analyses and documentation
 
 The existing effect-row and finite-pattern checks are unchanged. Documentation
 must describe this as structural size-change analysis, not general termination.

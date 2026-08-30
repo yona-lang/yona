@@ -1,0 +1,11 @@
+out/
+build/
+site/dist/
+site/.astro/
+site/generated/
+site/src/content/docs/stdlib/
+**/node_modules/
+**/package-lock.json
+**/pnpm-lock.yaml
+lib/**/*.yonai
+**/Generated/

@@ -11,7 +11,7 @@ export get, post, request, send, parseResponse, formatRequest
 export serve, response, ok, notFound, serverError
 
 ## HTTP method.
-type Method = GET | POST | PUT | DELETE | PATCH | HEAD | OPTIONS
+type Method = Get | Post | Put | Delete | Patch | Head | Options
 
 ## HTTP request with method, path, headers, and body.
 type Request = Request {
@@ -35,13 +35,13 @@ request method path headers body = Request { method = method, path = path, heade
 ## Format a Method as a string.
 methodString : Method -> String
 methodString m = case m of
-    GET -> "GET"
-    POST -> "POST"
-    PUT -> "PUT"
-    DELETE -> "DELETE"
-    PATCH -> "PATCH"
-    HEAD -> "HEAD"
-    OPTIONS -> "OPTIONS"
+    Get -> "GET"
+    Post -> "POST"
+    Put -> "PUT"
+    Delete -> "DELETE"
+    Patch -> "PATCH"
+    Head -> "HEAD"
+    Options -> "OPTIONS"
 end
 
 ## Format a Request into an HTTP/1.1 request string.
@@ -73,7 +73,7 @@ parseResponse raw =
 ## Send an HTTP request to host:port and return the Response.
 ##
 ## ```
-## send "example.com" 80 (request GET "/" 0 "")
+## send "example.com" 80 (request Get "/" 0 "")
 ## ```
 send : String -> Int -> Request -> Response
 send host port req =
@@ -93,7 +93,7 @@ send host port req =
 ## get "example.com" 80 "/api"
 ## ```
 get : String -> Int -> String -> Response
-get host port path = send host port (Request { method = GET, path = path, headers = 0, body = "" })
+get host port path = send host port (Request { method = Get, path = path, headers = 0, body = "" })
 
 ## HTTP POST shorthand.
 ##
@@ -101,7 +101,7 @@ get host port path = send host port (Request { method = GET, path = path, header
 ## post "example.com" 80 "/submit" "key=value"
 ## ```
 post : String -> Int -> String -> String -> Response
-post host port path body = send host port (Request { method = POST, path = path, headers = 0, body = body })
+post host port path body = send host port (Request { method = Post, path = path, headers = 0, body = body })
 
 ## Create a simple 200 OK response.
 ##
@@ -150,7 +150,7 @@ serveLoop listener handler =
             path = case parts of [_|[p|_]] -> p; _ -> "/" end
             bodyStart = indexOf "\r\n\r\n" raw
             body = if bodyStart >= 0 then drop (bodyStart + 4) raw else ""
-            methodVal = case method of "GET" -> GET; "POST" -> POST; "PUT" -> PUT; "DELETE" -> DELETE; _ -> GET end
+            methodVal = case method of "GET" -> Get; "POST" -> Post; "PUT" -> Put; "DELETE" -> Delete; _ -> Get end
             req = Request { method = methodVal, path = path, headers = 0, body = body }
             resp = handler req
             netSend client (formatResponse resp)

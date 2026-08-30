@@ -1,1 +1,2 @@
-FN yona_Std_Format__format 2 STRING SEQ -> STRING
+MODULE Std\Format
+FN format 2 STRING SEQ -> STRING

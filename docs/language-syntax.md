@@ -414,7 +414,7 @@ Exceptions are ADT values. Define exception types, raise them, and catch with pa
 ### Exception Types
 
 ```yona
-type Error = RuntimeError String | NotFound String | IOError String
+type Error = RuntimeError String | NotFound String | IoError String
 ```
 
 ### Raise Expressions
@@ -546,11 +546,6 @@ type Reducer a b = MkReducer (a -> b -> a)        # multi-param function
 ```
 
 ADTs with function-typed fields are heap-allocated (like recursive ADTs), since closures stored in them may return values of the same type (lazy data structures).
-
-The bare `Fn` keyword is still supported for backward compatibility:
-```yona
-type Box = MkBox Fn     # equivalent to (... -> ...)
-```
 
 ### Named Fields
 

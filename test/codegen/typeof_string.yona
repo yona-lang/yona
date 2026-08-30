@@ -1,4 +1,0 @@
-case typeOf "hello" of
-    TString -> 1
-    _ -> 0
-end

@@ -1,0 +1,2 @@
+extern async testSlowAdd : Int -> Int -> Int = "YonaTestSlowAdd" in
+testSlowAdd 10 20

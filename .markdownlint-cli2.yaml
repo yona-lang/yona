@@ -1,0 +1,26 @@
+config:
+  default: true
+  line-length: false
+  no-duplicate-heading: false
+  no-inline-html: false
+  first-line-h1: false
+  blanks-around-fences: false
+  blanks-around-headings: false
+  blanks-around-lists: false
+  fenced-code-language: false
+  no-bare-urls: false
+  no-blanks-blockquote: false
+  no-space-in-code: false
+  ordered-list-marker-value: false
+  single-title: false
+  table-column-style: false
+  table-column-count: false
+globs:
+  - "**/*.md"
+  - "**/*.mdc"
+ignores:
+  - "out/**"
+  - "build/**"
+  - "site/generated/**"
+  - "site/src/content/docs/stdlib/**"
+  - "**/node_modules/**"

@@ -1,0 +1,8 @@
+import spawn, readLine, wait from Std\Process in
+do
+    proc = spawn "printf" ["line1\nline2\nline3\n"]
+    l1 = readLine proc
+    l2 = readLine proc
+    wait proc
+    l1 ++ " " ++ l2
+end

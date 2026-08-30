@@ -1,4 +1,0 @@
-case typeOf [1, 2, 3] of
-    TSeq -> 1
-    _ -> 0
-end

@@ -128,19 +128,15 @@ runtime.
 New `.yonai` files keep the familiar readable summary:
 
 ```text
-FN yona_Test_Fx__fetch 1 STRING -> STRING effects Fs.read
+FN YonaTestFxFetch 1 STRING -> STRING effects Fs.read
 ```
 
-They also carry a versioned `effectscheme v2` field. It is a deterministic,
-normalized description of every arrow in the exported type, including shared
-open variables and handler masks. On import, the whole scheme is cloned with
-fresh effect variables, preserving polymorphism and independent callback
-effects across module boundaries.
-
-Old interfaces remain supported. Closed `effects …` rows restore their known
-labels; legacy open metadata (`effects |`, optionally `hof`) becomes a
-conservative opaque source. A missing effect field is unknown, never proof of
-purity.
+They also carry an `effectscheme` field: a deterministic, normalized
+description of every arrow in the exported type, including shared open
+variables and handler masks. On import, the whole scheme is cloned with fresh
+effect variables, preserving polymorphism and independent callback effects
+across module boundaries. The readable `effects …` field is its summary;
+missing effect metadata is unknown, never proof of purity.
 
 ## Current limitations
 

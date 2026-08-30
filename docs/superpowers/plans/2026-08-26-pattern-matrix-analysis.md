@@ -30,7 +30,7 @@ unchanged.
 ### Task 1: Establish usefulness-analysis regressions
 
 **Files:**
-- Modify: `test/codegen_test.cpp`
+- Modify: `test/Codegen/CodegenTest.cpp`
 
 **Produces:** Direct analysis and diagnostic regressions for nested patterns,
 aliases/or-patterns, partial overlap, guards, and `--Werror`.
@@ -44,15 +44,15 @@ aliases/or-patterns, partial overlap, guards, and `--Werror`.
   and an alias around `Some _` retains that result.
 - [x] Run `./out/build/x64-debug-linux/tests -tc='Case analysis*'` and confirm
   the nested cases are not yet reported unreachable.
-- [ ] Commit: `test: specify pattern-matrix overlap behavior`.
+- [x] Commit: `test: specify pattern-matrix overlap behavior`.
 
 ### Task 2: Introduce a compiler-independent pattern matrix
 
 **Files:**
-- Create: `include/PatternAnalysis.h`
-- Create: `src/PatternAnalysis.cpp`
+- Create: `include/yona/Semantics/PatternAnalysis.h`
+- Create: `src/Semantics/PatternAnalysis.cpp`
 - Modify: `CMakeLists.txt`
-- Modify: `include/Codegen.h`
+- Modify: `include/yona/Codegen/Codegen.h`
 
 **Consumes:** `ast::PatternNode`, ADT constructor metadata, and case clauses.
 
@@ -67,17 +67,17 @@ coverage facts.
   candidate is useful unless a prior row or complete closed family proves it
   covered. Open families only prove identical literal/structural coverage.
 - [x] Treat any guarded clause as absent from the coverage matrix.
-- [x] Register `src/PatternAnalysis.cpp` in the core CMake source list.
+- [x] Register `src/Semantics/PatternAnalysis.cpp` in the core CMake source list.
 - [x] Build and run the new focused tests; expect all to pass.
-- [ ] Commit: `feat: add typed pattern-matrix analysis`.
+- [x] Commit: `feat: add typed pattern-matrix analysis`.
 
 ### Task 3: Route Codegen diagnostics through the shared analysis
 
 **Files:**
-- Modify: `src/codegen/CodegenCase.cpp`
-- Modify: `include/Codegen.h`
-- Modify: `test/codegen_test.cpp`
-- Modify: `test/yona_script_test.cpp`
+- Modify: `src/Codegen/CodegenCase.cpp`
+- Modify: `include/yona/Codegen/Codegen.h`
+- Modify: `test/Codegen/CodegenTest.cpp`
+- Modify: `test/Toolchain/YonaScriptTest.cpp`
 
 **Produces:** Existing `Codegen::analyze_case_patterns` delegates to the new
 module; `-Woverlapping-patterns` has the precise unreachable-only contract.
@@ -90,7 +90,7 @@ module; `-Woverlapping-patterns` has the precise unreachable-only contract.
 - [x] Add CLI checks for explicit warning enablement, `--Wall`, and `--Werror`.
 - [x] Re-run prior finite ADT/Bool strict-gate tests to prove no behavioral
   regression.
-- [ ] Commit: `feat: diagnose nested unreachable patterns`.
+- [x] Commit: `feat: diagnose nested unreachable patterns`.
 
 ### Task 4: Document the precise guarantee and complete verification
 
@@ -108,12 +108,12 @@ module; `-Woverlapping-patterns` has the precise unreachable-only contract.
   completed; retain general termination and arbitrary open-domain coverage.
 - [x] Run `cmake --build --preset build-debug-linux -j2`,
   `ctest --preset unit-tests-linux --output-on-failure`, and `git diff --check`.
-- [ ] Commit: `docs: complete pattern overlap analysis`.
+- [x] Commit: `docs: complete pattern overlap analysis`.
 
 ### Task 5: Verify LSP and editor integration
 
 **Files:**
-- Modify: `test/lsp_test.cpp` only if the protocol regression exposes a gap
+- Modify: `test/Lsp/LspTest.cpp` only if the protocol regression exposes a gap
 - Modify: `editors/zed/` only if a new grammar node needs a query
 
 - [x] Add an `yls` diagnostic regression for a nested unreachable arm; assert
@@ -121,5 +121,5 @@ module; `-Woverlapping-patterns` has the precise unreachable-only contract.
   selects the later arm.
 - [x] Run the VS Code extension test suite and the Zed manifest/package smoke
   checks. Do not add editor-local pattern analysis.
-- [ ] Commit any required editor-facing regression or query/documentation
+- [x] Commit any required editor-facing regression or query/documentation
   update with the compiler feature.

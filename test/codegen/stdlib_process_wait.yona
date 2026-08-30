@@ -1,3 +1,0 @@
-import spawn, wait from Std\Process in
-let proc = spawn "exit 42" in
-wait proc

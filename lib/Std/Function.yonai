@@ -1,35 +1,36 @@
-FN yona_Std_Function__apply 2 INT FUNCTION -> INT borrow 01 effects |
-FN yona_Std_Function__compose 3 FUNCTION FUNCTION INT -> INT borrow 110 effects | hof
-FN yona_Std_Function__const 2 INT INT -> INT effects -
-FN yona_Std_Function__fix 2 FUNCTION INT -> INT effects | hof
-FN yona_Std_Function__flip 3 FUNCTION INT INT -> INT borrow 100 effects | hof
-FN yona_Std_Function__identity 1 INT -> INT effects -
-FN yona_Std_Function__on 4 FUNCTION FUNCTION INT INT -> INT borrow 1100 effects | hof
-FN yona_Std_Function__pipe 2 INT SEQ -> INT effects |
-GENFN_BEGIN yona_Std_Function__apply apply
+MODULE Std\Function
+FN apply 2 INT FUNCTION -> INT borrow 01 effects |
+FN compose 3 FUNCTION FUNCTION INT -> INT borrow 110 effects | hof
+FN const 2 INT INT -> INT effects -
+FN fix 2 FUNCTION INT -> INT effects | hof
+FN flip 3 FUNCTION INT INT -> INT borrow 100 effects | hof
+FN identity 1 INT -> INT effects -
+FN on 4 FUNCTION FUNCTION INT INT -> INT borrow 1100 effects | hof
+FN pipe 2 INT SEQ -> INT effects |
+GENFN_BEGIN apply apply
 apply x f = f x
 GENFN_END
-GENFN_BEGIN yona_Std_Function__compose compose
+GENFN_BEGIN compose compose
 compose f g x = f (g x)
 GENFN_END
-GENFN_BEGIN yona_Std_Function__const const
+GENFN_BEGIN const const
 const value _ = value
 GENFN_END
-GENFN_BEGIN yona_Std_Function__fix fix
+GENFN_BEGIN fix fix
 fix f value =
     let loop value = f loop value
     in loop value
 GENFN_END
-GENFN_BEGIN yona_Std_Function__flip flip
+GENFN_BEGIN flip flip
 flip f a b = f b a
 GENFN_END
-GENFN_BEGIN yona_Std_Function__identity identity
+GENFN_BEGIN identity identity
 identity x = x
 GENFN_END
-GENFN_BEGIN yona_Std_Function__on on
+GENFN_BEGIN on on
 on cmp f a b = cmp (f a) (f b)
 GENFN_END
-GENFN_BEGIN yona_Std_Function__pipe pipe
+GENFN_BEGIN pipe pipe
 pipe x fns =
     case fns of
         [] -> x

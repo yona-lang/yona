@@ -31,6 +31,11 @@ Receive-only handle wrapping a Channel.
 
 ### `channel : Int -> (Linear (Sender value), Linear (Receiver value))`
 
+Compiler-backed constructor. Codegen supplies a hidden payload descriptor
+after inference has made `value` concrete.
+
+### `send : Sender value -> value -> Unit`
+
 Create a bounded channel with the given buffer capacity. Returns a tuple
 of `Linear`-wrapped sender and receiver handles. The linearity checker
 requires both wrappers to be unwrapped before scope exit:
@@ -42,9 +47,6 @@ case rl of Linear receiver ->
 ...                 -- use sender / receiver freely
 end end
 ```
-
-### `send : Sender value -> value -> Unit`
-
 Send a value through a sender. Blocks if the buffer is full.
 
 ### `recv : Receiver value -> Option value`

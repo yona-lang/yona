@@ -1,6 +1,6 @@
-extern async yona_test_slow_identity : Int -> Int in
-let a = yona_test_slow_identity 100 in
-let b = yona_test_slow_identity (a + 0) in
-let c = yona_test_slow_identity (b + 0) in
-let d = yona_test_slow_identity (c + 0) in
+extern async testSlowIdentity : Int -> Int = "YonaTestSlowIdentity" in
+let a = testSlowIdentity 100 in
+let b = testSlowIdentity (a + 0) in
+let c = testSlowIdentity (b + 0) in
+let d = testSlowIdentity (c + 0) in
 d

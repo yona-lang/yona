@@ -1,0 +1,20 @@
+import parse, get as jsonGet, asString from Std\Json,
+       stdinFd, readExact from Std\Io,
+       length from Std\String
+in
+case readExact stdinFd 75 of
+    Ok body ->
+        case parse body of
+            Ok j ->
+                case jsonGet j "method" of
+                    Some v ->
+                        case asString v of
+                            Some s -> s
+                            None -> "not-string"
+                        end
+                    None -> "missing"
+                end
+            Err e -> e
+        end
+    Err e -> e
+end

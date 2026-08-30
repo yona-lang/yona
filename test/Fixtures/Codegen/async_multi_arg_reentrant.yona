@@ -1,0 +1,4 @@
+extern async testSlowAdd : Int -> Int -> Int = "YonaTestSlowAdd" in
+let add a b = testSlowAdd a b in
+let first = add 10 20, second = add 30 40 in
+first + second

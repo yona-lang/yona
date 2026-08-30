@@ -1,8 +1,9 @@
-import iterate, replicate, dedup from Std\Collection,
+import iterate, unfold, replicate, dedup from Std\Collection,
        testCase, check, run, render from Std\Test
 in
 let cases = [
         testCase "iterate includes seed" (\_ -> check "powers" (iterate 4 (\x -> x * 2) 1 == [1, 2, 4, 8])),
+        testCase "unfold consumes Option producers" (\_ -> check "countdown" (unfold (\n -> if n > 0 then Some (n, n - 1) else None) 3 == [3, 2, 1])),
         testCase "replicate empty" (\_ -> check "zero copies" (replicate 0 42 == [])),
         testCase "dedup is consecutive" (\_ -> check "runs only" (dedup [1, 1, 2, 1, 1] == [1, 2, 1]))
     ]

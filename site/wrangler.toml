@@ -1,4 +1,4 @@
-# Cloudflare Pages project for the Yona 2.0 docs.
+# Cloudflare Pages project for the Yona documentation.
 # Deployed from CI (.github/workflows/docs-site.yml) via `wrangler pages deploy`.
 name = "yona-lang"
 compatibility_date = "2026-08-19"

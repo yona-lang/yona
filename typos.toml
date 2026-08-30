@@ -1,0 +1,10 @@
+[files]
+extend-exclude = "out/**,build/**,site/generated/**,site/src/content/docs/stdlib/**,lib/**/*.yonai,**/node_modules/**,**/*.spv,**/*.bin"
+
+[default.extend-words]
+doctest = "doctest"
+io_uring = "io_uring"
+PCRE = "PCRE"
+SPIR = "SPIR"
+Yona = "Yona"
+yona = "yona"

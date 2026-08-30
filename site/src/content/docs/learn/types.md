@@ -1,11 +1,13 @@
 ---
 title: Types and data
-description: Hindley–Milner inference, algebraic data types, records, first-class constructors, traits, and auto-derive.
+description:
+  Hindley–Milner inference, algebraic data types, records, first-class
+  constructors, traits, and auto-derive.
 ---
 
 Yona is statically typed with full type inference. You almost never write a
-type; the compiler reconstructs the most general (Hindley–Milner) type of
-every expression and rejects ill-typed programs at compile time.
+type; the compiler reconstructs the most general (Hindley–Milner) type of every
+expression and rejects ill-typed programs at compile time.
 
 ## Type inference
 
@@ -16,22 +18,22 @@ let twice f x = f (f x) in     # inferred: (a -> a) -> a -> a
 twice (\x -> x + 1) 40         # => 42
 ```
 
-Annotations are optional documentation, written Haskell-style on the line
-before a definition; the checker verifies the body against them:
+Annotations are optional documentation, written Haskell-style on the line before
+a definition; the checker verifies the body against them:
 
 ```yona
 scale : Float -> Float -> Float
 scale factor x = factor * x
 ```
 
-Type errors are compile-time errors — `1 + "two"` never reaches the
-runtime. A full account of the checker lives in the
+Type errors are compile-time errors — `1 + "two"` never reaches the runtime. A
+full account of the checker lives in the
 [type system guide](/guides/type-system/).
 
 ## Algebraic data types
 
-`type` declares a sum type: a name, optional type parameters, and one or
-more constructors separated by `|`. Constructor fields are types:
+`type` declares a sum type: a name, optional type parameters, and one or more
+constructors separated by `|`. Constructor fields are types:
 
 ```yona
 type Option a = Some a | None
@@ -71,8 +73,8 @@ heap-allocated and reference-counted.
 
 ### Function-typed fields
 
-Fields can hold functions, written as an arrow type in parentheses. This is
-how lazy structures like streams are built — the tail is a thunk:
+Fields can hold functions, written as an arrow type in parentheses. This is how
+lazy structures like streams are built — the tail is a thunk:
 
 ```yona
 type Lazy a = Cons a (() -> Lazy a) | Empty
@@ -89,8 +91,8 @@ end
 ## Records: named fields
 
 A single-constructor ADT can name its fields. Construct with
-`Name { field = value, … }`, read with dot access, and update functionally
-— `p { age = 31 }` returns a *copy* with one field replaced, leaving `p`
+`Name { field = value, … }`, read with dot access, and update functionally —
+`p { age = 31 }` returns a _copy_ with one field replaced, leaving `p`
 unchanged:
 
 ```yona
@@ -126,9 +128,9 @@ point 2                  # => Pair 1 2
 
 ## Traits
 
-Traits are Yona's interfaces (type classes): a set of function signatures a
-type can implement. This section is an introduction — the full story,
-including superclass constraints and cross-module export, is in the
+Traits are Yona's interfaces (type classes): a set of function signatures a type
+can implement. This section is an introduction — the full story, including
+superclass constraints and cross-module export, is in the
 [traits guide](/guides/traits/).
 
 ### Declaring a trait
@@ -139,8 +141,8 @@ trait Show a
 end
 ```
 
-A trait may provide **default methods** — implementations in terms of the
-other methods, inherited by instances that don't override them:
+A trait may provide **default methods** — implementations in terms of the other
+methods, inherited by instances that don't override them:
 
 ```yona
 trait Eq a
@@ -170,9 +172,9 @@ show (Some 42)   # => "Some(42)"
 
 ### Static resolution
 
-Trait methods are resolved **at compile time** by monomorphization: each
-call site compiles the concrete instance directly, so trait dispatch has
-zero runtime overhead — there are no vtables or dictionaries at runtime.
+Trait methods are resolved **at compile time** by monomorphization: each call
+site compiles the concrete instance directly, so trait dispatch has zero runtime
+overhead — there are no vtables or dictionaries at runtime.
 
 ## Auto-derive
 
@@ -193,23 +195,22 @@ compare Red Blue              # => Less (declaration order defines Ord)
 
 Semantics of the generated instances:
 
-- **Show** — nullary constructors print their name; constructors with
-  fields print `Name(field1, field2, …)`, fields shown recursively.
+- **Show** — nullary constructors print their name; constructors with fields
+  print `Name(field1, field2, …)`, fields shown recursively.
 - **Eq** — same constructor and all fields equal.
-- **Ord** — constructor declaration order first (first declared is
-  smallest), then lexicographic left-to-right field comparison; returns
-  `-1`, `0`, or `1`.
+- **Ord** — constructor declaration order first (first declared is smallest),
+  then lexicographic left-to-right field comparison; returns `-1`, `0`, or `1`.
 - **Hash** — the constructor tag mixed with field hashes.
 
-Deriving works for polymorphic and recursive ADTs; the generated methods
-recurse through fields. Types with function-typed fields can derive `Show`
-(functions print as `<function>`) but not `Eq`, `Ord`, or `Hash`. Derived
-instances are exported across modules like hand-written ones.
+Deriving works for polymorphic and recursive ADTs; the generated methods recurse
+through fields. Types with function-typed fields can derive `Show` (functions
+print as `<function>`) but not `Eq`, `Ord`, or `Hash`. Derived instances are
+exported across modules like hand-written ones.
 
 ## Anonymous sum types
 
-A value can be typed as one of several alternatives without declaring an
-ADT, using `|` between types; match on the runtime type with typed patterns
+A value can be typed as one of several alternatives without declaring an ADT,
+using `|` between types; match on the runtime type with typed patterns
 `(name : Type)`:
 
 ```yona
@@ -235,15 +236,17 @@ type Iterator a = Iterator (() -> Option a)  # pull-based stream
 - `Option` and `Result` are the standard ways to express absence and
   fallibility; see [Std\Option](/stdlib/option/) and
   [Std\Result](/stdlib/result/).
-- `Linear` wraps resources (file handles, sockets) that the linearity
-  checker requires you to consume exactly once.
-- `Iterator` is the streaming protocol used by file and string iteration —
-  O(1) memory per element.
+- `Linear` wraps resources (file handles, sockets) that the linearity checker
+  requires you to consume exactly once.
+- `Iterator` is the streaming protocol used by file and string iteration — O(1)
+  memory per element.
 
 Full signatures are in the [prelude reference](/reference/prelude/).
 
 ## Where to next
 
-- [Pattern matching](/learn/pattern-matching/) — destructuring the data you define.
-- [Traits guide](/guides/traits/) — superclasses, constrained instances, exports.
+- [Pattern matching](/learn/pattern-matching/) — destructuring the data you
+  define.
+- [Traits guide](/guides/traits/) — superclasses, constrained instances,
+  exports.
 - [Type system guide](/guides/type-system/) — inference internals and status.

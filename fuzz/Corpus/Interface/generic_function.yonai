@@ -1,0 +1,4 @@
+MODULE Fuzz\GenericFunction
+GENFN_BEGIN identity identity
+identity value = value
+GENFN_END

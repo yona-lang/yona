@@ -1,0 +1,82 @@
+MODULE Std\Io
+FN eprint 1 STRING -> UNIT effects - effectscheme $##
+FN eprintln 1 STRING -> UNIT effects - effectscheme $##
+FN flush 1 INT -> BOOL effects - effectscheme $##
+FN isTty 1 INT -> BOOL
+FN print 1 STRING -> UNIT effects - effectscheme $##
+FN println 1 STRING -> UNIT effects - effectscheme $##
+FN putStr 2 INT STRING -> UNIT effects - effectscheme $##;$/r##
+FN putStrLn 2 INT STRING -> UNIT effects - effectscheme $##;$/r##
+FN readExact 2 INT INT -> ADT(Result,STRING,STRING)
+FN readExactBytes 2 INT INT -> STRING
+FN readLine 0 -> ADT effects - effectscheme $##
+FN readLineFrom 1 INT -> ADT effects - effectscheme $##
+FN readStdin 0 -> STRING effects - effectscheme $##
+FN stderrFd 0 -> INT effects - effectscheme $##
+FN stdinFd 0 -> INT effects - effectscheme $##
+FN stdoutFd 0 -> INT effects - effectscheme $##
+FN write 2 INT STRING -> UNIT effects - effectscheme $##;$/r##
+FN writeBytes 2 INT STRING -> UNIT
+GENFN_DEP eprint writeStrNative NATIVE YonaStdIoWriteStr IO 2 INT STRING -> UNIT
+GENFN_CTOR eprint Write FileMode 1 0 4 0
+GENFN_BEGIN eprint eprint
+eprint s = writeStrNative stderrFd s
+GENFN_END
+GENFN_DEP eprintln writeLineNative NATIVE YonaStdIoWriteLine IO 2 INT STRING -> UNIT
+GENFN_CTOR eprintln Write FileMode 1 0 4 0
+GENFN_BEGIN eprintln eprintln
+eprintln s = writeLineNative stderrFd s
+GENFN_END
+GENFN_DEP flush flushFdNative NATIVE YonaStdIoFlushFd FN 1 INT -> BOOL
+GENFN_BEGIN flush flush
+flush fd = flushFdNative fd
+GENFN_END
+GENFN_DEP print writeStrNative NATIVE YonaStdIoWriteStr IO 2 INT STRING -> UNIT
+GENFN_CTOR print Write FileMode 1 0 4 0
+GENFN_BEGIN print print
+print s = writeStrNative stdoutFd s
+GENFN_END
+GENFN_DEP println writeLineNative NATIVE YonaStdIoWriteLine IO 2 INT STRING -> UNIT
+GENFN_CTOR println Write FileMode 1 0 4 0
+GENFN_BEGIN println println
+println s = writeLineNative stdoutFd s
+GENFN_END
+GENFN_DEP putStr writeStrNative NATIVE YonaStdIoWriteStr IO 2 INT STRING -> UNIT
+GENFN_CTOR putStr Write FileMode 1 0 4 0
+GENFN_BEGIN putStr putStr
+putStr fd s = writeStrNative fd s
+GENFN_END
+GENFN_DEP putStrLn writeLineNative NATIVE YonaStdIoWriteLine IO 2 INT STRING -> UNIT
+GENFN_BEGIN putStrLn putStrLn
+putStrLn fd s = writeLineNative fd s
+GENFN_END
+GENFN_DEP readLine readLineFdNative NATIVE YonaStdIoReadLineFd AFN 1 INT -> ADT(Option)
+GENFN_CTOR readLine Read FileMode 0 0 4 0
+GENFN_BEGIN readLine readLine
+readLine = readLineFdNative stdinFd
+GENFN_END
+GENFN_DEP readLineFrom readLineFdNative NATIVE YonaStdIoReadLineFd AFN 1 INT -> ADT(Option)
+GENFN_CTOR readLineFrom Read FileMode 0 0 4 0
+GENFN_BEGIN readLineFrom readLineFrom
+readLineFrom fd = readLineFdNative fd
+GENFN_END
+GENFN_DEP readStdin readStdinNative NATIVE YonaStdIoReadStdinImpl FN 1 UNIT -> STRING
+GENFN_BEGIN readStdin readStdin
+readStdin = readStdinNative ()
+GENFN_END
+GENFN_BEGIN stderrFd stderrFd
+stderrFd = 2
+GENFN_END
+GENFN_BEGIN stdinFd stdinFd
+stdinFd  = 0
+GENFN_END
+GENFN_BEGIN stdoutFd stdoutFd
+stdoutFd = 1
+GENFN_END
+GENFN_DEP write writeStrNative NATIVE YonaStdIoWriteStr IO 2 INT STRING -> UNIT
+GENFN_CTOR write Read FileMode 0 0 4 0
+GENFN_CTOR write Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR write None Option 1 0 2 1
+GENFN_BEGIN write write
+write fd s = writeStrNative fd s
+GENFN_END

@@ -25,7 +25,7 @@ walks the parsed module or expression before code generation and turns each
 reported incomplete finite-ADT case into E0203. The analysis is syntactic
 except for constructor metadata already registered in `Codegen`.
 
-## Errors and compatibility
+## Errors and default behavior
 
 The strict diagnostic explains that `--require-effect-free` also requires a
 finite-ADT match to cover all constructors and lists the missing names.

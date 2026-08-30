@@ -8,7 +8,7 @@ optionally compares against C references and across optimization levels.
 Usage:
     python3 bench/runner.py                      # run all, -O2
     python3 bench/runner.py core/fibonacci        # specific benchmark
-    python3 bench/runner.py --compare-c           # compare vs C
+    python3 bench/runner.py --compare c           # compare vs C
     python3 bench/runner.py --verify-reference-outputs   # C refs vs .expected only, exit 1 on mismatch
     python3 bench/runner.py --verify-reference-outputs --reference-verify-langs all
     python3 bench/runner.py --skip-erl   # omit Erlang when Windows OTP crashes
@@ -17,18 +17,29 @@ Usage:
 """
 
 import argparse
+import contextlib
+import ctypes
 import json
 import os
+import shutil
 import subprocess
 import sys
-import time
 import tempfile
-import shutil
-import ctypes
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BENCH_DIR = ROOT / "bench"
+REFERENCE_DIR = BENCH_DIR / "Reference"
+
+
+def _upper_camel(stem: str) -> str:
+    """Return the canonical native filename stem for a benchmark name."""
+    return "".join(
+        part[:1].upper() + part[1:] for part in stem.split("_") if part
+    )
+
+
 def _default_yonac():
     candidates = [
         ROOT / "out" / "build" / "x64-debug-macos" / "yonac",
@@ -46,8 +57,6 @@ def _default_yonac():
 
 YONAC = _default_yonac()
 BUILD_DIR = Path(tempfile.gettempdir()) / "yona_bench"
-STARTUP_CACHE_VERSION = "v2"
-
 # Per-benchmark timeout (seconds) — prevents runaway benchmarks while keeping
 # slower VM startup / process-heavy rows reliable on Windows.
 BENCH_TIMEOUT = 30
@@ -92,14 +101,23 @@ def with_exe_suffix(path):
 def _ref_source(stem: str, ext: str, platform_specific: bool = False):
     """Pick platform-specific ref first when available.
 
-    On Windows we prefer `name.win.ext` and fall back to `name.ext`.
-    Other platforms keep using `name.ext` unchanged.
+    Native C files follow repository UpperCamelCase naming. On Windows we
+    prefer `NameWindows.c` and fall back to `Name.c`. Other reference
+    languages retain their language-native descriptive filenames.
     """
+    if ext == "c":
+        native_stem = _upper_camel(stem)
+        if platform_specific and os.name == "nt":
+            win_src = REFERENCE_DIR / f"{native_stem}Windows.c"
+            if win_src.exists():
+                return win_src
+        src = REFERENCE_DIR / f"{native_stem}.c"
+        return src if src.exists() else None
     if platform_specific and os.name == "nt":
-        win_src = BENCH_DIR / "reference" / f"{stem}.win.{ext}"
+        win_src = REFERENCE_DIR / f"{stem}.win.{ext}"
         if win_src.exists():
             return win_src
-    src = BENCH_DIR / "reference" / f"{stem}.{ext}"
+    src = REFERENCE_DIR / f"{stem}.{ext}"
     return src if src.exists() else None
 
 
@@ -156,8 +174,12 @@ def ensure_benchmark_data():
     data_dir = BENCH_DIR / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     # Keep canonical LF text sizes so benchmark expected outputs are cross-platform stable.
-    _ensure_text_fixture(data_dir / "bench_text.txt", total_bytes=1206681, newline_count=20000)
-    _ensure_text_fixture(data_dir / "large_text.txt", total_bytes=55022092, newline_count=500000)
+    _ensure_text_fixture(
+        data_dir / "bench_text.txt", total_bytes=1206681, newline_count=20000
+    )
+    _ensure_text_fixture(
+        data_dir / "large_text.txt", total_bytes=55022092, newline_count=500000
+    )
     chunk_sizes = [9101111, 9101111, 9101111, 9101109]  # sum = 36404442
     for i, size in enumerate(chunk_sizes, start=1):
         p = data_dir / f"chunk_{i}.txt"
@@ -175,28 +197,46 @@ def ensure_benchmark_data():
 def find_benchmarks(filter_name=None):
     benchmarks = []
     for category in sorted(BENCH_DIR.iterdir()):
-        if not category.is_dir() or category.name in ("reference", "__pycache__"):
+        if not category.is_dir() or category.name in (
+            "Reference",
+            "__pycache__",
+        ):
             continue
         for yona_file in sorted(category.glob("*.yona")):
             name = f"{category.name}/{yona_file.stem}"
             if filter_name and filter_name not in name:
                 continue
             expected_file = yona_file.with_suffix(".expected")
-            benchmarks.append({
-                "name": name,
-                "source": yona_file,
-                "expected": expected_file if expected_file.exists() else None,
-                "category": category.name,
-            })
+            benchmarks.append(
+                {
+                    "name": name,
+                    "source": yona_file,
+                    "expected": expected_file
+                    if expected_file.exists()
+                    else None,
+                    "category": category.name,
+                }
+            )
     return benchmarks
 
 
 def compile_yona(source, opt_level, exe_path):
     lib_path = ROOT / "lib"
-    cmd = [str(YONAC), f"-O{opt_level}", "--sysroot", str(_default_sysroot()), "-I", str(lib_path),
-           "-o", str(exe_path), str(source)]
+    cmd = [
+        str(YONAC),
+        f"-O{opt_level}",
+        "--sysroot",
+        str(_default_sysroot()),
+        "-I",
+        str(lib_path),
+        "-o",
+        str(exe_path),
+        str(source),
+    ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=_tool_env())
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120, env=_tool_env()
+        )
         if result.returncode != 0:
             err = (result.stderr or result.stdout or "").strip()
             if err:
@@ -210,15 +250,19 @@ def compile_yona(source, opt_level, exe_path):
 def compile_c(c_file, exe_path):
     cc = os.environ.get("YONAC_CC")
     if not cc:
-        cc = (shutil.which("clang")
-              or shutil.which("cc")
-              or shutil.which("gcc")
-              or "clang")
+        cc = (
+            shutil.which("clang")
+            or shutil.which("cc")
+            or shutil.which("gcc")
+            or "clang"
+        )
     cmd = [cc, "-O2", "-o", str(exe_path), str(c_file)]
     if os.name != "nt":
         cmd.insert(2, "-lm")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, env=_tool_env())
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=10, env=_tool_env()
+        )
         return result.returncode == 0
     except subprocess.TimeoutExpired:
         return False
@@ -247,6 +291,7 @@ def _prep_erl(stem, build_dir):
     if src is None:
         return None
     from shutil import which
+
     if not which("erl") or not which("erlc"):
         return None
     # Rewrite the escript header to a module declaration so erlc can
@@ -265,12 +310,13 @@ def _prep_erl(stem, build_dir):
             body.append(line)
         erl_src.write_text(
             f"-module({mod_name}).\n"
-            f"-export([main/1]).\n"
-            + "\n".join(body) + "\n"
+            f"-export([main/1]).\n" + "\n".join(body) + "\n"
         )
         result = subprocess.run(
             ["erlc", "-o", str(build_dir), str(erl_src)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if result.returncode != 0 or not beam.exists():
             # On some Windows hosts `erlc`/`erl` exit with 0xC0000005 (access
@@ -289,8 +335,14 @@ def _prep_erl(stem, build_dir):
     # Note: Erlang VM startup is ~1s on this box, so these numbers reflect
     # VM boot + computation and will look lopsided on sub-millisecond
     # benchmarks. -eval invokes main/1 with [] (escript convention).
-    return ["erl", "-noshell", "-pa", str(build_dir),
-            "-eval", f"{mod_name}:main([]), init:stop()."]
+    return [
+        "erl",
+        "-noshell",
+        "-pa",
+        str(build_dir),
+        "-eval",
+        f"{mod_name}:main([]), init:stop().",
+    ]
 
 
 def _prep_java(stem, build_dir):
@@ -301,6 +353,7 @@ def _prep_java(stem, build_dir):
     if src is None:
         return None
     from shutil import which
+
     if not which("java") or not which("javac"):
         return None
     # javac's class output location is determined by the source's package
@@ -312,16 +365,22 @@ def _prep_java(stem, build_dir):
     text = src.read_text()
     # Look for `class NAME` — fall back to `stem`.
     import re
+
     m = re.search(r"(?:public\s+)?class\s+(\w+)", text)
     cls = m.group(1) if m else stem
     class_file = jdir / f"{cls}.class"
-    if not class_file.exists() or src.stat().st_mtime > class_file.stat().st_mtime:
+    if (
+        not class_file.exists()
+        or src.stat().st_mtime > class_file.stat().st_mtime
+    ):
         # Copy source next to where .class will land (javac default).
         staged = jdir / f"{cls}.java"
         staged.write_text(text)
         result = subprocess.run(
             ["javac", "-d", str(jdir), str(staged)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if result.returncode != 0 or not class_file.exists():
             return None
@@ -334,6 +393,7 @@ def _prep_hs(stem, build_dir):
     if src is None:
         return None
     from shutil import which
+
     ghc_cmd = None
     if which("ghc"):
         ghc_cmd = ["ghc"]
@@ -349,8 +409,11 @@ def _prep_hs(stem, build_dir):
         hdir = build_dir / f"hs_{stem}"
         hdir.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            ghc_cmd + ["-O2", "-outputdir", str(hdir), "-o", str(exe), str(src)],
-            capture_output=True, text=True, timeout=60,
+            ghc_cmd
+            + ["-O2", "-outputdir", str(hdir), "-o", str(exe), str(src)],
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode != 0 or not exe.exists():
             return None
@@ -363,6 +426,7 @@ def _prep_js(stem, build_dir):
     if src is None:
         return None
     from shutil import which
+
     if not which("node"):
         return None
     return ["node", str(src)]
@@ -374,6 +438,7 @@ def _prep_py(stem, build_dir):
     if src is None:
         return None
     from shutil import which
+
     py = which("python") or which("python3") or sys.executable
     if not py:
         return None
@@ -386,13 +451,16 @@ def _prep_go(stem, build_dir):
     if src is None:
         return None
     from shutil import which
+
     if not which("go"):
         return None
     exe = with_exe_suffix(build_dir / f"ref_go_{stem}")
     if not exe.exists() or src.stat().st_mtime > exe.stat().st_mtime:
         result = subprocess.run(
             ["go", "build", "-o", str(exe), str(src)],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode != 0 or not exe.exists():
             return None
@@ -407,35 +475,29 @@ def measure_startup(lang, build_dir, iterations=3):
     and run via the same toolchain the reference impls use, so the
     measured number includes compiler-output/VM-boot overhead exactly
     the way benchmark runs do."""
-    cache = build_dir / f".startup_{lang}.ms"
+    cache = build_dir / f".startup_{lang}.json"
     if cache.exists():
         try:
-            parts = cache.read_text().strip().split()
-            # v2 format: "<version> <avg_ms> <peak_rss_kb>"
-            if len(parts) >= 3 and parts[0] == STARTUP_CACHE_VERSION:
-                avg_ms = float(parts[1])
-                peak_rss = int(parts[2])
-                # On Windows we now expect startup RSS to be measurable.
-                # If legacy zero-RSS slipped in, force recompute.
-                if (os.name == "nt" or sys.platform == "darwin") and peak_rss <= 0:
-                    raise ValueError("stale startup RSS cache")
-                return avg_ms, peak_rss
-            # Legacy cache support (v1): "<avg_ms> [peak_rss_kb]"
-            if len(parts) >= 2:
-                avg_ms = float(parts[0])
-                peak_rss = int(parts[1])
-                if (os.name == "nt" or sys.platform == "darwin") and peak_rss <= 0:
-                    raise ValueError("stale legacy startup RSS cache")
-                return avg_ms, peak_rss
-        except (ValueError, IndexError):
+            cached = json.loads(cache.read_text(encoding="utf-8"))
+            avg_ms = float(cached["averageMilliseconds"])
+            peak_rss = int(cached["peakRssKilobytes"])
+            if (os.name == "nt" or sys.platform == "darwin") and peak_rss <= 0:
+                raise ValueError("stale startup RSS cache")
+            return avg_ms, peak_rss
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             pass
     probe_dir = build_dir / "_startup"
     probe_dir.mkdir(parents=True, exist_ok=True)
 
     from shutil import which
+
     cmd = None
     if lang == "c":
-        cc = which(os.environ.get("YONAC_CC", "")) if os.environ.get("YONAC_CC") else None
+        cc = (
+            which(os.environ.get("YONAC_CC", ""))
+            if os.environ.get("YONAC_CC")
+            else None
+        )
         if not cc:
             cc = which("clang") or which("cc")
         if not cc:
@@ -443,8 +505,14 @@ def measure_startup(lang, build_dir, iterations=3):
         src = probe_dir / "startup.c"
         src.write_text("int main(void){return 0;}\n")
         exe = with_exe_suffix(probe_dir / "startup_c")
-        if subprocess.run([cc, "-O2", "-o", str(exe), str(src)],
-                          capture_output=True, timeout=30).returncode != 0:
+        if (
+            subprocess.run(
+                [cc, "-O2", "-o", str(exe), str(src)],
+                capture_output=True,
+                timeout=30,
+            ).returncode
+            != 0
+        ):
             return 0.0, 0
         cmd = [str(exe)]
     elif lang == "erl":
@@ -453,19 +521,41 @@ def measure_startup(lang, build_dir, iterations=3):
         if not (which("erl") and which("erlc")):
             return 0.0, 0
         src = probe_dir / "startup_erl.erl"
-        src.write_text("-module(startup_erl).\n-export([main/1]).\nmain(_) -> ok.\n")
-        if subprocess.run(["erlc", "-o", str(probe_dir), str(src)],
-                          capture_output=True, timeout=30).returncode != 0:
+        src.write_text(
+            "-module(startup_erl).\n-export([main/1]).\nmain(_) -> ok.\n"
+        )
+        if (
+            subprocess.run(
+                ["erlc", "-o", str(probe_dir), str(src)],
+                capture_output=True,
+                timeout=30,
+            ).returncode
+            != 0
+        ):
             return 0.0, 0
-        cmd = ["erl", "-noshell", "-pa", str(probe_dir),
-               "-eval", "startup_erl:main([]), init:stop()."]
+        cmd = [
+            "erl",
+            "-noshell",
+            "-pa",
+            str(probe_dir),
+            "-eval",
+            "startup_erl:main([]), init:stop().",
+        ]
     elif lang == "java":
         if not (which("java") and which("javac")):
             return 0.0, 0
         src = probe_dir / "startup_java.java"
-        src.write_text("public class startup_java { public static void main(String[] a) {} }\n")
-        if subprocess.run(["javac", "-d", str(probe_dir), str(src)],
-                          capture_output=True, timeout=30).returncode != 0:
+        src.write_text(
+            "public class startup_java { public static void main(String[] a) {} }\n"
+        )
+        if (
+            subprocess.run(
+                ["javac", "-d", str(probe_dir), str(src)],
+                capture_output=True,
+                timeout=30,
+            ).returncode
+            != 0
+        ):
             return 0.0, 0
         cmd = ["java", "-cp", str(probe_dir), "startup_java"]
     elif lang == "hs":
@@ -479,10 +569,22 @@ def measure_startup(lang, build_dir, iterations=3):
         src = probe_dir / "startup_hs.hs"
         src.write_text("main = return ()\n")
         exe = with_exe_suffix(probe_dir / "startup_hs")
-        if subprocess.run(
-            ghc_cmd + ["-O2", "-outputdir", str(probe_dir), "-o", str(exe), str(src)],
-            capture_output=True, timeout=60,
-        ).returncode != 0:
+        if (
+            subprocess.run(
+                ghc_cmd
+                + [
+                    "-O2",
+                    "-outputdir",
+                    str(probe_dir),
+                    "-o",
+                    str(exe),
+                    str(src),
+                ],
+                capture_output=True,
+                timeout=60,
+            ).returncode
+            != 0
+        ):
             return 0.0, 0
         cmd = [str(exe)]
     elif lang == "js":
@@ -504,8 +606,14 @@ def measure_startup(lang, build_dir, iterations=3):
         src = probe_dir / "startup.go"
         src.write_text("package main\nfunc main(){}\n")
         exe = with_exe_suffix(probe_dir / "startup_go")
-        if subprocess.run(["go", "build", "-o", str(exe), str(src)],
-                          capture_output=True, timeout=60).returncode != 0:
+        if (
+            subprocess.run(
+                ["go", "build", "-o", str(exe), str(src)],
+                capture_output=True,
+                timeout=60,
+            ).returncode
+            != 0
+        ):
             return 0.0, 0
         cmd = [str(exe)]
     elif lang == "yona":
@@ -531,18 +639,28 @@ def measure_startup(lang, build_dir, iterations=3):
         return 0.0, 0
     avg_ms = sum(times) / len(times)
     peak_rss = max(rss_values) if rss_values else 0
-    cache.write_text(f"{STARTUP_CACHE_VERSION} {avg_ms} {peak_rss}\n")
+    cache.write_text(
+        json.dumps(
+            {
+                "averageMilliseconds": avg_ms,
+                "peakRssKilobytes": peak_rss,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return avg_ms, peak_rss
 
 
 REF_LANGS = {
-    "c":    {"label": "C",    "prep": _prep_c},
-    "erl":  {"label": "Erl",  "prep": _prep_erl},
+    "c": {"label": "C", "prep": _prep_c},
+    "erl": {"label": "Erl", "prep": _prep_erl},
     "java": {"label": "Java", "prep": _prep_java},
-    "hs":   {"label": "Hs",   "prep": _prep_hs},
-    "js":   {"label": "Node", "prep": _prep_js},
-    "py":   {"label": "Py",   "prep": _prep_py},
-    "go":   {"label": "Go",   "prep": _prep_go},
+    "hs": {"label": "Hs", "prep": _prep_hs},
+    "js": {"label": "Node", "prep": _prep_js},
+    "py": {"label": "Py", "prep": _prep_py},
+    "go": {"label": "Go", "prep": _prep_go},
 }
 
 
@@ -551,6 +669,7 @@ def _windows_peak_working_set_kb(proc: subprocess.Popen) -> int:
     if os.name != "nt":
         return 0
     try:
+
         class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
             _fields_ = [
                 ("cb", ctypes.c_uint32),
@@ -594,7 +713,6 @@ def _posix_communicate_rusage(proc, timeout):
     import select
 
     chunks = {proc.stdout.fileno(): [], proc.stderr.fileno(): []}
-    kind = {proc.stdout.fileno(): "out", proc.stderr.fileno(): "err"}
     pending = set(chunks)
     deadline = time.monotonic() + timeout
     while pending:
@@ -625,14 +743,18 @@ def run_once(cmd_or_exe):
         cmd = cmd_or_exe if isinstance(cmd_or_exe, list) else [str(cmd_or_exe)]
         start = time.perf_counter_ns()
         if os.name == "nt":
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
             stdout, stderr = proc.communicate(timeout=BENCH_TIMEOUT)
             elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
             if proc.returncode != 0:
                 return None
             peak_rss_kb = _windows_peak_working_set_kb(proc)
             return stdout.strip(), elapsed_ms, peak_rss_kb
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0
+        )
         stdout, stderr, ru = _posix_communicate_rusage(proc, BENCH_TIMEOUT)
         elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
         if proc.returncode != 0:
@@ -640,15 +762,11 @@ def run_once(cmd_or_exe):
         return stdout.strip(), elapsed_ms, _posix_rss_kb_from_rusage(ru)
     except subprocess.TimeoutExpired:
         if proc is not None:
-            try:
+            with contextlib.suppress(Exception):
                 proc.kill()
-            except Exception:
-                pass
             if os.name != "nt":
-                try:
+                with contextlib.suppress(Exception):
                     os.wait4(proc.pid, 0)
-                except Exception:
-                    pass
         return None
     except Exception:
         return None
@@ -718,7 +836,9 @@ def verify_reference_outputs(benchmarks, langs: tuple, build_dir: Path) -> int:
                 continue
             result = run_once(cmd)
             if result is None:
-                print(f"  FAIL {bench['name']:.<40} {spec['label']:<5} (run error or timeout)")
+                print(
+                    f"  FAIL {bench['name']:.<40} {spec['label']:<5} (run error or timeout)"
+                )
                 failures += 1
                 continue
             out, _, _ = result
@@ -784,11 +904,17 @@ def run_suite(benchmarks, opt_level, iterations, compare_langs=()):
     if startup_ms:
         parts = []
         if "yona" in startup_ms:
-            parts.append(f"Yona={fmt_time(startup_ms['yona'])}/{fmt_rss(startup_rss['yona'])}")
-        for l in startup_ms:
-            if l == "yona":
+            parts.append(
+                f"Yona={fmt_time(startup_ms['yona'])}/{fmt_rss(startup_rss['yona'])}"
+            )
+        for language in startup_ms:
+            if language == "yona":
                 continue
-            parts.append(f"{REF_LANGS[l]['label']}={fmt_time(startup_ms[l])}/{fmt_rss(startup_rss[l])}")
+            parts.append(
+                f"{REF_LANGS[language]['label']}="
+                f"{fmt_time(startup_ms[language])}/"
+                f"{fmt_rss(startup_rss[language])}"
+            )
         print("  Startup (cold-start no-op, time/RSS):", ", ".join(parts))
 
     results = []
@@ -814,8 +940,14 @@ def run_suite(benchmarks, opt_level, iterations, compare_langs=()):
             continue
 
         if not check_correctness(bench, stats["output"]):
-            expected = bench["expected"].read_text().strip() if bench["expected"] else "?"
-            print(f"    {stem:.<28} WRONG (expected {expected}, got {stats['output'][:40]})")
+            expected = (
+                bench["expected"].read_text().strip()
+                if bench["expected"]
+                else "?"
+            )
+            print(
+                f"    {stem:.<28} WRONG (expected {expected}, got {stats['output'][:40]})"
+            )
             results.append({"name": bench["name"], "status": "wrong_output"})
             continue
 
@@ -835,12 +967,16 @@ def run_suite(benchmarks, opt_level, iterations, compare_langs=()):
         r["peak_rss_kb_adj"] = yona_rss_adj
         r["startup_rss_kb"] = ysu_rss
 
-        y_time_disp = (f"{fmt_time(stats['avg_ms'])}→{fmt_time(yona_adj)}"
-                       if ysu > stats["avg_ms"] * 0.05
-                       else fmt_time(stats["avg_ms"]))
-        y_rss_disp = (f"{fmt_rss(stats['peak_rss_kb'])}→{fmt_rss(yona_rss_adj)}"
-                      if ysu_rss > stats["peak_rss_kb"] * 0.05
-                      else fmt_rss(stats["peak_rss_kb"]))
+        y_time_disp = (
+            f"{fmt_time(stats['avg_ms'])}→{fmt_time(yona_adj)}"
+            if ysu > stats["avg_ms"] * 0.05
+            else fmt_time(stats["avg_ms"])
+        )
+        y_rss_disp = (
+            f"{fmt_rss(stats['peak_rss_kb'])}→{fmt_rss(yona_rss_adj)}"
+            if ysu_rss > stats["peak_rss_kb"] * 0.05
+            else fmt_rss(stats["peak_rss_kb"])
+        )
         line = f"    {stem:.<28} {y_time_disp:>14}  {y_rss_disp:>14}"
 
         for lang in compare_langs:
@@ -876,12 +1012,20 @@ def run_suite(benchmarks, opt_level, iterations, compare_langs=()):
             r[f"{lang}_startup_rss_kb"] = su_rss
             r[f"{lang}_ratio"] = ratio
             r[f"{lang}_ratio_adj"] = adj_ratio
-            time_disp = (f"{fmt_time(raw)}→{fmt_time(adj)}"
-                         if su > raw * 0.05 else fmt_time(raw))
-            rss_disp = (f"{fmt_rss(raw_rss)}→{fmt_rss(adj_rss)}"
-                        if su_rss > raw_rss * 0.05 else fmt_rss(raw_rss))
-            line += (f"  {spec['label']}: {time_disp:>14} "
-                     f"{rss_disp:>14}  {adj_ratio:.1f}x")
+            time_disp = (
+                f"{fmt_time(raw)}→{fmt_time(adj)}"
+                if su > raw * 0.05
+                else fmt_time(raw)
+            )
+            rss_disp = (
+                f"{fmt_rss(raw_rss)}→{fmt_rss(adj_rss)}"
+                if su_rss > raw_rss * 0.05
+                else fmt_rss(raw_rss)
+            )
+            line += (
+                f"  {spec['label']}: {time_disp:>14} "
+                f"{rss_disp:>14}  {adj_ratio:.1f}x"
+            )
 
         print(line)
         results.append(r)
@@ -894,15 +1038,19 @@ def get_git_info():
     try:
         sha = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, cwd=ROOT
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
         ).stdout.strip()
         subject = subprocess.run(
             ["git", "log", "-1", "--format=%s"],
-            capture_output=True, text=True, cwd=ROOT
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
         ).stdout.strip()
-        dirty = subprocess.run(
-            ["git", "diff", "--quiet"], cwd=ROOT
-        ).returncode != 0
+        dirty = (
+            subprocess.run(["git", "diff", "--quiet"], cwd=ROOT).returncode != 0
+        )
         return {"sha": sha, "subject": subject, "dirty": dirty}
     except Exception:
         return {"sha": "unknown", "subject": "", "dirty": False}
@@ -911,6 +1059,7 @@ def get_git_info():
 def save_results(all_results, git_info):
     """Append benchmark results to bench/history.jsonl."""
     import datetime
+
     history_file = BENCH_DIR / "history.jsonl"
     entry = {
         "timestamp": datetime.datetime.now().isoformat(),
@@ -927,43 +1076,42 @@ def main():
     parser.add_argument("filter", nargs="?", help="Filter by benchmark name")
     parser.add_argument("-n", "--iterations", type=int, default=3)
     parser.add_argument("-O", "--opt-level", type=int, default=2)
-    parser.add_argument("--compare-c", action="store_true",
-                        help="Compare against C reference impls")
-    parser.add_argument("--compare-erl", action="store_true",
-                        help="Compare against Erlang reference impls (erlc-compiled)")
     parser.add_argument(
         "--skip-erl",
         action="store_true",
         help="Skip all Erlang reference usage (prep, startup probe, verify). "
-             "Same as YONA_BENCH_SKIP_ERLANG=1; use when erl/erlc crash on Windows OTP.",
+        "Same as YONA_BENCH_SKIP_ERLANG=1; use when erl/erlc crash on Windows OTP.",
     )
-    # `--compare` without a value means "-c" (backwards compat). With a value,
-    # it takes a CSV of language keys: `--compare=c,erl`. The `nargs="?"` +
-    # `const` trick gives us both forms from a single flag.
-    parser.add_argument("--compare",
-                        dest="compare_langs_csv",
-                        nargs="?", const="c",
-                        help="Comma-separated languages to compare against "
-                             f"({','.join(REF_LANGS.keys())}). Defaults to 'c' "
-                             f"when the flag is present without a value.")
+    parser.add_argument(
+        "--compare",
+        dest="compare_langs_csv",
+        help="Comma-separated languages to compare against "
+        f"({','.join(REF_LANGS.keys())}).",
+    )
     parser.add_argument(
         "--verify-reference-outputs",
         action="store_true",
         help="Check reference implementations only: each benchmark with a "
-             ".expected file is run once per language (see "
-             "--reference-verify-langs). Exits 1 on stdout mismatch. Does not "
-             "run the Yona timing suite or require yonac.",
+        ".expected file is run once per language (see "
+        "--reference-verify-langs). Exits 1 on stdout mismatch. Does not "
+        "run the Yona timing suite or require yonac.",
     )
     parser.add_argument(
         "--reference-verify-langs",
         default="c",
         metavar="LANGS",
         help="Comma-separated reference keys (c,erl,java,...) or 'all'. "
-             "Used only with --verify-reference-outputs. Default: c",
+        "Used only with --verify-reference-outputs. Default: c",
     )
-    parser.add_argument("--all-opt-levels", action="store_true", help="Run O0, O1, O2, O3")
+    parser.add_argument(
+        "--all-opt-levels", action="store_true", help="Run O0, O1, O2, O3"
+    )
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--save", action="store_true", help="Save results to bench/history.jsonl")
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help="Save results to bench/history.jsonl",
+    )
     parser.add_argument("--yonac", help="Path to yonac executable")
     args = parser.parse_args()
 
@@ -975,19 +1123,16 @@ def main():
     if args.yonac:
         YONAC = Path(args.yonac)
 
-    # Resolve comparison languages from the various flags.
     compare_langs = []
-    if args.compare_c:
-        compare_langs.append("c")
-    if args.compare_erl:
-        compare_langs.append("erl")
     if args.compare_langs_csv:
         for lang in args.compare_langs_csv.split(","):
             lang = lang.strip().lower()
             if lang and lang not in compare_langs:
                 if lang not in REF_LANGS:
-                    print(f"Error: unknown comparison language '{lang}'. "
-                          f"Available: {','.join(REF_LANGS.keys())}")
+                    print(
+                        f"Error: unknown comparison language '{lang}'. "
+                        f"Available: {','.join(REF_LANGS.keys())}"
+                    )
                     sys.exit(1)
                 compare_langs.append(lang)
     compare_langs = tuple(
@@ -1007,9 +1152,7 @@ def main():
             verify_langs = tuple(REF_LANGS.keys())
         else:
             verify_langs = tuple(
-                x.strip().lower()
-                for x in raw.split(",")
-                if x.strip()
+                x.strip().lower() for x in raw.split(",") if x.strip()
             )
         for lang in verify_langs:
             if lang not in REF_LANGS:
@@ -1038,15 +1181,22 @@ def main():
 
     if args.all_opt_levels:
         for level in [0, 1, 2, 3]:
-            header = f"O{level}"
             print(f"\n{'=' * 60}")
-            print(f"  Optimization Level: -O{level}  ({args.iterations} iterations)")
+            print(
+                f"  Optimization Level: -O{level}  ({args.iterations} iterations)"
+            )
             print(f"{'=' * 60}")
-            all_results[f"O{level}"] = run_suite(benchmarks, level, args.iterations, compare_langs)
+            all_results[f"O{level}"] = run_suite(
+                benchmarks, level, args.iterations, compare_langs
+            )
     else:
-        print(f"Yona Benchmarks — -O{args.opt_level}, {args.iterations} iterations")
+        print(
+            f"Yona Benchmarks — -O{args.opt_level}, {args.iterations} iterations"
+        )
         print(f"{'=' * 60}")
-        all_results[f"O{args.opt_level}"] = run_suite(benchmarks, args.opt_level, args.iterations, compare_langs)
+        all_results[f"O{args.opt_level}"] = run_suite(
+            benchmarks, args.opt_level, args.iterations, compare_langs
+        )
 
     # Summary
     print(f"\n{'=' * 60}")

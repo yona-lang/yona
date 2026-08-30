@@ -1,255 +1,71 @@
-ADT FileHandle 1 1
-CTOR FileHandle 0 1 fields _0:INT
-ADT FileMode 4 0
-CTOR Read 0 0
-CTOR ReadWrite 2 0
-CTOR Write 1 0
-CTOR Append 3 0
-ADT Iterator 1 1 recursive
-CTOR Iterator 0 1 fields _0:FUNCTION:ADT:Option
-ADT Linear 1 1
-CTOR Linear 0 1 fields _0:INT
-ADT Option 2 1
-CTOR Some 0 1 fields _0:INT
-CTOR None 1 0
-ADT Receiver 1 1
-CTOR Receiver 0 1 fields _0:INT
-ADT Result 2 1
-CTOR Ok 0 1 fields _0:INT
-CTOR Err 1 1 fields _0:INT
-ADT Sender 1 1
-CTOR Sender 0 1 fields _0:INT
-ADT Stream 2 2 recursive
-CTOR Nil 1 0
-CTOR Yield 0 2 fields _0:INT _1:FUNCTION:ADT:Stream
-ADT Type 18 1
-CTOR TSum 16 0
-CTOR TAdt 15 1 fields _0:STRING
-CTOR TInt 0 0
-CTOR TFloat 1 0
-CTOR TBool 2 0
-CTOR TString 3 0
-CTOR TSymbol 4 0
-CTOR TUnit 5 0
-CTOR TSeq 6 0
-CTOR TIntArray 13 0
-CTOR TSet 7 0
-CTOR TDict 8 0
-CTOR TFunction 10 0
-CTOR TTuple 9 0
-CTOR TPromise 11 0
-CTOR TByteArray 12 0
-CTOR TFloatArray 14 0
-CTOR TRecord 17 0
-ADT Whence 3 0
-CTOR SeekEnd 2 0
-CTOR SeekSet 0 0
-CTOR SeekCur 1 0
-TRAIT Closeable a 1
-  METHOD close
-TRAIT Show a 1
-  METHOD show
-TRAIT Eq a 1
-  METHOD eq
-TRAIT Ord a 1
-  METHOD compare
-TRAIT Hash a 1
-  METHOD hash
-TRAIT Array a 2
-  METHOD length
-  METHOD get
-INSTANCE Show Float
-  IMPL show yona_Prelude__Show_Float__show
-INSTANCE Closeable Int
-  IMPL close Closeable_Int__close
-INSTANCE Closeable FileHandle
-  IMPL close yona_Std_File__closeFileHandle
-INSTANCE Ord String
-  IMPL compare yona_Prelude__Ord_String__compare
-INSTANCE Eq Bool
-  IMPL eq yona_Prelude__Eq_Bool__eq
-INSTANCE Show Int
-  IMPL show yona_Prelude__Show_Int__show
-INSTANCE Show String
-  IMPL show yona_Prelude__Show_String__show
-INSTANCE Eq String
-  IMPL eq yona_Prelude__Eq_String__eq
-INSTANCE Show Bool
-  IMPL show yona_Prelude__Show_Bool__show
-INSTANCE Ord Bool
-  IMPL compare yona_Prelude__Ord_Bool__compare
-INSTANCE Show Symbol
-  IMPL show yona_Prelude__Show_Symbol__show
-INSTANCE Eq Int
-  IMPL eq yona_Prelude__Eq_Int__eq
-INSTANCE Array FloatArray
-  IMPL length yona_Prelude__Array_FloatArray__length
-  IMPL get yona_Prelude__Array_FloatArray__get
-INSTANCE Eq Float
-  IMPL eq yona_Prelude__Eq_Float__eq
-INSTANCE Eq Symbol
-  IMPL eq yona_Prelude__Eq_Symbol__eq
-INSTANCE Ord Int
-  IMPL compare yona_Prelude__Ord_Int__compare
-INSTANCE Ord Float
-  IMPL compare yona_Prelude__Ord_Float__compare
-INSTANCE Hash Int
-  IMPL hash yona_Prelude__Hash_Int__hash
-INSTANCE Hash Float
-  IMPL hash yona_Prelude__Hash_Float__hash
-INSTANCE Hash String
-  IMPL hash yona_Prelude__Hash_String__hash
-INSTANCE Hash Bool
-  IMPL hash yona_Prelude__Hash_Bool__hash
-INSTANCE Hash Symbol
-  IMPL hash yona_Prelude__Hash_Symbol__hash
-INSTANCE Array ByteArray
-  IMPL length yona_Prelude__Array_ByteArray__length
-  IMPL get yona_Prelude__Array_ByteArray__get
-INSTANCE Array IntArray
-  IMPL length yona_Prelude__Array_IntArray__length
-  IMPL get yona_Prelude__Array_IntArray__get
-INSTANCE Array Seq
-  IMPL length yona_Prelude__Array_Seq__length
-  IMPL get yona_Prelude__Array_Seq__get
-INSTANCE Array String
-  IMPL length yona_Prelude__Array_String__length
-  IMPL get yona_Prelude__Array_String__get
-FN yona_Std_Stream__filter 2 FUNCTION ADT -> ADT
-FN yona_Prelude__Array_Seq__length 1 INT -> INT
-FN yona_Prelude__Eq_Symbol__eq 2 INT INT -> BOOL
-FN yona_Prelude__Hash_Int__hash 1 INT -> INT
-FN yona_Prelude__Show_String__show 1 STRING -> STRING
-FN yona_Prelude__Show_Int__show 1 INT -> STRING
-FN yona_Std_Stream__dropWhile 2 FUNCTION ADT -> INT borrow 10
-FN yona_Prelude__Show_Bool__show 1 BOOL -> STRING
-FN yona_Prelude__Hash_Float__hash 1 FLOAT -> INT
-FN yona_Prelude__Show_Float__show 1 FLOAT -> STRING
-FN yona_Std_Stream__drop 2 INT ADT -> ADT
-FN yona_Prelude__Eq_Int__eq 2 INT INT -> BOOL
-FN yona_Prelude__Array_FloatArray__length 1 INT -> INT
-FN yona_Prelude__Array_ByteArray__length 1 INT -> INT
-FN yona_Prelude__Eq_Float__eq 2 FLOAT FLOAT -> BOOL
-FN yona_Prelude__Hash_String__hash 1 STRING -> INT
-FN yona_Prelude__Eq_String__eq 2 STRING STRING -> BOOL
-FN yona_Prelude__Eq_Bool__eq 2 BOOL BOOL -> BOOL
-FN yona_Prelude__Ord_Int__compare 2 INT INT -> INT
-FN yona_Std_Stream__fromIterator 1 ADT -> ADT
-FN yona_Prelude__Ord_Float__compare 2 FLOAT FLOAT -> INT
-FN yona_Prelude__Ord_String__compare 2 STRING STRING -> INT
-FN yona_Prelude__Ord_Bool__compare 2 BOOL BOOL -> INT
-FN yona_Prelude__Hash_Bool__hash 1 BOOL -> INT
-FN yona_Prelude__Hash_Symbol__hash 1 INT -> INT
-FN yona_Std_Stream__concat 2 ADT INT -> ADT
-FN yona_Prelude__Show_Symbol__show 1 INT -> STRING
-FN yona_Prelude__Array_FloatArray__get 2 INT INT -> FLOAT
-FN yona_Prelude__Array_ByteArray__get 2 INT INT -> INT
-FN yona_Std_Stream__singleton 1 INT -> ADT retadt Stream
-FN yona_Prelude__Array_IntArray__length 1 INT -> INT
-FN yona_Prelude__Array_IntArray__get 2 INT INT -> INT
-FN yona_Std_Stream__unfold 2 FUNCTION INT -> ADT
-FN yona_Prelude__Array_String__length 1 STRING -> INT
-FN yona_Prelude__Array_Seq__get 2 SEQ INT -> INT
-FN yona_Prelude__Array_String__get 2 STRING INT -> INT
-FN Closeable_Int__close 1 INT -> UNIT
-FN yona_Std_Stream__empty 0 -> ADT retadt Stream
-FN yona_Std_Stream__zipWith 3 FUNCTION ADT ADT -> ADT
-FN yona_Std_Stream__fromSeq 1 SEQ -> ADT
-FN yona_Std_Stream__repeat 1 INT -> ADT retadt Stream
-FN yona_Std_Stream__range 2 INT INT -> ADT
-FN yona_Std_Stream__naturals 0 -> ADT
-FN yona_Std_Stream__iterate 2 FUNCTION INT -> ADT retadt Stream
-FN yona_Std_Stream__map 2 FUNCTION ADT -> ADT
-FN yona_Std_Stream__chunksOf 2 INT INT -> ADT
-FN yona_Std_Stream__take 2 INT ADT -> ADT
-FN yona_Std_Stream__takeWhile 2 FUNCTION ADT -> ADT
-FN yona_Std_Stream__zip 2 ADT ADT -> ADT
-FN yona_Std_Stream__flatMap 2 FUNCTION ADT -> ADT
-FN yona_Std_Stream__scan 3 FUNCTION INT ADT -> ADT
-FN yona_Std_Stream__bracket 3 FUNCTION FUNCTION FUNCTION -> ADT borrow 100
-FN yona_Std_Stream__async 1 INT -> ADT
-FN yona_Std_Stream__buffered 2 INT INT -> ADT
-FN yona_Std_Stream__toSeq 1 ADT -> SEQ
-FN yona_Std_Stream__foldl 3 FUNCTION INT ADT -> INT borrow 100
-FN yona_Std_Stream__forEach 2 FUNCTION ADT -> INT borrow 10
-FN yona_Std_Stream__count 1 INT -> INT
-FN yona_Std_Stream__sum 1 INT -> INT
-FN yona_Std_Stream__anyMatch 2 FUNCTION ADT -> BOOL borrow 10
-FN yona_Std_Stream__allMatch 2 FUNCTION ADT -> INT borrow 10
-FN yona_Std_Stream__find 2 FUNCTION ADT -> ADT borrow 10
-FN yona_Std_Stream__head 1 ADT -> ADT
-FN yona_Std_Stream__isEmpty 1 ADT -> BOOL
-GENFN_BEGIN yona_Std_Stream__empty empty
-empty = Nil
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__find find
-find pred s = case s of
-    Yield x rest -> if pred x then Some x else find pred (rest ())
-    Nil          -> None
+MODULE Std\Stream
+ADT Stream 2 2 recursive params a
+  CTOR Yield 0 2 fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+  CTOR Nil 1 0
+FN allMatch 2 FUNCTION ADT -> INT borrow 10 effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN anyMatch 2 FUNCTION ADT -> BOOL borrow 10 effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN bracket 3 FUNCTION FUNCTION FUNCTION -> ADT borrow 101 effects | hof effectscheme $##;$/p##f0;$/r##;$/r/p##f1;$/r/r##f0|f2|f3;$/r/r/p##f3
+FN chunksOf 2 INT ADT -> ADT effects - effectscheme $##;$/r##
+FN concat 2 ADT ADT -> ADT effects - effectscheme $##;$/r##
+FN count 1 ADT -> INT effects - effectscheme $##
+FN drop 2 INT ADT -> ADT borrow 10 effects - effectscheme $##;$/r##
+FN dropWhile 2 FUNCTION ADT -> INT borrow 10 effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN empty 0 -> ADT(Stream) effects - effectscheme $##
+FN filter 2 FUNCTION ADT -> ADT effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN find 2 FUNCTION ADT -> ADT borrow 10 effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN flatMap 2 FUNCTION ADT -> ADT effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN foldl 3 FUNCTION INT ADT -> INT borrow 100 effects | hof effectscheme $##;$/p##f0;$/p/r##f1;$/r##;$/r/r##f0|f1
+FN forEach 2 FUNCTION ADT -> INT borrow 10 effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN fromIterator 1 ADT -> ADT effects - effectscheme $##
+FN fromSeq 1 SEQ -> ADT effects - effectscheme $##
+FN head 1 ADT -> ADT effects - effectscheme $##
+FN isEmpty 1 ADT -> BOOL effects - effectscheme $##
+FN iterate 2 FUNCTION INT -> ADT(Stream) effects - hof effectscheme $##;$/p##f0;$/r##
+FN map 2 FUNCTION ADT -> ADT effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN naturals 0 -> ADT effects - effectscheme $##
+FN range 2 INT INT -> ADT effects - effectscheme $##;$/r##
+FN repeat 1 INT -> ADT(Stream) effects - effectscheme $##
+FN scan 3 FUNCTION INT ADT -> ADT effects | hof effectscheme $##;$/p##f0;$/p/r##f1;$/r##;$/r/r##f0|f1
+FN singleton 1 INT -> ADT(Stream) effects - effectscheme $##
+FN sum 1 ADT -> INT effects - effectscheme $##
+FN take 2 INT ADT -> ADT effects - effectscheme $##;$/r##
+FN takeWhile 2 FUNCTION ADT -> ADT effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN toSeq 1 ADT -> SEQ effects - effectscheme $##
+FN unfold 2 FUNCTION INT -> ADT effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN zip 2 ADT ADT -> ADT effects - effectscheme $##;$/r##
+FN zipWith 3 FUNCTION ADT ADT -> ADT effects | hof effectscheme $##;$/p##f0;$/p/r##f1;$/r##;$/r/r##f0|f1
+GENFN_CTOR allMatch Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR allMatch Nil Stream 1 0 2 2 recursive
+GENFN_CTOR allMatch None Option 1 0 2 1
+GENFN_BEGIN allMatch allMatch
+allMatch pred s = case s of
+    Yield x rest -> if pred x then allMatch pred (rest ()) else false
+    Nil          -> true
 end
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__range range
-range lo hi =
-    if lo >= hi then Nil
-    else Yield lo (\_ -> range (lo + 1) hi)
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__repeat repeat
-repeat x = Yield x (\_ -> repeat x)
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__singleton singleton
-singleton x = Yield x (\_ -> Nil)
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__zipWith zipWith
-zipWith fn a b = case a of
-    Yield x ra -> case b of
-        Yield y rb -> Yield (fn x y) (\_ -> zipWith fn (ra ()) (rb ()))
-        Nil        -> Nil
-    end
-    Nil -> Nil
+GENFN_CTOR anyMatch Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR anyMatch Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN anyMatch anyMatch
+anyMatch pred s = case s of
+    Yield x rest -> if pred x then true else anyMatch pred (rest ())
+    Nil          -> false
 end
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__fromSeq fromSeq
-fromSeq xs = case xs of
-    []    -> Nil
-    [h|t] -> Yield h (\_ -> fromSeq t)
-end
+GENFN_CTOR bracket Linear Linear 0 1 1 1 fields _0:VAR(a)
+GENFN_CTOR bracket Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR bracket Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN bracket bracket
+bracket acquire release produce =
+    let r = acquire 0
+    in let wrap t = case t of
+            Yield x rest -> Yield x (\_ -> wrap (rest ()))
+            Nil          -> let _ = release r in Nil
+        end
+    in wrap (produce r)
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__naturals naturals
-naturals = import intMax from Std\Constants\Num in range 0 intMax
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__iterate iterate
-iterate f x = Yield x (\_ -> iterate f (f x))
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__unfold unfold
-unfold step seed = case step seed of
-    Some pair -> case pair of
-        (x, next) -> Yield x (\_ -> unfold step next)
-    end
-    None -> Nil
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__fromIterator fromIterator
-fromIterator iter = case iter of
-    Iterator nextFn -> case nextFn () of
-        Some x -> Yield x (\_ -> fromIterator iter)
-        None   -> Nil
-    end
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__map map
-map fn s = case s of
-    Yield x rest -> Yield (fn x) (\_ -> map fn (rest ()))
-    Nil          -> Nil
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__filter filter
-filter pred s = case s of
-    Yield x rest -> if pred x then Yield x (\_ -> filter pred (rest ()))
-                    else filter pred (rest ())
-    Nil          -> Nil
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__chunksOf chunksOf
+GENFN_CTOR chunksOf Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR chunksOf Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN chunksOf chunksOf
 chunksOf n s =
     if n <= 0 then Nil
     else let
@@ -264,15 +80,20 @@ chunksOf n s =
         end
     in go 0 [] s
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__take take
-take n s =
-    if n <= 0 then Nil
-    else case s of
-        Yield x rest -> Yield x (\_ -> take (n - 1) (rest ()))
-        Nil          -> Nil
-    end
+GENFN_CTOR concat Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR concat Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN concat concat
+concat a b = case a of
+    Yield x rest -> Yield x (\_ -> concat (rest ()) b)
+    Nil          -> b
+end
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__drop drop
+GENFN_BEGIN count count
+count s = foldl (\acc _ -> acc + 1) 0 s
+GENFN_END
+GENFN_CTOR drop Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR drop Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN drop drop
 drop n s =
     if n <= 0 then s
     else case s of
@@ -280,24 +101,188 @@ drop n s =
         Nil          -> Nil
     end
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__takeWhile takeWhile
-takeWhile pred s = case s of
-    Yield x rest -> if pred x then Yield x (\_ -> takeWhile pred (rest ()))
-                    else Nil
-    Nil          -> Nil
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__dropWhile dropWhile
+GENFN_CTOR dropWhile Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR dropWhile Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN dropWhile dropWhile
 dropWhile pred s = case s of
     Yield x rest -> if pred x then dropWhile pred (rest ())
                     else Yield x rest
     Nil          -> Nil
 end
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__count count
-count s = foldl (\acc _ -> acc + 1) 0 s
+GENFN_CTOR empty Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN empty empty
+empty = Nil
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__zip zip
+GENFN_CTOR filter Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR filter Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN filter filter
+filter pred s = case s of
+    Yield x rest -> if pred x then Yield x (\_ -> filter pred (rest ()))
+                    else filter pred (rest ())
+    Nil          -> Nil
+end
+GENFN_END
+GENFN_CTOR find Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR find Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR find Nil Stream 1 0 2 2 recursive
+GENFN_CTOR find None Option 1 0 2 1
+GENFN_BEGIN find find
+find pred s = case s of
+    Yield x rest -> if pred x then Some x else find pred (rest ())
+    Nil          -> None
+end
+GENFN_END
+GENFN_CTOR flatMap Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR flatMap Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN flatMap flatMap
+flatMap fn s = case s of
+    Yield x rest -> concat (fn x) (flatMap fn (rest ()))
+    Nil          -> Nil
+end
+GENFN_END
+GENFN_CTOR foldl Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR foldl Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN foldl foldl
+foldl fn z s = case s of
+    Yield x rest -> foldl fn (fn z x) (rest ())
+    Nil          -> z
+end
+GENFN_END
+GENFN_CTOR forEach Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR forEach Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN forEach forEach
+forEach fn s = case s of
+    Yield x rest -> let _ = fn x in forEach fn (rest ())
+    Nil          -> ()
+end
+GENFN_END
+GENFN_CTOR fromIterator Iterator Iterator 0 1 1 1 recursive fields _0:FUNCTION(UNIT,ADT(Option,VAR(a)))
+GENFN_CTOR fromIterator Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR fromIterator Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR fromIterator Nil Stream 1 0 2 2 recursive
+GENFN_CTOR fromIterator None Option 1 0 2 1
+GENFN_BEGIN fromIterator fromIterator
+fromIterator iter = case iter of
+    Iterator nextFn -> case nextFn () of
+        Some x -> Yield x (\_ -> fromIterator iter)
+        None   -> Nil
+    end
+end
+GENFN_END
+GENFN_CTOR fromSeq Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR fromSeq Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN fromSeq fromSeq
+fromSeq xs = case xs of
+    []    -> Nil
+    [h|t] -> Yield h (\_ -> fromSeq t)
+end
+GENFN_END
+GENFN_CTOR head Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR head Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR head Nil Stream 1 0 2 2 recursive
+GENFN_CTOR head None Option 1 0 2 1
+GENFN_BEGIN head head
+head s = case s of
+    Yield x _ -> Some x
+    Nil       -> None
+end
+GENFN_END
+GENFN_CTOR isEmpty Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR isEmpty Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN isEmpty isEmpty
+isEmpty s = case s of
+    Yield _ _ -> false
+    Nil       -> true
+end
+GENFN_END
+GENFN_CTOR iterate Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR iterate Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR iterate None Option 1 0 2 1
+GENFN_BEGIN iterate iterate
+iterate f x = Yield x (\_ -> iterate f (f x))
+GENFN_END
+GENFN_CTOR map Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR map Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN map map
+map fn s = case s of
+    Yield x rest -> Yield (fn x) (\_ -> map fn (rest ()))
+    Nil          -> Nil
+end
+GENFN_END
+GENFN_BEGIN naturals naturals
+naturals = import intMax from Std\Constants\Num in range 0 intMax
+GENFN_END
+GENFN_CTOR range Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR range Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN range range
+range lo hi =
+    if lo >= hi then Nil
+    else Yield lo (\_ -> range (lo + 1) hi)
+GENFN_END
+GENFN_CTOR repeat Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_BEGIN repeat repeat
+repeat x = Yield x (\_ -> repeat x)
+GENFN_END
+GENFN_CTOR scan Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR scan Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN scan scan
+scan fn z s = case s of
+    Yield x rest -> let z2 = fn z x in Yield z2 (\_ -> scan fn z2 (rest ()))
+    Nil          -> Nil
+end
+GENFN_END
+GENFN_CTOR singleton Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR singleton Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN singleton singleton
+singleton x = Yield x (\_ -> Nil)
+GENFN_END
+GENFN_BEGIN sum sum
+sum s = foldl (\acc x -> acc + x) 0 s
+GENFN_END
+GENFN_CTOR take Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR take Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN take take
+take n s =
+    if n <= 0 then Nil
+    else case s of
+        Yield x rest -> Yield x (\_ -> take (n - 1) (rest ()))
+        Nil          -> Nil
+    end
+GENFN_END
+GENFN_CTOR takeWhile Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR takeWhile Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN takeWhile takeWhile
+takeWhile pred s = case s of
+    Yield x rest -> if pred x then Yield x (\_ -> takeWhile pred (rest ()))
+                    else Nil
+    Nil          -> Nil
+end
+GENFN_END
+GENFN_CTOR toSeq Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR toSeq Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN toSeq toSeq
+toSeq s = case s of
+    Yield x rest -> x :: toSeq (rest ())
+    Nil          -> []
+end
+GENFN_END
+GENFN_CTOR unfold Iterator Iterator 0 1 1 1 recursive fields _0:FUNCTION(UNIT,ADT(Option,VAR(a)))
+GENFN_CTOR unfold Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR unfold Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR unfold Nil Stream 1 0 2 2 recursive
+GENFN_CTOR unfold None Option 1 0 2 1
+GENFN_BEGIN unfold unfold
+unfold step seed = case step seed of
+    Some pair -> case pair of
+        (x, next) -> Yield x (\_ -> unfold step next)
+    end
+    None -> Nil
+end
+GENFN_END
+GENFN_CTOR zip Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR zip Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN zip zip
 zip a b = case a of
     Yield x ra -> case b of
         Yield y rb -> Yield (x, y) (\_ -> zip (ra ()) (rb ()))
@@ -306,97 +291,14 @@ zip a b = case a of
     Nil -> Nil
 end
 GENFN_END
-GENFN_BEGIN yona_Std_Stream__concat concat
-concat a b = case a of
-    Yield x rest -> Yield x (\_ -> concat (rest ()) b)
-    Nil          -> b
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__flatMap flatMap
-flatMap fn s = case s of
-    Yield x rest -> concat (fn x) (flatMap fn (rest ()))
-    Nil          -> Nil
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__scan scan
-scan fn z s = case s of
-    Yield x rest -> let z2 = fn z x in Yield z2 (\_ -> scan fn z2 (rest ()))
-    Nil          -> Nil
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__bracket bracket
-bracket acquire release produce =
-    let r = acquire 0
-    in let wrap t = case t of
-            Yield x rest -> Yield x (\_ -> wrap (rest ()))
-            Nil          -> let _ = release r in Nil
-        end
-    in wrap (produce r)
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__async async
-async s = buffered 16 s
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__buffered buffered
-buffered n s =
-    import channel, send, recv, close from Std\Channel,
-           spawn from Std\Task in
-    let (sl, rl) = channel n in
-    case sl of Linear sender ->
-    case rl of Linear receiver ->
-        let drive t = case t of
-                Yield x rest -> let _ = send sender x in drive (rest ())
-                Nil          -> close sender
-            end,
-            _ = spawn (\_ -> drive s),
-            pull _ = case recv receiver of
-                Some v -> Yield v (\_ -> pull ())
-                None   -> Nil
-            end
-        in pull ()
-    end end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__toSeq toSeq
-toSeq s = case s of
-    Yield x rest -> x :: toSeq (rest ())
-    Nil          -> []
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__foldl foldl
-foldl fn z s = case s of
-    Yield x rest -> foldl fn (fn z x) (rest ())
-    Nil          -> z
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__forEach forEach
-forEach fn s = case s of
-    Yield x rest -> let _ = fn x in forEach fn (rest ())
-    Nil          -> ()
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__sum sum
-sum s = foldl (\acc x -> acc + x) 0 s
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__anyMatch anyMatch
-anyMatch pred s = case s of
-    Yield x rest -> if pred x then true else anyMatch pred (rest ())
-    Nil          -> false
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__allMatch allMatch
-allMatch pred s = case s of
-    Yield x rest -> if pred x then allMatch pred (rest ()) else false
-    Nil          -> true
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__head head
-head s = case s of
-    Yield x _ -> Some x
-    Nil       -> None
-end
-GENFN_END
-GENFN_BEGIN yona_Std_Stream__isEmpty isEmpty
-isEmpty s = case s of
-    Yield _ _ -> false
-    Nil       -> true
+GENFN_CTOR zipWith Yield Stream 0 2 2 2 recursive fields _0:VAR(a) _1:FUNCTION(UNIT,ADT(Stream,VAR(a)))
+GENFN_CTOR zipWith Nil Stream 1 0 2 2 recursive
+GENFN_BEGIN zipWith zipWith
+zipWith fn a b = case a of
+    Yield x ra -> case b of
+        Yield y rb -> Yield (fn x y) (\_ -> zipWith fn (ra ()) (rb ()))
+        Nil        -> Nil
+    end
+    Nil -> Nil
 end
 GENFN_END

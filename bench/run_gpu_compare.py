@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""
-Time Std\\GPU columnar benches twice: CPU-forced vs Vulkan opt-in.
+r"""
+Time Std\\Gpu columnar benches twice: CPU-forced vs Vulkan opt-in.
 
-Requires a yonac built with Vulkan headers (`YONA_COMPILE_GPU_VULKAN`). If no
+Requires a yonac built with CMake `-DYONA_ENABLE_VULKAN=ON`. If no
 GPU or init fails, the "Vulkan" row still runs but falls back to the same CPU
 implementation — compare wall times on a machine with a discrete GPU + drivers.
-On Windows, **`VULKAN_SDK`** must be set when running yonac so **`Std\GPU` float**
+On Windows, **`VULKAN_SDK`** must be set when running yonac so **`Std\Gpu` float**
 benchmarks (`float_scale`) can link **`vulkan-1.lib`**.
 
 Usage:
@@ -17,8 +17,7 @@ Env (see docs/gpu-architecture.md):
   YONA_GPU_VULKAN_COMPUTE=1  (set by this script for the Vulkan column)
 
 Machine-readable output:
-  --json          array of per-bench dicts (backward compatible)
-  --json-report   same benches plus meta (schema yona.gpu_compare.v1); for crossover logs
+  --json          canonical metadata and benchmark results document
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ import platform
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,7 +62,9 @@ def _tool_env() -> dict:
     env = os.environ.copy()
     extra: list[str] = []
     if os.name == "nt":
-        llvm_prefix = os.environ.get("LLVM_INSTALL_PREFIX") or os.environ.get("LLVM_HOME")
+        llvm_prefix = os.environ.get("LLVM_INSTALL_PREFIX") or os.environ.get(
+            "LLVM_HOME"
+        )
         if llvm_prefix:
             llvm_bin = Path(llvm_prefix) / "bin"
             if llvm_bin.exists():
@@ -90,7 +91,7 @@ BENCHES = (
     ("filter_10k", "gpu_filter_10k.yona"),
     ("pipeline_5k", "gpu_columnar_pipeline_5k.yona"),
     ("materialize_5k", "gpu_materialize_sum_5k.yona"),
-    # FloatArray scale via gpu_stub.f64 fence path (.expected 0 = success; fails on hosts
+    # FloatArray scale via the Vulkan f64 fence path (.expected 0 = success; fails on hosts
     # without Vulkan + shaderFloat64 — same deterministic output across CPU/Vulkan env cols).
     ("float_scale", "gpu_float_scale_hot.yona"),
     # PinnedFloats in-place scale (Vulkan-mapped when available, else host-malloc).
@@ -100,7 +101,9 @@ BENCHES = (
 BENCH_ONLY_CHOICES = [b[0] for b in BENCHES] + ["all"]
 
 
-def compile_yona(yonac: Path, sysroot: Path, lib: Path, opt: int, src: Path, exe: Path) -> bool:
+def compile_yona(
+    yonac: Path, sysroot: Path, lib: Path, opt: int, src: Path, exe: Path
+) -> bool:
     cmd = [
         str(yonac),
         f"-O{opt}",
@@ -112,11 +115,15 @@ def compile_yona(yonac: Path, sysroot: Path, lib: Path, opt: int, src: Path, exe
         str(exe),
         str(src),
     ]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=_tool_env())
+    r = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=120, env=_tool_env()
+    )
     return r.returncode == 0
 
 
-def run_once(exe: Path, env: dict, timeout: float = 120.0) -> tuple[str | None, float]:
+def run_once(
+    exe: Path, env: dict, timeout: float = 120.0
+) -> tuple[str | None, float]:
     t0 = time.perf_counter_ns()
     r = subprocess.run(
         [str(exe)],
@@ -153,7 +160,14 @@ def print_results_table(
     inner = 115
     print()
     print(_hline(inner))
-    print("| " + _cell("Std\\GPU — CPU-only vs Vulkan opt-in (same .expected output)", inner) + " |")
+    print(
+        "| "
+        + _cell(
+            "Std\\Gpu — CPU-only vs Vulkan opt-in (same .expected output)",
+            inner,
+        )
+        + " |"
+    )
     print("| " + _cell(f"yonac: {yonac}", inner) + " |")
     print(
         "| "
@@ -248,9 +262,15 @@ def print_results_table(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Compare GPU bench CPU vs Vulkan env")
-    ap.add_argument("-n", type=int, default=3, help="iterations per configuration")
-    ap.add_argument("-O", dest="opt", type=int, default=2, help="yonac optimization level")
+    ap = argparse.ArgumentParser(
+        description="Compare GPU bench CPU vs Vulkan env"
+    )
+    ap.add_argument(
+        "-n", type=int, default=3, help="iterations per configuration"
+    )
+    ap.add_argument(
+        "-O", dest="opt", type=int, default=2, help="yonac optimization level"
+    )
     ap.add_argument("--yonac", type=Path, default=None, help="path to yonac")
     ap.add_argument(
         "--only",
@@ -262,12 +282,7 @@ def main() -> int:
     ap.add_argument(
         "--json",
         action="store_true",
-        help="print machine-readable summary after table (array of bench result dicts)",
-    )
-    ap.add_argument(
-        "--json-report",
-        action="store_true",
-        help="like --json but wraps results in meta (host, yonac, iterations, -O) for crossover logs",
+        help="print canonical machine-readable metadata and results after the table",
     )
     args = ap.parse_args()
 
@@ -281,7 +296,11 @@ def main() -> int:
     build = Path(os.environ.get("TEMP", "/tmp")) / "yona_gpu_compare_build"
     build.mkdir(parents=True, exist_ok=True)
 
-    benches = BENCHES if args.only == "all" else [b for b in BENCHES if b[0] == args.only]
+    benches = (
+        BENCHES
+        if args.only == "all"
+        else [b for b in BENCHES if b[0] == args.only]
+    )
 
     rows_out: list[dict] = []
 
@@ -315,20 +334,27 @@ def main() -> int:
         env_vk["YONA_GPU_VULKAN_COMPUTE"] = "1"
         env_vk["YONA_GPU_VULKAN_MIN_LEN"] = "1"
 
-        def bench_env(e: dict) -> list[float] | None:
+        def bench_env(
+            environment: dict,
+            executable: Path,
+            expected_output: str | None,
+            result_row: dict,
+        ) -> list[float] | None:
             times: list[float] = []
             for _ in range(args.n):
-                out, ms = run_once(exe, e)
+                out, ms = run_once(executable, environment)
                 if out is None:
                     return None
-                if expected is not None and out != expected:
-                    row["status"] = "wrong_output"
-                    row["error"] = f"expected {expected}, got {out}"
+                if expected_output is not None and out != expected_output:
+                    result_row["status"] = "wrong_output"
+                    result_row["error"] = (
+                        f"expected {expected_output}, got {out}"
+                    )
                     return None
                 times.append(ms)
             return times
 
-        t_cpu = bench_env(env_cpu)
+        t_cpu = bench_env(env_cpu, exe, expected, row)
         if t_cpu is None:
             if row.get("status") != "wrong_output":
                 row["status"] = "run_failed"
@@ -336,7 +362,7 @@ def main() -> int:
             rows_out.append(row)
             continue
 
-        t_vk = bench_env(env_vk)
+        t_vk = bench_env(env_vk, exe, expected, row)
         if t_vk is None:
             if row.get("status") != "wrong_output":
                 row["status"] = "run_failed"
@@ -357,24 +383,21 @@ def main() -> int:
 
     print_results_table(rows_out, yonac, args.n, args.opt)
 
-    if args.json_report or args.json:
-        if args.json_report:
-            report = {
-                "schema": "yona.gpu_compare.v1",
-                "meta": {
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                    "platform": platform.platform(),
-                    "python": sys.version.split()[0],
-                    "yonac": str(yonac.resolve()),
-                    "iterations_per_variant": args.n,
-                    "opt_level": args.opt,
-                    "only": args.only,
-                },
-                "benches": rows_out,
-            }
-            print(json.dumps(report, indent=2))
-        else:
-            print(json.dumps(rows_out, indent=2))
+    if args.json:
+        report = {
+            "schema": "yona.gpu_compare",
+            "meta": {
+                "generated_at": datetime.now(UTC).isoformat(),
+                "platform": platform.platform(),
+                "python": sys.version.split()[0],
+                "yonac": str(yonac.resolve()),
+                "iterations_per_variant": args.n,
+                "opt_level": args.opt,
+                "only": args.only,
+            },
+            "benches": rows_out,
+        }
+        print(json.dumps(report, indent=2))
 
     failed = sum(1 for r in rows_out if r.get("status") != "ok")
     return 1 if failed else 0

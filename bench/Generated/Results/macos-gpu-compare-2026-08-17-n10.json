@@ -1,0 +1,113 @@
+{
+  "schema": "yona.gpu_compare",
+  "meta": {
+    "generated_at": "2026-08-17T18:06:37.073971+00:00",
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6",
+    "yonac": "/Users/akovari/devel/yonac-llvm/out/build/x64-debug-macos/yonac",
+    "iterations_per_variant": 10,
+    "opt_level": 2,
+    "only": "all"
+  },
+  "benches": [
+    {
+      "benchmark": "map_reduce",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_map_reduce_hot.yona",
+      "status": "ok",
+      "cpu_avg": 738.3057627000001,
+      "cpu_min": 696.433167,
+      "vk_avg": 817.4549709,
+      "vk_min": 727.222708,
+      "ratio_vk_over_cpu": 1.1072038336942538,
+      "speedup_cpu_over_vk": 0.9031760634926981
+    },
+    {
+      "benchmark": "filter",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_filter_hot.yona",
+      "status": "ok",
+      "cpu_avg": 711.1673791000001,
+      "cpu_min": 684.709583,
+      "vk_avg": 752.4682209,
+      "vk_min": 725.768459,
+      "ratio_vk_over_cpu": 1.0580747135115607,
+      "speedup_cpu_over_vk": 0.9451128424392441
+    },
+    {
+      "benchmark": "pipeline",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_columnar_pipeline.yona",
+      "status": "ok",
+      "cpu_avg": 40.634812499999995,
+      "cpu_min": 18.937,
+      "vk_avg": 60.828695700000004,
+      "vk_min": 45.744042,
+      "ratio_vk_over_cpu": 1.4969601668520067,
+      "speedup_cpu_over_vk": 0.6680204471324871
+    },
+    {
+      "benchmark": "materialize",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_materialize_sum.yona",
+      "status": "ok",
+      "cpu_avg": 39.4812041,
+      "cpu_min": 16.407875,
+      "vk_avg": 56.0814291,
+      "vk_min": 43.978875,
+      "ratio_vk_over_cpu": 1.4204589342805785,
+      "speedup_cpu_over_vk": 0.7039978248343175
+    },
+    {
+      "benchmark": "map_reduce_10k",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_map_reduce_10k.yona",
+      "status": "ok",
+      "cpu_avg": 33.5384749,
+      "cpu_min": 11.482041,
+      "vk_avg": 45.5747125,
+      "vk_min": 37.947333,
+      "ratio_vk_over_cpu": 1.358878501061478,
+      "speedup_cpu_over_vk": 0.7359009648168379
+    },
+    {
+      "benchmark": "filter_10k",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_filter_10k.yona",
+      "status": "ok",
+      "cpu_avg": 29.2480793,
+      "cpu_min": 9.555291,
+      "vk_avg": 49.797675,
+      "vk_min": 42.436541,
+      "ratio_vk_over_cpu": 1.7025964163055314,
+      "speedup_cpu_over_vk": 0.5873382502295539
+    },
+    {
+      "benchmark": "pipeline_5k",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_columnar_pipeline_5k.yona",
+      "status": "ok",
+      "cpu_avg": 27.642508600000003,
+      "cpu_min": 7.269917,
+      "vk_avg": 48.0527667,
+      "vk_min": 42.498666,
+      "ratio_vk_over_cpu": 1.738364900065546,
+      "speedup_cpu_over_vk": 0.5752532163772373
+    },
+    {
+      "benchmark": "materialize_5k",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_materialize_sum_5k.yona",
+      "status": "ok",
+      "cpu_avg": 28.992591700000002,
+      "cpu_min": 8.961584,
+      "vk_avg": 43.3648083,
+      "vk_min": 38.377041,
+      "ratio_vk_over_cpu": 1.495720311889192,
+      "speedup_cpu_over_vk": 0.6685741926824107
+    },
+    {
+      "benchmark": "float_scale",
+      "source": "/Users/akovari/devel/yonac-llvm/bench/accelerators/gpu_float_scale_hot.yona",
+      "status": "ok",
+      "cpu_avg": 66.5364208,
+      "cpu_min": 34.390833,
+      "vk_avg": 40.4162164,
+      "vk_min": 34.3385,
+      "ratio_vk_over_cpu": 0.6074299746523185,
+      "speedup_cpu_over_vk": 1.6462802985189875
+    }
+  ]
+}

@@ -1,2 +1,0 @@
-extern async yona_test_slow_identity : Int -> Int in
-let a = yona_test_slow_identity 10, b = yona_test_slow_identity 20 in a + b

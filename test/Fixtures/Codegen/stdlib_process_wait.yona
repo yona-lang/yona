@@ -1,0 +1,3 @@
+import spawn, wait from Std\Process in
+let proc = spawn "/bin/sh" ["-c", "exit 42"] in
+wait proc

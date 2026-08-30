@@ -1,21 +1,23 @@
 ---
 title: Persistent data structures
-description: How Yona's immutable sequences, dicts, and sets work — structural sharing, complexities, and performance guidance.
+description:
+  How Yona's immutable sequences, dicts, and sets work — structural sharing,
+  complexities, and performance guidance.
 ---
 
-All of Yona's built-in collections are **persistent**: operations return a
-new value and never modify the original. Persistence is what makes Yona's
+All of Yona's built-in collections are **persistent**: operations return a new
+value and never modify the original. Persistence is what makes Yona's
 concurrency model safe (any task can read any value without locks), makes
 equational reasoning valid (a value never changes under you), and gives
 versioning and undo for free. This page explains what persistence means
-operationally, how each structure is represented, what the operations cost,
-and how to write fast code with them.
+operationally, how each structure is represented, what the operations cost, and
+how to write fast code with them.
 
 ## What persistence means operationally
 
-An "update" produces a new version; the old version remains valid and
-unchanged. The two versions are not copies of each other — they **share
-structure**, and only the changed path is newly allocated:
+An "update" produces a new version; the old version remains valid and unchanged.
+The two versions are not copies of each other — they **share structure**, and
+only the changed path is newly allocated:
 
 ```yona
 import put from Std\Dict in
@@ -26,29 +28,29 @@ let updated  = put original 4 "four" in
 #    They share the subtree holding keys 1, 2, 3.
 ```
 
-For a 10,000-entry dict, `put` allocates O(log n) new nodes — a handful —
-while everything else is shared. "Copy-on-write" semantics at a fraction of
-the copying.
+For a 10,000-entry dict, `put` allocates O(log n) new nodes — a handful — while
+everything else is shared. "Copy-on-write" semantics at a fraction of the
+copying.
 
 ## Sequences
 
 Sequences (`[1, 2, 3]`) are Yona's list type. The representation is hybrid:
 
-- **Small sequences (≤ 32 elements)** are a flat array with an offset
-  field, so removing the head is a pointer bump, not a copy.
-- **Large sequences** are a 32-way **radix-balanced trie** with a head
-  chain that absorbs prepends and a tail buffer that absorbs appends.
+- **Small sequences (≤ 32 elements)** are a flat array with an offset field, so
+  removing the head is a pointer bump, not a copy.
+- **Large sequences** are a 32-way **radix-balanced trie** with a head chain
+  that absorbs prepends and a tail buffer that absorbs appends.
 
 ### Complexity
 
-| Operation | Cost | Notes |
-|-----------|------|-------|
-| `cons` (prepend, `::`) | O(1) amortized | head chain absorbs prepends |
-| `head` | O(1) | direct access |
-| `tail` | O(1) amortized | offset bump / chain pull |
-| index (`nth`) | O(log32 n) | trie descent; O(1) when small |
-| `length` | O(1) | stored in the root |
-| `++` (concat) | O(n) | flatten and rebuild |
+| Operation              | Cost           | Notes                         |
+| ---------------------- | -------------- | ----------------------------- |
+| `cons` (prepend, `::`) | O(1) amortized | head chain absorbs prepends   |
+| `head`                 | O(1)           | direct access                 |
+| `tail`                 | O(1) amortized | offset bump / chain pull      |
+| index (`nth`)          | O(log32 n)     | trie descent; O(1) when small |
+| `length`               | O(1)           | stored in the root            |
+| `++` (concat)          | O(n)           | flatten and rebuild           |
 
 ```yona
 let xs = [1, 2, 3, 4, 5] in
@@ -56,26 +58,26 @@ let ys = 0 :: xs in                  # => [0, 1, 2, 3, 4, 5] — O(1)
 case xs of [h|t] -> h end            # => 1 — O(1), xs unchanged
 ```
 
-Note the branching factor: log32 of a million is about 4, so indexed access
-into large sequences is a handful of pointer hops, not a linked-list walk.
+Note the branching factor: log32 of a million is about 4, so indexed access into
+large sequences is a handful of pointer hops, not a linked-list walk.
 
 ## Dictionaries and sets
 
 Dicts (`{"a": 1}`) and sets (`{1, 2, 3}`) share one engine: a **hash array
-mapped trie (HAMT)** — a 32-way bitmap-compressed persistent hash trie. A
-set is a HAMT whose entries carry no payload.
+mapped trie (HAMT)** — a 32-way bitmap-compressed persistent hash trie. A set is
+a HAMT whose entries carry no payload.
 
-| Operation | Cost |
-|-----------|------|
-| `put` / `insert` | O(1) amortized |
-| `get` / `contains` | O(1) amortized |
-| `size` | O(1) |
-| `keys`, `entries`, iteration | O(n) |
+| Operation                    | Cost           |
+| ---------------------------- | -------------- |
+| `put` / `insert`             | O(1) amortized |
+| `get` / `contains`           | O(1) amortized |
+| `size`                       | O(1)           |
+| `keys`, `entries`, iteration | O(n)           |
 
-"O(1) amortized" is precise here: a 64-bit hash consumed 5 bits per level
-bounds the trie at 7 levels, so every lookup or insert touches at most 7
-compact nodes. An insert path-copies those nodes and shares the rest of the
-trie with the previous version.
+"O(1) amortized" is precise here: a 64-bit hash consumed 5 bits per level bounds
+the trie at 7 levels, so every lookup or insert touches at most 7 compact nodes.
+An insert path-copies those nodes and shares the rest of the trie with the
+previous version.
 
 ```yona
 import put, get, contains from Std\Dict in
@@ -94,8 +96,8 @@ let a = {1, 2, 3, 4, 5},
 
 ## Functional update idioms
 
-There is no assignment; "updating" a collection means computing a new one
-and threading it through the program. The standard idioms:
+There is no assignment; "updating" a collection means computing a new one and
+threading it through the program. The standard idioms:
 
 **Thread the new version through recursion:**
 
@@ -116,21 +118,20 @@ let evens = foldl (\acc x -> if x % 2 == 0 then x :: acc else acc)
 evens                                # => [6, 4, 2]
 ```
 
-Each `::` is O(1); building a list of n elements by folding is O(n).
-Building it with repeated `xs ++ [x]` is O(n²), because every `++` rebuilds
-the left operand. If output order matters, cons and `reverse` once at the
-end (O(n)) — still linear overall.
+Each `::` is O(1); building a list of n elements by folding is O(n). Building it
+with repeated `xs ++ [x]` is O(n²), because every `++` rebuilds the left
+operand. If output order matters, cons and `reverse` once at the end (O(n)) —
+still linear overall.
 
 **Use collection combinators before manual recursion:** `map`, `filter`,
-`foldl`, `take`, `zip` and friends from `Std\List` cover most shapes and
-are written against the fast paths described below.
+`foldl`, `take`, `zip` and friends from `Std\List` cover most shapes and are
+written against the fast paths described below.
 
 ## In-place optimization: transparent uniqueness
 
-Persistence sounds expensive — a new version per operation — but Yona's
-runtime checks the reference count before copying. If a collection's
-refcount is exactly 1, no other reference can observe it, so the operation
-**mutates in place**:
+Persistence sounds expensive — a new version per operation — but Yona's runtime
+checks the reference count before copying. If a collection's refcount is exactly
+1, no other reference can observe it, so the operation **mutates in place**:
 
 - unique `cons`/`tail` on a sequence: O(1), zero allocation
 - unique HAMT `put`: edits the node directly instead of path-copying
@@ -147,19 +148,19 @@ sum 0 [1, 2, 3, 4, 5]                # => 15
 
 This is **transparent**: semantics are unchanged, and the fast path fires
 exactly when immutability cannot be observed. A dict built in a tight loop
-performs like a mutable hash table while remaining a persistent value the
-moment you share it. The ownership analysis that keeps refcounts at 1
-through call chains is described in [Memory and linearity](/guides/memory/).
+performs like a mutable hash table while remaining a persistent value the moment
+you share it. The ownership analysis that keeps refcounts at 1 through call
+chains is described in [Memory and linearity](/guides/memory/).
 
-*Implementation note.* Uniqueness is checked with one atomic load of the
-refcount header. The compiler's callee-owns convention and last-use
-analysis avoid spurious refcount increments precisely so that hot-loop
-accumulators stay at rc==1 and hit these paths.
+_Implementation note._ Uniqueness is checked with one atomic load of the
+refcount header. The compiler's callee-owns convention and last-use analysis
+avoid spurious refcount increments precisely so that hot-loop accumulators stay
+at rc==1 and hit these paths.
 
 ## Pattern matching over collections
 
-Sequences destructure with head-tail and literal patterns; dicts match on
-keys; both nest freely with ADT and tuple patterns:
+Sequences destructure with head-tail and literal patterns; dicts match on keys;
+both nest freely with ADT and tuple patterns:
 
 ```yona
 let describe xs = case xs of
@@ -177,9 +178,9 @@ case {"status": 200, "body": "ok"} of
 end                                   # => "success"
 ```
 
-Matching never copies: `[h|t]` binds `h` by access and `t` by structural
-sharing (or an in-place offset bump when unique). A dict key pattern is a
-lookup, not a traversal.
+Matching never copies: `[h|t]` binds `h` by access and `t` by structural sharing
+(or an in-place offset bump when unique). A dict key pattern is a lookup, not a
+traversal.
 
 ## Performance guidance
 
@@ -190,34 +191,33 @@ lookup, not a traversal.
 - **Dict** — keyed lookup. Use when you would reach for a hash map; don't
   simulate one with a sequence of pairs and linear search.
 - **Set** — membership tests and set algebra (`union`, `intersection`,
-  `difference`). A set beats `contains` on a sequence from a few dozen
-  elements up.
+  `difference`). A set beats `contains` on a sequence from a few dozen elements
+  up.
 
 **Building:**
 
 - Fold with `::` (O(n)); never grow with `xs ++ [x]` in a loop (O(n²)).
-- Build dicts/sets by threading through a fold — the uniqueness fast path
-  makes it competitive with mutable tables.
-- Let bindings keep intermediate collections uniquely owned; sharing a
-  value across tasks or storing it in a long-lived structure ends the
-  in-place regime for that value (correctly — from then on versions
-  genuinely share).
+- Build dicts/sets by threading through a fold — the uniqueness fast path makes
+  it competitive with mutable tables.
+- Let bindings keep intermediate collections uniquely owned; sharing a value
+  across tasks or storing it in a long-lived structure ends the in-place regime
+  for that value (correctly — from then on versions genuinely share).
 
 **Traversal:** prefer `foldl` (loop-based, no stack growth) over hand-rolled
 non-tail recursion for aggregation; use `Iterator`-returning functions for
 O(1)-memory streaming over large inputs — see
 [Iterators and streams](/guides/iterators/).
 
-**Concat:** `++` is O(n); concatenating many pieces is best done once at
-the end (`flatten`) rather than pairwise in a loop.
+**Concat:** `++` is O(n); concatenating many pieces is best done once at the end
+(`flatten`) rather than pairwise in a loop.
 
 ## Why this design
 
-The alternative — mutable collections with defensive copying — pushes the
-cost onto every boundary where data is shared: across tasks, into caches,
-between versions. Persistent structures invert this: sharing is free and
-*updating* pays a small logarithmic cost, which the uniqueness optimization
-then erases in the common single-owner case. Combined with reference
-counting (deterministic reclamation, no GC pauses), the result is
-predictable performance with immutability as the default. Measured numbers
-against C and other languages are in [Performance](/guides/performance/).
+The alternative — mutable collections with defensive copying — pushes the cost
+onto every boundary where data is shared: across tasks, into caches, between
+versions. Persistent structures invert this: sharing is free and _updating_ pays
+a small logarithmic cost, which the uniqueness optimization then erases in the
+common single-owner case. Combined with reference counting (deterministic
+reclamation, no GC pauses), the result is predictable performance with
+immutability as the default. Measured numbers against C and other languages are
+in [Performance](/guides/performance/).

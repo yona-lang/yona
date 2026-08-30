@@ -15,7 +15,7 @@ if ! cmp -s "$src" "$dst"; then
   exit 1
 fi
 if grep -q '"daemon"' "$src"; then
-  echo "canonical grammar still highlights leftover 1.x keyword daemon" >&2
+  echo "canonical grammar still highlights the retired keyword daemon" >&2
   exit 1
 fi
 for tok in fun lambda record deriving native io '@borrow'; do

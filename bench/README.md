@@ -10,19 +10,19 @@ python3 bench/runner.py
 python3 bench/runner.py fibonacci
 
 # Compare against C reference implementations
-python3 bench/runner.py --compare-c
+python3 bench/runner.py --compare c
 
 # Compare against Erlang (uses erlc, so run includes VM boot)
-python3 bench/runner.py --compare-erl
+python3 bench/runner.py --compare erl
 
 # Compare against several languages at once
-python3 bench/runner.py --compare=c,erl
+python3 bench/runner.py --compare c,erl
 
 # Compare all optimization levels (O0, O1, O2, O3)
 python3 bench/runner.py --all-opt-levels
 
 # Compare everything
-python3 bench/runner.py --all-opt-levels --compare-c
+python3 bench/runner.py --all-opt-levels --compare c
 
 # Custom iterations and optimization level
 python3 bench/runner.py -n 5 -O3
@@ -30,9 +30,9 @@ python3 bench/runner.py -n 5 -O3
 # JSON output for CI/scripting
 python3 bench/runner.py --json
 
-# Std\GPU: CPU vs Vulkan wall times (same correctness checks)
+# Std\Gpu: CPU vs Vulkan wall times (same correctness checks)
 python3 bench/run_gpu_compare.py
-python3 bench/run_gpu_compare.py --only float_scale   # FloatArray gpu_stub f64 (golden 0)
+python3 bench/run_gpu_compare.py --only float_scale   # FloatArray Vulkan f64 path (golden 0)
 python3 bench/run_gpu_compare.py --only pinned_scale  # PinnedFloats in-place scale
 
 # Reference lanes only: stdout must match each benchmark's .expected (CI-friendly; no yonac)
@@ -43,7 +43,7 @@ python3 bench/runner.py --verify-reference-outputs --reference-verify-langs all
 
 # Windows: some OTP installs crash (`erlc`/`erl` exit -1073741819). Omit Erlang with:
 #   `--skip-erl`  — same as env YONA_BENCH_SKIP_ERLANG=1 (drops erl from --compare-* / verify all)
-python3 bench/runner.py --skip-erl --compare=c,erl,hs
+python3 bench/runner.py --skip-erl --compare c,erl,hs
 ```
 Use Linux/WSL Erlang when you need the Erlang reference row unchanged.
 
@@ -57,7 +57,7 @@ Use Linux/WSL Erlang when you need the Erlang reference row unchanged.
   only (no Yona compile) and exits non-zero if any lane's stdout differs from
   the golden `.expected` file.
 - **Reference comparison** — optional ratio vs C, Erlang, or both (via
-  `--compare-c` / `--compare-erl` / `--compare=c,erl`). Erlang numbers
+  `--compare c,erl`). Erlang numbers
   include VM startup (~1s), so short benchmarks look lopsided.
 
 ## Structure
@@ -87,10 +87,10 @@ bench/
     gpu_map_reduce_10k.yona     # same at 10k rows
     gpu_filter_hot.yona         # upload -> filterGreaterThan -> reduceSum (100k rows)
     gpu_filter_10k.yona           # same at 10k rows
-    gpu_float_scale_hot.yona      # FloatArray scale async (gpu_stub); stdout must match .expected
+    gpu_float_scale_hot.yona      # FloatArray Vulkan scale async; stdout must match .expected
     gpu_pinned_scale_hot.yona     # PinnedFloats in-place scale (mapped or malloc)
-  reference/             # Reference implementations (C, Erlang, Haskell,
-    fibonacci.c          # Java, JavaScript, Python). Only .c and .erl are
+  Reference/             # Reference implementations (C, Erlang, Haskell,
+    Fibonacci.c          # Java, JavaScript, Python). Only .c and .erl are
     fibonacci.erl        # currently wired into the runner's comparison
     fibonacci.hs         # output; the others are kept for reading.
     ...
@@ -100,8 +100,8 @@ bench/
 
 1. Create `bench/<category>/<name>.yona`
 2. Create `bench/<category>/<name>.expected` — expected output
-3. Optionally `bench/reference/<name>.c` — C equivalent
-4. Optionally `bench/reference/<name>.erl` — Erlang equivalent. Use the
+3. Optionally `bench/Reference/<UpperCamelName>.c` — C equivalent
+4. Optionally `bench/Reference/<name>.erl` — Erlang equivalent. Use the
    escript shebang (`#!/usr/bin/env escript`) and export `main/1`. The
    runner rewrites it to a regular module and compiles with `erlc`
    before timing.
@@ -109,9 +109,9 @@ bench/
 The runner discovers all `.yona` files automatically. Each benchmark has a
 10-second timeout to prevent runaway execution.
 
-## GPU / Vulkan (`Std\GPU`)
+## GPU / Vulkan (`Std\Gpu`)
 
-The accelerators under `bench/accelerators/` use `Std\GPU` (CPU SIMD by default;
+The accelerators under `bench/accelerators/` use `Std\Gpu` (CPU SIMD by default;
 optional Vulkan when the compiler and runtime support it). The main benchmark
 runner does **not** set GPU env vars — each process uses normal capability
 detection.
@@ -130,16 +130,17 @@ Output must match the `.expected` file for both passes. It prints a summary
 table: **CPU avg (ms)** vs **GPU avg (ms)** (Vulkan opt-in), **Delta %**, and a
 short verdict (e.g. `GPU faster (1.2x)`). On machines without a usable GPU,
 the GPU column may match CPU time (same kernels). Programs using
-**`Std\GPU.floatArray*Async`** (native `Promise` + optional `VkDevice` init)
+**`Std\Gpu.floatArray*Async`** (native `Promise` + optional `VkDevice` init)
 are **not** in the fixed `BENCHES` list yet — add them after a deterministic
 bench harness can init Vulkan or asserts a shared error outcome for both env columns.
 
 Use `--json` for a machine-readable list after the table (array of results).
-Use `--json-report` for the same data wrapped with host / yonac / `-O` / iteration
+Use `--json` for the same data wrapped with host / yonac / `-O` / iteration
 metadata (`docs/gpu-transparent-lowering.md` — benchmark corpus for crossover work).
 
-See `docs/gpu-architecture.md` for all `YONA_GPU_VULKAN_*` variables (including
-`YONA_GPU_VULKAN_FILTER_CPU_PREFIX=1` to A/B the legacy host prefix for filter).
+See `docs/gpu-architecture.md` for the complete set of
+`YONA_GPU_VULKAN_*` controls, including per-operation thresholds and
+diagnostic storage modes.
 
 Compiler **call-site JSON** (no codegen): `yonac bench/accelerators/gpu_map_reduce_10k.yona -I lib
 --emit-accelerator-report` (modules: add `--emit-accelerator-report-with-types` for a typechecked

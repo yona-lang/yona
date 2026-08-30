@@ -1,1 +1,0 @@
-let n = 10 in let add_n x = x + n in let apply f x = f x in apply add_n 5

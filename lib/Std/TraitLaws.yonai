@@ -1,12 +1,13 @@
-FN yona_Std_TraitLaws__eqLaws 4 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
-FN yona_Std_TraitLaws__hashLaws 5 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),INT) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
-FN yona_Std_TraitLaws__monoidLaws 6 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a))) VAR(a) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
-FN yona_Std_TraitLaws__ordLaws 5 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),FUNCTION(VAR(a),ADT(Ordering))) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
-FN yona_Std_TraitLaws__semigroupLaws 5 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a))) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
-FN yona_Std_TraitLaws__showLaws 3 STRING FUNCTION(VAR(a),STRING) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
-GENFN_CTOR yona_Std_TraitLaws__associativeFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__associativeFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__associativeFailure associativeFailure
+MODULE Std\TraitLaws
+FN eqLaws 4 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
+FN hashLaws 5 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),INT) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
+FN monoidLaws 6 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a))) VAR(a) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
+FN ordLaws 5 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),FUNCTION(VAR(a),ADT(Ordering))) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
+FN semigroupLaws 5 STRING FUNCTION(VAR(a),STRING) FUNCTION(VAR(a),FUNCTION(VAR(a),BOOL)) FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(a))) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
+FN showLaws 3 STRING FUNCTION(VAR(a),STRING) Seq(VAR(a)) -> Seq(ADT(TestCase)) effects |
+GENFN_CTOR associativeFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR associativeFailure None Option 1 0 2 1
+GENFN_BEGIN associativeFailure associativeFailure
 associativeFailure : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> Seq a -> Int -> Int -> Option String
 associativeFailure render equals append samples firstIndex count =
     if firstIndex >= count then None
@@ -15,9 +16,9 @@ associativeFailure render equals append samples firstIndex count =
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__associativeFailureSecond None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__associativeFailureSecond Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__associativeFailureSecond associativeFailureSecond
+GENFN_CTOR associativeFailureSecond Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR associativeFailureSecond None Option 1 0 2 1
+GENFN_BEGIN associativeFailureSecond associativeFailureSecond
 associativeFailureSecond : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> Seq a -> Int -> Int -> Int -> Option String
 associativeFailureSecond render equals append samples firstIndex secondIndex count =
     if secondIndex >= count then None
@@ -26,9 +27,9 @@ associativeFailureSecond render equals append samples firstIndex secondIndex cou
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__associativeFailureThird None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__associativeFailureThird Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__associativeFailureThird associativeFailureThird
+GENFN_CTOR associativeFailureThird Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR associativeFailureThird None Option 1 0 2 1
+GENFN_BEGIN associativeFailureThird associativeFailureThird
 associativeFailureThird : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> Seq a -> Int -> Int -> Int -> Int -> Option String
 associativeFailureThird render equals append samples firstIndex secondIndex thirdIndex count =
     if thirdIndex >= count then None
@@ -41,8 +42,8 @@ associativeFailureThird render equals append samples firstIndex secondIndex thir
             associativeFailureThird render equals append samples firstIndex secondIndex (thirdIndex + 1) count
          else Some ("non-associative for " ++ render first ++ ", " ++ render second ++ ", " ++ render third)
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__eqLaws TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult contract:F(N(%28%29);N(TestResult))
-GENFN_BEGIN yona_Std_TraitLaws__eqLaws eqLaws
+GENFN_CTOR eqLaws TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_BEGIN eqLaws eqLaws
 eqLaws : String -> (a -> String) -> (a -> a -> Bool) -> Seq a -> Seq TestCase
 eqLaws label render equals samples = import testCase from Std\Test in
     let count = size samples in [
@@ -54,10 +55,10 @@ eqLaws label render equals samples = import testCase from Std\Test in
             lawResult "transitive" (transitiveEqFailure render equals samples 0 count))
     ]
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__hashFailure Equal Ordering 1 0 3 0
-GENFN_CTOR yona_Std_TraitLaws__hashFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__hashFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__hashFailure hashFailure
+GENFN_CTOR hashFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR hashFailure Equal Ordering 1 0 3 0
+GENFN_CTOR hashFailure None Option 1 0 2 1
+GENFN_BEGIN hashFailure hashFailure
 hashFailure : (a -> String) -> (a -> a -> Bool) -> (a -> Int) -> Seq a -> Int -> Int -> Option String
 hashFailure render equals hasher samples leftIndex count =
     if leftIndex >= count then None
@@ -66,9 +67,9 @@ hashFailure render equals hasher samples leftIndex count =
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__hashFailureAt None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__hashFailureAt Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__hashFailureAt hashFailureAt
+GENFN_CTOR hashFailureAt Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR hashFailureAt None Option 1 0 2 1
+GENFN_BEGIN hashFailureAt hashFailureAt
 hashFailureAt : (a -> String) -> (a -> a -> Bool) -> (a -> Int) -> Seq a -> Int -> Int -> Int -> Option String
 hashFailureAt render equals hasher samples leftIndex rightIndex count =
     if rightIndex >= count then None
@@ -77,8 +78,8 @@ hashFailureAt render equals hasher samples leftIndex rightIndex count =
             Some ("equal values hash differently: " ++ render left ++ " and " ++ render right)
         else hashFailureAt render equals hasher samples leftIndex (rightIndex + 1) count
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__hashLaws TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult contract:F(N(%28%29);N(TestResult))
-GENFN_BEGIN yona_Std_TraitLaws__hashLaws hashLaws
+GENFN_CTOR hashLaws TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_BEGIN hashLaws hashLaws
 hashLaws : String -> (a -> String) -> (a -> a -> Bool) ->
     (a -> Int) -> Seq a -> Seq TestCase
 hashLaws label render equals hasher samples = import testCase from Std\Test in [
@@ -86,9 +87,9 @@ hashLaws label render equals hasher samples = import testCase from Std\Test in [
         lawResult "hash agreement" (hashFailure render equals hasher samples 0 (size samples)))
 ]
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__identityFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__identityFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__identityFailure identityFailure
+GENFN_CTOR identityFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR identityFailure None Option 1 0 2 1
+GENFN_BEGIN identityFailure identityFailure
 identityFailure : (a -> String) -> (a -> a -> Bool) -> (a -> a -> a) -> a -> Seq a -> Int -> Int -> Option String
 identityFailure @borrow render @borrow equals @borrow append @borrow emptyValue @borrow samples index count =
     if index >= count then None
@@ -101,15 +102,15 @@ identityFailure @borrow render @borrow equals @borrow append @borrow emptyValue 
             else Some ("right identity fails: " ++ render value ++ " <> empty = " ++ render rightCombined)
         else Some ("left identity fails: empty <> " ++ render value ++ " = " ++ render leftCombined)
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__lawResult None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__lawResult Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__lawResult lawResult
+GENFN_CTOR lawResult Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR lawResult None Option 1 0 2 1
+GENFN_BEGIN lawResult lawResult
 lawResult : String -> Option String -> TestResult
 lawResult success failure = import pass, fail from Std\Test in
     case failure of None -> pass success; Some message -> fail message end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__monoidLaws TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult contract:F(N(%28%29);N(TestResult))
-GENFN_BEGIN yona_Std_TraitLaws__monoidLaws monoidLaws
+GENFN_CTOR monoidLaws TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_BEGIN monoidLaws monoidLaws
 monoidLaws : String -> (a -> String) -> (a -> a -> Bool) ->
     (a -> a -> a) -> a -> Seq a -> Seq TestCase
 monoidLaws label render equals append emptyValue samples = import testCase from Std\Test in [
@@ -117,15 +118,15 @@ monoidLaws label render equals append emptyValue samples = import testCase from 
         lawResult "identity" (identityFailure render equals append emptyValue samples 0 (size samples)))
 ]
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__opposite Equal Ordering 1 0 3 0
-GENFN_CTOR yona_Std_TraitLaws__opposite Greater Ordering 2 0 3 0
-GENFN_CTOR yona_Std_TraitLaws__opposite Less Ordering 0 0 3 0
-GENFN_BEGIN yona_Std_TraitLaws__opposite opposite
+GENFN_CTOR opposite Less Ordering 0 0 3 0
+GENFN_CTOR opposite Equal Ordering 1 0 3 0
+GENFN_CTOR opposite Greater Ordering 2 0 3 0
+GENFN_BEGIN opposite opposite
 opposite : Ordering -> Ordering
 opposite ordering = case ordering of Less -> Greater; Equal -> Equal; Greater -> Less end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__ordLaws TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult contract:F(N(%28%29);N(TestResult))
-GENFN_BEGIN yona_Std_TraitLaws__ordLaws ordLaws
+GENFN_CTOR ordLaws TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_BEGIN ordLaws ordLaws
 ordLaws : String -> (a -> String) -> (a -> a -> Bool) ->
     (a -> a -> Ordering) -> Seq a -> Seq TestCase
 ordLaws label render equals compareValues samples = import testCase from Std\Test in
@@ -136,9 +137,9 @@ ordLaws label render equals compareValues samples = import testCase from Std\Tes
             lawResult "transitive" (transitiveOrdFailure render compareValues samples 0 count))
     ]
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__ordPairFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__ordPairFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__ordPairFailure ordPairFailure
+GENFN_CTOR ordPairFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR ordPairFailure None Option 1 0 2 1
+GENFN_BEGIN ordPairFailure ordPairFailure
 ordPairFailure : (a -> String) -> (a -> a -> Bool) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Option String
 ordPairFailure render equals compareValues samples leftIndex count =
     if leftIndex >= count then None
@@ -147,10 +148,10 @@ ordPairFailure render equals compareValues samples leftIndex count =
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__ordPairFailureAt Equal Ordering 1 0 3 0
-GENFN_CTOR yona_Std_TraitLaws__ordPairFailureAt None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__ordPairFailureAt Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__ordPairFailureAt ordPairFailureAt
+GENFN_CTOR ordPairFailureAt Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR ordPairFailureAt Equal Ordering 1 0 3 0
+GENFN_CTOR ordPairFailureAt None Option 1 0 2 1
+GENFN_BEGIN ordPairFailureAt ordPairFailureAt
 ordPairFailureAt : (a -> String) -> (a -> a -> Bool) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Int -> Option String
 ordPairFailureAt render equals compareValues samples leftIndex rightIndex count =
     if rightIndex >= count then None
@@ -164,9 +165,9 @@ ordPairFailureAt render equals compareValues samples leftIndex rightIndex count 
             Some ("reversing operands is inconsistent for " ++ render left ++ " and " ++ render right)
          else ordPairFailureAt render equals compareValues samples leftIndex (rightIndex + 1) count
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__reflexiveFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__reflexiveFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__reflexiveFailure reflexiveFailure
+GENFN_CTOR reflexiveFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR reflexiveFailure None Option 1 0 2 1
+GENFN_BEGIN reflexiveFailure reflexiveFailure
 reflexiveFailure : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Option String
 reflexiveFailure render equals samples index count =
     if index >= count then None
@@ -174,8 +175,8 @@ reflexiveFailure render equals samples index count =
         if equals value value then reflexiveFailure render equals samples (index + 1) count
         else Some ("not reflexive for " ++ render value)
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__semigroupLaws TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult contract:F(N(%28%29);N(TestResult))
-GENFN_BEGIN yona_Std_TraitLaws__semigroupLaws semigroupLaws
+GENFN_CTOR semigroupLaws TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_BEGIN semigroupLaws semigroupLaws
 semigroupLaws : String -> (a -> String) -> (a -> a -> Bool) ->
     (a -> a -> a) -> Seq a -> Seq TestCase
 semigroupLaws label render equals append samples = import testCase from Std\Test in [
@@ -183,9 +184,9 @@ semigroupLaws label render equals append samples = import testCase from Std\Test
         lawResult "associative" (associativeFailure render equals append samples 0 (size samples)))
 ]
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__showFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__showFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__showFailure showFailure
+GENFN_CTOR showFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR showFailure None Option 1 0 2 1
+GENFN_BEGIN showFailure showFailure
 showFailure : (a -> String) -> Seq a -> Int -> Int -> Option String
 showFailure renderer samples index count =
     if index >= count then None
@@ -193,17 +194,17 @@ showFailure renderer samples index count =
         if renderer value == renderer value then showFailure renderer samples (index + 1) count
         else Some ("rendering is unstable at sample " ++ renderer value)
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__showLaws TestCase TestCase 0 2 1 2 recursive fieldname:name field:STRING contract:N(String) fieldname:thunk field:FUNCTION:ADT:TestResult contract:F(N(%28%29);N(TestResult))
-GENFN_BEGIN yona_Std_TraitLaws__showLaws showLaws
+GENFN_CTOR showLaws TestCase TestCase 0 2 1 2 recursive fields name:STRING thunk:FUNCTION(UNIT,ADT(TestResult))
+GENFN_BEGIN showLaws showLaws
 showLaws : String -> (a -> String) -> Seq a -> Seq TestCase
 showLaws label renderer samples = import testCase from Std\Test in [
     testCase (label ++ " Show deterministic") (\_ ->
         lawResult "deterministic" (showFailure renderer samples 0 (size samples)))
 ]
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__symmetricFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__symmetricFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__symmetricFailure symmetricFailure
+GENFN_CTOR symmetricFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR symmetricFailure None Option 1 0 2 1
+GENFN_BEGIN symmetricFailure symmetricFailure
 symmetricFailure : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Option String
 symmetricFailure render equals samples leftIndex count =
     if leftIndex >= count then None
@@ -212,9 +213,9 @@ symmetricFailure render equals samples leftIndex count =
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__symmetricFailureAt None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__symmetricFailureAt Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__symmetricFailureAt symmetricFailureAt
+GENFN_CTOR symmetricFailureAt Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR symmetricFailureAt None Option 1 0 2 1
+GENFN_BEGIN symmetricFailureAt symmetricFailureAt
 symmetricFailureAt : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Int -> Option String
 symmetricFailureAt render equals samples leftIndex rightIndex count =
     if rightIndex >= count then None
@@ -223,9 +224,9 @@ symmetricFailureAt render equals samples leftIndex rightIndex count =
             symmetricFailureAt render equals samples leftIndex (rightIndex + 1) count
         else Some ("asymmetric for " ++ render left ++ " and " ++ render right)
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__transitiveEqFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__transitiveEqFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__transitiveEqFailure transitiveEqFailure
+GENFN_CTOR transitiveEqFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR transitiveEqFailure None Option 1 0 2 1
+GENFN_BEGIN transitiveEqFailure transitiveEqFailure
 transitiveEqFailure : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Option String
 transitiveEqFailure render equals samples firstIndex count =
     if firstIndex >= count then None
@@ -234,9 +235,9 @@ transitiveEqFailure render equals samples firstIndex count =
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__transitiveEqFailureSecond None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__transitiveEqFailureSecond Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__transitiveEqFailureSecond transitiveEqFailureSecond
+GENFN_CTOR transitiveEqFailureSecond Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR transitiveEqFailureSecond None Option 1 0 2 1
+GENFN_BEGIN transitiveEqFailureSecond transitiveEqFailureSecond
 transitiveEqFailureSecond : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Int -> Option String
 transitiveEqFailureSecond render equals samples firstIndex secondIndex count =
     if secondIndex >= count then None
@@ -245,9 +246,9 @@ transitiveEqFailureSecond render equals samples firstIndex secondIndex count =
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__transitiveEqFailureThird None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__transitiveEqFailureThird Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__transitiveEqFailureThird transitiveEqFailureThird
+GENFN_CTOR transitiveEqFailureThird Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR transitiveEqFailureThird None Option 1 0 2 1
+GENFN_BEGIN transitiveEqFailureThird transitiveEqFailureThird
 transitiveEqFailureThird : (a -> String) -> (a -> a -> Bool) -> Seq a -> Int -> Int -> Int -> Int -> Option String
 transitiveEqFailureThird render equals samples firstIndex secondIndex thirdIndex count =
     if thirdIndex >= count then None
@@ -258,9 +259,9 @@ transitiveEqFailureThird render equals samples firstIndex secondIndex thirdIndex
             Some ("non-transitive chain " ++ render first ++ ", " ++ render second ++ ", " ++ render third)
          else transitiveEqFailureThird render equals samples firstIndex secondIndex (thirdIndex + 1) count
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__transitiveOrdFailure None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__transitiveOrdFailure Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__transitiveOrdFailure transitiveOrdFailure
+GENFN_CTOR transitiveOrdFailure Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR transitiveOrdFailure None Option 1 0 2 1
+GENFN_BEGIN transitiveOrdFailure transitiveOrdFailure
 transitiveOrdFailure : (a -> String) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Option String
 transitiveOrdFailure render compareValues samples firstIndex count =
     if firstIndex >= count then None
@@ -269,9 +270,9 @@ transitiveOrdFailure render compareValues samples firstIndex count =
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__transitiveOrdFailureSecond None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__transitiveOrdFailureSecond Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__transitiveOrdFailureSecond transitiveOrdFailureSecond
+GENFN_CTOR transitiveOrdFailureSecond Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR transitiveOrdFailureSecond None Option 1 0 2 1
+GENFN_BEGIN transitiveOrdFailureSecond transitiveOrdFailureSecond
 transitiveOrdFailureSecond : (a -> String) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Int -> Option String
 transitiveOrdFailureSecond render compareValues samples firstIndex secondIndex count =
     if secondIndex >= count then None
@@ -280,10 +281,10 @@ transitiveOrdFailureSecond render compareValues samples firstIndex secondIndex c
         Some message -> Some message
     end
 GENFN_END
-GENFN_CTOR yona_Std_TraitLaws__transitiveOrdFailureThird Greater Ordering 2 0 3 0
-GENFN_CTOR yona_Std_TraitLaws__transitiveOrdFailureThird None Option 1 0 2 1
-GENFN_CTOR yona_Std_TraitLaws__transitiveOrdFailureThird Some Option 0 1 2 1 fieldname:_0 field:INT contract:N(a)
-GENFN_BEGIN yona_Std_TraitLaws__transitiveOrdFailureThird transitiveOrdFailureThird
+GENFN_CTOR transitiveOrdFailureThird Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR transitiveOrdFailureThird None Option 1 0 2 1
+GENFN_CTOR transitiveOrdFailureThird Greater Ordering 2 0 3 0
+GENFN_BEGIN transitiveOrdFailureThird transitiveOrdFailureThird
 transitiveOrdFailureThird : (a -> String) -> (a -> a -> Ordering) -> Seq a -> Int -> Int -> Int -> Int -> Option String
 transitiveOrdFailureThird render compareValues samples firstIndex secondIndex thirdIndex count =
     if thirdIndex >= count then None

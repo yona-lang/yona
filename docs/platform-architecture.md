@@ -2,27 +2,28 @@
 
 ## Goals
 
-- **Linux**: io_uring–backed async file and network I/O (`file_linux.c`, `net_linux.c`), POSIX process APIs (`os_linux.c`).
-- **macOS**: kqueue–backed async file and network I/O (`kqueue_macos.c`, `file_macos.c`, `net_macos.c`), POSIX process APIs (`os_macos.c`). File submits run on a worker pool and wake `kq_await` through a kqueue pipe; sockets use `EVFILT_READ` / `EVFILT_WRITE`. Same `yona_platform_*` / `yona_rt_io_await` ABI as Linux.
-- **Windows**: Native Win32 and UCRT (`file_windows.c`, `os_windows.c`, `net_windows.c`). Socket and file submit paths integrate with `yona_rt_io_await` via IOCP-backed completion where appropriate, with direct-result IDs retained for ordering-sensitive operations.
-- **No pthread on Windows**: Async and channels live under `src/runtime/platform/` (`async_win32.c` / `channel_win32.c`) and are pulled in via `#include` from `compiled_runtime.c`.
+- **Linux**: io_uring–backed async file and network I/O (`FileLinux.c`, `NetLinux.c`), POSIX process APIs (`OsLinux.c`).
+- **macOS**: kqueue–backed async file and network I/O (`KqueueMacOs.c`, `FileMacOs.c`, `NetMacOs.c`), POSIX process APIs (`OsMacOs.c`). File submits run on a worker pool and wake `YonaRuntimeKqueueAwait` through a kqueue pipe; sockets use `EVFILT_READ` / `EVFILT_WRITE`. Same `YonaRuntimePlatform*` / `YonaRuntimeIoAwait` ABI as Linux.
+- **Windows**: Native Win32 and UCRT (`FileWindows.c`, `OsWindows.c`, `NetWindows.c`). Socket and file submit paths integrate with `YonaRuntimeIoAwait` via IOCP-backed completion where appropriate, with direct-result IDs retained for ordering-sensitive operations.
+- **No pthread on Windows**: Async and channels live under
+  `src/Runtime/Concurrency/` (`AsyncWin32.c` / `ChannelWin32.c`) and compile into
+  the `yona_runtime_concurrency` component.
 
 ## Public runtime headers
 
-- `include/yona/runtime/platform.h` — portable `yona_platform_*` / process ABI.
-- `include/yona/runtime/uring.h` — Linux-only io_uring API + shared `io_context_t` layout.
-- `src/runtime/platform/uring_linux.c` — the single ring and `io_ctx` table (must not be header-static; file/net/os are separate TUs).
-- `include/yona/runtime/kqueue.h` — macOS kqueue API + the same `io_context_t` layout.
-- `src/runtime/platform/kqueue_macos.c` — the single kqueue, worker pool, and `io_ctx` table.
-- `include/yona/runtime/sjlj.h` — `yona_sjlj_setjmp` / `yona_sjlj_longjmp` (AArch64 inline asm; `__builtin_*` elsewhere).
+- `include/yona/Runtime/Platform/Api.h` — portable `YonaRuntimePlatform*` / process ABI.
+- `include/yona/Runtime/Platform/IoUring.h` — Linux-only io_uring API + shared `YonaIoContext` layout.
+- `src/Runtime/Platform/IoUringLinux.c` — the single ring and `io_ctx` table (must not be header-static; file/net/os are separate TUs).
+- `include/yona/Runtime/Platform/Kqueue.h` — macOS kqueue API + the same `YonaIoContext` layout.
+- `src/Runtime/Platform/KqueueMacOs.c` — the single kqueue, worker pool, and `io_ctx` table.
+- `include/yona/Runtime/Platform/SjLj.h` — `YONA_SJLJ_SETJMP` / `yonaSjLjLongJump` (AArch64 inline asm; `__builtin_*` elsewhere).
 
-## Frozen platform ABI (v1)
+## Platform boundary
 
-`platform.h` is now treated as a versioned runtime ABI contract
-(`YONA_PLATFORM_ABI_VERSION=1`). New platforms should implement every symbol in
-this grouped inventory:
+`Api.h` is the canonical runtime platform contract. New platforms
+must implement every symbol in this grouped inventory:
 
-- **Async submit/await**: `yona_rt_io_await`, `yona_platform_*_submit`,
+- **Async submit/await**: `YonaRuntimeIoAwait`, `YonaRuntimePlatform*_submit`,
   fd submit helpers, fd string writes, fd line reads.
 - **Filesystem (path-based)**: `read/write/append`, existence, remove, size,
   directory listing.
@@ -32,30 +33,36 @@ this grouped inventory:
 - **Console and platform constants**: console line read and constant providers
   (page size, cpu count, endianness, os name, arch).
 
-Policy:
-
-- ABI-breaking changes must increment `YONA_PLATFORM_ABI_VERSION`.
-- Non-breaking additive changes require implementations in all active platform
-  backends before merging.
+Contract changes must update every active platform backend in the same change.
 
 ## CMake selection
 
-- All `src/runtime/platform/*.c` are **removed** from the globbed library sources, then the correct platform TUs are **appended** per OS (`WIN32` vs `APPLE` vs Linux; Linux includes `uring_linux.c`, macOS includes `kqueue_macos.c`).
-- Under `src/runtime/platform/`, the files `async_posix.c`, `async_win32.c`, `channel_posix.c`, and `channel_win32.c` are excluded from the library glob with the other platform `.c` sources because they are **included** from `compiled_runtime.c`, not compiled as separate TUs.
+- `cmake/YonaComponents.cmake` owns explicit source lists; runtime sources are
+  never discovered with a recursive glob.
+- Exactly one platform set is selected for
+  `yona_runtime_platform_io` (`WIN32`, `APPLE`, or Linux), while the matching
+  async/channel pair is selected for `yona_runtime_concurrency`.
+- Core, collections, codecs, concurrency, GPU, and platform I/O compile once as
+  focused object targets and are aggregated into the single `yona_runtime`
+  archive.
 - Windows links **`ws2_32`** for Winsock.
 
-## `compiled_runtime.c` boundary
+## Runtime component boundaries
 
-- Shared Yona runtime (RC, stdlib shims, HTTP helpers, etc.) lives here.
-- Platform entry points (`yona_platform_*`, `yona_Std_Net__*`, process spawn, `yona_rt_io_await`) live under `src/runtime/platform/` and are compiled as their own `.c` files.
-- Async/channel implementations are **included** at the end of `compiled_runtime.c` so promise and channel types stay in one link unit: `_WIN32` → win32 sources; else → POSIX sources.
-- Handle-oriented file operations used by `Std\File` in `compiled_runtime.c`
-  now route through platform wrappers (open/close/seek/tell/flush/truncate),
-  removing remaining per-OS `#if` branches from this path.
+- `yona_runtime_core` owns reference counting, closures, ADTs, exceptions, and
+  native stdlib entry points.
+- `yona_runtime_collections` owns sequences and HAMTs;
+  `yona_runtime_codecs` owns JSON, regex, and UTF conversion.
+- `yona_runtime_concurrency` owns tasks, promises, and channels.
+- `yona_runtime_gpu` owns capability discovery, device state, and kernels.
+- `yona_runtime_platform_io` owns platform entry points
+  (`YonaRuntimePlatform*`, native Net/File/Process operations, and I/O completion).
+- Cross-component declarations live in runtime headers; ad-hoc source-file
+  recompilation is not a supported interface.
 
 ## CLI/REPL linker plan
 
-- `include/LinkerPlan.h` + `src/LinkerPlan.cpp` define shared linker-mode
+- `include/yona/Toolchain/LinkerPlan.h` + `src/Toolchain/LinkerPlan.cpp` define shared linker-mode
   selection for `yonac` and `yona`.
 - Supported modes are `auto`, `bundled`, `system`, and `inprocess`.
 - In `auto`, the toolchain prefers bundled `lld` when found under discovered
@@ -74,18 +81,21 @@ Policy:
   readable and packaging behavior consistent.
 - `YONAC_REQUIRE_INPROCESS_LLD=1` forces hard failure when in-process linker
   mode is unavailable or fails, preventing silent fallback in strict CI gates.
-- CMake now produces prebuilt runtime artifacts under build-local `runtime/`
-  (`compiled_runtime.o`, `crt_*.o`, and `yona_runtime.lib` /
-  `libyona_runtime.a`) so distribution packaging can ship an object/sysroot
-  layout that avoids runtime C recompilation in normal CLI/REPL usage.
+- CMake produces exactly one aggregate runtime archive under build-local
+  `runtime/`: `yona_runtime.lib` on Windows or `libyona_runtime.a` on Unix.
+  CLI, REPL, tests, and packages consume that archive directly. Missing
+  archives are hard errors; there is no source or loose-object fallback.
 
 ## Windows compile flags
 
 - **`NOMINMAX`** and **`WIN32_LEAN_AND_MEAN`** are set in CMake for `WIN32` so Windows headers do not break C++ standard library min/max.
 
-## `yona_io_register_direct_result`
+## `YonaRuntimeIoRegisterDirectResult`
 
-- Shared helper used by `file_windows.c` and `net_windows.c`: registers an opaque pointer (or integer cast through `intptr_t`) for a high direct-result ID range; `yona_rt_io_await` in `file_windows.c` completes those immediately.
+- A shared helper used by `src/Runtime/Platform/FileWindows.c` and
+  `NetWindows.c` registers an opaque pointer (or integer cast through
+  `intptr_t`) for a high direct-result ID range; `YonaRuntimeIoAwait` in
+  `FileWindows.c` completes those immediately.
 
 ## Codegen transfer scopes
 

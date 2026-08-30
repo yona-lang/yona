@@ -1,1 +1,0 @@
-let y = 10 in let add_y x = x + y in add_y 5

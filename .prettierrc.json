@@ -1,0 +1,9 @@
+{
+  "endOfLine": "lf",
+  "plugins": ["./site/node_modules/prettier-plugin-astro/dist/index.js"],
+  "printWidth": 80,
+  "proseWrap": "always",
+  "singleQuote": false,
+  "tabWidth": 2,
+  "useTabs": false
+}

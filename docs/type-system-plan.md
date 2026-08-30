@@ -69,8 +69,8 @@ CTOR None 1 0
 ADT List 2 2 recursive
 CTOR Cons 0 2
 CTOR Nil 1 0
-FN yona_Std_Option__isSome 1 ADT -> BOOL
-FN yona_Std_User__inspectName 1 STRING -> INT borrow 1
+FN YonaStdOptionIsSome 1 ADT -> BOOL
+FN YonaStdUserInspectName 1 STRING -> INT borrow 1
 ```
 
 Importers read `.yonai` to get constructor info and function signatures.

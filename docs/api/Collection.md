@@ -16,13 +16,13 @@ Returns the first `n` values: `[seed, fn(seed), fn(fn(seed)), ...]`.
 iterate 5 (\x -> x * 2) 1   # => [1, 2, 4, 8, 16]
 ```
 
-### `unfold : (a -> b) -> Int -> [b]`
+### `unfold : (state -> Option (value, state)) -> state -> Seq value`
 
 Generates a sequence from a seed using a producer function.
-`fn seed` returns `(:some, (value, next_seed))` to continue, `:none` to stop.
+`fn seed` returns `Some (value, nextSeed)` to continue, `None` to stop.
 
 ```
-unfold (\n -> if n > 0 then (:some, (n, n - 1)) else :none) 5
+unfold (\n -> if n > 0 then Some (n, n - 1) else None) 5
 # => [5, 4, 3, 2, 1]
 ```
 

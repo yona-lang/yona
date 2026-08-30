@@ -201,10 +201,10 @@ let directCases = [
         ordLaws "Whence" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [SeekSet, SeekCur, SeekEnd] ++
         hashLaws "Whence" (\value -> show value) (\a b -> a == b) (\a -> hash a) [SeekSet, SeekSet, SeekEnd] ++
         showLaws "Whence" (\value -> show value) [SeekSet, SeekEnd] ++
-        eqLaws "Type" (\value -> show value) (\a b -> a == b) [TInt, TString, TAdt "Box"] ++
-        ordLaws "Type" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [TInt, TString, TAdt "Box"] ++
-        hashLaws "Type" (\value -> show value) (\a b -> a == b) (\a -> hash a) [TInt, TInt, TString] ++
-        showLaws "Type" (\value -> show value) [TInt, TAdt "Box"] ++
+        eqLaws "Type" (\value -> show value) (\a b -> a == b) [TypeInt, TypeString, TypeAdt "Box"] ++
+        ordLaws "Type" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [TypeInt, TypeString, TypeAdt "Box"] ++
+        hashLaws "Type" (\value -> show value) (\a b -> a == b) (\a -> hash a) [TypeInt, TypeInt, TypeString] ++
+        showLaws "Type" (\value -> show value) [TypeInt, TypeAdt "Box"] ++
         eqLaws "ConvertError" (\value -> show value) (\a b -> a == b) [InvalidConversion "x", ConversionOutOfRange "x"] ++
         ordLaws "ConvertError" (\value -> show value) (\a b -> a == b) (\a b -> compare a b) [InvalidConversion "x", ConversionOutOfRange "x"] ++
         hashLaws "ConvertError" (\value -> show value) (\a b -> a == b) (\a -> hash a) [InvalidConversion "x", InvalidConversion "x"] ++
