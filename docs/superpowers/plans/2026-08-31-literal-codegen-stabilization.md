@@ -44,6 +44,35 @@ points.
 Run the focused fixtures plus literal/parser/typechecker controls, then commit
 as `fix: lower byte and character literals`.
 
+## Task 1A: Enforce Unicode scalar character values
+
+**Files:**
+
+- Modify: `src/Syntax/Lexer.cpp`
+- Modify: `src/Syntax/ParserPattern.cpp`
+- Modify: `test/Syntax/LexerTest.cpp`
+- Modify or add focused parser/codegen fixtures under: `test/`
+
+- [ ] **Step 1: Add boundary and pattern RED coverage**
+
+Prove U+10FFFF and U+1F600 are accepted, while surrogate endpoints U+D800 and
+U+DFFF plus U+110000 are rejected as invalid character literals. Add a
+non-ASCII character-pattern round trip that currently exposes the narrowing
+cast in `ParserPattern`.
+
+- [ ] **Step 2: Validate escapes and preserve the full token value**
+
+After accumulating a Unicode escape, reject surrogate code points and values
+above U+10FFFF. Construct pattern `CharacterExpr` nodes from the full lexer
+`char32_t` value through the AST's character carrier, matching expression
+parsing. Do not change string escape semantics unless a focused test proves the
+same documented scalar invariant applies there.
+
+- [ ] **Step 3: Verify and commit**
+
+Run Lexer, parser/pattern, and character codegen fixtures including a non-BMP
+control. Commit as `fix: validate Unicode character literals`.
+
 ## Task 2: Centralize literal predicates across pattern shapes
 
 **Files:**
