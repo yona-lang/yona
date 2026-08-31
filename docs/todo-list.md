@@ -288,6 +288,13 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   with allocation stats; the stale `temporary` entry in `named_values_` makes
   constructor lowering add an unmatched retain, leaking the sequence.
 
+- [ ] **A shadowed sequence binding contaminates the enclosing binding's
+  transfer state.** Repro: bind `outer = [1]`, construct
+  `Some (let outer = [2] in outer)`, then consume both the inner value and the
+  restored outer value in nested cases; the result is correct (`21`) but one
+  of the two sequences reports leaked under allocation stats. Renaming the
+  inner binding makes both sequences balance.
+
 - [ ] **The macOS file runtime uses undeclared lowercase async-I/O locals.**
   Repro: compile `src/Runtime/Platform/FileMacOs.c`; the read path references
   `fd`, `buf`, `count`, and `offset` although its parameters are `Fd`, `Buf`,
