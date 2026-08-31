@@ -64,7 +64,7 @@ import size from Std\File in
 size "data.bin"   # => 4096
 ```
 
-### `listDir : String -> [a]`
+### `listDir : String -> [String]`
 
 List directory contents. Returns a sequence of filenames.
 
@@ -73,7 +73,7 @@ import listDir from Std\File in
 listDir "/tmp"   # => ["file1.txt", "file2.txt", ...]
 ```
 
-### `readLines : String -> Iterator`
+### `readLines : String -> Iterator String`
 
 Returns an `Iterator String` that yields lines from the file lazily.
 Uses O(1) memory per element.
@@ -104,7 +104,7 @@ import fromSeq from Std\ByteArray in
 writeFileBytes "out.bin" (fromSeq [0, 1, 2, 3])
 ```
 
-### `openFile : String -> FileMode -> Linear Filehandle`
+### `openFile : String -> FileMode -> Linear FileHandle`
 
 Open a file with the given mode string (`"r"`, `"w"`, `"rw"`, etc.).
 It returns an owning `Linear FileHandle`, not a raw descriptor. Match the
@@ -119,21 +119,32 @@ end
 
 The mode is a `FileMode` ADT (Prelude): `Read`, `Write`, `ReadWrite`, `Append`.
 
-### `closeFileHandle : Int -> ()`
+### `closeFileHandle : FileHandle -> ()`
 
 Close a file handle.
 
-### `readBytes : Int -> Int -> ByteArray`
+### `readBytes : FileHandle -> Int -> ByteArray`
 
 Read up to `count` bytes from a file handle. Async (io_uring).
 Returns a byte buffer.
 
-### `writeBytes : Int -> Int -> Int`
+### `readExact : FileHandle -> Int -> Result (String, String)`
+
+Read exactly `count` bytes from an unwrapped typed file handle. Returns `Ok`
+with the bytes, or `Err` if EOF arrives early or the count is invalid.
+
+### `readExactBytes : FileHandle -> Int -> String`
+
+Read up to `count` bytes from an unwrapped typed file handle, returning a short
+string at EOF. Use `Std\Io.readExactBytes` for raw pipe, socket, or console
+descriptors.
+
+### `writeBytes : FileHandle -> ByteArray -> Int`
 
 Write bytes to a file handle. Async (io_uring).
 Returns the number of bytes written.
 
-### `seek : Int -> Int -> a -> Int`
+### `seek : FileHandle -> Int -> Whence -> Int`
 
 Seek to a position in a file. `whence` is a `Whence` ADT (Prelude):
 `SeekSet` (absolute), `SeekCur` (relative to current), `SeekEnd` (relative to end).
@@ -146,19 +157,19 @@ case openFile "data.bin" Read of
 end
 ```
 
-### `tell : Int -> Int`
+### `tell : FileHandle -> Int`
 
 Returns the current position in a file handle.
 
-### `flush : Int -> Bool`
+### `flush : FileHandle -> Bool`
 
 Flush buffered writes for a file handle. Returns `true` on success.
 
-### `truncate : Int -> Int -> Bool`
+### `truncate : FileHandle -> Int -> Bool`
 
 Truncate a file to the given length. Returns `true` on success.
 
-### `readChunks : Int -> Int -> Iterator`
+### `readChunks : FileHandle -> Int -> Iterator ByteArray`
 
 Read data from a file handle in chunks of `chunkSize` bytes.
 Returns a handle for chunked reading.

@@ -3,10 +3,14 @@
  * Content-Length framing on stdin needs this.
  */
 
+#include "yona/Support/Process.h"
+
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -28,6 +32,8 @@
 extern "C" {
 char *YonaStdIoReadExactBytes(int64_t fd, int64_t n);
 int64_t YonaStdIoReadExact(int64_t fd, int64_t n);
+char *YonaStdFileReadExactBytes(int64_t handle, int64_t n);
+int64_t YonaStdFileReadExact(int64_t handle, int64_t n);
 void YonaStdIoWriteBytes(int64_t fd, const char *s);
 int64_t YonaStdStringLength(const char *s);
 void YonaRuntimeRelease(void *ptr);
@@ -121,6 +127,67 @@ TEST_SUITE("IoReadExact") {
     CHECK(adt[0] == 1);
     REQUIRE(pipe_close(fds[0]) == 0);
   }
+
+  TEST_CASE("File readExactBytes extracts an unwrapped FileHandle") {
+    int fds[2];
+    REQUIRE(make_pipe(fds) == 0);
+    REQUIRE(pipe_write(fds[1], "typed", 5) == 5);
+    REQUIRE(pipe_close(fds[1]) == 0);
+    int64_t handle[] = {0, 1, 0, fds[0]};
+    CHECK(take_rc(YonaStdFileReadExactBytes(
+              static_cast<int64_t>(reinterpret_cast<intptr_t>(handle)), 5)) ==
+          "typed");
+    REQUIRE(pipe_close(fds[0]) == 0);
+  }
+
+  TEST_CASE("File readExact reports short EOF through Result") {
+    int fds[2];
+    REQUIRE(make_pipe(fds) == 0);
+    REQUIRE(pipe_write(fds[1], "xy", 2) == 2);
+    REQUIRE(pipe_close(fds[1]) == 0);
+    int64_t handle[] = {0, 1, 0, fds[0]};
+    int64_t r = YonaStdFileReadExact(
+        static_cast<int64_t>(reinterpret_cast<intptr_t>(handle)), 4);
+    REQUIRE(r != 0);
+    auto *adt = reinterpret_cast<int64_t *>(static_cast<intptr_t>(r));
+    CHECK(adt[0] == 1);
+    YonaRuntimeRelease(reinterpret_cast<void *>(static_cast<intptr_t>(r)));
+    REQUIRE(pipe_close(fds[0]) == 0);
+  }
+
+#if defined(__linux__)
+  TEST_CASE("File readExact releases its discarded short string") {
+    constexpr const char *ChildEnvironment =
+        "YONA_TEST_FILE_READ_EXACT_LEAK_CHILD";
+    if (std::getenv(ChildEnvironment)) {
+      int fds[2];
+      REQUIRE(make_pipe(fds) == 0);
+      REQUIRE(pipe_write(fds[1], "xy", 2) == 2);
+      REQUIRE(pipe_close(fds[1]) == 0);
+      int64_t handle[] = {0, 1, 0, fds[0]};
+      int64_t result = YonaStdFileReadExact(
+          static_cast<int64_t>(reinterpret_cast<intptr_t>(handle)), 4);
+      REQUIRE(result != 0);
+      YonaRuntimeRelease(
+          reinterpret_cast<void *>(static_cast<intptr_t>(result)));
+      REQUIRE(pipe_close(fds[0]) == 0);
+      return;
+    }
+
+    const auto executable = std::filesystem::canonical("/proc/self/exe");
+    const auto result = yona::support::executeProcess(
+        executable, {"-tc=File readExact releases its discarded short string"},
+        {.CaptureStdout = true,
+         .CaptureStderr = true,
+         .EnvironmentOverrides = {{ChildEnvironment, "1"},
+                                  {"YONA_ALLOC_STATS", "1"}}});
+    REQUIRE_FALSE(result.ExecutionFailed);
+    REQUIRE(result.ExitCode == 0);
+    INFO(result.StandardError);
+    CHECK(result.StandardError.find("tag=STRING allocs=2 frees=2 leaked=0") !=
+          std::string::npos);
+  }
+#endif
 
 #if defined(_WIN32)
   TEST_CASE("readExact and writeBytes set CRT stdio to binary mode") {

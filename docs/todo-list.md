@@ -246,11 +246,37 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `Int` where their live `Linear FileHandle` is passed. Preserve the resource
   type through the native binary I/O interface and codegen call lowering.
 
+- [x] **Exact-read `Err` results leak the discarded short string.** Repro:
+  call `Std\Io.readExact` on a two-byte stream with a requested length of four
+  under `YONA_ALLOC_STATS=1`; `readExactFromFd` replaces the short managed
+  string with `Err "unexpected eof"` without releasing it. Fixed by releasing
+  the short read before constructing `Err`; the isolated allocation regression
+  now reports two STRING allocations and two frees.
+
+- [x] **Length-tagged strings are absent from runtime allocation statistics.**
+  Repro: allocate a string through `YonaRuntimeAllocateStringWithLength` under
+  `YONA_ALLOC_STATS=1`; the STRING allocation counter does not advance even
+  though release advances the free counter. Fixed by recording the STRING
+  allocation on the length-tagged allocation path; the exact-read lifetime
+  regression observes the balanced counter totals.
+
+- [ ] **Direct ownership doctests cannot find Prelude without `YONA_PATH`.**
+  Repro: unset `YONA_PATH` and run `tests -tc="dropping a set of seqs releases
+  inner heap objects"`; its empty `Codegen.ModulePaths` makes `SemanticSetup`
+  throw `unable to install Prelude interface in test` despite the configured
+  deterministic test Prelude artifacts and repository library path.
+
 - [ ] **Lifted dictionary trait code can crash during ownership lowering.**
   Repro: run `tests.exe -tc="Fixture-based codegen tests"`; the
   `dict_lifted_trait_lifetime` fixture terminates with `SIGSEGV`. Audit the
   lifted trait materialization and dictionary-value ownership path before
   enabling the fixture suite as a release gate.
+
+- [ ] **Temporary constructor cases leak their scrutinee and heap fields.**
+  Repro: `case Some 1 of Some x -> 0; None -> 0 end` leaks the ADT, while
+  `case Some [1] of Some xs -> 0; None -> 0 end` leaks both the ADT and Seq.
+  The IR retains the anonymous sequence before `ADTSetField` and retains the
+  extracted field, but drops neither the temporary scrutinee nor field binding.
 
 - [ ] **ABI refinement no longer emits the canonical refined call form.**
   Repro: run `tests.exe -tc="ABI refinement leaves one canonical function"`;

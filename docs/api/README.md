@@ -1,6 +1,6 @@
 # Yona Standard Library API Reference
 
-436 public functions across 40 modules.
+438 public functions across 40 modules.
 
 | Module | Functions | Types | Description |
 |--------|-----------|-------|-------------|
@@ -12,14 +12,14 @@
 | [Std.Crypto](Crypto.md) | 4 | 0 | Crypto -- cryptographic hashing and random byte generation. |
 | [Std.Dict](Dict.md) | 9 | 0 | Dict — persistent dictionary backed by a Hash Array Mapped Trie (HAMT). |
 | [Std.Encoding](Encoding.md) | 7 | 0 | Encoding -- string encoding and decoding utilities. |
-| [Std.File](File.md) | 19 | 0 | File -- filesystem operations with async I/O support. |
+| [Std.File](File.md) | 21 | 0 | File -- filesystem operations with async I/O support. |
 | [Std.FloatArray](FloatArray.md) | 11 | 0 | Contiguous unboxed array of `Float` (64-bit double) values. |
 | [Std.Format](Format.md) | 1 | 0 | Format -- string formatting with positional placeholders. |
 | [Std.Function](Function.md) | 8 | 0 | Function combinators — identity, composition, application, flipping. |
 | [Std.Gpu](Gpu.md) | 42 | 7 | Std\Gpu — accelerated columnar execution. |
 | [Std.Http](Http.md) | 11 | 3 | HTTP client and server — built on Std\Net and Std\String. |
 | [Std.IntArray](IntArray.md) | 15 | 0 | Contiguous unboxed array of `Int` values. |
-| [Std.Io](Io.md) | 18 | 0 | Std\Io — non-blocking console and handle-based byte I/O. |
+| [Std.Io](Io.md) | 18 | 0 | Std\Io — non-blocking console and raw-descriptor byte I/O. |
 | [Std.Iterator](Iterator.md) | 7 | 0 | Stateful pull-iterator adapters and consumers. |
 | [Std.Json](Json.md) | 11 | 1 | Recursive JSON values — object/array parse and stringify. |
 | [Std.List](List.md) | 29 | 0 | Sequence (list) operations — map, filter, fold, sort, and more. |

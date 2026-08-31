@@ -1346,8 +1346,10 @@ char *YonaStdIoReadStdinImpl(int64_t Unit) {
   return R;
 }
 
-/* readExact: stream read() loop — pipe/socket safe (not pread/seek).
- * `fd_or_handle` is a raw descriptor (stdin is 0) or a FileHandle ADT. */
+/* Exact stream reads are shared by two deliberately separate public ABIs:
+ * Std\Io accepts raw descriptors, while Std\File accepts FileHandle payloads.
+ * Keep representation extraction at those entry points so source-level types
+ * never depend on integer/pointer guessing. */
 #ifndef YONA_READ_EXACT_MAX
 #define YONA_READ_EXACT_MAX (16u * 1024u * 1024u)
 #endif
@@ -1356,34 +1358,17 @@ char *YonaStdIoReadStdinImpl(int64_t Unit) {
 /* Content-Length framing is byte-exact. CRT stdin/stdout default to text
  * mode, so _read/_write translate CRLF and desync LSP headers (C++ yls
  * already calls _setmode on cin/cout). */
-static void setWindowsStandardIoBinary(int64_t FdOrHandle) {
-  if (FdOrHandle >= 0 && FdOrHandle <= 2)
-    (void)_setmode((int)FdOrHandle, _O_BINARY);
+static void setWindowsStandardIoBinary(int64_t Fd) {
+  if (Fd >= 0 && Fd <= 2)
+    (void)_setmode((int)Fd, _O_BINARY);
 }
 #endif
 
-char *YonaStdIoReadExactBytes(int64_t FdOrHandle, int64_t N) {
-#if defined(_WIN32)
-  setWindowsStandardIoBinary(FdOrHandle);
-#endif
+static char *readExactBytesFromFd(int Fd, int64_t N) {
   if (N <= 0 || (uint64_t)N > YONA_READ_EXACT_MAX) {
     char *R = (char *)YonaRuntimeAllocateStringWithLength(1, 0);
     R[0] = '\0';
     return R;
-  }
-  int Fd;
-  if (FdOrHandle > 65536) {
-    int64_t *Handle = (int64_t *)(intptr_t)FdOrHandle;
-    /* Linear FileHandle is [tag, 1, heap, inner]; FileHandle is [tag, 1, 0,
-     * fd]. */
-    if (Handle[1] == 1 && Handle[2] != 0 && Handle[3] > 65536) {
-      int64_t *Inner = (int64_t *)(intptr_t)Handle[3];
-      Fd = (int)Inner[3];
-    } else {
-      Fd = (int)Handle[3];
-    }
-  } else {
-    Fd = (int)FdOrHandle;
   }
   size_t Want = (size_t)N;
   char *Buf = (char *)malloc(Want);
@@ -1410,6 +1395,17 @@ char *YonaStdIoReadExactBytes(int64_t FdOrHandle, int64_t N) {
   return R;
 }
 
+char *YonaStdIoReadExactBytes(int64_t Fd, int64_t N) {
+#if defined(_WIN32)
+  setWindowsStandardIoBinary(Fd);
+#endif
+  return readExactBytesFromFd((int)Fd, N);
+}
+
+char *YonaStdFileReadExactBytes(int64_t Handle, int64_t N) {
+  return readExactBytesFromFd(fhFd(Handle), N);
+}
+
 /* Result Json/String-style ADT: Ok tag 0 | Err tag 1, one heap field. */
 static int64_t ioResultOkString(char *S) {
   int64_t *Adt = (int64_t *)YonaRuntimeAllocate(
@@ -1433,15 +1429,27 @@ static int64_t ioResultError(const char *Msg) {
   return (int64_t)(intptr_t)Adt;
 }
 
-int64_t YonaStdIoReadExact(int64_t FdOrHandle, int64_t N) {
+static int64_t readExactFromFd(int Fd, int64_t N) {
   if (N < 0)
     return ioResultError("negative count");
   if ((uint64_t)N > YONA_READ_EXACT_MAX)
     return ioResultError("too large");
-  char *S = YonaStdIoReadExactBytes(FdOrHandle, N);
+  char *S = readExactBytesFromFd(Fd, N);
   if (YonaRuntimeStringLength(S) == N)
     return ioResultOkString(S);
+  YonaRuntimeRelease(S);
   return ioResultError("unexpected eof");
+}
+
+int64_t YonaStdIoReadExact(int64_t Fd, int64_t N) {
+#if defined(_WIN32)
+  setWindowsStandardIoBinary(Fd);
+#endif
+  return readExactFromFd((int)Fd, N);
+}
+
+int64_t YonaStdFileReadExact(int64_t Handle, int64_t N) {
+  return readExactFromFd(fhFd(Handle), N);
 }
 
 /* Synchronous write — no Promise. Safe for LSP Content-Length framing. */

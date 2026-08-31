@@ -1,6 +1,6 @@
 # Std.Io
 
-Std\Io — non-blocking console and handle-based byte I/O.
+Std\Io — non-blocking console and raw-descriptor byte I/O.
 
 Every operation that can block on a slow device submits through
 io_uring (on Linux) or the thread pool (for reads), returns a
@@ -28,10 +28,9 @@ end
 
 ### `stdinFd : Int = 0`
 
-File descriptor numbers, exposed as Int so any Std\File handle call
-that expects `FileHandle` can be wrapped — `FileHandle stdoutFd`
-builds the Linear-compatible handle — and the raw int is also useful
-for passing to `write` without constructing the ADT.
+File descriptor numbers, exposed as Int for raw-descriptor operations such
+as console I/O, pipes, sockets, and LSP framing. Typed filesystem handles
+use the separate operations in `Std\File`.
 
 ### `stdoutFd : Int = 1`
 
@@ -86,7 +85,8 @@ stdin (`yona -` or a pipe); a file script still inherits stdin.
 
 Read exactly `n` bytes from `fd` with stream `read` (not seek/`pread`).
 Safe on pipes and sockets — required for LSP `Content-Length` framing
-on stdin. `fd` may be a raw descriptor (`stdinFd`) or a `FileHandle`.
+on stdin. `fd` is a raw descriptor such as `stdinFd`; use
+`Std\File.readExact` for a typed `FileHandle`.
 On Windows, a raw stdio fd (`0`/`1`/`2`) is switched to binary mode so
 CRT text-mode CRLF translation cannot desync the frame.
 

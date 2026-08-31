@@ -1,6 +1,6 @@
 #include "Support/RepoPaths.h"
-#include "yona/Semantics/InterfaceCatalog.h"
 #include "yona/Semantics/GenericFunctionSource.h"
+#include "yona/Semantics/InterfaceCatalog.h"
 #include "yona/Semantics/TypeChecker.h"
 #include "yona/Support/Diagnostic.h"
 #include "yona/Syntax/Parser.h"
@@ -55,12 +55,11 @@ TEST_CASE("Std File exposes canonical typed resource contracts") {
   REQUIRE(*Loaded != nullptr);
 
   const auto &Functions = (*Loaded)->Functions;
-  const auto Find = [&](const std::string &Name)
-      -> const yona::interface::Function & {
+  const auto Find =
+      [&](const std::string &Name) -> const yona::interface::Function & {
     const auto Found =
-        std::find_if(Functions.begin(), Functions.end(), [&](const auto &Fn) {
-          return Fn.Name == Name;
-        });
+        std::find_if(Functions.begin(), Functions.end(),
+                     [&](const auto &Fn) { return Fn.Name == Name; });
     REQUIRE(Found != Functions.end());
     return *Found;
   };
@@ -72,8 +71,7 @@ TEST_CASE("Std File exposes canonical typed resource contracts") {
   CHECK(Open.BorrowedParameters == std::vector<bool>{false, false});
 
   const auto &Close = Find("closeFileHandle");
-  CHECK(Close.ParameterTypes ==
-        std::vector<std::string>{"ADT(FileHandle)"});
+  CHECK(Close.ParameterTypes == std::vector<std::string>{"ADT(FileHandle)"});
   CHECK(Close.ReturnType == "UNIT");
   CHECK(Close.BorrowedParameters == std::vector<bool>{false});
 
@@ -89,16 +87,16 @@ TEST_CASE("Std File exposes canonical typed resource contracts") {
   };
 
   CheckBorrowedHandle("flush", {"ADT(FileHandle)"}, "BOOL");
-  CheckBorrowedHandle("readBytes", {"ADT(FileHandle)", "INT"},
-                      "BYTE_ARRAY");
+  CheckBorrowedHandle("readBytes", {"ADT(FileHandle)", "INT"}, "BYTE_ARRAY");
+  CheckBorrowedHandle("readExact", {"ADT(FileHandle)", "INT"},
+                      "ADT(Result,STRING,STRING)");
+  CheckBorrowedHandle("readExactBytes", {"ADT(FileHandle)", "INT"}, "STRING");
   CheckBorrowedHandle("readChunks", {"ADT(FileHandle)", "INT"},
                       "ADT(Iterator,BYTE_ARRAY)");
-  CheckBorrowedHandle("seek",
-                      {"ADT(FileHandle)", "INT", "ADT(Whence)"}, "INT");
+  CheckBorrowedHandle("seek", {"ADT(FileHandle)", "INT", "ADT(Whence)"}, "INT");
   CheckBorrowedHandle("tell", {"ADT(FileHandle)"}, "INT");
   CheckBorrowedHandle("truncate", {"ADT(FileHandle)", "INT"}, "BOOL");
-  CheckBorrowedHandle("writeBytes", {"ADT(FileHandle)", "BYTE_ARRAY"},
-                      "INT");
+  CheckBorrowedHandle("writeBytes", {"ADT(FileHandle)", "BYTE_ARRAY"}, "INT");
 
   CHECK(Find("listDir").ReturnType == "Seq(STRING)");
   CHECK(Find("readLines").ReturnType == "ADT(Iterator,STRING)");
@@ -142,6 +140,63 @@ case openFile "file.bin" Read of
   end
 end
 )") == 0);
+}
+
+TEST_CASE("Std File and Std Io exact reads reject crossed resource types") {
+  const auto LibraryPath = yona::test::repo_root() / "lib";
+
+  const auto CheckSource = [&](const std::string &Source) {
+    yona::semantics::InterfaceCatalog Catalog({LibraryPath.string()});
+    yona::parser::Parser Parser;
+    yona::compiler::DiagnosticEngine Diagnostics;
+    yona::compiler::typechecker::TypeChecker Checker(Diagnostics);
+    Checker.add_module_path(LibraryPath.string());
+    Checker.set_import_type_source(&Catalog);
+    const auto Installed = Catalog.installPrelude(Parser, Checker);
+    REQUIRE(Installed.has_value());
+    REQUIRE(*Installed);
+
+    auto Result = Parser.parseExpression(Source, "exact_read_contract.yona");
+    REQUIRE(Result.has_value());
+    auto Parsed = std::move(Result.value());
+    Diagnostics.setSources(Parsed.Sources);
+    Checker.check(Parsed.Expression.get());
+    Checker.solve_constraints();
+    return Diagnostics.error_count();
+  };
+
+  CHECK(CheckSource(R"(
+import stdinFd, readExact from Std\Io, isOk from Std\Result in
+isOk (readExact stdinFd 0)
+)") == 0);
+
+  CHECK(CheckSource(R"(
+import openFile, closeFileHandle, readExactBytes from Std\File in
+case openFile "file.bin" Read of
+  Linear h -> do
+    bytes = readExactBytes h 0
+    closeFileHandle h
+    bytes
+  end
+end
+)") == 0);
+
+  CHECK(CheckSource(R"(
+import stdinFd from Std\Io, readExactBytes from Std\File in
+readExactBytes stdinFd 0
+)") > 0);
+
+  CHECK(CheckSource(R"(
+import openFile, closeFileHandle from Std\File,
+       readExactBytes from Std\Io in
+case openFile "file.bin" Read of
+  Linear h -> do
+    bytes = readExactBytes h 0
+    closeFileHandle h
+    bytes
+  end
+end
+)") > 0);
 }
 
 TEST_CASE("Semantics generic source service retains GENFN source ownership") {

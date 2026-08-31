@@ -96,23 +96,25 @@ fixtures on Linux. Commit as `fix: type file handle operations`.
 - Modify: focused semantic/codegen tests
 - Regenerate/update as required: `docs/api/File.md`, `docs/api/Io.md`
 
-- [ ] **Step 1: Lock both source-level contracts**
+- [x] **Step 1: Lock both source-level contracts**
 
 Retain `Std\Io.readExact`/`readExactBytes` for raw `Int` descriptors such as
 `stdinFd`; remove the inaccurate claim that they also accept typed handles.
 Add `Std\File.readExact`/`readExactBytes` accepting an unwrapped `FileHandle`,
 and prove the wrong representation is rejected for each module boundary.
 
-- [ ] **Step 2: Reuse the representation-aware C helpers**
+- [x] **Step 2: Reuse the representation-aware C helpers**
 
 Factor the existing exact-read implementation behind explicit Io-fd and
 FileHandle C entry points, or add narrow File aliases if that keeps the runtime
 clear. Keep distinct module declarations so HM typing remains sound; do not
 introduce a wildcard parameter or implicit coercion. Update the fixture to
 unwrap its file handle and import the typed exact-byte read from `Std\File`,
-while retaining the zero-length stdin descriptor control from `Std\Io`.
+while retaining the zero-length stdin descriptor control from `Std\Io`. Cover
+short-EOF Result ownership under allocation statistics and release the
+discarded short string before returning `Err`.
 
-- [ ] **Step 3: Regenerate, verify, and commit**
+- [x] **Step 3: Regenerate, verify, and commit**
 
 Regenerate only owned API outputs; inspect for unrelated churn. Run Io,
 FileHandle, LSP framing, and fixture tests. Commit as

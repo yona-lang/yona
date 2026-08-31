@@ -646,6 +646,7 @@ void *YonaRuntimeAllocateStringWithLength(size_t Bytes, size_t StringLength) {
   int64_t *Raw = (int64_t *)poolAlloc(Total);
   Raw[0] = 1;
   Raw[1] = YONA_ENCODE_TAG_LEN(YONA_RC_TYPE_STRING, Cls, StringLength);
+  YONA_ALLOC_INC_TAG(YONA_RC_TYPE_STRING);
   return (void *)(Raw + YONA_RC_HEADER_SIZE);
 }
 

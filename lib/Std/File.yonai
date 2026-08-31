@@ -7,6 +7,8 @@ FN listDir 1 STRING -> Seq(STRING)
 FN openFile 2 STRING ADT(FileMode) -> LINEAR(ADT(FileHandle))
 IO readBytes 2 ADT(FileHandle) INT -> BYTE_ARRAY borrow 10
 FN readChunks 2 ADT(FileHandle) INT -> ADT(Iterator,BYTE_ARRAY) borrow 10
+FN readExact 2 ADT(FileHandle) INT -> ADT(Result,STRING,STRING) borrow 10
+FN readExactBytes 2 ADT(FileHandle) INT -> STRING borrow 10
 IO readFile 1 STRING -> STRING
 IO readFileBytes 1 STRING -> BYTE_ARRAY
 FN readLines 1 STRING -> ADT(Iterator,STRING)
