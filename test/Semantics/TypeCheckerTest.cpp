@@ -1882,15 +1882,9 @@ end
   }
 
   TEST_CASE("Imported zero-arity FN remains callable with its known effects") {
-    namespace fs = std::filesystem;
-    auto dir = fs::temp_directory_path() /
-               ("yona_yonai_zero_arity_effect_" +
-                std::to_string(std::chrono::steady_clock::now()
-                                   .time_since_epoch()
-                                   .count()));
-    fs::create_directories(dir / "Test");
+    ScopedInterfaceTestDirectory dir("yonai_zero_arity_effect");
     {
-      std::ofstream out(dir / "Test" / "Thunk.yonai");
+      std::ofstream out(dir.path() / "Test" / "Thunk.yonai");
       out << "MODULE Test\\Thunk\n"
              "FN thunk 0 -> INT effects Fs.read\n"
              "FN pureThunk 0 -> INT effects - effectscheme $##;$/r##\n";
@@ -1902,7 +1896,7 @@ end
     REQUIRE(unhandled.has_value());
     DiagnosticEngine unhandled_diag;
     TypeChecker unhandled_checker(unhandled_diag);
-    unhandled_checker.add_module_path(dir.string());
+    unhandled_checker.add_module_path(dir.path().string());
     unhandled_checker.check(unhandled.value().get());
     CHECK(std::any_of(unhandled_diag.records().begin(),
                       unhandled_diag.records().end(), [](const auto &record) {
@@ -1928,7 +1922,7 @@ end
     REQUIRE(handled.has_value());
     DiagnosticEngine handled_diag;
     TypeChecker handled_checker(handled_diag);
-    handled_checker.add_module_path(dir.string());
+    handled_checker.add_module_path(dir.path().string());
     handled_checker.check(handled.value().get());
     CHECK_FALSE(handled_checker.has_direct_errors());
 
@@ -1938,14 +1932,12 @@ end
     REQUIRE(pure.has_value());
     DiagnosticEngine pure_diag;
     TypeChecker pure_checker(pure_diag);
-    pure_checker.add_module_path(dir.string());
+    pure_checker.add_module_path(dir.path().string());
     auto *pure_type = pure_checker.check(pure.value().get());
     REQUIRE(pure_type != nullptr);
     CHECK(pretty_print(pure_checker.zonk(pure_type)) == "Int");
     CHECK_FALSE(pure_checker.has_direct_errors());
 
-    std::error_code ec;
-    fs::remove_all(dir, ec);
   }
 
   TEST_CASE("Native zero-arity FN imports remain values") {
@@ -2036,15 +2028,9 @@ end
   }
 
   TEST_CASE("Canonical imports preserve legacy wildcard descriptors") {
-    namespace fs = std::filesystem;
-    auto dir = fs::temp_directory_path() /
-               ("yona_yonai_legacy_shapes_" +
-                std::to_string(std::chrono::steady_clock::now()
-                                   .time_since_epoch()
-                                   .count()));
-    fs::create_directories(dir / "Test");
+    ScopedInterfaceTestDirectory dir("yonai_legacy_shapes");
     {
-      std::ofstream out(dir / "Test" / "Shapes.yonai");
+      std::ofstream out(dir.path() / "Test" / "Shapes.yonai");
       out << "MODULE Test\\Shapes\n"
              "FN legacy 2 LINEAR TUPLE -> TUPLE\n"
              "FN structured 1 TUPLE(INT,STRING) -> LINEAR(INT)\n"
@@ -2059,7 +2045,7 @@ end
       REQUIRE(parsed.has_value());
       DiagnosticEngine diag;
       TypeChecker checker(diag);
-      checker.add_module_path(dir.string());
+      checker.add_module_path(dir.path().string());
       CHECK(checker.check(parsed.value().get()) != nullptr);
       CHECK_FALSE(checker.has_direct_errors());
     }
@@ -2072,7 +2058,7 @@ end
       REQUIRE(parsed.has_value());
       DiagnosticEngine diag;
       TypeChecker checker(diag);
-      checker.add_module_path(dir.string());
+      checker.add_module_path(dir.path().string());
       auto *type = checker.check(parsed.value().get());
       REQUIRE(type != nullptr);
       CHECK(pretty_print(checker.zonk(type)) == "Linear Int");
@@ -2087,7 +2073,7 @@ end
       REQUIRE(parsed.has_value());
       DiagnosticEngine diag;
       TypeChecker checker(diag);
-      checker.add_module_path(dir.string());
+      checker.add_module_path(dir.path().string());
       checker.check(parsed.value().get());
       CHECK(diag.has_errors());
     }
@@ -2100,13 +2086,10 @@ end
       REQUIRE(parsed.has_value());
       DiagnosticEngine diag;
       TypeChecker checker(diag);
-      checker.add_module_path(dir.string());
+      checker.add_module_path(dir.path().string());
       checker.check(parsed.value().get());
       CHECK(diag.has_errors());
     }
-
-    std::error_code ec;
-    fs::remove_all(dir, ec);
   }
 
   TEST_CASE("Effect: imported HOF open rest from .yonai is E0202") {
