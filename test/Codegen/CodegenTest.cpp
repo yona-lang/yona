@@ -295,9 +295,19 @@ run value = helper value
 
 TEST_CASE("ABI refinement leaves one canonical function") {
   const auto ir = compile_to_ir("let f x = x == 0 in f 1", 0);
+  const auto occurrence_count = [&ir](const string &needle) {
+    size_t count = 0;
+    for (size_t pos = 0; (pos = ir.find(needle, pos)) != string::npos;
+         pos += needle.size()) {
+      ++count;
+    }
+    return count;
+  };
+
   CHECK(ir != "CODEGEN_ERROR");
+  CHECK(occurrence_count("define internal fastcc i1 @f(i64 %x)") == 1);
   CHECK(ir.find("@f.") == string::npos);
-  CHECK(ir.find("call fastcc i1 @f(i64 1)") != string::npos);
+  CHECK(occurrence_count("call fastcc i1 @f(i64 1)") == 1);
 }
 
 TEST_CASE("CodegenSession owns the complete LLVM lifecycle") {
