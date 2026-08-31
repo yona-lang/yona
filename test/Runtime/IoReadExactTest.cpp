@@ -4,6 +4,7 @@
  */
 
 #include "yona/Runtime/Core/Api.h"
+#include "yona/Runtime/Platform/IoContext.h"
 #include "yona/Support/Process.h"
 
 #include <doctest/doctest.h>
@@ -173,6 +174,80 @@ TEST_SUITE("IoReadExact") {
   }
 
 #if defined(__linux__)
+  TEST_CASE(
+      "cancelled I/O contexts release managed buffers and free raw buffers") {
+    constexpr const char *ChildEnvironment =
+        "YONA_TEST_CANCELLED_IO_OWNERSHIP_CHILD";
+    if (std::getenv(ChildEnvironment)) {
+      constexpr YonaIoOperationKind managed_kinds[] = {
+          YonaIoOperationReadFile,
+          YonaIoOperationWriteFile,
+          YonaIoOperationSend,
+          YonaIoOperationReceive,
+          YonaIoOperationReceiveBytes,
+          YonaIoOperationReadFileBytes,
+          YonaIoOperationReadFileDescriptorBytes,
+          YonaIoOperationWriteFileDescriptorBytes,
+      };
+      for (const auto kind : managed_kinds) {
+        void *bytes = YonaRuntimeByteArrayFromString("pin");
+        REQUIRE(bytes != nullptr);
+        YonaRuntimeRetain(bytes);
+        REQUIRE(runtime_reference_count(bytes) == 2);
+        auto *context =
+            static_cast<YonaIoContext *>(std::malloc(sizeof(YonaIoContext)));
+        REQUIRE(context != nullptr);
+        *context = {kind, -1, static_cast<char *>(bytes), 3, 0};
+
+        YonaRuntimeIoContextCleanupCancelled(context);
+
+        CHECK(runtime_reference_count(bytes) == 1);
+        YonaRuntimeRelease(bytes);
+      }
+
+      constexpr YonaIoOperationKind raw_kinds[] = {
+          YonaIoOperationAccept,
+          YonaIoOperationConnect,
+          YonaIoOperationWriteFileDescriptorString,
+      };
+      for (const auto kind : raw_kinds) {
+        int owned_fds[2] = {-1, -1};
+        if (kind == YonaIoOperationConnect)
+          REQUIRE(make_pipe(owned_fds) == 0);
+        auto *buffer = static_cast<char *>(std::malloc(32));
+        REQUIRE(buffer != nullptr);
+        std::memset(buffer, 0x5a, 32);
+        auto *context =
+            static_cast<YonaIoContext *>(std::malloc(sizeof(YonaIoContext)));
+        REQUIRE(context != nullptr);
+        *context = {kind, owned_fds[0], buffer, 32,
+                    kind == YonaIoOperationConnect};
+        YonaRuntimeIoContextCleanupCancelled(context);
+        if (kind == YonaIoOperationConnect) {
+          CHECK(pipe_close(owned_fds[0]) == -1);
+          pipe_close(owned_fds[1]);
+        }
+      }
+      return;
+    }
+
+    const auto executable = std::filesystem::canonical("/proc/self/exe");
+    const auto result = yona::support::executeProcess(
+        executable,
+        {"-tc=cancelled I/O contexts release managed buffers and free raw "
+         "buffers"},
+        {.CaptureStdout = true,
+         .CaptureStderr = true,
+         .EnvironmentOverrides = {{ChildEnvironment, "1"},
+                                  {"MALLOC_CHECK_", "3"},
+                                  {"YONA_ALLOC_STATS", "1"}}});
+    REQUIRE_FALSE(result.ExecutionFailed);
+    REQUIRE(result.ExitCode == 0);
+    INFO(result.StandardError);
+    CHECK(result.StandardError.find("tag=BYTEARR allocs=8 frees=8 leaked=0") !=
+          std::string::npos);
+  }
+
   TEST_CASE("closeFileHandle releases its transferred FileHandle") {
     constexpr const char *ChildEnvironment =
         "YONA_TEST_FILE_CLOSE_OWNERSHIP_CHILD";

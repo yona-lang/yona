@@ -22,8 +22,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/socket.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+
+int64_t YonaStdNetRecv(int64_t Fd, int64_t MaximumBytes);
+int64_t YonaStdNetRecvBytes(int64_t Fd, int64_t MaximumBytes);
 
 static int installIoUringSetupBlocker(void) {
   struct sock_filter Filter[] = {
@@ -62,15 +66,40 @@ int main(void) {
     return 3;
   }
 
-  int64_t ReadId =
-      YonaRuntimePlatformSubmitFileDescriptorByteRead(Fd, 32, 0);
+  /* These submitters allocate managed result buffers before discovering that
+   * io_uring is unavailable. Submission failure must release those buffers. */
+  if (YonaRuntimePlatformSubmitFileRead(Path) != 0 ||
+      YonaRuntimePlatformSubmitFileByteRead(Path) != 0) {
+    close(Fd);
+    unlink(Path);
+    return 4;
+  }
+
+  int Sockets[2];
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, Sockets) != 0) {
+    close(Fd);
+    unlink(Path);
+    return 5;
+  }
+  if (YonaStdNetRecv(Sockets[0], 32) != 0 ||
+      YonaStdNetRecvBytes(Sockets[0], 32) != 0) {
+    close(Sockets[0]);
+    close(Sockets[1]);
+    close(Fd);
+    unlink(Path);
+    return 6;
+  }
+  close(Sockets[0]);
+  close(Sockets[1]);
+
+  int64_t ReadId = YonaRuntimePlatformSubmitFileDescriptorByteRead(Fd, 32, 0);
   int64_t *ReadBytes = (int64_t *)(intptr_t)YonaRuntimeIoAwait(ReadId);
   if (!ReadBytes || ReadBytes[0] != (int64_t)(sizeof(Initial) - 1) ||
       memcmp(ReadBytes + 1, Initial, sizeof(Initial) - 1) != 0) {
     YonaRuntimeRelease(ReadBytes);
     close(Fd);
     unlink(Path);
-    return 4;
+    return 7;
   }
   YonaRuntimeRelease(ReadBytes);
 
@@ -82,7 +111,7 @@ int main(void) {
   if (WriteResult != (int64_t)strlen("write fallback payload")) {
     close(Fd);
     unlink(Path);
-    return 5;
+    return 8;
   }
 
   close(Fd);

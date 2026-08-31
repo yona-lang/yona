@@ -38,9 +38,9 @@ static _Atomic uint64_t DirectResultId =
 static int64_t registerDirectIoResult(void *Result) {
   uint64_t Id = atomic_fetch_add(&DirectResultId, 1);
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YONA_IO_OP_DIRECT_RESULT;
-  Ctx->fd = -1;
-  Ctx->buf = (char *)Result;
+  Ctx->Kind = YONA_IO_OP_DIRECT_RESULT;
+  Ctx->FileDescriptor = -1;
+  Ctx->Buffer = (char *)Result;
   Ctx->BufferSize = 0;
   Ctx->CloseFileDescriptor = 0;
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -56,9 +56,9 @@ int64_t YonaRuntimeIoAwait(int64_t IoId) {
   if (IoId <= 0)
     return 0;
   YonaIoContext *Ctx = YonaRuntimeIoContextTake((uint64_t)IoId);
-  if (Ctx && Ctx->type == YONA_IO_OP_DIRECT_RESULT) {
+  if (Ctx && Ctx->Kind == YONA_IO_OP_DIRECT_RESULT) {
     /* Blocking fallback: result is stored in buf pointer */
-    int64_t Result = (int64_t)(intptr_t)Ctx->buf;
+    int64_t Result = (int64_t)(intptr_t)Ctx->Buffer;
     free(Ctx);
     return Result;
   }
@@ -71,13 +71,7 @@ int64_t YonaRuntimeIoAwait(int64_t IoId) {
   /* Handle cancellation: clean up context and raise */
   if (Res == -ECANCELED) {
     Ctx = YonaRuntimeIoContextTake((uint64_t)IoId);
-    if (Ctx) {
-      if (Ctx->buf)
-        free(Ctx->buf);
-      if (Ctx->CloseFileDescriptor && Ctx->fd >= 0)
-        close(Ctx->fd);
-      free(Ctx);
-    }
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0; /* Cancelled — caller checks group error */
   }
 
@@ -86,64 +80,64 @@ int64_t YonaRuntimeIoAwait(int64_t IoId) {
     return (int64_t)Res;
 
   int64_t Result;
-  switch (Ctx->type) {
+  switch (Ctx->Kind) {
   case YonaIoOperationReadFile:
     if (Res >= 0)
-      Ctx->buf[Res] = '\0';
+      Ctx->Buffer[Res] = '\0';
     else
-      Ctx->buf[0] = '\0';
+      Ctx->Buffer[0] = '\0';
     if (Ctx->CloseFileDescriptor)
-      close(Ctx->fd);
-    Result = (int64_t)(intptr_t)Ctx->buf;
+      close(Ctx->FileDescriptor);
+    Result = (int64_t)(intptr_t)Ctx->Buffer;
     break;
   case YonaIoOperationWriteFile:
     if (Ctx->CloseFileDescriptor)
-      close(Ctx->fd);
+      close(Ctx->FileDescriptor);
     /* Unpin the content buffer (was rc_inc'd at submit) */
-    if (Ctx->buf)
-      YonaRuntimeRelease(Ctx->buf);
+    if (Ctx->Buffer)
+      YonaRuntimeRelease(Ctx->Buffer);
     Result = (Res == (int32_t)Ctx->BufferSize) ? 1 : 0;
     break;
   case YonaIoOperationAccept:
-    free(Ctx->buf);
+    free(Ctx->Buffer);
     Result = (Res >= 0) ? (int64_t)Res : -1;
     break;
   case YonaIoOperationConnect:
-    free(Ctx->buf);
-    Result = (Res >= 0) ? (int64_t)Ctx->fd : -1;
+    free(Ctx->Buffer);
+    Result = (Res >= 0) ? (int64_t)Ctx->FileDescriptor : -1;
     if (Res < 0)
-      close(Ctx->fd);
+      close(Ctx->FileDescriptor);
     break;
   case YonaIoOperationSend:
     /* Unpin the send buffer (was rc_inc'd at submit) */
-    if (Ctx->buf)
-      YonaRuntimeRelease(Ctx->buf);
+    if (Ctx->Buffer)
+      YonaRuntimeRelease(Ctx->Buffer);
     Result = (int64_t)Res;
     break;
   case YonaIoOperationReceive:
     if (Res > 0)
-      Ctx->buf[Res] = '\0';
+      Ctx->Buffer[Res] = '\0';
     else
-      Ctx->buf[0] = '\0';
-    Result = (int64_t)(intptr_t)Ctx->buf;
+      Ctx->Buffer[0] = '\0';
+    Result = (int64_t)(intptr_t)Ctx->Buffer;
     break;
   case YonaIoOperationReceiveBytes: {
     /* Bytes: set length field, return the Bytes buffer */
-    int64_t *BytesBuffer = (int64_t *)(intptr_t)Ctx->buf;
+    int64_t *BytesBuffer = (int64_t *)(intptr_t)Ctx->Buffer;
     BytesBuffer[0] = (Res > 0) ? (int64_t)Res : 0;
     Result = (int64_t)(intptr_t)BytesBuffer;
     break;
   }
   case YonaIoOperationReadFileBytes: {
-    int64_t *BytesBuffer = (int64_t *)(intptr_t)Ctx->buf;
+    int64_t *BytesBuffer = (int64_t *)(intptr_t)Ctx->Buffer;
     BytesBuffer[0] = (Res > 0) ? (int64_t)Res : 0;
     if (Ctx->CloseFileDescriptor)
-      close(Ctx->fd);
+      close(Ctx->FileDescriptor);
     Result = (int64_t)(intptr_t)BytesBuffer;
     break;
   }
   case YonaIoOperationReadFileDescriptorBytes: {
-    int64_t *BytesBuffer = (int64_t *)(intptr_t)Ctx->buf;
+    int64_t *BytesBuffer = (int64_t *)(intptr_t)Ctx->Buffer;
     BytesBuffer[0] = (Res > 0) ? (int64_t)Res : 0;
     /* Don't close fd — caller owns the handle */
     Result = (int64_t)(intptr_t)BytesBuffer;
@@ -151,8 +145,8 @@ int64_t YonaRuntimeIoAwait(int64_t IoId) {
   }
   case YonaIoOperationWriteFileDescriptorBytes: {
     /* Unpin the write buffer */
-    if (Ctx->buf)
-      YonaRuntimeRelease(Ctx->buf);
+    if (Ctx->Buffer)
+      YonaRuntimeRelease(Ctx->Buffer);
     /* Don't close fd — caller owns the handle */
     Result = (Res >= 0) ? (int64_t)Res : -1;
     break;
@@ -160,8 +154,8 @@ int64_t YonaRuntimeIoAwait(int64_t IoId) {
   case YonaIoOperationWriteFileDescriptorString: {
     /* Caller allocated the concatenated string via malloc. Free
      * it now that the kernel has consumed it. */
-    if (Ctx->buf)
-      free(Ctx->buf);
+    if (Ctx->Buffer)
+      free(Ctx->Buffer);
     Result = (Res >= 0) ? (int64_t)Res : -1;
     break;
   }
@@ -193,9 +187,9 @@ static int64_t readFileBlocking(const char *Path) {
   }
   size_t Size = (size_t)St.st_size;
   char *Buf = (char *)YonaRuntimeAllocateStringWithLength(Size + 1, Size);
-  ssize_t n = read(fd, buf, size);
-  if (n >= 0)
-    buf[n] = '\0';
+  ssize_t N = read(Fd, Buf, Size);
+  if (N >= 0)
+    Buf[N] = '\0';
   else
     Buf[0] = '\0';
   close(Fd);
@@ -218,16 +212,15 @@ int64_t YonaRuntimePlatformSubmitFileRead(const char *Path) {
   char *Buf = (char *)YonaRuntimeAllocateStringWithLength(Size + 1, Size);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationReadFile;
-  Ctx->fd = Fd;
-  Ctx->buf = Buf;
+  Ctx->Kind = YonaIoOperationReadFile;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = Buf;
   Ctx->BufferSize = Size;
   Ctx->CloseFileDescriptor = 1;
 
   uint64_t Id = YonaRuntimeKqueueSubmitRead(Fd, Buf, Size, 0);
   if (Id == 0) {
-    close(Fd);
-    free(Ctx);
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0;
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -249,9 +242,9 @@ int64_t YonaRuntimePlatformSubmitFileWrite(const char *Path,
   memcpy(Pinned, Content, Len + 1);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationWriteFile;
-  Ctx->fd = Fd;
-  Ctx->buf = Pinned; /* rc_dec'd in completer */
+  Ctx->Kind = YonaIoOperationWriteFile;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = Pinned; /* rc_dec'd in completer */
   Ctx->BufferSize = Len;
   Ctx->CloseFileDescriptor = 1;
 
@@ -283,16 +276,15 @@ int64_t YonaRuntimePlatformSubmitFileByteRead(const char *Path) {
   Buf[0] = 0; /* length set by completer */
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationReadFileBytes;
-  Ctx->fd = Fd;
-  Ctx->buf = (char *)Buf;
+  Ctx->Kind = YonaIoOperationReadFileBytes;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = (char *)Buf;
   Ctx->BufferSize = Size;
   Ctx->CloseFileDescriptor = 1;
 
   uint64_t Id = YonaRuntimeKqueueSubmitRead(Fd, (uint8_t *)(Buf + 1), Size, 0);
   if (Id == 0) {
-    close(Fd);
-    free(Ctx);
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0;
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -309,17 +301,18 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteRead(int Fd, int64_t Count,
   Buf[0] = 0; /* length set by completer */
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationReadFileDescriptorBytes;
-  Ctx->fd = Fd;
-  Ctx->buf = (char *)Buf;
+  Ctx->Kind = YonaIoOperationReadFileDescriptorBytes;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = (char *)Buf;
   Ctx->BufferSize = (size_t)Count;
   Ctx->CloseFileDescriptor = 0; /* caller owns the handle */
 
   uint64_t Id = YonaRuntimeKqueueSubmitRead(Fd, (uint8_t *)(Buf + 1),
                                             (size_t)Count, (off_t)Offset);
   if (Id == 0) {
-    ssize_t n = pread(fd, (uint8_t *)(buf + 1), (size_t)count, (off_t)offset);
-    buf[0] = (n > 0) ? n : 0;
+    ssize_t N = pread(Fd, (uint8_t *)(Buf + 1), (size_t)Count, (off_t)Offset);
+    Buf[0] = (N > 0) ? N : 0;
+    free(Ctx);
     return registerDirectIoResult(Buf);
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -337,18 +330,19 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteWrite(int Fd, void *Bytes,
   YonaRuntimeRetain(Bytes);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationWriteFileDescriptorBytes;
-  Ctx->fd = Fd;
-  Ctx->buf = (char *)Bytes; /* rc_dec'd in completer */
+  Ctx->Kind = YonaIoOperationWriteFileDescriptorBytes;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = (char *)Bytes; /* rc_dec'd in completer */
   Ctx->BufferSize = (size_t)Len;
   Ctx->CloseFileDescriptor = 0;
 
   uint64_t Id =
       YonaRuntimeKqueueSubmitWrite(Fd, Data, (size_t)Len, (off_t)Offset);
   if (Id == 0) {
-    ssize_t n = pwrite(fd, data, (size_t)len, (off_t)offset);
+    ssize_t N = pwrite(Fd, Data, (size_t)Len, (off_t)Offset);
     YonaRuntimeRelease(Bytes);
-    return registerDirectIoResult((void *)(intptr_t)(n >= 0 ? n : -1));
+    free(Ctx);
+    return registerDirectIoResult((void *)(intptr_t)(N >= 0 ? N : -1));
   }
   YonaRuntimeIoContextPut(Id, Ctx);
   return (int64_t)Id;
@@ -453,22 +447,22 @@ int64_t YonaRuntimePlatformTruncateFileHandle(int Fd, int64_t Length) {
 }
 
 int64_t *YonaRuntimePlatformListDirectory(const char *Path) {
-  DIR *dir = opendir(path);
-  if (!dir)
+  DIR *Dir = opendir(Path);
+  if (!Dir)
     return YonaRuntimeSequenceAllocate(0);
   int64_t Count = 0;
   struct dirent *Entry;
-  while ((Entry = readdir(dir)) != NULL) {
+  while ((Entry = readdir(Dir)) != NULL) {
     if (Entry->d_name[0] == '.' &&
         (Entry->d_name[1] == '\0' ||
          (Entry->d_name[1] == '.' && Entry->d_name[2] == '\0')))
       continue;
     Count++;
   }
-  rewinddir(dir);
+  rewinddir(Dir);
   int64_t *Seq = YonaRuntimeSequenceAllocate(Count);
   int64_t I = 0;
-  while ((Entry = readdir(dir)) != NULL) {
+  while ((Entry = readdir(Dir)) != NULL) {
     if (Entry->d_name[0] == '.' &&
         (Entry->d_name[1] == '\0' ||
          (Entry->d_name[1] == '.' && Entry->d_name[2] == '\0')))
@@ -480,7 +474,7 @@ int64_t *YonaRuntimePlatformListDirectory(const char *Path) {
     I++;
   }
   YonaRuntimeSequenceSetHeap(Seq, 1);
-  closedir(dir);
+  closedir(Dir);
   return Seq;
 }
 
@@ -536,8 +530,8 @@ static int64_t advanceLineIterator(int64_t *ClosureEnvironment) {
   while (1) {
     /* Refill buffer if empty */
     if (St->BufferPosition >= St->BufferLength) {
-      ssize_t n = read(st->fd, st->buf, YONA_LINE_ITER_BUF_SIZE);
-      if (n <= 0) {
+      ssize_t N = read(St->Fd, St->Buf, YONA_LINE_ITER_BUF_SIZE);
+      if (N <= 0) {
         St->Eof = 1;
         if (LineLength == 0) {
           /* EOF with no partial line — return None */
@@ -549,7 +543,7 @@ static int64_t advanceLineIterator(int64_t *ClosureEnvironment) {
         }
         break; /* Return the partial line */
       }
-      st->BufferLength = (size_t)n;
+      St->BufferLength = (size_t)N;
       St->BufferPosition = 0;
     }
 
@@ -654,15 +648,15 @@ static int64_t advanceChunkIterator(int64_t *Env) {
 
   uint64_t Id = YonaRuntimeKqueueSubmitRead(
       St->Fd, (uint8_t *)(Buf + 1), (size_t)St->ChunkSize, (off_t)St->Position);
-  ssize_t n;
+  ssize_t N;
   if (Id == 0) {
-    n = pread(st->fd, (uint8_t *)(buf + 1), (size_t)st->ChunkSize,
-              (off_t)st->position);
+    N = pread(St->Fd, (uint8_t *)(Buf + 1), (size_t)St->ChunkSize,
+              (off_t)St->Position);
   } else {
-    n = (ssize_t)YonaRuntimeKqueueAwait(id);
+    N = (ssize_t)YonaRuntimeKqueueAwait(Id);
   }
 
-  if (n <= 0) {
+  if (N <= 0) {
     St->Eof = 1;
     YonaRuntimeRelease(Buf);
     int64_t *None = (int64_t *)YonaRuntimeAllocate(4, 3 * sizeof(int64_t));
@@ -671,8 +665,8 @@ static int64_t advanceChunkIterator(int64_t *Env) {
     None[2] = 0;
     return (int64_t)(intptr_t)None;
   }
-  buf[0] = n;
-  st->position += n;
+  Buf[0] = N;
+  St->Position += N;
 
   /* Some(bytes) */
   int64_t *Some = (int64_t *)YonaRuntimeAllocate(4, 4 * sizeof(int64_t));
@@ -729,9 +723,9 @@ static int64_t submitFileDescriptorStringsWrite(int Fd, const char *S1,
   Buf[Total] = '\0';
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationWriteFileDescriptorString;
-  Ctx->fd = Fd;
-  Ctx->buf = Buf;
+  Ctx->Kind = YonaIoOperationWriteFileDescriptorString;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = Buf;
   Ctx->BufferSize = Total;
   Ctx->CloseFileDescriptor = 0;
 
@@ -739,18 +733,18 @@ static int64_t submitFileDescriptorStringsWrite(int Fd, const char *S1,
    * `do` is visible before process exit. Linux io_uring does the same
    * implicitly (IORING_OP_WRITE is in the kernel before submit returns).
    * Worker-thread writes lose that race under popen/fully-buffered stdio. */
-  if (fd == STDOUT_FILENO || fd == STDERR_FILENO) {
-    ssize_t n = write(fd, buf, total);
+  if (Fd == STDOUT_FILENO || Fd == STDERR_FILENO) {
+    ssize_t N = write(Fd, Buf, Total);
     free(Buf);
     free(Ctx);
-    return registerDirectIoResult((void *)(intptr_t)(n >= 0 ? n : -1));
+    return registerDirectIoResult((void *)(intptr_t)(N >= 0 ? N : -1));
   }
   uint64_t Id = YonaRuntimeKqueueSubmitWrite(Fd, Buf, Total, (off_t)-1);
   if (Id == 0) {
-    ssize_t n = write(fd, buf, total);
+    ssize_t N = write(Fd, Buf, Total);
     free(Buf);
     free(Ctx);
-    return registerDirectIoResult((void *)(intptr_t)(n >= 0 ? n : -1));
+    return registerDirectIoResult((void *)(intptr_t)(N >= 0 ? N : -1));
   }
   YonaRuntimeIoContextPut(Id, Ctx);
   return (int64_t)Id;
@@ -784,8 +778,8 @@ const char *YonaRuntimePlatformReadLineFromFileDescriptor(int Fd) {
       Buf = (char *)realloc(Buf, Cap);
     }
     char Ch;
-    ssize_t n = read(fd, &ch, 1);
-    if (n <= 0) {
+    ssize_t N = read(Fd, &Ch, 1);
+    if (N <= 0) {
       if (Len == 0) {
         free(Buf);
         return NULL;

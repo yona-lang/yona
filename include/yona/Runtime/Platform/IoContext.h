@@ -36,6 +36,7 @@ typedef struct YonaIoContext {
 
 void YonaRuntimeIoContextPut(uint64_t Id, YonaIoContext *Context);
 YonaIoContext *YonaRuntimeIoContextTake(uint64_t Id);
+void YonaRuntimeIoContextCleanupCancelled(YonaIoContext *Context);
 
 #ifdef __cplusplus
 }

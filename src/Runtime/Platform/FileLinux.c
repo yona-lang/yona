@@ -65,13 +65,7 @@ int64_t YonaRuntimeIoAwait(int64_t IoId) {
   /* Handle cancellation: clean up context and raise */
   if (Res == -125 /* ECANCELED */) {
     Ctx = YonaRuntimeIoContextTake((uint64_t)IoId);
-    if (Ctx) {
-      if (Ctx->Buffer)
-        free(Ctx->Buffer);
-      if (Ctx->CloseFileDescriptor && Ctx->FileDescriptor >= 0)
-        close(Ctx->FileDescriptor);
-      free(Ctx);
-    }
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0; /* Cancelled — caller checks group error */
   }
 
@@ -229,8 +223,7 @@ int64_t YonaRuntimePlatformSubmitFileRead(const char *Path) {
   uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     /* io_uring unavailable — fall back to blocking read */
-    close(Fd);
-    free(Ctx);
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0;
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -310,8 +303,7 @@ int64_t YonaRuntimePlatformSubmitFileByteRead(const char *Path) {
 
   uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
-    close(Fd);
-    free(Ctx);
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0;
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -338,8 +330,7 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteRead(int Fd, int64_t Count,
   uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     /* Fallback: blocking pread */
-    ssize_t N =
-        pread(Fd, (uint8_t *)(Buf + 1), (size_t)Count, (off_t)Offset);
+    ssize_t N = pread(Fd, (uint8_t *)(Buf + 1), (size_t)Count, (off_t)Offset);
     Buf[0] = N > 0 ? N : 0;
     return registerDirectIoResult(Buf);
   }

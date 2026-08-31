@@ -662,6 +662,19 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		"${PROJECT_SOURCE_DIR}/include")
 	target_link_libraries(runtime_io_fallback_leak_probe PRIVATE yona_runtime)
 
+	add_test(NAME runtime_io_submission_cleanup_string
+		COMMAND "${CMAKE_COMMAND}" -E env YONA_ALLOC_STATS=1
+			$<TARGET_FILE:runtime_io_fallback_leak_probe>)
+	set_tests_properties(runtime_io_submission_cleanup_string PROPERTIES
+		LABELS "runtime;linux;ownership"
+		PASS_REGULAR_EXPRESSION "tag=STRING allocs=2 frees=2 leaked=0")
+	add_test(NAME runtime_io_submission_cleanup_bytes
+		COMMAND "${CMAKE_COMMAND}" -E env YONA_ALLOC_STATS=1
+			$<TARGET_FILE:runtime_io_fallback_leak_probe>)
+	set_tests_properties(runtime_io_submission_cleanup_bytes PROPERTIES
+		LABELS "runtime;linux;ownership"
+		PASS_REGULAR_EXPRESSION "tag=BYTEARR allocs=4 frees=4 leaked=0")
+
 	find_program(YONA_VALGRIND_EXECUTABLE NAMES valgrind)
 	if(YONA_VALGRIND_EXECUTABLE)
 		add_test(NAME runtime_io_fallback_leak

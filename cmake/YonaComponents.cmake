@@ -204,6 +204,7 @@ if(WIN32)
   )
 elseif(APPLE)
   list(APPEND YONA_RUNTIME_PLATFORM_IO_SOURCES
+    "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/IoContext.c"
     "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/KqueueMacOs.c"
     "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/FileMacOs.c"
     "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/NetMacOs.c"
@@ -215,6 +216,7 @@ elseif(APPLE)
   )
 else()
   list(APPEND YONA_RUNTIME_PLATFORM_IO_SOURCES
+    "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/IoContext.c"
     "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/IoUringLinux.c"
     "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/FileLinux.c"
     "${PROJECT_SOURCE_DIR}/src/Runtime/Platform/NetLinux.c"

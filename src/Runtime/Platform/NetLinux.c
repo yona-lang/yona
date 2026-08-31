@@ -51,7 +51,7 @@ int64_t YonaStdNetTcpConnect(const char *Host, int64_t Port) {
   Ctx->FileDescriptor = Fd;
   Ctx->Buffer = (char *)AddressCopy;
   Ctx->BufferSize = 0;
-  Ctx->CloseFileDescriptor = 0;
+  Ctx->CloseFileDescriptor = 1;
 
   struct io_uring_sqe Sqe;
   memset(&Sqe, 0, sizeof(Sqe));
@@ -62,9 +62,7 @@ int64_t YonaStdNetTcpConnect(const char *Host, int64_t Port) {
 
   uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
-    close(Fd);
-    free(AddressCopy);
-    free(Ctx);
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0;
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -180,8 +178,7 @@ int64_t YonaStdNetRecv(int64_t Fd, int64_t MaximumBytes) {
 
   uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
-    free(Ctx);
-    Buf[0] = '\0';
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0;
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -245,7 +242,7 @@ int64_t YonaStdNetRecvBytes(int64_t Fd, int64_t MaximumBytes) {
 
   uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
-    free(Ctx);
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
     return 0;
   }
   YonaRuntimeIoContextPut(Id, Ctx);
@@ -358,6 +355,10 @@ int64_t YonaStdHttpHttpGet(const char *Url) {
   memset(&Sqe, 0, sizeof(Sqe));
   Sqe.opcode = IORING_OP_NOP;
   uint64_t NoOperationId = YonaRuntimeIoUringSubmit(&Sqe);
+  if (NoOperationId == 0) {
+    YonaRuntimeIoContextCleanupCancelled(Ctx);
+    return 0;
+  }
   YonaRuntimeIoContextPut(NoOperationId, Ctx);
   return (int64_t)NoOperationId;
 }
