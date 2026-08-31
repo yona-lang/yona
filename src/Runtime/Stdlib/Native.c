@@ -1739,7 +1739,7 @@ void YonaStdTimeSleep(int64_t Ms) {
     Ms -= (int64_t)Chunk;
   }
 #else
-  usleep((useconds_t)(ms * 1000));
+  usleep((useconds_t)(Ms * 1000));
 #endif
 }
 
@@ -1761,7 +1761,7 @@ static int yonaPathIsSep(char C) {
 #ifdef _WIN32
   return C == '/' || C == '\\';
 #else
-  return c == '/';
+  return C == '/';
 #endif
 }
 
@@ -2038,9 +2038,9 @@ static int yonaCryptoRandomFill(uint8_t *Buffer, size_t Length) {
   FILE *source = fopen("/dev/urandom", "rb");
   if (!source)
     return 0;
-  const size_t read = fread(buffer, 1, length, source);
+  const size_t Read = fread(Buffer, 1, Length, source);
   fclose(source);
-  return read == length;
+  return Read == Length;
 #endif
 }
 
