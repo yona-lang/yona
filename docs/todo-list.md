@@ -6,6 +6,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **The opaque-constructor negative codegen regression expects a failed
+  compile to return a module.** Repro: run `tests -tc="*interface*"`; the
+  `Opaque exported ADTs omit constructors from their interface` case correctly
+  rejects hidden `MkToken` with an undefined-function diagnostic, then fails
+  because it requires `compile(...) != nullptr` before checking the error.
+
 - [ ] **Character escape parsing accepts values that are not Unicode scalar
   values.** Repro: compile `'\uD800'` or `'\UFFFFFFFF'`; parsing and typing
   accept the surrogate/out-of-range value and codegen emits it as an integer
