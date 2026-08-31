@@ -17,6 +17,7 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <stdexcept>
 #include <type_traits>
 
@@ -1854,6 +1855,164 @@ end
     checker.add_module_path(dir.string());
     checker.check(parsed.value().get());
     CHECK_FALSE(checker.has_direct_errors());
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+  }
+
+  TEST_CASE("Imported zero-arity FN remains callable with its known effects") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() /
+               ("yona_yonai_zero_arity_effect_" +
+                std::to_string(std::chrono::steady_clock::now()
+                                   .time_since_epoch()
+                                   .count()));
+    fs::create_directories(dir / "Test");
+    {
+      std::ofstream out(dir / "Test" / "Thunk.yonai");
+      out << "MODULE Test\\Thunk\n"
+             "FN thunk 0 -> INT effects Fs.read\n"
+             "FN pureThunk 0 -> INT effects - effectscheme $##;$/r##\n";
+    }
+
+    yona::parser::Parser unhandled_parser;
+    auto unhandled = unhandled_parser.parseExpression(
+        R"(import thunk from Test\Thunk in thunk ())", "<test>");
+    REQUIRE(unhandled.has_value());
+    DiagnosticEngine unhandled_diag;
+    TypeChecker unhandled_checker(unhandled_diag);
+    unhandled_checker.add_module_path(dir.string());
+    unhandled_checker.check(unhandled.value().get());
+    CHECK(std::any_of(unhandled_diag.records().begin(),
+                      unhandled_diag.records().end(), [](const auto &record) {
+                        return record.level == DiagLevel::Error &&
+                               record.code == ErrorCode::E0202;
+                      }));
+    CHECK_FALSE(std::any_of(
+        unhandled_diag.records().begin(), unhandled_diag.records().end(),
+        [](const auto &record) {
+          return record.level == DiagLevel::Error &&
+                 record.code == ErrorCode::E0100;
+        }));
+
+    yona::parser::Parser handled_parser;
+    auto handled = handled_parser.parseExpression(R"(
+import thunk from Test\Thunk in
+handle thunk () with
+    Fs.read path resume -> resume 0
+    return val -> val
+end
+)",
+                                                   "<test>");
+    REQUIRE(handled.has_value());
+    DiagnosticEngine handled_diag;
+    TypeChecker handled_checker(handled_diag);
+    handled_checker.add_module_path(dir.string());
+    handled_checker.check(handled.value().get());
+    CHECK_FALSE(handled_checker.has_direct_errors());
+
+    yona::parser::Parser pure_parser;
+    auto pure = pure_parser.parseExpression(
+        R"(import pureThunk from Test\Thunk in pureThunk ())", "<test>");
+    REQUIRE(pure.has_value());
+    DiagnosticEngine pure_diag;
+    TypeChecker pure_checker(pure_diag);
+    pure_checker.add_module_path(dir.string());
+    auto *pure_type = pure_checker.check(pure.value().get());
+    REQUIRE(pure_type != nullptr);
+    CHECK(pretty_print(pure_checker.zonk(pure_type)) == "Int");
+    CHECK_FALSE(pure_checker.has_direct_errors());
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+  }
+
+  TEST_CASE("Native zero-arity FN imports remain values") {
+    if (!std::filesystem::exists(yona::test::lib_dir()))
+      return;
+    yona::parser::Parser parser;
+    auto parsed = parser.parseExpression(
+        R"(import executablePath from Std\Process in executablePath)",
+        "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    checker.add_module_path(yona::test::lib_dir().string());
+    auto *type = checker.check(parsed.value().get());
+    REQUIRE(type != nullptr);
+    CHECK(pretty_print(checker.zonk(type)) == "String");
+    CHECK_FALSE(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Canonical imports preserve legacy wildcard descriptors") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() /
+               ("yona_yonai_legacy_shapes_" +
+                std::to_string(std::chrono::steady_clock::now()
+                                   .time_since_epoch()
+                                   .count()));
+    fs::create_directories(dir / "Test");
+    {
+      std::ofstream out(dir / "Test" / "Shapes.yonai");
+      out << "MODULE Test\\Shapes\n"
+             "FN legacy 2 LINEAR TUPLE -> TUPLE\n"
+             "FN structured 1 TUPLE(INT,STRING) -> LINEAR(INT)\n"
+             "FN exact 1 INT -> INT\n";
+    }
+
+    SUBCASE("bare ABI-only descriptors are independent fresh wildcards") {
+      yona::parser::Parser parser;
+      auto parsed = parser.parseExpression(
+          R"(import legacy from Test\Shapes in legacy "left" true)",
+          "<test>");
+      REQUIRE(parsed.has_value());
+      DiagnosticEngine diag;
+      TypeChecker checker(diag);
+      checker.add_module_path(dir.string());
+      CHECK(checker.check(parsed.value().get()) != nullptr);
+      CHECK_FALSE(checker.has_direct_errors());
+    }
+
+    SUBCASE("parameterized descriptors remain structural") {
+      yona::parser::Parser parser;
+      auto parsed = parser.parseExpression(
+          R"(import structured from Test\Shapes in structured (1, "two"))",
+          "<test>");
+      REQUIRE(parsed.has_value());
+      DiagnosticEngine diag;
+      TypeChecker checker(diag);
+      checker.add_module_path(dir.string());
+      auto *type = checker.check(parsed.value().get());
+      REQUIRE(type != nullptr);
+      CHECK(pretty_print(checker.zonk(type)) == "Linear Int");
+      CHECK_FALSE(checker.has_direct_errors());
+    }
+
+    SUBCASE("parameterized descriptors reject nested mismatches") {
+      yona::parser::Parser parser;
+      auto parsed = parser.parseExpression(
+          R"(import structured from Test\Shapes in structured (1, 2))",
+          "<test>");
+      REQUIRE(parsed.has_value());
+      DiagnosticEngine diag;
+      TypeChecker checker(diag);
+      checker.add_module_path(dir.string());
+      checker.check(parsed.value().get());
+      CHECK(diag.has_errors());
+    }
+
+    SUBCASE("exact scalar atoms reject mismatches") {
+      yona::parser::Parser parser;
+      auto parsed = parser.parseExpression(
+          R"(import exact from Test\Shapes in exact "not-an-int")",
+          "<test>");
+      REQUIRE(parsed.has_value());
+      DiagnosticEngine diag;
+      TypeChecker checker(diag);
+      checker.add_module_path(dir.string());
+      checker.check(parsed.value().get());
+      CHECK(diag.has_errors());
+    }
+
     std::error_code ec;
     fs::remove_all(dir, ec);
   }

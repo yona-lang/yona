@@ -2030,7 +2030,7 @@ wrap = \() -> readSecret ()
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
-    CHECK(yonai.find("effects Fs.read") != string::npos);
+    CHECK(yonai.find("FN wrap 0 -> INT effects Fs.read") != string::npos);
 
     parser::Parser p2;
     string expr = R"(import wrap from Test\Wrap in wrap ())";
@@ -2044,6 +2044,16 @@ wrap = \() -> readSecret ()
     checker.add_module_path(yona_lib.string());
     checker.check(parsed->Expression.get());
     CHECK(checker.has_direct_errors());
+    CHECK(std::any_of(diag.records().begin(), diag.records().end(),
+                      [](const auto &record) {
+                        return record.level == DiagLevel::Error &&
+                               record.code == ErrorCode::E0202;
+                      }));
+    CHECK_FALSE(std::any_of(diag.records().begin(), diag.records().end(),
+                            [](const auto &record) {
+                              return record.level == DiagLevel::Error &&
+                                     record.code == ErrorCode::E0100;
+                            }));
 
     parser::Parser p3;
     string handled = R"(

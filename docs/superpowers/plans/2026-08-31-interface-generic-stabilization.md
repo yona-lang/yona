@@ -64,7 +64,7 @@ Commit as `test: repair generic source ownership fixture`.
 - Modify: `test/Semantics/TypeCheckerTest.cpp`
 - Modify: `test/Codegen/CodegenTest.cpp`
 
-- [ ] **Step 1: Strengthen focused RED coverage**
+- [x] **Step 1: Strengthen focused RED coverage**
 
 Add direct import tests proving:
 
@@ -79,24 +79,26 @@ Run those tests and the existing sibling-wrapped effect-row case. Confirm bare
 legacy descriptors throw and zero-arity `wrap ()` is currently typed as an
 application of a value.
 
-- [ ] **Step 2: Decode legacy ABI-only atoms deliberately**
+- [x] **Step 2: Decode legacy ABI-only atoms deliberately**
 
 In `TypeChecker::mono_from_import_sig`, map bare `LINEAR` and `TUPLE` to fresh
 wildcards. Keep recursive descriptors structural and do not make scalar atoms
 permissive.
 
-- [ ] **Step 3: Reconstruct zero-arity rows as callable functions**
+- [x] **Step 3: Reconstruct zero-arity rows as callable functions**
 
-When a canonical `FN` row has no explicit parameter descriptors, synthesize a
-`Unit -> Return` arrow before applying its effect scheme. Do not alter value or
-constructor rows.
+When a parameterless canonical `FN` row contains semantic evidence of a
+source-level thunk (a nested return-arrow effect scheme, or a legacy non-empty
+known effect row), synthesize a `Unit -> Return` arrow and normalize away the
+hidden module-binding layer. Keep zero-arity CAF/native rows as values, and do
+not alter constructor rows.
 
-- [ ] **Step 4: Verify focused and stdlib consumers**
+- [x] **Step 4: Verify focused and stdlib consumers**
 
 Run the new tests, the five interface effect-row Codegen cases, and
 `./out/build/x64-debug-linux/tests -tc="Stdlib conformance fixtures"`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit as `fix: restore canonical interface call shapes`.
 
