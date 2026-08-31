@@ -6,6 +6,16 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **The Time fixture calls canonical zero-arity values as functions.**
+  Repro: run the `stdlib_time` codegen fixture; `now ()` reports an expected
+  `Int` versus `Unit -> ...` mismatch now that imported zero-arity declarations
+  correctly behave as values. Update the fixture to use `now` directly.
+
+- [ ] **Pure-contract `sortBy` corrupts the sequence allocator freelist.**
+  Repro: run the `stdlib_pure_contract_values` codegen fixture; the generated
+  program aborts in `poolAlloc` while `sortBy`/`filter` prepends an element,
+  reporting an unaligned freelist link instead of printing the result tuple.
+
 - [ ] **Cross-module generic tests use invalid underscore identifiers.**
   Repro: run `./out/build/x64-debug-linux/tests -tc="*cross-module*"`; the
   `double_it` and `unwrap_or` modules fail interface validation before testing
