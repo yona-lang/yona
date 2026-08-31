@@ -191,6 +191,49 @@ TEST_CASE("yona removes expression temporaries after compilation fails") {
   CHECK_FALSE(has_runner_temporary(Temp.path()));
 }
 
+TEST_CASE("yona removes expression temporaries after a successful run") {
+  IsolatedTempDir Temp("yona_expression_success_cleanup");
+  auto r = run_yona({"-e", "1 + 2"}, "", temp_environment(Temp.path()));
+  CHECK(r.status == 0);
+  CHECK(r.out == "3");
+  CHECK_FALSE(has_runner_temporary(Temp.path()));
+}
+
+TEST_CASE("yona preserves a child failure and removes its temporaries") {
+  IsolatedTempDir Temp("yona_child_failure_cleanup");
+  auto r = run_yona({"-e", "import exit from Std\\Process in exit 37"}, "",
+                    temp_environment(Temp.path()));
+  CHECK(r.status == 37);
+  CHECK_FALSE(has_runner_temporary(Temp.path()));
+}
+
+#ifndef _WIN32
+// LLVM's process wrapper reserves exit 127 for launch failures.  A POSIX shell
+// acts as the outer waiter so this test can observe the runner's exact 127.
+// Task 1's platform ABI coverage exercises the Windows process path directly.
+TEST_CASE("yona without a sibling compiler cleans its expression source") {
+  IsolatedTempDir RunnerDir("yona_missing_compiler_runner");
+  IsolatedTempDir Temp("yona_missing_compiler_cleanup");
+  const fs::path CopiedRunner = RunnerDir.path() / exe_name("yona");
+  REQUIRE(fs::copy_file(tool("yona"), CopiedRunner));
+  fs::permissions(CopiedRunner,
+                  fs::perms::owner_exec | fs::perms::group_exec |
+                      fs::perms::others_exec,
+                  fs::perm_options::add);
+  REQUIRE(runProcess(CopiedRunner, {"--version"}).status == 0);
+
+  auto r = runProcess("/bin/sh",
+                      {"-c",
+                       "\"$1\" -e \"$2\"\nchild_status=$?\nprintf '%s' "
+                       "\"$child_status\"",
+                       "yona-missing-compiler", CopiedRunner.string(), "1 + 2"},
+                      temp_environment(Temp.path()));
+  CHECK(r.status == 0);
+  CHECK(r.out == "127");
+  CHECK_FALSE(has_runner_temporary(Temp.path()));
+}
+#endif
+
 TEST_CASE("yona rejects a module file") {
   auto src = write_temp_yona("script_module", "module Foo\nexport x\nx = 1\n");
   auto r = run_yona({src.string()});
