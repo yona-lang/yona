@@ -965,6 +965,28 @@ static std::string check_expr_str(const std::string &source) {
   return yona::compiler::typechecker::pretty_print(checker.zonk(t));
 }
 
+class ScopedInterfaceTestDirectory {
+public:
+  explicit ScopedInterfaceTestDirectory(std::string_view name)
+      : path_(std::filesystem::temp_directory_path() /
+              ("yona_" + std::string(name) + "_" +
+               std::to_string(std::chrono::steady_clock::now()
+                                  .time_since_epoch()
+                                  .count()))) {
+    std::filesystem::create_directories(path_ / "Test");
+  }
+
+  ~ScopedInterfaceTestDirectory() {
+    std::error_code error;
+    std::filesystem::remove_all(path_, error);
+  }
+
+  const std::filesystem::path &path() const { return path_; }
+
+private:
+  std::filesystem::path path_;
+};
+
 TEST_SUITE("TypeChecker") { // reopen suite
 
   TEST_CASE("Inference: integer literal") {
@@ -1941,6 +1963,76 @@ end
     REQUIRE(type != nullptr);
     CHECK(pretty_print(checker.zonk(type)) == "String");
     CHECK_FALSE(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Zero-arity FUNCTION import remains a function-valued CAF") {
+    ScopedInterfaceTestDirectory dir("yonai_function_caf");
+    {
+      std::ofstream out(dir.path() / "Test" / "FunctionCaf.yonai");
+      out << "MODULE Test\\FunctionCaf\n"
+             "FN value 0 -> FUNCTION(INT,INT) effects - effectscheme "
+             "$##;$/r##\n";
+    }
+
+    yona::parser::Parser parser;
+    auto parsed = parser.parseExpression(
+        R"(import value from Test\FunctionCaf in value 1)", "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    checker.add_module_path(dir.path().string());
+    auto *type = checker.check(parsed.value().get());
+    REQUIRE(type != nullptr);
+    CHECK(pretty_print(checker.zonk(type)) == "Int");
+    CHECK_FALSE(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Zero-arity thunk scheme shifts nested effect paths") {
+    ScopedInterfaceTestDirectory dir("yonai_nested_thunk_scheme");
+    {
+      std::ofstream out(dir.path() / "Test" / "NestedThunk.yonai");
+      out << "MODULE Test\\NestedThunk\n"
+             "FN thunk 0 -> FUNCTION(UNIT,FUNCTION(INT,INT)) effects - "
+             "effectscheme "
+             "$##;$/r#Fs.read#;$/r/r#Log.log#\n";
+    }
+
+    yona::parser::Parser parser;
+    auto parsed = parser.parseExpression(
+        R"(import thunk from Test\NestedThunk in thunk)", "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    checker.add_module_path(dir.path().string());
+    auto *type = checker.check(parsed.value().get());
+    REQUIRE(type != nullptr);
+    CHECK(pretty_print(checker.zonk(type)) ==
+          "(() -> !{Fs.read} (Int -> !{Log.log} Int))");
+    CHECK_FALSE(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Non-entry scheme substrings do not create zero-arity thunks") {
+    ScopedInterfaceTestDirectory dir("yonai_non_entry_scheme_substring");
+    {
+      std::ofstream out(dir.path() / "Test" / "NotThunk.yonai");
+      out << "MODULE Test\\NotThunk\n"
+             "FN value 0 -> INT effects - effectscheme $#$/r##\n";
+    }
+
+    yona::parser::Parser parser;
+    auto parsed = parser.parseExpression(
+        R"(import value from Test\NotThunk in value ())", "<test>");
+    REQUIRE(parsed.has_value());
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    checker.add_module_path(dir.path().string());
+    checker.check(parsed.value().get());
+    CHECK(diagnostics.has_errors());
+    CHECK(std::any_of(diagnostics.records().begin(),
+                      diagnostics.records().end(), [](const auto &record) {
+                        return record.level == DiagLevel::Error &&
+                               record.code == ErrorCode::E0100;
+                      }));
   }
 
   TEST_CASE("Canonical imports preserve legacy wildcard descriptors") {

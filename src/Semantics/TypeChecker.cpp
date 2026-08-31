@@ -198,6 +198,54 @@ static std::string fqn_to_string(FqnExpr *fqn) {
   return s;
 }
 
+/// A parameterless module binding serializes as an implementation-only root
+/// arrow at `$`; a source-visible thunk starts at `$/r`.  Rebase that visible
+/// subtree without decoding and re-encoding individual effect entries: labels,
+/// tail ids, and masks are part of the interface contract.
+static std::optional<std::string>
+normalize_zero_arity_thunk_scheme(std::string_view encoded) {
+  if (encoded.empty())
+    return std::nullopt;
+
+  bool found_hidden_root = false;
+  bool found_visible_root = false;
+  std::string normalized;
+  size_t start = 0;
+  while (start <= encoded.size()) {
+    const size_t end = encoded.find(';', start);
+    const std::string_view field = encoded.substr(
+        start,
+        end == std::string_view::npos ? std::string_view::npos : end - start);
+    if (field.empty())
+      return std::nullopt;
+    const size_t delimiter = field.find('#');
+    if (delimiter == std::string_view::npos)
+      return std::nullopt;
+    const std::string_view path = field.substr(0, delimiter);
+    if (path == "$") {
+      if (found_hidden_root)
+        return std::nullopt;
+      found_hidden_root = true;
+    } else if (path == "$/r" || path.starts_with("$/r/")) {
+      found_visible_root = found_visible_root || path == "$/r";
+      if (!normalized.empty())
+        normalized += ';';
+      normalized += '$';
+      normalized.append(field.substr(3));
+    } else {
+      // A valid hidden module-binding graph contains only its root and the
+      // source-visible return subtree. Preserve unknown graphs conservatively.
+      return std::nullopt;
+    }
+    if (end == std::string_view::npos)
+      break;
+    start = end + 1;
+  }
+  if (!found_hidden_root || !found_visible_root)
+    return std::nullopt;
+  return normalized;
+}
+
 TypeChecker::TypeChecker(DiagnosticEngine &diag)
     : unifier_(arena_, uf_, diag), diag_(diag) {
   root_env_ = std::make_shared<TypeEnv>();
@@ -3326,13 +3374,6 @@ MonoTypePtr TypeChecker::mono_from_import_sig(
           "imported function requires canonical parameter descriptors");
     fn = arena_.make_arrow(from_descriptor(*Descriptor), fn);
   }
-  // Parameterless module bindings are normally CAF values. A nested root
-  // return entry is the canonical evidence that the binding's value is a
-  // source-level `\() -> ...` thunk: the serialized `$` arrow is the hidden
-  // module-binding layer and `$/r` is the visible Unit call.
-  if (sig.param_descriptors.empty() &&
-      sig.effect_scheme.find("$/r#") != std::string::npos)
-    fn = arena_.make_arrow(arena_.make_con(TyCon::Unit), fn);
   if (output_descriptor_variables)
     *output_descriptor_variables = descriptor_variables;
   return fn;
@@ -3346,25 +3387,30 @@ TypeChecker::mono_from_interface_function(const interface::Function &Function,
   Signature.return_descriptor = Function.ReturnType;
   Signature.effect_scheme = Function.Effects.Scheme;
   auto *Type = mono_from_import_sig(Signature, Level);
-  const bool EncodesVisibleUnitThunk =
-      Function.ParameterTypes.empty() &&
-      Function.Effects.Scheme.find("$/r#") != std::string::npos;
+  const auto ShiftedThunkScheme =
+      Function.ParameterTypes.empty()
+          ? normalize_zero_arity_thunk_scheme(Function.Effects.Scheme)
+          : std::nullopt;
+  const bool ReturnDescriptorIsArrow =
+      unifier_.resolve(Type) && unifier_.resolve(Type)->tag == MonoType::Arrow;
+  if (ShiftedThunkScheme && !ReturnDescriptorIsArrow)
+    Type = arena_.make_arrow(arena_.make_con(TyCon::Unit), Type);
   // Legacy interfaces predate effect schemes. A non-empty/open known effect
   // row cannot describe a CAF value because effects attach to calls, so it is
   // sufficient evidence for the same visible Unit thunk. Unknown and
   // explicitly pure zero-arity native/CAF rows deliberately remain values.
   const bool LegacyKnownUnitThunk =
       Function.ParameterTypes.empty() && Function.Effects.IsKnown &&
-      (!Function.Effects.Operations.empty() || Function.Effects.IsOpen);
-  if (LegacyKnownUnitThunk && !EncodesVisibleUnitThunk)
+      Function.Effects.Scheme.empty() &&
+      (!Function.Effects.Operations.empty() || Function.Effects.IsOpen) &&
+      !ReturnDescriptorIsArrow;
+  if (LegacyKnownUnitThunk)
     Type = arena_.make_arrow(arena_.make_con(TyCon::Unit), Type);
   if (!Function.Effects.IsKnown)
     return Type;
-  // The nested scheme includes the hidden parameterless module-binding
-  // arrow. Its normalized summary is authoritative for the visible thunk;
-  // applying the unshifted scheme would attach the empty hidden row and drop
-  // the `$/r` effect. Non-zero-arity schemes retain their exact graph.
-  if (!Function.Effects.Scheme.empty() && !EncodesVisibleUnitThunk)
+  if (ShiftedThunkScheme)
+    return apply_effect_scheme(Type, *ShiftedThunkScheme);
+  if (!Function.Effects.Scheme.empty())
     return apply_effect_scheme(Type, Function.Effects.Scheme);
 
   std::vector<EffectRef> Sources;
