@@ -255,6 +255,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   its generated program with `YONA_ALLOC_STATS=1`; output is correct (`12`)
   and all six File/Linear ADTs are freed, but both ByteArrays remain leaked.
 
+- [ ] **Generated entry points do not release a heap-backed final result.**
+  Repro: compile a program whose root expression returns `[1]` and run it with
+  `YONA_ALLOC_STATS=1`; the value is printed successfully, but the sequence
+  reports one allocation and zero frees when `main` exits.
+
 - [ ] **Destructuring a named tuple can free it before its enclosing scope's
   final use.** Repro: compile and run
   `let t = ([1], [2]) in let (x, y) = t in let q = (3, 4) in t`; tuple-pattern
