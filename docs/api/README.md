@@ -1,6 +1,6 @@
 # Yona Standard Library API Reference
 
-438 public functions across 40 modules.
+439 public functions across 40 modules.
 
 | Module | Functions | Types | Description |
 |--------|-----------|-------|-------------|
@@ -30,7 +30,7 @@
 | [Std.Pair](Pair.md) | 9 | 1 | ADT-based pairs with named fields — an alternative to tuples. |
 | [Std.Parallel](Parallel.md) | 2 | 0 |  |
 | [Std.Path](Path.md) | 6 | 0 | Path -- file path manipulation. |
-| [Std.Process](Process.md) | 22 | 0 | Process -- process management, environment, and command execution. |
+| [Std.Process](Process.md) | 23 | 0 | Process -- process management, environment, and command execution. |
 | [Std.Random](Random.md) | 4 | 0 | Random -- pseudo-random number generation. |
 | [Std.Range](Range.md) | 11 | 0 | Integer ranges with optional step — lazy representation, materialized on demand. |
 | [Std.Regex](Regex.md) | 7 | 0 | Regex — PCRE2-backed regular expressions. |

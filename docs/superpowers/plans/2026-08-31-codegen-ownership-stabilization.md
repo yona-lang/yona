@@ -117,7 +117,7 @@ suites. Commit as `fix: transfer temporary ADT fields`.
 - Modify as needed: `src/Semantics/BorrowEscapeAnalysis.cpp`
 - Modify: focused closure/dictionary ownership tests under `test/Codegen/`
 
-- [ ] **Step 1: Add a minimal reusable-capture RED regression**
+- [x] **Step 1: Add a minimal reusable-capture RED regression**
 
 Capture a heap tuple in a predicate/comparator closure, invoke that closure
 more than once through a consuming higher-order call, and assert correct output
@@ -127,14 +127,14 @@ minimal `sortBy` control whose pattern-bound `rest` is consumed by two filter
 calls; reference counting must be scoped to the defining case-arm body instead
 of skipping that body because the pattern introduces the queried name.
 
-- [ ] **Step 2: Retain a per-call owned reference**
+- [x] **Step 2: Retain a per-call owned reference**
 
 The environment keeps ownership of every capture until closure destruction.
 When a captured heap carrier is passed to a non-borrowed parameter, retain a
 new call reference before invocation. Do not mark the environment's capture as
 transferred and do not weaken the callee-owns ABI.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run closure capture, higher-order List, dictionary trait, recursive closure,
 frame/raise, and allocation controls. Commit as
@@ -170,9 +170,11 @@ runtime/codegen suites. Commit as `test: make ownership setup deterministic`.
 
 - Modify: `src/Runtime/Platform/FileLinux.c`
 - Modify: `src/Runtime/Platform/FileMacOs.c`
+- Modify: `src/Runtime/Platform/NetLinux.c`
+- Modify: `src/Runtime/Platform/NetMacOs.c`
 - Modify: focused platform I/O tests under `test/Runtime/`
 
-- [ ] **Step 1: Add cancellation ownership coverage**
+- [x] **Step 1: Add cancellation ownership coverage**
 
 Cancel an in-flight managed ByteArray write and prove the retained submit pin is
 released through `YonaRuntimeRelease`, while raw buffers for read/accept/connect
@@ -183,13 +185,14 @@ network receives. Those paths must release the buffer allocated before submit
 instead of freeing only the context; cover at least one String and one ByteArray
 allocation counter.
 
-- [ ] **Step 2: Complete the macOS context/identifier migration**
+- [x] **Step 2: Complete the macOS context/identifier migration**
 
 Use the canonical `YonaIoContext` fields and declared parameter spelling in all
-macOS read, write, fallback, seek, and truncate paths. Run a syntax/compile
-probe on Linux where possible in addition to the Linux runtime tests.
+macOS file and network read, write, connect, accept, fallback, seek, truncate,
+and iterator paths. Run a syntax/compile probe on Linux where possible in
+addition to the Linux runtime tests.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run platform I/O, exact-read, File contract, cancellation, and generated binary
 fixtures. Commit as `fix: balance cancelled file buffers`.
@@ -202,19 +205,19 @@ fixtures. Commit as `fix: balance cancelled file buffers`.
 - Modify: `src/Codegen/Codegen.cpp`
 - Modify: focused generated-program allocation tests under `test/Codegen/`
 
-- [ ] **Step 1: Isolate async native-call ByteArray ownership**
+- [x] **Step 1: Isolate async native-call ByteArray ownership**
 
 Prove an anonymous ByteArray passed to `writeBytes` is released after the
 borrowed async submission and the awaited ByteArray returned by `readBytes` is
 released after its final scalar consumer. Keep File/Linear counts balanced.
 
-- [ ] **Step 2: Run borrowed-temporary cleanup on async calls**
+- [x] **Step 2: Run borrowed-temporary cleanup on async calls**
 
 Apply the same post-call cleanup used by direct extern calls after submission,
 without releasing the runtime's independent retained pin. Release a heap-backed
 entry-point result only after printing/await resolution is complete.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run `binary_write_read`, direct/async native call controls, heap-root print
 controls, File fixtures, and allocation tests. Commit as
@@ -228,19 +231,19 @@ controls, File fixtures, and allocation tests. Commit as
 - Regenerate: `lib/Std/Gpu.yonai`
 - Modify: focused interface and GPU fixture tests
 
-- [ ] **Step 1: Lock the typed helper contract**
+- [x] **Step 1: Lock the typed helper contract**
 
 Assert `drainMapFloatGpu` retains `FloatMapOp`, `Receiver FloatArray`, and
 `Sender FloatArray` parameters and returns `Int`. Confirm the checked-in row
 currently degrades to `ADT INT INT -> INT`.
 
-- [ ] **Step 2: Regenerate from the canonical source model**
+- [x] **Step 2: Regenerate from the canonical source model**
 
 Fix the serializer/type source if regeneration still loses the parameterized
 endpoint types; otherwise regenerate the stale artifact and prove a second
 generation is byte-stable. Do not hand-maintain a divergent interface row.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run interface round-trips plus CPU fallback and available Linux GPU channel
 fixtures. Commit as `fix: regenerate typed GPU channel interface`.
@@ -255,13 +258,13 @@ fixtures. Commit as `fix: regenerate typed GPU channel interface`.
 - Modify: `CHANGELOG.md`
 - Modify: `.superpowers/sdd/progress.md`
 
-- [ ] **Step 1: Run focused and full Linux gates**
+- [x] **Step 1: Run focused and full Linux gates**
 
 Build the debug preset; run ownership/allocation, channel, ADT, closure,
 dictionary, interface, GPU fallback, and full fixture suites; then run the full
 CTest preset and `git diff --check`.
 
-- [ ] **Step 2: Record combined results later**
+- [x] **Step 2: Record combined results later**
 
 Close only bugs supported by fresh passing evidence. Fold these results into
 the user-requested combined final stabilization update.

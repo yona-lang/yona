@@ -153,24 +153,24 @@ suite. Commit as `test: isolate missing clang-format detection`.
 - Modify: `.superpowers/sdd/progress.md`
 - Regenerate as applicable: `docs/api/`
 
-- [ ] **Step 1: Document `runWithArgv0` without weakening existing contracts**
+- [x] **Step 1: Document `runWithArgv0` without weakening existing contracts**
 
 Add the explicit argv0 primitive to Process API docs; keep `run` documented as
 excluding argv0. Existing CLI/site text already states the desired script,
 stdin, and `-e` vectors and should remain unchanged. Run
 `python3 scripts/gendocs.py` and inspect generated changes.
 
-- [ ] **Step 2: Run completion gates**
+- [x] **Step 2: Run completion gates**
 
 Run the process/runtime, runner/toolchain, and formatting tests, then the full
 Linux build/CTest gate and `git diff --check`.
 
-- [ ] **Step 3: Record one combined update**
+- [x] **Step 3: Record one combined update**
 
 Close the runner status-109, temporary-source leak, and missing-clang-format
 bugs only with passing evidence; add the Unreleased changelog entries and
 update plan/design status in one combined documentation commit.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit as `docs: record runner and tooling stabilization`.

@@ -162,7 +162,7 @@ diagnostic controls. Commit as `fix: preserve literal diagnostic positions`.
 - Modify: `src/Codegen/CodegenCase.cpp`
 - Add or modify focused fixtures under: `test/Fixtures/Codegen/`
 
-- [ ] **Step 1: Add cross-shape RED coverage**
+- [x] **Step 1: Add cross-shape RED coverage**
 
 For integer, symbol, byte, character, float, string, boolean, and unit
 literals, cover equal and same-typed unequal cases where meaningful. Exercise
@@ -170,7 +170,7 @@ direct value patterns, or-pattern alternatives, tuple and nested tuple fields,
 constructor fields, head-tail sequence heads, and exact-sequence elements.
 Retain integer and symbol controls so the fix cannot regress existing paths.
 
-- [ ] **Step 2: Add one carrier-aware literal predicate helper**
+- [x] **Step 2: Add one carrier-aware literal predicate helper**
 
 Generate integer equality for integer, symbol, byte, character, and boolean;
 ordered floating equality for floats after restoring the double carrier; and
@@ -178,7 +178,7 @@ runtime content equality for strings after restoring pointers. Unit always
 matches because it has one value. Reject unsupported literal kinds explicitly
 rather than silently treating them as matches.
 
-- [ ] **Step 3: Route every literal-pattern path through the helper**
+- [x] **Step 3: Route every literal-pattern path through the helper**
 
 Use the same helper in direct value, or-pattern, tuple/nested-tuple,
 constructor/nested-constructor-field, head-tail, and exact-sequence matching.
@@ -186,7 +186,7 @@ Preserve each caller's existing length/tag checks, identifier bindings,
 transfer/drop scopes, and ownership behavior. Each successful comparison
 continues in a fresh block; each failure uses the existing next-arm block.
 
-- [ ] **Step 4: Verify ownership and matching suites**
+- [x] **Step 4: Verify ownership and matching suites**
 
 Run the focused literal fixtures, exact sequence edge cases, ADT/constructor
 cases, case-expression tests, and relevant memory/ownership controls. Commit as
@@ -202,12 +202,12 @@ cases, case-expression tests, and relevant memory/ownership controls. Commit as
 - Modify: `CHANGELOG.md`
 - Modify: `.superpowers/sdd/progress.md`
 
-- [ ] **Step 1: Run focused and full Linux gates**
+- [x] **Step 1: Run focused and full Linux gates**
 
 Build the debug preset; run all literal/pattern, case, ADT, and fixture suites;
 then run the full CTest preset and `git diff --check`.
 
-- [ ] **Step 2: Record combined results later**
+- [x] **Step 2: Record combined results later**
 
 Close the byte/character expression, general literal-pattern, and exact
 sequence-pattern todo entries only with passing evidence. Include these results

@@ -313,12 +313,12 @@ Commit as `test: align refinement ABI regression`.
 - Modify: `CHANGELOG.md`
 - Modify: `.superpowers/sdd/progress.md`
 
-- [ ] **Step 1: Build and run focused suites**
+- [x] **Step 1: Build and run focused suites**
 
 Run the Semantics, Codegen Modules, Trait, Lazy stream, stdlib conformance, and
 module-dependency suites.
 
-- [ ] **Step 2: Run the full Linux gate**
+- [x] **Step 2: Run the full Linux gate**
 
 ```bash
 cmake --build --preset build-debug-linux
@@ -326,13 +326,13 @@ ctest --preset unit-tests-linux
 git diff --check
 ```
 
-- [ ] **Step 3: Record combined results**
+- [x] **Step 3: Record combined results**
 
 Check off only bugs proven fixed, summarize user-visible changes under
 `Unreleased`, update the stabilization design's expanded Linux scope, and list
 the exact remaining independent failures for the next plan. Keep the combined
 documentation update in one commit, as requested.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit as `docs: record interface stabilization`.

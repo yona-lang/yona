@@ -2,7 +2,7 @@
 
 ## Functions
 
-### `pmap : (a -> b) -> [c] -> [b]`
+### `pmap : (a -> b) -> [a] -> [b]`
 
 Parallel map — applies `f` to each element concurrently.
 All invocations of `f` run in parallel. If any fails, the
@@ -13,7 +13,7 @@ import pmap from Std\Parallel in
 pmap (\x -> x * 2) [1, 2, 3]   # => [2, 4, 6]
 ```
 
-### `pfor : (a -> b) -> [c] -> Int`
+### `pfor : (a -> b) -> [a] -> Int`
 
 Parallel for-each — applies f to each element concurrently
 for side effects. Returns the number of elements processed.

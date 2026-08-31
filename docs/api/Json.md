@@ -21,7 +21,7 @@ Objects preserve member order as a sequence of `(key, value)` pairs.
 
 ## Functions
 
-### `parse : String -> Result`
+### `parse : String -> Result (Json, String)`
 
 Parse one JSON value. Trailing non-whitespace is an error.
 
@@ -37,15 +37,15 @@ Compact JSON text for `j`.
 stringify (JsonInt 1)   # => "1"
 ```
 
-### `get : a -> b -> c`
+### `get : Json -> String -> Option Json`
 
 Look up `key` in a JSON object. `None` if `j` is not an object or the key is missing.
 
-### `asString : a -> b`
+### `asString : Json -> Option String`
 
 Unwrap a JSON string.
 
-### `asInt : a -> b`
+### `asInt : Json -> Option Int`
 
 Unwrap a JSON integer.
 

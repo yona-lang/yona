@@ -50,15 +50,15 @@ implies a b = if a then b else true
 ## Executes `fn ()` if `cond` is true, otherwise returns `:ok`.
 ##
 ## ```
-## when true (\-> 42)    # => 42
-## when false (\-> 42)   # => :ok
+## when true (\-> :done)    # => :done
+## when false (\-> :done)   # => :ok
 ## ```
 when cond fn = if cond then fn () else :ok
 
 ## Executes `fn ()` if `cond` is false, otherwise returns `:ok`.
 ##
 ## ```
-## unless false (\-> 42)   # => 42
-## unless true (\-> 42)    # => :ok
+## unless false (\-> :done)   # => :done
+## unless true (\-> :done)    # => :ok
 ## ```
 unless cond fn = if cond then :ok else fn ()

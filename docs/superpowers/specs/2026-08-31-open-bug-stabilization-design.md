@@ -7,7 +7,7 @@ that is reproducible on Linux. The Windows-only `Std\Convert` Bool parsing
 failure is excluded unless the same failure can be reproduced easily in the
 Linux workspace.
 
-The ten in-scope bugs are:
+The initial ten in-scope bugs were:
 
 1. The Linux io_uring cancel declaration/definition mismatch.
 2. Stale `YonaIoContext` field access and identifier casing in Linux platform
@@ -24,6 +24,13 @@ The ten in-scope bugs are:
 
 The already implemented AST `nullptr_t` repair remains part of the working
 baseline and must continue to pass its compile regression.
+
+During execution, each completed gate exposed additional Linux-reproducible
+frontend, interface, ownership, runtime, fixture, packaging, and documentation
+defects. Per the repository tracking rule, each was added to the bug list and
+included in the same stabilization scope. The final sweep closes every checked
+Linux item recorded there; only the native-Windows `Std\Convert` Bool failure
+remains excluded.
 
 ## Strategy
 
@@ -89,6 +96,11 @@ The Windows-only conversion item remains unchecked with its native-CI evidence
 unless a Linux reproduction is found. A portable static or unit-level
 reproduction is sufficient to bring it into scope; Wine availability alone is
 not treated as native Windows verification.
+
+Final evidence on 2026-08-31: the debug target graph builds, focused ownership
+and codegen fixtures pass (including 175,140 fixture assertions and 881 pattern
+ownership assertions), allocator-disabled Valgrind controls report no JSON/LSP
+use-after-free, and all 10 tests in `unit-tests-linux` pass.
 
 ## Documentation
 

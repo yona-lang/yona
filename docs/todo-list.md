@@ -6,130 +6,160 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
-- [ ] **The Time fixture calls canonical zero-arity values as functions.**
+The 2026-08-31 Linux stabilization closed every host-reproducible item below.
+The checked entries retain their original reproductions for regression history;
+the fixes cover frontend scalar/type-shape preservation, canonical interfaces,
+generic specialization, case/aggregate ownership, async resources, generated
+program cleanup, runner/tooling behavior, and deterministic fixture contracts.
+The full Linux debug build and all 10 CTest targets pass. The sole unchecked bug
+is the native-Windows-only `Std\Convert` Bool failure.
+
+
+- [x] **The Time fixture calls canonical zero-arity values as functions.**
   Repro: run the `stdlib_time` codegen fixture; `now ()` reports an expected
   `Int` versus `Unit -> ...` mismatch now that imported zero-arity declarations
   correctly behave as values. Update the fixture to use `now` directly.
 
-- [ ] **Pure-contract `sortBy` corrupts the sequence allocator freelist.**
+- [x] **Pure-contract `sortBy` corrupts the sequence allocator freelist.**
   Repro: run the `stdlib_pure_contract_values` codegen fixture; the generated
   program aborts in `poolAlloc` while `sortBy`/`filter` prepends an element,
   reporting an unaligned freelist link instead of printing the result tuple.
 
-- [ ] **Cross-module generic tests use invalid underscore identifiers.**
+- [x] **Cross-module generic tests use invalid underscore identifiers.**
   Repro: run `./out/build/x64-debug-linux/tests -tc="*cross-module*"`; the
   `double_it` and `unwrap_or` modules fail interface validation before testing
   generic reuse because local Yona symbols must use canonical camelCase names.
 
-- [ ] **The opaque-constructor negative codegen regression expects a failed
+- [x] **The opaque-constructor negative codegen regression expects a failed
   compile to return a module.** Repro: run `tests -tc="*interface*"`; the
   `Opaque exported ADTs omit constructors from their interface` case correctly
   rejects hidden `MkToken` with an undefined-function diagnostic, then fails
   because it requires `compile(...) != nullptr` before checking the error.
 
-- [ ] **Character escape parsing accepts values that are not Unicode scalar
+- [x] **Character escape parsing accepts values that are not Unicode scalar
   values.** Repro: compile `'\uD800'` or `'\UFFFFFFFF'`; parsing and typing
   accept the surrogate/out-of-range value and codegen emits it as an integer
   instead of diagnosing an invalid character literal.
 
-- [ ] **String escapes encode non-scalar Unicode values as invalid UTF-8.**
+- [x] **String escapes encode non-scalar Unicode values as invalid UTF-8.**
   Repro: compile `"\uD800"` or `"\U00110000"`; the shared escape parser
   accepts the invalid value and the string scanner emits an illegal UTF-8 byte
   sequence instead of a lexer diagnostic.
 
-- [ ] **Non-ASCII character patterns are truncated during parsing.** Repro:
+- [x] **Non-ASCII character patterns are truncated during parsing.** Repro:
   parse `case 'λ' of 'λ' -> 1; _ -> 0 end`; `ParserPattern` casts the
   lexer `char32_t` token through `char`, losing the Unicode code point before
   semantic analysis and codegen.
 
-- [ ] **Printed non-ASCII character ASTs use an unsupported escape form.**
+- [x] **Printed non-ASCII character ASTs use an unsupported escape form.**
   Repro: print a `CharacterExpr` containing U+03BB; `Ast.cpp` emits
   `'\x3bb'`, but the lexer supports only `\u`/`\U` Unicode escapes, so the
   printed AST cannot be parsed back.
 
-- [ ] **Malformed or non-scalar raw UTF-8 can escape lexer validation or crash
+- [x] **Malformed or non-scalar raw UTF-8 can escape lexer validation or crash
   `yonac`.** Repro: pipe the overlong bytes `C0 80` inside a character literal
   to `yonac --emit-ir`; cursor accounting reaches `string_view::substr` out of
   range. Raw surrogate `ED A0 80` and above-U+10FFFF `F4 90 80 80` sequences
   are also accepted as character values instead of rejected.
 
-- [ ] **Invalid UTF-8 inside a character literal is diagnosed one column
+- [x] **Invalid UTF-8 inside a character literal is diagnosed one column
   late.** Repro: place an invalid raw byte at column 2 between single quotes;
   the lexer reports column 3 because literal rescanning rewinds `Current`
   without restoring `Column`.
 
-- [ ] **Byte and character literals are accepted by parsing and typing but
+- [x] **Byte and character literals are accepted by parsing and typing but
   rejected by codegen.** Repro: compile `case [2b] of [1b] -> 1; _ -> 2 end`
   (or the analogous character sequence); codegen reports `unsupported
   expression type` before pattern matching.
 
-- [ ] **Literal-pattern lowering is inconsistent outside integer and symbol
+- [x] **Literal-pattern lowering is inconsistent outside integer and symbol
   controls.** Repro: match a string, float, or boolean literal against a
   different value of the same type as a direct value, or-pattern alternative,
   tuple/constructor field, or sequence head; codegen enters the literal arm
   because these paths either emit only integer/symbol predicates or only bind
   identifiers.
 
-- [ ] **Exact sequence patterns ignore string-literal elements when case arms
+- [x] **Exact sequence patterns ignore string-literal elements when case arms
   have the same length.** Repro: compile
   `case ["ordinary"] of ["explicit"] -> 1 ["ordinary"] -> 2 end`; codegen
   enters the first one-element arm without comparing its string literal.
 
-- [ ] **The Yona runner leaks temporary source files when stdin or `-e`
+- [x] **A failed head-tail literal leaks earlier retained heap heads.** Repro:
+  match `[formatInt 1, "b"]` against `[first, "z" | rest]` under allocation
+  statistics; the second-head mismatch branches directly to the next arm
+  without dropping `first`, leaving one managed string allocation live.
+
+- [x] **Composite head-tail heads ignore nested literal subpatterns.** Repro:
+  match `[(1, "two")]` against `[(1, "wrong") | _]`; tuple and record heads
+  bind only identifier children, so the unequal nested string is treated as a
+  match and the wrong arm runs.
+
+- [x] **Composite head-tail validation stops after one tuple level.** Repro:
+  match `[((1, "two"), 3)]` against `[((1, "wrong"), 3) | _]`; the outer
+  tuple loop skips its nested `TuplePattern`, so the unequal inner string is
+  never compared and the wrong arm runs.
+
+- [x] **A failed composite head-tail match can release its temporary sequence
+  twice.** Repro: bind the result of matching `[(1, "two")]` against
+  `[(1, "wrong") | _]`, then allocate another sequence; the mismatch cleanup
+  falls through to the catch-all release, while branch-transfer reconciliation
+  synthesizes a second release and corrupts the class-1 pool freelist.
+
+- [x] **The Yona runner leaks temporary source files when stdin or `-e`
   compilation fails.** Repro: run `printf 'bad syntax' |
   ./out/build/x64-debug-linux/yona` with an isolated `TMPDIR`; the runner exits
   from `compileToTemp` before its caller removes `yona-src*.yona`.
 
-- [ ] **Canonical zero-arity interface functions import as values instead of
+- [x] **Canonical zero-arity interface functions import as values instead of
   `Unit -> T`.** Repro: run `./out/build/x64-debug-linux/tests
   -tc="Interface files preserve sibling-wrapped FN effect rows"`; `wrap ()`
   reports an expected `Int` versus `(() -> ...)` mismatch before the effect
   row can be checked.
 
-- [ ] **The semantic generic-source service cannot reparse its owned source.**
+- [x] **The semantic generic-source service cannot reparse its owned source.**
   Repro: run `./out/build/x64-debug-linux/tests -tc="Semantics generic source
   service retains GENFN source ownership"`; `GenericFunctionSourceService`
   returns no parsed function before native dependency registration begins.
 
-- [ ] **The Yona runner exits 109 for ordinary Linux programs.** Repro: run
+- [x] **The Yona runner exits 109 for ordinary Linux programs.** Repro: run
   `./out/build/x64-debug-linux/tests -tc="yona runs a file"`; the built
   runner produces no output and returns status 109 instead of compiling and
   printing `3`. File, shebang, stdin, and `-e` modes fail the same way.
 
-- [ ] **Canonical interface reading rejects emitted `LINEAR` and `TUPLE`
+- [x] **Canonical interface reading rejects emitted `LINEAR` and `TUPLE`
   types.** Repro: run `./out/build/x64-debug-linux/tests
   -tc="Stdlib conformance fixtures"`; `stdlib_process_pid` reports `unknown
   canonical interface type: LINEAR`, while `pure_Core_test` reports the same
   error for `TUPLE`.
 
-- [ ] **Exported function effect rows do not survive interface round-trips.**
+- [x] **Exported function effect rows do not survive interface round-trips.**
   Repro: run `./out/build/x64-debug-linux/tests -ts="Codegen Modules"`;
   exported function, higher-order open-rest, and sibling-wrapped effect-row
   tests fail, including `Interface effect schemes preserve two independent
   callback rows`.
 
-- [ ] **Whole-module imports corrupt module dependency typing.** Repro: run
+- [x] **Whole-module imports corrupt module dependency typing.** Repro: run
   `./out/build/x64-debug-linux/tests -tc="yonac module dependencies respect
   whole-module import bindings"`; compilation exits 1 and emits an unexpected
   `E0100` diagnostic.
 
-- [ ] **Cross-module trait dispatch and structural derives regress together.**
+- [x] **Cross-module trait dispatch and structural derives regress together.**
   Repro: run `./out/build/x64-debug-linux/tests -ts="Trait"`; constrained and
   cross-module generic instances return codegen/interface errors, while
   derived Show/Eq/Ord/Hash cases return run or type errors (13 failing cases
   in the current Linux debug preset).
 
-- [ ] **The missing-clang-format regression does not report the missing tool.**
+- [x] **The missing-clang-format regression does not report the missing tool.**
   Repro: run `./out/build/x64-debug-linux/tests -tc="format script fails
   clearly when clang-format is unavailable"`; the subprocess output contains
   no `clang-format` diagnostic.
 
-- [ ] **Annotated ADT case functions fail module compilation after heap
+- [x] **Annotated ADT case functions fail module compilation after heap
   boxing.** Repro: run `./out/build/x64-debug-linux/tests -tc="Annotated ADT
   case functions heap-box non-recursive results"`; expression module creation
   returns null.
 
-- [ ] **Parameterized ADT equality loses floating-point field ABI.** Repro:
+- [x] **Parameterized ADT equality loses floating-point field ABI.** Repro:
   run `./out/build/x64-debug-linux/tests -tc="Parameterized ADT case fields
   retain their floating-point ABI"`; LLVM rejects the derived `Result`
   equality call because codegen passes a `double` to a `ptr` parameter.
@@ -219,115 +249,248 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ### Frontend correctness audit (2026-08-30)
 
-- [ ] **Generic functions reconstructed from `.yonai` can lose their native
+- [x] **Generic functions reconstructed from `.yonai` can lose their native
   Prelude dependency bindings.** Repro: run
   `ctest --test-dir out/build/release-gate-x64 -R doctest_tests`; generic
   String/Foldable bodies report `undefined function 'primitiveSizeString'` or
   `primitiveGetString` while recompiling their serialized source. The reader,
   generic isolation, and native-dependency registration must retain the
-  `GENFN_DEP ... NATIVE YonaRuntime...` bindings through reparsing.
+  `GENFN_DEP ... NATIVE YonaRuntime...` bindings through reparsing. Fixed by
+  preserving explicit native/Yona provenance on every private dependency and
+  selecting the innermost owner when nested generic bodies reuse a local name.
 
-- [ ] **The stream module lowering path can leave an unterminated LLVM basic
+- [x] **Repeated generic compilation can rebuild a stable scalar ABI as a
+  pointer ABI.** Repro: compile the `foundation_Traits_test` stdlib fixture in
+  a clean build; Prelude Foldable dictionary helpers are first inferred as
+  `Int`, transiently rebuilt with a pointer return, then emit `ret i64` in a
+  `ptr` function and fail LLVM verification.
+
+- [x] **The foundation Traits fixture corrupts the sequence allocator
+  freelist.** Repro: after stabilizing its repeated generic return ABI, run
+  `foundation_Traits_test`; the linked program aborts in `poolAlloc` with an
+  unaligned class-1 freelist link. The same ownership corruption reproduces on
+  the isolated `4278fdd` baseline once only the ABI verifier blocker is fixed.
+
+- [x] **The stream module lowering path can leave an unterminated LLVM basic
   block.** Repro: run the `Lazy stream takeStream` doctest; LLVM rejects
   `takeStream__genfn_0_12_Stream` because `%case.impossible` has no
   terminator. Fix the exhaustive-case lowering path before code emission.
 
-- [ ] **The current channel fixture suite does not satisfy its typed ownership
+- [x] **The current channel fixture suite does not satisfy its typed ownership
   contract.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`; the
   channel fixtures return `RUN_ERROR` or reject inferred payloads as
   non-concrete. Reconcile channel creation, payload descriptors, and the
   canonical `Std\Channel` interfaces.
 
-- [ ] **The checked-in GPU channel helper interface loses its endpoint and
+- [x] **The checked-in GPU channel helper interface loses its endpoint and
   operation types.** Repro: run the `gpu_float_channel` fixture;
   `drainMapFloatGpu` imports as `ADT INT INT -> INT` instead of
   `FloatMapOp -> Receiver FloatArray -> Sender FloatArray -> Int`, producing
   a type error before the channel runtime is exercised.
 
-- [ ] **Generated channel programs leak their endpoint object graph.** Repro:
+- [x] **Regenerating the full GPU interface makes the CPU conformance program
+  hang.** Repro: run
+  `YONA_GPU_DISABLE_VULKAN=1 tests -tc="Stdlib GPU conformance fixtures"` after
+  regenerating `lib/Std/Gpu.yonai`; the `gpu_test` child never exits, while the
+  same source compiled against `a75950d^:lib/Std/Gpu.yonai` reports three
+  passing cases immediately. The fixture-based `stdlib_gpu` subcase hangs for
+  the same reason.
+
+- [x] **The `stdlib_gpu` fixture does not force its documented CPU fallback.**
+  Repro: on a Vulkan-enabled Linux host, run the fixture-based codegen subcase
+  `stdlib_gpu`; its expected output is `0`, but the runner only sets
+  `YONA_GPU_DISABLE_VULKAN=1` for `gpu_backend_flags` and
+  `gpu_vulkan_last_note`, so the fixture reports the discovered device count
+  and availability (for example `31`).
+
+- [x] **The compiled-in Vulkan GPU probe ignores its disable override.** Repro:
+  on a Vulkan-enabled Linux host, run
+  `YONA_GPU_DISABLE_VULKAN=1 test/_scratch/yona_codegen_stdlib_gpu`; the
+  `YonaStdGpuAvailable` / `YonaStdGpuPhysicalDeviceCount` probe in
+  `Runtime/Gpu/Stub.c` still enumerates devices and prints (for example) `31`
+  instead of the CPU-fallback result `0`.
+
+- [x] **Generated channel programs leak their endpoint object graph.** Repro:
   run a compiled `channel_basic` with `YONA_ALLOC_STATS=1`; it returns `42`
   but reports three leaked ADTs, one tuple, and one channel even though direct
   runtime release recursively frees the same tuple/Linear/endpoint/channel
   shape.
 
-- [ ] **Generated binary File programs do not release ByteArray temporaries
+- [x] **Generated binary File programs do not release ByteArray temporaries
   or read results.** Repro: run the `binary_write_read` fixture, then execute
   its generated program with `YONA_ALLOC_STATS=1`; output is correct (`12`)
   and all six File/Linear ADTs are freed, but both ByteArrays remain leaked.
 
-- [ ] **Generated entry points do not release a heap-backed final result.**
+- [x] **Native array interfaces misdeclare read-only heap parameters as
+  consuming.** Repro: bind a `ByteArray` returned by `readBytes`, call
+  `Std\ByteArray.length`, and run with `YONA_ALLOC_STATS=1`; codegen retains
+  the named array for a callee-owned call, but the observational C wrapper
+  does not release it, leaving the read result leaked. The checked-in
+  `ByteArray`, `IntArray`, and `FloatArray` interfaces omit the same borrow
+  metadata across their native wrappers.
+
+- [x] **Generated entry points do not release a heap-backed final result.**
   Repro: compile a program whose root expression returns `[1]` and run it with
   `YONA_ALLOC_STATS=1`; the value is printed successfully, but the sequence
   reports one allocation and zero frees when `main` exits.
 
-- [ ] **Destructuring a named tuple can free it before its enclosing scope's
+- [x] **Destructuring a named tuple can free it before its enclosing scope's
   final use.** Repro: compile and run
   `let t = ([1], [2]) in let (x, y) = t in let q = (3, 4) in t`; tuple-pattern
   lowering releases `t`, the unrelated allocation reuses its pool slot, and
   the final access to `t` exits with status 139.
 
-- [ ] **A failed tuple pattern leaks heap-valued prefix bindings.** Repro: run
+- [x] **A failed tuple pattern leaks heap-valued prefix bindings.** Repro: run
   `case ([1], :no) of (x, :yes) -> 1; _ -> 0 end` with
   `YONA_ALLOC_STATS=1`; it prints `0`, but the sequence bound before the
   symbol mismatch reports one allocation and zero frees.
 
-- [ ] **Pattern cleanup is emitted after a terminated case-arm block.** Repro:
+- [x] **Pattern cleanup is emitted after a terminated case-arm block.** Repro:
   compile `case ([1], 2) of (x, y) -> raise 1 end`; the arm emits
   `unreachable` first and then appends aggregate release calls, so LLVM rejects
   `%case.body.0` with `Terminator found in the middle of a basic block`.
 
-- [ ] **Record-pattern fields can dangle after a temporary scrutinee is
+- [x] **Caught heap ADT exceptions retain their pattern-bound owner.** Repro:
+  raise the `error` binding from
+  `case (InvalidSyntax "boom", [1]) of (error, values) -> raise error end`
+  inside `try ... catch InvalidSyntax message -> 1; _ -> 0 end`; the handler
+  runs and the sequence balances, but allocation stats report ADT 1/0.
+
+- [x] **Catch-constructor payload bindings are absent from semantic scope.**
+  Repro: type-check
+  `try raise InvalidSyntax "boom" catch InvalidSyntax message -> message end`;
+  codegen has a payload-binding path, but the checker reports undefined
+  variable `message`, preventing a caught heap payload from escaping.
+
+- [x] **A caught heap payload is released when the handler returns an
+  aggregate containing it.** Repro: catch `InvalidSyntax message`, return
+  `(message, 7)`, then destructure the tuple and call `Std\String.length` on
+  `message`; handler cleanup compares only the aggregate pointer with the
+  payload pointer, releases the tuple's live child before merge, and leaves a
+  use-after-free/double-release path.
+
+- [x] **Tuple construction transfers ordinary lexical heap bindings.** Repro:
+  bind `x = "a" + "b"`, construct and discard `(x, 2)`, allocate another
+  string, then compare `x == "ab"`; the tuple destructor releases `x`, its
+  allocator slot is reused, and the comparison incorrectly returns `false`.
+
+- [x] **A caught inner raise releases its enclosing case-arm bindings.** Repro:
+  bind `x` from `case ([1], 2)`, evaluate `try raise 1 catch _ -> 0 end` in
+  that arm, then match `x`; unconditional active-arm cleanup frees `x` and the
+  temporary tuple before the inner catch resumes.
+
+- [x] **Record-pattern fields can dangle after a temporary scrutinee is
   released.** Repro: construct an exported generic `Box { item : a }` and run
   `case make [1] of Box { item = x } -> x end`; record binding neither retains
   the heap field nor registers an arm drop, so releasing the temporary `Box`
   leaves `x` pointing at freed sequence storage and prints garbage.
 
-- [ ] **Generic record tuple fields lose their element shapes during pattern
+- [x] **Generic record tuple fields lose their element shapes during pattern
   binding.** Repro: construct `Box a` with `a = ([Int], [Int])`, then match
   `Box { item = (x, y) }`; substitution changes the field tag to `TUPLE` but
   leaves `tuple_elements` empty, so codegen never binds `x` or `y` and reports
   `undefined variable 'x'`.
 
-- [ ] **A heap value returned from a nested `let` is misclassified as a
+- [x] **Generic record function fields lose their return shape during pattern
+  binding.** Repro: construct `Box a` with `a = Int -> [Int]`, bind its field
+  as `f`, and consume `f 1`; substitution changes the field tag to `FUNCTION`
+  but leaves its return type as `Int`, so the actual sequence result is treated
+  as non-owned and leaks.
+
+- [x] **Whole generic record tuple bindings lose recursive child identities.**
+  Repro: construct `Box a` with `a = (([Int], [Int]), [Int])`, bind `item` as
+  `pair`, then destructure `pair` and its nested tuple in later cases; lowering
+  retains only top-level tuple tags, releases the nested tuple owner, and uses
+  its escaped sequence child afterward as if it were an `Int`.
+
+- [x] **A heap value returned from a nested `let` is misclassified as a
   borrowed ADT field.** Repro: run
   `case Some (let temporary = [1] in temporary) of Some values -> 0; None -> 1 end`
   with allocation stats; the stale `temporary` entry in `named_values_` makes
   constructor lowering add an unmatched retain, leaking the sequence.
 
-- [ ] **A shadowed sequence binding contaminates the enclosing binding's
+- [x] **A shadowed sequence binding contaminates the enclosing binding's
   transfer state.** Repro: bind `outer = [1]`, construct
   `Some (let outer = [2] in outer)`, then consume both the inner value and the
   restored outer value in nested cases; the result is correct (`21`) but one
   of the two sequences reports leaked under allocation stats. Renaming the
   inner binding makes both sequences balance.
 
-- [ ] **The macOS file runtime uses undeclared lowercase async-I/O locals.**
+- [x] **Nested `let` cleanup retains an unrelated heap result.** Repro:
+  evaluate `case (let x = [1] in [2]) of [value] -> value; _ -> 0 end` with
+  allocation stats; cleanup retains the fresh result before dropping `x`, so
+  the surrounding case releases only one of its two references.
+
+- [x] **Grouped-let escape analysis arena-allocates heap values returned
+  inside tuples.** Repro: evaluate `let first = true, second = [1] in
+  (first, second)`; `second` is allocated in the task-group arena, the arena is
+  destroyed before root printing, and tuple traversal dereferences freed
+  sequence storage.
+
+- [x] **Arena-backed aggregates leak their managed children.** Repro: run
+  `import formatInt from Std\Convert in let first = [formatInt 1], second =
+  [2] in 0` with allocation statistics; `first` is bulk-freed with the
+  task-group arena, so its heap-marked string child never receives a recursive
+  release and reports one live STRING allocation.
+
+- [x] **Sequence join leaks anonymous borrowed operands.** Repro: evaluate
+  `case ([1] ++ [2]) of [a, b] -> a * 10 + b; _ -> 0 end` with allocation
+  stats; `YonaRuntimeSequenceJoin` borrows both inputs, but codegen never
+  releases the two temporary operand owners.
+
+- [x] **Sequence literals retain anonymous heap elements without releasing
+  their original owner.** Repro: construct `[formatInt 1]` and discard it
+  under allocation statistics; sequence storage unconditionally retains the
+  fresh string instead of transferring it, so destroying the sequence leaves
+  one string reference live.
+
+- [x] **`if` transfer reconciliation treats borrowed closure captures as
+  owned.** Repro: merge two captured heap values through an `if`, then consume
+  the selected result; lowering marks the borrowed incoming capture as
+  transferred and releases the non-selected capture from its closure owner.
+
+- [x] **The macOS file runtime uses undeclared lowercase async-I/O locals.**
   Repro: compile `src/Runtime/Platform/FileMacOs.c`; the read path references
   `fd`, `buf`, `count`, and `offset` although its parameters are `Fd`, `Buf`,
   `Count`, and `Offset`, the write path similarly references lowercase
   `fd`, `data`, `len`, and `offset`, and the fallback/seek/truncate blocks
   contain the same incomplete identifier-case migration.
 
-- [ ] **The macOS network runtime uses stale context fields and lowercase
+- [x] **The macOS network runtime uses stale context fields and lowercase
   locals.** Repro: compile `src/Runtime/Platform/NetMacOs.c`; async operations
   initialize removed `YonaIoContext` members `type`, `fd`, and `buf`, while
   connect/listen/HTTP/UDP paths reference undeclared identifiers such as
   `hints`, `res`, `addr`, `ai`, and `fd` instead of their declared canonical
   spellings.
 
-- [ ] **Cancelling an async file write frees a reference-counted ByteArray
+- [x] **Cancelling an async file write frees a reference-counted ByteArray
   payload directly.** Repro: submit `writeBytes` and cancel its I/O context
   before completion; the Linux and macOS cancellation cleanup calls `free`
   on the retained managed payload instead of `YonaRuntimeRelease`, risking an
   invalid free and leaving the internal pin's ownership contract unbalanced.
 
-- [ ] **Failed async read/receive submission leaks its managed result buffer.**
+- [x] **Failed async read/receive submission leaks its managed result buffer.**
   Repro: make `YonaRuntimeIoUringSubmit` return zero after
   `YonaRuntimePlatformSubmitFileRead` or `YonaStdNetRecv` allocates its managed
   string; the failure path frees the `YonaIoContext` but neither returns nor
   releases the buffer. ByteArray read submission has the same ownership gap.
 
-- [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
+- [x] **The `stdlib_io` fixture writes the wrong values in the wrong order.**
+  Repro: run the fixture-based codegen subcase `stdlib_io`; the generated
+  program produces `0\n test` instead of the expected `io test\n0` even though
+  focused cancellation, exact-read, and string-write runtime tests pass.
+
+- [x] **The `adt_heap_ordering` fixture intermittently loses and reorders
+  scalar results.** Repro: run the full fixture-based codegen suite; expected
+  `true\ntrue\n7\n0`, but an affected run prints `0\ntrue\n7`. The isolated
+  subcase can pass, indicating an ordering-sensitive failure.
+
+- [x] **The `tuple_traits` fixture intermittently loses and reorders scalar
+  results.** Repro: run its fixture-based codegen subcase repeatedly; expected
+  `true\ntrue\ntrue\n(1, 2)\n0`, but affected runs begin with `0` and omit one
+  or more `true` lines. The failure reproduces on clean commit `73fa29f`.
+
+- [x] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
   boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
   `binary_chunks`, `binary_seek`, and `binary_write_read` report an expected
   `Int` where their live `Linear FileHandle` is passed. Preserve the resource
@@ -347,35 +510,76 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   allocation on the length-tagged allocation path; the exact-read lifetime
   regression observes the balanced counter totals.
 
-- [ ] **Direct ownership doctests cannot find Prelude without `YONA_PATH`.**
+- [x] **Direct ownership doctests cannot find Prelude without `YONA_PATH`.**
   Repro: unset `YONA_PATH` and run `tests -tc="dropping a set of seqs releases
   inner heap objects"`; its empty `Codegen.ModulePaths` makes `SemanticSetup`
   throw `unable to install Prelude interface in test` despite the configured
   deterministic test Prelude artifacts and repository library path.
 
-- [ ] **Lifted dictionary trait code can crash during ownership lowering.**
+- [x] **Lifted dictionary trait code can crash during ownership lowering.**
   Repro: run `tests.exe -tc="Fixture-based codegen tests"`; the
   `dict_lifted_trait_lifetime` fixture terminates with `SIGSEGV`. Audit the
   lifted trait materialization and dictionary-value ownership path before
   enabling the fixture suite as a release gate.
 
-- [ ] **Temporary constructor cases leak their scrutinee and heap fields.**
+- [x] **Temporary constructor cases leak their scrutinee and heap fields.**
   Repro: `case Some 1 of Some x -> 0; None -> 0 end` leaks the ADT, while
   `case Some [1] of Some xs -> 0; None -> 0 end` leaks both the ADT and Seq.
   The IR retains the anonymous sequence before `ADTSetField` and retains the
   extracted field, but drops neither the temporary scrutinee nor field binding.
 
-- [ ] **ABI refinement no longer emits the canonical refined call form.**
+- [x] **ABI refinement no longer emits the canonical refined call form.**
   Repro: run `tests.exe -tc="ABI refinement leaves one canonical function"`;
   the generated IR no longer contains `call fastcc i1 @f(i64 %x)`. Reconcile
   refined function declaration and call lowering, then update the regression
   only if the canonical ABI intentionally changed.
 
-- [ ] **Effectful file fixtures lose their `Fs.read` handler context.**
+- [x] **Effectful file fixtures lose their `Fs.read` handler context.**
   Repro: run `tests.exe -tc="Fixture-based codegen tests"`; file-oriented
   fixture expressions report unhandled `Fs.read` [E0202] despite being run
   under their expected handler path. Preserve the effect environment through
   imported/fixture compilation.
+
+- [x] **Several stdlib conformance contracts are stale after canonical type
+  inference changes.** Repro: run `ctest --preset unit-tests-linux -R
+  doctest_tests`; Bool/Core and Parallel import obsolete `INT` parameter rows,
+  Log/Time still call zero-arity values with `()`, and the empty Channel test
+  leaves its payload type unconstrained, producing isolated
+  `TYPE_ERROR`/`CODEGEN_ERROR` results.
+
+- [x] **The HTTP conformance parser rejects its complete response control.**
+  Repro: run `ctest --preset unit-tests-linux -R doctest_stdlib_network`; the
+  response constructors pass, but `Http parses a complete response` returns
+  `FAIL ...: parse` and the summary is 2/1 instead of 3/0.
+
+- [x] **A nested case can return an ADT containing a freed generic constructor
+  field.** Repro: wrap `Ok j` from `Std\\Json.parse` as `Some j`, return it from
+  a helper, then inspect `j`; the `Result` scrutinee cleanup releases the JSON
+  tree because `parse`'s erased `Result` contract loses the field shape. The
+  Yona-written LSP smoke test exposes this as a corrupt class-0 pool freelist.
+
+- [x] **Constructor patterns erase nested field type arguments during module
+  checking.** Repro: declare `JsonObject (Seq (String, Json))`, bind its field
+  in `JsonObject pairs`, and pass `pairs` to a helper inferred as `Seq (a, b)`;
+  the checker reports `Seq (a, b) vs Seq` instead of preserving the declared
+  sequence element tuple.
+
+- [x] **The JSON integer fixture mixes result types in its error arm.** Repro:
+  run the `stdlib_json_get_int` codegen fixture after restoring the precise
+  `Option Int` contract; its success arms return `Int` but `Err e -> e` returns
+  `String`, so canonical branch unification correctly reports `E0100`.
+
+- [x] **Generated API signatures mangle existing CamelCase nominal types.**
+  Repro: regenerate docs from `ADT(FileHandle)` or `ADT(FloatMapOp)`; the
+  renderer emits `Filehandle` and `Floatmapop`, flattens multi-argument ADTs,
+  and leaves a second terminal newline in the index. Fixed by preserving
+  descriptor names that already contain lowercase characters, rendering
+  multi-argument applications structurally, and emitting one final newline.
+
+- [x] **The `Std\Bool.when` and `unless` examples use an impossible result
+  type.** Repro: type-check `when true (\-> 42)`; the `:ok` branch makes the
+  canonical callback/result type `Symbol`. Fixed by documenting Symbol-valued
+  callbacks that match the exported contract.
 
 - [x] **A bundled-PCRE2 CMake install could fail before exporting the Yona
   package.** Repro: configure without a system PCRE2, build `yonac`, then run

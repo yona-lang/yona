@@ -163,6 +163,13 @@ The prefix must not contain path separators.
 Execute `file` with an argument sequence that excludes `argv[0]` (no shell).
 Inherit stdin, stdout, and stderr. Wait and return the exit status.
 
+### `runWithArgv0 : String -> String -> [a] -> Int`
+
+Execute `file` while setting the child-visible `argv[0]` explicitly. The final
+argument sequence still excludes `argv[0]`. This is intended for launchers such
+as `yona`, which execute a temporary binary but expose the script path, `-`, or
+`-e` as the program name.
+
 ### `execArgs : String -> [a] -> Int`
 
 Replace the current process with `file` and the given arguments, excluding

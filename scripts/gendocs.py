@@ -203,6 +203,13 @@ def pretty_arrow(
 
     descriptor_variables: dict[str, str] = {}
 
+    def descriptor_name(text: str) -> str:
+        # Canonical descriptors already carry source-level nominal spelling.
+        # Only legacy all-uppercase ABI atoms need SNAKE_CASE conversion.
+        if any(char.islower() for char in text):
+            return text
+        return "".join(part.title() for part in text.split("_"))
+
     def descriptor_parts(text: str) -> list[str]:
         parts: list[str] = []
         depth = 0
@@ -222,7 +229,7 @@ def pretty_arrow(
         if text in CONCRETE_CTYPES:
             return CONCRETE_CTYPES[text]
         if "(" not in text or not text.endswith(")"):
-            return "".join(part.title() for part in text.split("_"))
+            return descriptor_name(text)
         name, body = text.split("(", 1)
         arguments = descriptor_parts(body[:-1])
         rendered = [descriptor(argument) for argument in arguments]
@@ -244,7 +251,13 @@ def pretty_arrow(
         if name == "LINEAR":
             return "Linear " + (rendered[0] if rendered else fresh())
         if name == "ADT":
-            return " ".join(rendered)
+            if not rendered:
+                return fresh()
+            if len(rendered) == 1:
+                return rendered[0]
+            if len(rendered) == 2:
+                return f"{rendered[0]} {rendered[1]}"
+            return f"{rendered[0]} (" + ", ".join(rendered[1:]) + ")"
         return name + (" " + " ".join(rendered) if rendered else "")
 
     if fn_name == "channel" and ret and ret[0] == "TUPLE":
@@ -370,7 +383,7 @@ def pretty_arrow(
             return fresh()
         if tok in CONCRETE_CTYPES:
             return CONCRETE_CTYPES[tok]
-        return "".join(p.title() for p in tok.split("_"))
+        return descriptor_name(tok)
 
     parts = [
         one(t, pname=param_names[i] if i < len(param_names) else "")
@@ -960,7 +973,6 @@ def main() -> None:
     for name, fname, nf, nt, desc in rows:
         display = name.replace("\\", ".")
         index.append(f"| [{display}]({fname}) | {nf} | {nt} | {desc} |")
-    index.append("")
     (OUT_DIR / "README.md").write_text("\n".join(index) + "\n")
     written.add("README.md")
 

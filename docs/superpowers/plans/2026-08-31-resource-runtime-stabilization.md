@@ -131,13 +131,13 @@ FileHandle, LSP framing, and fixture tests. Commit as
 - Modify: `.superpowers/sdd/progress.md`
 - Modify public File/Io/Channel documentation if contracts changed
 
-- [ ] **Step 1: Run focused and full Linux gates**
+- [x] **Step 1: Run focused and full Linux gates**
 
 Build the debug preset; run channel/runtime, file/binary, Io/LSP, linearity,
 effect-row, and full fixture suites; then run the full CTest preset and
 `git diff --check`.
 
-- [ ] **Step 2: Record combined results later**
+- [x] **Step 2: Record combined results later**
 
 Close the channel and FileHandle bugs only with passing evidence. Reverify the
 effectful-file item: reviewed semantic-signature work already makes its focused

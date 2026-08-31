@@ -4,6 +4,38 @@
 
 ### Fixed
 
+- Completed the Linux open-bug stabilization sweep. Literal lowering now
+  validates Unicode and compares every supported scalar consistently across
+  direct, alternative, tuple, constructor, record, exact-sequence, and
+  head-tail patterns, including recursive composite heads and failed-match
+  cleanup.
+- Canonical interfaces now preserve structural types, zero-arity/effect rows,
+  generic owner dependencies, recursive specialization identity, and stable
+  scalar ABIs. `Std\Json` exposes precise recursive `Result`, `Option`, tuple,
+  and sequence shapes, preventing returned parsed trees from being released by
+  an enclosing case cleanup.
+- Generated programs now balance aggregate, tuple, constructor, record,
+  sequence, channel, ByteArray, root-result, exception, closure-capture, and
+  nested-let ownership. Arena destruction recursively releases managed
+  children, while branch merges normalize borrowed and owned provenance.
+- Async file/network cancellation and submission failures release their owned
+  contexts and buffers on Linux and macOS; native observational array contracts
+  carry complete borrow masks and generated binary-I/O programs release their
+  temporary buffers.
+- The Yona runner now preserves the documented child `argv[0]`, forwards user
+  arguments once, propagates child status, and removes temporary sources and
+  executables on success and failure. Formatter detection tests retain their
+  prerequisites while excluding only `clang-format`.
+- Stdlib and fixture contracts were regenerated or corrected for Bool,
+  Parallel, Channel, Time, Log, Http, Json, File, GPU, traits, streams, and
+  effectful I/O. The Linux debug build and complete CTest preset are green.
+- Raised heap exceptions now transfer an explicit owner through catches,
+  rethrows, and async task groups; catch payload bindings are clause-scoped and
+  remain valid when returned from a handler.
+- The regenerated `Std\Gpu` interface preserves `drainMapFloatGpu`'s
+  `FloatMapOp`, `Receiver FloatArray`, and `Sender FloatArray` parameters, so
+  typed GPU channel pipelines compile through both Vulkan and CPU fallback
+  paths.
 - Linux runtime components again build after the source modularization: the
   io_uring cancellation signature preserves its const contract, and platform
   I/O and native stdlib consumers use the canonical context fields and local
