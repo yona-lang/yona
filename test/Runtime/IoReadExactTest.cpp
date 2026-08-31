@@ -36,6 +36,7 @@ char *YonaStdFileReadExactBytes(int64_t handle, int64_t n);
 int64_t YonaStdFileReadExact(int64_t handle, int64_t n);
 void YonaStdIoWriteBytes(int64_t fd, const char *s);
 int64_t YonaStdStringLength(const char *s);
+void *YonaRuntimeAllocateStringWithLength(size_t bytes, size_t string_length);
 void YonaRuntimeRelease(void *ptr);
 }
 
@@ -156,6 +157,35 @@ TEST_SUITE("IoReadExact") {
   }
 
 #if defined(__linux__)
+  TEST_CASE("Length-tagged allocation registers its stats reporter") {
+    constexpr const char *ChildEnvironment =
+        "YONA_TEST_LENGTH_TAGGED_STATS_CHILD";
+    if (std::getenv(ChildEnvironment)) {
+      auto *value =
+          static_cast<char *>(YonaRuntimeAllocateStringWithLength(1, 0));
+      REQUIRE(value != nullptr);
+      value[0] = '\0';
+      YonaRuntimeRelease(value);
+      return;
+    }
+
+    const auto executable = std::filesystem::canonical("/proc/self/exe");
+    const auto result = yona::support::executeProcess(
+        executable,
+        {"-tc=Length-tagged allocation registers its stats reporter"},
+        {.CaptureStdout = true,
+         .CaptureStderr = true,
+         .EnvironmentOverrides = {{ChildEnvironment, "1"},
+                                  {"YONA_ALLOC_STATS", "1"}}});
+    REQUIRE_FALSE(result.ExecutionFailed);
+    REQUIRE(result.ExitCode == 0);
+    INFO(result.StandardError);
+    CHECK(result.StandardError.find("[alloc-stats] allocs=1 frees=1") !=
+          std::string::npos);
+    CHECK(result.StandardError.find("tag=STRING allocs=1 frees=1 leaked=0") !=
+          std::string::npos);
+  }
+
   TEST_CASE("File readExact releases its discarded short string") {
     constexpr const char *ChildEnvironment =
         "YONA_TEST_FILE_READ_EXACT_LEAK_CHILD";

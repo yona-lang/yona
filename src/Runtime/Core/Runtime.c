@@ -641,6 +641,7 @@ void *YonaRuntimeAllocateString(size_t Bytes) {
 /* Public: allocate an RC-managed string with known length.
  * Length is encoded in bits 16-63 of the type_tag word for O(1) retrieval. */
 void *YonaRuntimeAllocateStringWithLength(size_t Bytes, size_t StringLength) {
+  yonaAllocReportMaybeRegister();
   size_t Total = YONA_RC_HEADER_SIZE * sizeof(int64_t) + Bytes;
   int Cls = poolClassFor(Total);
   int64_t *Raw = (int64_t *)poolAlloc(Total);
