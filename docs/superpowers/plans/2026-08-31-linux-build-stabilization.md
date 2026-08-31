@@ -704,6 +704,59 @@ git add test/Toolchain/YonaLinkUtil.h
 git commit -m "fix: link generated fixtures with Vulkan"
 ```
 
+### Task 10: Make installed compiler tools resolve their packaged library
+
+**Files:**
+
+- Modify: `CMakeLists.txt`
+- Test: `installed_consumer_contract`
+
+**Interfaces:**
+
+- Consumes: installed `yonac`, `yona-repl`, and `yls` executables linked to
+  the installed `libyona_lib` shared library when `YONA_LINK_STATIC_CLI=OFF`.
+- Produces: relocatable installed tools that search the package's sibling
+  CMake install library directory before host-global libraries.
+
+- [ ] **Step 1: Reproduce the installed-library resolution failure**
+
+With Task 8's scoped output-directory change present, run:
+
+```bash
+ctest --preset unit-tests-linux -R installed_consumer_contract --output-on-failure
+```
+
+Expected: consumer configuration succeeds, then installed `yonac` loads a
+host-global `libyona_lib.so` and fails to resolve the current
+`DiagnosticEngine` constructor.
+
+- [ ] **Step 2: Give shared-library CLI installs a relocatable rpath**
+
+When `YONA_LINK_STATIC_CLI` is off, set `INSTALL_RPATH` on all three installed
+compiler tools. Use `@loader_path/../${CMAKE_INSTALL_LIBDIR}` on macOS and
+`$ORIGIN/../${CMAKE_INSTALL_LIBDIR}` on other Unix hosts. Do not add an rpath
+to Windows binaries or to static-CLI packaging builds.
+
+- [ ] **Step 3: Verify packaged resolution and the consumer contract**
+
+Run:
+
+```bash
+ctest --preset unit-tests-linux -R installed_consumer_contract --output-on-failure
+ldd out/build/x64-debug-linux/test-install/bin/yonac | \
+  rg 'test-install/.*/libyona_lib'
+```
+
+Expected: the contract passes and the installed compiler resolves
+`libyona_lib` from the same install prefix.
+
+- [ ] **Step 4: Commit the installed-tool linkage repair**
+
+```bash
+git add CMakeLists.txt
+git commit -m "fix: resolve installed compiler libraries relocatably"
+```
+
 ## Follow-up Plan Sequence
 
 After this plan produces a buildable test runner, create and execute focused
