@@ -860,8 +860,10 @@ private:
                    *group_arena_bind_pop_ = nullptr;
     // Exceptions
     llvm::Function *try_begin_ = nullptr, *try_end_ = nullptr,
-                   *raise_ = nullptr, *get_exc_sym_ = nullptr,
-                   *get_exc_msg_ = nullptr;
+                   *raise_ = nullptr, *raise_owned_ = nullptr,
+                   *reraise_ = nullptr, *get_exc_sym_ = nullptr,
+                   *get_exc_msg_ = nullptr,
+                   *consume_exc_owner_ = nullptr;
     // Perceus phase 3: frame-scoped heap cleanup on raise unwind
     llvm::Function *frame_push_ = nullptr, *frame_pop_ = nullptr,
                    *frame_transfer_ = nullptr, *try_depth_ = nullptr;

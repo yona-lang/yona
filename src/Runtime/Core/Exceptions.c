@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ===== Exception handling (setjmp/longjmp) ===== */
 
@@ -20,6 +21,7 @@
 typedef struct {
   int64_t Symbol;
   const char *Message;
+  void *Owner;
 } YonaException;
 
 /* ===== Perceus phase 3: frame-scoped heap cleanup on unwind =====
@@ -220,16 +222,13 @@ void YonaRuntimePrintStackTrace(void) {
 #endif
 }
 
-void YonaRuntimeRaise(int64_t Symbol, const char *Message) {
+static void raiseCurrent(void) {
   if (YonaExc.Depth == 0) {
-    /* For display: message contains "symbol_name\0actual_message" if from
-       codegen, but since we get them separately, just print both */
-    fprintf(stderr, "Unhandled exception: \"%s\"\n", Message ? Message : "");
+    fprintf(stderr, "Unhandled exception: \"%s\"\n",
+            YonaExc.Current.Message ? YonaExc.Current.Message : "");
     YonaRuntimePrintStackTrace();
     abort();
   }
-  YonaExc.Current.Symbol = Symbol;
-  YonaExc.Current.Message = Message;
   YonaExc.Depth--;
   /* Phase 3: unwind owned-heap frames before longjmp blows past
    * their function-exit cleanups. */
@@ -248,10 +247,50 @@ void YonaRuntimeRaise(int64_t Symbol, const char *Message) {
 #endif
 }
 
+void YonaRuntimeRaiseOwned(int64_t Symbol, const char *Payload, void *Owner) {
+  /* Replacing an exception without first consuming it would otherwise orphan
+   * the previous owner. This is also a defensive guard for native callers. */
+  if (YonaExc.Current.Owner && YonaExc.Current.Owner != Owner)
+    YonaRuntimeRelease(YonaExc.Current.Owner);
+  YonaExc.Current.Symbol = Symbol;
+  YonaExc.Current.Message = Payload;
+  YonaExc.Current.Owner = Owner;
+  raiseCurrent();
+}
+
+void YonaRuntimeRaise(int64_t Symbol, const char *Message) {
+  char *OwnedMessage = NULL;
+  if (Message) {
+    const size_t Length = strlen(Message);
+    OwnedMessage =
+        (char *)YonaRuntimeAllocateStringWithLength(Length + 1, Length);
+    if (OwnedMessage) {
+      memcpy(OwnedMessage, Message, Length);
+      OwnedMessage[Length] = '\0';
+    }
+  }
+  YonaRuntimeRaiseOwned(Symbol, OwnedMessage, OwnedMessage);
+}
+
+void YonaRuntimeReraise(void) { raiseCurrent(); }
+
 int64_t YonaRuntimeGetExceptionSymbol(void) { return YonaExc.Current.Symbol; }
 
 const char *YonaRuntimeGetExceptionMessage(void) {
   return YonaExc.Current.Message;
+}
+
+void *YonaRuntimeTakeExceptionOwner(void) {
+  void *Owner = YonaExc.Current.Owner;
+  YonaExc.Current.Owner = NULL;
+  return Owner;
+}
+
+void YonaRuntimeConsumeExceptionOwner(int64_t PayloadIsHeap) {
+  void *Owner = YonaRuntimeTakeExceptionOwner();
+  if (Owner && PayloadIsHeap && YonaExc.Current.Message)
+    YonaRuntimeRetain((void *)YonaExc.Current.Message);
+  YonaRuntimeRelease(Owner);
 }
 
 /* Forward declarations for runtime functions used by shims */

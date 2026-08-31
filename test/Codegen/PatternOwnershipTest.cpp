@@ -356,6 +356,73 @@ TEST_SUITE("Pattern ownership") {
           std::string::npos);
   }
 
+  TEST_CASE("caught heap exceptions transfer their owners exactly once") {
+    const auto caught_ir = assert_zero_alloc_leaks(
+        "try case (InvalidSyntax \"boom\", [1]) of "
+        "(error, values) -> raise error end "
+        "catch InvalidSyntax message -> 1; _ -> 0 end",
+        "caught_pattern_bound_heap_exception", "1",
+        "tag=ADT allocs=1 frees=1 leaked=0");
+    CHECK(caught_ir.find("call void @YonaRuntimeRaiseOwned") !=
+          std::string::npos);
+    CHECK(caught_ir.find("call void @YonaRuntimeConsumeExceptionOwner") !=
+          std::string::npos);
+
+    const auto scalar_ir = assert_zero_alloc_leaks(
+        "let value = [6] in "
+        "let caught = try raise 1 catch _ -> 0 end in "
+        "case value of [result] -> result; _ -> caught end",
+        "caught_scalar_exception_owner", "6",
+        "tag=SEQ allocs=1 frees=1 leaked=0");
+    CHECK(scalar_ir.find("call void @YonaRuntimeRaise(i64") !=
+          std::string::npos);
+    CHECK(scalar_ir.find("call void @YonaRuntimeRaiseOwned") ==
+          std::string::npos);
+
+    assert_zero_alloc_leaks(
+        "import length from Std\\String in "
+        "let escaped = try raise InvalidSyntax \"boom\" "
+        "catch InvalidSyntax message -> message; _ -> \"wrong\" end in "
+        "length escaped",
+        "caught_heap_exception_payload_escape", "4",
+        "tag=ADT allocs=1 frees=1 leaked=0");
+
+    const auto reraise_ir = assert_zero_alloc_leaks(
+        "try (try raise InvalidSyntax \"boom\" "
+        "catch ParsedValueOutOfRange _ -> 0 end) "
+        "catch InvalidSyntax message -> 2; _ -> 0 end",
+        "unmatched_heap_exception_reraise", "2",
+        "tag=ADT allocs=1 frees=1 leaked=0");
+    CHECK(reraise_ir.find("call void @YonaRuntimeReraise") !=
+          std::string::npos);
+
+    assert_zero_alloc_leaks(
+        "try (try raise InvalidSyntax \"boom\" "
+        "catch InvalidSyntax message -> raise ParsedValueOutOfRange message "
+        "end) catch ParsedValueOutOfRange message -> 3; _ -> 0 end",
+        "nested_heap_exception_transfer", "3",
+        "tag=ADT allocs=2 frees=2 leaked=0");
+
+    assert_zero_alloc_leaks(
+        "let message = [7] in "
+        "let caught = try raise InvalidSyntax \"boom\" "
+        "catch InvalidSyntax message -> 0 end in "
+        "case message of [value] -> value; _ -> caught end",
+        "caught_exception_binding_shadow_restore", "7",
+        "tag=ADT allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("async exception propagation transfers its owner to the caller") {
+    const auto ir = assert_zero_alloc_leaks(
+        "extern async raiseOwned : Int -> Int = "
+        "\"YonaTestAsyncRaiseOwned\" in "
+        "try let failed = raiseOwned 0, sibling = [1] in 0 "
+        "catch InvalidSyntax message -> 5; _ -> 0 end",
+        "async_heap_exception_owner", "5",
+        "tag=ADT allocs=1 frees=1 leaked=0");
+    CHECK(ir.find("YonaRuntimeAsyncCall") != std::string::npos);
+  }
+
   TEST_CASE("generated channel programs release their endpoint graph") {
     const auto fixture =
         yona::test::codegen_fixtures_dir() / "channel_basic.yona";
@@ -371,8 +438,11 @@ TEST_SUITE("Pattern ownership") {
       CAPTURE(name);
       const auto fixture = fixtures / (std::string(name) + ".yona");
       REQUIRE(fs::exists(fixture));
-      assert_zero_alloc_leaks(read_file(fixture),
-                              std::string(name) + "_allocations");
+      const bool raises_native =
+          std::string(name).starts_with("channel_deadlock");
+      assert_zero_alloc_leaks(
+          read_file(fixture), std::string(name) + "_allocations", {},
+          raises_native ? "tag=STRING allocs=1 frees=1 leaked=0" : "");
     }
   }
 }

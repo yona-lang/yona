@@ -510,9 +510,15 @@ void Codegen::declare_runtime() {
   rt_.try_begin_ = decl("YonaRuntimeTryBegin", ptr, {}); // returns void*[5]
   rt_.try_end_ = decl("YonaRuntimeTryEnd", vd, {});
   rt_.raise_ = decl("YonaRuntimeRaise", vd, {i64, ptr});
+  rt_.raise_owned_ = decl("YonaRuntimeRaiseOwned", vd, {i64, ptr, ptr});
+  rt_.reraise_ = decl("YonaRuntimeReraise", vd, {});
   rt_.get_exc_sym_ = decl("YonaRuntimeGetExceptionSymbol", i64, {});
   rt_.get_exc_msg_ = decl("YonaRuntimeGetExceptionMessage", ptr, {});
+  rt_.consume_exc_owner_ =
+      decl("YonaRuntimeConsumeExceptionOwner", vd, {i64});
   rt_.raise_->addFnAttr(llvm::Attribute::NoReturn);
+  rt_.raise_owned_->addFnAttr(llvm::Attribute::NoReturn);
+  rt_.reraise_->addFnAttr(llvm::Attribute::NoReturn);
 
   // Perceus phase 3: frame-scoped heap cleanup on raise. See
   // src/Runtime/Core/Exceptions.c for the runtime layout.

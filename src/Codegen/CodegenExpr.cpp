@@ -2109,6 +2109,7 @@ TypedValue Codegen::codegen_raise(RaiseExpr *node) {
   auto i64_ty = LType::getInt64Ty(*context_);
   Value *tag_val;
   Value *payload_val;
+  Value *exception_owner = nullptr;
 
   if (exc_val.type == CType::ADT && exc_val.val->getType()->isStructTy()) {
     // Non-recursive ADT: extract tag and first payload field
@@ -2120,6 +2121,7 @@ TypedValue Codegen::codegen_raise(RaiseExpr *node) {
       if (payload_val->getType()->isIntegerTy())
         payload_val = builder_->CreateIntToPtr(payload_val,
                                                PointerType::get(*context_, 0));
+      exception_owner = payload_val;
     } else {
       payload_val = ConstantPointerNull::get(PointerType::get(*context_, 0));
     }
@@ -2132,6 +2134,7 @@ TypedValue Codegen::codegen_raise(RaiseExpr *node) {
         rt_.adt_get_field_, {exc_val.val, ConstantInt::get(i64_ty, 0)});
     payload_val =
         builder_->CreateIntToPtr(field, PointerType::get(*context_, 0));
+    exception_owner = exc_val.val;
   } else {
     // Fallback: treat as integer tag with no payload
     tag_val = exc_val.val;
@@ -2143,8 +2146,14 @@ TypedValue Codegen::codegen_raise(RaiseExpr *node) {
   // YonaRuntimeRaise transfers control immediately. Pattern-bound owners are
   // local to selected case arms rather than function unwind frames, so they
   // must be released before entering the runtime.
-  emit_active_arm_drops(exc_val.val);
-  builder_->CreateCall(rt_.raise_, {tag_val, payload_val});
+  if (exception_owner)
+    emit_frame_transfer(exception_owner);
+  emit_active_arm_drops(exception_owner ? exception_owner : exc_val.val);
+  if (exception_owner)
+    builder_->CreateCall(rt_.raise_owned_,
+                         {tag_val, payload_val, exception_owner});
+  else
+    builder_->CreateCall(rt_.raise_, {tag_val, payload_val});
   builder_->CreateUnreachable();
   return {UndefValue::get(i64_ty), CType::UNIT};
 }
@@ -2241,6 +2250,8 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
   if (node->catchExpr) {
     for (size_t ci = 0; ci < node->catchExpr->patterns.size(); ci++) {
       auto *cp = node->catchExpr->patterns[ci];
+      auto catch_named_values = named_values_;
+      std::optional<TypedValue> owned_payload;
       auto body_bb =
           BasicBlock::Create(*context_, "catch.body." + std::to_string(ci), fn);
       BasicBlock *next_bb;
@@ -2272,6 +2283,8 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
                                   : CType::INT;
                 if (fi == 0) {
                   named_values_[(*id)->name->value] = {exc_payload, ftype};
+                  if (is_heap_type(ftype))
+                    owned_payload = TypedValue{exc_payload, ftype};
                 } else {
                   named_values_[(*id)->name->value] = {
                       ConstantInt::get(i64_ty, 0), CType::INT};
@@ -2297,6 +2310,10 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
           tup = builder_->CreateInsertValue(tup, exc_payload, {1});
           named_values_[(*id)->name->value] = {
               tup, CType::TUPLE, {CType::INT, CType::STRING}};
+          // The runtime exception tuple's message is its sole heap child.
+          // Keep that child alive for the selected handler even though the
+          // tuple itself is an unboxed SSA aggregate.
+          owned_payload = TypedValue{exc_payload, CType::STRING};
         }
         builder_->CreateBr(body_bb);
         builder_->SetInsertPoint(body_bb);
@@ -2305,6 +2322,18 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
         builder_->SetInsertPoint(body_bb);
       }
 
+      // Selecting a catch arm atomically converts the runtime-held exception
+      // owner into an ordinary handler-local payload owner. A wildcard catch
+      // consumes and releases the exception without retaining its payload.
+      builder_->CreateCall(
+          rt_.consume_exc_owner_,
+          {ConstantInt::get(i64_ty, owned_payload.has_value() ? 1 : 0)});
+      arm_drop_stack_.push_back({});
+      arm_scrutinee_drop_stack_.push_back(std::nullopt);
+      if (owned_payload)
+        arm_drop_stack_.back().push_back(
+            {owned_payload->val, owned_payload->type});
+
       // Compile handler body
       TypedValue handler_val;
       if (auto *pwog = std::get_if<PatternWithoutGuards *>(&cp->pattern))
@@ -2312,16 +2341,21 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
       if (!handler_val)
         handler_val = {ConstantInt::get(i64_ty, 0), CType::INT};
 
-      if (!current_block_terminated()) {
+      const bool handler_terminated = current_block_terminated();
+      if (!handler_terminated) {
+        emit_arm_drops(arm_drop_stack_.back(), handler_val.val);
         builder_->CreateBr(merge_bb);
         catch_results.push_back({handler_val, builder_->GetInsertBlock()});
       }
+      arm_drop_stack_.pop_back();
+      arm_scrutinee_drop_stack_.pop_back();
+      named_values_ = std::move(catch_named_values);
 
       if (ci + 1 < node->catchExpr->patterns.size())
         builder_->SetInsertPoint(next_bb);
       else {
         builder_->SetInsertPoint(next_bb);
-        builder_->CreateCall(rt_.raise_, {exc_tag, exc_payload});
+        builder_->CreateCall(rt_.reraise_, {});
         builder_->CreateUnreachable();
       }
     }

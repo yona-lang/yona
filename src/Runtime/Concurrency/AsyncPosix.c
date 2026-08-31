@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 void YonaRuntimeArenaDestroy(void *ArenaPtr);
@@ -27,8 +28,15 @@ void YonaRuntimeArenaDestroy(void *ArenaPtr);
 void *YonaRuntimeTryBegin(void);
 void YonaRuntimeTryEnd(void);
 void YonaRuntimeRaise(int64_t Symbol, const char *Message);
+void YonaRuntimeRaiseOwned(int64_t Symbol, const char *Message, void *Owner);
 int64_t YonaRuntimeGetExceptionSymbol(void);
 const char *YonaRuntimeGetExceptionMessage(void);
+void *YonaRuntimeTakeExceptionOwner(void);
+void YonaRuntimeRelease(void *Value);
+void *YonaRuntimeAllocateStringWithLength(size_t Bytes, size_t StringLength);
+void *YonaRuntimeAdtAllocate(int64_t Tag, int64_t FieldCount);
+void YonaRuntimeAdtSetField(void *Value, int64_t Index, int64_t Field);
+void YonaRuntimeAdtSetHeapMask(void *Value, int64_t Mask);
 
 struct YonaTask {
   int64_t Result;
@@ -54,6 +62,7 @@ struct YonaTaskGroup {
   /* Error from first failing child */
   int64_t FirstErrorSymbol;
   const char *FirstErrorMsg;
+  void *FirstErrorOwner;
   int HasError;
   /* Bump Arena for structured-concurrency scope (parent Thread only) */
   void *Arena;
@@ -175,6 +184,8 @@ void YonaRuntimeTaskGroupEnd(YonaTaskGroupRef Group) {
   YonaRuntimeTaskGroupDetachArena(TaskGroup);
   for (int I = 0; I < TaskGroup->ChildCount; I++)
     destroyPromise(TaskGroup->Children[I]);
+  YonaRuntimeRelease(TaskGroup->FirstErrorOwner);
+  TaskGroup->FirstErrorOwner = NULL;
   pthread_mutex_destroy(&TaskGroup->Mutex);
   pthread_cond_destroy(&TaskGroup->DoneCond);
   free(TaskGroup->Children);
@@ -403,17 +414,21 @@ static void *yonaPoolWorker(void *Unused) {
       fulfillPromise(Task, Result, 0);
     } else {
       /* Task raised an exception — capture in Group */
+      void *Owner = YonaRuntimeTakeExceptionOwner();
       if (Task->Group) {
         pthread_mutex_lock(&Task->Group->Mutex);
         if (!Task->Group->HasError) {
           Task->Group->FirstErrorSymbol = YonaRuntimeGetExceptionSymbol();
           Task->Group->FirstErrorMsg = YonaRuntimeGetExceptionMessage();
+          Task->Group->FirstErrorOwner = Owner;
+          Owner = NULL;
           Task->Group->HasError = 1;
         }
         pthread_mutex_unlock(&Task->Group->Mutex);
         /* Cancel siblings */
         YonaRuntimeTaskGroupCancel(Task->Group);
       }
+      YonaRuntimeRelease(Owner);
       fulfillPromise(Task, 0, 1);
     }
 
@@ -633,8 +648,10 @@ int64_t YonaRuntimeTaskGroupAwaitAll(YonaTaskGroupRef G) {
   if (G->HasError) {
     int64_t Sym = G->FirstErrorSymbol;
     const char *Msg = G->FirstErrorMsg;
+    void *Owner = G->FirstErrorOwner;
+    G->FirstErrorOwner = NULL;
     /* Don't end Group here — let the codegen do it after cleanup */
-    YonaRuntimeRaise(Sym, Msg);
+    YonaRuntimeRaiseOwned(Sym, Msg, Owner);
   }
 
   return 0;
@@ -644,6 +661,27 @@ int64_t YonaRuntimeTaskGroupAwaitAll(YonaTaskGroupRef G) {
 int64_t YonaTestSlowIdentity(int64_t Ms) {
   usleep((useconds_t)(Ms * 1000));
   return Ms;
+}
+
+/* Test helper: propagate a genuinely owned heap ADT through an async worker's
+ * exception boundary and into the parent task group. */
+int64_t YonaTestAsyncRaiseOwned(int64_t Ignored) {
+  (void)Ignored;
+  static const char Message[] = "boom";
+  char *Payload =
+      (char *)YonaRuntimeAllocateStringWithLength(sizeof(Message), 4);
+  if (!Payload)
+    YonaRuntimeRaise(0, "exception payload allocation failed");
+  memcpy(Payload, Message, sizeof(Message));
+  void *Owner = YonaRuntimeAdtAllocate(0, 1);
+  if (!Owner) {
+    YonaRuntimeRelease(Payload);
+    YonaRuntimeRaise(0, "exception owner allocation failed");
+  }
+  YonaRuntimeAdtSetField(Owner, 0, (int64_t)(intptr_t)Payload);
+  YonaRuntimeAdtSetHeapMask(Owner, 1);
+  YonaRuntimeRaiseOwned(0, Payload, Owner);
+  return 0;
 }
 
 /* Test helper: multi-Arg async function — adds two numbers with A delay */

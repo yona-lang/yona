@@ -48,8 +48,21 @@ void YonaRuntimeClosureSetHeapMask(void *Closure, int64_t Mask);
 void YonaRuntimeClosureSetBorrowMask(void *Closure, int64_t Mask);
 
 void YonaRuntimeRaise(int64_t Symbol, const char *Message);
+/// Raise an exception while transferring one heap owner into the runtime.
+/// Payload may point into Owner (for example an ADT field). Both pointers stay
+/// valid until a matching catch consumes the owner or the exception is
+/// re-raised.
+void YonaRuntimeRaiseOwned(int64_t Symbol, const char *Payload, void *Owner);
+/// Re-raise the current exception without changing or duplicating its owner.
+void YonaRuntimeReraise(void);
 int64_t YonaRuntimeGetExceptionSymbol(void);
 const char *YonaRuntimeGetExceptionMessage(void);
+/// Atomically remove the current exception owner from TLS. The caller assumes
+/// responsibility for releasing or transferring the returned reference.
+void *YonaRuntimeTakeExceptionOwner(void);
+/// Select a catch arm. When PayloadIsHeap is nonzero, retain the payload before
+/// releasing the enclosing exception owner so the handler receives one owner.
+void YonaRuntimeConsumeExceptionOwner(int64_t PayloadIsHeap);
 
 void *YonaRuntimeByteArrayFromString(const char *String);
 int64_t *YonaRuntimeIntArrayAllocate(int64_t Count);

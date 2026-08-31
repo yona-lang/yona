@@ -1388,7 +1388,12 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
         // Extract body from the catch pattern's variant
         if (auto *pwog = std::get_if<PatternWithoutGuards *>(&cp->pattern)) {
           if (*pwog && (*pwog)->expr) {
-            auto *catch_type = infer((*pwog)->expr, env, level);
+            // A catch pattern introduces the same lexical bindings as a case
+            // pattern. Keep each clause isolated so its bindings neither leak
+            // into sibling clauses nor overwrite an enclosing name.
+            auto catch_env = env->child();
+            infer_pattern(cp->matchPattern, catch_env, level);
+            auto *catch_type = infer((*pwog)->expr, catch_env, level);
             unifier_.unify(try_type, catch_type, node->Range,
                            "in try/catch (all branches must have same type)");
           }

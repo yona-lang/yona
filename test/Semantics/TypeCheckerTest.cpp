@@ -1031,6 +1031,28 @@ TEST_SUITE("TypeChecker") { // reopen suite
     CHECK(check_expr_str("let f x = x + 1 in f 5") == "Int");
   }
 
+  TEST_CASE("Inference: catch constructor bindings are clause scoped") {
+    yona::parser::Parser parser;
+    yona::compiler::codegen::Codegen codegen(
+        "catch_constructor_binding_typecheck");
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    YONA_TEST_INSTALL_PRELUDE(codegen, parser, checker);
+
+    auto parsed = parser.parseExpression(
+        "try raise InvalidSyntax \"boom\" "
+        "catch InvalidSyntax message -> message end",
+        "<stream>");
+    REQUIRE(parsed);
+    REQUIRE(parsed->Expression);
+    auto *type = checker.check(parsed->Expression.get());
+    REQUIRE(type);
+    CHECK(checker.solve_constraints());
+    CHECK_FALSE(checker.has_errors());
+    CHECK(yona::compiler::typechecker::pretty_print(checker.zonk(type)) ==
+          "String");
+  }
+
   TEST_CASE("Inference: tuple") {
     CHECK(check_expr_str("(1, \"hello\")") == "(Int, String)");
     CHECK(check_expr_str("(1, 2, 3)") == "(Int, Int, Int)");
