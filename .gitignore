@@ -1,6 +1,7 @@
 # Out-of-tree builds and generated CMake/Ninja state
 /out/
 /build/
+/.worktrees/
 /cmake-build*/
 [Dd]ebug/
 [Rr]elease/
