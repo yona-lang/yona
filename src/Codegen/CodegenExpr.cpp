@@ -2134,6 +2134,10 @@ TypedValue Codegen::codegen_raise(RaiseExpr *node) {
     payload_val = ConstantPointerNull::get(PointerType::get(*context_, 0));
   }
 
+  // YonaRuntimeRaise transfers control immediately. Pattern-bound owners are
+  // local to selected case arms rather than function unwind frames, so they
+  // must be released before entering the runtime.
+  emit_active_arm_drops(exc_val.val);
   builder_->CreateCall(rt_.raise_, {tag_val, payload_val});
   builder_->CreateUnreachable();
   return {UndefValue::get(i64_ty), CType::UNIT};
@@ -2202,7 +2206,11 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
 
   // Try body
   builder_->SetInsertPoint(try_bb);
+  // A raise caught by this try only exits case arms created inside the try.
+  // Enclosing arm bindings remain live when the catch handler resumes.
+  try_arm_drop_depth_stack_.push_back(arm_drop_stack_.size());
   auto try_val = codegen(node->tryExpr);
+  try_arm_drop_depth_stack_.pop_back();
   bool try_terminated = current_block_terminated();
   BasicBlock *try_end_bb = nullptr;
   if (!try_terminated) {

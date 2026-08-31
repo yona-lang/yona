@@ -25,6 +25,42 @@ using llvm::StructType;
 using llvm::Value;
 using LType = llvm::Type;
 
+bool Codegen::arm_drop_was_transferred(Value *value, CType type) const {
+  if (type == CType::SEQ)
+    return is_transferred(value, TransferDomain::Seq);
+  if (type == CType::SET || type == CType::DICT)
+    return is_transferred(value, TransferDomain::Map);
+  return false;
+}
+
+void Codegen::emit_arm_drops(
+    const std::vector<std::pair<Value *, CType>> &drops, Value *escaping) {
+  for (const auto &[value, type] : drops) {
+    if (value == escaping || arm_drop_was_transferred(value, type))
+      continue;
+    emit_rc_dec(value, type);
+  }
+}
+
+void Codegen::emit_arm_scrutinee_drop(const std::optional<TypedValue> &drop,
+                                      Value *escaping) {
+  if (!drop || drop->val == escaping ||
+      arm_drop_was_transferred(drop->val, drop->type))
+    return;
+  emit_frame_transfer(drop->val);
+  emit_rc_dec(drop->val, drop->type);
+}
+
+void Codegen::emit_active_arm_drops(Value *escaping) {
+  const size_t catch_boundary =
+      try_arm_drop_depth_stack_.empty() ? 0 : try_arm_drop_depth_stack_.back();
+  for (size_t index = arm_drop_stack_.size(); index > catch_boundary; --index) {
+    emit_arm_drops(arm_drop_stack_[index - 1], escaping);
+    if (index <= arm_scrutinee_drop_stack_.size())
+      emit_arm_scrutinee_drop(arm_scrutinee_drop_stack_[index - 1], escaping);
+  }
+}
+
 // ===== Pattern match helpers (extracted from codegen_case) =====
 
 bool Codegen::codegen_pattern_value(PatternValue *pv,
@@ -1237,21 +1273,6 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
       node->expr->get_type() != ast::AST_IDENTIFIER_EXPR &&
       is_heap_value(scrutinee);
 
-  auto value_was_transferred = [&](Value *value, CType type) {
-    if (type == CType::SEQ)
-      return is_transferred(value, TransferDomain::Seq);
-    if (type == CType::SET || type == CType::DICT)
-      return is_transferred(value, TransferDomain::Map);
-    return false;
-  };
-  auto emit_arm_drops = [&](const auto &drops, Value *escaping) {
-    for (auto &[value, type] : drops) {
-      if (value == escaping || value_was_transferred(value, type))
-        continue;
-      emit_rc_dec(value, type);
-    }
-  };
-
   // A finite constructor match that covers every variant has no legitimate
   // fall-through edge after its final arm. Sending that impossible edge to
   // the value merge creates a predecessor which bypasses values bound by an
@@ -1325,6 +1346,7 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     // bindings (currently just head-tail `rest`) accumulate here and
     // are rc_dec'd after the arm body is codegen'd.
     arm_drop_stack_.push_back({});
+    arm_scrutinee_drop_stack_.push_back(std::nullopt);
 
     if (pat->get_type() == ast::AST_UNDERSCORE_PATTERN) {
       builder_->CreateBr(body_bb);
@@ -1581,6 +1603,14 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
       builder_->SetInsertPoint(guarded_bb);
     }
 
+    // The selected arm owns a temporary heap scrutinee alongside any retained
+    // pattern bindings. Register it only after a guard succeeds: a rejected
+    // arm must preserve the scrutinee for subsequent patterns. Keeping all
+    // selected-arm owners in one drop scope also lets `raise` release them
+    // before its non-returning runtime call.
+    if (case_owns_scrutinee && !arm_scrutinee_drop_stack_.empty())
+      arm_scrutinee_drop_stack_.back() = scrutinee;
+
     auto body_tv = codegen(clause->body);
     if (!body_tv)
       return {};
@@ -1590,24 +1620,24 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     // escapes the arm and the caller becomes its owner. Also skip
     // values whose seq ownership was transferred to a consumer during
     // the body (user-defined call or nested pattern-match consume).
-    if (!arm_drop_stack_.empty()) {
+    const bool body_terminated = current_block_terminated();
+    if (!body_terminated && !arm_drop_stack_.empty())
       emit_arm_drops(arm_drop_stack_.back(), body_tv.val);
+    if (!body_terminated && !arm_scrutinee_drop_stack_.empty())
+      emit_arm_scrutinee_drop(arm_scrutinee_drop_stack_.back(), body_tv.val);
+    if (!arm_drop_stack_.empty())
       arm_drop_stack_.pop_back();
-    }
-    if (case_owns_scrutinee && scrutinee.val != body_tv.val &&
-        !value_was_transferred(scrutinee.val, scrutinee.type)) {
-      emit_frame_transfer(scrutinee.val);
-      emit_rc_dec(scrutinee.val, scrutinee.type);
-    }
+    if (!arm_scrutinee_drop_stack_.empty())
+      arm_scrutinee_drop_stack_.pop_back();
     named_values_ = std::move(arm_named_values);
     BasicBlock *arm_exit =
         current_block_terminated() ? nullptr : builder_->GetInsertBlock();
     if (arm_exit && body_tv.type == CType::SEQ)
       mark_transferred(body_tv.val, TransferDomain::Seq);
-    if (arm_exit)
+    if (arm_exit) {
       builder_->CreateBr(merge_bb);
-    results.push_back(
-        {body_tv, arm_exit ? arm_exit : builder_->GetInsertBlock()});
+      results.push_back({body_tv, arm_exit});
+    }
     transfer_branch_end(arm_exit);
 
     // Later arms cannot be reached after an unguarded catch-all.  Besides
@@ -1631,8 +1661,10 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
   fn->insert(fn->end(), merge_bb);
   transfer_scope_exit();
   builder_->SetInsertPoint(merge_bb);
-  if (results.empty())
-    return {};
+  if (results.empty()) {
+    builder_->CreateUnreachable();
+    return {llvm::UndefValue::get(LType::getInt64Ty(*context_)), CType::UNIT};
+  }
 
   unsigned pred_count = 0;
   for (auto it = pred_begin(merge_bb); it != pred_end(merge_bb); ++it)

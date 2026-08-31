@@ -479,6 +479,14 @@ private:
   // active case arm; codegen_case pushes a new frame on entry to the
   // arm and drops + pops on exit.
   std::vector<std::vector<std::pair<llvm::Value *, CType>>> arm_drop_stack_;
+  std::vector<std::optional<TypedValue>> arm_scrutinee_drop_stack_;
+  std::vector<std::size_t> try_arm_drop_depth_stack_;
+  bool arm_drop_was_transferred(llvm::Value *value, CType type) const;
+  void emit_arm_drops(const std::vector<std::pair<llvm::Value *, CType>> &drops,
+                      llvm::Value *escaping = nullptr);
+  void emit_arm_scrutinee_drop(const std::optional<TypedValue> &drop,
+                               llvm::Value *escaping = nullptr);
+  void emit_active_arm_drops(llvm::Value *escaping = nullptr);
 
   // ===== Perceus linear: seq ownership tracking =====
   //

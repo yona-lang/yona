@@ -30,13 +30,13 @@ std::string read_file(const fs::path &path) {
   return contents.str();
 }
 
-void assert_zero_alloc_leaks(const std::string &source,
-                             const std::string &artifact_stem,
-                             const std::string &expected_output = {},
-                             const std::string &expected_stats = {},
-                             const fs::path &module_root = {},
-                             const fs::path &module_object = {},
-                             std::size_t minimum_retain_calls = 0) {
+std::string assert_zero_alloc_leaks(const std::string &source,
+                                    const std::string &artifact_stem,
+                                    const std::string &expected_output = {},
+                                    const std::string &expected_stats = {},
+                                    const fs::path &module_root = {},
+                                    const fs::path &module_object = {},
+                                    std::size_t minimum_retain_calls = 0) {
   REQUIRE(yona::test::link::ensure_runtime_objects());
 
   parser::Parser parser;
@@ -60,8 +60,8 @@ void assert_zero_alloc_leaks(const std::string &source,
   REQUIRE_FALSE(type_checker.has_errors());
   codegen.set_type_checker(&type_checker);
   REQUIRE(codegen.compile(parsed->Expression.get()));
+  const auto ir = codegen.emit_ir();
   if (minimum_retain_calls > 0) {
-    const auto ir = codegen.emit_ir();
     std::size_t retain_calls = 0;
     for (std::size_t position = 0;
          (position = ir.find("call void @YonaRuntimeRetain", position)) !=
@@ -109,6 +109,7 @@ void assert_zero_alloc_leaks(const std::string &source,
     position = end;
   }
   REQUIRE(leak_rows > 0);
+  return ir;
 }
 
 void assert_generic_record_zero_alloc_leaks(
@@ -277,6 +278,60 @@ TEST_SUITE("Pattern ownership") {
         "case values of [result] -> result; _ -> 0 end; None -> 0 end",
         "captured_nested_let_constructor_field", "3",
         "tag=SEQ allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("terminated case arms release pattern owners before raising") {
+    const auto ir = assert_zero_alloc_leaks(
+        "try case ([1], 2) of (x, y) -> raise 1 end catch _ -> 0 end",
+        "terminated_tuple_pattern_arm", "0",
+        "tag=SEQ allocs=1 frees=1 leaked=0");
+
+    const auto raise = ir.find("call void @YonaRuntimeRaise");
+    REQUIRE(raise != std::string::npos);
+    const auto unreachable = ir.find("unreachable", raise);
+    REQUIRE(unreachable != std::string::npos);
+    std::size_t releases = 0;
+    for (std::size_t position = 0;
+         (position = ir.find("call void @YonaRuntimeRelease", position)) !=
+             std::string::npos &&
+         position < raise;
+         position += 4)
+      ++releases;
+    CHECK(releases == 2);
+    CHECK(raise < unreachable);
+    CHECK(ir.find("call void @YonaRuntimeRelease", raise) == std::string::npos);
+
+    const auto frame_ir =
+        assert_zero_alloc_leaks("let terminate xs = "
+                                "try case (if true then xs else xs) of "
+                                "[x] -> raise 1; _ -> 2 end catch _ -> 0 end "
+                                "in terminate [1]",
+                                "terminated_case_arm_frame_transfer", "0",
+                                "tag=SEQ allocs=1 frees=1 leaked=0");
+    const auto frame_transfer =
+        frame_ir.find("call void @YonaRuntimeFrameTransfer");
+    REQUIRE(frame_transfer != std::string::npos);
+    const auto frame_release =
+        frame_ir.find("call void @YonaRuntimeRelease", frame_transfer);
+    REQUIRE(frame_release != std::string::npos);
+    const auto frame_raise =
+        frame_ir.find("call void @YonaRuntimeRaise", frame_release);
+    REQUIRE(frame_raise != std::string::npos);
+    CHECK(frame_transfer < frame_release);
+    CHECK(frame_release < frame_raise);
+
+    const auto caught_ir = assert_zero_alloc_leaks(
+        "case ([1], 2) of (x, y) -> "
+        "let caught = try raise 1 catch _ -> 0 end in "
+        "let replacement = [9] in "
+        "case replacement of _ -> "
+        "case x of [value] -> value; _ -> 0 end end end",
+        "caught_raise_preserves_outer_pattern_owner", "1",
+        "tag=SEQ allocs=2 frees=2 leaked=0");
+    const auto caught_raise = caught_ir.find("call void @YonaRuntimeRaise");
+    REQUIRE(caught_raise != std::string::npos);
+    CHECK(caught_ir.rfind("call void @YonaRuntimeRelease", caught_raise) ==
+          std::string::npos);
   }
 
   TEST_CASE("generated channel programs release their endpoint graph") {
