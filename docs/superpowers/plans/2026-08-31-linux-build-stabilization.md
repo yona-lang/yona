@@ -601,6 +601,109 @@ git add include/yona/Runtime/Platform/IoContext.h \
 git commit -m "fix: share the platform I/O context contract"
 ```
 
+### Task 8: Separate installed executable targets from generated files
+
+**Files:**
+
+- Modify: `cmake/YonaPackageTools.cmake`
+- Modify: `test/CMake/InstalledConsumer/RunInstalledConsumer.cmake`
+- Test: `installed_consumer_contract`
+
+**Interfaces:**
+
+- Consumes: `yona_add_executable(<target> SOURCE <file>)` and its
+  `YONA_EXECUTABLE` target property.
+- Produces: a stable custom target whose generated executable has a distinct
+  filesystem path under the consumer build tree.
+
+- [ ] **Step 1: Reproduce the Ninja target/output collision**
+
+Run:
+
+```bash
+ctest --preset unit-tests-linux -R installed_consumer_contract --output-on-failure
+```
+
+Expected: consumer generation fails because the phony
+`yona_language_consumer` target and its output file share the same Ninja name.
+
+- [ ] **Step 2: Put generated executables in a dedicated directory**
+
+Change the installed helper's default output path to a dedicated `bin/`
+directory below `CMAKE_CURRENT_BINARY_DIR`, retaining the requested target and
+output basenames. Keep `YONA_EXECUTABLE` set to the complete generated path and
+update the contract runner to execute that path.
+
+- [ ] **Step 3: Verify the installed consumer contract**
+
+Run:
+
+```bash
+ctest --preset unit-tests-linux -R installed_consumer_contract --output-on-failure
+```
+
+Expected: configure, build, and execution all pass without Ninja duplicate-rule
+warnings.
+
+- [ ] **Step 4: Commit the installed-helper repair**
+
+```bash
+git add cmake/YonaPackageTools.cmake \
+  test/CMake/InstalledConsumer/RunInstalledConsumer.cmake
+git commit -m "fix: separate installed Yona targets from outputs"
+```
+
+### Task 9: Propagate Vulkan linkage to fixture-generated programs
+
+**Files:**
+
+- Modify: `test/Toolchain/YonaLinkUtil.h`
+- Test: `doctest_stdlib_gpu`
+
+**Interfaces:**
+
+- Consumes: the configured Vulkan loader path already recorded in
+  `yona/Runtime/Generated/VulkanLinkConfig.h` and the canonical static runtime
+  archive.
+- Produces: subprocess link commands that carry the runtime archive's Vulkan
+  loader dependency on every supported platform.
+
+- [ ] **Step 1: Reproduce the missing transitive dependency**
+
+Run:
+
+```bash
+ctest --preset unit-tests-linux -R doctest_stdlib_gpu --output-on-failure
+```
+
+Expected: the generated GPU fixture returns `LINK_ERROR` with unresolved
+`vk*` symbols from `libyona_runtime.a`.
+
+- [ ] **Step 2: Append the configured loader arguments**
+
+Teach the shared generated-program linker helper to consume
+`VulkanLinkConfig.h`. When a loader was configured, append its full Windows
+import-library path or the configured Unix library directory plus `-lvulkan`;
+on macOS also retain the loader directory as an rpath. Keep these arguments
+after the runtime archive so static-library resolution order remains valid.
+
+- [ ] **Step 3: Verify the GPU conformance fixture**
+
+Run:
+
+```bash
+ctest --preset unit-tests-linux -R doctest_stdlib_gpu --output-on-failure
+```
+
+Expected: the fixture links and the focused CTest test passes.
+
+- [ ] **Step 4: Commit the fixture-link repair**
+
+```bash
+git add test/Toolchain/YonaLinkUtil.h
+git commit -m "fix: link generated fixtures with Vulkan"
+```
+
 ## Follow-up Plan Sequence
 
 After this plan produces a buildable test runner, create and execute focused
