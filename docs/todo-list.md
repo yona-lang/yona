@@ -238,11 +238,13 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   non-concrete. Reconcile channel creation, payload descriptors, and the
   canonical `Std\Channel` interfaces.
 
-- [ ] **The checked-in GPU channel helper interface loses its endpoint and
+- [x] **The checked-in GPU channel helper interface loses its endpoint and
   operation types.** Repro: run the `gpu_float_channel` fixture;
   `drainMapFloatGpu` imports as `ADT INT INT -> INT` instead of
   `FloatMapOp -> Receiver FloatArray -> Sender FloatArray -> Int`, producing
-  a type error before the channel runtime is exercised.
+  a type error before the channel runtime is exercised. Fixed by regenerating
+  `Std\Gpu.yonai` from the canonical source model and locking the structural
+  operation and endpoint descriptors in the interface catalog tests.
 
 - [ ] **Generated channel programs leak their endpoint object graph.** Repro:
   run a compiled `channel_basic` with `YONA_ALLOC_STATS=1`; it returns `42`
@@ -283,6 +285,13 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `Count`, and `Offset`, the write path similarly references lowercase
   `fd`, `data`, `len`, and `offset`, and the fallback/seek/truncate blocks
   contain the same incomplete identifier-case migration.
+
+- [ ] **The macOS network runtime uses stale context fields and lowercase
+  locals.** Repro: compile `src/Runtime/Platform/NetMacOs.c`; async operations
+  initialize removed `YonaIoContext` members `type`, `fd`, and `buf`, while
+  connect/listen/HTTP/UDP paths reference undeclared identifiers such as
+  `hints`, `res`, `addr`, `ai`, and `fd` instead of their declared canonical
+  spellings.
 
 - [ ] **Cancelling an async file write frees a reference-counted ByteArray
   payload directly.** Repro: submit `writeBytes` and cancel its I/O context
