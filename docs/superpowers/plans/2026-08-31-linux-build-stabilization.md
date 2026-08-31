@@ -761,6 +761,81 @@ git add CMakeLists.txt
 git commit -m "fix: resolve installed compiler libraries relocatably"
 ```
 
+### Task 11: Eliminate Linux binary-I/O fallback context leaks
+
+**Files:**
+
+- Modify: `src/Runtime/Platform/FileLinux.c`
+- Modify: `CMakeLists.txt`
+- Create: `test/Runtime/IoFallbackLeakProbe.c`
+- Test: `runtime_io_fallback_leak` when Valgrind is available
+
+**Interfaces:**
+
+- Consumes: handle-based byte read/write submission when `io_uring_setup`
+  fails and `YonaRuntimeIoUringSubmit` returns zero.
+- Produces: blocking fallbacks that create only the direct-result context and
+  retain/release byte arrays exactly once.
+
+- [ ] **Step 1: Reproduce both leaked contexts deterministically**
+
+Build a Linux-only probe that installs a seccomp filter returning `EPERM` for
+`io_uring_setup`, performs one descriptor byte read and write, awaits both
+direct results, and releases their byte arrays. Run it with:
+
+```bash
+valgrind --leak-check=full --show-leak-kinds=definite \
+  --errors-for-leak-kinds=definite --error-exitcode=99 \
+  ./out/build/x64-debug-linux/runtime_io_fallback_leak_probe
+```
+
+Expected before the fix: Valgrind reports two 32-byte definitely-lost blocks
+allocated by the read and write submission functions.
+
+- [ ] **Step 2: Allocate asynchronous contexts only after successful submit**
+
+In both handle-based byte functions, keep buffers pinned before submission as
+required, but defer allocation and initialization of `YonaIoContext` until
+after a nonzero operation ID is returned. The zero-ID paths must perform their
+blocking operation, balance the write retain, and register only the direct
+result context.
+
+- [ ] **Step 3: Register and verify the optional leak regression**
+
+On Linux, build the probe against `yona_runtime`. When `valgrind` is found,
+register `runtime_io_fallback_leak` with the exact definite-leak options above.
+Run:
+
+```bash
+cmake --build --preset build-debug-linux \
+  --target runtime_io_fallback_leak_probe
+ctest --test-dir out/build/x64-debug-linux \
+  -R runtime_io_fallback_leak --output-on-failure
+```
+
+Expected: the probe builds and Valgrind exits zero with no definitely-lost
+context blocks.
+
+- [ ] **Step 4: Verify the normal runtime suites**
+
+Run:
+
+```bash
+cmake --build --preset build-debug-linux --target tests
+./out/build/x64-debug-linux/tests -ts="IoReadExact"
+./out/build/x64-debug-linux/tests -ts="RuntimeGuards"
+```
+
+Expected: every focused case and assertion passes.
+
+- [ ] **Step 5: Commit the fallback repair**
+
+```bash
+git add src/Runtime/Platform/FileLinux.c CMakeLists.txt \
+  test/Runtime/IoFallbackLeakProbe.c
+git commit -m "fix: release Linux binary I/O fallback contexts"
+```
+
 ## Follow-up Plan Sequence
 
 After this plan produces a buildable test runner, create and execute focused
