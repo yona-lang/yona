@@ -1,0 +1,21 @@
+let intMatch = case 2 of 1 -> false; 2 -> true; _ -> false end,
+    symbolMatch = case :two of :one -> false; :two -> true; _ -> false end,
+    byteMatch = case 66b of 65b -> false; 66b -> true; _ -> false end,
+    charMatch = case 'B' of 'A' -> false; 'B' -> true; _ -> false end,
+    floatMatch = case 2.5 of 1.5 -> false; 2.5 -> true; _ -> false end,
+    stringMatch = case "two" of "one" -> false; "two" -> true; _ -> false end,
+    boolMatch = case false of true -> false; false -> true end,
+    unitMatch = case () of () -> true end,
+    orFloat = case 2.5 of
+        1.5 | 3.5 -> false
+        2.5 -> true
+        _ -> false
+    end,
+    orString = case "two" of
+        "one" | "three" -> false
+        "two" -> true
+        _ -> false
+    end,
+    orBool = case false of true | true -> false; false -> true end
+in (intMatch, symbolMatch, byteMatch, charMatch, floatMatch, stringMatch,
+    boolMatch, unitMatch, orFloat, orString, orBool)

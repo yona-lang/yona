@@ -1,0 +1,33 @@
+let ints = case [1, 2] of [1, 3] -> false; [1, 2] -> true; _ -> false end,
+    symbols = case [:one, :two] of
+        [:one, :three] -> false
+        [:one, :two] -> true
+        _ -> false
+    end,
+    bytes = case [65b, 66b] of
+        [65b, 67b] -> false
+        [65b, 66b] -> true
+        _ -> false
+    end,
+    chars = case ['A', 'B'] of
+        ['A', 'C'] -> false
+        ['A', 'B'] -> true
+        _ -> false
+    end,
+    floats = case [1.5, 2.5] of
+        [1.5, 3.5] -> false
+        [1.5, 2.5] -> true
+        _ -> false
+    end,
+    strings = case ["one", "two"] of
+        ["one", "three"] -> false
+        ["one", "two"] -> true
+        _ -> false
+    end,
+    bools = case [true, false] of
+        [true, true] -> false
+        [true, false] -> true
+        _ -> false
+    end,
+    units = case [(), ()] of [(), ()] -> true; _ -> false end
+in (ints, symbols, bytes, chars, floats, strings, bools, units)

@@ -972,6 +972,8 @@ private:
   TypedValue codegen_if(IfExpr *node);
   TypedValue codegen_case(CaseExpr *node);
   // codegen_case pattern helpers — return true if body codegen was inlined
+  llvm::Value *emit_literal_pattern_predicate(AstNode *literal,
+                                              const TypedValue &scrutinee);
   bool codegen_pattern_value(PatternValue *pat, const TypedValue &scrutinee,
                              llvm::BasicBlock *body_bb,
                              llvm::BasicBlock *next_bb);

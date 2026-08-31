@@ -63,6 +63,55 @@ void Codegen::emit_active_arm_drops(Value *escaping) {
 
 // ===== Pattern match helpers (extracted from codegen_case) =====
 
+Value *Codegen::emit_literal_pattern_predicate(AstNode *literal,
+                                               const TypedValue &scrutinee) {
+  if (!literal || !scrutinee.val)
+    return ConstantInt::getFalse(*context_);
+
+  const auto literal_value = codegen(literal);
+  if (!literal_value)
+    return ConstantInt::getFalse(*context_);
+
+  auto *i64_ty = LType::getInt64Ty(*context_);
+  switch (literal->get_type()) {
+  case ast::AST_STRING_EXPR: {
+    Value *actual = scrutinee.val;
+    if (actual->getType()->isIntegerTy())
+      actual = builder_->CreateIntToPtr(actual, PointerType::get(*context_, 0),
+                                        "pattern_string_ptr");
+    auto *equal =
+        builder_->CreateCall(rt_.string_eq_, {actual, literal_value.val});
+    return builder_->CreateICmpNE(equal, ConstantInt::get(i64_ty, 0));
+  }
+  case ast::AST_FLOAT_EXPR: {
+    Value *actual = scrutinee.val;
+    if (actual->getType()->isIntegerTy())
+      actual = builder_->CreateBitCast(actual, LType::getDoubleTy(*context_),
+                                       "pattern_float");
+    return builder_->CreateFCmpOEQ(actual, literal_value.val);
+  }
+  case ast::AST_TRUE_LITERAL_EXPR:
+  case ast::AST_FALSE_LITERAL_EXPR: {
+    Value *actual = scrutinee.val;
+    if (!actual->getType()->isIntegerTy(1))
+      actual = builder_->CreateICmpNE(
+          actual, ConstantInt::get(actual->getType(), 0), "pattern_bool");
+    return builder_->CreateICmpEQ(actual, literal_value.val);
+  }
+  case ast::AST_INTEGER_EXPR:
+  case ast::AST_BYTE_EXPR:
+  case ast::AST_CHARACTER_EXPR:
+  case ast::AST_UNIT_EXPR: {
+    Value *actual = scrutinee.val;
+    if (actual->getType()->isIntegerTy() && actual->getType() != i64_ty)
+      actual = builder_->CreateZExtOrTrunc(actual, i64_ty);
+    return builder_->CreateICmpEQ(actual, literal_value.val);
+  }
+  default:
+    return ConstantInt::getFalse(*context_);
+  }
+}
+
 bool Codegen::codegen_pattern_value(PatternValue *pv,
                                     const TypedValue &scrutinee,
                                     BasicBlock *body_bb, BasicBlock *next_bb) {
@@ -76,13 +125,8 @@ bool Codegen::codegen_pattern_value(PatternValue *pv,
     builder_->CreateCondBr(cmp, body_bb, next_bb);
   } else if (auto *lit = std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
     auto *an = reinterpret_cast<AstNode *>(*lit);
-    if (an->get_type() == ast::AST_INTEGER_EXPR) {
-      auto *ie = static_cast<IntegerExpr *>(an);
-      auto mv = ConstantInt::get(LType::getInt64Ty(*context_), ie->value);
-      auto cmp = builder_->CreateICmpEQ(scrutinee.val, mv);
-      builder_->CreateCondBr(cmp, body_bb, next_bb);
-    } else
-      builder_->CreateBr(body_bb);
+    builder_->CreateCondBr(emit_literal_pattern_predicate(an, scrutinee),
+                           body_bb, next_bb);
   } else
     builder_->CreateBr(body_bb);
   return false;
@@ -174,6 +218,24 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
           emit_rc_inc(elem_val, head_type);
           if (!arm_drop_stack_.empty())
             arm_drop_stack_.back().push_back({elem_val, head_type});
+        }
+      } else {
+        Value *predicate = nullptr;
+        if (auto *symbol = std::get_if<SymbolExpr *>(&pv->expr)) {
+          predicate = builder_->CreateICmpEQ(
+              hv, ConstantInt::get(i64_ty, intern_symbol((*symbol)->value)));
+        } else if (auto *literal =
+                       std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
+          predicate = emit_literal_pattern_predicate(
+              reinterpret_cast<AstNode *>(*literal),
+              TypedValue{elem_val, head_type});
+        }
+        if (predicate) {
+          auto *matched =
+              BasicBlock::Create(*context_, "head.literal.match",
+                                 builder_->GetInsertBlock()->getParent());
+          builder_->CreateCondBr(predicate, matched, next_bb);
+          builder_->SetInsertPoint(matched);
         }
       }
     } else if (hp->get_type() == ast::AST_TUPLE_PATTERN) {
@@ -428,22 +490,22 @@ bool Codegen::codegen_pattern_seq(SeqPattern *sp, const TypedValue &scrutinee,
           named_values_[(*id)->name->value] = std::move(bound);
           return;
         }
-        Value *expected = nullptr;
-        if (auto *symbol = std::get_if<SymbolExpr *>(&value_pattern->expr))
-          expected = ConstantInt::get(i64_ty, intern_symbol((*symbol)->value));
-        else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
-                     &value_pattern->expr)) {
+        Value *predicate = nullptr;
+        if (auto *symbol = std::get_if<SymbolExpr *>(&value_pattern->expr)) {
+          auto *expected =
+              ConstantInt::get(i64_ty, intern_symbol((*symbol)->value));
+          predicate = builder_->CreateICmpEQ(carrier, expected);
+        } else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
+                       &value_pattern->expr)) {
           auto *node = reinterpret_cast<AstNode *>(*literal);
-          if (node->get_type() == ast::AST_INTEGER_EXPR)
-            expected = ConstantInt::get(
-                i64_ty, static_cast<IntegerExpr *>(node)->value);
+          TypedValue actual{carrier, identity ? identity->type : CType::INT};
+          predicate = emit_literal_pattern_predicate(node, actual);
         }
-        if (expected) {
+        if (predicate) {
           auto *matched =
               BasicBlock::Create(*context_, "seq.exact.value",
                                  builder_->GetInsertBlock()->getParent());
-          builder_->CreateCondBr(builder_->CreateICmpEQ(carrier, expected),
-                                 matched, next_bb);
+          builder_->CreateCondBr(predicate, matched, next_bb);
           builder_->SetInsertPoint(matched);
         }
         return;
@@ -565,6 +627,19 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
         if (auto *identifier =
                 std::get_if<IdentifierExpr *>(&value_pattern->expr))
           bind_identifier(*identifier, nested_element, element_identity);
+        else if (auto *symbol = std::get_if<SymbolExpr *>(&value_pattern->expr))
+          branch_to_match_or_cleanup(
+              builder_->CreateICmpEQ(
+                  nested_element,
+                  ConstantInt::get(i64_ty, intern_symbol((*symbol)->value))),
+              "nested.tuple.symbol.match");
+        else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
+                     &value_pattern->expr))
+          branch_to_match_or_cleanup(
+              emit_literal_pattern_predicate(
+                  reinterpret_cast<AstNode *>(*literal),
+                  TypedValue{nested_element, element_identity.type}),
+              "nested.tuple.lit.match");
       }
     }
   };
@@ -604,16 +679,9 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
       } else if (auto *lit =
                      std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
         auto *an = reinterpret_cast<AstNode *>(*lit);
-        if (an->get_type() == ast::AST_INTEGER_EXPR) {
-          auto *ie = static_cast<IntegerExpr *>(an);
-          Value *cmp_val = elem;
-          if (cmp_val->getType() != i64_ty)
-            cmp_val = builder_->CreateZExtOrTrunc(cmp_val, i64_ty);
-          branch_to_match_or_cleanup(
-              builder_->CreateICmpEQ(cmp_val,
-                                     ConstantInt::get(i64_ty, ie->value)),
-              "tuple.lit.match");
-        }
+        branch_to_match_or_cleanup(
+            emit_literal_pattern_predicate(an, TypedValue{elem, et}),
+            "tuple.lit.match");
       }
     } else if (sub->get_type() == ast::AST_TUPLE_PATTERN) {
       SemanticTypeIdentity identity;
@@ -641,6 +709,24 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
   int8_t tag = static_cast<int8_t>(ctor_it->second.tag);
   auto tag_ty = LType::getInt64Ty(*context_);
   auto i64_ty = LType::getInt64Ty(*context_);
+  auto *fn = builder_->GetInsertBlock()->getParent();
+
+  auto branch_to_match_or_cleanup = [&](Value *condition,
+                                        const llvm::Twine &match_name) {
+    auto *match_bb = BasicBlock::Create(*context_, match_name, fn);
+    if (arm_drop_stack_.empty() || arm_drop_stack_.back().empty()) {
+      builder_->CreateCondBr(condition, match_bb, next_bb);
+    } else {
+      auto *cleanup_bb =
+          BasicBlock::Create(*context_, match_name + ".failed", fn);
+      builder_->CreateCondBr(condition, match_bb, cleanup_bb);
+      builder_->SetInsertPoint(cleanup_bb);
+      for (const auto &[value, type] : arm_drop_stack_.back())
+        emit_rc_dec(value, type);
+      builder_->CreateBr(next_bb);
+    }
+    builder_->SetInsertPoint(match_bb);
+  };
 
   using FieldShape = AdtInfo::FieldShape;
   std::function<void(PatternNode *, Value *, const FieldShape &)> bind_pattern;
@@ -680,8 +766,24 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
       return;
     auto *value_pattern = static_cast<PatternValue *>(pattern);
     auto *identifier = std::get_if<IdentifierExpr *>(&value_pattern->expr);
-    if (!identifier)
+    if (!identifier) {
+      if (auto *symbol = std::get_if<SymbolExpr *>(&value_pattern->expr)) {
+        auto *actual = raw_value;
+        if (actual->getType() != i64_ty)
+          actual = builder_->CreateZExtOrTrunc(actual, i64_ty);
+        branch_to_match_or_cleanup(
+            builder_->CreateICmpEQ(
+                actual,
+                ConstantInt::get(i64_ty, intern_symbol((*symbol)->value))),
+            "constructor.symbol.match");
+      } else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
+                     &value_pattern->expr))
+        branch_to_match_or_cleanup(emit_literal_pattern_predicate(
+                                       reinterpret_cast<AstNode *>(*literal),
+                                       TypedValue{raw_value, shape.type}),
+                                   "constructor.lit.match");
       return;
+    }
 
     Value *typed_value = raw_value;
     if (shape.type == CType::FLOAT && raw_value->getType()->isIntegerTy())
@@ -913,7 +1015,8 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
             bound.adt_type_name = "Option";
           }
           named_values_[(*id)->name->value] = bound;
-        }
+        } else
+          bind_field_pattern(fi, field_val);
       } else if (sub_pat->get_type() == ast::AST_TUPLE_PATTERN) {
         bind_field_pattern(fi, field_val);
       }
@@ -980,7 +1083,8 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
               ctor_it->second.type_name == "Option")
             bound.boxed_heap = scrutinee.boxed_heap || is_heap_type(ftype);
           named_values_[(*id)->name->value] = bound;
-        }
+        } else
+          bind_field_pattern(fi, field_val);
       } else if (sub_pat->get_type() == ast::AST_TUPLE_PATTERN) {
         bind_field_pattern(fi, field_val);
       }
@@ -1423,15 +1527,9 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
           } else if (auto *lit =
                          std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
             auto *an = reinterpret_cast<AstNode *>(*lit);
-            if (an->get_type() == ast::AST_INTEGER_EXPR) {
-              auto *ie = static_cast<IntegerExpr *>(an);
-              auto mv =
-                  ConstantInt::get(LType::getInt64Ty(*context_), ie->value);
-              auto cmp = builder_->CreateICmpEQ(scrutinee.val, mv);
-              builder_->CreateCondBr(cmp, body_bb, alt_next);
-            } else {
-              builder_->CreateBr(body_bb);
-            }
+            builder_->CreateCondBr(
+                emit_literal_pattern_predicate(an, scrutinee), body_bb,
+                alt_next);
           } else if (auto *id = std::get_if<IdentifierExpr *>(&pv->expr)) {
             named_values_[(*id)->name->value] = scrutinee;
             builder_->CreateBr(body_bb);
@@ -1498,6 +1596,22 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
           }
           return shape;
         };
+        auto branch_to_record_match_or_cleanup =
+            [&](Value *condition, const llvm::Twine &match_name) {
+              auto *match_bb = BasicBlock::Create(*context_, match_name, fn);
+              if (arm_drop_stack_.empty() || arm_drop_stack_.back().empty()) {
+                builder_->CreateCondBr(condition, match_bb, next_bb);
+              } else {
+                auto *cleanup_bb =
+                    BasicBlock::Create(*context_, match_name + ".failed", fn);
+                builder_->CreateCondBr(condition, match_bb, cleanup_bb);
+                builder_->SetInsertPoint(cleanup_bb);
+                for (const auto &[value, type] : arm_drop_stack_.back())
+                  emit_rc_dec(value, type);
+                builder_->CreateBr(next_bb);
+              }
+              builder_->SetInsertPoint(match_bb);
+            };
         std::function<void(PatternNode *, Value *, const FieldShape &)>
             bind_field;
         bind_field = [&](PatternNode *field_pattern, Value *raw_value,
@@ -1530,8 +1644,27 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
           auto *value_pattern = static_cast<PatternValue *>(field_pattern);
           auto *identifier =
               std::get_if<IdentifierExpr *>(&value_pattern->expr);
-          if (!identifier)
+          if (!identifier) {
+            if (auto *symbol =
+                    std::get_if<SymbolExpr *>(&value_pattern->expr)) {
+              auto *actual = raw_value;
+              if (actual->getType() != i64_ty)
+                actual = builder_->CreateZExtOrTrunc(actual, i64_ty);
+              branch_to_record_match_or_cleanup(
+                  builder_->CreateICmpEQ(
+                      actual, ConstantInt::get(
+                                  i64_ty, intern_symbol((*symbol)->value))),
+                  "record.symbol.match");
+            } else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
+                           &value_pattern->expr)) {
+              branch_to_record_match_or_cleanup(
+                  emit_literal_pattern_predicate(
+                      reinterpret_cast<AstNode *>(*literal),
+                      TypedValue{raw_value, shape.type}),
+                  "record.literal.match");
+            }
             return;
+          }
           Value *typed_value = raw_value;
           if (shape.type == CType::FLOAT && raw_value->getType()->isIntegerTy())
             typed_value = builder_->CreateBitCast(

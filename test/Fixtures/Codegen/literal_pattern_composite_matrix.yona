@@ -1,0 +1,21 @@
+let tupleMatch = case (2.5, "two", false, 66b, 'B') of
+        (1.5, "two", false, 66b, 'B') -> false
+        (2.5, "two", false, 66b, 'B') -> true
+        _ -> false
+    end,
+    nestedTupleMatch = case (("two", 2.5), false) of
+        (("one", 2.5), false) -> false
+        (("two", 2.5), false) -> true
+        _ -> false
+    end,
+    constructorMatch = case Some "two" of
+        Some "one" -> false
+        Some "two" -> true
+        None -> false
+    end,
+    headTailMatch = case ["two", "rest"] of
+        ["one" | _] -> false
+        ["two" | _] -> true
+        _ -> false
+    end
+in (tupleMatch, nestedTupleMatch, constructorMatch, headTailMatch)
