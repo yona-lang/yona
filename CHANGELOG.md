@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- `nullptr_t` uses now remain in the appropriate standard or AST namespace,
+  restoring builds with libstdc++ 16 after the namespace-import cleanup.
+
 ### Changed
 
 - `cmake --install` now exports only Yona's declared package surface; bundled

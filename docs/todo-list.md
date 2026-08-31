@@ -6,6 +6,31 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **The Linux io_uring implementation disagrees with its public cancel
+  declaration.** Repro: build the debug `tests` target; `IoUringLinux.c`
+  defines `YonaRuntimeIoUringCancelGroup(uint64_t *, int)` while
+  `IoUring.h` declares `const uint64_t *`. Reconcile the ownership contract
+  in the declaration and definition.
+
+- [ ] **The modularized Linux platform I/O sources still use the pre-refactor
+  `YonaIoContext` fields and inconsistent local identifier casing.** Repro:
+  build the debug `tests` target; `FileLinux.c` and `NetLinux.c` reference
+  removed `type`, `fd`, and `buf` fields, and names such as `hints`/`res`
+  that are declared as `Hints`/`Res`. Port these consumers to the canonical
+  context API and identifier spelling.
+
+- [ ] **The modularized native stdlib sources contain inconsistent local
+  identifier casing.** Repro: build the debug `tests` target; `Native.c`
+  declares `Buf`, `Len`, `Cap`, `Fd`, `Got`, and `Off` but later uses their
+  lowercase forms. Restore consistent identifiers in the read/write helpers.
+
+- [x] **The modularized AST header omitted its `nullptr_t` import.** Repro:
+  build with Clang 22 and libstdc++ 16; `yona/Syntax/Ast.h` rejects its
+  unqualified `nullptr_t` uses. Fixed by explicitly importing
+  `std::nullptr_t` into `yona::ast` and qualifying semantic uses outside that
+  namespace; the AST compile regression verifies the unit-expression literal
+  type.
+
 ### Frontend correctness audit (2026-08-30)
 
 - [ ] **Generic functions reconstructed from `.yonai` can lose their native

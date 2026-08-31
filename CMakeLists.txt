@@ -663,6 +663,7 @@ add_executable(tests
 	"${PROJECT_SOURCE_DIR}/test/Codegen/CodegenTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/TypedIrLoweringTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Support/DoctestMain.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Syntax/AstTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Syntax/FormatParserTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Runtime/GpuStubTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Runtime/GpuVulkanDeviceTest.cpp"

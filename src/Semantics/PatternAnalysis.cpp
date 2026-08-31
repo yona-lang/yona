@@ -110,8 +110,10 @@ bool covers(PatternNode *cover, PatternNode *candidate) {
     if (candidate->get_type() != AST_PATTERN_VALUE)
       return false;
     auto *other = static_cast<PatternValue *>(candidate);
-    if (auto *left = std::get_if<LiteralExpr<nullptr_t> *>(&value->expr)) {
-      auto *right = std::get_if<LiteralExpr<nullptr_t> *>(&other->expr);
+    if (auto *left =
+            std::get_if<LiteralExpr<std::nullptr_t> *>(&value->expr)) {
+      auto *right =
+          std::get_if<LiteralExpr<std::nullptr_t> *>(&other->expr);
       return right && static_cast<AstNode *>(*left)->get_type() ==
                           static_cast<AstNode *>(*right)->get_type();
     }
