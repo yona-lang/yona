@@ -29,7 +29,7 @@ dictionary-ownership bugs remain for later focused plans.
 
 - Modify: `test/Semantics/InterfaceCatalogTest.cpp`
 
-- [ ] **Step 1: Witness the current failure**
+- [x] **Step 1: Witness the current failure**
 
 Run:
 
@@ -41,18 +41,18 @@ Run:
 Expected RED: the parser reports that the test fixture's `case` expression is
 missing its mandatory `end` token.
 
-- [ ] **Step 2: Correct only the malformed test source**
+- [x] **Step 2: Correct only the malformed test source**
 
 Add `end` to the embedded generic source. Do not change
 `GenericFunctionSourceService`; the service already retains the source manager
 and parsed module correctly for valid canonical source.
 
-- [ ] **Step 3: Run the focused semantic interface suite**
+- [x] **Step 3: Run the focused semantic interface suite**
 
 Run the focused test above and `./out/build/x64-debug-linux/tests
 -ts="Semantics"`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit as `test: repair generic source ownership fixture`.
 

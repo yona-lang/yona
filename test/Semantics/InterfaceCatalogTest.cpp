@@ -50,7 +50,8 @@ TEST_CASE("Semantics generic source service retains GENFN source ownership") {
       {"Some", "Option", 0, 1, {"value"}}, {"None", "Option", 1, 0, {}}};
 
   auto Parsed = Service.parseGenericModule(
-      "identityOption", "identityOption value = case value of\nSome x -> x\nNone -> 0",
+      "identityOption",
+      "identityOption value = case value of\nSome x -> x\nNone -> 0 end",
       Constructors);
   REQUIRE(Parsed.has_value());
   REQUIRE(Parsed->Sources);
