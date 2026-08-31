@@ -255,6 +255,23 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   its generated program with `YONA_ALLOC_STATS=1`; output is correct (`12`)
   and all six File/Linear ADTs are freed, but both ByteArrays remain leaked.
 
+- [ ] **Destructuring a named tuple can free it before its enclosing scope's
+  final use.** Repro: compile and run
+  `let t = ([1], [2]) in let (x, y) = t in let q = (3, 4) in t`; tuple-pattern
+  lowering releases `t`, the unrelated allocation reuses its pool slot, and
+  the final access to `t` exits with status 139.
+
+- [ ] **A failed tuple pattern leaks heap-valued prefix bindings.** Repro: run
+  `case ([1], :no) of (x, :yes) -> 1; _ -> 0 end` with
+  `YONA_ALLOC_STATS=1`; it prints `0`, but the sequence bound before the
+  symbol mismatch reports one allocation and zero frees.
+
+- [ ] **The macOS file runtime uses undeclared lowercase async-I/O locals.**
+  Repro: compile `src/Runtime/Platform/FileMacOs.c`; the read path references
+  `fd`, `buf`, `count`, and `offset` although its parameters are `Fd`, `Buf`,
+  `Count`, and `Offset`, and the write path similarly references lowercase
+  `fd`, `data`, `len`, and `offset`.
+
 - [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
   boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
   `binary_chunks`, `binary_seek`, and `binary_write_read` report an expected
