@@ -6,6 +6,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **Generated fixture links discard a configured MoltenVK library name.**
+  Repro: configure macOS with `YONA_VULKAN_LIBRARY` resolving directly to
+  `libMoltenVK.dylib` and no `libvulkan.dylib`; the fixture linker retains only
+  the directory and emits `-lvulkan`, so the supported direct-MoltenVK link
+  cannot resolve.
+
 - [ ] **Linux file-descriptor I/O fallbacks leak their initially allocated
   io_uring context.** Repro: force `YonaRuntimeIoUringSubmit` to return zero
   in `YonaRuntimePlatformSubmitFileDescriptorByteRead` or
