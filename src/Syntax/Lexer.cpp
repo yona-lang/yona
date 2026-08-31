@@ -120,13 +120,13 @@ std::expected<char32_t, LexError> Lexer::peek_char() const {
   size_t len = 0;
   char32_t result = 0;
 
-  if ((ch & 0xE0) == 0xC0) {
+  if (ch >= 0xC2 && ch <= 0xDF) {
     len = 2;
     result = ch & 0x1F;
-  } else if ((ch & 0xF0) == 0xE0) {
+  } else if (ch >= 0xE0 && ch <= 0xEF) {
     len = 3;
     result = ch & 0x0F;
-  } else if ((ch & 0xF8) == 0xF0) {
+  } else if (ch >= 0xF0 && ch <= 0xF4) {
     len = 4;
     result = ch & 0x07;
   } else {
@@ -151,10 +151,22 @@ std::expected<char32_t, LexError> Lexer::peek_char() const {
     result = (result << 6) | (byte & 0x3F);
   }
 
+  const bool non_minimal =
+      (len == 3 && result < 0x800) || (len == 4 && result < 0x10000);
+  const bool surrogate = result >= 0xD800 && result <= 0xDFFF;
+  if (non_minimal || surrogate || result > 0x10FFFF) {
+    return std::unexpected(LexError{LexError::Type::INVALID_CHARACTER,
+                                    "Invalid UTF-8 scalar value",
+                                    currentRange()});
+  }
+
   return result;
 }
 
 std::expected<char32_t, LexError> Lexer::advance_char() {
+  if (isAtEnd())
+    return U'\0';
+
   auto ch_result = peek_char();
   if (!ch_result) {
     return ch_result;

@@ -108,14 +108,14 @@ Run AST/parser formatting tests and the Unicode fixture, then commit as
 - Modify only if a decoded-width result is required: `include/yona/Syntax/Lexer.h`
 - Modify: `test/Syntax/LexerTest.cpp`
 
-- [ ] **Step 1: Add raw-byte RED coverage**
+- [x] **Step 1: Add raw-byte RED coverage**
 
 Test overlong `C0 80`, `E0 80 80`, and `F0 80 80 80`, an encoded surrogate
 `ED A0 80`, and above-U+10FFFF `F4 90 80 80`. Assert `INVALID_CHARACTER`,
 bounded recovery, and no exception/crash; retain valid two-, three-, and
 four-byte boundary controls.
 
-- [ ] **Step 2: Validate decoding before cursor advancement**
+- [x] **Step 2: Validate decoding before cursor advancement**
 
 Reject illegal lead-byte ranges, non-minimal encodings, surrogate scalars, and
 values above U+10FFFF in the UTF-8 decoder. Make cursor advancement use the
@@ -123,7 +123,7 @@ validated encoded width (or an equivalent lead-byte-derived width), so an
 invalid/overlong result cannot desynchronize `Current` from `SourceText`.
 Recovery must consume at least one raw byte and stay within the source range.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run the full Lexer suite, parser recovery controls, and malformed-input CLI
 repros, then commit as `fix: reject malformed UTF-8 source`.

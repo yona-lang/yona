@@ -273,6 +273,53 @@ TEST_SUITE("Lexer") {
     CHECK(errors[0].type == LexError::Type::INVALID_CHARACTER);
   }
 
+  TEST_CASE("Malformed UTF-8 is rejected with bounded recovery") {
+    const vector<pair<string, string>> malformed = {
+        {"overlong two-byte", string("\xC0\x80", 2)},
+        {"overlong three-byte", string("\xE0\x80\x80", 3)},
+        {"overlong four-byte", string("\xF0\x80\x80\x80", 4)},
+        {"encoded surrogate", string("\xED\xA0\x80", 3)},
+        {"above Unicode maximum", string("\xF4\x90\x80\x80", 4)},
+    };
+
+    for (const auto &[name, bytes] : malformed) {
+      CAPTURE(name);
+      string source = "'" + bytes + "'\n";
+      auto lexer = makeLexer(source);
+      auto result = lexer.tokenize();
+
+      REQUIRE_FALSE(result.has_value());
+      const auto &errors = result.error();
+      REQUIRE_FALSE(errors.empty());
+      CHECK(errors.front().type == LexError::Type::INVALID_CHARACTER);
+      CHECK(errors.size() <= source.size());
+    }
+  }
+
+  TEST_CASE("UTF-8 scalar boundaries retain their decoded values") {
+    const vector<pair<string, char32_t>> valid = {
+        {string("\xC2\x80", 2), char32_t{0x80}},
+        {string("\xDF\xBF", 2), char32_t{0x7FF}},
+        {string("\xE0\xA0\x80", 3), char32_t{0x800}},
+        {string("\xED\x9F\xBF", 3), char32_t{0xD7FF}},
+        {string("\xEE\x80\x80", 3), char32_t{0xE000}},
+        {string("\xF0\x90\x80\x80", 4), char32_t{0x10000}},
+        {string("\xF4\x8F\xBF\xBF", 4), char32_t{0x10FFFF}},
+    };
+
+    for (const auto &[bytes, expected] : valid) {
+      CAPTURE(expected);
+      auto lexer = makeLexer("'" + bytes + "'");
+      auto result = lexer.tokenize();
+
+      REQUIRE(result.has_value());
+      const auto &tokens = result.value();
+      REQUIRE(tokens.size() == 2);
+      CHECK(tokens.front().type == TokenType::YCHARACTER);
+      CHECK(get<char32_t>(tokens.front().value) == expected);
+    }
+  }
+
   TEST_CASE("CharacterLiterals") {
     LexerTest fixture;
     auto lexer = makeLexer("'a' '\\n' '\\u0041'");
