@@ -19,41 +19,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "yona/Runtime/Platform/IoContext.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef enum YonaIoOperationKind {
-  YonaIoOperationReadFile,
-  YonaIoOperationWriteFile,
-  YonaIoOperationAccept,
-  YonaIoOperationConnect,
-  YonaIoOperationSend,
-  YonaIoOperationReceive,
-  YonaIoOperationReceiveBytes,
-  YonaIoOperationReadFileBytes,
-  YonaIoOperationReadFileDescriptorBytes,
-  YonaIoOperationWriteFileDescriptorBytes,
-  YonaIoOperationWriteFileDescriptorString,
-} YonaIoOperationKind;
-
-typedef struct YonaIoContext {
-  YonaIoOperationKind Kind;
-  int FileDescriptor;
-  char *Buffer;
-  size_t BufferSize;
-  int CloseFileDescriptor;
-} YonaIoContext;
-
-#define YONA_IO_CONTEXT_TABLE_SIZE 1024
 
 uint64_t YonaRuntimeIoUringSubmit(struct io_uring_sqe *Submission);
 int32_t YonaRuntimeIoUringAwait(uint64_t Id);
 void YonaRuntimeIoUringCancel(uint64_t TargetId);
 void YonaRuntimeIoUringCancelGroup(const uint64_t *IoIds, int Count);
-
-void YonaRuntimeIoContextPut(uint64_t Id, YonaIoContext *Context);
-YonaIoContext *YonaRuntimeIoContextTake(uint64_t Id);
 
 #ifdef __cplusplus
 }
