@@ -25,7 +25,7 @@ source modules never pretend one HM parameter is `Int | FileHandle`.
 - Modify: focused runtime/channel tests under `test/Runtime/`
 - Modify only as needed for typed fixture controls: `test/Fixtures/Codegen/channel_*.yona`
 
-- [ ] **Step 1: Add runtime-shape and E2E RED coverage**
+- [x] **Step 1: Add runtime-shape and E2E RED coverage**
 
 Assert `YonaStdChannelChannel` returns
 `(Linear (Sender raw), Linear (Receiver raw))` with every heap mask and
@@ -34,7 +34,7 @@ currently reaches `YonaStdChannelRawSend(0, 42)` after double-unwrapping the
 runtime's missing layers. Add an explicit payload annotation only to fixtures
 whose payload truly remains unconstrained.
 
-- [ ] **Step 2: Add the missing runtime wrappers on both platforms**
+- [x] **Step 2: Add the missing runtime wrappers on both platforms**
 
 Allocate `Sender` and `Receiver` endpoint ADTs around the shared channel, then
 allocate one `Linear` ADT around each endpoint before placing them in the
@@ -42,7 +42,7 @@ tuple. Balance every allocation/retain/release path, including partial
 allocation failure. Keep payload descriptors, blocking semantics, and raw
 send/receive entry points unchanged.
 
-- [ ] **Step 3: Verify ownership and commit**
+- [x] **Step 3: Verify ownership and commit**
 
 Run direct runtime tests plus basic, capacity, heap-payload, close/deadlock,
 spawn/pipeline, and GPU channel fixtures. Run allocation-stat controls. Commit

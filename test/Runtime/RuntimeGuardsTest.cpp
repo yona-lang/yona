@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <memory>
 
 extern "C" {
 int64_t *YonaRuntimeSequenceAllocate(int64_t count);
@@ -108,6 +109,62 @@ TEST_SUITE("RuntimeGuards") {
     YonaRuntimeRelease(option);
     CHECK(runtime_rc_of(child) == 1);
     YonaRuntimeRelease(channel);
+    YonaRuntimeRelease(child);
+  }
+
+  TEST_CASE("channel constructor returns owning linear endpoint wrappers") {
+    YonaTypeDescriptor descriptor = YonaRuntimeReferenceTypeDescriptor;
+    std::unique_ptr<void, decltype(&YonaRuntimeRelease)> tuple(
+        YonaStdChannelChannel(4, &descriptor), &YonaRuntimeRelease);
+    REQUIRE(tuple != nullptr);
+
+    auto *tuple_value = static_cast<int64_t *>(tuple.get());
+    CHECK(runtime_rc_of(tuple_value) == 1);
+    REQUIRE(tuple_value[0] == 2);
+    CHECK(tuple_value[1] == 3);
+
+    auto *sender_linear = reinterpret_cast<int64_t *>(tuple_value[2]);
+    auto *receiver_linear = reinterpret_cast<int64_t *>(tuple_value[3]);
+    REQUIRE(sender_linear != nullptr);
+    REQUIRE(receiver_linear != nullptr);
+    CHECK(runtime_rc_of(sender_linear) == 1);
+    CHECK(runtime_rc_of(receiver_linear) == 1);
+    REQUIRE(sender_linear[0] == 0);
+    REQUIRE(receiver_linear[0] == 0);
+    REQUIRE(sender_linear[1] == 1);
+    REQUIRE(receiver_linear[1] == 1);
+    CHECK(sender_linear[2] == 1);
+    CHECK(receiver_linear[2] == 1);
+
+    auto *sender = reinterpret_cast<int64_t *>(sender_linear[3]);
+    auto *receiver = reinterpret_cast<int64_t *>(receiver_linear[3]);
+    REQUIRE(sender != nullptr);
+    REQUIRE(receiver != nullptr);
+    CHECK(runtime_rc_of(sender) == 1);
+    CHECK(runtime_rc_of(receiver) == 1);
+    REQUIRE(sender[0] == 0);
+    REQUIRE(receiver[0] == 0);
+    REQUIRE(sender[1] == 1);
+    REQUIRE(receiver[1] == 1);
+    CHECK(sender[2] == 1);
+    CHECK(receiver[2] == 1);
+
+    auto *sender_raw = reinterpret_cast<void *>(sender[3]);
+    auto *receiver_raw = reinterpret_cast<void *>(receiver[3]);
+    REQUIRE(sender_raw != nullptr);
+    CHECK(receiver_raw == sender_raw);
+    CHECK(runtime_rc_of(sender_raw) == 2);
+
+    descriptor = YonaRuntimeUnmanagedTypeDescriptor;
+    auto *child = YonaRuntimeSequenceAllocate(0);
+    YonaRuntimeRetain(child);
+    YonaRuntimeChannelSend(
+        static_cast<YonaChannelRef>(sender_raw),
+        static_cast<int64_t>(reinterpret_cast<intptr_t>(child)));
+    CHECK(runtime_rc_of(child) == 2);
+
+    tuple.reset();
+    CHECK(runtime_rc_of(child) == 1);
     YonaRuntimeRelease(child);
   }
 

@@ -240,27 +240,42 @@ void *YonaStdChannelChannel(int64_t Cap,
   int64_t Raw = (int64_t)(intptr_t)YonaRuntimeChannelCreate(Cap, PayloadType);
   if (Raw == 0)
     return NULL;
-  void *Left = YonaRuntimeAdtAllocate(0, 1);
-  void *Right = YonaRuntimeAdtAllocate(0, 1);
-  if (Left == NULL || Right == NULL) {
-    YonaRuntimeRelease(Left);
-    YonaRuntimeRelease(Right);
+  void *Sender = YonaRuntimeAdtAllocate(0, 1);
+  void *Receiver = YonaRuntimeAdtAllocate(0, 1);
+  if (Sender == NULL || Receiver == NULL) {
+    YonaRuntimeRelease(Sender);
+    YonaRuntimeRelease(Receiver);
     YonaRuntimeRelease((void *)(intptr_t)Raw);
     return NULL;
   }
   YonaRuntimeRetain((void *)(intptr_t)Raw);
-  YonaRuntimeAdtSetField(Left, 0, Raw);
-  YonaRuntimeAdtSetField(Right, 0, Raw);
-  YonaRuntimeAdtSetHeapMask(Left, 1);
-  YonaRuntimeAdtSetHeapMask(Right, 1);
-  void *Tuple = YonaRuntimeTupleAllocate(2);
-  if (Tuple == NULL) {
-    YonaRuntimeRelease(Left);
-    YonaRuntimeRelease(Right);
+  YonaRuntimeAdtSetField(Sender, 0, Raw);
+  YonaRuntimeAdtSetField(Receiver, 0, Raw);
+  YonaRuntimeAdtSetHeapMask(Sender, 1);
+  YonaRuntimeAdtSetHeapMask(Receiver, 1);
+
+  void *SenderLinear = YonaRuntimeAdtAllocate(0, 1);
+  void *ReceiverLinear = YonaRuntimeAdtAllocate(0, 1);
+  if (SenderLinear == NULL || ReceiverLinear == NULL) {
+    YonaRuntimeRelease(SenderLinear);
+    YonaRuntimeRelease(ReceiverLinear);
+    YonaRuntimeRelease(Sender);
+    YonaRuntimeRelease(Receiver);
     return NULL;
   }
-  YonaRuntimeTupleSet(Tuple, 0, (int64_t)(intptr_t)Left);
-  YonaRuntimeTupleSet(Tuple, 1, (int64_t)(intptr_t)Right);
+  YonaRuntimeAdtSetField(SenderLinear, 0, (int64_t)(intptr_t)Sender);
+  YonaRuntimeAdtSetField(ReceiverLinear, 0, (int64_t)(intptr_t)Receiver);
+  YonaRuntimeAdtSetHeapMask(SenderLinear, 1);
+  YonaRuntimeAdtSetHeapMask(ReceiverLinear, 1);
+
+  void *Tuple = YonaRuntimeTupleAllocate(2);
+  if (Tuple == NULL) {
+    YonaRuntimeRelease(SenderLinear);
+    YonaRuntimeRelease(ReceiverLinear);
+    return NULL;
+  }
+  YonaRuntimeTupleSet(Tuple, 0, (int64_t)(intptr_t)SenderLinear);
+  YonaRuntimeTupleSet(Tuple, 1, (int64_t)(intptr_t)ReceiverLinear);
   YonaRuntimeTupleSetHeapMask(Tuple, 3);
   return Tuple;
 }

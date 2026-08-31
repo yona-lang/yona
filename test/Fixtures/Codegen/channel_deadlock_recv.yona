@@ -1,9 +1,11 @@
-import channel, recv from Std\Channel in
-let (sl, rl) = channel 1 in
+import Std\Channel in
+let receive : Receiver Int -> Option Int
+    receive receiver = recv receiver
+in let (sl, rl) = channel 1 in
 case sl of Linear _ ->
 case rl of Linear receiver ->
     try
-        let _ = recv receiver in
+        let _ = receive receiver in
         0
     catch _ -> 123
     end
