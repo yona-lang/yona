@@ -1180,6 +1180,71 @@ void Codegen::GenfnNameIsolation::restore() {
   cg.types_.adt_constructors = std::move(saved_adt_constructors);
 }
 
+Codegen::PrivateGenfnDependencyOverlay::PrivateGenfnDependencyOverlay(
+    Codegen &cg, const std::optional<std::string> &owner)
+    : cg(cg) {
+  if (!owner)
+    return;
+  const auto dependencies = cg.imports_.private_genfn_dependencies.find(*owner);
+  if (dependencies == cg.imports_.private_genfn_dependencies.end())
+    return;
+
+  cg.active_private_dependency_overlays_.push_back(this);
+  std::unordered_set<std::string> overlaid_names;
+  for (const auto &[local_name, dependency] : dependencies->second) {
+    if (!overlaid_names.insert(local_name).second)
+      continue;
+
+    SavedBinding saved;
+    saved.name = local_name;
+    if (const auto existing = cg.imports_.extern_functions.find(local_name);
+        existing != cg.imports_.extern_functions.end())
+      saved.external = existing->second;
+    if (const auto existing = cg.compiled_functions_.find(local_name);
+        existing != cg.compiled_functions_.end())
+      saved.compiled = existing->second;
+    if (const auto existing = cg.deferred_functions_.find(local_name);
+        existing != cg.deferred_functions_.end())
+      saved.deferred = existing->second;
+    if (const auto existing = cg.named_values_.find(local_name);
+        existing != cg.named_values_.end())
+      saved.named_value = existing->second;
+    saved_bindings.push_back(std::move(saved));
+
+    cg.compiled_functions_.erase(local_name);
+    cg.deferred_functions_.erase(local_name);
+    cg.named_values_.erase(local_name);
+    cg.imports_.extern_functions[local_name] = dependency.c_symbol;
+  }
+}
+
+void Codegen::PrivateGenfnDependencyOverlay::restore() {
+  if (restored)
+    return;
+  restored = true;
+  const auto active =
+      std::find(cg.active_private_dependency_overlays_.begin(),
+                cg.active_private_dependency_overlays_.end(), this);
+  if (active != cg.active_private_dependency_overlays_.end())
+    cg.active_private_dependency_overlays_.erase(active);
+
+  for (auto it = saved_bindings.rbegin(); it != saved_bindings.rend(); ++it) {
+    const auto &saved = *it;
+    cg.imports_.extern_functions.erase(saved.name);
+    cg.compiled_functions_.erase(saved.name);
+    cg.deferred_functions_.erase(saved.name);
+    cg.named_values_.erase(saved.name);
+    if (saved.external)
+      cg.imports_.extern_functions.emplace(saved.name, *saved.external);
+    if (saved.compiled)
+      cg.compiled_functions_.emplace(saved.name, *saved.compiled);
+    if (saved.deferred)
+      cg.deferred_functions_.emplace(saved.name, *saved.deferred);
+    if (saved.named_value)
+      cg.named_values_.emplace(saved.name, *saved.named_value);
+  }
+}
+
 Codegen::ActiveNamedValueSnapshot::ActiveNamedValueSnapshot(
     Codegen &cg, NamedValueBindings &bindings)
     : cg_(cg), bindings_(bindings) {
@@ -1240,6 +1305,16 @@ void Codegen::migrate_function_references(Function *obsolete,
     migrate_bindings(isolation->saved_named_values);
     migrate_functions(isolation->saved_compiled_functions);
   }
+  for (auto *overlay : active_private_dependency_overlays_) {
+    if (!overlay)
+      continue;
+    for (auto &saved : overlay->saved_bindings) {
+      if (saved.named_value && saved.named_value->val == obsolete)
+        saved.named_value->val = replacement;
+      if (saved.compiled && saved.compiled->fn == obsolete)
+        saved.compiled->fn = replacement;
+    }
+  }
 }
 
 void Codegen::install_private_genfn_ctors(const std::string &mangled) {
@@ -1275,6 +1350,10 @@ void Codegen::register_sibling_genfns(const std::string &mangled) {
   std::vector<std::string> reachable_sources;
   reachable_sources.push_back(root_source_it->second.source_text);
   const std::string &root_local_name = root_source_it->second.local_name;
+  std::unordered_set<std::string> trait_implementation_targets;
+  for (const auto &[_, instance] : types_.trait_instances)
+    for (const auto &[__, target] : instance.method_mangled_names)
+      trait_implementation_targets.insert(target);
   std::unordered_set<std::string> registered_dependencies;
   bool discovered_dependency = true;
   while (discovered_dependency) {
@@ -1283,6 +1362,8 @@ void Codegen::register_sibling_genfns(const std::string &mangled) {
       if (dep_mangled == mangled)
         continue;
       if (ifs.module_fqn != module_fqn)
+        continue;
+      if (trait_implementation_targets.count(dep_mangled))
         continue;
       if (ifs.local_name == root_local_name ||
           registered_dependencies.count(dep_mangled))
@@ -1308,6 +1389,9 @@ void Codegen::register_sibling_genfns(const std::string &mangled) {
       deferred_functions_.erase(ifs.local_name);
       named_values_.erase(ifs.local_name);
       codegen_function_def(func_ast, ifs.local_name);
+      if (const auto deferred = deferred_functions_.find(ifs.local_name);
+          deferred != deferred_functions_.end())
+        deferred->second.imported_owner = dep_mangled;
       registered_dependencies.insert(dep_mangled);
       reachable_sources.push_back(ifs.source_text);
       discovered_dependency = true;

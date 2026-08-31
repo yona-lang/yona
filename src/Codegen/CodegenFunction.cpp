@@ -1068,8 +1068,15 @@ TypedValue Codegen::codegen_lambda_alias(LambdaAlias *node) {
 }
 
 Codegen::CompiledFunction
-Codegen::compile_function(const std::string &name, const DeferredFunction &def,
+Codegen::compile_function(const std::string &name,
+                          const DeferredFunction &input_def,
                           const std::vector<TypedValue> &args) {
+
+  // Installing an owner's private dependency may hide a deferred local with
+  // the same name as one of its dependencies. Keep this definition stable
+  // independently of the maps restored by the scoped overlay.
+  const DeferredFunction def = input_def;
+  PrivateGenfnDependencyOverlay dependency_overlay(*this, def.imported_owner);
 
   const auto source_self = deferred_functions_.find(def.ast->name);
   const bool has_source_self_alias = def.ast->name != name &&

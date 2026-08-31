@@ -278,6 +278,9 @@ struct DeferredFunction {
   FunctionExpr *ast;
   std::vector<std::string> param_names;
   std::vector<std::string> free_vars;
+  /// Exact exported GENFN whose private dependencies belong to this reparsed
+  /// sibling. Local source names are not unique across trait implementations.
+  std::optional<std::string> imported_owner;
 };
 
 class Codegen {
@@ -1102,10 +1105,36 @@ private:
     GenfnNameIsolation(const GenfnNameIsolation &) = delete;
     GenfnNameIsolation &operator=(const GenfnNameIsolation &) = delete;
   };
+  /// Temporarily exposes only the private dependencies declared by one
+  /// imported GENFN. Each affected local name is restored exactly, including
+  /// bindings hidden by the overlay.
+  struct PrivateGenfnDependencyOverlay {
+    struct SavedBinding {
+      std::string name;
+      std::optional<std::string> external;
+      std::optional<CompiledFunction> compiled;
+      std::optional<DeferredFunction> deferred;
+      std::optional<TypedValue> named_value;
+    };
+
+    Codegen &cg;
+    std::vector<SavedBinding> saved_bindings;
+    bool restored = false;
+    PrivateGenfnDependencyOverlay(Codegen &cg,
+                                  const std::optional<std::string> &owner);
+    void restore();
+    ~PrivateGenfnDependencyOverlay() { restore(); }
+    PrivateGenfnDependencyOverlay(const PrivateGenfnDependencyOverlay &) =
+        delete;
+    PrivateGenfnDependencyOverlay &
+    operator=(const PrivateGenfnDependencyOverlay &) = delete;
+  };
   /// Every active imported-GENFN isolation owns snapshots of compiler
   /// bindings. ABI refinement may replace a provisional LLVM Function while
   /// such a scope is active, so those snapshots must be migrated too.
   std::vector<GenfnNameIsolation *> active_genfn_isolations_;
+  std::vector<PrivateGenfnDependencyOverlay *>
+      active_private_dependency_overlays_;
   /// Ordinary nested compilation scopes also save and later restore lexical
   /// bindings.  Keep their snapshots live while codegen recurses so ABI
   /// refinement can migrate retired LLVM Function handles before a parent

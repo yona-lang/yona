@@ -172,7 +172,7 @@ Commit as `fix: serialize inferred interface signatures`.
 - Modify: `test/Codegen/CodegenTest.cpp`
 - Modify: `test/Semantics/TraitTest.cpp`
 
-- [ ] **Step 1: Add owner-conflation RED tests**
+- [x] **Step 1: Add owner-conflation RED tests**
 
 Add a focused imported `Std\\Convert.intToFloat` regression and a combined
 `intToFloat`/`floatToInt` case. Confirm the current deferred body loses
@@ -182,13 +182,13 @@ constrained `Some`/`None`, cross-module generic, and derived Show-field trait
 failures: trait implementation sources currently overwrite ordinary deferred
 keys such as `show`, `into`, and `stringify`.
 
-- [ ] **Step 2: Carry imported owner identity on deferred functions**
+- [x] **Step 2: Carry imported owner identity on deferred functions**
 
 Extend `DeferredFunction` with the optional mangled GENFN owner. When
 `register_sibling_genfns` reparses and registers an imported sibling, retain
 the exact `dep_mangled` identity on the resulting deferred definition.
 
-- [ ] **Step 3: Overlay only the owner's private dependencies**
+- [x] **Step 3: Overlay only the owner's private dependencies**
 
 At `compile_function`, install an RAII-scoped overlay for the deferred
 function's exact owner from `private_genfn_dependencies`. Restore prior local,
@@ -196,7 +196,7 @@ compiled, deferred, named-value, and external bindings on every exit. Do not
 activate dependencies from unrelated exports that happen to share a source
 name.
 
-- [ ] **Step 4: Keep trait implementation overloads out of sibling locals**
+- [x] **Step 4: Keep trait implementation overloads out of sibling locals**
 
 In `register_sibling_genfns`, exclude every mangled target owned by
 `types_.trait_instances[*].method_mangled_names`. Those implementations form an
@@ -204,12 +204,12 @@ overload set selected by complete trait heads; registering them as ordinary
 same-named siblings makes direct compiled/deferred lookup bypass trait
 selection. Preserve registration of ordinary private generic helpers.
 
-- [ ] **Step 5: Verify generic and trait consumers**
+- [x] **Step 5: Verify generic and trait consumers**
 
 Run the new Convert tests, relevant generic interface tests, and the Trait
 suite. Record any still-independent trait failure before continuing.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Commit as `fix: retain imported generic dependency owners`.
 

@@ -114,7 +114,8 @@ static string compile_and_run(const string &code,
                               const char *run_env_val = nullptr,
                               const char *artifact_suffix = nullptr,
                               const char *stdin_data = nullptr,
-                              int opt_level = 2) {
+                              int opt_level = 2,
+                              const fs::path *extra_module_path = nullptr) {
   parser::Parser parser;
 
   Codegen codegen("test_module");
@@ -126,6 +127,8 @@ static string compile_and_run(const string &code,
     if (fs::exists(dir))
       codegen.ModulePaths.push_back(fs::canonical(dir).string());
   }
+  if (extra_module_path)
+    codegen.ModulePaths.push_back(extra_module_path->string());
   // Type check (blocking)
   DiagnosticEngine tc_diag;
   typechecker::TypeChecker type_checker(tc_diag);
@@ -223,6 +226,71 @@ findAll (compile "[0-9]+") "a1b22" == [["1"], ["22"]]
     CHECK(compile_and_run(source, nullptr, nullptr, "imported_nested_seq_eq",
                           nullptr, opt_level) == "true");
   }
+}
+
+TEST_CASE(
+    "Imported Std Convert intToFloat retains its native dependency owner") {
+  const string source = R"(
+import intToFloat from Std\Convert in
+case intToFloat 42 of
+    Ok value -> if value == 42.0 then 1 else 0
+    Err _ -> -1
+end
+)";
+  CHECK(compile_and_run(source, nullptr, nullptr,
+                        "imported_convert_int_to_float") == "1");
+}
+
+TEST_CASE("Imported Std Convert siblings keep private dependency owners "
+          "separate") {
+  const string source = R"(
+import intToFloat, floatToInt from Std\Convert in
+case intToFloat 42 of
+    Ok floatValue -> case floatToInt 7.0 of
+        Ok intValue -> if floatValue == 42.0 then intValue else 0
+        Err _ -> -1
+    end
+    Err _ -> -2
+end
+)";
+  CHECK(compile_and_run(source, nullptr, nullptr,
+                        "imported_convert_owner_isolation") == "7");
+}
+
+TEST_CASE("Imported private generic helpers retain their exact native "
+          "dependencies") {
+  const fs::path module_root =
+      yona::test::link::scratch_root() / "yona_genfn_dependency_owner";
+  fs::create_directories(module_root / "Test");
+
+  parser::Parser module_parser;
+  auto module = module_parser.parseModule(R"(
+module Test\DependencyOwner
+
+export run
+
+extern absNative : Int -> Int = "YonaStdMathAbs"
+helper value = absNative value
+run value = helper value
+)",
+                                          "dependency_owner.yona");
+  REQUIRE(module.has_value());
+
+  Codegen module_codegen("dependency_owner_module");
+  REQUIRE(module_codegen.compile_module(module.value().get()) != nullptr);
+  DiagnosticEngine module_diag;
+  typechecker::TypeChecker module_checker(module_diag);
+  module_codegen.populate_interface_effect_rows(module.value().get(),
+                                                module_checker);
+  REQUIRE_FALSE(module_checker.has_errors());
+  REQUIRE(module_codegen.emit_interface_file(
+      (module_root / "Test" / "DependencyOwner.yonai").string()));
+
+  const string source =
+      R"(import run from Test\DependencyOwner in run (0 - 42))";
+  CHECK(compile_and_run(source, nullptr, nullptr,
+                        "imported_private_genfn_dependency", nullptr, 2,
+                        &module_root) == "42");
 }
 
 TEST_CASE("ABI refinement leaves one canonical function") {
