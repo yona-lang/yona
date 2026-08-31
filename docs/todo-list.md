@@ -282,6 +282,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   the heap field nor registers an arm drop, so releasing the temporary `Box`
   leaves `x` pointing at freed sequence storage and prints garbage.
 
+- [ ] **Generic record tuple fields lose their element shapes during pattern
+  binding.** Repro: construct `Box a` with `a = ([Int], [Int])`, then match
+  `Box { item = (x, y) }`; substitution changes the field tag to `TUPLE` but
+  leaves `tuple_elements` empty, so codegen never binds `x` or `y` and reports
+  `undefined variable 'x'`.
+
 - [ ] **A heap value returned from a nested `let` is misclassified as a
   borrowed ADT field.** Repro: run
   `case Some (let temporary = [1] in temporary) of Some values -> 0; None -> 1 end`

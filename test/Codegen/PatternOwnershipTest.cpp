@@ -251,6 +251,34 @@ TEST_SUITE("Pattern ownership") {
                             "multi_field_temporary_constructor");
   }
 
+  TEST_CASE("constructors transfer heap results returned from nested lets") {
+    assert_zero_alloc_leaks("case Some (let temporary = [1] in temporary) of "
+                            "Some values -> 0; None -> 1 end",
+                            "nested_let_constructor_field", "0",
+                            "tag=SEQ allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("nested let shadowing restores outer constructor provenance") {
+    assert_zero_alloc_leaks(
+        "let outer = 1 in "
+        "let wrapped = Some (let outer = [2] in outer) in "
+        "case wrapped of Some inner -> "
+        "case inner of [innerValue] -> "
+        "innerValue * 10 + outer; _ -> 0 end; None -> 0 end",
+        "shadowed_nested_let_constructor_field", "21",
+        "tag=SEQ allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("nested let results preserve enclosing captured ownership") {
+    assert_zero_alloc_leaks(
+        "let captured = [3] in "
+        "let make = \\() -> Some (let alias = captured in alias) in "
+        "case make () of Some values -> "
+        "case values of [result] -> result; _ -> 0 end; None -> 0 end",
+        "captured_nested_let_constructor_field", "3",
+        "tag=SEQ allocs=1 frees=1 leaked=0");
+  }
+
   TEST_CASE("generated channel programs release their endpoint graph") {
     const auto fixture =
         yona::test::codegen_fixtures_dir() / "channel_basic.yona";

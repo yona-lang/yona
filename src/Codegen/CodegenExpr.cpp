@@ -1606,6 +1606,15 @@ void Codegen::cleanup_let_scope(const std::vector<TypedValue> &scope_bindings,
 TypedValue Codegen::codegen_let(LetExpr *node) {
   set_debug_loc(node->Range);
 
+  // Let aliases are lexical. Keep the enclosing bindings available while
+  // lowering the body, then restore them when the expression ends. Besides
+  // preserving shadowed names, this prevents an owned result returned from a
+  // nested let from looking borrowed merely because its former local binding
+  // still points at the same LLVM value.
+  auto saved_named_values = named_values_;
+  ActiveNamedValueSnapshot saved_named_values_snapshot(*this,
+                                                       saved_named_values);
+
   // 1. Escape analysis
   auto non_escaping = analyze_let_escaping(node);
 
@@ -1691,6 +1700,8 @@ TypedValue Codegen::codegen_let(LetExpr *node) {
   for (auto *alias : node->aliases)
     if (auto *va = dynamic_cast<ValueAlias *>(alias))
       deferred_generators_.erase(va->identifier->name->value);
+
+  named_values_ = std::move(saved_named_values);
 
   return result;
 }
