@@ -6,6 +6,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **The Yona runner leaks temporary source files when stdin or `-e`
+  compilation fails.** Repro: run `printf 'bad syntax' |
+  ./out/build/x64-debug-linux/yona` with an isolated `TMPDIR`; the runner exits
+  from `compileToTemp` before its caller removes `yona-src*.yona`.
+
 - [ ] **Canonical zero-arity interface functions import as values instead of
   `Unit -> T`.** Repro: run `./out/build/x64-debug-linux/tests
   -tc="Interface files preserve sibling-wrapped FN effect rows"`; `wrap ()`
