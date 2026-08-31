@@ -671,17 +671,17 @@ import Test\GenLib in describe (Some 42)
   }
 
   TEST_CASE("Cross-module generic: extern fallback when types match") {
-    // Module exports `double_it` compiled with Int. Expression also calls with
+    // Module exports `doubleIt` compiled with Int. Expression also calls with
     // Int. Should use extern path (no GENFN re-parse needed).
     string mod_source = R"(
 module Test\GenLib2
 
-export double_it
+export doubleIt
 
-double_it x = x + x
+doubleIt x = x + x
 )";
     string expr_source = R"(
-import Test\GenLib2 in double_it 21
+import Test\GenLib2 in doubleIt 21
 )";
     auto result =
         compile_and_run_trait(mod_source, expr_source, "Test/GenLib2");
@@ -690,23 +690,23 @@ import Test\GenLib2 in double_it 21
 
   TEST_CASE(
       "Cross-module generic: ADT pattern matching in re-parsed function") {
-    // Module exports `unwrap_or` that pattern-matches on an ADT.
+    // Module exports `unwrapOr` that pattern-matches on an ADT.
     // Expression calls with concrete ADT value.
     string mod_source = R"(
 module Test\GenLib3
 
-export unwrap_or
+export unwrapOr
 export type Maybe
 
 type Maybe a = Just a | Nothing
 
-unwrap_or default val = case val of
+unwrapOr default val = case val of
     Just x -> x
     Nothing -> default
 end
 )";
     string expr_source = R"(
-import Test\GenLib3 in unwrap_or 0 (Just 99)
+import Test\GenLib3 in unwrapOr 0 (Just 99)
 )";
     auto result =
         compile_and_run_trait(mod_source, expr_source, "Test/GenLib3");
