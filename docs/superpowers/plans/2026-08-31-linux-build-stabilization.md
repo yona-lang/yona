@@ -657,6 +657,8 @@ git commit -m "fix: separate installed Yona targets from outputs"
 
 **Files:**
 
+- Modify: `CMakeLists.txt`
+- Modify: `cmake/VulkanLinkConfig.h.in`
 - Modify: `test/Toolchain/YonaLinkUtil.h`
 - Test: `doctest_stdlib_gpu`
 
@@ -681,11 +683,12 @@ Expected: the generated GPU fixture returns `LINK_ERROR` with unresolved
 
 - [ ] **Step 2: Append the configured loader arguments**
 
-Teach the shared generated-program linker helper to consume
-`VulkanLinkConfig.h`. When a loader was configured, append its full Windows
-import-library path or the configured Unix library directory plus `-lvulkan`;
-on macOS also retain the loader directory as an rpath. Keep these arguments
-after the runtime archive so static-library resolution order remains valid.
+Teach the generated configuration to retain the complete resolved Vulkan
+library path, including a direct `libMoltenVK.dylib` selection. Teach the
+shared generated-program linker helper to consume `VulkanLinkConfig.h` and
+append that exact configured library file. On macOS also retain its directory
+as an rpath. Keep these arguments after the runtime archive so static-library
+resolution order remains valid.
 
 - [ ] **Step 3: Verify the GPU conformance fixture**
 
@@ -700,7 +703,8 @@ Expected: the fixture links and the focused CTest test passes.
 - [ ] **Step 4: Commit the fixture-link repair**
 
 ```bash
-git add test/Toolchain/YonaLinkUtil.h
+git add CMakeLists.txt cmake/VulkanLinkConfig.h.in \
+  test/Toolchain/YonaLinkUtil.h
 git commit -m "fix: link generated fixtures with Vulkan"
 ```
 
