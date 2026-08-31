@@ -6,6 +6,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **Character escape parsing accepts values that are not Unicode scalar
+  values.** Repro: compile `'\uD800'` or `'\UFFFFFFFF'`; parsing and typing
+  accept the surrogate/out-of-range value and codegen emits it as an integer
+  instead of diagnosing an invalid character literal.
+
 - [ ] **Byte and character literals are accepted by parsing and typing but
   rejected by codegen.** Repro: compile `case [2b] of [1b] -> 1; _ -> 2 end`
   (or the analogous character sequence); codegen reports `unsupported
