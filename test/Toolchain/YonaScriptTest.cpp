@@ -710,6 +710,17 @@ TEST_CASE("yonac module dependencies respect whole-module import bindings") {
   CHECK(r.out.find("E0100") == std::string::npos);
 }
 
+TEST_CASE("yonac module dependencies support selective heterogeneous imports") {
+  auto src = write_temp_yona("module_dependency_selective_generic_import",
+                             "module Test\\SelectiveGenericImport\n"
+                             "export both\n"
+                             "both = import apply from Std\\Function in "
+                             "(apply 1 identity, apply \"two\" identity)\n");
+  auto r = run_yonac_ir(src);
+  CHECK(r.status == 0);
+  CHECK(r.out.find("E0100") == std::string::npos);
+}
+
 TEST_CASE(
     "yonac keeps callbacks returned by recursive calls effect-polymorphic") {
   auto src = write_temp_yona("preliminary_independent_callback_rows",

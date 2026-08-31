@@ -260,25 +260,25 @@ Commit as `fix: preserve imported recursive specializations`.
 
 - Modify: `test/Toolchain/YonaScriptTest.cpp`
 
-- [ ] **Step 1: Keep the exact focused RED**
+- [x] **Step 1: Keep the exact focused RED**
 
 Run `yonac module dependencies respect whole-module import bindings`. Before
 Task 3 this reports `expected Int, found String` because the imported generic
 `Std\\Function.apply` and Prelude `identity` rows were serialized as exact
 `INT`; after Task 3 it must pass.
 
-- [ ] **Step 2: Add selective-import and local-shadow controls if absent**
+- [x] **Step 2: Add selective-import and local-shadow controls if absent**
 
 Lock the diagnosis with a selective `Std\\Function.apply` heterogeneous call
 and a same-named local/import shadowing control. Do not change dependency
 collection: resolver tracing already proves it returns the right export and
 the dependency components are correctly ordered and nonrecursive.
 
-- [ ] **Step 3: Verify module dependencies**
+- [x] **Step 3: Verify module dependencies**
 
 Run all module dependency toolchain tests and the direct wildcard fixture.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit as `test: cover generic whole-module imports`.
 
