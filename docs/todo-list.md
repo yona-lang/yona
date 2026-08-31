@@ -217,6 +217,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   non-concrete. Reconcile channel creation, payload descriptors, and the
   canonical `Std\Channel` interfaces.
 
+- [ ] **The checked-in GPU channel helper interface loses its endpoint and
+  operation types.** Repro: run the `gpu_float_channel` fixture;
+  `drainMapFloatGpu` imports as `ADT INT INT -> INT` instead of
+  `FloatMapOp -> Receiver FloatArray -> Sender FloatArray -> Int`, producing
+  a type error before the channel runtime is exercised.
+
 - [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
   boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
   `binary_chunks`, `binary_seek`, and `binary_write_read` report an expected
