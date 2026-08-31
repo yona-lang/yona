@@ -649,6 +649,27 @@ add_subdirectory(tools)
 
 include(CTest)
 
+if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	add_executable(runtime_io_fallback_leak_probe
+		"${PROJECT_SOURCE_DIR}/test/Runtime/IoFallbackLeakProbe.c")
+	target_include_directories(runtime_io_fallback_leak_probe PRIVATE
+		"${PROJECT_SOURCE_DIR}/include")
+	target_link_libraries(runtime_io_fallback_leak_probe PRIVATE yona_runtime)
+
+	find_program(YONA_VALGRIND_EXECUTABLE NAMES valgrind)
+	if(YONA_VALGRIND_EXECUTABLE)
+		add_test(NAME runtime_io_fallback_leak
+			COMMAND "${YONA_VALGRIND_EXECUTABLE}"
+				--leak-check=full
+				--show-leak-kinds=definite
+				--errors-for-leak-kinds=definite
+				--error-exitcode=99
+				$<TARGET_FILE:runtime_io_fallback_leak_probe>)
+		set_tests_properties(runtime_io_fallback_leak PROPERTIES
+			LABELS "runtime;linux;valgrind")
+	endif()
+endif()
+
 if(BUILD_TESTING)
 find_package(doctest 2.5 CONFIG QUIET)
 if(doctest_FOUND)

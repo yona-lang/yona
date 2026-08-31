@@ -327,13 +327,6 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteRead(int Fd, int64_t Count,
       8 /* RC_TYPE_BYTE_ARRAY */, sizeof(int64_t) + (size_t)Count);
   Buf[0] = 0; /* length set by completer */
 
-  YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->Kind = YonaIoOperationReadFileDescriptorBytes;
-  Ctx->FileDescriptor = Fd;
-  Ctx->Buffer = (char *)Buf;
-  Ctx->BufferSize = (size_t)Count;
-  Ctx->CloseFileDescriptor = 0; /* caller owns the handle */
-
   struct io_uring_sqe Sqe;
   memset(&Sqe, 0, sizeof(Sqe));
   Sqe.opcode = IORING_OP_READ;
@@ -350,6 +343,13 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteRead(int Fd, int64_t Count,
     Buf[0] = N > 0 ? N : 0;
     return registerDirectIoResult(Buf);
   }
+
+  YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
+  Ctx->Kind = YonaIoOperationReadFileDescriptorBytes;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = (char *)Buf;
+  Ctx->BufferSize = (size_t)Count;
+  Ctx->CloseFileDescriptor = 0; /* caller owns the handle */
   YonaRuntimeIoContextPut(Id, Ctx);
   return (int64_t)Id;
 }
@@ -363,13 +363,6 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteWrite(int Fd, void *Bytes,
 
   /* Pin the bytes buffer — rc_inc so it stays alive during async I/O */
   YonaRuntimeRetain(Bytes);
-
-  YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->Kind = YonaIoOperationWriteFileDescriptorBytes;
-  Ctx->FileDescriptor = Fd;
-  Ctx->Buffer = (char *)Bytes; /* rc_dec'd in completer */
-  Ctx->BufferSize = (size_t)Len;
-  Ctx->CloseFileDescriptor = 0;
 
   struct io_uring_sqe Sqe;
   memset(&Sqe, 0, sizeof(Sqe));
@@ -386,6 +379,13 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteWrite(int Fd, void *Bytes,
     YonaRuntimeRelease(Bytes);
     return registerDirectIoResult((void *)(intptr_t)(N >= 0 ? N : -1));
   }
+
+  YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
+  Ctx->Kind = YonaIoOperationWriteFileDescriptorBytes;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = (char *)Bytes; /* rc_dec'd in completer */
+  Ctx->BufferSize = (size_t)Len;
+  Ctx->CloseFileDescriptor = 0;
   YonaRuntimeIoContextPut(Id, Ctx);
   return (int64_t)Id;
 }
