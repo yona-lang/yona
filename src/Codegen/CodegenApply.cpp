@@ -1102,8 +1102,19 @@ Codegen::resolve_apply_function(const std::string &fn_name,
     if (nv_it != named_values_.end() && nv_it->second.type == CType::FUNCTION &&
         nv_it->second.val) {
       if (auto *llvm_fn = dyn_cast<Function>(nv_it->second.val)) {
-        // Find by LLVM function name
+        // LLVM uniquifies colliding materialization names (for example a
+        // second imported `foldLeft` specialization gets a `.1` suffix),
+        // while compiler metadata remains keyed by its semantic name. Match
+        // the bound Function value when the uniquified spelling is not a key;
+        // otherwise a lexical self alias falls through to the higher-order
+        // path and loses its return and callee-owns metadata.
         cf_it = compiled_functions_.find(llvm_fn->getName().str());
+        if (cf_it == compiled_functions_.end())
+          cf_it = std::find_if(compiled_functions_.begin(),
+                               compiled_functions_.end(),
+                               [llvm_fn](const auto &entry) {
+                                 return entry.second.fn == llvm_fn;
+                               });
       }
     }
   }
