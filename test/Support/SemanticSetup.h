@@ -1,11 +1,14 @@
 #ifndef YONA_TEST_SUPPORT_SEMANTICSETUP_H
 #define YONA_TEST_SUPPORT_SEMANTICSETUP_H
 
+#include "Support/RepoPaths.h"
 #include "yona/Codegen/Codegen.h"
 #include "yona/Semantics/InterfaceCatalog.h"
 #include "yona/Semantics/TypeChecker.h"
 #include "yona/Syntax/Parser.h"
 
+#include <algorithm>
+#include <filesystem>
 #include <stdexcept>
 
 namespace yona::test {
@@ -16,7 +19,7 @@ class SemanticSetup final {
 public:
   SemanticSetup(compiler::codegen::Codegen &Codegen, parser::Parser &Parser,
                 compiler::typechecker::TypeChecker &Checker)
-      : Catalog(Codegen.ModulePaths) {
+      : Catalog(makeCatalog(Codegen)) {
     Codegen.loadPrelude();
     Catalog.appendEnvironmentSearchPaths();
     const auto Installed = Catalog.installPrelude(Parser, Checker);
@@ -26,6 +29,20 @@ public:
   }
 
 private:
+  static semantics::InterfaceCatalog
+  makeCatalog(compiler::codegen::Codegen &Codegen) {
+    std::error_code Error;
+    const auto ConfiguredLib =
+        std::filesystem::weakly_canonical(lib_dir(), Error);
+    if (!Error && std::filesystem::is_directory(ConfiguredLib, Error)) {
+      const auto Path = ConfiguredLib.string();
+      if (std::find(Codegen.ModulePaths.begin(), Codegen.ModulePaths.end(),
+                    Path) == Codegen.ModulePaths.end())
+        Codegen.ModulePaths.push_back(Path);
+    }
+    return semantics::InterfaceCatalog(Codegen.ModulePaths);
+  }
+
   semantics::InterfaceCatalog Catalog;
 };
 
@@ -47,11 +64,11 @@ private:
 
 #define YONA_TEST_JOIN_IMPL(Left, Right) Left##Right
 #define YONA_TEST_JOIN(Left, Right) YONA_TEST_JOIN_IMPL(Left, Right)
-#define YONA_TEST_INSTALL_PRELUDE(Codegen, Parser, Checker)                  \
-  yona::test::SemanticSetup YONA_TEST_JOIN(SemanticSetup_, __LINE__)(        \
-      Codegen, Parser, Checker)
-#define YONA_TEST_INSTALL_PARSER_PRELUDE(Codegen, Parser)                     \
-  yona::test::ParserPreludeSetup YONA_TEST_JOIN(ParserPreludeSetup_,          \
-                                                 __LINE__)(Codegen, Parser)
+#define YONA_TEST_INSTALL_PRELUDE(Codegen, Parser, Checker)                    \
+  yona::test::SemanticSetup YONA_TEST_JOIN(SemanticSetup_,                     \
+                                           __LINE__)(Codegen, Parser, Checker)
+#define YONA_TEST_INSTALL_PARSER_PRELUDE(Codegen, Parser)                      \
+  yona::test::ParserPreludeSetup YONA_TEST_JOIN(ParserPreludeSetup_,           \
+                                                __LINE__)(Codegen, Parser)
 
 #endif /* YONA_TEST_SUPPORT_SEMANTICSETUP_H */

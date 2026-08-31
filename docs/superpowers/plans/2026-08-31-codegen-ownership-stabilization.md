@@ -127,19 +127,19 @@ frame/raise, and allocation controls. Commit as
 - Modify: the shared semantic/codegen test setup under `test/`
 - Modify: focused direct ownership tests only if required
 
-- [ ] **Step 1: Reproduce without ambient environment**
+- [x] **Step 1: Reproduce without ambient environment**
 
 Unset `YONA_PATH` and run the direct allocation doctests. Assert the setup uses
 the repository/configured test library path rather than an empty
 `Codegen.ModulePaths` vector.
 
-- [ ] **Step 2: Centralize deterministic test module paths**
+- [x] **Step 2: Centralize deterministic test module paths**
 
 Route ownership tests through the same test support helper as other semantic
 and codegen suites. Do not add an environment-variable fallback specific to a
 single case.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run the focused tests both with and without `YONA_PATH`, then the surrounding
 runtime/codegen suites. Commit as `test: make ownership setup deterministic`.

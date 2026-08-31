@@ -729,6 +729,7 @@ add_executable(tests
 	"${PROJECT_SOURCE_DIR}/test/Runtime/RuntimeGuardsTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Runtime/TaskOwnershipTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Support/SanityTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Support/SemanticSetupTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Runtime/SequenceOperationsTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Support/ProcessTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Support/SourceManagerTest.cpp"
