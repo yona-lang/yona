@@ -1,50 +1,62 @@
 MODULE Std\Json
-ADT Json 7 1 recursive
+ADT Json 7 1
   CTOR JsonNull 0 0
   CTOR JsonBool 1 1 fields _0:BOOL
   CTOR JsonInt 2 1 fields _0:INT
   CTOR JsonFloat 3 1 fields _0:FLOAT
   CTOR JsonString 4 1 fields _0:STRING
-  CTOR JsonArray 5 1 fields _0:SEQ
-  CTOR JsonObject 6 1 fields _0:SEQ
+  CTOR JsonArray 5 1 fields _0:Seq(ADT(Json))
+  CTOR JsonObject 6 1 fields _0:Seq(TUPLE(STRING,ADT(Json)))
+FN asInt 1 ADT(Json) -> ADT(Option,INT) effects - effectscheme $##
+FN asString 1 ADT(Json) -> ADT(Option,STRING) effects - effectscheme $##
+FN get 2 ADT(Json) STRING -> ADT(Option,ADT(Json)) effects - effectscheme $##;$/r##
 FN null 0 -> STRING
-FN parse 1 STRING -> ADT(Result)
+FN parse 1 STRING -> ADT(Result,ADT(Json),STRING)
 FN parseFloat 1 STRING -> FLOAT
 FN parseInt 1 STRING -> INT
-FN stringify 1 ADT -> STRING
+FN stringify 1 ADT(Json) -> STRING
 FN stringifyBool 1 BOOL -> STRING
 FN stringifyFloat 1 FLOAT -> STRING
 FN stringifyString 1 STRING -> STRING
+GENFN_CTOR asInt Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR asInt None Option 1 0 2 1
+GENFN_CTOR asInt JsonInt Json 2 1 7 1 fields _0:INT
 GENFN_BEGIN asInt asInt
+asInt : Json -> Option Int
 asInt j =
     case j of
         JsonInt n -> Some n
         _ -> None
     end
 GENFN_END
+GENFN_CTOR asString Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR asString None Option 1 0 2 1
+GENFN_CTOR asString JsonString Json 4 1 7 1 fields _0:STRING
 GENFN_BEGIN asString asString
+asString : Json -> Option String
 asString j =
     case j of
         JsonString s -> Some s
         _ -> None
     end
 GENFN_END
+GENFN_CTOR get None Option 1 0 2 1
+GENFN_CTOR get JsonObject Json 6 1 7 1 fields _0:Seq(TUPLE(STRING,ADT(Json)))
 GENFN_BEGIN get get
+get : Json -> String -> Option Json
 get j key =
     case j of
         JsonObject pairs -> getPair pairs key
         _ -> None
     end
 GENFN_END
+GENFN_CTOR getPair Some Option 0 1 2 1 fields _0:VAR(a)
+GENFN_CTOR getPair None Option 1 0 2 1
 GENFN_BEGIN getPair getPair
+getPair : Seq (String, Json) -> String -> Option Json
 getPair pairs key =
-    getPairAt pairs key 0 (length pairs)
-GENFN_END
-GENFN_BEGIN getPairAt getPairAt
-getPairAt pairs key i n =
-    if i >= n then None
-    else
-        case get pairs i of
-            (k, v) -> if k == key then Some v else getPairAt pairs key (i + 1) n
-        end
+    case pairs of
+        [] -> None
+        [(k, v) | rest] -> if k == key then Some v else getPair rest key
+    end
 GENFN_END

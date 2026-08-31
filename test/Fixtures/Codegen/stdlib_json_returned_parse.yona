@@ -1,0 +1,21 @@
+import parse, get as jsonGet, asString from Std\Json, fromChars from Std\String in
+let
+    parsed body =
+        case parse body of
+            Ok value -> Some value
+            Err _ -> None
+        end,
+    source = fromChars [123] ++ "\"method\":\"initialize\"" ++ fromChars [125]
+in
+    case parsed source of
+        Some json ->
+            case jsonGet json "method" of
+                Some value ->
+                    case asString value of
+                        Some method -> method
+                        None -> "not-string"
+                    end
+                None -> "missing"
+            end
+        None -> "parse-error"
+    end

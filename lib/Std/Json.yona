@@ -21,15 +21,15 @@ type Json =
   | JsonInt Int
   | JsonFloat Float
   | JsonString String
-  | JsonArray Seq
-  | JsonObject Seq
+  | JsonArray (Seq Json)
+  | JsonObject (Seq (String, Json))
 
 ## Parse one JSON value. Trailing non-whitespace is an error.
 ##
 ## ```
 ## parse "{\"id\":1}"   # => Ok (JsonObject [("id", JsonInt 1)])
 ## ```
-extern parse : String -> Result = "YonaStdJsonParse"
+extern parse : String -> Result (Json, String) = "YonaStdJsonParse"
 
 ## Compact JSON text for `j`.
 ##
@@ -46,23 +46,22 @@ extern parseInt : String -> Int = "YonaStdJsonParseInt"
 extern parseFloat : String -> Float = "YonaStdJsonParseFloat"
 
 ## Look up `key` in a JSON object. `None` if `j` is not an object or the key is missing.
+get : Json -> String -> Option Json
 get j key =
     case j of
         JsonObject pairs -> getPair pairs key
         _ -> None
     end
 
+getPair : Seq (String, Json) -> String -> Option Json
 getPair pairs key =
-    getPairAt pairs key 0 (length pairs)
-
-getPairAt pairs key i n =
-    if i >= n then None
-    else
-        case get pairs i of
-            (k, v) -> if k == key then Some v else getPairAt pairs key (i + 1) n
-        end
+    case pairs of
+        [] -> None
+        [(k, v) | rest] -> if k == key then Some v else getPair rest key
+    end
 
 ## Unwrap a JSON string.
+asString : Json -> Option String
 asString j =
     case j of
         JsonString s -> Some s
@@ -70,6 +69,7 @@ asString j =
     end
 
 ## Unwrap a JSON integer.
+asInt : Json -> Option Int
 asInt j =
     case j of
         JsonInt n -> Some n

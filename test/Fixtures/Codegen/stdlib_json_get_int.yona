@@ -10,5 +10,5 @@ case parse src of
                 end
             None -> -2
         end
-    Err e -> e
+    Err _ -> -3
 end

@@ -1233,6 +1233,33 @@ run _ = Box ["value"]
     CHECK_FALSE(diag.has_errors());
   }
 
+  TEST_CASE("ADT constructor fields preserve nested tuple type arguments") {
+    DiagnosticEngine diag;
+    TypeChecker checker(diag);
+    yona::parser::Parser parser;
+    auto result = parser.parseModule(R"(
+module Test\NestedParameterizedField
+
+export pairs
+
+type Json = JsonNull | JsonObject (Seq (String, Json))
+
+pairs : Json -> Seq (String, Json)
+pairs value =
+  case value of
+    JsonNull -> []
+    JsonObject entries -> entries
+  end
+)",
+                                     "nested_parameterized_field.yona");
+    REQUIRE(result.has_value());
+
+    checker.check_module(result.value().get());
+
+    CHECK_FALSE(checker.has_direct_errors());
+    CHECK_FALSE(diag.has_errors());
+  }
+
   TEST_CASE("Module checking binds extern declarations and types constant "
             "definitions as values") {
     DiagnosticEngine diag;

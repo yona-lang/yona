@@ -497,9 +497,9 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
     // Parse a single field type. Handles bare identifiers, parenthesized
     // groups (tuples and function types), and parameterized type
     // applications like `Option a`, `Map String Int`, `Option (a, Stream a)`.
-    // Only the head identifier is preserved in the resulting FieldType;
-    // the codegen uses that to pick a CType, and the type arguments are
-    // consumed so the rest of the constructor parses correctly.
+    // Preserve the full structural type. Constructor-pattern checking and
+    // ownership lowering need nested arguments such as `Seq (String, Json)`,
+    // not merely the outer `Seq` name.
     std::function<FieldType()> parse_field_type = [&]() -> FieldType {
       // Scalar/native type names have arity zero. Treating every
       // uppercase identifier as an applied type makes the documented
@@ -512,46 +512,6 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
             "FileHandle", "FileMode", "Whence",     "Type"};
         return !nullary_types.contains(name);
       };
-      // Helper: consume one "atom" — a primary type without further
-      // application. Used for arguments to a parameterized head type.
-      std::function<void()> consume_type_atom = [&]() {
-        if (check(TokenType::YLPAREN)) {
-          advance(); // (
-          if (check(TokenType::YRPAREN)) {
-            advance();
-            return;
-          }
-          // Recursively consume one or more comma/arrow-separated
-          // sub-types until the matching ')'.
-          int depth = 1;
-          while (!is_at_end() && depth > 0) {
-            if (check(TokenType::YLPAREN)) {
-              depth++;
-              advance();
-            } else if (check(TokenType::YRPAREN)) {
-              depth--;
-              advance();
-            } else
-              advance();
-          }
-        } else if (check(TokenType::YLBRACKET)) {
-          advance();
-          int depth = 1;
-          while (!is_at_end() && depth > 0) {
-            if (check(TokenType::YLBRACKET)) {
-              depth++;
-              advance();
-            } else if (check(TokenType::YRBRACKET)) {
-              depth--;
-              advance();
-            } else
-              advance();
-          }
-        } else if (check(TokenType::YIDENTIFIER)) {
-          advance();
-        }
-      };
-
       if (check(TokenType::YLPAREN)) {
         advance(); // consume (
 
@@ -572,11 +532,7 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                   !check(TokenType::YARROW)) ||
                  (check(TokenType::YLPAREN) && !check(TokenType::YARROW))) {
             if (check(TokenType::YLPAREN)) {
-              // Type application argument: `Option (a, Stream a)`.
-              // Consume the parenthesized group; we don't model
-              // type arguments structurally — only the head name
-              // matters for codegen.
-              consume_type_atom();
+              field.type_arguments.push_back(parse_field_type());
             } else {
               field.type_arguments.push_back(
                   FieldType::simple(string(current().lexeme)));
@@ -645,7 +601,7 @@ unique_ptr<AdtDeclNode> ParserImpl::parse_adt_declaration() {
                (check(TokenType::YIDENTIFIER) && !check(TokenType::YARROW) ||
                 check(TokenType::YLPAREN))) {
           if (check(TokenType::YLPAREN)) {
-            consume_type_atom();
+            result.type_arguments.push_back(parse_field_type());
           } else {
             result.type_arguments.push_back(
                 FieldType::simple(string(current().lexeme)));
