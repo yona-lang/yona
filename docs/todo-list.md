@@ -103,6 +103,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   case functions heap-box non-recursive results"`; expression module creation
   returns null.
 
+- [ ] **Parameterized ADT equality loses floating-point field ABI.** Repro:
+  run `./out/build/x64-debug-linux/tests -tc="Parameterized ADT case fields
+  retain their floating-point ABI"`; LLVM rejects the derived `Result`
+  equality call because codegen passes a `double` to a `ptr` parameter.
+
 - [x] **Generated fixture links discard a configured MoltenVK library name.**
   Repro: configure macOS with `YONA_VULKAN_LIBRARY` resolving directly to
   `libMoltenVK.dylib` and no `libvulkan.dylib`; the fixture linker retains only
