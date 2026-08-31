@@ -6,6 +6,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **Linux file-descriptor I/O fallbacks leak their initially allocated
+  io_uring context.** Repro: force `YonaRuntimeIoUringSubmit` to return zero
+  in `YonaRuntimePlatformSubmitFileDescriptorByteRead` or
+  `YonaRuntimePlatformSubmitFileDescriptorByteWrite`; each path registers a
+  separate direct-result context without freeing its original `Ctx`.
+
 - [ ] **The Linux io_uring implementation disagrees with its public cancel
   declaration.** Repro: build the debug `tests` target; `IoUringLinux.c`
   defines `YonaRuntimeIoUringCancelGroup(uint64_t *, int)` while
