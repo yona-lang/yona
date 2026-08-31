@@ -1794,6 +1794,20 @@ Codegen::codegen_extern_call(ApplyExpr *node, const std::string &fn_name,
       ret_ctype = cffi_it->second.return_type;
   }
 
+  // Private GENFN dependencies carry the same async contract as ordinary
+  // imported functions. Route them through the canonical promise call path
+  // before structural return-descriptor resolution: resolving an IO
+  // dependency's `UNIT` payload here used to overwrite PROMISE, declare the
+  // completion cookie as a pointer, and make an enclosing `do` skip its
+  // await. The resulting writes raced each other and process exit.
+  if (meta_it != imports_.meta.end() &&
+      meta_it->second.extern_promise != ast::ExternPromiseKind::Sync) {
+    auto *async_fn = declare_import_extern_fn(mangled, meta_it->second);
+    auto async_cf =
+        compiled_function_from_meta(async_fn, meta_it->second, CType::PROMISE);
+    return emit_direct_call(fn_name, async_cf, all_args);
+  }
+
   // Declare the extern function. Boxed wrappers (all-INT metadata)
   // return i64; typed wrappers (with FLOAT etc.) return their native type.
   auto i64_ty_local = LType::getInt64Ty(*context_);
@@ -2424,6 +2438,11 @@ TypedValue Codegen::emit_direct_call(const std::string &fn_name,
     const CType inner_ret = promiseResultType();
     // Call the function directly — it returns the uring ID as i64
     auto *result = builder_->CreateCall(cf.fn, call_args, "io_submit");
+    // The runtime has taken any independent pin required by the submitted
+    // operation. Borrowed anonymous arguments still belong to this call site
+    // and must be released after submission, just like a synchronous extern
+    // call; named borrowed values remain owned by their lexical scope.
+    cleanup_borrowed_temporary_args(cf, all_args);
     TypedValue tv{result, CType::PROMISE, {inner_ret}};
     tv.promise_await = PromiseAwaitPath::IoUring;
     return tv;

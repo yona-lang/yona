@@ -436,6 +436,7 @@ static void ensure_runtime_archive() {
 static void assert_linked_yona_zero_alloc_leaks(const string &obj_path,
                                                 const string &exe_path_stem) {
   vector<fs::path> o = {fs::path(obj_path)};
+  REQUIRE(yona::test::link::append_prelude_object(o));
   REQUIRE(yona::test::link::append_runtime_objects(o));
   fs::path exe_path = yona::test::link::scratch_root() /
                       (exe_path_stem + yona::test::link::exe_suffix());
@@ -737,6 +738,54 @@ TEST_SUITE("Codegen E2E") {
       }
     } scratch_files;
     run_yona_fixture_tree(fixtures_dir);
+  }
+
+  TEST_CASE("Imported IO wrappers preserve promise await metadata") {
+    const string source = R"(
+import println from Std\Io in do
+    println "first"
+    println "second"
+    0
+end
+)";
+
+    parser::Parser parser;
+    DiagnosticEngine diagnostics;
+    typechecker::TypeChecker type_checker(diagnostics);
+    Codegen codegen("imported_io_awaits", &diagnostics);
+    codegen.set_opt_level(0);
+    if (fs::exists(yona::test::lib_dir()))
+      codegen.ModulePaths.push_back(
+          fs::canonical(yona::test::lib_dir()).string());
+    YONA_TEST_INSTALL_PRELUDE(codegen, parser, type_checker);
+    for (const auto &path : codegen.ModulePaths)
+      type_checker.add_module_path(path);
+
+    auto parsed = parser.parseExpression(source, "imported_io_awaits.yona");
+    REQUIRE(parsed);
+    REQUIRE(parsed->Expression);
+    type_checker.check(parsed->Expression.get());
+    REQUIRE(type_checker.solve_constraints());
+    REQUIRE_FALSE(type_checker.has_errors());
+    codegen.set_type_checker(&type_checker);
+    REQUIRE(codegen.compile(parsed->Expression.get()));
+
+    const string ir = codegen.emit_ir();
+    size_t awaits = 0;
+    for (size_t position = 0;
+         (position = ir.find("call i64 @YonaRuntimeIoAwait", position)) !=
+         string::npos;
+         position += 4)
+      ++awaits;
+    CHECK(awaits == 1);
+
+    size_t wrapper_calls = 0;
+    for (size_t position = 0;
+         (position = ir.find("call fastcc i64 @println__genfn", position)) !=
+         string::npos;
+         position += 4)
+      ++wrapper_calls;
+    CHECK(wrapper_calls == 2);
   }
 
   TEST_CASE("Stdlib conformance fixtures") {
@@ -1094,6 +1143,61 @@ TEST_SUITE("PerceusExceptionCleanup") {
     REQUIRE(codegen.emit_object_file(obj_path.string()));
     assert_linked_yona_zero_alloc_leaks(obj_path.string(),
                                         "yona_borrowed_temp_cleanup");
+  }
+
+  TEST_CASE("generated entry point releases its printed heap result") {
+    ensure_runtime_archive();
+
+    parser::Parser parser;
+    Codegen codegen("root_heap_result_cleanup_test");
+    DiagnosticEngine diagnostics;
+    typechecker::TypeChecker type_checker(diagnostics);
+    YONA_TEST_INSTALL_PRELUDE(codegen, parser, type_checker);
+    auto parsed = parser.parseExpression("[1]", "root_heap_result.yona");
+    REQUIRE(parsed);
+    REQUIRE(parsed->Expression);
+    type_checker.check(parsed->Expression.get());
+    REQUIRE(type_checker.solve_constraints());
+    REQUIRE_FALSE(type_checker.has_errors());
+    codegen.set_type_checker(&type_checker);
+    REQUIRE(codegen.compile(parsed->Expression.get()));
+
+    const auto object_path =
+        yona::test::link::scratch_root() / "yona_root_heap_result.o";
+    REQUIRE(codegen.emit_object_file(object_path.string()));
+    assert_linked_yona_zero_alloc_leaks(object_path.string(),
+                                        "yona_root_heap_result");
+  }
+
+  TEST_CASE("generated binary IO releases submitted and returned ByteArrays") {
+    ensure_runtime_archive();
+    string source = read_file(yona::test::codegen_fixtures_dir() /
+                              "binary_write_read.yona");
+    REQUIRE_FALSE(source.empty());
+    yona::test::link::rewrite_codegen_fixture_tmp_paths(source);
+
+    parser::Parser parser;
+    Codegen codegen("binary_byte_array_cleanup_test");
+    codegen.ModulePaths.push_back(yona::test::lib_dir().string());
+    DiagnosticEngine diagnostics;
+    typechecker::TypeChecker type_checker(diagnostics);
+    YONA_TEST_INSTALL_PRELUDE(codegen, parser, type_checker);
+    type_checker.add_module_path(yona::test::lib_dir().string());
+    auto parsed =
+        parser.parseExpression(source, "binary_write_read_cleanup.yona");
+    REQUIRE(parsed);
+    REQUIRE(parsed->Expression);
+    type_checker.check(parsed->Expression.get());
+    REQUIRE(type_checker.solve_constraints());
+    REQUIRE_FALSE(type_checker.has_errors());
+    codegen.set_type_checker(&type_checker);
+    REQUIRE(codegen.compile(parsed->Expression.get()));
+
+    const auto object_path =
+        yona::test::link::scratch_root() / "yona_binary_byte_array_cleanup.o";
+    REQUIRE(codegen.emit_object_file(object_path.string()));
+    assert_linked_yona_zero_alloc_leaks(object_path.string(),
+                                        "yona_binary_byte_array_cleanup");
   }
 
   TEST_CASE("raise through grouped-let task group frees bump arena") {

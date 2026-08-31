@@ -2140,6 +2140,10 @@ void Codegen::codegen_print(const TypedValue &tv) {
   auto resolved = auto_await(tv);
   codegen_print_value(resolved);
   builder_->CreateCall(rt_.print_newline_, {});
+  // The entry point owns its final value. Printing only borrows it, so close
+  // the last root reference after all type-directed reads have completed.
+  // Static literals and unboxed ADTs are filtered by emit_rc_dec.
+  emit_rc_dec(resolved.val, resolved.type);
 }
 
 // ===== Core Dispatch =====

@@ -155,3 +155,47 @@ TEST_CASE("packaged interfaces use the canonical deterministic schema") {
     CHECK(*Serialized == Stored);
   }
 }
+
+TEST_CASE("native array interfaces preserve their complete borrow contracts") {
+  using Contract =
+      std::pair<std::string, std::vector<std::pair<std::string, std::string>>>;
+  const std::vector<Contract> Contracts = {
+      {"ByteArray",
+       {{"alloc", "0"},     {"concat", "11"}, {"foldl", "101"},
+        {"fromSeq", "1"},   {"fromString", "1"},
+        {"get", "10"},      {"head", "1"},
+        {"join", "11"},     {"length", "1"},
+        {"map", "11"},      {"set", "100"},
+        {"slice", "100"},   {"tail", "1"},
+        {"toSeq", "1"},     {"toString", "1"}}},
+      {"IntArray",
+       {{"alloc", "0"},   {"cons", "01"},  {"fill", "00"},
+        {"filter", "11"}, {"foldl", "101"}, {"fromSeq", "1"},
+        {"get", "10"},    {"head", "1"},   {"join", "11"},
+        {"length", "1"},  {"map", "11"},   {"set", "100"},
+        {"slice", "100"}, {"tail", "1"},   {"toSeq", "1"}}},
+      {"FloatArray",
+       {{"alloc", "0"},  {"cons", "01"}, {"fill", "00"},
+        {"foldl", "101"}, {"get", "10"},   {"head", "1"},
+        {"join", "11"},  {"length", "1"}, {"map", "11"},
+        {"set", "100"},  {"tail", "1"}}},
+  };
+
+  for (const auto &[ModuleName, Functions] : Contracts) {
+    CAPTURE(ModuleName);
+    const auto Parsed = yona::interface::readModule(
+        yona::test::repo_root() / "lib" / "Std" / (ModuleName + ".yonai"));
+    REQUIRE(Parsed.has_value());
+    CHECK(Parsed->Functions.size() == Functions.size());
+    for (const auto &[FunctionName, ExpectedMask] : Functions) {
+      CAPTURE(FunctionName);
+      const auto *Function = yona::interface::findFunction(*Parsed,
+                                                           FunctionName);
+      REQUIRE(Function != nullptr);
+      std::string ActualMask;
+      for (const bool Borrowed : Function->BorrowedParameters)
+        ActualMask += Borrowed ? '1' : '0';
+      CHECK(ActualMask == ExpectedMask);
+    }
+  }
+}
