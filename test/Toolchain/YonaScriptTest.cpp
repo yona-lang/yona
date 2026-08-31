@@ -3,6 +3,8 @@
 
 #include <doctest/doctest.h>
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -48,11 +50,51 @@ static CmdResult runProcess(const fs::path &Executable,
 }
 
 static CmdResult run_yona(const std::vector<std::string> &args,
-                          const std::string &stdin_text = "") {
-  yona::support::ProcessOptions Options;
+                          const std::string &stdin_text = "",
+                          yona::support::ProcessOptions Options = {}) {
   if (!stdin_text.empty())
     Options.StandardInput = stdin_text;
   return runProcess(tool("yona"), args, Options);
+}
+
+class IsolatedTempDir {
+public:
+  explicit IsolatedTempDir(const std::string &Stem) {
+    static std::atomic<unsigned long> Sequence{0};
+    const auto Timestamp =
+        std::chrono::steady_clock::now().time_since_epoch().count();
+    Path = yona::test::link::scratch_root() /
+           (Stem + "_" + std::to_string(Timestamp) + "_" +
+            std::to_string(Sequence.fetch_add(1)));
+    std::error_code Error;
+    fs::remove_all(Path, Error);
+    fs::create_directories(Path);
+  }
+
+  ~IsolatedTempDir() {
+    std::error_code Error;
+    fs::remove_all(Path, Error);
+  }
+
+  const fs::path &path() const { return Path; }
+
+private:
+  fs::path Path;
+};
+
+static yona::support::ProcessOptions temp_environment(const fs::path &Path) {
+  return {.EnvironmentOverrides = {{"TMPDIR", Path.string()},
+                                   {"TMP", Path.string()},
+                                   {"TEMP", Path.string()}}};
+}
+
+static bool has_runner_temporary(const fs::path &Directory) {
+  for (const auto &Entry : fs::directory_iterator(Directory)) {
+    const std::string Name = Entry.path().filename().string();
+    if (Name.starts_with("yona-src") || Name.starts_with("yona-run"))
+      return true;
+  }
+  return false;
 }
 
 #ifndef _WIN32
@@ -101,17 +143,24 @@ TEST_CASE("yona shebang script is executable") {
 
 TEST_CASE("yona getArgs uses the script path") {
   auto src = write_temp_yona("script_args",
-                             "import getArgs from Std\\Process in\n"
-                             "case getArgs of [_|t] -> t; [] -> [] end\n");
-  auto r = run_yona({src.string(), "foo", "bar"});
+                             "import getArgs from Std\\Process in getArgs\n");
+  const std::string TrickyArgument = "argument with spaces & metacharacters!?";
+  auto r = run_yona({src.string(), "foo", TrickyArgument});
   CHECK(r.status == 0);
-  CHECK(r.out == "[foo, bar]");
+  CHECK(r.out == "[" + src.string() + ", foo, " + TrickyArgument + "]");
 }
 
 TEST_CASE("yona compiles piped stdin") {
   auto r = run_yona({}, "1 + 2\n");
   CHECK(r.status == 0);
   CHECK(r.out == "3");
+}
+
+TEST_CASE("yona piped stdin getArgs argv0 is dash") {
+  auto r =
+      run_yona({"-", "foo"}, "import getArgs from Std\\Process in getArgs\n");
+  CHECK(r.status == 0);
+  CHECK(r.out == "[-, foo]");
 }
 
 TEST_CASE("yona -e compiles and runs an expression") {
@@ -121,10 +170,25 @@ TEST_CASE("yona -e compiles and runs an expression") {
 }
 
 TEST_CASE("yona -e getArgs argv0 is -e") {
-  auto r =
-      run_yona({"-e", "import getArgs from Std\\Process in getArgs", "foo"});
+  const std::string TrickyArgument = "spaces ; $ & * ? metacharacters";
+  auto r = run_yona({"-e", "import getArgs from Std\\Process in getArgs", "foo",
+                     TrickyArgument});
   CHECK(r.status == 0);
-  CHECK(r.out == "[-e, foo]");
+  CHECK(r.out == "[-e, foo, " + TrickyArgument + "]");
+}
+
+TEST_CASE("yona removes stdin temporaries after compilation fails") {
+  IsolatedTempDir Temp("yona_stdin_cleanup");
+  auto r = run_yona({"-"}, "let\n", temp_environment(Temp.path()));
+  CHECK(r.status != 0);
+  CHECK_FALSE(has_runner_temporary(Temp.path()));
+}
+
+TEST_CASE("yona removes expression temporaries after compilation fails") {
+  IsolatedTempDir Temp("yona_expression_cleanup");
+  auto r = run_yona({"-e", "let"}, "", temp_environment(Temp.path()));
+  CHECK(r.status != 0);
+  CHECK_FALSE(has_runner_temporary(Temp.path()));
 }
 
 TEST_CASE("yona rejects a module file") {

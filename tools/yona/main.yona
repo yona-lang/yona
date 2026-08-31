@@ -23,7 +23,7 @@
 # and are called as `startRepl 0` / `usage 0`.
 # startsWith / endsWith take the needle first: startsWith "module" s.
 
-import getArgs, executablePath, run, execArgs, exit, yonaVersion, tempFile from Std\Process,
+import getArgs, executablePath, run, runWithArgv0, execArgs, exit, yonaVersion, tempFile from Std\Process,
        isTty, eprintln, println, readStdin, stdinFd from Std\Io,
        exists, writeFile, remove, readFile from Std\File,
        join, dirname from Std\Path,
@@ -64,46 +64,44 @@ let
 
   isModuleSource src = startsWith "module" (skipHashComments src),
 
-  # Replace this process. argv is `["yona"]` so the REPL banner matches.
+  # Replace this process. execArgs supplies the executable as argv[0].
   startRepl _ =
     let repl = findSibling "yona-repl" in
     if repl == "" then die "yona: cannot find yona-repl next to this executable" 127
-    else execArgs repl ["yona"],
+    else execArgs repl [],
 
-  # Blocking wait (`run` is FN). Inherit stdio; fail with yonac's status.
+  # Blocking wait (`run` is FN). The caller owns status propagation.
   compileToTemp sourcePath =
     let yonac = findSibling "yonac" in
     if yonac == "" then
       do
         eprintln "yona: cannot find yonac next to this executable"
-        exit 127
-        ""
+        ("", 127)
       end
     else
       do
         tmpExe = tempFile "yona-run" (if endsWith ".exe" yonac then ".exe" else "")
-        code = run yonac [yonac, sourcePath, "-o", tmpExe]
+        code = run yonac [sourcePath, "-o", tmpExe]
         if code != 0 then
           do
             remove tmpExe
-            exit code
-            ""
+            ("", code)
           end
-        else tmpExe
+        else (tmpExe, code)
       end,
 
   # argv0 is the script path, `-e`, or `-` — not the temp file name.
   runTemp tmpExe argv0 userArgs =
     do
-      status = run tmpExe (argv0 :: userArgs)
+      status = runWithArgv0 tmpExe argv0 userArgs
       remove tmpExe
       exit status
     end,
 
   compileAndRun sourcePath argv0 userArgs =
-    do
-      tmpExe = compileToTemp sourcePath
-      runTemp tmpExe argv0 userArgs
+    case compileToTemp sourcePath of
+      (tmpExe, status) ->
+        if status != 0 then exit status else runTemp tmpExe argv0 userArgs
     end,
 
   compileStdin userArgs =
@@ -118,9 +116,12 @@ let
         end
       else
         do
-          tmpExe = compileToTemp tmpSrc
+          compiled = compileToTemp tmpSrc
           remove tmpSrc
-          runTemp tmpExe "-" userArgs
+          case compiled of
+            (tmpExe, status) ->
+              if status != 0 then exit status else runTemp tmpExe "-" userArgs
+          end
         end
     end,
 
@@ -128,9 +129,12 @@ let
     do
       tmpSrc = tempFile "yona-src" ".yona"
       writeFile tmpSrc expr
-      tmpExe = compileToTemp tmpSrc
+      compiled = compileToTemp tmpSrc
       remove tmpSrc
-      runTemp tmpExe "-e" userArgs
+      case compiled of
+        (tmpExe, status) ->
+          if status != 0 then exit status else runTemp tmpExe "-e" userArgs
+      end
     end,
 
   compileFile path userArgs =

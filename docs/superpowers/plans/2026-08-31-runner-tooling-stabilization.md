@@ -69,7 +69,7 @@ targets permit. Commit as `feat: run processes with explicit argv0`.
 - Modify: `tools/yona/main.yona`
 - Modify: `test/Toolchain/YonaScriptTest.cpp`
 
-- [ ] **Step 1: Strengthen runner RED coverage**
+- [x] **Step 1: Strengthen runner RED coverage**
 
 Retain the already-red file, shebang, stdin, and `-e` cases. Strengthen argument
 tests to assert complete vectors:
@@ -82,18 +82,18 @@ Add failed stdin and failed `-e` compilation cases with a unique isolated
 `TMPDIR`/`TMP`/`TEMP`; assert nonzero status and no remaining `yona-src*` or
 `yona-run*` files.
 
-- [ ] **Step 2: Remove duplicate compiler argv0**
+- [x] **Step 2: Remove duplicate compiler argv0**
 
 Compile with `run yonac [sourcePath, "-o", tmpExe]`; do not pass `yonac` again
 inside the argument sequence. Change the REPL replacement to
 `execArgs repl []` for the same reason.
 
-- [ ] **Step 3: Run children with explicit argv0**
+- [x] **Step 3: Run children with explicit argv0**
 
 Import and call `runWithArgv0 tmpExe argv0 userArgs` so generated programs see
 the script path, `-`, or `-e` exactly as published. Preserve child exit status.
 
-- [ ] **Step 4: Make temporary ownership non-bypassable**
+- [x] **Step 4: Make temporary ownership non-bypassable**
 
 Make `compileToTemp` return the output path and status instead of calling
 `exit`. It removes the temp executable on failure. stdin/`-e` callers always
@@ -101,7 +101,7 @@ remove their temp source before branching on compile status; `runTemp` removes
 the executable after the child returns and only then exits. Missing-tool paths
 must report status 127 without bypassing caller cleanup.
 
-- [ ] **Step 5: Verify all runner modes and commit**
+- [x] **Step 5: Verify all runner modes and commit**
 
 Run all `yona *` toolchain cases, including module rejection, missing files,
 unknown flags, version, file/shebang/stdin/`-e`, full argv vectors, and cleanup.
