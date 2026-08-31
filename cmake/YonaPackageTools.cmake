@@ -56,7 +56,7 @@ function(yona_add_executable Target)
     set(Yona_OUTPUT_NAME "${Target}")
   endif()
   set(OutputPath
-    "${CMAKE_CURRENT_BINARY_DIR}/${Yona_OUTPUT_NAME}${CMAKE_EXECUTABLE_SUFFIX}")
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/${Yona_OUTPUT_NAME}${CMAKE_EXECUTABLE_SUFFIX}")
   get_filename_component(OutputDirectory "${OutputPath}" DIRECTORY)
 
   add_custom_command(

@@ -61,7 +61,7 @@ if(NOT BuildResult EQUAL 0)
 endif()
 
 set(YonaLanguageConsumer
-    "${ConsumerBuild}/yona_language_consumer${CMAKE_EXECUTABLE_SUFFIX}")
+    "${ConsumerBuild}/bin/yona_language_consumer${CMAKE_EXECUTABLE_SUFFIX}")
 execute_process(
   COMMAND "${YonaLanguageConsumer}"
   RESULT_VARIABLE YonaLanguageConsumerResult
