@@ -135,21 +135,21 @@ repros, then commit as `fix: reject malformed UTF-8 source`.
 - Modify: `src/Syntax/Lexer.cpp`
 - Modify: `test/Syntax/LexerTest.cpp`
 
-- [ ] **Step 1: Add exact-location RED coverage**
+- [x] **Step 1: Add exact-location RED coverage**
 
 Place invalid raw UTF-8 at known columns inside character and string literals,
 including after a multibyte prefix on a later line. Assert the diagnostic range
 starts at the invalid byte; confirm literal rescanning currently reports one
 column late.
 
-- [ ] **Step 2: Rewind complete lexer position state**
+- [x] **Step 2: Rewind complete lexer position state**
 
 When `scan_token` delegates to a scanner that reconsumes the opening quote,
 restore `Current`, `Line`, and `Column` together to the token start. Prefer one
 narrow helper over ad-hoc assignments. Do not alter number/symbol paths that
 resume after an already-consumed ASCII prefix.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run Lexer location/recovery tests, malformed-input CLI repros, and parser
 diagnostic controls. Commit as `fix: preserve literal diagnostic positions`.

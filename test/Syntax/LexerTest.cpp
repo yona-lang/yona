@@ -296,6 +296,40 @@ TEST_SUITE("Lexer") {
     }
   }
 
+  TEST_CASE("Invalid UTF-8 literal diagnostics point at the invalid byte") {
+    struct DiagnosticCase {
+      string name;
+      string source;
+      size_t line;
+      size_t column;
+      size_t offset;
+    };
+
+    const string invalid("\xC0", 1);
+    const vector<DiagnosticCase> cases = {
+        {"character", "'" + invalid + "'", 1, 2, 1},
+        {"string after ASCII", "\"ab" + invalid + "\"", 1, 4, 3},
+        {"later-line character after UTF-8 identifier",
+         string("\xCE\xBB\n  '", 6) + invalid + "'", 2, 4, 6},
+        {"later-line string after UTF-8 scalar",
+         string("\xCE\xBB\n  \"\xCE\xBB", 8) + invalid + "\"", 2, 5, 8},
+    };
+
+    for (const auto &test : cases) {
+      CAPTURE(test.name);
+      auto lexer = makeLexer(test.source);
+      auto result = lexer.tokenize();
+
+      REQUIRE_FALSE(result.has_value());
+      const auto &errors = result.error();
+      REQUIRE_FALSE(errors.empty());
+      CHECK(errors.front().type == LexError::Type::INVALID_CHARACTER);
+      CHECK(errors.front().Range.Line == test.line);
+      CHECK(errors.front().Range.Column == test.column);
+      CHECK(errors.front().Range.Offset == test.offset);
+    }
+  }
+
   TEST_CASE("UTF-8 scalar boundaries retain their decoded values") {
     const vector<pair<string, char32_t>> valid = {
         {string("\xC2\x80", 2), char32_t{0x80}},

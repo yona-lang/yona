@@ -971,6 +971,12 @@ std::expected<Token, LexError> Lexer::scan_token() {
     return tok;
   };
 
+  auto rewind_to_token_start = [this] {
+    Current = TokenStart;
+    Line = TokenStartLine;
+    Column = TokenStartColumn;
+  };
+
   // Single character tokens
   switch (ch) {
   case '(':
@@ -1002,10 +1008,10 @@ std::expected<Token, LexError> Lexer::scan_token() {
   case '\\':
     return make_token(TokenType::YBACKSLASH);
   case '"':
-    Current = TokenStart; // Reset for string scanning
+    rewind_to_token_start();
     return scan_string();
   case '\'':
-    Current = TokenStart; // Reset for character scanning
+    rewind_to_token_start();
     return scan_character();
   case ':':
     // Could be COLON, CONS (::), CONS_RIGHT (:>), or SYMBOL
