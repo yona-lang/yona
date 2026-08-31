@@ -1406,6 +1406,44 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
         auto tag_ty = LType::getInt64Ty(*context_);
         auto i64_ty = LType::getInt64Ty(*context_);
         using FieldShape = AdtInfo::FieldShape;
+        auto concrete_field_shape = [&](size_t field_index) {
+          FieldShape shape;
+          if (field_index < ctor_it->second.field_shapes.size())
+            shape = ctor_it->second.field_shapes[field_index];
+          else {
+            if (field_index < ctor_it->second.field_types.size())
+              shape.type = ctor_it->second.field_types[field_index];
+            if (field_index < ctor_it->second.field_fn_return_types.size())
+              shape.function_return_type =
+                  ctor_it->second.field_fn_return_types[field_index];
+            if (field_index < ctor_it->second.field_fn_return_adt_names.size())
+              shape.function_return_adt_name =
+                  ctor_it->second.field_fn_return_adt_names[field_index];
+          }
+
+          if (field_index >= ctor_it->second.declared_field_types.size())
+            return shape;
+          const auto &declared =
+              ctor_it->second.declared_field_types[field_index];
+          if (declared.is_function_type || declared.is_tuple_type ||
+              !declared.type_arguments.empty())
+            return shape;
+          const auto parameters =
+              types_.adt_type_params.find(ctor_it->second.type_name);
+          if (parameters == types_.adt_type_params.end())
+            return shape;
+          for (size_t parameter = 0; parameter < parameters->second.size();
+               ++parameter) {
+            if (parameters->second[parameter] != declared.name)
+              continue;
+            if (parameter < scrutinee.adt_type_arguments.size())
+              shape.type = scrutinee.adt_type_arguments[parameter];
+            else if (field_index < scrutinee.subtypes.size())
+              shape.type = scrutinee.subtypes[field_index];
+            break;
+          }
+          return shape;
+        };
         std::function<void(PatternNode *, Value *, const FieldShape &)>
             bind_field;
         bind_field = [&](PatternNode *field_pattern, Value *raw_value,
@@ -1457,6 +1495,11 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
               bound.subtypes.push_back(element.type);
           }
           named_values_[(*identifier)->name->value] = bound;
+          if (is_heap_type(bound.type) && bound.val->getType()->isPointerTy()) {
+            emit_rc_inc(bound.val, bound.type);
+            if (!arm_drop_stack_.empty())
+              arm_drop_stack_.back().push_back({bound.val, bound.type});
+          }
         };
 
         bool use_heap_layout =
@@ -1477,18 +1520,7 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
                 auto val = builder_->CreateCall(
                     rt_.adt_get_field_,
                     {scrutinee.val, ConstantInt::get(i64_ty, fi)});
-                FieldShape fallback;
-                if (fi < ctor_it->second.field_types.size())
-                  fallback.type = ctor_it->second.field_types[fi];
-                if (fi < ctor_it->second.field_fn_return_types.size())
-                  fallback.function_return_type =
-                      ctor_it->second.field_fn_return_types[fi];
-                if (fi < ctor_it->second.field_fn_return_adt_names.size())
-                  fallback.function_return_adt_name =
-                      ctor_it->second.field_fn_return_adt_names[fi];
-                const auto &shape = fi < ctor_it->second.field_shapes.size()
-                                        ? ctor_it->second.field_shapes[fi]
-                                        : fallback;
+                const auto shape = concrete_field_shape(fi);
                 bind_field(pattern, val, shape);
                 break;
               }
@@ -1507,18 +1539,7 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
               if (ctor_it->second.field_names[fi] == name_expr->value) {
                 auto val = builder_->CreateExtractValue(scrutinee.val,
                                                         {(unsigned)(fi + 1)});
-                FieldShape fallback;
-                if (fi < ctor_it->second.field_types.size())
-                  fallback.type = ctor_it->second.field_types[fi];
-                if (fi < ctor_it->second.field_fn_return_types.size())
-                  fallback.function_return_type =
-                      ctor_it->second.field_fn_return_types[fi];
-                if (fi < ctor_it->second.field_fn_return_adt_names.size())
-                  fallback.function_return_adt_name =
-                      ctor_it->second.field_fn_return_adt_names[fi];
-                const auto &shape = fi < ctor_it->second.field_shapes.size()
-                                        ? ctor_it->second.field_shapes[fi]
-                                        : fallback;
+                const auto shape = concrete_field_shape(fi);
                 bind_field(pattern, val, shape);
                 break;
               }

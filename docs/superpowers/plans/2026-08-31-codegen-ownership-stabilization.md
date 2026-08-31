@@ -52,7 +52,7 @@ bindings before testing the next arm. A non-identifier heap case scrutinee is
 case-owned and is released on the selected path; named scrutinees remain owned
 by their enclosing scope.
 
-- [ ] **Step 3a: Preserve named tuple owners and clean failed prefixes**
+- [x] **Step 3a: Preserve named tuple owners and clean failed prefixes**
 
 Destructuring a named tuple must not release the enclosing scope's reference
 before a later use; retain or defer based on the same last-use ownership model
@@ -61,7 +61,7 @@ block that releases any heap prefix bindings retained before the mismatch.
 Cover named reuse with allocator-slot reuse, mismatch stats, and canonical
 `if false` guard syntax plus selected-output assertions.
 
-- [ ] **Step 3b: Give record-pattern fields the same arm lifetime**
+- [x] **Step 3b: Give record-pattern fields the same arm lifetime**
 
 Retain heap fields extracted from record patterns and register their arm drops,
 including guard failure and escaping-result handling, before releasing a

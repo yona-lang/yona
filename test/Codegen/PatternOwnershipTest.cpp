@@ -33,11 +33,16 @@ std::string read_file(const fs::path &path) {
 void assert_zero_alloc_leaks(const std::string &source,
                              const std::string &artifact_stem,
                              const std::string &expected_output = {},
-                             const std::string &expected_stats = {}) {
+                             const std::string &expected_stats = {},
+                             const fs::path &module_root = {},
+                             const fs::path &module_object = {},
+                             std::size_t minimum_retain_calls = 0) {
   REQUIRE(yona::test::link::ensure_runtime_objects());
 
   parser::Parser parser;
   Codegen codegen(artifact_stem);
+  if (!module_root.empty())
+    codegen.ModulePaths.push_back(module_root.string());
   if (fs::exists(yona::test::lib_dir()))
     codegen.ModulePaths.push_back(
         fs::canonical(yona::test::lib_dir()).string());
@@ -55,11 +60,24 @@ void assert_zero_alloc_leaks(const std::string &source,
   REQUIRE_FALSE(type_checker.has_errors());
   codegen.set_type_checker(&type_checker);
   REQUIRE(codegen.compile(parsed->Expression.get()));
+  if (minimum_retain_calls > 0) {
+    const auto ir = codegen.emit_ir();
+    std::size_t retain_calls = 0;
+    for (std::size_t position = 0;
+         (position = ir.find("call void @YonaRuntimeRetain", position)) !=
+         std::string::npos;
+         position += 4)
+      ++retain_calls;
+    CHECK(retain_calls >= minimum_retain_calls);
+  }
 
   const auto object_path =
       yona::test::link::scratch_root() / ("yona_" + artifact_stem + ".o");
   REQUIRE(codegen.emit_object_file(object_path.string()));
-  std::vector<fs::path> objects = {object_path};
+  std::vector<fs::path> objects;
+  if (!module_object.empty())
+    objects.push_back(module_object);
+  objects.push_back(object_path);
   REQUIRE(yona::test::link::append_prelude_object(objects));
   REQUIRE(yona::test::link::append_runtime_objects(objects));
   const auto executable = yona::test::link::scratch_root() /
@@ -91,6 +109,43 @@ void assert_zero_alloc_leaks(const std::string &source,
     position = end;
   }
   REQUIRE(leak_rows > 0);
+}
+
+void assert_generic_record_zero_alloc_leaks(
+    const std::string &source, const std::string &artifact_stem,
+    const std::string &expected_output) {
+  const auto module_root =
+      yona::test::link::scratch_root() / ("yona_" + artifact_stem + "_modules");
+  fs::create_directories(module_root / "Test");
+
+  parser::Parser module_parser;
+  auto module = module_parser.parseModule(R"(
+module Test\PatternRecord
+
+export type Box
+export make
+
+type Box a = Box { item : a }
+make : a -> Box a
+make value = Box { item = value }
+)",
+                                          "pattern_record.yona");
+  REQUIRE(module.has_value());
+
+  DiagnosticEngine module_diagnostics;
+  Codegen module_codegen(artifact_stem + "_module", &module_diagnostics);
+  module_codegen.ModulePaths.push_back(yona::test::lib_dir().string());
+  REQUIRE(module_codegen.compile_module(module.value().get()));
+  REQUIRE_FALSE(module_diagnostics.has_errors());
+  const auto module_object = yona::test::link::scratch_root() /
+                             ("yona_" + artifact_stem + "_module.o");
+  REQUIRE(module_codegen.emit_object_file(module_object.string()));
+  REQUIRE(module_codegen.emit_interface_file(
+      (module_root / "Test" / "PatternRecord.yonai").string()));
+
+  assert_zero_alloc_leaks(source, artifact_stem, expected_output,
+                          "tag=SEQ allocs=2 frees=2 leaked=0", module_root,
+                          module_object, 3);
 }
 
 } // namespace
@@ -146,6 +201,18 @@ TEST_SUITE("Pattern ownership") {
                             "case Some [1] of Some xs -> xs; None -> [] end in "
                             "case extracted of [x] -> x; _ -> 0 end",
                             "constructor_binding_escape");
+  }
+
+  TEST_CASE("record bindings survive guards and escape temporary scrutinees") {
+    assert_generic_record_zero_alloc_leaks(
+        "import Test\\PatternRecord in "
+        "let extracted = case make [1] of "
+        "Box { item = value } if false -> []; "
+        "Box { item = value } -> value end in "
+        "let replacement = [9] in "
+        "case replacement of _ -> "
+        "case extracted of [result] -> result; _ -> 0 end end",
+        "generic_record_binding_lifetime", "1");
   }
 
   TEST_CASE("temporary heap-field constructor cases isolate field ownership") {
