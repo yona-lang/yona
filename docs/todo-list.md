@@ -223,6 +223,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `FloatMapOp -> Receiver FloatArray -> Sender FloatArray -> Int`, producing
   a type error before the channel runtime is exercised.
 
+- [ ] **Generated channel programs leak their endpoint object graph.** Repro:
+  run a compiled `channel_basic` with `YONA_ALLOC_STATS=1`; it returns `42`
+  but reports three leaked ADTs, one tuple, and one channel even though direct
+  runtime release recursively frees the same tuple/Linear/endpoint/channel
+  shape.
+
 - [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
   boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
   `binary_chunks`, `binary_seek`, and `binary_write_read` report an expected
