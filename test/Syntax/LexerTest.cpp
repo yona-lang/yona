@@ -292,6 +292,46 @@ TEST_SUITE("Lexer") {
     CHECK(get<char32_t>(tokens[2].value) == U'A');
   }
 
+  TEST_CASE("Character unicode escapes accept scalar boundaries") {
+    auto lexer = makeLexer("'\\U0010FFFF' '\\U0001F600'");
+    auto result = lexer.tokenize();
+
+    REQUIRE(result.has_value());
+    const auto &tokens = result.value();
+    REQUIRE(tokens.size() == 3);
+    CHECK(tokens[0].type == TokenType::YCHARACTER);
+    CHECK(get<char32_t>(tokens[0].value) == char32_t{0x10FFFF});
+    CHECK(tokens[1].type == TokenType::YCHARACTER);
+    CHECK(get<char32_t>(tokens[1].value) == char32_t{0x1F600});
+  }
+
+  TEST_CASE("Character unicode escapes reject non-scalar values") {
+    for (const auto source : {"'\\uD800'", "'\\uDFFF'", "'\\U00110000'"}) {
+      CAPTURE(source);
+      auto lexer = makeLexer(source);
+      auto result = lexer.tokenize();
+
+      REQUIRE_FALSE(result.has_value());
+      const auto &errors = result.error();
+      REQUIRE_FALSE(errors.empty());
+      CHECK(errors.front().type == LexError::Type::INVALID_ESCAPE_SEQUENCE);
+    }
+  }
+
+  TEST_CASE("String unicode escapes reject non-scalar values") {
+    for (const auto source : {R"("\uD800")", R"("\uDFFF")",
+                              R"("\U00110000")"}) {
+      CAPTURE(source);
+      auto lexer = makeLexer(source);
+      auto result = lexer.tokenize();
+
+      REQUIRE_FALSE(result.has_value());
+      const auto &errors = result.error();
+      REQUIRE_FALSE(errors.empty());
+      CHECK(errors.front().type == LexError::Type::INVALID_ESCAPE_SEQUENCE);
+    }
+  }
+
   TEST_CASE("UnicodeIdentifiers") {
     LexerTest fixture;
     fixture.TestTokens("λ пользователь 用户",

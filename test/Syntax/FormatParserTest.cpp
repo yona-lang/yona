@@ -12,6 +12,7 @@ using yona::ast::ExprNode;
 using yona::ast::ApplyExpr;
 using yona::ast::AST_UNIT_EXPR;
 using yona::ast::CaseExpr;
+using yona::ast::CharacterExpr;
 using yona::ast::ExternDeclExpr;
 using yona::ast::ExternPromiseKind;
 using yona::ast::FieldUpdateExpr;
@@ -177,6 +178,37 @@ end
     auto *integer = dynamic_cast<IntegerExpr *>(*literal);
     REQUIRE(integer);
     CHECK(integer->value == 42);
+  }
+
+  TEST_CASE("character expressions preserve non-ASCII scalar values") {
+    Parser parser;
+    auto result = parser.parseExpression(R"('\u03BB')", "<character-test>");
+
+    REQUIRE(result.has_value());
+    auto *character = dynamic_cast<CharacterExpr *>(result.value().get());
+    REQUIRE(character);
+    CHECK(static_cast<char32_t>(character->value) == char32_t{0x03BB});
+  }
+
+  TEST_CASE("character patterns preserve non-BMP scalar values") {
+    Parser parser;
+    auto result =
+        parser.parseExpression(R"(case input of '\U0001F600' -> 1; _ -> 0 end)",
+                               "<character-pattern-test>");
+
+    REQUIRE(result.has_value());
+    auto *case_expr = dynamic_cast<CaseExpr *>(result.value().get());
+    REQUIRE(case_expr);
+    REQUIRE(case_expr->clauses.size() == 2);
+    auto *pattern =
+        dynamic_cast<PatternValue *>(case_expr->clauses[0]->pattern);
+    REQUIRE(pattern);
+    auto *literal = std::get_if<LiteralExpr<void *> *>(&pattern->expr);
+    REQUIRE(literal);
+    REQUIRE(*literal);
+    auto *character = dynamic_cast<CharacterExpr *>(*literal);
+    REQUIRE(character);
+    CHECK(static_cast<char32_t>(character->value) == char32_t{0x1F600});
   }
 
   TEST_CASE("field update validates its target before transferring ownership") {

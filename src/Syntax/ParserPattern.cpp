@@ -92,7 +92,7 @@ unique_ptr<PatternNode> ParserImpl::parse_pattern_primary() {
   if (check(TokenType::YCHARACTER)) {
     auto token = advance();
     auto value = get<char32_t>(token.value);
-    auto char_expr = new CharacterExpr(loc, static_cast<char>(value));
+    auto char_expr = new CharacterExpr(loc, static_cast<wchar_t>(value));
     return make_unique<PatternValue>(
         loc, static_cast<LiteralExpr<void *> *>(char_expr));
   }

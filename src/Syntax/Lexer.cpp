@@ -479,6 +479,12 @@ std::expected<char32_t, LexError> Lexer::parse_unicode_escape(int digits) {
     }
   }
 
+  if (value > 0x10FFFF || (value >= 0xD800 && value <= 0xDFFF)) {
+    return std::unexpected(LexError{LexError::Type::INVALID_ESCAPE_SEQUENCE,
+                                    "Unicode escape is not a scalar value",
+                                    currentRange()});
+  }
+
   return value;
 }
 
