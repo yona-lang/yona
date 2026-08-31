@@ -6,6 +6,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **The semantic generic-source service cannot reparse its owned source.**
+  Repro: run `./out/build/x64-debug-linux/tests -tc="Semantics generic source
+  service retains GENFN source ownership"`; `GenericFunctionSourceService`
+  returns no parsed function before native dependency registration begins.
+
 - [ ] **The Yona runner exits 109 for ordinary Linux programs.** Repro: run
   `./out/build/x64-debug-linux/tests -tc="yona runs a file"`; the built
   runner produces no output and returns status 109 instead of compiling and
@@ -44,64 +49,81 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   case functions heap-box non-recursive results"`; expression module creation
   returns null.
 
-- [ ] **Generated fixture links discard a configured MoltenVK library name.**
+- [x] **Generated fixture links discard a configured MoltenVK library name.**
   Repro: configure macOS with `YONA_VULKAN_LIBRARY` resolving directly to
   `libMoltenVK.dylib` and no `libvulkan.dylib`; the fixture linker retains only
   the directory and emits `-lvulkan`, so the supported direct-MoltenVK link
-  cannot resolve.
+  cannot resolve. Fixed by preserving the exact configured loader path in the
+  generated link contract; the isolated direct-MoltenVK configuration probe
+  retains `libMoltenVK.dylib`, and the Linux GPU conformance CTest passes.
 
-- [ ] **Linux file-descriptor I/O fallbacks leak their initially allocated
+- [x] **Linux file-descriptor I/O fallbacks leak their initially allocated
   io_uring context.** Repro: force `YonaRuntimeIoUringSubmit` to return zero
   in `YonaRuntimePlatformSubmitFileDescriptorByteRead` or
   `YonaRuntimePlatformSubmitFileDescriptorByteWrite`; each path registers a
-  separate direct-result context without freeing its original `Ctx`.
+  separate direct-result context without freeing its original `Ctx`. Fixed by
+  allocating asynchronous contexts only after successful submission; the
+  seccomp/Valgrind fallback regression reports no definite leaks.
 
-- [ ] **Installed Yona executable targets collide with their output file.**
+- [x] **Installed Yona executable targets collide with their output file.**
   Repro: run `ctest --preset unit-tests-linux -R
   installed_consumer_contract`; Ninja rejects `yona_language_consumer`
   because the phony custom target names itself as an input and multiple rules
-  generate the same path.
+  generate the same path. Fixed by emitting installed-helper executables below
+  a dedicated `bin/` directory; the installed-consumer CTest configures,
+  builds, and runs without duplicate-rule diagnostics.
 
-- [ ] **Installed `yonac` cannot load the compiler library.** Repro: after
+- [x] **Installed `yonac` cannot load the compiler library.** Repro: after
   fixing the installed-consumer target/output collision, run `ctest --preset
   unit-tests-linux -R installed_consumer_contract`; the installed `yonac`
-  exits with an unresolved `yona::compiler::DiagnosticEngine` symbol.
+  exits with an unresolved `yona::compiler::DiagnosticEngine` symbol. Fixed
+  with a relocatable sibling-library install RPATH on shared Unix CLI tools;
+  the contract passes and `ldd` resolves the packaged `libyona_lib`.
 
-- [ ] **Vulkan-enabled generated programs omit the loader link dependency.**
+- [x] **Vulkan-enabled generated programs omit the loader link dependency.**
   Repro: run `ctest --preset unit-tests-linux -R doctest_stdlib_gpu`; linking
   the stdlib GPU conformance fixture reports unresolved `vk*` symbols from
-  `runtime/libyona_runtime.a` and returns `LINK_ERROR`.
+  `runtime/libyona_runtime.a` and returns `LINK_ERROR`. Fixed by appending the
+  exact configured loader after the runtime archive; the GPU conformance CTest
+  passes with 4/4 assertions.
 
-- [ ] **Platform I/O registry declarations lack C++ linkage guards.** Repro:
+- [x] **Platform I/O registry declarations lack C++ linkage guards.** Repro:
   run `cmake --build --preset build-debug-linux`; linking `tests` reports
   undefined `YonaRuntimeIoContextPut`/`YonaRuntimeIoContextTake` references
   from `IoReadExactTest.cpp` while `runtime/libyona_runtime.a` exports the C
-  symbols.
+  symbols. Fixed with canonical `extern "C"` guards; the test executable links
+  and the `IoReadExact` suite passes all 8 cases and 46 assertions.
 
-- [ ] **The Linux and macOS platform I/O headers cannot be included together
+- [x] **The Linux and macOS platform I/O headers cannot be included together
   by C++ consumers.** Repro: run `clang++ -std=gnu++23 -Iinclude -x c++
   -fsyntax-only` with both `IoUring.h` and `Kqueue.h`; the duplicate
   `YonaIoOperationKind` and `YonaIoContext` definitions are rejected. Share
   the common platform-I/O declarations or make their definitions mutually
-  exclusive while retaining each platform API.
+  exclusive while retaining each platform API. Fixed by extracting the common
+  ABI into `IoContext.h`; the dual-header syntax probe and test link both pass.
 
-- [ ] **The Linux io_uring implementation disagrees with its public cancel
+- [x] **The Linux io_uring implementation disagrees with its public cancel
   declaration.** Repro: build the debug `tests` target; `IoUringLinux.c`
   defines `YonaRuntimeIoUringCancelGroup(uint64_t *, int)` while
   `IoUring.h` declares `const uint64_t *`. Reconcile the ownership contract
-  in the declaration and definition.
+  in the declaration and definition. Fixed by preserving `const` in the
+  definition; the full Linux debug graph builds successfully.
 
-- [ ] **The modularized Linux platform I/O sources still use the pre-refactor
+- [x] **The modularized Linux platform I/O sources still use the pre-refactor
   `YonaIoContext` fields and inconsistent local identifier casing.** Repro:
   build the debug `tests` target; `FileLinux.c` and `NetLinux.c` reference
   removed `type`, `fd`, and `buf` fields, and names such as `hints`/`res`
   that are declared as `Hints`/`Res`. Port these consumers to the canonical
-  context API and identifier spelling.
+  context API and identifier spelling. Fixed by migrating both sources to the
+  canonical context fields and local spellings; the component and full graph
+  build, and the focused file/network suites pass.
 
-- [ ] **The modularized native stdlib sources contain inconsistent local
+- [x] **The modularized native stdlib sources contain inconsistent local
   identifier casing.** Repro: build the debug `tests` target; `Native.c`
   declares `Buf`, `Len`, `Cap`, `Fd`, `Got`, and `Off` but later uses their
   lowercase forms. Restore consistent identifiers in the read/write helpers.
+  Fixed by completing the native POSIX identifier migration; the stdlib
+  component and full Linux debug graph build successfully.
 
 - [x] **The modularized AST header omitted its `nullptr_t` import.** Repro:
   build with Clang 22 and libstdc++ 16; `yona/Syntax/Ast.h` rejects its
