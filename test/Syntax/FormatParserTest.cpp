@@ -3,16 +3,23 @@
 
 #include <doctest/doctest.h>
 
+#include <array>
+#include <iomanip>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
 
-using yona::ast::ExprNode;
+using std::array;
+using std::ostringstream;
+using std::pair;
+using std::string;
 using yona::ast::ApplyExpr;
 using yona::ast::AST_UNIT_EXPR;
 using yona::ast::CaseExpr;
 using yona::ast::CharacterExpr;
+using yona::ast::ExprNode;
 using yona::ast::ExternDeclExpr;
 using yona::ast::ExternPromiseKind;
 using yona::ast::FieldUpdateExpr;
@@ -26,9 +33,9 @@ using yona::ast::ModuleCall;
 using yona::ast::ModuleImport;
 using yona::ast::PatternValue;
 using yona::ast::TuplePattern;
-using yona::parser::Parser;
-using yona::parser::ParseError;
 using yona::parser::ParsedExpression;
+using yona::parser::ParseError;
+using yona::parser::Parser;
 
 TEST_SUITE("Std Format parser regressions") {
 
@@ -209,6 +216,55 @@ end
     auto *character = dynamic_cast<CharacterExpr *>(*literal);
     REQUIRE(character);
     CHECK(static_cast<char32_t>(character->value) == char32_t{0x1F600});
+  }
+
+  TEST_CASE("printed character expressions round-trip through the lexer") {
+    const array<pair<char32_t, string>, 9> cases{{
+        {char32_t{0x03BB}, R"('\u03BB')"},
+        {char32_t{0x1F600}, R"('\U0001F600')"},
+        {char32_t{0x10FFFF}, R"('\U0010FFFF')"},
+        {U'A', R"('A')"},
+        {U'\'', R"('\'')"},
+        {U'\\', R"('\\')"},
+        {U'\n', R"('\n')"},
+        {U'\0', R"('\0')"},
+        {char32_t{0x0008}, R"('\u0008')"},
+    }};
+
+    for (const auto &[scalar, expected] : cases) {
+      CAPTURE(scalar);
+      CAPTURE(expected);
+      CharacterExpr character(yona::SourceRange::unknown(),
+                              static_cast<wchar_t>(scalar));
+      ostringstream printed;
+      printed << character;
+      CHECK(printed.str() == expected);
+
+      Parser parser;
+      auto reparsed =
+          parser.parseExpression(printed.str(), "<printed-character>");
+      REQUIRE(reparsed.has_value());
+      auto *round_tripped =
+          dynamic_cast<CharacterExpr *>(reparsed.value().get());
+      REQUIRE(round_tripped);
+      CHECK(static_cast<char32_t>(round_tripped->value) == scalar);
+    }
+  }
+
+  TEST_CASE("character printing preserves caller stream formatting") {
+    CharacterExpr character(yona::SourceRange::unknown(),
+                            static_cast<wchar_t>(char32_t{0x03BB}));
+    ostringstream printed;
+    printed << std::hex << std::showbase << std::nouppercase
+            << std::setfill('*');
+    const auto flags = printed.flags();
+    const auto fill = printed.fill();
+
+    printed << character;
+
+    CHECK(printed.str() == R"('\u03BB')");
+    CHECK(printed.flags() == flags);
+    CHECK(printed.fill() == fill);
   }
 
   TEST_CASE("field update validates its target before transferring ownership") {

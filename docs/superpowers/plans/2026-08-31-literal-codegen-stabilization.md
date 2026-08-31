@@ -82,20 +82,20 @@ rejection and non-BMP controls. Commit as
 - Modify: `src/Syntax/Ast.cpp`
 - Modify: focused AST/parser tests under `test/Syntax/`
 
-- [ ] **Step 1: Add print-round-trip RED coverage**
+- [x] **Step 1: Add print-round-trip RED coverage**
 
 Construct and print character nodes for U+03BB, U+1F600, U+10FFFF, ASCII quote,
 backslash, newline, and NUL. Reparse every printed spelling and assert the same
 scalar value. Confirm non-ASCII currently emits unsupported `\x...` escapes.
 
-- [ ] **Step 2: Emit canonical lexer-supported escapes**
+- [x] **Step 2: Emit canonical lexer-supported escapes**
 
 Keep existing short escapes for ASCII controls and delimiters. Emit `\u` plus
 exactly four uppercase hex digits for remaining BMP values and `\U` plus
 exactly eight for supplementary values. Preserve and restore the caller's
 stream formatting flags and fill character.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run AST/parser formatting tests and the Unicode fixture, then commit as
 `fix: print parseable character literals`.

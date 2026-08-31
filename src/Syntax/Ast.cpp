@@ -1,6 +1,7 @@
 #include "yona/Syntax/Ast.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <numeric>
@@ -14,6 +15,28 @@ using yona::compiler::types::BuiltinTypeStrings;
 namespace yona::ast {
 
 using compiler::types::Type;
+
+namespace {
+
+class StreamFormatGuard {
+  std::ostream &stream_;
+  std::ios_base::fmtflags flags_;
+  char fill_;
+
+public:
+  explicit StreamFormatGuard(std::ostream &stream)
+      : stream_(stream), flags_(stream.flags()), fill_(stream.fill()) {}
+
+  ~StreamFormatGuard() {
+    stream_.flags(flags_);
+    stream_.fill(fill_);
+  }
+
+  StreamFormatGuard(const StreamFormatGuard &) = delete;
+  StreamFormatGuard &operator=(const StreamFormatGuard &) = delete;
+};
+
+} // namespace
 
 template <class T>
   requires derived_from<T, AstNode>
@@ -123,9 +146,10 @@ CharacterExpr::CharacterExpr(SourceRange token, const wchar_t value)
     : LiteralExpr<wchar_t>(token, value) {}
 
 void CharacterExpr::print(std::ostream &os) const {
-  // Print character literals with proper escaping
+  StreamFormatGuard format_guard(os);
+  const auto scalar = static_cast<uint32_t>(static_cast<char32_t>(value));
   os << '\'';
-  switch (value) {
+  switch (scalar) {
   case '\n':
     os << "\\n";
     break;
@@ -145,13 +169,13 @@ void CharacterExpr::print(std::ostream &os) const {
     os << "\\0";
     break;
   default:
-    if (value >= 32 && value <= 126) {
-      // Printable ASCII character
-      os << (char)value;
+    if (scalar >= 32 && scalar <= 126) {
+      os << static_cast<char>(scalar);
     } else {
-      // Non-printable character - use hex escape
-      os << "\\x" << std::hex << std::setfill('0') << std::setw(2) << (int)value
-         << std::dec;
+      const int width = scalar <= 0xFFFF ? 4 : 8;
+      os << (width == 4 ? "\\u" : "\\U") << std::hex << std::uppercase
+         << std::noshowbase << std::noshowpos << std::right << std::setfill('0')
+         << std::setw(width) << scalar;
     }
     break;
   }
