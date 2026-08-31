@@ -6,6 +6,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **Cross-module generic tests use invalid underscore identifiers.**
+  Repro: run `./out/build/x64-debug-linux/tests -tc="*cross-module*"`; the
+  `double_it` and `unwrap_or` modules fail interface validation before testing
+  generic reuse because local Yona symbols must use canonical camelCase names.
+
 - [ ] **The opaque-constructor negative codegen regression expects a failed
   compile to return a module.** Repro: run `tests -tc="*interface*"`; the
   `Opaque exported ADTs omit constructors from their interface` case correctly
