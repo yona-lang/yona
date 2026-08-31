@@ -5,6 +5,7 @@
  * once into the canonical archive used by every generated program. */
 
 #include "Support/RepoPaths.h"
+#include "yona/Runtime/Generated/VulkanLinkConfig.h"
 #include "yona/Support/Process.h"
 
 #include <cstdlib>
@@ -103,6 +104,19 @@ inline std::string exe_suffix() {
 #endif
 }
 
+inline void append_vulkan_link_arguments(std::vector<std::string> &args) {
+#if YONA_HAVE_CONFIGURED_VULKAN_IMPORT_LIB
+  args.emplace_back(YONA_CONFIGURED_VULKAN_IMPORT_LIB_PATH);
+#elif YONA_HAVE_CONFIGURED_VULKAN_LIB_DIR
+  const std::string loader_dir = YONA_CONFIGURED_VULKAN_LIB_DIR;
+  args.push_back("-L" + loader_dir);
+#if defined(__APPLE__)
+  args.push_back("-Wl,-rpath," + loader_dir);
+#endif
+  args.emplace_back("-lvulkan");
+#endif
+}
+
 inline bool link_objs_to_exe(const std::vector<std::filesystem::path> &objs,
                              const std::filesystem::path &exe_out,
                              const std::vector<std::string> &extra_args = {}) {
@@ -131,6 +145,7 @@ inline bool link_objs_to_exe(const std::vector<std::filesystem::path> &objs,
   args.insert(args.end(), {"-lm", "-lpthread", "-rdynamic"});
 #endif
   args.insert(args.end(), extra_args.begin(), extra_args.end());
+  append_vulkan_link_arguments(args);
 
   const auto QuietResult =
       yona::support::executeProcess(cc(), args, {.SuppressStderr = true});
