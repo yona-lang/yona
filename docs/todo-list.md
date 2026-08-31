@@ -6,6 +6,16 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **Byte and character literals are accepted by parsing and typing but
+  rejected by codegen.** Repro: compile `case [2b] of [1b] -> 1; _ -> 2 end`
+  (or the analogous character sequence); codegen reports `unsupported
+  expression type` before pattern matching.
+
+- [ ] **Top-level and tuple literal patterns ignore non-integer, non-symbol
+  values.** Repro: match a string, float, or boolean literal pattern against a
+  different value of the same type; codegen enters the literal arm because
+  those pattern lowerings emit predicates only for integers and symbols.
+
 - [ ] **Exact sequence patterns ignore string-literal elements when case arms
   have the same length.** Repro: compile
   `case ["ordinary"] of ["explicit"] -> 1 ["ordinary"] -> 2 end`; codegen
