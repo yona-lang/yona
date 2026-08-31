@@ -11,6 +11,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   accept the surrogate/out-of-range value and codegen emits it as an integer
   instead of diagnosing an invalid character literal.
 
+- [ ] **String escapes encode non-scalar Unicode values as invalid UTF-8.**
+  Repro: compile `"\uD800"` or `"\U00110000"`; the shared escape parser
+  accepts the invalid value and the string scanner emits an illegal UTF-8 byte
+  sequence instead of a lexer diagnostic.
+
 - [ ] **Non-ASCII character patterns are truncated during parsing.** Repro:
   parse `case 'λ' of 'λ' -> 1; _ -> 0 end`; `ParserPattern` casts the
   lexer `char32_t` token through `char`, losing the Unicode code point before
