@@ -27,12 +27,12 @@
 
 int64_t YonaStdNetTcpConnect(const char *Host, int64_t Port) {
   struct addrinfo Hints, *Res;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
+  memset(&Hints, 0, sizeof(Hints));
+  Hints.ai_family = AF_INET;
+  Hints.ai_socktype = SOCK_STREAM;
   char PortString[8];
   snprintf(PortString, sizeof(PortString), "%" PRId64, Port);
-  if (getaddrinfo(Host, PortString, &hints, &Res) != 0)
+  if (getaddrinfo(Host, PortString, &Hints, &Res) != 0)
     return 0;
   int Fd = socket(Res->ai_family, Res->ai_socktype, Res->ai_protocol);
   if (Fd < 0) {
@@ -43,24 +43,24 @@ int64_t YonaStdNetTcpConnect(const char *Host, int64_t Port) {
   struct sockaddr_storage *AddressCopy =
       (struct sockaddr_storage *)malloc(sizeof(struct sockaddr_storage));
   memcpy(AddressCopy, Res->ai_addr, Res->ai_addrlen);
-  socklen_t AddressLength = res->ai_addrlen;
+  socklen_t AddressLength = Res->ai_addrlen;
   freeaddrinfo(Res);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationConnect;
-  Ctx->fd = Fd;
-  Ctx->buf = (char *)AddressCopy;
+  Ctx->Kind = YonaIoOperationConnect;
+  Ctx->FileDescriptor = Fd;
+  Ctx->Buffer = (char *)AddressCopy;
   Ctx->BufferSize = 0;
   Ctx->CloseFileDescriptor = 0;
 
   struct io_uring_sqe Sqe;
-  memset(&sqe, 0, sizeof(sqe));
-  sqe.opcode = IORING_OP_CONNECT;
+  memset(&Sqe, 0, sizeof(Sqe));
+  Sqe.opcode = IORING_OP_CONNECT;
   Sqe.fd = Fd;
   Sqe.addr = (unsigned long)AddressCopy;
-  sqe.off = (uint64_t)AddressLength;
+  Sqe.off = (uint64_t)AddressLength;
 
-  uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+  uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     close(Fd);
     free(AddressCopy);
@@ -73,19 +73,19 @@ int64_t YonaStdNetTcpConnect(const char *Host, int64_t Port) {
 
 int64_t YonaStdNetTcpListen(const char *Host, int64_t Port) {
   struct sockaddr_in Addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
+  memset(&Addr, 0, sizeof(Addr));
+  Addr.sin_family = AF_INET;
   Addr.sin_port = htons((uint16_t)Port);
   if (Host && Host[0] != '\0')
-    inet_pton(AF_INET, Host, &addr.sin_addr);
+    inet_pton(AF_INET, Host, &Addr.sin_addr);
   else
-    addr.sin_addr.s_addr = INADDR_ANY;
+    Addr.sin_addr.s_addr = INADDR_ANY;
   int Fd = socket(AF_INET, SOCK_STREAM, 0);
   if (Fd < 0)
     return -1;
   int Opt = 1;
   setsockopt(Fd, SOL_SOCKET, SO_REUSEADDR, &Opt, sizeof(Opt));
-  if (bind(Fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+  if (bind(Fd, (struct sockaddr *)&Addr, sizeof(Addr)) < 0) {
     close(Fd);
     return -1;
   }
@@ -104,21 +104,21 @@ int64_t YonaStdNetTcpAccept(int64_t ListenerFileDescriptor) {
   *AddressLengthPointer = sizeof(struct sockaddr_in);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationAccept;
-  Ctx->fd = (int)ListenerFileDescriptor;
-  Ctx->buf = (char *)ClientAddress;
+  Ctx->Kind = YonaIoOperationAccept;
+  Ctx->FileDescriptor = (int)ListenerFileDescriptor;
+  Ctx->Buffer = (char *)ClientAddress;
   Ctx->BufferSize = 0;
   Ctx->CloseFileDescriptor = 0;
 
   struct io_uring_sqe Sqe;
-  memset(&sqe, 0, sizeof(sqe));
-  sqe.opcode = IORING_OP_ACCEPT;
+  memset(&Sqe, 0, sizeof(Sqe));
+  Sqe.opcode = IORING_OP_ACCEPT;
   Sqe.fd = (int)ListenerFileDescriptor;
   /* Kernel/liburing use addr = sockaddr *, off = socklen_t * (NOT addr2). */
   Sqe.addr = (unsigned long)ClientAddress;
-  sqe.off = (uint64_t)(unsigned long)AddressLengthPointer;
+  Sqe.off = (uint64_t)(unsigned long)AddressLengthPointer;
 
-  uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+  uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     free(ClientAddress);
     free(Ctx);
@@ -136,20 +136,20 @@ int64_t YonaStdNetSend(int64_t Fd, const char *Data) {
   memcpy(Pinned, Data, Len + 1);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationSend;
-  Ctx->fd = (int)Fd;
-  Ctx->buf = Pinned; /* rc_dec'd in completer */
+  Ctx->Kind = YonaIoOperationSend;
+  Ctx->FileDescriptor = (int)Fd;
+  Ctx->Buffer = Pinned; /* rc_dec'd in completer */
   Ctx->BufferSize = Len;
   Ctx->CloseFileDescriptor = 0;
 
   struct io_uring_sqe Sqe;
-  memset(&sqe, 0, sizeof(sqe));
-  sqe.opcode = IORING_OP_SEND;
+  memset(&Sqe, 0, sizeof(Sqe));
+  Sqe.opcode = IORING_OP_SEND;
   Sqe.fd = (int)Fd;
   Sqe.addr = (unsigned long)Pinned;
   Sqe.len = (unsigned)Len;
 
-  uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+  uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     YonaRuntimeRelease(Pinned);
     free(Ctx);
@@ -165,20 +165,20 @@ int64_t YonaStdNetRecv(int64_t Fd, int64_t MaximumBytes) {
   char *Buf = (char *)YonaRuntimeAllocateString((size_t)MaximumBytes + 1);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationReceive;
-  Ctx->fd = (int)Fd;
-  Ctx->buf = Buf;
+  Ctx->Kind = YonaIoOperationReceive;
+  Ctx->FileDescriptor = (int)Fd;
+  Ctx->Buffer = Buf;
   Ctx->BufferSize = (size_t)MaximumBytes;
   Ctx->CloseFileDescriptor = 0;
 
   struct io_uring_sqe Sqe;
-  memset(&sqe, 0, sizeof(sqe));
-  sqe.opcode = IORING_OP_RECV;
+  memset(&Sqe, 0, sizeof(Sqe));
+  Sqe.opcode = IORING_OP_RECV;
   Sqe.fd = (int)Fd;
   Sqe.addr = (unsigned long)Buf;
   Sqe.len = (unsigned)MaximumBytes;
 
-  uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+  uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     free(Ctx);
     Buf[0] = '\0';
@@ -197,20 +197,20 @@ int64_t YonaStdNetSendBytes(int64_t Fd, void *Bytes) {
   YonaRuntimeRetain(Bytes);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationSend;
-  Ctx->fd = (int)Fd;
-  Ctx->buf = (char *)Bytes; /* store for rc_dec in completer */
+  Ctx->Kind = YonaIoOperationSend;
+  Ctx->FileDescriptor = (int)Fd;
+  Ctx->Buffer = (char *)Bytes; /* store for rc_dec in completer */
   Ctx->BufferSize = (size_t)Len;
   Ctx->CloseFileDescriptor = 0;
 
   struct io_uring_sqe Sqe;
-  memset(&sqe, 0, sizeof(sqe));
-  sqe.opcode = IORING_OP_SEND;
+  memset(&Sqe, 0, sizeof(Sqe));
+  Sqe.opcode = IORING_OP_SEND;
   Sqe.fd = (int)Fd;
   Sqe.addr = (unsigned long)Data;
   Sqe.len = (unsigned)Len;
 
-  uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+  uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     YonaRuntimeRelease(Bytes);
     free(Ctx);
@@ -230,20 +230,20 @@ int64_t YonaStdNetRecvBytes(int64_t Fd, int64_t MaximumBytes) {
   Buf[0] = 0; /* length set by completer */
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationReceiveBytes;
-  Ctx->fd = (int)Fd;
-  Ctx->buf = (char *)Buf;
+  Ctx->Kind = YonaIoOperationReceiveBytes;
+  Ctx->FileDescriptor = (int)Fd;
+  Ctx->Buffer = (char *)Buf;
   Ctx->BufferSize = (size_t)MaximumBytes;
   Ctx->CloseFileDescriptor = 0;
 
   struct io_uring_sqe Sqe;
-  memset(&sqe, 0, sizeof(sqe));
-  sqe.opcode = IORING_OP_RECV;
+  memset(&Sqe, 0, sizeof(Sqe));
+  Sqe.opcode = IORING_OP_RECV;
   Sqe.fd = (int)Fd;
   Sqe.addr = (unsigned long)(uint8_t *)(Buf + 1); /* data starts after length */
   Sqe.len = (unsigned)MaximumBytes;
 
-  uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+  uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
   if (Id == 0) {
     free(Ctx);
     return 0;
@@ -271,12 +271,12 @@ int64_t YonaStdHttpHttpGet(const char *Url) {
   const char *Path = (const char *)(intptr_t)YonaRuntimeAdtGetField(Parsed, 2);
 
   struct addrinfo Hints, *Ai;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
+  memset(&Hints, 0, sizeof(Hints));
+  Hints.ai_family = AF_INET;
+  Hints.ai_socktype = SOCK_STREAM;
   char PortString[8];
   snprintf(PortString, sizeof(PortString), "%" PRId64, Port);
-  if (getaddrinfo(Host, PortString, &hints, &Ai) != 0) {
+  if (getaddrinfo(Host, PortString, &Hints, &Ai) != 0) {
     YonaRuntimeRelease(Parsed);
     return 0;
   }
@@ -289,16 +289,16 @@ int64_t YonaStdHttpHttpGet(const char *Url) {
 
   struct sockaddr_storage AddressBuffer;
   memcpy(&AddressBuffer, Ai->ai_addr, Ai->ai_addrlen);
-  socklen_t AddressLength = ai->ai_addrlen;
+  socklen_t AddressLength = Ai->ai_addrlen;
   freeaddrinfo(Ai);
   {
     struct io_uring_sqe Sqe;
-    memset(&sqe, 0, sizeof(sqe));
-    sqe.opcode = IORING_OP_CONNECT;
+    memset(&Sqe, 0, sizeof(Sqe));
+    Sqe.opcode = IORING_OP_CONNECT;
     Sqe.fd = Fd;
     Sqe.addr = (unsigned long)&AddressBuffer;
-    sqe.off = (uint64_t)AddressLength;
-    uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+    Sqe.off = (uint64_t)AddressLength;
+    uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
     if (YonaRuntimeIoUringAwait(Id) < 0) {
       close(Fd);
       YonaRuntimeRelease(Parsed);
@@ -310,12 +310,12 @@ int64_t YonaStdHttpHttpGet(const char *Url) {
   YonaRuntimeRelease(Parsed);
   {
     struct io_uring_sqe Sqe;
-    memset(&sqe, 0, sizeof(sqe));
-    sqe.opcode = IORING_OP_SEND;
+    memset(&Sqe, 0, sizeof(Sqe));
+    Sqe.opcode = IORING_OP_SEND;
     Sqe.fd = Fd;
     Sqe.addr = (unsigned long)Req;
     Sqe.len = (unsigned)strlen(Req);
-    uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+    uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
     YonaRuntimeIoUringAwait(Id);
   }
   YonaRuntimeRelease((void *)Req);
@@ -325,12 +325,12 @@ int64_t YonaStdHttpHttpGet(const char *Url) {
   char *Buf = (char *)YonaRuntimeAllocate(YONA_RC_TYPE_STRING, BufferSize);
   for (;;) {
     struct io_uring_sqe Sqe;
-    memset(&sqe, 0, sizeof(sqe));
-    sqe.opcode = IORING_OP_RECV;
+    memset(&Sqe, 0, sizeof(Sqe));
+    Sqe.opcode = IORING_OP_RECV;
     Sqe.fd = Fd;
     Sqe.addr = (unsigned long)(Buf + Total);
     Sqe.len = (unsigned)(BufferSize - Total - 1);
-    uint64_t Id = YonaRuntimeIoUringSubmit(&sqe);
+    uint64_t Id = YonaRuntimeIoUringSubmit(&Sqe);
     int32_t N = YonaRuntimeIoUringAwait(Id);
     if (N <= 0)
       break;
@@ -349,15 +349,15 @@ int64_t YonaStdHttpHttpGet(const char *Url) {
   close(Fd);
 
   YonaIoContext *Ctx = (YonaIoContext *)malloc(sizeof(YonaIoContext));
-  Ctx->type = YonaIoOperationReadFile;
-  Ctx->fd = -1;
-  Ctx->buf = Buf;
+  Ctx->Kind = YonaIoOperationReadFile;
+  Ctx->FileDescriptor = -1;
+  Ctx->Buffer = Buf;
   Ctx->BufferSize = Total;
   Ctx->CloseFileDescriptor = 0;
   struct io_uring_sqe Sqe;
-  memset(&sqe, 0, sizeof(sqe));
-  sqe.opcode = IORING_OP_NOP;
-  uint64_t NoOperationId = YonaRuntimeIoUringSubmit(&sqe);
+  memset(&Sqe, 0, sizeof(Sqe));
+  Sqe.opcode = IORING_OP_NOP;
+  uint64_t NoOperationId = YonaRuntimeIoUringSubmit(&Sqe);
   YonaRuntimeIoContextPut(NoOperationId, Ctx);
   return (int64_t)NoOperationId;
 }
@@ -366,17 +366,17 @@ int64_t YonaStdHttpHttpGet(const char *Url) {
 
 int64_t YonaStdNetUdpBind(const char *Host, int64_t Port) {
   struct sockaddr_in Addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
+  memset(&Addr, 0, sizeof(Addr));
+  Addr.sin_family = AF_INET;
   Addr.sin_port = htons((uint16_t)Port);
   if (Host && Host[0] != '\0')
-    inet_pton(AF_INET, Host, &addr.sin_addr);
+    inet_pton(AF_INET, Host, &Addr.sin_addr);
   else
-    addr.sin_addr.s_addr = INADDR_ANY;
+    Addr.sin_addr.s_addr = INADDR_ANY;
   int Fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (Fd < 0)
     return -1;
-  if (bind(Fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+  if (bind(Fd, (struct sockaddr *)&Addr, sizeof(Addr)) < 0) {
     close(Fd);
     return -1;
   }
@@ -386,12 +386,12 @@ int64_t YonaStdNetUdpBind(const char *Host, int64_t Port) {
 int64_t YonaStdNetUdpSendTo(int64_t Fd, const char *Host, int64_t Port,
                             const char *Data) {
   struct sockaddr_in Addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
+  memset(&Addr, 0, sizeof(Addr));
+  Addr.sin_family = AF_INET;
   Addr.sin_port = htons((uint16_t)Port);
-  inet_pton(AF_INET, Host, &addr.sin_addr);
+  inet_pton(AF_INET, Host, &Addr.sin_addr);
   return (int64_t)sendto((int)Fd, Data, strlen(Data), 0,
-                         (struct sockaddr *)&addr, sizeof(addr));
+                         (struct sockaddr *)&Addr, sizeof(Addr));
 }
 
 int64_t YonaStdNetUdpRecv(int64_t Fd, int64_t MaximumBytes) {
@@ -399,28 +399,28 @@ int64_t YonaStdNetUdpRecv(int64_t Fd, int64_t MaximumBytes) {
     MaximumBytes = 4096;
   char *Buf = (char *)YonaRuntimeAllocateString((size_t)MaximumBytes + 1);
   struct sockaddr_in From;
-  socklen_t SourceAddressLength = sizeof(from);
-  ssize_t n = recvfrom((int)fd, buf, (size_t)MaximumBytes, 0,
-                       (struct sockaddr *)&from, &SourceAddressLength);
-  if (n <= 0) {
+  socklen_t SourceAddressLength = sizeof(From);
+  ssize_t N = recvfrom((int)Fd, Buf, (size_t)MaximumBytes, 0,
+                       (struct sockaddr *)&From, &SourceAddressLength);
+  if (N <= 0) {
     Buf[0] = '\0';
     return (int64_t)(intptr_t)Buf;
   }
-  buf[n] = '\0';
+  Buf[N] = '\0';
   return (int64_t)(intptr_t)Buf;
 }
 
 const char *YonaStdNetPeerAddress(int64_t Fd) {
   struct sockaddr_in Addr;
-  socklen_t len = sizeof(addr);
-  if (getpeername((int)Fd, (struct sockaddr *)&addr, &len) < 0) {
+  socklen_t AddressLength = sizeof(Addr);
+  if (getpeername((int)Fd, (struct sockaddr *)&Addr, &AddressLength) < 0) {
     char *R = (char *)YonaRuntimeAllocateString(8);
     memcpy(R, "unknown", 8);
     return R;
   }
   char Ip[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip));
+  inet_ntop(AF_INET, &Addr.sin_addr, Ip, sizeof(Ip));
   char *R = (char *)YonaRuntimeAllocateString(64);
-  snprintf(R, 64, "%s:%d", ip, ntohs(addr.sin_port));
+  snprintf(R, 64, "%s:%d", Ip, ntohs(Addr.sin_port));
   return R;
 }
