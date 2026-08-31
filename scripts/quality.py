@@ -238,7 +238,8 @@ def run(
 
 def resolve_tool(name: str, *, version_22: bool = False) -> str:
     executable = shutil.which(name)
-    if not executable:
+    path_only = os.environ.get("YONA_QUALITY_TEST_PATH_ONLY") == "1"
+    if not executable and not path_only:
         suffix = ".exe" if os.name == "nt" else ""
         command_suffix = ".cmd" if os.name == "nt" else ""
         candidates = (

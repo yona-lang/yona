@@ -577,6 +577,12 @@ find_program(YONA_PYTHON_EXECUTABLE NAMES python3 python)
 if(NOT YONA_PYTHON_EXECUTABLE)
 	message(FATAL_ERROR "Python 3 is required for repository quality targets")
 endif()
+if(UNIX)
+	find_program(YONA_TEST_DIRNAME_EXECUTABLE NAMES dirname)
+	if(NOT YONA_TEST_DIRNAME_EXECUTABLE)
+		message(FATAL_ERROR "dirname is required to test repository shell scripts")
+	endif()
+endif()
 foreach(_yona_quality_command IN ITEMS
 	format
 	format-check

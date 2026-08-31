@@ -115,13 +115,13 @@ Commit as `fix: preserve runner arguments and temporary ownership`.
 - Modify: `test/Toolchain/YonaScriptTest.cpp`
 - Modify only if a narrow resolver test hook is required: `scripts/quality.py`
 
-- [ ] **Step 1: Retain the exact current failure**
+- [x] **Step 1: Retain the exact current failure**
 
 Run `format script fails clearly when clang-format is unavailable` and confirm
 `PATH=/nonexistent` makes `/bin/sh` fail at external `dirname`, so the test
 never reaches Python or clang-format resolution.
 
-- [ ] **Step 2: Build an isolated prerequisite PATH**
+- [x] **Step 2: Build an isolated prerequisite PATH**
 
 Pass absolute discovered Python and `dirname` paths to the test through CMake.
 Create a unique temporary bin containing only symlinks/copies named `python3`
@@ -129,14 +129,14 @@ and `dirname`, invoke `format.sh` (narrowed to clang-format if supported), and
 exclude clang-format without removing the prerequisites needed to reach
 `quality.py`.
 
-- [ ] **Step 3: Assert the canonical resolver diagnostic**
+- [x] **Step 3: Assert the canonical resolver diagnostic**
 
 Assert nonzero status, the specific missing required `clang-format` message,
 and absence of `Done`. If Python's scripts-directory fallback makes the test
 host-dependent, add one narrowly named test-only resolver override rather than
 duplicating formatter detection in `format.sh`.
 
-- [ ] **Step 4: Verify tooling tests and commit**
+- [x] **Step 4: Verify tooling tests and commit**
 
 Run the focused format test, quality-script tests, and the full Toolchain
 suite. Commit as `test: isolate missing clang-format detection`.

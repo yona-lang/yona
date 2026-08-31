@@ -99,13 +99,23 @@ static bool has_runner_temporary(const fs::path &Directory) {
 
 #ifndef _WIN32
 TEST_CASE("format script fails clearly when clang-format is unavailable") {
-  const auto script = yona::test::repo_root() / "scripts" / "format.sh";
-  const auto result =
-      runProcess("/bin/sh", {script.string()},
-                 {.CaptureStderr = true,
-                  .EnvironmentOverrides = {{"PATH", "/nonexistent"}}});
+  IsolatedTempDir Tools("yona_format_tools");
+  const fs::path PythonLink = Tools.path() / "python3";
+  const fs::path DirnameLink = Tools.path() / "dirname";
+  fs::create_symlink(YONA_TEST_PYTHON_EXECUTABLE, PythonLink);
+  fs::create_symlink(YONA_TEST_DIRNAME_EXECUTABLE, DirnameLink);
+
+  const fs::path Script = yona::test::repo_root() / "scripts" / "format.sh";
+  const fs::path Source =
+      yona::test::repo_root() / "test" / "Toolchain" / "YonaScriptTest.cpp";
+  const auto result = runProcess(
+      "/bin/sh", {Script.string(), "--only", "clang-format", Source.string()},
+      {.CaptureStderr = true,
+       .EnvironmentOverrides = {{"PATH", Tools.path().string()},
+                                {"YONA_QUALITY_TEST_PATH_ONLY", "1"}}});
   CHECK(result.status != 0);
-  CHECK(result.out.find("clang-format") != std::string::npos);
+  CHECK(result.out.find("required local tool 'clang-format' was not found; "
+                        "see docs/quality.md") != std::string::npos);
   CHECK(result.out.find("Done") == std::string::npos);
 }
 #endif
