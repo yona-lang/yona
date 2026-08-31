@@ -1970,8 +1970,8 @@ value (MkToken n) = n
     REQUIRE(hidden_ctor_result.has_value());
     Codegen hidden_ctor_codegen("opaque_hidden_ctor");
     hidden_ctor_codegen.ModulePaths.push_back(yona_lib.string());
-    REQUIRE(hidden_ctor_codegen.compile(hidden_ctor_result.value().get()) !=
-            nullptr);
+    CHECK(hidden_ctor_codegen.compile(hidden_ctor_result.value().get()) ==
+          nullptr);
     CHECK(hidden_ctor_codegen.errorCount() > 0);
 
     auto transparent_result = parser.parseModule(R"(
