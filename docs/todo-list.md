@@ -21,6 +21,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   lexer `char32_t` token through `char`, losing the Unicode code point before
   semantic analysis and codegen.
 
+- [ ] **Printed non-ASCII character ASTs use an unsupported escape form.**
+  Repro: print a `CharacterExpr` containing U+03BB; `Ast.cpp` emits
+  `'\x3bb'`, but the lexer supports only `\u`/`\U` Unicode escapes, so the
+  printed AST cannot be parsed back.
+
 - [ ] **Byte and character literals are accepted by parsing and typing but
   rejected by codegen.** Repro: compile `case [2b] of [1b] -> 1; _ -> 2 end`
   (or the analogous character sequence); codegen reports `unsupported
