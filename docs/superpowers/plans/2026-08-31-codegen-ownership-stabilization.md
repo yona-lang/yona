@@ -52,6 +52,22 @@ bindings before testing the next arm. A non-identifier heap case scrutinee is
 case-owned and is released on the selected path; named scrutinees remain owned
 by their enclosing scope.
 
+- [ ] **Step 3a: Preserve named tuple owners and clean failed prefixes**
+
+Destructuring a named tuple must not release the enclosing scope's reference
+before a later use; retain or defer based on the same last-use ownership model
+used by ordinary calls. Route tuple literal/symbol mismatches through a cleanup
+block that releases any heap prefix bindings retained before the mismatch.
+Cover named reuse with allocator-slot reuse, mismatch stats, and canonical
+`if false` guard syntax plus selected-output assertions.
+
+- [ ] **Step 3b: Give record-pattern fields the same arm lifetime**
+
+Retain heap fields extracted from record patterns and register their arm drops,
+including guard failure and escaping-result handling, before releasing a
+temporary record scrutinee. Assert the semantic output as well as per-tag
+allocation balance for a generic heap-valued record field.
+
 - [x] **Step 4: Make raw channel natives honor callee-owns**
 
 Keep the source-level raw extern contracts consuming. Balance the call-owned
@@ -92,12 +108,13 @@ constructor-specific leak exemption.
 Run ADT, Option/Result, constructor-pattern, exception-frame, and allocation
 suites. Commit as `fix: transfer temporary ADT fields`.
 
-## Task 3: Preserve captured heap values across consuming calls
+## Task 3: Preserve repeated and captured heap values across consuming calls
 
 **Files:**
 
 - Modify: `src/Codegen/CodegenApply.cpp`
 - Modify as needed: `src/Codegen/CodegenFunction.cpp`
+- Modify as needed: `src/Semantics/BorrowEscapeAnalysis.cpp`
 - Modify: focused closure/dictionary ownership tests under `test/Codegen/`
 
 - [ ] **Step 1: Add a minimal reusable-capture RED regression**
@@ -105,7 +122,10 @@ suites. Commit as `fix: transfer temporary ADT fields`.
 Capture a heap tuple in a predicate/comparator closure, invoke that closure
 more than once through a consuming higher-order call, and assert correct output
 plus zero leaks. Retain `dict_lifted_trait_lifetime` as the integration case;
-Valgrind currently reaches `compareEntry` with an invalid captured pivot.
+Valgrind currently reaches `compareEntry` with an invalid captured pivot. Add a
+minimal `sortBy` control whose pattern-bound `rest` is consumed by two filter
+calls; reference counting must be scoped to the defining case-arm body instead
+of skipping that body because the pattern introduces the queried name.
 
 - [ ] **Step 2: Retain a per-call owned reference**
 
@@ -144,7 +164,58 @@ single case.
 Run the focused tests both with and without `YONA_PATH`, then the surrounding
 runtime/codegen suites. Commit as `test: make ownership setup deterministic`.
 
-## Task 5: Repair the generated GPU channel helper interface
+## Task 5: Balance async file cancellation and repair macOS file lowering
+
+**Files:**
+
+- Modify: `src/Runtime/Platform/FileLinux.c`
+- Modify: `src/Runtime/Platform/FileMacOs.c`
+- Modify: focused platform I/O tests under `test/Runtime/`
+
+- [ ] **Step 1: Add cancellation ownership coverage**
+
+Cancel an in-flight managed ByteArray write and prove the retained submit pin is
+released through `YonaRuntimeRelease`, while raw buffers for read/accept/connect
+continue to use `free`. Assert zero allocation leaks and no invalid free.
+
+- [ ] **Step 2: Complete the macOS context/identifier migration**
+
+Use the canonical `YonaIoContext` fields and declared parameter spelling in all
+macOS read, write, fallback, seek, and truncate paths. Run a syntax/compile
+probe on Linux where possible in addition to the Linux runtime tests.
+
+- [ ] **Step 3: Verify and commit**
+
+Run platform I/O, exact-read, File contract, cancellation, and generated binary
+fixtures. Commit as `fix: balance cancelled file buffers`.
+
+## Task 6: Release generated native-call temporaries and root results
+
+**Files:**
+
+- Modify: `src/Codegen/CodegenApply.cpp`
+- Modify: `src/Codegen/Codegen.cpp`
+- Modify: focused generated-program allocation tests under `test/Codegen/`
+
+- [ ] **Step 1: Isolate async native-call ByteArray ownership**
+
+Prove an anonymous ByteArray passed to `writeBytes` is released after the
+borrowed async submission and the awaited ByteArray returned by `readBytes` is
+released after its final scalar consumer. Keep File/Linear counts balanced.
+
+- [ ] **Step 2: Run borrowed-temporary cleanup on async calls**
+
+Apply the same post-call cleanup used by direct extern calls after submission,
+without releasing the runtime's independent retained pin. Release a heap-backed
+entry-point result only after printing/await resolution is complete.
+
+- [ ] **Step 3: Verify and commit**
+
+Run `binary_write_read`, direct/async native call controls, heap-root print
+controls, File fixtures, and allocation tests. Commit as
+`fix: release generated boundary values`.
+
+## Task 7: Repair the generated GPU channel helper interface
 
 **Files:**
 
@@ -169,7 +240,7 @@ generation is byte-stable. Do not hand-maintain a divergent interface row.
 Run interface round-trips plus CPU fallback and available Linux GPU channel
 fixtures. Commit as `fix: regenerate typed GPU channel interface`.
 
-## Task 6: Close the ownership batch after full reassessment
+## Task 8: Close the ownership batch after full reassessment
 
 **Files:**
 

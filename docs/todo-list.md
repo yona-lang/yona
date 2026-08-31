@@ -271,6 +271,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `YONA_ALLOC_STATS=1`; it prints `0`, but the sequence bound before the
   symbol mismatch reports one allocation and zero frees.
 
+- [ ] **Record-pattern fields can dangle after a temporary scrutinee is
+  released.** Repro: construct an exported generic `Box { item : a }` and run
+  `case make [1] of Box { item = x } -> x end`; record binding neither retains
+  the heap field nor registers an arm drop, so releasing the temporary `Box`
+  leaves `x` pointing at freed sequence storage and prints garbage.
+
 - [ ] **The macOS file runtime uses undeclared lowercase async-I/O locals.**
   Repro: compile `src/Runtime/Platform/FileMacOs.c`; the read path references
   `fd`, `buf`, `count`, and `offset` although its parameters are `Fd`, `Buf`,
