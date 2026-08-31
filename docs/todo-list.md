@@ -271,6 +271,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `YONA_ALLOC_STATS=1`; it prints `0`, but the sequence bound before the
   symbol mismatch reports one allocation and zero frees.
 
+- [ ] **Pattern cleanup is emitted after a terminated case-arm block.** Repro:
+  compile `case ([1], 2) of (x, y) -> raise 1 end`; the arm emits
+  `unreachable` first and then appends aggregate release calls, so LLVM rejects
+  `%case.body.0` with `Terminator found in the middle of a basic block`.
+
 - [ ] **Record-pattern fields can dangle after a temporary scrutinee is
   released.** Repro: construct an exported generic `Box { item : a }` and run
   `case make [1] of Box { item = x } -> x end`; record binding neither retains
