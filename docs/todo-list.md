@@ -18,6 +18,13 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   from `IoReadExactTest.cpp` while `runtime/libyona_runtime.a` exports the C
   symbols.
 
+- [ ] **The Linux and macOS platform I/O headers cannot be included together
+  by C++ consumers.** Repro: run `clang++ -std=gnu++23 -Iinclude -x c++
+  -fsyntax-only` with both `IoUring.h` and `Kqueue.h`; the duplicate
+  `YonaIoOperationKind` and `YonaIoContext` definitions are rejected. Share
+  the common platform-I/O declarations or make their definitions mutually
+  exclusive while retaining each platform API.
+
 - [ ] **The Linux io_uring implementation disagrees with its public cancel
   declaration.** Repro: build the debug `tests` target; `IoUringLinux.c`
   defines `YonaRuntimeIoUringCancelGroup(uint64_t *, int)` while
