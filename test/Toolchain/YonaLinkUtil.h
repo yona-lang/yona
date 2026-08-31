@@ -107,13 +107,13 @@ inline std::string exe_suffix() {
 inline void append_vulkan_link_arguments(std::vector<std::string> &args) {
 #if YONA_HAVE_CONFIGURED_VULKAN_IMPORT_LIB
   args.emplace_back(YONA_CONFIGURED_VULKAN_IMPORT_LIB_PATH);
-#elif YONA_HAVE_CONFIGURED_VULKAN_LIB_DIR
-  const std::string loader_dir = YONA_CONFIGURED_VULKAN_LIB_DIR;
-  args.push_back("-L" + loader_dir);
+#elif YONA_HAVE_CONFIGURED_VULKAN_LIBRARY
+  const std::filesystem::path loader_path =
+      YONA_CONFIGURED_VULKAN_LIBRARY_PATH;
 #if defined(__APPLE__)
-  args.push_back("-Wl,-rpath," + loader_dir);
+  args.push_back("-Wl,-rpath," + loader_path.parent_path().string());
 #endif
-  args.emplace_back("-lvulkan");
+  args.push_back(loader_path.string());
 #endif
 }
 
