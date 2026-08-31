@@ -1333,7 +1333,7 @@ char *YonaStdIoReadStdinImpl(int64_t Unit) {
 #if defined(_WIN32)
     int N = (int)read(0, Buf + Len, (unsigned)(Cap - Len));
 #else
-    ssize_t n = read(0, buf + len, cap - len);
+    ssize_t N = read(0, Buf + Len, Cap - Len);
 #endif
     if (N <= 0)
       break;
@@ -1397,7 +1397,7 @@ char *YonaStdIoReadExactBytes(int64_t FdOrHandle, int64_t N) {
 #if defined(_WIN32)
     int K = (int)_read(Fd, Buf + Got, (unsigned)(Want - Got));
 #else
-    ssize_t k = read(fd, buf + got, want - got);
+    ssize_t K = read(Fd, Buf + Got, Want - Got);
 #endif
     if (K <= 0)
       break;
@@ -1469,7 +1469,7 @@ void YonaStdIoWriteBytes(int64_t FdOrHandle, const char *S) {
 #if defined(_WIN32)
     int K = (int)_write(Fd, S + Off, (unsigned)(N - Off));
 #else
-    ssize_t k = write(fd, s + off, n - off);
+    ssize_t K = write(Fd, S + Off, N - Off);
 #endif
     if (K <= 0)
       break;
