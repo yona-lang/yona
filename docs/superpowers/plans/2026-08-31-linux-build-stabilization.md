@@ -438,6 +438,88 @@ git add docs/todo-list.md CHANGELOG.md \
 git commit -m "docs: record Linux build stabilization"
 ```
 
+### Task 6: Restore C linkage for platform I/O headers
+
+**Files:**
+
+- Modify: `include/yona/Runtime/Platform/IoUring.h`
+- Modify: `include/yona/Runtime/Platform/Kqueue.h`
+- Test: `test/Runtime/IoReadExactTest.cpp`
+
+**Interfaces:**
+
+- Consumes: C implementations of the Linux io_uring and macOS kqueue runtime
+  APIs.
+- Produces: public headers whose function declarations retain C linkage when
+  included by C++ tests or consumers.
+
+- [ ] **Step 1: Reproduce the C/C++ linkage failure**
+
+Run:
+
+```bash
+cmake --build --preset build-debug-linux --target tests
+```
+
+Expected: linking fails on C++-mangled
+`YonaRuntimeIoContextPut(unsigned long, YonaIoContext *)` and
+`YonaRuntimeIoContextTake(unsigned long)` while the runtime archive exports C
+symbols.
+
+- [ ] **Step 2: Add the canonical linkage guards**
+
+After the system includes in both platform headers, add:
+
+```c
+#ifdef __cplusplus
+extern "C" {
+#endif
+```
+
+Immediately before each header's final include-guard `#endif`, add:
+
+```c
+#ifdef __cplusplus
+}
+#endif
+```
+
+Keep the enum, struct, constant, and every function declaration inside the
+linkage block. Do not add ad hoc `extern "C"` declarations to the test.
+
+- [ ] **Step 3: Verify both public headers compile as C++**
+
+Run:
+
+```bash
+clang++ -std=gnu++23 -Iinclude -x c++ -fsyntax-only - <<'EOF'
+#include "yona/Runtime/Platform/IoUring.h"
+#include "yona/Runtime/Platform/Kqueue.h"
+EOF
+```
+
+Expected: the syntax-only compile exits zero.
+
+- [ ] **Step 4: Verify the tests executable links**
+
+Run:
+
+```bash
+cmake --build --preset build-debug-linux --target tests
+```
+
+Expected: the `tests` executable links without unresolved platform I/O
+registry symbols. If another new build bug appears first, record it immediately
+before changing its source.
+
+- [ ] **Step 5: Commit the linkage repair**
+
+```bash
+git add include/yona/Runtime/Platform/IoUring.h \
+  include/yona/Runtime/Platform/Kqueue.h
+git commit -m "fix: restore C linkage for platform I/O headers"
+```
+
 ## Follow-up Plan Sequence
 
 After this plan produces a buildable test runner, create and execute focused
