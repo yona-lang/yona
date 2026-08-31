@@ -277,6 +277,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   the heap field nor registers an arm drop, so releasing the temporary `Box`
   leaves `x` pointing at freed sequence storage and prints garbage.
 
+- [ ] **A heap value returned from a nested `let` is misclassified as a
+  borrowed ADT field.** Repro: run
+  `case Some (let temporary = [1] in temporary) of Some values -> 0; None -> 1 end`
+  with allocation stats; the stale `temporary` entry in `named_values_` makes
+  constructor lowering add an unmatched retain, leaking the sequence.
+
 - [ ] **The macOS file runtime uses undeclared lowercase async-I/O locals.**
   Repro: compile `src/Runtime/Platform/FileMacOs.c`; the read path references
   `fd`, `buf`, `count`, and `offset` although its parameters are `Fd`, `Buf`,
