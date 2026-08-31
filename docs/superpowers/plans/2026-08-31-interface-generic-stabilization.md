@@ -49,8 +49,8 @@ and parsed module correctly for valid canonical source.
 
 - [x] **Step 3: Run the focused semantic interface suite**
 
-Run the focused test above and `./out/build/x64-debug-linux/tests
--ts="Semantics"`.
+Run the focused test above and the real semantic interface/catalog filter:
+`./out/build/x64-debug-linux/tests -tc="Semantics*"`.
 
 - [x] **Step 4: Commit**
 

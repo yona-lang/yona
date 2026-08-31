@@ -57,5 +57,14 @@ TEST_CASE("Semantics generic source service retains GENFN source ownership") {
   REQUIRE(Parsed->Sources);
   REQUIRE(Parsed->Module);
   REQUIRE(Parsed->Module->functions.size() == 1);
-  CHECK(Parsed->Module->functions.front()->name == "identityOption");
+  const auto *Function = Parsed->Module->functions.front();
+  CHECK(Function->name == "identityOption");
+
+  const auto FunctionRange = Function->Range;
+  REQUIRE(FunctionRange.isValid());
+  const auto SourceText = Parsed->Sources->text(FunctionRange.Source);
+  REQUIRE(FunctionRange.Offset + FunctionRange.Length <= SourceText.size());
+  CHECK(Parsed->Sources->name(FunctionRange.Source) == "<imported>");
+  CHECK(SourceText.substr(FunctionRange.Offset, FunctionRange.Length) ==
+        "identityOption");
 }
