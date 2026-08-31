@@ -110,6 +110,7 @@ Commit as `fix: restore canonical interface call shapes`.
 - Modify: `src/Semantics/TypeChecker.cpp`
 - Modify: `src/Codegen/CodegenModule.cpp`
 - Modify: `test/Codegen/CodegenTest.cpp`
+- Modify: `test/Semantics/TraitTest.cpp`
 - Modify only if required by the public contract: `test/Semantics/TypeCheckerTest.cpp`
 - Regenerate affected canonical interfaces under: `lib/`
 
@@ -125,14 +126,20 @@ ABI `INT` shapes. Confirm the producer currently emits incompatible guesses.
 Expose a TypeChecker operation that serializes a zonked `MonoType` into the
 canonical descriptor grammar, assigning stable variable names within one
 signature. Cover arrows, tuples, linear/named types, collections, ADTs, and
-scalars. Fail explicitly on an unrepresentable type.
+scalars. Fail explicitly on an unrepresentable type. Parameterless module
+definitions have one checker-internal `Unit` binding arrow: strip exactly that
+outer layer before serializing the exported value. Thus `x = 42` remains a
+zero-arity `INT` value, while `wrap = \() -> ...` returns
+`FUNCTION(UNIT,...)` with its visible effect scheme rooted at `$`.
 
 - [ ] **Step 3: Overlay inferred structure and effects together**
 
 Extend `Codegen::populate_interface_effect_rows` so the checked semantic type
 replaces interface parameter/return descriptors in `imports_.meta` and the
 matching compiled-function metadata at the same point that it installs the
-effect scheme. Preserve all LLVM `CType` fields and linkage metadata.
+effect scheme. Preserve all LLVM `CType` fields and linkage metadata. Update
+the Trait module-emission test helper to call this canonical post-typecheck
+pass before it emits `.yonai`, matching the CLI path.
 
 - [ ] **Step 4: Regenerate affected packaged interfaces**
 
@@ -163,13 +170,17 @@ Commit as `fix: serialize inferred interface signatures`.
 - Modify: `src/Codegen/CodegenFunction.cpp`
 - Modify only if call routing requires it: `src/Codegen/CodegenApply.cpp`
 - Modify: `test/Codegen/CodegenTest.cpp`
+- Modify: `test/Semantics/TraitTest.cpp`
 
 - [ ] **Step 1: Add owner-conflation RED tests**
 
 Add a focused imported `Std\\Convert.intToFloat` regression and a combined
 `intToFloat`/`floatToInt` case. Confirm the current deferred body loses
 `intToFloatNative` and that same-named sibling generic functions cannot safely
-share a union of private dependencies.
+share a union of private dependencies. Retain the focused multi-head,
+constrained `Some`/`None`, cross-module generic, and derived Show-field trait
+failures: trait implementation sources currently overwrite ordinary deferred
+keys such as `show`, `into`, and `stringify`.
 
 - [ ] **Step 2: Carry imported owner identity on deferred functions**
 
@@ -185,12 +196,20 @@ compiled, deferred, named-value, and external bindings on every exit. Do not
 activate dependencies from unrelated exports that happen to share a source
 name.
 
-- [ ] **Step 4: Verify generic and trait consumers**
+- [ ] **Step 4: Keep trait implementation overloads out of sibling locals**
+
+In `register_sibling_genfns`, exclude every mangled target owned by
+`types_.trait_instances[*].method_mangled_names`. Those implementations form an
+overload set selected by complete trait heads; registering them as ordinary
+same-named siblings makes direct compiled/deferred lookup bypass trait
+selection. Preserve registration of ordinary private generic helpers.
+
+- [ ] **Step 5: Verify generic and trait consumers**
 
 Run the new Convert tests, relevant generic interface tests, and the Trait
 suite. Record any still-independent trait failure before continuing.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 Commit as `fix: retain imported generic dependency owners`.
 
@@ -208,7 +227,9 @@ Commit as `fix: retain imported generic dependency owners`.
 Run `Lazy stream takeStream` and add an expression-compilation regression that
 produces a diagnostic during case lowering. Confirm imported specializations
 cannot resolve their lexical self name and that expression compilation proceeds
-to verify incomplete recovery IR.
+to verify incomplete recovery IR. Retain `Annotated ADT case functions
+heap-box non-recursive results`: its imported recursive `run` body exposes the
+same missing lexical-self alias and subsequent cross-function case blocks.
 
 - [ ] **Step 2: Bind the source-level self alias narrowly**
 
@@ -226,8 +247,8 @@ case early-return paths.
 
 - [ ] **Step 4: Verify stream and case suites**
 
-Run the focused stream case, all ADT/case Codegen tests, and the new diagnostic
-regression.
+Run the focused stream case, annotated ADT heap-box case, all ADT/case Codegen
+tests, and the new diagnostic regression.
 
 - [ ] **Step 5: Commit**
 
