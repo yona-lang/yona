@@ -6,6 +6,44 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **The Yona runner exits 109 for ordinary Linux programs.** Repro: run
+  `./out/build/x64-debug-linux/tests -tc="yona runs a file"`; the built
+  runner produces no output and returns status 109 instead of compiling and
+  printing `3`. File, shebang, stdin, and `-e` modes fail the same way.
+
+- [ ] **Canonical interface reading rejects emitted `LINEAR` and `TUPLE`
+  types.** Repro: run `./out/build/x64-debug-linux/tests
+  -tc="Stdlib conformance fixtures"`; `stdlib_process_pid` reports `unknown
+  canonical interface type: LINEAR`, while `pure_Core_test` reports the same
+  error for `TUPLE`.
+
+- [ ] **Exported function effect rows do not survive interface round-trips.**
+  Repro: run `./out/build/x64-debug-linux/tests -ts="Codegen Modules"`;
+  exported function, higher-order open-rest, and sibling-wrapped effect-row
+  tests fail, including `Interface effect schemes preserve two independent
+  callback rows`.
+
+- [ ] **Whole-module imports corrupt module dependency typing.** Repro: run
+  `./out/build/x64-debug-linux/tests -tc="yonac module dependencies respect
+  whole-module import bindings"`; compilation exits 1 and emits an unexpected
+  `E0100` diagnostic.
+
+- [ ] **Cross-module trait dispatch and structural derives regress together.**
+  Repro: run `./out/build/x64-debug-linux/tests -ts="Trait"`; constrained and
+  cross-module generic instances return codegen/interface errors, while
+  derived Show/Eq/Ord/Hash cases return run or type errors (13 failing cases
+  in the current Linux debug preset).
+
+- [ ] **The missing-clang-format regression does not report the missing tool.**
+  Repro: run `./out/build/x64-debug-linux/tests -tc="format script fails
+  clearly when clang-format is unavailable"`; the subprocess output contains
+  no `clang-format` diagnostic.
+
+- [ ] **Annotated ADT case functions fail module compilation after heap
+  boxing.** Repro: run `./out/build/x64-debug-linux/tests -tc="Annotated ADT
+  case functions heap-box non-recursive results"`; expression module creation
+  returns null.
+
 - [ ] **Generated fixture links discard a configured MoltenVK library name.**
   Repro: configure macOS with `YONA_VULKAN_LIBRARY` resolving directly to
   `libMoltenVK.dylib` and no `libvulkan.dylib`; the fixture linker retains only
