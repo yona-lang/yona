@@ -11,6 +11,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   accept the surrogate/out-of-range value and codegen emits it as an integer
   instead of diagnosing an invalid character literal.
 
+- [ ] **Non-ASCII character patterns are truncated during parsing.** Repro:
+  parse `case 'λ' of 'λ' -> 1; _ -> 0 end`; `ParserPattern` casts the
+  lexer `char32_t` token through `char`, losing the Unicode code point before
+  semantic analysis and codegen.
+
 - [ ] **Byte and character literals are accepted by parsing and typing but
   rejected by codegen.** Repro: compile `case [2b] of [1b] -> 1; _ -> 2 end`
   (or the analogous character sequence); codegen reports `unsupported
