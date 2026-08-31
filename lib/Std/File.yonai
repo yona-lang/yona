@@ -1,20 +1,20 @@
 MODULE Std\File
 FN appendFile 2 STRING STRING -> BOOL
-FN closeFileHandle 1 INT -> UNIT
+FN closeFileHandle 1 ADT(FileHandle) -> UNIT
 FN exists 1 STRING -> BOOL
-FN flush 1 INT -> BOOL
-FN listDir 1 STRING -> SEQ
-FN openFile 2 STRING ADT -> LINEAR(ADT(FileHandle))
-IO readBytes 2 INT INT -> BYTE_ARRAY
-FN readChunks 2 INT INT -> ADT(Iterator)
+FN flush 1 ADT(FileHandle) -> BOOL borrow 1
+FN listDir 1 STRING -> Seq(STRING)
+FN openFile 2 STRING ADT(FileMode) -> LINEAR(ADT(FileHandle))
+IO readBytes 2 ADT(FileHandle) INT -> BYTE_ARRAY borrow 10
+FN readChunks 2 ADT(FileHandle) INT -> ADT(Iterator,BYTE_ARRAY) borrow 10
 IO readFile 1 STRING -> STRING
 IO readFileBytes 1 STRING -> BYTE_ARRAY
-FN readLines 1 STRING -> ADT(Iterator)
+FN readLines 1 STRING -> ADT(Iterator,STRING)
 FN remove 1 STRING -> BOOL
-FN seek 3 INT INT ADT -> INT
+FN seek 3 ADT(FileHandle) INT ADT(Whence) -> INT borrow 100
 FN size 1 STRING -> INT
-FN tell 1 INT -> INT
-FN truncate 2 INT INT -> BOOL
-IO writeBytes 2 INT INT -> INT
+FN tell 1 ADT(FileHandle) -> INT borrow 1
+FN truncate 2 ADT(FileHandle) INT -> BOOL borrow 10
+IO writeBytes 2 ADT(FileHandle) BYTE_ARRAY -> INT borrow 10
 IO writeFile 2 STRING STRING -> BOOL
 FN writeFileBytes 2 STRING BYTE_ARRAY -> BOOL

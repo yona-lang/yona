@@ -57,7 +57,7 @@ as `fix: return linear channel endpoints`.
 - Modify: `test/Fixtures/Codegen/linear_file_case.yona`
 - Modify: semantic/interface and codegen tests under `test/`
 
-- [ ] **Step 1: Add exact contract RED coverage**
+- [x] **Step 1: Add exact contract RED coverage**
 
 Assert `openFile` returns `LINEAR(ADT(FileHandle))`; close consumes an
 `ADT(FileHandle)`; read/write/seek/tell/flush/truncate borrow the unwrapped
@@ -65,7 +65,7 @@ handle; binary payloads use `BYTE_ARRAY`; and mode/whence parameters retain
 their ADT descriptors. Add a negative type test proving a `Linear FileHandle`
 cannot be passed directly to a payload operation.
 
-- [ ] **Step 2: Repair the canonical native interface**
+- [x] **Step 2: Repair the canonical native interface**
 
 Replace legacy `INT` guesses in `Std\File.yonai` with the precise Prelude ADT,
 ByteArray, FileMode, Whence, Iterator, and result descriptors. Keep the C ABI
@@ -74,13 +74,13 @@ layout, while the public typed boundary requires one explicit source-level
 `Linear` unwrap. Mark non-terminal handle parameters borrowed; do not mark
 close borrowed.
 
-- [ ] **Step 3: Make fixtures obey linear ownership**
+- [x] **Step 3: Make fixtures obey linear ownership**
 
 Rewrite binary fixtures to unwrap each newly opened handle exactly once before
 borrowing it for operations and finally closing it. Do not weaken the checker
 or rely on implicit `Linear` coercions.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run canonical import/type tests, linearity/resource tests, and all File/binary
 fixtures on Linux. Commit as `fix: type file handle operations`.

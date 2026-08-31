@@ -1,8 +1,14 @@
 import openFile, readBytes, writeBytes, closeFileHandle from Std\File, fromString, length from Std\ByteArray in
-let wh = openFile "/tmp/yona_binary_test.bin" Write in
-let _ = writeBytes wh (fromString "hello binary") in
-let _ = closeFileHandle wh in
-let rh = openFile "/tmp/yona_binary_test.bin" Read in
-let data = readBytes rh 12 in
-let _ = closeFileHandle rh in
-length data
+case openFile "/tmp/yona_binary_test.bin" Write of
+    Linear wh -> do
+        writeBytes wh (fromString "hello binary")
+        closeFileHandle wh
+        case openFile "/tmp/yona_binary_test.bin" Read of
+            Linear rh -> do
+                data = readBytes rh 12
+                closeFileHandle rh
+                length data
+            end
+        end
+    end
+end

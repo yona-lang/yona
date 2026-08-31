@@ -7,8 +7,10 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 TEST_CASE("Semantics interface catalog installs Prelude without Codegen") {
   const auto LibraryPath = yona::test::repo_root() / "lib";
@@ -43,6 +45,103 @@ TEST_CASE("Semantics interface catalog installs Prelude without Codegen") {
   Checker.check(Parsed.Expression.get());
   CHECK(Checker.solve_constraints());
   CHECK_FALSE(Checker.has_errors());
+}
+
+TEST_CASE("Std File exposes canonical typed resource contracts") {
+  const auto LibraryPath = yona::test::repo_root() / "lib";
+  yona::semantics::InterfaceCatalog Catalog({LibraryPath.string()});
+  const auto Loaded = Catalog.loadModule("Std\\File");
+  REQUIRE(Loaded.has_value());
+  REQUIRE(*Loaded != nullptr);
+
+  const auto &Functions = (*Loaded)->Functions;
+  const auto Find = [&](const std::string &Name)
+      -> const yona::interface::Function & {
+    const auto Found =
+        std::find_if(Functions.begin(), Functions.end(), [&](const auto &Fn) {
+          return Fn.Name == Name;
+        });
+    REQUIRE(Found != Functions.end());
+    return *Found;
+  };
+
+  const auto &Open = Find("openFile");
+  CHECK(Open.ParameterTypes ==
+        std::vector<std::string>{"STRING", "ADT(FileMode)"});
+  CHECK(Open.ReturnType == "LINEAR(ADT(FileHandle))");
+  CHECK(Open.BorrowedParameters == std::vector<bool>{false, false});
+
+  const auto &Close = Find("closeFileHandle");
+  CHECK(Close.ParameterTypes ==
+        std::vector<std::string>{"ADT(FileHandle)"});
+  CHECK(Close.ReturnType == "UNIT");
+  CHECK(Close.BorrowedParameters == std::vector<bool>{false});
+
+  const auto CheckBorrowedHandle = [&](const std::string &Name,
+                                       std::vector<std::string> Parameters,
+                                       const std::string &ReturnType) {
+    const auto &Function = Find(Name);
+    CHECK(Function.ParameterTypes == Parameters);
+    CHECK(Function.ReturnType == ReturnType);
+    std::vector<bool> ExpectedBorrowed(Parameters.size(), false);
+    ExpectedBorrowed.front() = true;
+    CHECK(Function.BorrowedParameters == ExpectedBorrowed);
+  };
+
+  CheckBorrowedHandle("flush", {"ADT(FileHandle)"}, "BOOL");
+  CheckBorrowedHandle("readBytes", {"ADT(FileHandle)", "INT"},
+                      "BYTE_ARRAY");
+  CheckBorrowedHandle("readChunks", {"ADT(FileHandle)", "INT"},
+                      "ADT(Iterator,BYTE_ARRAY)");
+  CheckBorrowedHandle("seek",
+                      {"ADT(FileHandle)", "INT", "ADT(Whence)"}, "INT");
+  CheckBorrowedHandle("tell", {"ADT(FileHandle)"}, "INT");
+  CheckBorrowedHandle("truncate", {"ADT(FileHandle)", "INT"}, "BOOL");
+  CheckBorrowedHandle("writeBytes", {"ADT(FileHandle)", "BYTE_ARRAY"},
+                      "INT");
+
+  CHECK(Find("listDir").ReturnType == "Seq(STRING)");
+  CHECK(Find("readLines").ReturnType == "ADT(Iterator,STRING)");
+}
+
+TEST_CASE("Std File requires one explicit Linear handle unwrap") {
+  const auto LibraryPath = yona::test::repo_root() / "lib";
+
+  const auto CheckSource = [&](const std::string &Source) {
+    yona::semantics::InterfaceCatalog Catalog({LibraryPath.string()});
+    yona::parser::Parser Parser;
+    yona::compiler::DiagnosticEngine Diagnostics;
+    yona::compiler::typechecker::TypeChecker Checker(Diagnostics);
+    Checker.add_module_path(LibraryPath.string());
+    Checker.set_import_type_source(&Catalog);
+    const auto Installed = Catalog.installPrelude(Parser, Checker);
+    REQUIRE(Installed.has_value());
+    REQUIRE(*Installed);
+
+    auto Result = Parser.parseExpression(Source, "file_handle_contract.yona");
+    REQUIRE(Result.has_value());
+    auto Parsed = std::move(Result.value());
+    Diagnostics.setSources(Parsed.Sources);
+    Checker.check(Parsed.Expression.get());
+    Checker.solve_constraints();
+    return Diagnostics.error_count();
+  };
+
+  CHECK(CheckSource(R"(
+import openFile, tell from Std\File in
+tell (openFile "file.bin" Read)
+)") > 0);
+
+  CHECK(CheckSource(R"(
+import openFile, tell, closeFileHandle from Std\File in
+case openFile "file.bin" Read of
+  Linear h -> do
+    n = tell h
+    closeFileHandle h
+    n
+  end
+end
+)") == 0);
 }
 
 TEST_CASE("Semantics generic source service retains GENFN source ownership") {

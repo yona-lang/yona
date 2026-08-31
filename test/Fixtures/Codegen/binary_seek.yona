@@ -1,9 +1,15 @@
 import openFile, readBytes, writeBytes, seek, closeFileHandle from Std\File, fromString, get from Std\ByteArray in
-let wh = openFile "/tmp/yona_binary_seek.bin" Write in
-let _ = writeBytes wh (fromString "abcdefghij") in
-let _ = closeFileHandle wh in
-let rh = openFile "/tmp/yona_binary_seek.bin" Read in
-let _ = seek rh 5 SeekSet in
-let data = readBytes rh 3 in
-let _ = closeFileHandle rh in
-get data 0
+case openFile "/tmp/yona_binary_seek.bin" Write of
+    Linear wh -> do
+        writeBytes wh (fromString "abcdefghij")
+        closeFileHandle wh
+        case openFile "/tmp/yona_binary_seek.bin" Read of
+            Linear rh -> do
+                seek rh 5 SeekSet
+                data = readBytes rh 3
+                closeFileHandle rh
+                get data 0
+            end
+        end
+    end
+end
