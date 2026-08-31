@@ -18,6 +18,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   because the phony custom target names itself as an input and multiple rules
   generate the same path.
 
+- [ ] **Installed `yonac` cannot load the compiler library.** Repro: after
+  fixing the installed-consumer target/output collision, run `ctest --preset
+  unit-tests-linux -R installed_consumer_contract`; the installed `yonac`
+  exits with an unresolved `yona::compiler::DiagnosticEngine` symbol.
+
 - [ ] **Vulkan-enabled generated programs omit the loader link dependency.**
   Repro: run `ctest --preset unit-tests-linux -R doctest_stdlib_gpu`; linking
   the stdlib GPU conformance fixture reports unresolved `vk*` symbols from
