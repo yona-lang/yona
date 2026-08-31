@@ -290,6 +290,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   on the retained managed payload instead of `YonaRuntimeRelease`, risking an
   invalid free and leaving the internal pin's ownership contract unbalanced.
 
+- [ ] **Failed async read/receive submission leaks its managed result buffer.**
+  Repro: make `YonaRuntimeIoUringSubmit` return zero after
+  `YonaRuntimePlatformSubmitFileRead` or `YonaStdNetRecv` allocates its managed
+  string; the failure path frees the `YonaIoContext` but neither returns nor
+  releases the buffer. ByteArray read submission has the same ownership gap.
+
 - [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
   boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
   `binary_chunks`, `binary_seek`, and `binary_write_read` report an expected
