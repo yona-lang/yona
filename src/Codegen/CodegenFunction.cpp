@@ -441,7 +441,8 @@ static void bind_pattern_names(AstNode *pat,
 
 void Codegen::collect_free_vars(AstNode *node,
                                 const std::unordered_set<std::string> &bound,
-                                std::unordered_set<std::string> &free_vars) {
+                                std::unordered_set<std::string> &free_vars,
+                                bool descend_nested_lambdas) {
   if (!node)
     return;
   switch (node->get_type()) {
@@ -470,15 +471,15 @@ void Codegen::collect_free_vars(AstNode *node,
   case ast::AST_IN_EXPR:
   case ast::AST_REMOVE_EXPR: {
     auto *bin = static_cast<AddExpr *>(node);
-    collect_free_vars(bin->left, bound, free_vars);
-    collect_free_vars(bin->right, bound, free_vars);
+    collect_free_vars(bin->left, bound, free_vars, descend_nested_lambdas);
+    collect_free_vars(bin->right, bound, free_vars, descend_nested_lambdas);
     break;
   }
   case ast::AST_IF_EXPR: {
     auto *e = static_cast<IfExpr *>(node);
-    collect_free_vars(e->condition, bound, free_vars);
-    collect_free_vars(e->thenExpr, bound, free_vars);
-    collect_free_vars(e->elseExpr, bound, free_vars);
+    collect_free_vars(e->condition, bound, free_vars, descend_nested_lambdas);
+    collect_free_vars(e->thenExpr, bound, free_vars, descend_nested_lambdas);
+    collect_free_vars(e->elseExpr, bound, free_vars, descend_nested_lambdas);
     break;
   }
   case ast::AST_LET_EXPR: {
@@ -486,38 +487,40 @@ void Codegen::collect_free_vars(AstNode *node,
     auto nb = bound;
     for (auto *a : e->aliases) {
       if (auto *va = dynamic_cast<ValueAlias *>(a)) {
-        collect_free_vars(va->expr, bound, free_vars);
+        collect_free_vars(va->expr, bound, free_vars, descend_nested_lambdas);
         nb.insert(va->identifier->name->value);
       } else if (auto *la = dynamic_cast<LambdaAlias *>(a)) {
-        // A nested lambda may reference a value from this function's lexical
-        // scope (including the enclosing function itself). Its own alias is
-        // bound for recursive calls and must not be reported as an outer free
-        // variable.
-        auto lambda_bound = bound;
-        lambda_bound.insert(la->name->value);
-        collect_free_vars(la->lambda, lambda_bound, free_vars);
+        if (descend_nested_lambdas) {
+          // Lexical-self detection must see recursion hidden in a thunk, but
+          // ordinary closure capture analysis intentionally handles the
+          // nested lambda when it is lowered.
+          auto lambda_bound = bound;
+          lambda_bound.insert(la->name->value);
+          collect_free_vars(la->lambda, lambda_bound, free_vars, true);
+        }
         nb.insert(la->name->value);
       }
     }
-    collect_free_vars(e->expr, nb, free_vars);
+    collect_free_vars(e->expr, nb, free_vars, descend_nested_lambdas);
     break;
   }
   case ast::AST_IMPORT_EXPR: {
     // Imports extend lookup but do not form an opaque boundary for
     // defining-module dependency discovery. Instance bodies commonly
     // import a public iterator/fold and then pass a private helper.
-    collect_free_vars(static_cast<ImportExpr *>(node)->expr, bound, free_vars);
+    collect_free_vars(static_cast<ImportExpr *>(node)->expr, bound, free_vars,
+                      descend_nested_lambdas);
     break;
   }
   case ast::AST_CASE_EXPR: {
     auto *e = static_cast<CaseExpr *>(node);
-    collect_free_vars(e->expr, bound, free_vars);
+    collect_free_vars(e->expr, bound, free_vars, descend_nested_lambdas);
     for (auto *c : e->clauses) {
       auto nb = bound;
       bind_pattern_names(c->pattern, nb);
       if (c->guard)
-        collect_free_vars(c->guard, nb, free_vars);
-      collect_free_vars(c->body, nb, free_vars);
+        collect_free_vars(c->guard, nb, free_vars, descend_nested_lambdas);
+      collect_free_vars(c->body, nb, free_vars, descend_nested_lambdas);
     }
     break;
   }
@@ -528,13 +531,15 @@ void Codegen::collect_free_vars(AstNode *node,
         free_vars.insert(nc->name->value);
     } else if (auto *ec = dynamic_cast<ExprCall *>(e->call)) {
       if (ec->expr)
-        collect_free_vars(ec->expr, bound, free_vars);
+        collect_free_vars(ec->expr, bound, free_vars, descend_nested_lambdas);
     }
     for (auto &a : e->args) {
       if (std::holds_alternative<ExprNode *>(a))
-        collect_free_vars(std::get<ExprNode *>(a), bound, free_vars);
+        collect_free_vars(std::get<ExprNode *>(a), bound, free_vars,
+                          descend_nested_lambdas);
       else
-        collect_free_vars(std::get<ValueExpr *>(a), bound, free_vars);
+        collect_free_vars(std::get<ValueExpr *>(a), bound, free_vars,
+                          descend_nested_lambdas);
     }
     break;
   }
@@ -546,26 +551,26 @@ void Codegen::collect_free_vars(AstNode *node,
       bind_pattern_names(pat, nb);
     for (auto *body : fn->bodies) {
       if (auto *bwg = dynamic_cast<BodyWithoutGuards *>(body))
-        collect_free_vars(bwg->expr, nb, free_vars);
+        collect_free_vars(bwg->expr, nb, free_vars, descend_nested_lambdas);
     }
     break;
   }
   case ast::AST_TUPLE_EXPR: {
     auto *e = static_cast<TupleExpr *>(node);
     for (auto *v : e->values)
-      collect_free_vars(v, bound, free_vars);
+      collect_free_vars(v, bound, free_vars, descend_nested_lambdas);
     break;
   }
   case ast::AST_VALUES_SEQUENCE_EXPR: {
     auto *e = static_cast<ValuesSequenceExpr *>(node);
     for (auto *v : e->values)
-      collect_free_vars(v, bound, free_vars);
+      collect_free_vars(v, bound, free_vars, descend_nested_lambdas);
     break;
   }
   case ast::AST_DO_EXPR: {
     auto *e = static_cast<DoExpr *>(node);
     for (auto *step : e->steps)
-      collect_free_vars(step, bound, free_vars);
+      collect_free_vars(step, bound, free_vars, descend_nested_lambdas);
     break;
   }
   default:
@@ -1097,14 +1102,39 @@ Codegen::compile_function(const std::string &name,
   std::unordered_set<std::string> source_free_names;
   for (auto *body : def.ast->bodies) {
     if (auto *unguarded = dynamic_cast<BodyWithoutGuards *>(body)) {
-      collect_free_vars(unguarded->expr, source_bound_names, source_free_names);
+      collect_free_vars(unguarded->expr, source_bound_names, source_free_names,
+                        true);
     } else if (auto *guarded = dynamic_cast<BodyWithGuards *>(body)) {
-      collect_free_vars(guarded->guard, source_bound_names, source_free_names);
-      collect_free_vars(guarded->expr, source_bound_names, source_free_names);
+      collect_free_vars(guarded->guard, source_bound_names, source_free_names,
+                        true);
+      collect_free_vars(guarded->expr, source_bound_names, source_free_names,
+                        true);
     }
   }
+
+  const auto local_source = deferred_functions_.find(def.ast->name);
+  const bool has_local_source_identity =
+      local_source != deferred_functions_.end() &&
+      local_source->second.ast == def.ast;
+  bool is_trait_redispatch_body = false;
+  for (const auto &[_, instance] : types_.trait_instances) {
+    for (const auto &[__, target] : instance.method_mangled_names) {
+      const auto local_target = deferred_functions_.find(target);
+      if (target == name ||
+          (def.imported_owner && target == *def.imported_owner) ||
+          (local_target != deferred_functions_.end() &&
+           local_target->second.ast == def.ast)) {
+        is_trait_redispatch_body = true;
+        break;
+      }
+    }
+    if (is_trait_redispatch_body)
+      break;
+  }
   const bool has_source_self_alias =
-      def.ast->name != name && source_free_names.count(def.ast->name) != 0;
+      def.ast->name != name && source_free_names.count(def.ast->name) != 0 &&
+      (has_local_source_identity || def.imported_owner.has_value()) &&
+      !is_trait_redispatch_body;
   const auto previous_source_self = named_values_.find(def.ast->name);
   const bool had_previous_source_self =
       previous_source_self != named_values_.end();

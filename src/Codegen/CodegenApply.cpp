@@ -1652,6 +1652,10 @@ Codegen::codegen_extern_call(ApplyExpr *node, const std::string &fn_name,
       codegen_function_def(func_ast, materialization_name);
       auto def_it2 = deferred_functions_.find(materialization_name);
       if (def_it2 != deferred_functions_.end()) {
+        // Retain the exact defining GENFN identity. Recursive source aliases
+        // and private dependencies must be scoped by this owner, while trait
+        // implementation owners deliberately redispatch same-named methods.
+        def_it2->second.imported_owner = mangled;
         compile_function(materialization_name, def_it2->second, all_args);
         auto cf_it2 = compiled_functions_.find(materialization_name);
         if (Session->errorCount() > errors_before) {

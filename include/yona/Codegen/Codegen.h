@@ -1208,7 +1208,8 @@ private:
   // Free variable analysis
   static void collect_free_vars(AstNode *node,
                                 const std::unordered_set<std::string> &bound,
-                                std::unordered_set<std::string> &free_vars);
+                                std::unordered_set<std::string> &free_vars,
+                                bool descend_nested_lambdas = false);
 
   // Infer parameter type from a function pattern node
   CType infer_type_from_pattern(PatternNode *pat);
