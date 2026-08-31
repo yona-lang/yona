@@ -1089,6 +1089,8 @@ TypedValue Codegen::codegen_function_def(FunctionExpr *node,
 
     last_lambda_name_ = fn_name;
     named_values_[fn_name] = {closure, CType::FUNCTION, {ret_ctype}};
+    if (name.empty())
+      anonymous_heap_values_.insert(closure);
     transferred_values_ = saved_transferred;
     return {closure, CType::FUNCTION, {ret_ctype}};
   }
@@ -2003,13 +2005,20 @@ Codegen::compile_function(const std::string &name,
       // callee-owns). Skip if TCO already handled cleanup before
       // the tail call, and skip params whose ownership was
       // transferred during body codegen (tracked in seq-domain transfers).
-      if (body_tv.val && !tco_cleanup_done_) {
+      if (body_tv.val) {
         auto ptr_ty = PointerType::get(*context_, 0);
         for (size_t pi = 0; pi < def.param_names.size(); pi++) {
           if (pi >= param_ctypes.size())
             continue;
           CType ct = param_ctypes[pi];
           if (!is_heap_type(ct))
+            continue;
+          // Tail-call preparation handles transferred collection parameters
+          // before recursion, but FUNCTION parameters are deliberately
+          // retained per call. Every returned frame must release that owned
+          // closure reference, including functions which also contain a
+          // self-tail call (filter/sort helpers are common examples).
+          if (tco_cleanup_done_ && ct != CType::FUNCTION)
             continue;
           if (annotated_param_is_unboxed_enum(pi) ||
               (pi < args.size() && is_unboxed_enum_adt(args[pi])))

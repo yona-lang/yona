@@ -552,9 +552,14 @@ TypedValue Codegen::codegen_join(JoinExpr *node) {
           return builder_->CreateIntToPtr(tv.val,
                                           PointerType::get(*context_, 0));
         };
+        auto previous = joined;
         joined = {builder_->CreateCall(rt_.seq_join_,
-                                       {as_seq(joined), as_seq(right)}),
+                                       {as_seq(previous), as_seq(right)}),
                   CType::SEQ};
+        if (!named_binding_for_value(previous.val))
+          emit_rc_dec(previous.val, CType::SEQ);
+        if (!named_binding_for_value(right.val))
+          emit_rc_dec(right.val, CType::SEQ);
       }
     }
     return joined;
@@ -585,8 +590,14 @@ TypedValue Codegen::codegen_join(JoinExpr *node) {
       return tv.val;
     return builder_->CreateIntToPtr(tv.val, PointerType::get(*context_, 0));
   };
-  return {builder_->CreateCall(rt_.seq_join_, {as_seq(left), as_seq(right)}),
-          CType::SEQ};
+  TypedValue result{
+      builder_->CreateCall(rt_.seq_join_, {as_seq(left), as_seq(right)}),
+      CType::SEQ};
+  if (!named_binding_for_value(left.val))
+    emit_rc_dec(left.val, CType::SEQ);
+  if (!named_binding_for_value(right.val))
+    emit_rc_dec(right.val, CType::SEQ);
+  return result;
 }
 
 TypedValue Codegen::codegen_cons_right(ConsRightExpr *node) {

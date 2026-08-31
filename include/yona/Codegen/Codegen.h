@@ -524,6 +524,17 @@ private:
   // codegen_pattern_headtail for single-use scrutinee detection (the
   // Perceus-linear owned-scrutinee fast path).
   ast::AstNode *current_fn_body_ = nullptr;
+  // Innermost-first lexical ownership scopes for values introduced by case
+  // patterns. A null body disables transfer while compiling a guard; once in
+  // the arm body, the binding is counted only within that body. Outer names
+  // continue to use current_fn_body_.
+  std::vector<
+      std::unordered_map<std::string, std::pair<llvm::Value *, ast::AstNode *>>>
+      pattern_ownership_scopes_;
+  // Heap values created by expression syntax may receive an internal compiler
+  // name, but that name is not a lexical owner. They transfer as temporaries
+  // until a real let/pattern binding adopts them.
+  std::unordered_set<llvm::Value *> anonymous_heap_values_;
 
   // Flow-sensitive transfer tracking across branching constructs.
   //

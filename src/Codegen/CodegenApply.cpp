@@ -61,6 +61,18 @@ using llvm::StructType;
 using llvm::Value;
 using LType = llvm::Type;
 
+// A closure environment owns each captured heap reference until the closure
+// itself is destroyed. Loading a capture creates a borrowed view of that
+// reference, not a transferable local owner. Calls whose parameters consume
+// the value must therefore receive a retained reference on every invocation.
+static bool is_closure_environment_capture(Value *value) {
+  while (auto *cast = llvm::dyn_cast<llvm::CastInst>(value))
+    value = cast->getOperand(0);
+  const auto *call = llvm::dyn_cast<llvm::CallBase>(value);
+  const auto *callee = call ? call->getCalledFunction() : nullptr;
+  return callee && callee->getName() == "YonaRuntimeClosureGetCapture";
+}
+
 static CType yona_type_to_ctype(const types::Type &t);
 
 struct TypeDescriptorNode {
@@ -893,6 +905,8 @@ std::optional<std::string>
 Codegen::named_binding_for_value(llvm::Value *value) const {
   if (!value)
     return std::nullopt;
+  if (anonymous_heap_values_.contains(value))
+    return std::nullopt;
   for (const auto &[name, binding] : named_values_)
     if (binding.val == value)
       return name;
@@ -1461,10 +1475,36 @@ Codegen::codegen_higher_order_call(const std::string &fn_name,
         if (recursive_self_environment && binding.empty())
           binding = active_function->getName().str();
 
-        const bool last_use = !recursive_self_environment && !binding.empty() &&
-                              current_fn_body_ &&
-                              compiler::analysis::max_identifier_refs_on_path(
-                                  current_fn_body_, binding) == 1;
+        ast::AstNode *binding_body = current_fn_body_;
+        for (auto scope = pattern_ownership_scopes_.rbegin();
+             scope != pattern_ownership_scopes_.rend(); ++scope) {
+          const auto introduced = scope->find(binding);
+          if (introduced != scope->end() &&
+              introduced->second.first == argument.val) {
+            binding_body = introduced->second.second;
+            break;
+          }
+        }
+
+        if (is_closure_environment_capture(argument.val)) {
+          auto *retain_bb =
+              BasicBlock::Create(*context_, "capture_retain",
+                                 builder_->GetInsertBlock()->getParent());
+          auto *continue_bb =
+              BasicBlock::Create(*context_, "capture_retain_cont",
+                                 builder_->GetInsertBlock()->getParent());
+          builder_->CreateCondBr(is_borrowed, continue_bb, retain_bb);
+          builder_->SetInsertPoint(retain_bb);
+          emit_rc_inc(argument.val, argument.type);
+          builder_->CreateBr(continue_bb);
+          builder_->SetInsertPoint(continue_bb);
+          continue;
+        }
+
+        const bool last_use =
+            !recursive_self_environment && !binding.empty() && binding_body &&
+            compiler::analysis::max_identifier_refs_on_path(binding_body,
+                                                            binding) == 1;
         if (last_use) {
           auto *owned_transfer =
               builder_->CreateNot(is_borrowed, "owned_transfer");
@@ -2145,12 +2185,21 @@ void Codegen::prepare_callee_owned_heap_args(
       continue;
     const auto named_as =
         named_binding_for_value(all_args[ai].val).value_or("");
+    ast::AstNode *binding_body = current_fn_body_;
+    for (auto scope = pattern_ownership_scopes_.rbegin();
+         scope != pattern_ownership_scopes_.rend(); ++scope) {
+      const auto introduced = scope->find(named_as);
+      if (introduced != scope->end() &&
+          introduced->second.first == all_args[ai].val) {
+        binding_body = introduced->second.second;
+        break;
+      }
+    }
     if (!is_heap_type(ct) && all_args[ai].boxed_heap) {
       if (named_as.empty())
         continue;
-      int uses = current_fn_body_
-                     ? count_identifier_refs(current_fn_body_, named_as)
-                     : 2;
+      int uses =
+          binding_body ? count_identifier_refs(binding_body, named_as) : 2;
       if (uses > 1)
         emit_rc_inc(all_args[ai].val, CType::ADT);
       continue;
@@ -2163,11 +2212,15 @@ void Codegen::prepare_callee_owned_heap_args(
     // needed — the caller retains ownership and the callee only reads.
     if (ai < cf.borrowed_params.size() && cf.borrowed_params[ai])
       continue;
+    if (is_closure_environment_capture(all_args[ai].val)) {
+      emit_rc_inc(all_args[ai].val, ct);
+      continue;
+    }
     // For SEQ args, skip the inc when the binding has exactly one
     // textual occurrence in the enclosing function body — that
     // single use is also the last use, so we can transfer.
-    if (ct == CType::SEQ && current_fn_body_) {
-      int uses = count_identifier_refs(current_fn_body_, named_as);
+    if (ct == CType::SEQ && binding_body) {
+      int uses = count_identifier_refs(binding_body, named_as);
       if (uses <= 1) {
         mark_transferred(all_args[ai].val, TransferDomain::Seq);
         emit_frame_transfer(all_args[ai].val);
@@ -2177,8 +2230,8 @@ void Codegen::prepare_callee_owned_heap_args(
     // Same single-use check for SET/DICT under the callee-owns ABI
     // extended to user-defined calls. Last-use args are transferred
     // (no rc_inc); the callee's function-exit drop handles cleanup.
-    if ((ct == CType::SET || ct == CType::DICT) && current_fn_body_) {
-      int uses = count_identifier_refs(current_fn_body_, named_as);
+    if ((ct == CType::SET || ct == CType::DICT) && binding_body) {
+      int uses = count_identifier_refs(binding_body, named_as);
       if (uses <= 1) {
         mark_transferred(all_args[ai].val, TransferDomain::Map);
         emit_frame_transfer(all_args[ai].val);

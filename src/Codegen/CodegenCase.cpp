@@ -1590,11 +1590,23 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     if (!body_inline)
       builder_->SetInsertPoint(body_bb);
 
+    std::unordered_map<std::string, std::pair<Value *, AstNode *>>
+        pattern_ownership_scope;
+    for (const auto &[name, binding] : named_values_) {
+      const auto outer = arm_named_values.find(name);
+      if (outer == arm_named_values.end() || outer->second.val != binding.val)
+        pattern_ownership_scope.emplace(name,
+                                        std::make_pair(binding.val, nullptr));
+    }
+    pattern_ownership_scopes_.push_back(std::move(pattern_ownership_scope));
+
     // Guard expression: pattern | guard -> body
     if (clause->guard) {
       auto guard_val = codegen(clause->guard);
-      if (!guard_val)
+      if (!guard_val) {
+        pattern_ownership_scopes_.pop_back();
         return {};
+      }
       Value *cond = guard_val.val;
       if (guard_val.type == CType::INT)
         cond = builder_->CreateICmpNE(
@@ -1619,7 +1631,10 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     if (case_owns_scrutinee && !arm_scrutinee_drop_stack_.empty())
       arm_scrutinee_drop_stack_.back() = scrutinee;
 
+    for (auto &[_, binding_scope] : pattern_ownership_scopes_.back())
+      binding_scope.second = clause->body;
     auto body_tv = codegen(clause->body);
+    pattern_ownership_scopes_.pop_back();
     if (!body_tv)
       return {};
     // Emit arm-scope drops for pattern-bound heap values BEFORE the arm

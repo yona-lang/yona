@@ -1459,19 +1459,7 @@ void Codegen::codegen_let_aliases(
 
       if (tv) {
         named_values_[vname] = tv;
-
-        // Seq protection: rc_inc to prevent unique-owner tail
-        // mutation when the binding is used more than once. If
-        // the body + subsequent aliases reference vname at most
-        // once, the single use (or drop) takes the existing ref
-        // and the protection is unnecessary — saving a copy on
-        // the downstream seq_tail_consume fast path.
-        if (tv.type == CType::SEQ && tv.val &&
-            !llvm::isa<llvm::Constant>(tv.val)) {
-          int uses = total_refs;
-          if (uses > 1)
-            emit_rc_inc(tv.val, CType::SEQ);
-        }
+        anonymous_heap_values_.erase(tv.val);
 
         if (is_heap_type(tv.type) && tv.val) {
           scope_bindings.push_back(tv);
@@ -1581,7 +1569,25 @@ void Codegen::cleanup_let_scope(const std::vector<TypedValue> &scope_bindings,
                                 const TypedValue &result, llvm::Value *arena,
                                 bool destroy_arena_at_end) {
   if (!scope_bindings.empty() && result && result.val) {
-    emit_rc_inc(result.val, result.type);
+    const bool result_aliases_dropped_binding = [&] {
+      for (size_t i = 0; i < scope_bindings.size(); ++i) {
+        if (scope_bindings[i].val != result.val)
+          continue;
+        if (i < binding_is_arena.size() && binding_is_arena[i])
+          continue;
+        if (scope_bindings[i].type == CType::SEQ &&
+            is_transferred(scope_bindings[i].val, TransferDomain::Seq))
+          continue;
+        if ((scope_bindings[i].type == CType::SET ||
+             scope_bindings[i].type == CType::DICT) &&
+            is_transferred(scope_bindings[i].val, TransferDomain::Map))
+          continue;
+        return true;
+      }
+      return false;
+    }();
+    if (result_aliases_dropped_binding)
+      emit_rc_inc(result.val, result.type);
     for (size_t i = 0; i < scope_bindings.size(); i++) {
       if (i < binding_is_arena.size() && binding_is_arena[i])
         continue;
