@@ -61,18 +61,6 @@ using llvm::StructType;
 using llvm::Value;
 using LType = llvm::Type;
 
-// A closure environment owns each captured heap reference until the closure
-// itself is destroyed. Loading a capture creates a borrowed view of that
-// reference, not a transferable local owner. Calls whose parameters consume
-// the value must therefore receive a retained reference on every invocation.
-static bool is_closure_environment_capture(Value *value) {
-  while (auto *cast = llvm::dyn_cast<llvm::CastInst>(value))
-    value = cast->getOperand(0);
-  const auto *call = llvm::dyn_cast<llvm::CallBase>(value);
-  const auto *callee = call ? call->getCalledFunction() : nullptr;
-  return callee && callee->getName() == "YonaRuntimeClosureGetCapture";
-}
-
 static CType yona_type_to_ctype(const types::Type &t);
 
 struct TypeDescriptorNode {
@@ -913,6 +901,46 @@ Codegen::named_binding_for_value(llvm::Value *value) const {
   return std::nullopt;
 }
 
+void Codegen::adopt_lexical_heap_owner(TypedValue &value) {
+  if (!value.val)
+    return;
+  if (value.heap_ownership == HeapOwnership::Owned)
+    anonymous_heap_values_.erase(value.val);
+}
+
+HeapOwnership Codegen::normalize_heap_phi_ownership(
+    std::vector<std::pair<TypedValue *, BasicBlock *>> incoming,
+    CType result_type) {
+  if (!is_heap_type(result_type) || incoming.empty())
+    return HeapOwnership::Owned;
+
+  const bool has_borrowed =
+      std::ranges::any_of(incoming, [](const auto &entry) {
+        return entry.first->heap_ownership == HeapOwnership::Borrowed;
+      });
+  const bool has_owned = std::ranges::any_of(incoming, [](const auto &entry) {
+    return entry.first->heap_ownership == HeapOwnership::Owned;
+  });
+  if (!has_borrowed)
+    return HeapOwnership::Owned;
+  if (!has_owned)
+    return HeapOwnership::Borrowed;
+
+  // A PHI cannot have path-dependent static ownership. Normalize mixed
+  // incoming edges to owned by retaining only the borrowed paths before their
+  // terminators; an all-borrowed merge remains borrowed and keeps its owner.
+  auto *restore_block = builder_->GetInsertBlock();
+  for (auto &[value, block] : incoming) {
+    if (value->heap_ownership != HeapOwnership::Borrowed)
+      continue;
+    builder_->SetInsertPoint(block_terminator(block));
+    emit_rc_inc(value->val, result_type);
+    value->heap_ownership = HeapOwnership::Owned;
+  }
+  builder_->SetInsertPoint(restore_block);
+  return HeapOwnership::Owned;
+}
+
 TypedValue
 Codegen::codegen_adt_construct(const std::string &fn_name,
                                const std::vector<TypedValue> &all_args) {
@@ -986,7 +1014,8 @@ Codegen::codegen_adt_construct(const std::string &fn_name,
       // binding, so the ADT needs an independent retained reference.
       if (is_heap_value(all_args[ai]) &&
           !all_args[ai].val->getType()->isStructTy() &&
-          named_binding_for_value(all_args[ai].val))
+          (all_args[ai].heap_ownership == HeapOwnership::Borrowed ||
+           named_binding_for_value(all_args[ai].val)))
         emit_rc_inc(all_args[ai].val, all_args[ai].type);
       builder_->CreateCall(rt_.adt_set_field_,
                            {node_ptr, ConstantInt::get(i64_ty, ai), arg_val});
@@ -1486,7 +1515,7 @@ Codegen::codegen_higher_order_call(const std::string &fn_name,
           }
         }
 
-        if (is_closure_environment_capture(argument.val)) {
+        if (argument.heap_ownership == HeapOwnership::Borrowed) {
           auto *retain_bb =
               BasicBlock::Create(*context_, "capture_retain",
                                  builder_->GetInsertBlock()->getParent());
@@ -2204,6 +2233,13 @@ void Codegen::prepare_callee_owned_heap_args(
         break;
       }
     }
+    const bool callee_borrows =
+        ai < cf.borrowed_params.size() && cf.borrowed_params[ai];
+    if (all_args[ai].heap_ownership == HeapOwnership::Borrowed) {
+      if (!callee_borrows)
+        emit_rc_inc(all_args[ai].val, is_heap_type(ct) ? ct : CType::ADT);
+      continue;
+    }
     if (!is_heap_type(ct) && all_args[ai].boxed_heap) {
       if (named_as.empty())
         continue;
@@ -2219,12 +2255,8 @@ void Codegen::prepare_callee_owned_heap_args(
       continue; // anonymous → transfer (no inc)
     // Borrow inference: if the callee borrows this param, no rc_inc
     // needed — the caller retains ownership and the callee only reads.
-    if (ai < cf.borrowed_params.size() && cf.borrowed_params[ai])
+    if (callee_borrows)
       continue;
-    if (is_closure_environment_capture(all_args[ai].val)) {
-      emit_rc_inc(all_args[ai].val, ct);
-      continue;
-    }
     // For SEQ args, skip the inc when the binding has exactly one
     // textual occurrence in the enclosing function body — that
     // single use is also the last use, so we can transfer.
@@ -2264,7 +2296,8 @@ void Codegen::cleanup_borrowed_temporary_args(
     if (all_args[ai].val->getType()->isStructTy())
       continue;
 
-    if (!named_binding_for_value(all_args[ai].val))
+    if (all_args[ai].heap_ownership == HeapOwnership::Owned &&
+        !named_binding_for_value(all_args[ai].val))
       emit_rc_dec(all_args[ai].val, ct);
   }
 }
@@ -2559,7 +2592,8 @@ TypedValue Codegen::emit_direct_call(const std::string &fn_name,
       continue;
     if (all_args[ai].val->getType()->isStructTy())
       continue;
-    if (!named_binding_for_value(all_args[ai].val)) {
+    if (all_args[ai].heap_ownership == HeapOwnership::Owned &&
+        !named_binding_for_value(all_args[ai].val)) {
       if (ai < cf.borrowed_params.size() && cf.borrowed_params[ai])
         continue;
       if (ct == CType::SEQ)

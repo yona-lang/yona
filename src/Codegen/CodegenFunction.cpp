@@ -911,6 +911,8 @@ TypedValue Codegen::codegen_function_def(FunctionExpr *node,
           capture_tvs[ci].adt_type_argument_names;
       captured.adt_semantic_arguments = capture_tvs[ci].adt_semantic_arguments;
       captured.boxed_heap = capture_tvs[ci].boxed_heap;
+      if (is_heap_value(captured))
+        captured.heap_ownership = HeapOwnership::Borrowed;
       named_values_[def.free_vars[ci]] = std::move(captured);
     }
 

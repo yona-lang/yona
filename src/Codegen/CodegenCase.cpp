@@ -1297,7 +1297,10 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
   // sequence/map consumers and direct result escape suppress that drop.
   const bool case_owns_scrutinee =
       node->expr->get_type() != ast::AST_IDENTIFIER_EXPR &&
-      is_heap_value(scrutinee);
+      is_heap_value(scrutinee) &&
+      scrutinee.heap_ownership == HeapOwnership::Owned;
+  if (case_owns_scrutinee)
+    adopt_lexical_heap_owner(scrutinee);
 
   // A finite constructor match that covers every variant has no legitimate
   // fall-through edge after its final arm. Sending that impossible edge to
@@ -1685,7 +1688,8 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     named_values_ = std::move(arm_named_values);
     BasicBlock *arm_exit =
         current_block_terminated() ? nullptr : builder_->GetInsertBlock();
-    if (arm_exit && body_tv.type == CType::SEQ)
+    if (arm_exit && body_tv.type == CType::SEQ &&
+        body_tv.heap_ownership == HeapOwnership::Owned)
       mark_transferred(body_tv.val, TransferDomain::Seq);
     if (arm_exit) {
       builder_->CreateBr(merge_bb);
@@ -1728,6 +1732,13 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
   for (size_t ri = 1; ri < results.size(); ri++)
     phi_type =
         common_phi_type(phi_type, results[ri].first.val->getType(), *context_);
+
+  std::vector<std::pair<TypedValue *, BasicBlock *>> ownership_incoming;
+  ownership_incoming.reserve(results.size());
+  for (auto &[tv, bb] : results)
+    ownership_incoming.emplace_back(&tv, bb);
+  const auto phi_ownership =
+      normalize_heap_phi_ownership(ownership_incoming, results[0].first.type);
 
   auto phi = builder_->CreatePHI(phi_type, pred_count);
   for (auto &[tv, bb] : results) {
@@ -1792,7 +1803,10 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     if (!found)
       phi->addIncoming(Constant::getNullValue(phi_type), *it);
   }
-  return {phi, results[0].first.type, results[0].first.subtypes};
+  auto result = results[0].first;
+  result.val = phi;
+  result.heap_ownership = phi_ownership;
+  return result;
 }
 
 // ===== Sum Type Support =====

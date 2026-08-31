@@ -230,6 +230,11 @@ enum class PromiseAwaitPath : uint8_t {
   IoUring,  ///< `YonaRuntimeIoAwait` — io_uring user_data cookie (`extern io`)
 };
 
+/// Compile-time ownership carried with heap values. `Borrowed` values are
+/// views into another owner (most notably closure environments); they may be
+/// read freely but must be retained before crossing a consuming ABI boundary.
+enum class HeapOwnership : uint8_t { Owned, Borrowed };
+
 struct SemanticTypeIdentity {
   CType type = CType::INT;
   std::string adt_name;
@@ -264,6 +269,7 @@ struct TypedValue {
   std::vector<std::string> record_fields; // For CType::RECORD: sorted field
                                           // names (index = tuple position)
   PromiseAwaitPath promise_await = PromiseAwaitPath::AsyncPtr;
+  HeapOwnership heap_ownership = HeapOwnership::Owned;
 
   TypedValue() = default;
   TypedValue(llvm::Value *v, CType t) : val(v), type(t) {}
@@ -1068,6 +1074,10 @@ private:
   void wrap_function_args_in_closures(std::vector<TypedValue> &all_args);
 
   std::optional<std::string> named_binding_for_value(llvm::Value *value) const;
+  void adopt_lexical_heap_owner(TypedValue &value);
+  HeapOwnership normalize_heap_phi_ownership(
+      std::vector<std::pair<TypedValue *, llvm::BasicBlock *>> incoming,
+      CType result_type);
 
   TypedValue codegen_adt_construct(const std::string &fn_name,
                                    const std::vector<TypedValue> &all_args);

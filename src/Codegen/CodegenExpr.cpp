@@ -1458,10 +1458,11 @@ void Codegen::codegen_let_aliases(
         current_arena_ = saved_arena;
 
       if (tv) {
+        adopt_lexical_heap_owner(tv);
         named_values_[vname] = tv;
-        anonymous_heap_values_.erase(tv.val);
 
-        if (is_heap_type(tv.type) && tv.val) {
+        if (is_heap_type(tv.type) && tv.val &&
+            tv.heap_ownership == HeapOwnership::Owned) {
           scope_bindings.push_back(tv);
           binding_is_arena.push_back(use_arena);
         }
@@ -1755,7 +1756,8 @@ TypedValue Codegen::codegen_if(IfExpr *node) {
   bool then_terminated = current_block_terminated();
   BasicBlock *then_end = nullptr;
   if (!then_terminated) {
-    if (then_tv.type == CType::SEQ)
+    if (then_tv.type == CType::SEQ &&
+        then_tv.heap_ownership == HeapOwnership::Owned)
       mark_transferred(then_tv.val, TransferDomain::Seq);
     builder_->CreateBr(merge_bb);
     then_end = builder_->GetInsertBlock();
@@ -1773,7 +1775,8 @@ TypedValue Codegen::codegen_if(IfExpr *node) {
   bool else_terminated = current_block_terminated();
   BasicBlock *else_end = nullptr;
   if (!else_terminated) {
-    if (else_tv.type == CType::SEQ)
+    if (else_tv.type == CType::SEQ &&
+        else_tv.heap_ownership == HeapOwnership::Owned)
       mark_transferred(else_tv.val, TransferDomain::Seq);
     builder_->CreateBr(merge_bb);
     else_end = builder_->GetInsertBlock();
@@ -1798,7 +1801,18 @@ TypedValue Codegen::codegen_if(IfExpr *node) {
   else
     phi_type = then_ty ? then_ty : else_ty;
 
-  auto phi = builder_->CreatePHI(phi_type, phi_count);
+  std::vector<std::pair<TypedValue *, BasicBlock *>> ownership_incoming;
+  if (then_end)
+    ownership_incoming.emplace_back(&then_tv, then_end);
+  if (else_end)
+    ownership_incoming.emplace_back(&else_tv, else_end);
+  const auto &live_result = then_end ? then_tv : else_tv;
+  const auto phi_ownership =
+      normalize_heap_phi_ownership(ownership_incoming, live_result.type);
+
+  auto phi = builder_->CreatePHI(
+      phi_type, phi_count,
+      phi_ownership == HeapOwnership::Borrowed ? "if.heap.borrowed" : "");
   if (then_end) {
     // Coerce then value if needed — insert before the branch terminator
     if (then_tv.val->getType() != phi_type) {
@@ -1818,7 +1832,15 @@ TypedValue Codegen::codegen_if(IfExpr *node) {
     }
     phi->addIncoming(else_tv.val, else_end);
   }
-  return {phi, then_tv.type, then_tv.subtypes};
+  TypedValue result{phi, live_result.type, live_result.subtypes};
+  result.semantic_subtypes = live_result.semantic_subtypes;
+  result.adt_type_name = live_result.adt_type_name;
+  result.adt_type_arguments = live_result.adt_type_arguments;
+  result.adt_type_argument_names = live_result.adt_type_argument_names;
+  result.adt_semantic_arguments = live_result.adt_semantic_arguments;
+  result.boxed_heap = live_result.boxed_heap;
+  result.heap_ownership = phi_ownership;
+  return result;
 }
 
 // ===== Identifier =====
@@ -2394,6 +2416,14 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
   if (pred_count == 0)
     return try_val;
 
+  std::vector<std::pair<TypedValue *, BasicBlock *>> ownership_incoming;
+  if (try_end_bb)
+    ownership_incoming.emplace_back(&try_val, try_end_bb);
+  for (auto &[tv, bb] : catch_results)
+    ownership_incoming.emplace_back(&tv, bb);
+  const auto phi_ownership =
+      normalize_heap_phi_ownership(ownership_incoming, result_type);
+
   auto phi = builder_->CreatePHI(result_llvm, pred_count, "try.result");
   if (try_end_bb) {
     Value *incoming = try_val.val;
@@ -2413,7 +2443,9 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
     }
     phi->addIncoming(incoming, bb);
   }
-  return {phi, result_type};
+  TypedValue result{phi, result_type};
+  result.heap_ownership = phi_ownership;
+  return result;
 }
 
 // ===== With Expression (resource management) =====

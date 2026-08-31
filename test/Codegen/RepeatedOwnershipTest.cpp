@@ -30,15 +30,15 @@ std::string read_file(const fs::path &path) {
   return contents.str();
 }
 
-void assert_repeated_heap_ownership(const std::string &source,
-                                    const std::string &artifact_stem,
-                                    const std::string &expected_output,
-                                    const std::string &expected_stats = {},
-                                    bool require_zero_leaks = true) {
+std::string assert_repeated_heap_ownership(
+    const std::string &source, const std::string &artifact_stem,
+    const std::string &expected_output, const std::string &expected_stats = {},
+    bool require_zero_leaks = true, int opt_level = 2) {
   REQUIRE(yona::test::link::ensure_runtime_objects());
 
   parser::Parser parser;
   Codegen codegen(artifact_stem);
+  codegen.set_opt_level(opt_level);
   if (fs::exists(yona::test::lib_dir()))
     codegen.ModulePaths.push_back(
         fs::canonical(yona::test::lib_dir()).string());
@@ -56,6 +56,7 @@ void assert_repeated_heap_ownership(const std::string &source,
   REQUIRE_FALSE(type_checker.has_errors());
   codegen.set_type_checker(&type_checker);
   REQUIRE(codegen.compile(parsed->Expression.get()));
+  const auto ir = codegen.emit_ir();
 
   const auto object_path =
       yona::test::link::scratch_root() / ("yona_" + artifact_stem + ".o");
@@ -95,6 +96,23 @@ void assert_repeated_heap_ownership(const std::string &source,
     position = end;
   }
   REQUIRE(leak_rows > 0);
+  return ir;
+}
+
+std::size_t count_ir_calls_for_value(const std::string &ir,
+                                     const std::string &callee,
+                                     const std::string &value) {
+  std::size_t count = 0;
+  for (std::size_t position = 0;
+       (position = ir.find("call void @" + callee, position)) !=
+       std::string::npos;
+       position += callee.size()) {
+    const auto line_end = ir.find('\n', position);
+    if (ir.substr(position, line_end - position).find(value) !=
+        std::string::npos)
+      ++count;
+  }
+  return count;
 }
 
 } // namespace
@@ -117,6 +135,55 @@ TEST_SUITE("Repeated heap ownership") {
         "in case filter predicate [3, 1, 2] of "
         "[only] -> only; _ -> 0 end",
         "repeated_captured_pivot", "1");
+  }
+
+  TEST_CASE("case patterns adopt anonymous captured closures exactly once") {
+    const auto ir =
+        assert_repeated_heap_ownership("let pivot = [1], apply f = f 1 in "
+                                       "case (\\x -> case pivot of "
+                                       "[value] -> value + x; _ -> 0 end) of "
+                                       "function -> apply function end",
+                                       "pattern_adopted_anonymous_closure", "2",
+                                       "tag=CLOSURE allocs=1 frees=1 leaked=0");
+    CHECK(count_ir_calls_for_value(ir, "YonaRuntimeRelease",
+                                   "%lambda_0_closure") == 1);
+  }
+
+  TEST_CASE("case patterns balance adopted temporary sequence ownership") {
+    assert_repeated_heap_ownership("let consume values = case values of "
+                                   "[value] -> value; _ -> 0 end in "
+                                   "case [4] of values -> consume values end",
+                                   "pattern_adopted_temporary_sequence", "4",
+                                   "tag=SEQ allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("captured heap ownership survives a PHI before a consuming call") {
+    const auto ir = assert_repeated_heap_ownership(
+        "let consume values = case values of "
+        "[value] -> value; _ -> 0 end, "
+        "left = [5], right = [6], "
+        "predicate = \\value -> "
+        "consume (if value > 0 then left else right) in "
+        "predicate 1 + predicate (0 - 1)",
+        "captured_phi_consuming_call", "11",
+        "tag=CLOSURE allocs=1 frees=1 leaked=0", true, 0);
+    CHECK(ir.find("%if.heap.borrowed") != std::string::npos);
+    CHECK(count_ir_calls_for_value(ir, "YonaRuntimeRetain",
+                                   "%if.heap.borrowed") == 1);
+  }
+
+  TEST_CASE("borrowed captured PHIs are not released after sequence join") {
+    const auto ir = assert_repeated_heap_ownership(
+        "let left = [2], right = [4], "
+        "combine = \\choice -> case "
+        "((if choice then left else right) ++ [3]) of "
+        "[a, b] -> a * 10 + b; _ -> 0 end in "
+        "combine true + combine false",
+        "captured_phi_borrowed_join", "66",
+        "tag=CLOSURE allocs=1 frees=1 leaked=0", true, 0);
+    CHECK(ir.find("%if.heap.borrowed") != std::string::npos);
+    CHECK(count_ir_calls_for_value(ir, "YonaRuntimeRelease",
+                                   "%if.heap.borrowed") == 0);
   }
 
   TEST_CASE("shadowed heap bindings keep independent transfer state") {
