@@ -269,8 +269,15 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 - [ ] **The macOS file runtime uses undeclared lowercase async-I/O locals.**
   Repro: compile `src/Runtime/Platform/FileMacOs.c`; the read path references
   `fd`, `buf`, `count`, and `offset` although its parameters are `Fd`, `Buf`,
-  `Count`, and `Offset`, and the write path similarly references lowercase
-  `fd`, `data`, `len`, and `offset`.
+  `Count`, and `Offset`, the write path similarly references lowercase
+  `fd`, `data`, `len`, and `offset`, and the fallback/seek/truncate blocks
+  contain the same incomplete identifier-case migration.
+
+- [ ] **Cancelling an async file write frees a reference-counted ByteArray
+  payload directly.** Repro: submit `writeBytes` and cancel its I/O context
+  before completion; the Linux and macOS cancellation cleanup calls `free`
+  on the retained managed payload instead of `YonaRuntimeRelease`, risking an
+  invalid free and leaving the internal pin's ownership contract unbalanced.
 
 - [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
   boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
