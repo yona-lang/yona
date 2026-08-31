@@ -4,6 +4,22 @@
 
 ### Fixed
 
+- Linux runtime components again build after the source modularization: the
+  io_uring cancellation signature preserves its const contract, and platform
+  I/O and native stdlib consumers use the canonical context fields and local
+  identifier spellings.
+- Platform I/O declarations now retain C linkage for C++ consumers and share
+  one `IoContext.h` ABI contract, so Linux and macOS headers compose without
+  duplicate type definitions and the runtime registry links into C++ tests.
+- Linux descriptor byte-I/O fallbacks allocate asynchronous contexts only
+  after successful io_uring submission, eliminating the two contexts formerly
+  leaked by blocking fallback reads and writes.
+- Installed CMake consumers now place generated Yona executables in a dedicated
+  `bin/` directory, and installed shared-library CLI tools use a relocatable
+  sibling-library RPATH instead of loading an incompatible host library.
+- Fixture-generated programs now link the exact Vulkan loader selected during
+  configuration after the static runtime archive, preserving direct MoltenVK
+  library identities and resolving Vulkan symbols in GPU conformance tests.
 - `nullptr_t` uses now remain in the appropriate standard or AST namespace,
   restoring builds with libstdc++ 16 after the namespace-import cleanup.
 

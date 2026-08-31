@@ -112,7 +112,7 @@ git commit -m "fix: restore portable AST null literal type"
 - Produces: a definition with the identical signature; cancellation reads each
   ID and never mutates the caller-owned array.
 
-- [ ] **Step 1: Reproduce the signature mismatch**
+- [x] **Step 1: Reproduce the signature mismatch**
 
 Run:
 
@@ -124,7 +124,7 @@ cmake --build --preset build-debug-linux \
 Expected: compilation fails because the header declares `const uint64_t *`
 while `IoUringLinux.c` defines `uint64_t *`.
 
-- [ ] **Step 2: Apply the minimal definition repair**
+- [x] **Step 2: Apply the minimal definition repair**
 
 Change only the definition signature:
 
@@ -135,7 +135,7 @@ void YonaRuntimeIoUringCancelGroup(const uint64_t *IoIds, int Count) {
 }
 ```
 
-- [ ] **Step 3: Verify this diagnostic disappears**
+- [x] **Step 3: Verify this diagnostic disappears**
 
 Run:
 
@@ -149,7 +149,7 @@ cmake --build --preset build-debug-linux \
 Expected: no grouped-cancellation signature diagnostic. Other platform-I/O
 compile errors remain red until Task 3.
 
-- [ ] **Step 4: Commit the isolated contract repair**
+- [x] **Step 4: Commit the isolated contract repair**
 
 ```bash
 git add src/Runtime/Platform/IoUringLinux.c
@@ -173,7 +173,7 @@ git commit -m "fix: preserve io_uring cancel group constness"
 - Produces: Linux file/network implementations that use those fields and the
   already-declared UpperCamelCase locals consistently.
 
-- [ ] **Step 1: Capture the component compile regression**
+- [x] **Step 1: Capture the component compile regression**
 
 Run:
 
@@ -185,7 +185,7 @@ cmake --build --preset build-debug-linux \
 Expected: `FileLinux.c` and `NetLinux.c` fail on removed context fields and
 undeclared lowercase variants such as `sqe`, `hints`, `res`, and `addr`.
 
-- [ ] **Step 2: Migrate every context-field consumer**
+- [x] **Step 2: Migrate every context-field consumer**
 
 Apply these exact mappings throughout both files:
 
@@ -204,7 +204,7 @@ Ctx->CloseFileDescriptor
 
 Do not rename the public struct back to its pre-refactor spelling.
 
-- [ ] **Step 3: Make local uses match their declarations**
+- [x] **Step 3: Make local uses match their declarations**
 
 In `FileLinux.c`, use these declaration spellings consistently:
 
@@ -238,7 +238,7 @@ ssize_t N =
 Buf[0] = N > 0 ? N : 0;
 ```
 
-- [ ] **Step 4: Verify the platform component compiles**
+- [x] **Step 4: Verify the platform component compiles**
 
 Run:
 
@@ -250,7 +250,7 @@ cmake --build --preset build-debug-linux \
 Expected: the target exits zero with no undeclared-identifier or missing-field
 diagnostics.
 
-- [ ] **Step 5: Commit the platform-I/O migration**
+- [x] **Step 5: Commit the platform-I/O migration**
 
 ```bash
 git add src/Runtime/Platform/FileLinux.c src/Runtime/Platform/NetLinux.c
@@ -272,7 +272,7 @@ git commit -m "fix: complete Linux platform I/O identifier migration"
   the enclosing `Buf`, `Len`, `Cap`, `Fd`, `Got`, `Want`, `S`, and `Off`
   variables.
 
-- [ ] **Step 1: Capture the native stdlib compile regression**
+- [x] **Step 1: Capture the native stdlib compile regression**
 
 Run:
 
@@ -283,7 +283,7 @@ cmake --build --preset build-debug-linux --target yona_runtime_stdlib
 Expected: the POSIX branches fail on lowercase names including `buf`, `len`,
 `cap`, `fd`, `got`, `want`, `s`, `off`, `n`, and `k`.
 
-- [ ] **Step 2: Align the stdin-read branch**
+- [x] **Step 2: Align the stdin-read branch**
 
 The platform conditional in `YonaStdIoReadStdinImpl` must be:
 
@@ -295,7 +295,7 @@ The platform conditional in `YonaStdIoReadStdinImpl` must be:
 #endif
 ```
 
-- [ ] **Step 3: Align the exact-read branch**
+- [x] **Step 3: Align the exact-read branch**
 
 The platform conditional in `YonaStdIoReadExactBytes` must be:
 
@@ -307,7 +307,7 @@ The platform conditional in `YonaStdIoReadExactBytes` must be:
 #endif
 ```
 
-- [ ] **Step 4: Align the synchronous-write branch**
+- [x] **Step 4: Align the synchronous-write branch**
 
 The platform conditional in `YonaStdIoWriteBytes` must be:
 
@@ -319,7 +319,7 @@ The platform conditional in `YonaStdIoWriteBytes` must be:
 #endif
 ```
 
-- [ ] **Step 5: Verify the stdlib component compiles**
+- [x] **Step 5: Verify the stdlib component compiles**
 
 Run:
 
@@ -329,7 +329,7 @@ cmake --build --preset build-debug-linux --target yona_runtime_stdlib
 
 Expected: the target exits zero with no undeclared-identifier diagnostics.
 
-- [ ] **Step 6: Commit the native stdlib migration**
+- [x] **Step 6: Commit the native stdlib migration**
 
 ```bash
 git add src/Runtime/Stdlib/Native.c
@@ -351,10 +351,10 @@ git commit -m "fix: complete native stdlib identifier migration"
 
 - Consumes: buildable runtime object components and the doctest `tests`
   executable.
-- Produces: a verified Linux debug baseline for the seven frontend/codegen bug
-  plans that follow this plan.
+- Produces: a verified Linux debug baseline for the open frontend and toolchain
+  bug plans that follow this plan.
 
-- [ ] **Step 1: Build the full debug target graph**
+- [x] **Step 1: Build the full debug target graph**
 
 Run:
 
@@ -366,19 +366,23 @@ cmake --build --preset build-debug-linux
 Expected: configuration and compilation exit zero. If a new compiler error is
 exposed, record it in `docs/todo-list.md` before changing its source.
 
-- [ ] **Step 2: Run focused runtime regressions**
+- [x] **Step 2: Run focused runtime regressions**
 
 Run:
 
 ```bash
-./out/build/x64-debug-linux/tests -tc="IoReadExact"
-./out/build/x64-debug-linux/tests -tc="Runtime Net Submit/Await"
-./out/build/x64-debug-linux/tests -tc="RuntimeGuards"
+./out/build/x64-debug-linux/tests -ts="IoReadExact"
+./out/build/x64-debug-linux/tests -ts="Runtime Net Submit/Await"
+./out/build/x64-debug-linux/tests -ts="RuntimeGuards"
 ```
 
 Expected: every selected doctest case passes with zero failures.
 
-- [ ] **Step 3: Run the complete Linux test preset**
+Completion evidence: 23/23 focused cases and 220/220 assertions pass. The
+original `-tc` spellings selected zero cases because these names identify
+doctest suites; `-ts` is the verified filter.
+
+- [x] **Step 3: Run the complete Linux test preset**
 
 Run:
 
@@ -387,10 +391,16 @@ ctest --preset unit-tests-linux
 ```
 
 Expected: CTest completes with zero failed tests, except for failures already
-represented by the seven open frontend/codegen entries. Capture the exact
-focused filters for those failures before the next subproject plan.
+represented by open frontend/toolchain entries. Capture the exact focused
+filters for those failures before the next subproject plan.
 
-- [ ] **Step 4: Update project records**
+Completion evidence: 7/8 CTest tests pass. Only `doctest_tests` remains red:
+34/727 cases and 72/141931 assertions fail, all represented by the open
+frontend/toolchain entries in `docs/todo-list.md`. The build, fallback-leak,
+installed-consumer, network, GPU, packaging, and runner-smoke CTest targets
+pass; this plan does not claim that the complete doctest executable is green.
+
+- [x] **Step 4: Update project records**
 
 Mark these three todo entries complete with their build and focused-test
 evidence:
@@ -409,6 +419,12 @@ Add this `CHANGELOG.md` entry under `Unreleased` / `Fixed`:
   I/O and native stdlib consumers use the canonical context fields and local
   identifier spellings.
 ```
+
+The combined completion record also closes the platform C-linkage and shared
+header contract, installed-consumer target/output separation, installed-tool
+RPATH, exact Vulkan/MoltenVK fixture linkage, and Linux fallback-context leak
+entries with their focused regression evidence. Frontend/toolchain failures
+remain open.
 
 Check off every completed step in this plan.
 
@@ -430,7 +446,13 @@ git diff --check
 
 Expected: both commands exit zero.
 
-- [ ] **Step 6: Commit verification records**
+Current evidence: `git diff --check` exits zero. The exact Clang 22 dry-run
+still reports pre-existing violations in `FileLinux.c`, `Ast.h`, and
+`PatternAnalysis.cpp`; this remains covered by the open checked-in formatting
+baseline item in `docs/todo-list.md`, and no unrelated source-format churn is
+included in this records-only change.
+
+- [x] **Step 6: Commit verification records**
 
 ```bash
 git add docs/todo-list.md CHANGELOG.md \
@@ -453,7 +475,7 @@ git commit -m "docs: record Linux build stabilization"
 - Produces: public headers whose function declarations retain C linkage when
   included by C++ tests or consumers.
 
-- [ ] **Step 1: Reproduce the C/C++ linkage failure**
+- [x] **Step 1: Reproduce the C/C++ linkage failure**
 
 Run:
 
@@ -466,7 +488,7 @@ Expected: linking fails on C++-mangled
 `YonaRuntimeIoContextTake(unsigned long)` while the runtime archive exports C
 symbols.
 
-- [ ] **Step 2: Add the canonical linkage guards**
+- [x] **Step 2: Add the canonical linkage guards**
 
 After the system includes in both platform headers, add:
 
@@ -487,7 +509,7 @@ Immediately before each header's final include-guard `#endif`, add:
 Keep the enum, struct, constant, and every function declaration inside the
 linkage block. Do not add ad hoc `extern "C"` declarations to the test.
 
-- [ ] **Step 3: Verify both public headers compile as C++**
+- [x] **Step 3: Verify both public headers compile as C++**
 
 Run:
 
@@ -500,7 +522,7 @@ EOF
 
 Expected: the syntax-only compile exits zero.
 
-- [ ] **Step 4: Verify the tests executable links**
+- [x] **Step 4: Verify the tests executable links**
 
 Run:
 
@@ -512,7 +534,7 @@ Expected: the `tests` executable links without unresolved platform I/O
 registry symbols. If another new build bug appears first, record it immediately
 before changing its source.
 
-- [ ] **Step 5: Commit the linkage repair**
+- [x] **Step 5: Commit the linkage repair**
 
 ```bash
 git add include/yona/Runtime/Platform/IoUring.h \
@@ -537,7 +559,7 @@ git commit -m "fix: restore C linkage for platform I/O headers"
 - Produces: one canonical C-compatible I/O context contract included by both
   platform-specific APIs.
 
-- [ ] **Step 1: Reproduce the duplicate-type failure**
+- [x] **Step 1: Reproduce the duplicate-type failure**
 
 Run:
 
@@ -551,7 +573,7 @@ EOF
 Expected: C++ rejects duplicate `YonaIoOperationKind` and `YonaIoContext`
 definitions.
 
-- [ ] **Step 2: Create the canonical shared header**
+- [x] **Step 2: Create the canonical shared header**
 
 Create `IoContext.h` with its own include guard, direct `<stddef.h>` and
 `<stdint.h>` includes, canonical C++ linkage guards, the complete existing
@@ -565,7 +587,7 @@ YonaIoContext *YonaRuntimeIoContextTake(uint64_t Id);
 
 Do not rename enum members, struct fields, the constant, or the registry API.
 
-- [ ] **Step 3: Consume the shared contract from each platform header**
+- [x] **Step 3: Consume the shared contract from each platform header**
 
 Add this include to both platform headers:
 
@@ -577,7 +599,7 @@ Remove only the duplicated enum, struct, table-size macro, and registry
 function declarations. Retain all io_uring/kqueue-specific declarations and
 their linkage guards.
 
-- [ ] **Step 4: Verify header composition and runtime linking**
+- [x] **Step 4: Verify header composition and runtime linking**
 
 Run:
 
@@ -592,7 +614,7 @@ cmake --build --preset build-debug-linux --target tests
 Expected: the syntax-only check exits zero and the test executable remains
 linked successfully.
 
-- [ ] **Step 5: Commit the shared contract**
+- [x] **Step 5: Commit the shared contract**
 
 ```bash
 git add include/yona/Runtime/Platform/IoContext.h \
@@ -616,7 +638,7 @@ git commit -m "fix: share the platform I/O context contract"
 - Produces: a stable custom target whose generated executable has a distinct
   filesystem path under the consumer build tree.
 
-- [ ] **Step 1: Reproduce the Ninja target/output collision**
+- [x] **Step 1: Reproduce the Ninja target/output collision**
 
 Run:
 
@@ -627,14 +649,14 @@ ctest --preset unit-tests-linux -R installed_consumer_contract --output-on-failu
 Expected: consumer generation fails because the phony
 `yona_language_consumer` target and its output file share the same Ninja name.
 
-- [ ] **Step 2: Put generated executables in a dedicated directory**
+- [x] **Step 2: Put generated executables in a dedicated directory**
 
 Change the installed helper's default output path to a dedicated `bin/`
 directory below `CMAKE_CURRENT_BINARY_DIR`, retaining the requested target and
 output basenames. Keep `YONA_EXECUTABLE` set to the complete generated path and
 update the contract runner to execute that path.
 
-- [ ] **Step 3: Verify the installed consumer contract**
+- [x] **Step 3: Verify the installed consumer contract**
 
 Run:
 
@@ -645,7 +667,7 @@ ctest --preset unit-tests-linux -R installed_consumer_contract --output-on-failu
 Expected: configure, build, and execution all pass without Ninja duplicate-rule
 warnings.
 
-- [ ] **Step 4: Commit the installed-helper repair**
+- [x] **Step 4: Commit the installed-helper repair**
 
 ```bash
 git add cmake/YonaPackageTools.cmake \
@@ -670,7 +692,7 @@ git commit -m "fix: separate installed Yona targets from outputs"
 - Produces: subprocess link commands that carry the runtime archive's Vulkan
   loader dependency on every supported platform.
 
-- [ ] **Step 1: Reproduce the missing transitive dependency**
+- [x] **Step 1: Reproduce the missing transitive dependency**
 
 Run:
 
@@ -681,7 +703,7 @@ ctest --preset unit-tests-linux -R doctest_stdlib_gpu --output-on-failure
 Expected: the generated GPU fixture returns `LINK_ERROR` with unresolved
 `vk*` symbols from `libyona_runtime.a`.
 
-- [ ] **Step 2: Append the configured loader arguments**
+- [x] **Step 2: Append the configured loader arguments**
 
 Teach the generated configuration to retain the complete resolved Vulkan
 library path, including a direct `libMoltenVK.dylib` selection. Teach the
@@ -690,7 +712,7 @@ append that exact configured library file. On macOS also retain its directory
 as an rpath. Keep these arguments after the runtime archive so static-library
 resolution order remains valid.
 
-- [ ] **Step 3: Verify the GPU conformance fixture**
+- [x] **Step 3: Verify the GPU conformance fixture**
 
 Run:
 
@@ -700,7 +722,7 @@ ctest --preset unit-tests-linux -R doctest_stdlib_gpu --output-on-failure
 
 Expected: the fixture links and the focused CTest test passes.
 
-- [ ] **Step 4: Commit the fixture-link repair**
+- [x] **Step 4: Commit the fixture-link repair**
 
 ```bash
 git add CMakeLists.txt cmake/VulkanLinkConfig.h.in \
@@ -722,7 +744,7 @@ git commit -m "fix: link generated fixtures with Vulkan"
 - Produces: relocatable installed tools that search the package's sibling
   CMake install library directory before host-global libraries.
 
-- [ ] **Step 1: Reproduce the installed-library resolution failure**
+- [x] **Step 1: Reproduce the installed-library resolution failure**
 
 With Task 8's scoped output-directory change present, run:
 
@@ -734,14 +756,14 @@ Expected: consumer configuration succeeds, then installed `yonac` loads a
 host-global `libyona_lib.so` and fails to resolve the current
 `DiagnosticEngine` constructor.
 
-- [ ] **Step 2: Give shared-library CLI installs a relocatable rpath**
+- [x] **Step 2: Give shared-library CLI installs a relocatable rpath**
 
 When `YONA_LINK_STATIC_CLI` is off, set `INSTALL_RPATH` on all three installed
 compiler tools. Use `@loader_path/../${CMAKE_INSTALL_LIBDIR}` on macOS and
 `$ORIGIN/../${CMAKE_INSTALL_LIBDIR}` on other Unix hosts. Do not add an rpath
 to Windows binaries or to static-CLI packaging builds.
 
-- [ ] **Step 3: Verify packaged resolution and the consumer contract**
+- [x] **Step 3: Verify packaged resolution and the consumer contract**
 
 Run:
 
@@ -754,7 +776,7 @@ ldd out/build/x64-debug-linux/test-install/bin/yonac | \
 Expected: the contract passes and the installed compiler resolves
 `libyona_lib` from the same install prefix.
 
-- [ ] **Step 4: Commit the installed-tool linkage repair**
+- [x] **Step 4: Commit the installed-tool linkage repair**
 
 ```bash
 git add CMakeLists.txt
@@ -777,7 +799,7 @@ git commit -m "fix: resolve installed compiler libraries relocatably"
 - Produces: blocking fallbacks that create only the direct-result context and
   retain/release byte arrays exactly once.
 
-- [ ] **Step 1: Reproduce both leaked contexts deterministically**
+- [x] **Step 1: Reproduce both leaked contexts deterministically**
 
 Build a Linux-only probe that installs a seccomp filter returning `EPERM` for
 `io_uring_setup`, performs one descriptor byte read and write, awaits both
@@ -792,7 +814,7 @@ valgrind --leak-check=full --show-leak-kinds=definite \
 Expected before the fix: Valgrind reports two 32-byte definitely-lost blocks
 allocated by the read and write submission functions.
 
-- [ ] **Step 2: Allocate asynchronous contexts only after successful submit**
+- [x] **Step 2: Allocate asynchronous contexts only after successful submit**
 
 In both handle-based byte functions, keep buffers pinned before submission as
 required, but defer allocation and initialization of `YonaIoContext` until
@@ -800,7 +822,7 @@ after a nonzero operation ID is returned. The zero-ID paths must perform their
 blocking operation, balance the write retain, and register only the direct
 result context.
 
-- [ ] **Step 3: Register and verify the optional leak regression**
+- [x] **Step 3: Register and verify the optional leak regression**
 
 On Linux, build the probe against `yona_runtime`. When `valgrind` is found,
 register `runtime_io_fallback_leak` with the exact definite-leak options above.
@@ -816,7 +838,7 @@ ctest --test-dir out/build/x64-debug-linux \
 Expected: the probe builds and Valgrind exits zero with no definitely-lost
 context blocks.
 
-- [ ] **Step 4: Verify the normal runtime suites**
+- [x] **Step 4: Verify the normal runtime suites**
 
 Run:
 
@@ -828,7 +850,7 @@ cmake --build --preset build-debug-linux --target tests
 
 Expected: every focused case and assertion passes.
 
-- [ ] **Step 5: Commit the fallback repair**
+- [x] **Step 5: Commit the fallback repair**
 
 ```bash
 git add src/Runtime/Platform/FileLinux.c CMakeLists.txt \
