@@ -7,6 +7,7 @@
 #include "yona/Syntax/AstVisitor.h"
 
 #include <any>
+#include <cstddef>
 #include <concepts>
 #include <functional>
 #include <map>
