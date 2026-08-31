@@ -434,6 +434,36 @@ TEST_SUITE("Pattern ownership") {
         "caught_heap_exception_payload_escape", "4",
         "tag=ADT allocs=1 frees=1 leaked=0");
 
+    assert_zero_alloc_leaks(
+        "let escaped = try raise InvalidSyntax (\"bo\" + \"om\") "
+        "catch InvalidSyntax message -> (message, 7); "
+        "_ -> (\"wrong\", 0) end in "
+        "case escaped of (_, _) -> 47 end",
+        "caught_heap_exception_tuple_escape", "47",
+        "tag=other allocs=1 frees=1 leaked=0", {}, {}, 1);
+
+    assert_zero_alloc_leaks(
+        "let escaped = try raise InvalidSyntax (\"bo\" + \"om\") "
+        "catch InvalidSyntax message -> ((message, 2), 3); "
+        "_ -> ((\"wrong\", 0), 0) end in "
+        "case escaped of ((_, _), _) -> 423 end",
+        "caught_heap_exception_nested_tuple_escape", "423",
+        "tag=other allocs=2 frees=2 leaked=0", {}, {}, 1);
+
+    assert_zero_alloc_leaks(
+        "let escaped = try raise InvalidSyntax (\"bo\" + \"om\") "
+        "catch InvalidSyntax message -> Some message; _ -> None end in "
+        "case escaped of Some _ -> 4; None -> 0 end",
+        "caught_heap_exception_adt_escape", "4",
+        "tag=ADT allocs=2 frees=2 leaked=0");
+
+    assert_zero_alloc_leaks(
+        "let escaped = try raise InvalidSyntax (\"bo\" + \"om\") "
+        "catch InvalidSyntax message -> [message]; _ -> [] end in "
+        "case escaped of [_] -> 4; _ -> 0 end",
+        "caught_heap_exception_sequence_escape", "4",
+        "tag=SEQ allocs=1 frees=1 leaked=0");
+
     const auto reraise_ir = assert_zero_alloc_leaks(
         "try (try raise InvalidSyntax \"boom\" "
         "catch ParsedValueOutOfRange _ -> 0 end) "

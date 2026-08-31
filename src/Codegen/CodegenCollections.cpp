@@ -124,6 +124,7 @@ TypedValue Codegen::codegen_tuple(TupleExpr *node) {
   set_debug_loc(node->Range);
   auto i64_ty = LType::getInt64Ty(*context_);
   std::vector<Value *> elems;
+  std::vector<TypedValue> element_values;
   std::vector<CType> subtypes;
   std::vector<SemanticTypeIdentity> semantic_subtypes;
 
@@ -168,6 +169,7 @@ TypedValue Codegen::codegen_tuple(TupleExpr *node) {
       i64_val = builder_->CreatePtrToInt(adt_ptr, i64_ty, "tuple_adt_box");
     }
     elems.push_back(i64_val);
+    element_values.push_back(tv);
     subtypes.push_back(tv.type);
     SemanticTypeIdentity identity;
     identity.type = tv.type;
@@ -186,6 +188,19 @@ TypedValue Codegen::codegen_tuple(TupleExpr *node) {
       rt_.tuple_alloc_, {ConstantInt::get(i64_ty, elems.size())}, "tuple");
   int64_t tuple_heap_mask = 0;
   for (size_t i = 0; i < elems.size(); i++) {
+    // A heap tuple owns every heap-marked child it stores. Preserve a
+    // pattern/catch binding whose active arm still schedules its own drop;
+    // anonymous temporaries and global/imported bindings transfer their sole
+    // owner directly.
+    const bool has_active_drop =
+        std::ranges::any_of(arm_drop_stack_, [&](const auto &drops) {
+          return std::ranges::any_of(drops, [&](const auto &drop) {
+            return drop.first == element_values[i].val;
+          });
+        });
+    if (has_active_drop && is_heap_type(subtypes[i]) && element_values[i].val &&
+        !element_values[i].val->getType()->isStructTy())
+      emit_rc_inc(element_values[i].val, element_values[i].type);
     builder_->CreateCall(rt_.tuple_set_,
                          {tuple_ptr, ConstantInt::get(i64_ty, i), elems[i]});
     if (is_heap_type(subtypes[i]) && i < 64)
