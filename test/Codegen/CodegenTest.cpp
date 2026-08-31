@@ -297,7 +297,7 @@ TEST_CASE("ABI refinement leaves one canonical function") {
   const auto ir = compile_to_ir("let f x = x == 0 in f 1", 0);
   CHECK(ir != "CODEGEN_ERROR");
   CHECK(ir.find("@f.") == string::npos);
-  CHECK(ir.find("call fastcc i1 @f(i64 %x)") != string::npos);
+  CHECK(ir.find("call fastcc i1 @f(i64 1)") != string::npos);
 }
 
 TEST_CASE("CodegenSession owns the complete LLVM lifecycle") {

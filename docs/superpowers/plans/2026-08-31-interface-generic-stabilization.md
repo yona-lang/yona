@@ -288,18 +288,18 @@ Commit as `test: cover generic whole-module imports`.
 
 - Modify: `test/Codegen/CodegenTest.cpp`
 
-- [ ] **Step 1: Confirm production IR is canonical**
+- [x] **Step 1: Confirm production IR is canonical**
 
 Run `ABI refinement leaves one canonical function`; inspect IR and confirm it
 contains one `define internal fastcc i1 @f(i64 %x)` and a direct
 `call fastcc i1 @f(i64 1)`, with no legacy trampoline.
 
-- [ ] **Step 2: Update only the stale assertion**
+- [x] **Step 2: Update only the stale assertion**
 
 Replace the removed `%x` call-operand expectation with assertions for the
 actual direct constant call and absence of duplicate/trampoline symbols.
 
-- [ ] **Step 3: Run the focused ABI/refinement suite and commit**
+- [x] **Step 3: Run the focused ABI/refinement suite and commit**
 
 Commit as `test: align refinement ABI regression`.
 
