@@ -488,8 +488,7 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
         // Heap-typed elements were stored as i64-cast pointers; restore
         // the pointer so downstream pattern matching can use heap layout.
         Value *typed_elem = elem;
-        if (et == CType::ADT || et == CType::STRING || et == CType::FUNCTION ||
-            et == CType::SET || et == CType::DICT || et == CType::CHANNEL)
+        if (is_heap_type(et))
           typed_elem = builder_->CreateIntToPtr(
               elem, PointerType::get(*context_, 0), "tuple_pat_elem_ptr");
         TypedValue bound{typed_elem, et};
@@ -504,7 +503,12 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
             bound.adt_type_argument_names.push_back(argument.adt_name);
           }
         }
-        named_values_[(*id)->name->value] = std::move(bound);
+        named_values_[(*id)->name->value] = bound;
+        if (is_heap_type(bound.type) && bound.val->getType()->isPointerTy()) {
+          emit_rc_inc(bound.val, bound.type);
+          if (!arm_drop_stack_.empty())
+            arm_drop_stack_.back().push_back({bound.val, bound.type});
+        }
       } else if (auto *lit =
                      std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
         auto *an = reinterpret_cast<AstNode *>(*lit);
@@ -620,6 +624,11 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
         bound.subtypes.push_back(element.type);
     }
     named_values_[(*identifier)->name->value] = bound;
+    if (is_heap_type(bound.type) && bound.val->getType()->isPointerTy()) {
+      emit_rc_inc(bound.val, bound.type);
+      if (!arm_drop_stack_.empty())
+        arm_drop_stack_.back().push_back({bound.val, bound.type});
+    }
   };
 
   auto bind_field_pattern = [&](size_t field_index, Value *field_value) {
@@ -760,10 +769,7 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
           if (ctor_it->second.type_name == "Iterator" && fi == 0)
             ftype = CType::FUNCTION;
           Value *typed_val = field_val;
-          if (ftype == CType::ADT || ftype == CType::SEQ ||
-              ftype == CType::STRING || ftype == CType::FUNCTION ||
-              ftype == CType::SET || ftype == CType::DICT ||
-              ftype == CType::CHANNEL || ftype == CType::TUPLE)
+          if (is_heap_type(ftype))
             typed_val = builder_->CreateIntToPtr(
                 field_val, PointerType::get(*context_, 0));
           else if (ftype == CType::FLOAT)
@@ -797,8 +803,11 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
           bool runtime_heap =
               declared_heap || (fi < scrutinee.subtypes.size() &&
                                 is_heap_type(scrutinee.subtypes[fi]));
-          if (runtime_heap && typed_val->getType()->isPointerTy())
+          if (runtime_heap && typed_val->getType()->isPointerTy()) {
             emit_rc_inc(typed_val, ftype);
+            if (!arm_drop_stack_.empty())
+              arm_drop_stack_.back().push_back({typed_val, ftype});
+          }
           TypedValue bound{typed_val, ftype};
           if (const auto *identity = concrete_field_identity(fi))
             bound.semantic_subtypes = identity->arguments;
@@ -866,9 +875,7 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
           if (ctor_it->second.type_name == "Iterator" && fi == 0)
             ftype = CType::FUNCTION;
           Value *typed_val = field_val;
-          if (ftype == CType::FUNCTION || ftype == CType::SEQ ||
-              ftype == CType::STRING || ftype == CType::ADT ||
-              ftype == CType::CHANNEL || ftype == CType::TUPLE)
+          if (is_heap_type(ftype))
             typed_val = builder_->CreateIntToPtr(
                 field_val, PointerType::get(*context_, 0));
           // Perceus DUP at field extraction — only fire when the
@@ -876,8 +883,11 @@ bool Codegen::codegen_pattern_constructor(ConstructorPattern *cp,
           // matching note in the heap-layout branch above).
           bool runtime_heap = fi < scrutinee.subtypes.size() &&
                               is_heap_type(scrutinee.subtypes[fi]);
-          if (runtime_heap && typed_val->getType()->isPointerTy())
+          if (runtime_heap && typed_val->getType()->isPointerTy()) {
             emit_rc_inc(typed_val, ftype);
+            if (!arm_drop_stack_.empty())
+              arm_drop_stack_.back().push_back({typed_val, ftype});
+          }
           TypedValue bound{typed_val, ftype};
           if (const auto *identity = concrete_field_identity(fi))
             bound.semantic_subtypes = identity->arguments;
@@ -1188,8 +1198,8 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
           message += ", ";
         message += coverage->missing[i];
       }
-      Session->diagnostics().warning(
-          node->Range, message, compiler::WarningFlag::IncompletePatterns);
+      Session->diagnostics().warning(node->Range, message,
+                                     compiler::WarningFlag::IncompletePatterns);
     }
   }
 
@@ -1205,6 +1215,29 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     scrutinee.val = builder_->CreateIntToPtr(
         scrutinee.val, PointerType::get(*context_, 0), "case.seq.ptr");
   }
+
+  // A non-identifier expression hands its heap result to the case. Named
+  // scrutinees remain owned by their enclosing scope. The selected arm drops
+  // this case-owned reference after its pattern bindings have been retained;
+  // sequence/map consumers and direct result escape suppress that drop.
+  const bool case_owns_scrutinee =
+      node->expr->get_type() != ast::AST_IDENTIFIER_EXPR &&
+      is_heap_value(scrutinee);
+
+  auto value_was_transferred = [&](Value *value, CType type) {
+    if (type == CType::SEQ)
+      return is_transferred(value, TransferDomain::Seq);
+    if (type == CType::SET || type == CType::DICT)
+      return is_transferred(value, TransferDomain::Map);
+    return false;
+  };
+  auto emit_arm_drops = [&](const auto &drops, Value *escaping) {
+    for (auto &[value, type] : drops) {
+      if (value == escaping || value_was_transferred(value, type))
+        continue;
+      emit_rc_dec(value, type);
+    }
+  };
 
   // A finite constructor match that covers every variant has no legitimate
   // fall-through edge after its final arm. Sending that impossible edge to
@@ -1504,7 +1537,13 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
             cond, ConstantInt::get(LType::getInt64Ty(*context_), 0));
       auto guarded_bb = BasicBlock::Create(
           *context_, "case.guarded." + std::to_string(i), fn);
-      builder_->CreateCondBr(cond, guarded_bb, next_bb);
+      auto guard_failed_bb = BasicBlock::Create(
+          *context_, "case.guard.failed." + std::to_string(i), fn);
+      builder_->CreateCondBr(cond, guarded_bb, guard_failed_bb);
+      builder_->SetInsertPoint(guard_failed_bb);
+      if (!arm_drop_stack_.empty())
+        emit_arm_drops(arm_drop_stack_.back(), nullptr);
+      builder_->CreateBr(next_bb);
       builder_->SetInsertPoint(guarded_bb);
     }
 
@@ -1518,14 +1557,13 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
     // values whose seq ownership was transferred to a consumer during
     // the body (user-defined call or nested pattern-match consume).
     if (!arm_drop_stack_.empty()) {
-      for (auto &[val, ct] : arm_drop_stack_.back()) {
-        if (val == body_tv.val)
-          continue;
-        if (ct == CType::SEQ && is_transferred(val, TransferDomain::Seq))
-          continue;
-        emit_rc_dec(val, ct);
-      }
+      emit_arm_drops(arm_drop_stack_.back(), body_tv.val);
       arm_drop_stack_.pop_back();
+    }
+    if (case_owns_scrutinee && scrutinee.val != body_tv.val &&
+        !value_was_transferred(scrutinee.val, scrutinee.type)) {
+      emit_frame_transfer(scrutinee.val);
+      emit_rc_dec(scrutinee.val, scrutinee.type);
     }
     named_values_ = std::move(arm_named_values);
     BasicBlock *arm_exit =

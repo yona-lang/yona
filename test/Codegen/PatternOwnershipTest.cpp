@@ -1,0 +1,140 @@
+#include "Support/RepoPaths.h"
+#include "Support/SemanticSetup.h"
+#include "Toolchain/YonaLinkUtil.h"
+#include "yona/Codegen/Codegen.h"
+#include "yona/Semantics/TypeChecker.h"
+#include "yona/Support/Diagnostic.h"
+#include "yona/Syntax/Parser.h"
+
+#include <doctest/doctest.h>
+
+#include <cctype>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace fs = std::filesystem;
+using yona::compiler::DiagnosticEngine;
+using yona::compiler::codegen::Codegen;
+namespace parser = yona::parser;
+namespace typechecker = yona::compiler::typechecker;
+
+namespace {
+
+std::string read_file(const fs::path &path) {
+  std::ifstream stream(path);
+  std::ostringstream contents;
+  contents << stream.rdbuf();
+  return contents.str();
+}
+
+void assert_zero_alloc_leaks(const std::string &source,
+                             const std::string &artifact_stem) {
+  REQUIRE(yona::test::link::ensure_runtime_objects());
+
+  parser::Parser parser;
+  Codegen codegen(artifact_stem);
+  if (fs::exists(yona::test::lib_dir()))
+    codegen.ModulePaths.push_back(
+        fs::canonical(yona::test::lib_dir()).string());
+  DiagnosticEngine diagnostics;
+  typechecker::TypeChecker type_checker(diagnostics);
+  YONA_TEST_INSTALL_PRELUDE(codegen, parser, type_checker);
+  for (const auto &path : codegen.ModulePaths)
+    type_checker.add_module_path(path);
+
+  const auto parsed = parser.parseExpression(source, "<stream>");
+  REQUIRE(parsed);
+  REQUIRE(parsed->Expression);
+  type_checker.check(parsed->Expression.get());
+  REQUIRE(type_checker.solve_constraints());
+  REQUIRE_FALSE(type_checker.has_errors());
+  codegen.set_type_checker(&type_checker);
+  REQUIRE(codegen.compile(parsed->Expression.get()));
+
+  const auto object_path =
+      yona::test::link::scratch_root() / ("yona_" + artifact_stem + ".o");
+  REQUIRE(codegen.emit_object_file(object_path.string()));
+  std::vector<fs::path> objects = {object_path};
+  REQUIRE(yona::test::link::append_prelude_object(objects));
+  REQUIRE(yona::test::link::append_runtime_objects(objects));
+  const auto executable = yona::test::link::scratch_root() /
+                          (artifact_stem + yona::test::link::exe_suffix());
+  REQUIRE(yona::test::link::link_objs_to_exe(objects, executable));
+
+  const auto combined =
+      yona::test::link::executeWithAllocationStats(executable);
+  REQUIRE(combined != "RUN_ERROR");
+  INFO("Full output:\n" << combined);
+  REQUIRE(combined.find("alloc-stats") != std::string::npos);
+
+  std::size_t leak_rows = 0;
+  for (std::size_t position = 0;
+       (position = combined.find("leaked=", position)) != std::string::npos;) {
+    position += 7;
+    std::size_t end = position;
+    while (end < combined.size() &&
+           std::isdigit(static_cast<unsigned char>(combined[end])))
+      ++end;
+    ++leak_rows;
+    const auto leaked = combined.substr(position, end - position);
+    CHECK_MESSAGE(leaked == "0",
+                  "Found leaked=" << leaked << " in alloc stats");
+    position = end;
+  }
+  REQUIRE(leak_rows > 0);
+}
+
+} // namespace
+
+TEST_SUITE("Pattern ownership") {
+
+  TEST_CASE(
+      "owned tuple aliases transfer heap children and release aggregate") {
+    assert_zero_alloc_leaks("let (x, y) = ([1], [2]) in 0",
+                            "owned_tuple_alias_drop");
+  }
+
+  TEST_CASE("temporary scalar constructor cases release their scrutinee") {
+    assert_zero_alloc_leaks("case Some 1 of Some x -> 0; None -> 0 end",
+                            "temporary_scalar_constructor_case");
+  }
+
+  TEST_CASE("constructor bindings are released when a guard rejects an arm") {
+    assert_zero_alloc_leaks(
+        "case Some [1] of Some xs | false -> 1; Some xs -> 0; None -> 2 end",
+        "constructor_binding_guard_failure");
+  }
+
+  TEST_CASE("constructor bindings may escape as the selected arm result") {
+    assert_zero_alloc_leaks("case Some [1] of Some xs -> xs; None -> [] end",
+                            "constructor_binding_escape");
+  }
+
+  TEST_CASE("temporary heap-field constructor cases isolate field ownership") {
+    assert_zero_alloc_leaks("case Some [1] of Some xs -> 0; None -> 0 end",
+                            "temporary_heap_constructor_case");
+  }
+
+  TEST_CASE("generated channel programs release their endpoint graph") {
+    const auto fixture =
+        yona::test::codegen_fixtures_dir() / "channel_basic.yona";
+    REQUIRE(fs::exists(fixture));
+    assert_zero_alloc_leaks(read_file(fixture), "channel_basic_allocations");
+  }
+
+  TEST_CASE("raw channel natives consume references on all return paths") {
+    const auto fixtures = yona::test::codegen_fixtures_dir();
+    for (const auto *name :
+         {"channel_capacity", "channel_try_recv_empty", "channel_deadlock_recv",
+          "channel_deadlock_send"}) {
+      CAPTURE(name);
+      const auto fixture = fixtures / (std::string(name) + ".yona");
+      REQUIRE(fs::exists(fixture));
+      assert_zero_alloc_leaks(read_file(fixture),
+                              std::string(name) + "_allocations");
+    }
+  }
+}

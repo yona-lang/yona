@@ -29,21 +29,21 @@ coercions or representation guesses are added.
 - Modify: `src/Runtime/Concurrency/ChannelWin32.c`
 - Modify: focused allocation tests under `test/Codegen/`
 
-- [ ] **Step 1: Add isolated RED allocation coverage**
+- [x] **Step 1: Add isolated RED allocation coverage**
 
 Compile and run `let (x, y) = ([1], [2]) in 0`, a scalar temporary
 constructor case, a heap-field temporary constructor case, and the existing
 `channel_basic` fixture under `YONA_ALLOC_STATS=1`. Assert per-tag zero leaks,
 not merely the expected printed value.
 
-- [ ] **Step 2: Transfer owned tuple fields explicitly**
+- [x] **Step 2: Transfer owned tuple fields explicitly**
 
 When a pattern alias destructures an owned heap tuple, retain each extracted
 heap binding, register it with the let scope, then release the tuple aggregate.
 Use `is_heap_type` and the semantic field identity rather than an incomplete
 hard-coded CType list. Primitive fields remain direct carriers.
 
-- [ ] **Step 3: Give constructor bindings an arm lifetime**
+- [x] **Step 3: Give constructor bindings an arm lifetime**
 
 Every heap field retained by constructor matching must enter
 `arm_drop_stack_`. Drop it on the selected arm after body evaluation unless it
@@ -52,14 +52,14 @@ bindings before testing the next arm. A non-identifier heap case scrutinee is
 case-owned and is released on the selected path; named scrutinees remain owned
 by their enclosing scope.
 
-- [ ] **Step 4: Make raw channel natives honor callee-owns**
+- [x] **Step 4: Make raw channel natives honor callee-owns**
 
 Keep the source-level raw extern contracts consuming. Balance the call-owned
 channel reference in every POSIX and Win32 raw helper, including error/raise
 paths; `rawSend` transfers the payload into the channel as before. Do not add
 checked-in borrow metadata that regeneration would silently discard.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run tuple/case/ADT ownership tests, direct runtime channel tests, every
 non-GPU channel fixture, and allocation-stat probes. Commit as

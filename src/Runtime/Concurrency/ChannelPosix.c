@@ -109,12 +109,14 @@ YonaChannelRef YonaRuntimeChannelCreate(int64_t Cap,
   return Ch;
 }
 
-void YonaRuntimeChannelSend(YonaChannelRef Ch, int64_t Value) {
+static void channelSend(YonaChannelRef Ch, int64_t Value, int ConsumeChannel) {
   pthread_mutex_lock(&Ch->Mutex);
   while (Ch->Count == Ch->Cap && !Ch->Closed) {
     if (Ch->Group && YonaRuntimeTaskGroupIsCancelled(Ch->Group)) {
       pthread_mutex_unlock(&Ch->Mutex);
       YonaRuntimeTypeDescriptorRelease(&Ch->PayloadType, Value);
+      if (ConsumeChannel)
+        YonaRuntimeRelease(Ch);
       YonaRuntimeRaise(YONA_SYMBOL_CANCELLED,
                        "task cancelled while waiting on channel send");
       return;
@@ -124,6 +126,8 @@ void YonaRuntimeChannelSend(YonaChannelRef Ch, int64_t Value) {
       YonaRuntimeChannelWaitEnd();
       pthread_mutex_unlock(&Ch->Mutex);
       YonaRuntimeTypeDescriptorRelease(&Ch->PayloadType, Value);
+      if (ConsumeChannel)
+        YonaRuntimeRelease(Ch);
       YonaRuntimeRaise(YONA_SYMBOL_DEADLOCK,
                        "channel deadlock: send waiting on full "
                        "channel; no runnable tasks remain");
@@ -146,6 +150,8 @@ void YonaRuntimeChannelSend(YonaChannelRef Ch, int64_t Value) {
   if (Ch->Closed) {
     pthread_mutex_unlock(&Ch->Mutex);
     YonaRuntimeTypeDescriptorRelease(&Ch->PayloadType, Value);
+    if (ConsumeChannel)
+      YonaRuntimeRelease(Ch);
     YonaRuntimeRaise(YONA_SYMBOL_CHANNEL_CLOSED, "send on Closed channel");
     return;
   }
@@ -154,13 +160,21 @@ void YonaRuntimeChannelSend(YonaChannelRef Ch, int64_t Value) {
   Ch->Count++;
   pthread_cond_signal(&Ch->NotEmpty);
   pthread_mutex_unlock(&Ch->Mutex);
+  if (ConsumeChannel)
+    YonaRuntimeRelease(Ch);
 }
 
-int64_t YonaRuntimeChannelReceive(YonaChannelRef Ch) {
+void YonaRuntimeChannelSend(YonaChannelRef Ch, int64_t Value) {
+  channelSend(Ch, Value, 0);
+}
+
+static int64_t channelReceive(YonaChannelRef Ch, int ConsumeChannel) {
   pthread_mutex_lock(&Ch->Mutex);
   while (Ch->Count == 0 && !Ch->Closed) {
     if (Ch->Group && YonaRuntimeTaskGroupIsCancelled(Ch->Group)) {
       pthread_mutex_unlock(&Ch->Mutex);
+      if (ConsumeChannel)
+        YonaRuntimeRelease(Ch);
       YonaRuntimeRaise(YONA_SYMBOL_CANCELLED,
                        "task cancelled while waiting on channel recv");
       return 0;
@@ -169,6 +183,8 @@ int64_t YonaRuntimeChannelReceive(YonaChannelRef Ch) {
                                     Ch->SendWaiters)) {
       YonaRuntimeChannelWaitEnd();
       pthread_mutex_unlock(&Ch->Mutex);
+      if (ConsumeChannel)
+        YonaRuntimeRelease(Ch);
       YonaRuntimeRaise(YONA_SYMBOL_DEADLOCK,
                        "channel deadlock: recv waiting on empty "
                        "open channel; no runnable tasks remain");
@@ -191,18 +207,28 @@ int64_t YonaRuntimeChannelReceive(YonaChannelRef Ch) {
   if (Ch->Count == 0 && Ch->Closed) {
     /* Channel Closed and drained */
     pthread_mutex_unlock(&Ch->Mutex);
-    return (int64_t)(intptr_t)chanMakeNone();
+    int64_t Result = (int64_t)(intptr_t)chanMakeNone();
+    if (ConsumeChannel)
+      YonaRuntimeRelease(Ch);
+    return Result;
   }
   int64_t Value = Ch->Buf[Ch->Head];
+  YonaTypeDescriptor PayloadType = Ch->PayloadType;
   Ch->Buf[Ch->Head] = 0;
   Ch->Head = (Ch->Head + 1) % Ch->Cap;
   Ch->Count--;
   pthread_cond_signal(&Ch->NotFull);
   pthread_mutex_unlock(&Ch->Mutex);
-  int64_t *Result = chanMakeSome(Value, Ch->PayloadType.PayloadIsHeap);
+  int64_t *Result = chanMakeSome(Value, PayloadType.PayloadIsHeap);
   if (Result == NULL)
-    YonaRuntimeTypeDescriptorRelease(&Ch->PayloadType, Value);
+    YonaRuntimeTypeDescriptorRelease(&PayloadType, Value);
+  if (ConsumeChannel)
+    YonaRuntimeRelease(Ch);
   return (int64_t)(intptr_t)Result;
+}
+
+int64_t YonaRuntimeChannelReceive(YonaChannelRef Ch) {
+  return channelReceive(Ch, 0);
 }
 
 int64_t YonaRuntimeChannelTryReceive(YonaChannelRef Ch) {
@@ -330,7 +356,8 @@ int64_t YonaStdChannelSend(int64_t ChI64, int64_t Value) {
 }
 
 int64_t YonaStdChannelRawSend(int64_t ChI64, int64_t Value) {
-  return YonaStdChannelSend(ChI64, Value);
+  channelSend((YonaChannel *)(intptr_t)ChI64, Value, 1);
+  return 0;
 }
 
 int64_t YonaStdChannelRecv(int64_t ChI64) {
@@ -338,7 +365,7 @@ int64_t YonaStdChannelRecv(int64_t ChI64) {
 }
 
 int64_t YonaStdChannelRawRecv(int64_t ChI64) {
-  return YonaStdChannelRecv(ChI64);
+  return channelReceive((YonaChannel *)(intptr_t)ChI64, 1);
 }
 
 int64_t YonaStdChannelTryRecv(int64_t ChI64) {
@@ -346,7 +373,10 @@ int64_t YonaStdChannelTryRecv(int64_t ChI64) {
 }
 
 int64_t YonaStdChannelRawTryRecv(int64_t ChI64) {
-  return YonaStdChannelTryRecv(ChI64);
+  YonaChannel *Ch = (YonaChannel *)(intptr_t)ChI64;
+  int64_t Result = YonaRuntimeChannelTryReceive(Ch);
+  YonaRuntimeRelease(Ch);
+  return Result;
 }
 
 int64_t YonaStdChannelClose(int64_t ChI64) {
@@ -355,7 +385,10 @@ int64_t YonaStdChannelClose(int64_t ChI64) {
 }
 
 int64_t YonaStdChannelRawClose(int64_t ChI64) {
-  return YonaStdChannelClose(ChI64);
+  YonaChannel *Ch = (YonaChannel *)(intptr_t)ChI64;
+  YonaRuntimeChannelClose(Ch);
+  YonaRuntimeRelease(Ch);
+  return 0;
 }
 
 int64_t YonaStdChannelIsClosed(int64_t ChI64) {
@@ -363,7 +396,10 @@ int64_t YonaStdChannelIsClosed(int64_t ChI64) {
 }
 
 int64_t YonaStdChannelRawIsClosed(int64_t ChI64) {
-  return YonaStdChannelIsClosed(ChI64);
+  YonaChannel *Ch = (YonaChannel *)(intptr_t)ChI64;
+  int64_t Result = YonaRuntimeChannelIsClosed(Ch);
+  YonaRuntimeRelease(Ch);
+  return Result;
 }
 
 int64_t YonaStdChannelLength(int64_t ChI64) {
@@ -371,7 +407,10 @@ int64_t YonaStdChannelLength(int64_t ChI64) {
 }
 
 int64_t YonaStdChannelRawLength(int64_t ChI64) {
-  return YonaStdChannelLength(ChI64);
+  YonaChannel *Ch = (YonaChannel *)(intptr_t)ChI64;
+  int64_t Result = YonaRuntimeChannelLength(Ch);
+  YonaRuntimeRelease(Ch);
+  return Result;
 }
 
 int64_t YonaStdChannelCapacity(int64_t ChI64) {
@@ -379,7 +418,10 @@ int64_t YonaStdChannelCapacity(int64_t ChI64) {
 }
 
 int64_t YonaStdChannelRawCapacity(int64_t ChI64) {
-  return YonaStdChannelCapacity(ChI64);
+  YonaChannel *Ch = (YonaChannel *)(intptr_t)ChI64;
+  int64_t Result = YonaRuntimeChannelCapacity(Ch);
+  YonaRuntimeRelease(Ch);
+  return Result;
 }
 
 /* ===== Std\Task — task spawning ===== */

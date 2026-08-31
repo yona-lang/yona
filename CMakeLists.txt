@@ -705,6 +705,7 @@ add_executable(tests
 	"${PROJECT_SOURCE_DIR}/test/Codegen/AcceleratorLoweringTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/AdtTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/CodegenTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Codegen/PatternOwnershipTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/TypedIrLoweringTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Support/DoctestMain.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Syntax/AstTest.cpp"

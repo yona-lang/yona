@@ -24,9 +24,9 @@ namespace yona::compiler::codegen {
 
 // Constants — match runtime defines
 static constexpr int64_t ARENA_DEFAULT_SIZE = 4096;
-using llvm::BasicBlock;
 using llvm::Argument;
 using llvm::ArrayType;
+using llvm::BasicBlock;
 using llvm::Constant;
 using llvm::ConstantArray;
 using llvm::ConstantExpr;
@@ -39,8 +39,8 @@ using llvm::Function;
 using llvm::FunctionType;
 using llvm::GlobalValue;
 using llvm::GlobalVariable;
-using llvm::IRBuilder;
 using llvm::InlineAsm;
+using llvm::IRBuilder;
 using llvm::LLVMContext;
 using llvm::PointerType;
 using llvm::StructType;
@@ -1487,8 +1487,8 @@ void Codegen::codegen_let_aliases(
               di_type_for(tv.type));
           debug_.builder->insertDeclare(
               alloca, di_var, debug_.builder->createExpression(),
-              DILocation::get(*context_, va->Range.Line,
-                              va->Range.Column, debug_.scope),
+              DILocation::get(*context_, va->Range.Line, va->Range.Column,
+                              debug_.scope),
               builder_->GetInsertBlock());
           tv.val = builder_->CreateLoad(tv.val->getType(), alloca, vname);
           named_values_[vname] = tv;
@@ -1529,9 +1529,7 @@ void Codegen::codegen_let_aliases(
             // as i64-cast pointers; convert back so pattern matching
             // can dispatch on heap layout.
             Value *typed_elem = elem;
-            if (et == CType::ADT || et == CType::STRING ||
-                et == CType::FUNCTION || et == CType::SET ||
-                et == CType::DICT || et == CType::CHANNEL)
+            if (is_heap_type(et))
               typed_elem = builder_->CreateIntToPtr(
                   elem, PointerType::get(*context_, 0), "tuple_elem_ptr");
             auto *sub = tp->patterns[i];
@@ -1552,12 +1550,20 @@ void Codegen::codegen_let_aliases(
                 }
                 named_values_[(*id)->name->value] = bound;
                 if (is_heap_type(et)) {
+                  // The tuple owns its stored child. Give the destructured
+                  // binding an independent reference before releasing the
+                  // temporary aggregate below.
+                  emit_rc_inc(bound.val, bound.type);
                   scope_bindings.push_back(bound);
                   binding_is_arena.push_back(false);
                 }
               }
             }
           }
+          // A pattern alias consumes its RHS tuple. Heap children bound above
+          // now own retained references; releasing the aggregate drops the
+          // tuple's original child references and the tuple itself.
+          emit_rc_dec(tuple_ptr, CType::TUPLE);
         }
       }
     }
@@ -1662,7 +1668,8 @@ TypedValue Codegen::codegen_let(LetExpr *node) {
   if (has_group && !body_terminated)
     builder_->CreateCall(rt_.group_await_all_, {current_group_});
 
-  // 8. Cleanup scope (group arena: YonaRuntimeTaskGroupEnd destroys bump memory)
+  // 8. Cleanup scope (group arena: YonaRuntimeTaskGroupEnd destroys bump
+  // memory)
   if (!body_terminated)
     cleanup_let_scope(scope_bindings, binding_is_arena, result, arena,
                       !group_arena_lifecycle);
