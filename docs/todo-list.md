@@ -238,13 +238,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   non-concrete. Reconcile channel creation, payload descriptors, and the
   canonical `Std\Channel` interfaces.
 
-- [x] **The checked-in GPU channel helper interface loses its endpoint and
+- [ ] **The checked-in GPU channel helper interface loses its endpoint and
   operation types.** Repro: run the `gpu_float_channel` fixture;
   `drainMapFloatGpu` imports as `ADT INT INT -> INT` instead of
   `FloatMapOp -> Receiver FloatArray -> Sender FloatArray -> Int`, producing
-  a type error before the channel runtime is exercised. Fixed by regenerating
-  `Std\Gpu.yonai` from the canonical source model and locking the structural
-  operation and endpoint descriptors in the interface catalog tests.
+  a type error before the channel runtime is exercised.
 
 - [ ] **Generated channel programs leak their endpoint object graph.** Repro:
   run a compiled `channel_basic` with `YONA_ALLOC_STATS=1`; it returns `42`

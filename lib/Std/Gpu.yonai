@@ -1,6 +1,6 @@
 MODULE Std\Gpu
 ADT Buffer 1 1
-  CTOR Buffer 0 1 fields _0:INT_ARRAY
+  CTOR Buffer 0 1 fields _0:ADT(IntArray)
 ADT FloatMapOp 2 1
   CTOR Scale 0 1 fields _0:FLOAT
   CTOR Mul2 1 0
@@ -19,48 +19,64 @@ ADT IntReduceOp 1 0
   CTOR Sum 0 0
 ADT PinnedFloats 1 1
   CTOR PinnedFloats 0 1 fields _0:INT
-FN allocPinnedFloats 1 INT -> ADT(PinnedFloats) effects -
-FN available 1 UNIT -> BOOL effects -
+FN allocPinnedFloats 1 INT -> ADT(PinnedFloats) effects - effectscheme $##
+FN available 1 UNIT -> BOOL borrow 1 effects - effectscheme $##
 FN backendName 0 -> STRING effects -
-FN checkGpu 0 -> ADT effects -
-FN closePinnedFloats 1 ADT(PinnedFloats) -> INT effects -
-FN copyFloatArrayToPinned 2 ADT(FloatArray) ADT(PinnedFloats) -> INT effects -
-FN drainMapFloatGpu 3 ADT INT INT -> INT effects |
-FN filterGreaterThan 2 INT ADT(Buffer) -> ADT(Buffer) effects -
-FN filterLessThan 2 INT ADT(Buffer) -> ADT(Buffer) effects -
+FN checkGpu 0 -> ADT(Result,INT,ADT(GpuIssue)) effects -
+FN closePinnedFloats 1 ADT(PinnedFloats) -> INT effects - effectscheme $##
+FN copyFloatArrayToPinned 2 FLOAT_ARRAY ADT(PinnedFloats) -> INT effects - effectscheme $##;$/r##
+FN drainMapFloatGpu 3 ADT(FloatMapOp) ADT(Receiver,FLOAT_ARRAY) ADT(Sender,FLOAT_ARRAY) -> INT effects - effectscheme $##;$/r##;$/r/r##
+FN filterGreaterThan 2 INT ADT(Buffer) -> ADT(Buffer) effects - effectscheme $##;$/r##
+FN filterLessThan 2 INT ADT(Buffer) -> ADT(Buffer) effects - effectscheme $##;$/r##
 NAT floatArrayMul2Async 1 FLOAT_ARRAY -> INT
 NAT floatArrayScaleAsync 2 FLOAT FLOAT_ARRAY -> INT
-FN gpuFloatChannel 1 INT -> TUPLE(ADT(Linear,ADT(Sender,ADT(FloatArray))),ADT(Linear,ADT(Receiver,ADT(FloatArray)))) effects -
-FN gpuLastIssue 0 -> ADT effects -
+FN gpuFloatChannel 1 INT -> TUPLE(ADT(Linear,ADT(Sender,FLOAT_ARRAY)),ADT(Linear,ADT(Receiver,FLOAT_ARRAY)))
+FN gpuLastIssue 0 -> ADT(GpuIssue) effects -
 FN hasGpu 0 -> BOOL effects -
 FN hasSimd 0 -> BOOL effects -
-FN length 1 ADT(Buffer) -> INT effects -
-FN mapAdd 2 INT ADT(Buffer) -> ADT(Buffer) effects -
-FN mapFloatGpu 2 ADT(FloatMapOp) ADT(FloatArray) -> ADT(FloatArray) effects -
-FN mapFloatPinnedGpu 2 ADT(FloatMapOp) ADT(PinnedFloats) -> INT effects -
-FN mapGpu 2 ADT(IntMapOp) ADT(Buffer) -> ADT(Buffer) effects -
-FN mapMul 2 INT ADT(Buffer) -> ADT(Buffer) effects -
-FN mapReduceGraphGpu 2 SEQ ADT -> INT effects -
-FN mapSquare 1 ADT(Buffer) -> ADT(Buffer) effects -
-FN materialize 1 ADT(Buffer) -> ADT(IntArray) effects -
-FN physicalDeviceCount 1 UNIT -> INT effects -
-FN pinnedBackend 1 ADT(PinnedFloats) -> STRING effects -
-FN pinnedGet 2 ADT(PinnedFloats) INT -> FLOAT effects -
-FN pinnedLength 1 ADT(PinnedFloats) -> INT effects -
-FN pinnedSet 3 ADT(PinnedFloats) INT FLOAT -> INT effects -
-FN pinnedToFloatArray 1 ADT(PinnedFloats) -> ADT(FloatArray) effects -
-FN raiseGpu 1 ADT -> UNIT effects Gpu.deviceLost,Gpu.fail,Gpu.oom
-FN reduceFloatGpu 2 ADT(FloatReduceOp) ADT(FloatArray) -> FLOAT effects -
-FN reduceGpu 2 ADT(IntReduceOp) ADT(Buffer) -> INT effects -
-FN reduceSum 1 ADT(Buffer) -> INT effects -
-FN upload 1 ADT(IntArray) -> ADT(Buffer) effects -
+FN length 1 ADT(Buffer) -> INT effects - effectscheme $##
+FN mapAdd 2 INT ADT(Buffer) -> ADT(Buffer) effects - effectscheme $##;$/r##
+FN mapFloatGpu 2 ADT(FloatMapOp) FLOAT_ARRAY -> FLOAT_ARRAY effects - effectscheme $##;$/r##
+FN mapFloatPinnedGpu 2 ADT(FloatMapOp) ADT(PinnedFloats) -> INT effects - effectscheme $##;$/r##
+FN mapGpu 2 ADT(IntMapOp) ADT(Buffer) -> ADT(Buffer) effects - effectscheme $##;$/r##
+FN mapMul 2 INT ADT(Buffer) -> ADT(Buffer) effects - effectscheme $##;$/r##
+FN mapReduceGraphGpu 2 Seq(ADT(IntMapOp)) ADT(Buffer) -> INT effects | effectscheme $##;$/r##o0
+FN mapSquare 1 ADT(Buffer) -> ADT(Buffer) effects - effectscheme $##
+FN materialize 1 ADT(Buffer) -> INT_ARRAY effects - effectscheme $##
+FN physicalDeviceCount 1 UNIT -> INT borrow 1 effects - effectscheme $##
+FN pinnedBackend 1 ADT(PinnedFloats) -> STRING effects - effectscheme $##
+FN pinnedGet 2 ADT(PinnedFloats) INT -> FLOAT effects - effectscheme $##;$/r##
+FN pinnedLength 1 ADT(PinnedFloats) -> INT effects - effectscheme $##
+FN pinnedSet 3 ADT(PinnedFloats) INT FLOAT -> INT effects - effectscheme $##;$/r##;$/r/r##
+FN pinnedToFloatArray 1 ADT(PinnedFloats) -> FLOAT_ARRAY effects - effectscheme $##
+FN raiseGpu 1 ADT(GpuIssue) -> UNIT effects Gpu.deviceLost,Gpu.fail,Gpu.oom effectscheme $#Gpu.deviceLost,Gpu.fail,Gpu.oom#
+FN reduceFloatGpu 2 ADT(FloatReduceOp) FLOAT_ARRAY -> FLOAT effects - effectscheme $##;$/r##
+FN reduceGpu 2 ADT(IntReduceOp) ADT(Buffer) -> INT effects - effectscheme $##;$/r##
+FN reduceSum 1 ADT(Buffer) -> INT effects - effectscheme $##
+FN upload 1 INT_ARRAY -> ADT(Buffer) effects - effectscheme $##
 FN vulkanAvailable 0 -> BOOL effects -
 FN vulkanLastIssueKind 0 -> INT effects -
 FN vulkanLastNote 0 -> STRING effects -
 FN vulkanStatus 0 -> STRING effects -
 FN vulkanTimelineSemaphore 0 -> BOOL effects -
-FN withGpuFallback 1 FUNCTION -> UNIT borrow 1 effects Gpu.deviceLost,Gpu.fail,Gpu.oom| hof
-FN withGpuIssue 2 FUNCTION FUNCTION -> UNIT borrow 11 effects | hof
+FN withGpuFallback 1 FUNCTION(UNIT,VAR(a)) -> VAR(a) borrow 1 effects Gpu.deviceLost,Gpu.fail,Gpu.oom| hof effectscheme $#Gpu.deviceLost,Gpu.fail,Gpu.oom#f0;$/p##f0
+FN withGpuIssue 2 FUNCTION(UNIT,VAR(a)) FUNCTION(ADT(GpuIssue),VAR(a)) -> VAR(a) borrow 11 effects | hof effectscheme $##;$/p##f0;$/r##f0|f1;$/r/p##f1
+GENFN_DEP allocPinnedFloats rawAllocPinnedFloats NATIVE YonaStdGpuRawAllocPinnedFloats FN 1 INT -> INT
+GENFN_CTOR allocPinnedFloats PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN allocPinnedFloats allocPinnedFloats
+allocPinnedFloats : Int -> PinnedFloats
+allocPinnedFloats n = PinnedFloats (rawAllocPinnedFloats n)
+GENFN_END
+GENFN_DEP available rawStdGpuAvailable YONA Std\Gpu available FN 1 INT -> BOOL
+GENFN_BEGIN available available
+available : () -> Bool
+available () = rawStdGpuAvailable 0
+GENFN_END
+GENFN_DEP backendName rawBackendName NATIVE YonaStdGpuRawBackendName FN 1 INT -> STRING
+GENFN_BEGIN backendName backendName
+backendName : String
+backendName = rawBackendName 0
+GENFN_END
 GENFN_CTOR checkGpu Ok Result 0 1 2 1 fields _0:VAR(a)
 GENFN_CTOR checkGpu Err Result 1 1 2 1 fields _0:VAR(e)
 GENFN_CTOR checkGpu GpuOom GpuIssue 1 0 4 1
@@ -73,6 +89,24 @@ checkGpu =
         1 -> Err GpuOom
         2 -> Err GpuDeviceLost
         code -> Err (GpuOther code)
+    end
+GENFN_END
+GENFN_DEP closePinnedFloats rawClosePinnedFloats NATIVE YonaStdGpuRawClosePinnedFloats FN 1 INT -> INT
+GENFN_CTOR closePinnedFloats PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN closePinnedFloats closePinnedFloats
+closePinnedFloats : PinnedFloats -> Int
+closePinnedFloats pf =
+    case pf of
+        PinnedFloats h -> rawClosePinnedFloats h
+    end
+GENFN_END
+GENFN_DEP copyFloatArrayToPinned rawCopyFloatArrayToPinned NATIVE YonaStdGpuRawCopyFloatArrayToPinned FN 2 FLOAT_ARRAY INT -> INT
+GENFN_CTOR copyFloatArrayToPinned PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN copyFloatArrayToPinned copyFloatArrayToPinned
+copyFloatArrayToPinned : FloatArray -> PinnedFloats -> Int
+copyFloatArrayToPinned arr pf =
+    case pf of
+        PinnedFloats h -> rawCopyFloatArrayToPinned arr h
     end
 GENFN_END
 GENFN_CTOR drainMapFloatGpu Some Option 0 1 2 1 fields _0:VAR(a)
@@ -102,6 +136,25 @@ encodeIntMapStages stages =
             Square -> 2 :: (0 :: acc)
         end) [] stages)
 GENFN_END
+GENFN_DEP filterGreaterThan rawFilterGreaterThan NATIVE YonaStdGpuRawFilterGreaterThan FN 2 INT INT_ARRAY -> INT_ARRAY
+GENFN_CTOR filterGreaterThan Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN filterGreaterThan filterGreaterThan
+filterGreaterThan : Int -> Buffer -> Buffer
+filterGreaterThan threshold buffer =
+    case buffer of
+        Buffer values -> Buffer (rawFilterGreaterThan threshold values)
+    end
+GENFN_END
+GENFN_DEP filterLessThan rawFilterLessThan NATIVE YonaStdGpuRawFilterLessThan FN 2 INT INT_ARRAY -> INT_ARRAY
+GENFN_CTOR filterLessThan Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_CTOR filterLessThan Square IntMapOp 2 0 3 1
+GENFN_BEGIN filterLessThan filterLessThan
+filterLessThan : Int -> Buffer -> Buffer
+filterLessThan threshold buffer =
+    case buffer of
+        Buffer values -> Buffer (rawFilterLessThan threshold values)
+    end
+GENFN_END
 GENFN_CTOR gpuLastIssue GpuOk GpuIssue 0 0 4 1
 GENFN_CTOR gpuLastIssue Ok Result 0 1 2 1 fields _0:VAR(a)
 GENFN_CTOR gpuLastIssue Err Result 1 1 2 1 fields _0:VAR(e)
@@ -117,8 +170,51 @@ gpuLastIssue =
         code -> GpuOther code
     end
 GENFN_END
+GENFN_DEP hasGpu rawHasGpu NATIVE YonaStdGpuRawHasGpu FN 1 INT -> BOOL
+GENFN_BEGIN hasGpu hasGpu
+hasGpu : Bool
+hasGpu = rawHasGpu 0
+GENFN_END
+GENFN_DEP hasSimd rawHasSimd NATIVE YonaStdGpuRawHasSimd FN 1 INT -> BOOL
+GENFN_BEGIN hasSimd hasSimd
+hasSimd : Bool
+hasSimd = rawHasSimd 0
+GENFN_END
+GENFN_DEP length rawLength NATIVE YonaStdGpuRawLength FN 1 INT_ARRAY -> INT
+GENFN_CTOR length Add IntMapOp 0 1 3 1 fields _0:INT
+GENFN_CTOR length Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN length length
+length : Buffer -> Int
+length buffer =
+    case buffer of
+        Buffer values -> rawLength values
+    end
+GENFN_END
+GENFN_DEP mapAdd rawMapAdd NATIVE YonaStdGpuRawMapAdd FN 2 INT INT_ARRAY -> INT_ARRAY
+GENFN_CTOR mapAdd Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN mapAdd mapAdd
+mapAdd : Int -> Buffer -> Buffer
+mapAdd delta buffer =
+    case buffer of
+        Buffer values -> Buffer (rawMapAdd delta values)
+    end
+GENFN_END
+GENFN_DEP mapFloatGpu rawMapFloatOp NATIVE YonaStdGpuRawMapFloatOp FN 2 ADT(FloatMapOp) FLOAT_ARRAY -> FLOAT_ARRAY
+GENFN_BEGIN mapFloatGpu mapFloatGpu
+mapFloatGpu : FloatMapOp -> FloatArray -> FloatArray
+mapFloatGpu op arr = rawMapFloatOp op arr
+GENFN_END
+GENFN_DEP mapFloatPinnedGpu rawMapFloatPinnedOp NATIVE YonaStdGpuRawMapFloatPinnedOp FN 2 ADT(FloatMapOp) INT -> INT
+GENFN_CTOR mapFloatPinnedGpu PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN mapFloatPinnedGpu mapFloatPinnedGpu
+mapFloatPinnedGpu : FloatMapOp -> PinnedFloats -> Int
+mapFloatPinnedGpu op pf =
+    case pf of
+        PinnedFloats h -> rawMapFloatPinnedOp op h
+    end
+GENFN_END
 GENFN_CTOR mapGpu Add IntMapOp 0 1 3 1 fields _0:INT
-GENFN_CTOR mapGpu Buffer Buffer 0 1 1 1 fields _0:INT_ARRAY
+GENFN_CTOR mapGpu Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
 GENFN_CTOR mapGpu Mul IntMapOp 1 1 3 1 fields _0:INT
 GENFN_CTOR mapGpu Square IntMapOp 2 0 3 1
 GENFN_BEGIN mapGpu mapGpu
@@ -128,6 +224,92 @@ mapGpu op buffer =
         Add d -> mapAdd d buffer
         Mul f -> mapMul f buffer
         Square -> mapSquare buffer
+    end
+GENFN_END
+GENFN_DEP mapMul rawMapMul NATIVE YonaStdGpuRawMapMul FN 2 INT INT_ARRAY -> INT_ARRAY
+GENFN_CTOR mapMul Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN mapMul mapMul
+mapMul : Int -> Buffer -> Buffer
+mapMul factor buffer =
+    case buffer of
+        Buffer values -> Buffer (rawMapMul factor values)
+    end
+GENFN_END
+GENFN_DEP mapReduceGraphGpu rawMapReduceGraph NATIVE YonaStdGpuRawMapReduceGraph FN 2 INT_ARRAY INT_ARRAY -> INT
+GENFN_CTOR mapReduceGraphGpu Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN mapReduceGraphGpu mapReduceGraphGpu
+mapReduceGraphGpu stages buffer =
+    case buffer of
+        Buffer values -> rawMapReduceGraph (encodeIntMapStages stages) values
+    end
+GENFN_END
+GENFN_DEP mapSquare rawMapSquare NATIVE YonaStdGpuRawMapSquare FN 1 INT_ARRAY -> INT_ARRAY
+GENFN_CTOR mapSquare Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_CTOR mapSquare Sum IntReduceOp 0 0 1 0
+GENFN_BEGIN mapSquare mapSquare
+mapSquare : Buffer -> Buffer
+mapSquare buffer =
+    case buffer of
+        Buffer values -> Buffer (rawMapSquare values)
+    end
+GENFN_END
+GENFN_DEP materialize rawMaterialize NATIVE YonaStdGpuRawMaterialize FN 1 INT_ARRAY -> INT_ARRAY
+GENFN_CTOR materialize Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN materialize materialize
+materialize : Buffer -> IntArray
+materialize buffer =
+    case buffer of
+        Buffer values -> rawMaterialize values
+    end
+GENFN_END
+GENFN_DEP physicalDeviceCount rawStdGpuPhysicalDeviceCount YONA Std\Gpu physicalDeviceCount FN 1 INT -> INT
+GENFN_BEGIN physicalDeviceCount physicalDeviceCount
+physicalDeviceCount : () -> Int
+physicalDeviceCount () = rawStdGpuPhysicalDeviceCount 0
+GENFN_END
+GENFN_DEP pinnedBackend rawPinnedBackend NATIVE YonaStdGpuRawPinnedBackend FN 1 INT -> STRING
+GENFN_CTOR pinnedBackend PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN pinnedBackend pinnedBackend
+pinnedBackend : PinnedFloats -> String
+pinnedBackend pf =
+    case pf of
+        PinnedFloats h -> rawPinnedBackend h
+    end
+GENFN_END
+GENFN_DEP pinnedGet rawPinnedGet NATIVE YonaStdGpuRawPinnedGet FN 2 INT INT -> FLOAT
+GENFN_CTOR pinnedGet PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN pinnedGet pinnedGet
+pinnedGet : PinnedFloats -> Int -> Float
+pinnedGet pf i =
+    case pf of
+        PinnedFloats h -> rawPinnedGet h i
+    end
+GENFN_END
+GENFN_DEP pinnedLength rawPinnedLength NATIVE YonaStdGpuRawPinnedLength FN 1 INT -> INT
+GENFN_CTOR pinnedLength PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN pinnedLength pinnedLength
+pinnedLength : PinnedFloats -> Int
+pinnedLength pf =
+    case pf of
+        PinnedFloats h -> rawPinnedLength h
+    end
+GENFN_END
+GENFN_DEP pinnedSet rawPinnedSet NATIVE YonaStdGpuRawPinnedSet FN 3 INT INT FLOAT -> INT
+GENFN_CTOR pinnedSet PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN pinnedSet pinnedSet
+pinnedSet : PinnedFloats -> Int -> Float -> Int
+pinnedSet pf i v =
+    case pf of
+        PinnedFloats h -> rawPinnedSet h i v
+    end
+GENFN_END
+GENFN_DEP pinnedToFloatArray rawPinnedToFloatArray NATIVE YonaStdGpuRawPinnedToFloatArray FN 1 INT -> FLOAT_ARRAY
+GENFN_CTOR pinnedToFloatArray PinnedFloats PinnedFloats 0 1 1 1 fields _0:INT
+GENFN_BEGIN pinnedToFloatArray pinnedToFloatArray
+pinnedToFloatArray : PinnedFloats -> FloatArray
+pinnedToFloatArray pf =
+    case pf of
+        PinnedFloats h -> rawPinnedToFloatArray h
     end
 GENFN_END
 GENFN_CTOR raiseGpu GpuOk GpuIssue 0 0 4 1
@@ -143,7 +325,19 @@ raiseGpu issue =
         GpuOther code -> perform Gpu.fail code
     end
 GENFN_END
-GENFN_CTOR reduceGpu Buffer Buffer 0 1 1 1 fields _0:INT_ARRAY
+GENFN_DEP reduceFloatGpu rawReduceFloatGpu NATIVE YonaStdGpuRawReduceFloatGpu FN 1 FLOAT_ARRAY -> FLOAT
+GENFN_CTOR reduceFloatGpu Add IntMapOp 0 1 3 1 fields _0:INT
+GENFN_CTOR reduceFloatGpu FloatSum FloatReduceOp 0 0 1 0
+GENFN_CTOR reduceFloatGpu Mul IntMapOp 1 1 3 1 fields _0:INT
+GENFN_CTOR reduceFloatGpu Square IntMapOp 2 0 3 1
+GENFN_BEGIN reduceFloatGpu reduceFloatGpu
+reduceFloatGpu : FloatReduceOp -> FloatArray -> Float
+reduceFloatGpu op arr =
+    case op of
+        FloatSum -> rawReduceFloatGpu arr
+    end
+GENFN_END
+GENFN_CTOR reduceGpu Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
 GENFN_CTOR reduceGpu Sum IntReduceOp 0 0 1 0
 GENFN_BEGIN reduceGpu reduceGpu
 reduceGpu : IntReduceOp -> Buffer -> Int
@@ -151,6 +345,46 @@ reduceGpu op buffer =
     case op of
         Sum -> reduceSum buffer
     end
+GENFN_END
+GENFN_DEP reduceSum rawReduceSum NATIVE YonaStdGpuRawReduceSum FN 1 INT_ARRAY -> INT
+GENFN_CTOR reduceSum Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN reduceSum reduceSum
+reduceSum : Buffer -> Int
+reduceSum buffer =
+    case buffer of
+        Buffer values -> rawReduceSum values
+    end
+GENFN_END
+GENFN_DEP upload rawUpload NATIVE YonaStdGpuRawUpload FN 1 INT_ARRAY -> INT_ARRAY
+GENFN_CTOR upload Buffer Buffer 0 1 1 1 fields _0:ADT(IntArray)
+GENFN_BEGIN upload upload
+upload : IntArray -> Buffer
+upload values = Buffer (rawUpload values)
+GENFN_END
+GENFN_DEP vulkanAvailable rawVulkanAvailable NATIVE YonaStdGpuRawVulkanAvailable FN 1 INT -> BOOL
+GENFN_BEGIN vulkanAvailable vulkanAvailable
+vulkanAvailable : Bool
+vulkanAvailable = rawVulkanAvailable 0
+GENFN_END
+GENFN_DEP vulkanLastIssueKind rawVulkanLastIssueKind NATIVE YonaStdGpuRawVulkanLastIssueKind FN 1 INT -> INT
+GENFN_BEGIN vulkanLastIssueKind vulkanLastIssueKind
+vulkanLastIssueKind : Int
+vulkanLastIssueKind = rawVulkanLastIssueKind 0
+GENFN_END
+GENFN_DEP vulkanLastNote rawVulkanLastNote NATIVE YonaStdGpuRawVulkanLastNote FN 1 INT -> STRING
+GENFN_BEGIN vulkanLastNote vulkanLastNote
+vulkanLastNote : String
+vulkanLastNote = rawVulkanLastNote 0
+GENFN_END
+GENFN_DEP vulkanStatus rawVulkanStatus NATIVE YonaStdGpuRawVulkanStatus FN 1 INT -> STRING
+GENFN_BEGIN vulkanStatus vulkanStatus
+vulkanStatus : String
+vulkanStatus = rawVulkanStatus 0
+GENFN_END
+GENFN_DEP vulkanTimelineSemaphore rawVulkanTimelineSemaphore NATIVE YonaStdGpuRawVulkanTimelineSemaphore FN 1 INT -> BOOL
+GENFN_BEGIN vulkanTimelineSemaphore vulkanTimelineSemaphore
+vulkanTimelineSemaphore : Bool
+vulkanTimelineSemaphore = rawVulkanTimelineSemaphore 0
 GENFN_END
 GENFN_BEGIN withGpuFallback withGpuFallback
 withGpuFallback action =

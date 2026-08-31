@@ -47,6 +47,22 @@ TEST_CASE("Semantics interface catalog installs Prelude without Codegen") {
   CHECK_FALSE(Checker.has_errors());
 }
 
+TEST_CASE("Std Gpu preserves typed float channel helper contracts") {
+  const auto LibraryPath = yona::test::repo_root() / "lib";
+  yona::semantics::InterfaceCatalog Catalog({LibraryPath.string()});
+  const auto Loaded = Catalog.loadModule("Std\\Gpu");
+  REQUIRE(Loaded.has_value());
+  REQUIRE(*Loaded != nullptr);
+
+  const auto *Drain =
+      yona::interface::findFunction(**Loaded, "drainMapFloatGpu");
+  REQUIRE(Drain != nullptr);
+  CHECK(Drain->ParameterTypes ==
+        std::vector<std::string>{"ADT(FloatMapOp)", "ADT(Receiver,FLOAT_ARRAY)",
+                                 "ADT(Sender,FLOAT_ARRAY)"});
+  CHECK(Drain->ReturnType == "INT");
+}
+
 TEST_CASE("Std File exposes canonical typed resource contracts") {
   const auto LibraryPath = yona::test::repo_root() / "lib";
   yona::semantics::InterfaceCatalog Catalog({LibraryPath.string()});

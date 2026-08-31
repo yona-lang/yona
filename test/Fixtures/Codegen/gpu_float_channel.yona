@@ -15,8 +15,8 @@ case orl of Linear outReceiver ->
     case recv outReceiver of
         Some b ->
             let s = reduceFloatGpu FloatSum b in
-            n + s
-        None -> 0.0
+            if s == 4.0 then n + 4 else -1
+        None -> 0
     end
 end end
 end end
