@@ -638,6 +638,7 @@ private:
       CType function_return_type = CType::INT;
       std::string function_return_adt_name;
       SemanticTypeIdentity function_return_identity;
+      SemanticTypeIdentity semantic_identity;
     };
 
     std::string type_name;

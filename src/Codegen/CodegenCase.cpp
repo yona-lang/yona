@@ -509,6 +509,66 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
     builder_->SetInsertPoint(match_bb);
   };
 
+  auto bind_identifier = [&](IdentifierExpr *identifier, Value *raw_value,
+                             const SemanticTypeIdentity &identity) {
+    Value *typed_value = raw_value;
+    if (is_heap_type(identity.type) && raw_value->getType()->isIntegerTy())
+      typed_value = builder_->CreateIntToPtr(
+          raw_value, PointerType::get(*context_, 0), "tuple_pat_elem_ptr");
+    TypedValue bound{typed_value, identity.type};
+    if (identity.type == CType::FUNCTION && !identity.arguments.empty()) {
+      const auto &result = identity.arguments.back();
+      bound.subtypes = {result.type};
+      bound.semantic_subtypes = {result};
+      bound.adt_type_name = result.adt_name;
+    } else {
+      bound.adt_type_name = identity.adt_name;
+      bound.semantic_subtypes = identity.arguments;
+      bound.adt_semantic_arguments = identity.arguments;
+      for (const auto &argument : identity.arguments) {
+        bound.subtypes.push_back(argument.type);
+        bound.adt_type_arguments.push_back(argument.type);
+        bound.adt_type_argument_names.push_back(argument.adt_name);
+      }
+    }
+    named_values_[identifier->name->value] = bound;
+    if (is_heap_type(bound.type) && bound.val->getType()->isPointerTy()) {
+      emit_rc_inc(bound.val, bound.type);
+      if (!arm_drop_stack_.empty())
+        arm_drop_stack_.back().push_back({bound.val, bound.type});
+    }
+  };
+
+  std::function<void(TuplePattern *, Value *, const SemanticTypeIdentity &)>
+      bind_nested_tuple;
+  bind_nested_tuple = [&](TuplePattern *nested, Value *raw_tuple,
+                          const SemanticTypeIdentity &identity) {
+    Value *nested_ptr = raw_tuple;
+    if (nested_ptr->getType()->isIntegerTy())
+      nested_ptr = builder_->CreateIntToPtr(
+          nested_ptr, PointerType::get(*context_, 0), "nested_tuple_ptr");
+    for (size_t ni = 0; ni < nested->patterns.size(); ++ni) {
+      auto *gep = builder_->CreateGEP(i64_ty, nested_ptr,
+                                      {ConstantInt::get(i64_ty, ni + 2)},
+                                      "nested_tuple_gep");
+      auto *nested_element =
+          builder_->CreateLoad(i64_ty, gep, "nested_tuple_element");
+      SemanticTypeIdentity element_identity;
+      if (ni < identity.arguments.size())
+        element_identity = identity.arguments[ni];
+      auto *nested_pattern = nested->patterns[ni];
+      if (nested_pattern->get_type() == ast::AST_TUPLE_PATTERN) {
+        bind_nested_tuple(static_cast<TuplePattern *>(nested_pattern),
+                          nested_element, element_identity);
+      } else if (nested_pattern->get_type() == ast::AST_PATTERN_VALUE) {
+        auto *value_pattern = static_cast<PatternValue *>(nested_pattern);
+        if (auto *identifier =
+                std::get_if<IdentifierExpr *>(&value_pattern->expr))
+          bind_identifier(*identifier, nested_element, element_identity);
+      }
+    }
+  };
+
   for (size_t ti = 0; ti < tp->patterns.size(); ti++) {
     Value *elem;
     if (is_ptr) {
@@ -536,30 +596,11 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
         branch_to_match_or_cleanup(builder_->CreateICmpEQ(cmp_val, sym_val),
                                    "tuple.sym.match");
       } else if (auto *id = std::get_if<IdentifierExpr *>(&pv->expr)) {
-        // Heap-typed elements were stored as i64-cast pointers; restore
-        // the pointer so downstream pattern matching can use heap layout.
-        Value *typed_elem = elem;
-        if (is_heap_type(et))
-          typed_elem = builder_->CreateIntToPtr(
-              elem, PointerType::get(*context_, 0), "tuple_pat_elem_ptr");
-        TypedValue bound{typed_elem, et};
-        if (ti < scrutinee.semantic_subtypes.size()) {
-          const auto &identity = scrutinee.semantic_subtypes[ti];
-          bound.adt_type_name = identity.adt_name;
-          bound.semantic_subtypes = identity.arguments;
-          bound.adt_semantic_arguments = identity.arguments;
-          for (const auto &argument : identity.arguments) {
-            bound.subtypes.push_back(argument.type);
-            bound.adt_type_arguments.push_back(argument.type);
-            bound.adt_type_argument_names.push_back(argument.adt_name);
-          }
-        }
-        named_values_[(*id)->name->value] = bound;
-        if (is_heap_type(bound.type) && bound.val->getType()->isPointerTy()) {
-          emit_rc_inc(bound.val, bound.type);
-          if (!arm_drop_stack_.empty())
-            arm_drop_stack_.back().push_back({bound.val, bound.type});
-        }
+        SemanticTypeIdentity identity;
+        identity.type = et;
+        if (ti < scrutinee.semantic_subtypes.size())
+          identity = scrutinee.semantic_subtypes[ti];
+        bind_identifier(*id, elem, identity);
       } else if (auto *lit =
                      std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
         auto *an = reinterpret_cast<AstNode *>(*lit);
@@ -575,26 +616,11 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
         }
       }
     } else if (sub->get_type() == ast::AST_TUPLE_PATTERN) {
-      auto *nested = static_cast<TuplePattern *>(sub);
-      Value *nested_ptr = elem;
-      if (nested_ptr->getType()->isIntegerTy())
-        nested_ptr = builder_->CreateIntToPtr(
-            nested_ptr, PointerType::get(*context_, 0), "nested_tuple_ptr");
-      for (size_t ni = 0; ni < nested->patterns.size(); ni++) {
-        auto *nested_sub = nested->patterns[ni];
-        if (nested_sub->get_type() != ast::AST_PATTERN_VALUE)
-          continue;
-        auto *pv = static_cast<PatternValue *>(nested_sub);
-        auto *id = std::get_if<IdentifierExpr *>(&pv->expr);
-        if (!id)
-          continue;
-        auto *gep = builder_->CreateGEP(i64_ty, nested_ptr,
-                                        {ConstantInt::get(i64_ty, ni + 2)},
-                                        "nested_tuple_gep");
-        auto *nested_elem =
-            builder_->CreateLoad(i64_ty, gep, "nested_tuple_elem");
-        named_values_[(*id)->name->value] = {nested_elem, CType::INT};
-      }
+      SemanticTypeIdentity identity;
+      identity.type = CType::TUPLE;
+      if (ti < scrutinee.semantic_subtypes.size())
+        identity = scrutinee.semantic_subtypes[ti];
+      bind_nested_tuple(static_cast<TuplePattern *>(sub), elem, identity);
     }
     // ast::AST_UNDERSCORE_PATTERN: wildcard, no action needed
   }
@@ -1521,8 +1547,12 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
             bound.semantic_subtypes = {std::move(return_identity)};
             bound.adt_type_name = shape.function_return_adt_name;
           } else if (shape.type == CType::TUPLE) {
-            for (const auto &element : shape.tuple_elements)
+            for (const auto &element : shape.tuple_elements) {
               bound.subtypes.push_back(element.type);
+              auto identity = element.semantic_identity;
+              identity.type = element.type;
+              bound.semantic_subtypes.push_back(std::move(identity));
+            }
           }
           named_values_[(*identifier)->name->value] = bound;
           if (is_heap_type(bound.type) && bound.val->getType()->isPointerTy()) {

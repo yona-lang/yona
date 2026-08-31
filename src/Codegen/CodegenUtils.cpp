@@ -28,6 +28,7 @@ Codegen::AdtInfo::FieldShape Codegen::field_shape_from_semantic_identity(
     const SemanticTypeIdentity &identity) {
   AdtInfo::FieldShape shape;
   shape.type = identity.type;
+  shape.semantic_identity = identity;
   if (identity.type == CType::TUPLE) {
     for (const auto &element : identity.arguments)
       shape.tuple_elements.push_back(

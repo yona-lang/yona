@@ -175,6 +175,9 @@ TypedValue Codegen::codegen_tuple(TupleExpr *node) {
     identity.arguments = !tv.semantic_subtypes.empty()
                              ? tv.semantic_subtypes
                              : tv.adt_semantic_arguments;
+    if (identity.arguments.empty())
+      for (const auto subtype : tv.subtypes)
+        identity.arguments.push_back({subtype, {}, {}});
     semantic_subtypes.push_back(std::move(identity));
   }
 

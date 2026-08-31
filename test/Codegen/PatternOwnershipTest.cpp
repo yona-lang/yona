@@ -112,7 +112,7 @@ std::string assert_zero_alloc_leaks(const std::string &source,
   return ir;
 }
 
-void assert_generic_record_zero_alloc_leaks(
+std::string assert_generic_record_zero_alloc_leaks(
     const std::string &source, const std::string &artifact_stem,
     const std::string &expected_output,
     const std::string &expected_stats = "tag=SEQ allocs=2 frees=2 leaked=0",
@@ -146,9 +146,9 @@ make value = Box { item = value }
   REQUIRE(module_codegen.emit_interface_file(
       (module_root / "Test" / "PatternRecord.yonai").string()));
 
-  assert_zero_alloc_leaks(source, artifact_stem, expected_output,
-                          expected_stats, module_root, module_object,
-                          minimum_retain_calls);
+  return assert_zero_alloc_leaks(source, artifact_stem, expected_output,
+                                 expected_stats, module_root, module_object,
+                                 minimum_retain_calls);
 }
 
 } // namespace
@@ -236,6 +236,43 @@ TEST_SUITE("Pattern ownership") {
         "case f 1 of [x] -> x; _ -> 0 end end",
         "generic_record_function_shape", "1",
         "tag=SEQ allocs=1 frees=1 leaked=0", 2);
+  }
+
+  TEST_CASE("generic record tuple identities survive later nested matching") {
+    const auto named_ir = assert_generic_record_zero_alloc_leaks(
+        "import Test\\PatternRecord in "
+        "let selected = case make (([1], [2]), [3]) of "
+        "Box { item = pair } -> case pair of "
+        "(nested, right) -> case nested of "
+        "(left, middle) -> left end end end in "
+        "case selected of [value] -> value; _ -> 0 end",
+        "generic_record_named_nested_tuple_escape", "1",
+        "tag=SEQ allocs=3 frees=3 leaked=0", 5);
+    const auto owner_release = named_ir.find("call void @YonaRuntimeRelease");
+    const auto escaped_use =
+        named_ir.find("call i64 @YonaRuntimeSequenceLength", owner_release);
+    REQUIRE(owner_release != std::string::npos);
+    REQUIRE(escaped_use != std::string::npos);
+    CHECK(owner_release < escaped_use);
+
+    assert_generic_record_zero_alloc_leaks(
+        "import Test\\PatternRecord in "
+        "let selected = case make (([4], [5]), [6]) of "
+        "Box { item = ((left, middle), right) } -> left end in "
+        "case selected of [value] -> value; _ -> 0 end",
+        "generic_record_anonymous_nested_tuple_escape", "4",
+        "tag=SEQ allocs=3 frees=3 leaked=0", 4);
+
+    assert_generic_record_zero_alloc_leaks(
+        "import length from Std\\String, Test\\PatternRecord in "
+        "case make ((length, [2]), [3]) of "
+        "Box { item = pair } -> case pair of "
+        "(nested, right) -> case nested of "
+        "(f, middle) -> let x = f \"abcd\" in "
+        "case middle of [y] -> case right of [z] -> "
+        "x * 100 + y * 10 + z; _ -> 0 end; _ -> 0 end "
+        "end end end",
+        "generic_record_named_nested_function", "423", "", 0);
   }
 
   TEST_CASE("temporary heap-field constructor cases isolate field ownership") {
@@ -353,6 +390,16 @@ TEST_SUITE("Pattern ownership") {
     const auto caught_raise = caught_ir.find("call void @YonaRuntimeRaise");
     REQUIRE(caught_raise != std::string::npos);
     CHECK(caught_ir.rfind("call void @YonaRuntimeRelease", caught_raise) ==
+          std::string::npos);
+
+    const auto scalar_pattern_ir = assert_zero_alloc_leaks(
+        "try case ([1], 7) of (values, code) -> raise code end "
+        "catch _ -> 0 end",
+        "raised_scalar_pattern_value_non_owner", "0",
+        "tag=SEQ allocs=1 frees=1 leaked=0");
+    CHECK(scalar_pattern_ir.find("call void @YonaRuntimeRaise(i64") !=
+          std::string::npos);
+    CHECK(scalar_pattern_ir.find("call void @YonaRuntimeRaiseOwned") ==
           std::string::npos);
   }
 

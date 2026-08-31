@@ -359,22 +359,33 @@ Codegen::field_shape_from_field_type(const ast::FieldType &field_type) {
   AdtInfo::FieldShape shape;
   if (field_type.is_tuple_type) {
     shape.type = CType::TUPLE;
-    for (const auto &element : field_type.tuple_types)
-      shape.tuple_elements.push_back(field_shape_from_field_type(element));
+    shape.semantic_identity.type = CType::TUPLE;
+    for (const auto &element : field_type.tuple_types) {
+      auto element_shape = field_shape_from_field_type(element);
+      shape.semantic_identity.arguments.push_back(
+          element_shape.semantic_identity);
+      shape.tuple_elements.push_back(std::move(element_shape));
+    }
     return shape;
   }
   if (field_type.is_function_type) {
     shape.type = CType::FUNCTION;
+    shape.semantic_identity.type = CType::FUNCTION;
     if (!field_type.return_types.empty()) {
       auto result =
           field_shape_from_field_type(field_type.return_types.front());
       shape.function_return_type = result.type;
+      shape.function_return_identity = result.semantic_identity;
+      shape.semantic_identity.arguments.push_back(result.semantic_identity);
       if (result.type == CType::ADT)
         shape.function_return_adt_name = field_type.return_types.front().name;
     }
     return shape;
   }
   shape.type = ctype_for_name(field_type.name);
+  shape.semantic_identity.type = shape.type;
+  if (shape.type == CType::ADT)
+    shape.semantic_identity.adt_name = field_type.name;
   return shape;
 }
 
