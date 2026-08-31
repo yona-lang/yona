@@ -6,6 +6,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **Exact sequence patterns ignore string-literal elements when case arms
+  have the same length.** Repro: compile
+  `case ["ordinary"] of ["explicit"] -> 1 ["ordinary"] -> 2 end`; codegen
+  enters the first one-element arm without comparing its string literal.
+
 - [ ] **The Yona runner leaks temporary source files when stdin or `-e`
   compilation fails.** Repro: run `printf 'bad syntax' |
   ./out/build/x64-debug-linux/yona` with an isolated `TMPDIR`; the runner exits
