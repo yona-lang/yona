@@ -32,6 +32,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   range. Raw surrogate `ED A0 80` and above-U+10FFFF `F4 90 80 80` sequences
   are also accepted as character values instead of rejected.
 
+- [ ] **Invalid UTF-8 inside a character literal is diagnosed one column
+  late.** Repro: place an invalid raw byte at column 2 between single quotes;
+  the lexer reports column 3 because literal rescanning rewinds `Current`
+  without restoring `Column`.
+
 - [ ] **Byte and character literals are accepted by parsing and typing but
   rejected by codegen.** Repro: compile `case [2b] of [1b] -> 1; _ -> 2 end`
   (or the analogous character sequence); codegen reports `unsupported
