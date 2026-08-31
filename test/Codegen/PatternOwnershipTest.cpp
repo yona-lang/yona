@@ -211,6 +211,13 @@ TEST_SUITE("Pattern ownership") {
     CHECK(ir.find("YonaRuntimeArenaAllocate") == std::string::npos);
   }
 
+  TEST_CASE("grouped let cleanup releases aggregate heap children") {
+    assert_zero_alloc_leaks("import formatInt from Std\\Convert in "
+                            "let first = [formatInt 1], second = [2] in 0",
+                            "grouped_let_arena_heap_child", "0",
+                            "tag=STRING allocs=1 frees=1 leaked=0");
+  }
+
   TEST_CASE("failed tuple patterns release retained prefix bindings") {
     assert_zero_alloc_leaks("case ([1], :no) of (x, :yes) -> 1; _ -> 0 end",
                             "tuple_pattern_symbol_prefix_mismatch", "0",

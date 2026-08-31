@@ -496,7 +496,7 @@ void YonaRuntimeRelease(void *Value) {
       /* Regex handle: free the PCRE2 compiled pattern.
        * Layout: [pcre2_code* code]
        * YonaRuntimeRegexDisposeCompiledCode is weak — if Regex.c isn't
- *
+       *
        * linked (PCRE2 unavailable), this is a no-op. */
       void *Code = *(void **)Payload;
       if (Code) {
@@ -547,6 +547,9 @@ typedef struct YonaArena {
   char *Cursor;
   char *End;
   struct YonaArena *Next; /* overflow chain */
+  void **Objects;
+  size_t ObjectCount;
+  size_t ObjectCapacity;
 } YonaArena;
 
 void *YonaRuntimeArenaCreate(int64_t Size) {
@@ -558,6 +561,9 @@ void *YonaRuntimeArenaCreate(int64_t Size) {
   Arena->Cursor = Arena->Base;
   Arena->End = Arena->Base + Size;
   Arena->Next = NULL;
+  Arena->Objects = NULL;
+  Arena->ObjectCount = 0;
+  Arena->ObjectCapacity = 0;
   return Arena;
 }
 
@@ -584,13 +590,53 @@ void *YonaRuntimeArenaAllocate(void *ArenaPtr, int64_t TypeTag,
   Arena->Cursor += Total;
   Raw[0] = YONA_RC_ARENA_SENTINEL; /* sentinel: rc_dec will skip */
   Raw[1] = TypeTag;
-  return (void *)(Raw + YONA_RC_HEADER_SIZE); /* return pointer past header */
+  void *Object = (void *)(Raw + YONA_RC_HEADER_SIZE);
+  if (Arena->ObjectCount == Arena->ObjectCapacity) {
+    size_t NewCapacity = Arena->ObjectCapacity ? Arena->ObjectCapacity * 2 : 16;
+    void **Objects =
+        (void **)realloc(Arena->Objects, NewCapacity * sizeof(void *));
+    if (!Objects) {
+      fprintf(stderr, "Fatal: unable to grow arena object registry\n");
+      abort();
+    }
+    Arena->Objects = Objects;
+    Arena->ObjectCapacity = NewCapacity;
+  }
+  Arena->Objects[Arena->ObjectCount++] = Object;
+  return Object; /* return pointer past header */
+}
+
+static void yonaArenaReleaseObjectChildren(void *Object) {
+  int64_t *Header = ((int64_t *)Object) - YONA_RC_HEADER_SIZE;
+  int64_t *Payload = (int64_t *)Object;
+  const int64_t TypeTag = Header[1];
+
+  /* Flat sequences are currently the only arena-allocated managed object.
+   * Bulk-freeing their storage must still run the recursive ownership edge
+   * represented by heap_flag. Arena children themselves have sentinel RC and
+   * are visited independently through this registry. */
+  if (TypeTag == YONA_RC_TYPE_SEQ) {
+    const int64_t Count = Payload[0];
+    const int64_t Flags = Payload[1];
+    const int HeapFlag = (int)(Flags & 0xFFFFFFFF);
+    const int Offset = (int)((uint64_t)Flags >> 32);
+    if (HeapFlag) {
+      for (int64_t I = 0; I < Count; ++I) {
+        const int64_t Value = Payload[2 + Offset + I];
+        if (Value)
+          YonaRuntimeRelease((void *)(intptr_t)Value);
+      }
+    }
+  }
 }
 
 void YonaRuntimeArenaDestroy(void *ArenaPtr) {
   YonaArena *Arena = (YonaArena *)ArenaPtr;
   while (Arena) {
     YonaArena *Next = Arena->Next;
+    for (size_t I = 0; I < Arena->ObjectCount; ++I)
+      yonaArenaReleaseObjectChildren(Arena->Objects[I]);
+    free(Arena->Objects);
     free(Arena);
     Arena = Next;
   }

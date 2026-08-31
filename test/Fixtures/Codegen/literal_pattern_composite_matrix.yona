@@ -22,10 +22,18 @@ let tupleMatch = case (2.5, "two", false, 66b, 'B') of
         [(1, "wrong") | _] -> false
         _ -> true
     end,
+    nestedTupleHeadMatch = case [((1, "two"), 3)] of
+        [((1, "wrong"), 3) | _] -> false
+        _ -> true
+    end,
+    constructorHeadMatch = case [(Some "two", 3)] of
+        [(Some "wrong", 3) | _] -> false
+        _ -> true
+    end,
     recordHeadMatch = import pass, testCase from Std\Test in
         case [testCase "two" (\() -> pass "ok")] of
             [TestCase { name = "wrong" } | _] -> false
             _ -> true
         end
 in (tupleMatch, nestedTupleMatch, constructorMatch, headTailMatch,
-    tupleHeadMatch, recordHeadMatch)
+    tupleHeadMatch, nestedTupleHeadMatch, constructorHeadMatch, recordHeadMatch)

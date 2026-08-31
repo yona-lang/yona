@@ -201,214 +201,196 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
   }
   const bool retain_bound_heads = owned && htp->tail != nullptr;
 
-  builder_->SetInsertPoint(body_bb);
-  for (size_t hi = 0; hi < htp->heads.size(); hi++) {
-    Value *hv;
-    if (hi == 0 && htp->heads.size() == 1)
-      hv = builder_->CreateCall(rt_.seq_head_, {seq_ptr}, "head");
-    else
-      hv = builder_->CreateCall(rt_.seq_get_,
-                                {seq_ptr, ConstantInt::get(i64_ty, hi)});
-    auto *hp = htp->heads[hi];
-    CType head_type =
-        (hp->get_type() == ast::AST_TUPLE_PATTERN) ? CType::TUPLE : elem_type;
-    Value *elem_val = hv;
-    if (head_type == CType::SEQ || head_type == CType::STRING ||
-        head_type == CType::FUNCTION || head_type == CType::ADT ||
-        elem_type == CType::SET || elem_type == CType::DICT)
-      elem_val = builder_->CreateIntToPtr(hv, PointerType::get(*context_, 0));
-    else if (head_type == CType::FLOAT)
-      elem_val = builder_->CreateBitCast(hv, LType::getDoubleTy(*context_),
-                                         "head_float");
-    else if (head_type == CType::BOOL)
-      elem_val = builder_->CreateICmpNE(hv, ConstantInt::get(hv->getType(), 0),
-                                        "head_bool");
-    if (hp->get_type() == ast::AST_PATTERN_VALUE) {
-      auto *pv = static_cast<PatternValue *>(hp);
-      if (auto *id = std::get_if<IdentifierExpr *>(&pv->expr)) {
-        TypedValue head{elem_val, head_type};
-        if (!scrutinee.semantic_subtypes.empty()) {
-          const auto &identity = scrutinee.semantic_subtypes.front();
-          head.adt_type_name = identity.adt_name;
-          head.semantic_subtypes = identity.arguments;
-          head.adt_semantic_arguments = identity.arguments;
-          for (const auto &argument : identity.arguments) {
-            head.adt_type_arguments.push_back(argument.type);
-            head.adt_type_argument_names.push_back(argument.adt_name);
-          }
+  using FieldShape = AdtInfo::FieldShape;
+  auto field_shape = [&](const AdtInfo &constructor, size_t index) {
+    if (index < constructor.field_shapes.size())
+      return constructor.field_shapes[index];
+    FieldShape shape;
+    if (index < constructor.field_types.size())
+      shape.type = constructor.field_types[index];
+    if (index < constructor.field_fn_return_types.size())
+      shape.function_return_type = constructor.field_fn_return_types[index];
+    if (index < constructor.field_fn_return_adt_names.size())
+      shape.function_return_adt_name =
+          constructor.field_fn_return_adt_names[index];
+    shape.semantic_identity.type = shape.type;
+    return shape;
+  };
+
+  std::function<void(PatternNode *, Value *, const FieldShape &)>
+      match_head_pattern;
+  match_head_pattern = [&](PatternNode *pattern, Value *raw,
+                           const FieldShape &shape) {
+    if (!pattern || !raw || pattern->get_type() == ast::AST_UNDERSCORE_PATTERN)
+      return;
+
+    if (pattern->get_type() == ast::AST_PATTERN_VALUE) {
+      auto *value_pattern = static_cast<PatternValue *>(pattern);
+      if (auto *identifier =
+              std::get_if<IdentifierExpr *>(&value_pattern->expr)) {
+        Value *typed = raw;
+        if (shape.type == CType::FLOAT && raw->getType()->isIntegerTy())
+          typed = builder_->CreateBitCast(raw, LType::getDoubleTy(*context_),
+                                          "head_field_float");
+        else if (shape.type == CType::BOOL && !raw->getType()->isIntegerTy(1))
+          typed = builder_->CreateICmpNE(
+              raw, ConstantInt::get(raw->getType(), 0), "head_field_bool");
+        else if (is_heap_type(shape.type) && raw->getType()->isIntegerTy())
+          typed = builder_->CreateIntToPtr(raw, PointerType::get(*context_, 0),
+                                           "head_field_ptr");
+
+        TypedValue bound{typed, shape.type};
+        bound.adt_type_name = shape.semantic_identity.adt_name;
+        bound.semantic_subtypes = shape.semantic_identity.arguments;
+        bound.adt_semantic_arguments = shape.semantic_identity.arguments;
+        for (const auto &argument : shape.semantic_identity.arguments) {
+          bound.subtypes.push_back(argument.type);
+          bound.adt_type_arguments.push_back(argument.type);
+          bound.adt_type_argument_names.push_back(argument.adt_name);
         }
-        named_values_[(*id)->name->value] = std::move(head);
-        if (retain_bound_heads && is_heap_type(head_type)) {
-          emit_rc_inc(elem_val, head_type);
+        if (shape.type == CType::FUNCTION) {
+          bound.subtypes = {shape.function_return_type};
+          bound.adt_type_name = shape.function_return_adt_name;
+          bound.semantic_subtypes = {shape.function_return_identity};
+        }
+        named_values_[(*identifier)->name->value] = bound;
+        if (retain_bound_heads && is_heap_type(shape.type) &&
+            typed->getType()->isPointerTy()) {
+          emit_rc_inc(typed, shape.type);
           if (!arm_drop_stack_.empty())
-            arm_drop_stack_.back().push_back({elem_val, head_type});
+            arm_drop_stack_.back().push_back({typed, shape.type});
         }
-      } else {
-        Value *predicate = nullptr;
-        if (auto *symbol = std::get_if<SymbolExpr *>(&pv->expr)) {
-          predicate = builder_->CreateICmpEQ(
-              hv, ConstantInt::get(i64_ty, intern_symbol((*symbol)->value)));
-        } else if (auto *literal =
-                       std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
-          predicate = emit_literal_pattern_predicate(
-              reinterpret_cast<AstNode *>(*literal),
-              TypedValue{elem_val, head_type});
-        }
-        if (predicate) {
-          branch_to_match_or_cleanup(predicate, "head.literal.match");
-        }
+        return;
       }
-    } else if (hp->get_type() == ast::AST_TUPLE_PATTERN) {
-      auto *tp = static_cast<TuplePattern *>(hp);
-      Value *tuple_ptr = elem_val;
+      if (auto *symbol = std::get_if<SymbolExpr *>(&value_pattern->expr)) {
+        branch_to_match_or_cleanup(
+            builder_->CreateICmpEQ(
+                raw, ConstantInt::get(i64_ty, intern_symbol((*symbol)->value))),
+            "head.symbol.match");
+      } else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
+                     &value_pattern->expr)) {
+        branch_to_match_or_cleanup(emit_literal_pattern_predicate(
+                                       reinterpret_cast<AstNode *>(*literal),
+                                       TypedValue{raw, shape.type}),
+                                   "head.literal.match");
+      }
+      return;
+    }
+
+    if (pattern->get_type() == ast::AST_TUPLE_PATTERN) {
+      auto *tuple_pattern = static_cast<TuplePattern *>(pattern);
+      Value *tuple_ptr = raw;
       if (tuple_ptr->getType()->isIntegerTy())
-        tuple_ptr =
-            builder_->CreateIntToPtr(tuple_ptr, PointerType::get(*context_, 0));
-      // A consuming head-tail match releases the sequence's ownership
-      // of its removed heap element. Keep the tuple container alive
-      // through the arm so its heap-marked fields remain valid while
-      // their pattern bindings are used.
-      if (retain_bound_heads) {
-        emit_rc_inc(tuple_ptr, CType::TUPLE);
-        if (!arm_drop_stack_.empty())
-          arm_drop_stack_.back().push_back({tuple_ptr, CType::TUPLE});
+        tuple_ptr = builder_->CreateIntToPtr(
+            tuple_ptr, PointerType::get(*context_, 0), "head_tuple_ptr");
+      for (size_t index = 0; index < tuple_pattern->patterns.size(); ++index) {
+        auto *slot = builder_->CreateGEP(i64_ty, tuple_ptr,
+                                         {ConstantInt::get(i64_ty, index + 2)},
+                                         "head_tuple_gep");
+        auto *value = builder_->CreateLoad(i64_ty, slot, "head_tuple_value");
+        FieldShape element_shape;
+        if (index < shape.tuple_elements.size())
+          element_shape = shape.tuple_elements[index];
+        else if (index < shape.semantic_identity.arguments.size())
+          element_shape = field_shape_from_semantic_identity(
+              shape.semantic_identity.arguments[index]);
+        match_head_pattern(tuple_pattern->patterns[index], value,
+                           element_shape);
       }
-      const SemanticTypeIdentity *tuple_identity = nullptr;
-      if (!scrutinee.semantic_subtypes.empty() &&
-          scrutinee.semantic_subtypes.front().type == CType::TUPLE)
-        tuple_identity = &scrutinee.semantic_subtypes.front();
-      for (size_t ti = 0; ti < tp->patterns.size(); ti++) {
-        auto *sub = tp->patterns[ti];
-        auto *gep = builder_->CreateGEP(i64_ty, tuple_ptr,
-                                        {ConstantInt::get(i64_ty, ti + 2)},
-                                        "tuple_head_gep");
-        auto *elem = builder_->CreateLoad(i64_ty, gep, "tuple_head_elem");
-        const SemanticTypeIdentity *element_identity =
-            tuple_identity && ti < tuple_identity->arguments.size()
-                ? &tuple_identity->arguments[ti]
-                : nullptr;
-        const CType element_type =
-            element_identity ? element_identity->type : CType::INT;
-        if (sub->get_type() != ast::AST_PATTERN_VALUE)
-          continue;
-        auto *pv = static_cast<PatternValue *>(sub);
-        if (auto *symbol = std::get_if<SymbolExpr *>(&pv->expr)) {
-          branch_to_match_or_cleanup(
-              builder_->CreateICmpEQ(
-                  elem,
-                  ConstantInt::get(i64_ty, intern_symbol((*symbol)->value))),
-              "tuple.head.symbol.match");
-          continue;
-        }
-        if (auto *literal =
-                std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
-          branch_to_match_or_cleanup(emit_literal_pattern_predicate(
-                                         reinterpret_cast<AstNode *>(*literal),
-                                         TypedValue{elem, element_type}),
-                                     "tuple.head.literal.match");
-          continue;
-        }
-        auto *id = std::get_if<IdentifierExpr *>(&pv->expr);
-        if (!id)
-          continue;
-        Value *typed_elem = elem;
-        if (is_heap_type(element_type))
-          typed_elem = builder_->CreateIntToPtr(
-              elem, PointerType::get(*context_, 0), "tuple_head_elem_ptr");
-        else if (element_type == CType::FLOAT)
-          typed_elem = builder_->CreateBitCast(
-              elem, LType::getDoubleTy(*context_), "tuple_head_elem_float");
-        else if (element_type == CType::BOOL)
-          typed_elem =
-              builder_->CreateICmpNE(elem, ConstantInt::get(elem->getType(), 0),
-                                     "tuple_head_elem_bool");
-        TypedValue bound{typed_elem, element_type};
-        if (element_identity) {
-          bound.adt_type_name = element_identity->adt_name;
-          bound.semantic_subtypes = element_identity->arguments;
-          bound.adt_semantic_arguments = element_identity->arguments;
-        }
-        named_values_[(*id)->name->value] = std::move(bound);
+      return;
+    }
+
+    auto match_constructor = [&](const std::string &name,
+                                 const auto &patterns) {
+      const auto constructor = types_.adt_constructors.find(name);
+      if (constructor == types_.adt_constructors.end()) {
+        branch_to_match_or_cleanup(ConstantInt::getFalse(*context_),
+                                   "head.constructor.missing");
+        return;
       }
-    } else if (hp->get_type() == ast::AST_RECORD_PATTERN) {
-      // A sequence head may itself be a named-field ADT pattern, e.g.
-      // `[TestCase { thunk = f } | rest]`. Preserve the declared field
-      // shape exactly as direct record-pattern matching does.
-      auto *record = static_cast<RecordPattern *>(hp);
-      auto ctor_it = types_.adt_constructors.find(record->recordType);
-      if (ctor_it == types_.adt_constructors.end())
-        continue;
-      Value *adt_ptr = elem_val;
-      if (!adt_ptr->getType()->isPointerTy())
-        adt_ptr =
-            builder_->CreateIntToPtr(adt_ptr, PointerType::get(*context_, 0));
-      auto *record_tag = builder_->CreateCall(rt_.adt_get_tag_, {adt_ptr});
+      Value *adt_ptr = raw;
+      if (adt_ptr->getType()->isIntegerTy())
+        adt_ptr = builder_->CreateIntToPtr(
+            adt_ptr, PointerType::get(*context_, 0), "head_adt_ptr");
+      auto *tag = builder_->CreateCall(rt_.adt_get_tag_, {adt_ptr});
       branch_to_match_or_cleanup(
           builder_->CreateICmpEQ(
-              record_tag, ConstantInt::get(i64_ty, static_cast<int8_t>(
-                                                       ctor_it->second.tag))),
-          "record.head.tag.match");
-      for (auto &[field_name, field_pattern] : record->items) {
-        if (!field_name || field_pattern->get_type() != ast::AST_PATTERN_VALUE)
+              tag, ConstantInt::get(i64_ty, constructor->second.tag)),
+          "head.constructor.tag.match");
+      for (size_t index = 0;
+           index < patterns.size() &&
+           index < static_cast<size_t>(constructor->second.arity);
+           ++index) {
+        auto *value = builder_->CreateCall(
+            rt_.adt_get_field_, {adt_ptr, ConstantInt::get(i64_ty, index)});
+        match_head_pattern(patterns[index], value,
+                           field_shape(constructor->second, index));
+      }
+    };
+
+    if (pattern->get_type() == ast::AST_CONSTRUCTOR_PATTERN) {
+      auto *constructor = static_cast<ConstructorPattern *>(pattern);
+      match_constructor(constructor->constructor_name,
+                        constructor->sub_patterns);
+      return;
+    }
+    if (pattern->get_type() == ast::AST_RECORD_PATTERN) {
+      auto *record = static_cast<RecordPattern *>(pattern);
+      const auto constructor = types_.adt_constructors.find(record->recordType);
+      if (constructor == types_.adt_constructors.end()) {
+        branch_to_match_or_cleanup(ConstantInt::getFalse(*context_),
+                                   "head.record.missing");
+        return;
+      }
+      Value *adt_ptr = raw;
+      if (adt_ptr->getType()->isIntegerTy())
+        adt_ptr = builder_->CreateIntToPtr(
+            adt_ptr, PointerType::get(*context_, 0), "head_record_ptr");
+      auto *tag = builder_->CreateCall(rt_.adt_get_tag_, {adt_ptr});
+      branch_to_match_or_cleanup(
+          builder_->CreateICmpEQ(
+              tag, ConstantInt::get(i64_ty, constructor->second.tag)),
+          "head.record.tag.match");
+      for (const auto &[field_name, field_pattern] : record->items) {
+        if (!field_name)
           continue;
-        auto *pattern_value = static_cast<PatternValue *>(field_pattern);
-        auto *identifier = std::get_if<IdentifierExpr *>(&pattern_value->expr);
-        for (size_t fi = 0; fi < ctor_it->second.field_names.size(); ++fi) {
-          if (ctor_it->second.field_names[fi] != field_name->value)
+        for (size_t index = 0; index < constructor->second.field_names.size();
+             ++index) {
+          if (constructor->second.field_names[index] != field_name->value)
             continue;
-          auto *raw = builder_->CreateCall(
-              rt_.adt_get_field_, {adt_ptr, ConstantInt::get(i64_ty, fi)});
-          AdtInfo::FieldShape fallback;
-          if (fi < ctor_it->second.field_types.size())
-            fallback.type = ctor_it->second.field_types[fi];
-          if (fi < ctor_it->second.field_fn_return_types.size())
-            fallback.function_return_type =
-                ctor_it->second.field_fn_return_types[fi];
-          if (fi < ctor_it->second.field_fn_return_adt_names.size())
-            fallback.function_return_adt_name =
-                ctor_it->second.field_fn_return_adt_names[fi];
-          const auto &shape = fi < ctor_it->second.field_shapes.size()
-                                  ? ctor_it->second.field_shapes[fi]
-                                  : fallback;
-          if (!identifier) {
-            if (auto *symbol =
-                    std::get_if<SymbolExpr *>(&pattern_value->expr)) {
-              branch_to_match_or_cleanup(
-                  builder_->CreateICmpEQ(
-                      raw, ConstantInt::get(i64_ty,
-                                            intern_symbol((*symbol)->value))),
-                  "record.head.symbol.match");
-            } else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
-                           &pattern_value->expr)) {
-              branch_to_match_or_cleanup(
-                  emit_literal_pattern_predicate(
-                      reinterpret_cast<AstNode *>(*literal),
-                      TypedValue{raw, shape.type}),
-                  "record.head.literal.match");
-            }
-            break;
-          }
-          Value *typed = raw;
-          if (shape.type == CType::FLOAT)
-            typed = builder_->CreateBitCast(raw, LType::getDoubleTy(*context_));
-          else if (is_heap_type(shape.type))
-            typed = builder_->CreateIntToPtr(
-                raw, PointerType::get(*context_, 0), "seq_record_field_ptr");
-          TypedValue bound{typed, shape.type};
-          if (shape.type == CType::FUNCTION) {
-            bound.subtypes = {shape.function_return_type};
-            bound.adt_type_name = shape.function_return_adt_name;
-          }
-          named_values_[(*identifier)->name->value] = bound;
-          if (retain_bound_heads && is_heap_type(shape.type)) {
-            emit_rc_inc(typed, shape.type);
-            if (!arm_drop_stack_.empty())
-              arm_drop_stack_.back().push_back({typed, shape.type});
-          }
+          auto *value = builder_->CreateCall(
+              rt_.adt_get_field_, {adt_ptr, ConstantInt::get(i64_ty, index)});
+          match_head_pattern(field_pattern, value,
+                             field_shape(constructor->second, index));
           break;
         }
       }
     }
+  };
+
+  FieldShape head_shape;
+  head_shape.type = elem_type;
+  head_shape.semantic_identity.type = elem_type;
+  if (!scrutinee.semantic_subtypes.empty())
+    head_shape =
+        field_shape_from_semantic_identity(scrutinee.semantic_subtypes.front());
+
+  builder_->SetInsertPoint(body_bb);
+  for (size_t index = 0; index < htp->heads.size(); ++index) {
+    Value *head =
+        index == 0 && htp->heads.size() == 1
+            ? builder_->CreateCall(rt_.seq_head_, {seq_ptr}, "head")
+            : builder_->CreateCall(rt_.seq_get_,
+                                   {seq_ptr, ConstantInt::get(i64_ty, index)});
+    auto *pattern = htp->heads[index];
+    if (retain_bound_heads && pattern->get_type() == ast::AST_TUPLE_PATTERN) {
+      auto *tuple_ptr = builder_->CreateIntToPtr(
+          head, PointerType::get(*context_, 0), "head_tuple_owner");
+      emit_rc_inc(tuple_ptr, CType::TUPLE);
+      if (!arm_drop_stack_.empty())
+        arm_drop_stack_.back().push_back({tuple_ptr, CType::TUPLE});
+    }
+    match_head_pattern(pattern, head, head_shape);
   }
   if (htp->tail) {
     // Ownership model — Perceus-linear (phase 1, single-use):
