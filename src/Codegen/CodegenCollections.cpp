@@ -188,18 +188,18 @@ TypedValue Codegen::codegen_tuple(TupleExpr *node) {
       rt_.tuple_alloc_, {ConstantInt::get(i64_ty, elems.size())}, "tuple");
   int64_t tuple_heap_mask = 0;
   for (size_t i = 0; i < elems.size(); i++) {
-    // A heap tuple owns every heap-marked child it stores. Preserve a
-    // pattern/catch binding whose active arm still schedules its own drop;
-    // anonymous temporaries and global/imported bindings transfer their sole
-    // owner directly.
-    const bool has_active_drop =
-        std::ranges::any_of(arm_drop_stack_, [&](const auto &drops) {
-          return std::ranges::any_of(drops, [&](const auto &drop) {
-            return drop.first == element_values[i].val;
-          });
-        });
-    if (has_active_drop && is_heap_type(subtypes[i]) && element_values[i].val &&
-        !element_values[i].val->getType()->isStructTy())
+    // A heap tuple owns every heap-marked child it stores. Borrowed values
+    // keep their existing owner, and named owned values remain owned by their
+    // lexical binding, so both require an independent tuple reference. Only a
+    // truly anonymous owned temporary transfers its existing reference.
+    const auto &element = element_values[i];
+    const auto named_owner = named_binding_for_value(element.val);
+    const bool has_lexical_owner =
+        named_owner && !imports_.extern_functions.contains(*named_owner);
+    const bool needs_independent_owner =
+        element.heap_ownership == HeapOwnership::Borrowed || has_lexical_owner;
+    if (needs_independent_owner && is_heap_type(subtypes[i]) && element.val &&
+        !element.val->getType()->isStructTy())
       emit_rc_inc(element_values[i].val, element_values[i].type);
     builder_->CreateCall(rt_.tuple_set_,
                          {tuple_ptr, ConstantInt::get(i64_ty, i), elems[i]});

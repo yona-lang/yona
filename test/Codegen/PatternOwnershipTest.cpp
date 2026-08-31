@@ -179,6 +179,23 @@ TEST_SUITE("Pattern ownership") {
         "named_tuple_alias_slot_reuse", "1");
   }
 
+  TEST_CASE("tuple storage retains ordinary named heap children") {
+    assert_zero_alloc_leaks("let text = \"a\" + \"b\", "
+                            "first = case (text, 2) of (_, _) -> 10 end, "
+                            "replacement = \"x\" + \"y\" in text == \"ab\"",
+                            "tuple_named_string_child_slot_reuse", "true",
+                            "tag=STRING allocs=2 frees=2 leaked=0");
+  }
+
+  TEST_CASE("tuple storage retains borrowed captured heap children") {
+    assert_zero_alloc_leaks("let pair = let captured = \"a\" + \"b\", "
+                            "make = \\() -> (captured, 2) in make (), "
+                            "replacement = \"x\" + \"y\" in "
+                            "case pair of (text, _) -> text == \"ab\" end",
+                            "tuple_borrowed_capture_child_slot_reuse", "true",
+                            "tag=STRING allocs=2 frees=2 leaked=0");
+  }
+
   TEST_CASE("failed tuple patterns release retained prefix bindings") {
     assert_zero_alloc_leaks("case ([1], :no) of (x, :yes) -> 1; _ -> 0 end",
                             "tuple_pattern_symbol_prefix_mismatch", "0",
