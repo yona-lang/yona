@@ -12,6 +12,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `YonaRuntimePlatformSubmitFileDescriptorByteWrite`; each path registers a
   separate direct-result context without freeing its original `Ctx`.
 
+- [ ] **Platform I/O registry declarations lack C++ linkage guards.** Repro:
+  run `cmake --build --preset build-debug-linux`; linking `tests` reports
+  undefined `YonaRuntimeIoContextPut`/`YonaRuntimeIoContextTake` references
+  from `IoReadExactTest.cpp` while `runtime/libyona_runtime.a` exports the C
+  symbols.
+
 - [ ] **The Linux io_uring implementation disagrees with its public cancel
   declaration.** Repro: build the debug `tests` target; `IoUringLinux.c`
   defines `YonaRuntimeIoUringCancelGroup(uint64_t *, int)` while
