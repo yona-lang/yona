@@ -700,6 +700,7 @@ private:
   struct NativeDependency {
     std::string c_symbol;
     ModuleFunctionMeta meta;
+    bool is_native = true;
   };
   ModuleFunctionMeta
   module_meta_from_compiled(const CompiledFunction &cf) const;
@@ -1138,6 +1139,7 @@ private:
 
     Codegen &cg;
     std::vector<SavedBinding> saved_bindings;
+    std::unordered_set<std::string> native_dependency_names;
     bool restored = false;
     PrivateGenfnDependencyOverlay(Codegen &cg,
                                   const std::optional<std::string> &owner);

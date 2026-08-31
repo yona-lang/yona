@@ -541,6 +541,11 @@ static void probeGpuUnlocked(void) {
   vkDestroyInstance(Inst, NULL);
 }
 
+static int gpuVulkanDisabled(void) {
+  const char *Disabled = getenv("YONA_GPU_DISABLE_VULKAN");
+  return Disabled != NULL && Disabled[0] != '\0' && strcmp(Disabled, "0") != 0;
+}
+
 static void ensureGpuProbe(void) {
   lockGpuMutex(&GMu);
   probeGpuUnlocked();
@@ -549,12 +554,16 @@ static void ensureGpuProbe(void) {
 
 int64_t YonaStdGpuAvailable(int64_t Unit) {
   (void)Unit;
+  if (gpuVulkanDisabled())
+    return 0;
   ensureGpuProbe();
   return GHaveCompute ? 1 : 0;
 }
 
 int64_t YonaStdGpuPhysicalDeviceCount(int64_t Unit) {
   (void)Unit;
+  if (gpuVulkanDisabled())
+    return 0;
   ensureGpuProbe();
   return (int64_t)GPhysCount;
 }
@@ -734,6 +743,8 @@ void YonaRuntimeGpuVulkanContextShutdown(void) {
 }
 
 int YonaRuntimeGpuVulkanContextInitialize(void) {
+  if (gpuVulkanDisabled())
+    return -2;
   lockGpuMutex(&GMu);
   if (GDev != VK_NULL_HANDLE) {
     unlockGpuMutex(&GMu);

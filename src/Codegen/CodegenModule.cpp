@@ -679,19 +679,8 @@ bool Codegen::emit_interface_file(const std::string &Path) {
         continue;
       interface::Function Contract =
           interfaceFunctionFromMeta(DependencyName, Dependency.meta);
-      if (const auto Target =
-              imports_.export_identities.find(Dependency.c_symbol);
-          Target != imports_.export_identities.end()) {
-        Generic.Dependencies.emplace_back(
-            std::move(Contract),
-            interface::ExportReference(
-                model::ModuleIdentity(Target->second.module_fqn),
-                Target->second.local_name));
-      } else {
-        Generic.Dependencies.emplace_back(
-            std::move(Contract),
-            interface::NativeReference{Dependency.c_symbol});
-      }
+      Generic.Dependencies.emplace_back(
+          std::move(Contract), interface::NativeReference{Dependency.c_symbol});
     }
 
     for (const auto &[ConstructorName, Info] : types_.adt_constructors) {
@@ -828,9 +817,11 @@ bool Codegen::load_interface_file(const std::string &Path) {
       const ModuleFunctionMeta Meta =
           moduleMetaFromInterface(Dependency.Contract);
       std::string Target;
+      bool IsNative = false;
       if (const auto *Native =
               std::get_if<interface::NativeReference>(&Dependency.Target)) {
         Target = Native->Symbol;
+        IsNative = true;
       } else {
         const auto &Reference =
             std::get<interface::ExportReference>(Dependency.Target);
@@ -841,7 +832,7 @@ bool Codegen::load_interface_file(const std::string &Path) {
         imports_.module_exports[TargetModule][Reference.LocalName] = Target;
       }
       imports_.private_genfn_dependencies[Owner].push_back(
-          {Dependency.Contract.Name, NativeDependency{Target, Meta}});
+          {Dependency.Contract.Name, NativeDependency{Target, Meta, IsNative}});
       imports_.meta.try_emplace(Target, Meta);
     }
     for (const interface::GenericConstructor &Constructor :
@@ -1215,6 +1206,8 @@ Codegen::PrivateGenfnDependencyOverlay::PrivateGenfnDependencyOverlay(
     cg.deferred_functions_.erase(local_name);
     cg.named_values_.erase(local_name);
     cg.imports_.extern_functions[local_name] = dependency.c_symbol;
+    if (dependency.is_native)
+      native_dependency_names.insert(local_name);
   }
 }
 

@@ -406,7 +406,8 @@ static void run_yona_fixture_tree(const fs::path &fixtures_dir) {
       const char *env_k = nullptr;
       const char *env_v = nullptr;
       const char *stdin_data = nullptr;
-      if (stem == "gpu_backend_flags" || stem == "gpu_vulkan_last_note") {
+      if (stem == "gpu_backend_flags" || stem == "gpu_vulkan_last_note" ||
+          stem == "stdlib_gpu") {
         env_k = "YONA_GPU_DISABLE_VULKAN";
         env_v = "1";
       }
@@ -2001,6 +2002,55 @@ value = 42
     client_checker.add_module_path(yona_lib.string());
     client_checker.check(client->Expression.get());
     CHECK_FALSE(client_checker.has_errors());
+  }
+
+  TEST_CASE("GENFN native dependencies win exported C symbol collisions") {
+    namespace fs = std::filesystem;
+    const fs::path yona_lib =
+        yona::test::link::scratch_root() / "yona_lib_native_symbol_collision";
+    fs::create_directories(yona_lib / "Test");
+    const fs::path interface_path = yona_lib / "Test" / "Collision.yonai";
+
+    parser::Parser module_parser;
+    auto module = module_parser.parseModule(R"(
+module Test\Collision
+
+export available
+
+extern rawAvailable : Int -> Bool = "YonaTestCollisionAvailable"
+
+available : () -> Bool
+available () = rawAvailable 0
+)",
+                                            "native_symbol_collision.yona");
+    REQUIRE(module.has_value());
+
+    Codegen module_codegen("native_symbol_collision");
+    REQUIRE(module_codegen.compile_module(module.value().get()) != nullptr);
+    REQUIRE(module_codegen.emit_interface_file(interface_path.string()));
+
+    const string yonai = read_file(interface_path);
+    CHECK(yonai.find("GENFN_DEP available rawAvailable NATIVE "
+                     "YonaTestCollisionAvailable FN 1 INT -> BOOL") !=
+          string::npos);
+    CHECK(yonai.find("GENFN_DEP available rawAvailable YONA Test\\Collision "
+                     "available") == string::npos);
+
+    parser::Parser client_parser;
+    auto client = client_parser.parseExpression(
+        R"(import available from Test\Collision in available ())",
+        "native_symbol_collision_client.yona");
+    REQUIRE(client.has_value());
+    REQUIRE(client->Expression != nullptr);
+
+    Codegen client_codegen("native_symbol_collision_client");
+    client_codegen.set_opt_level(0);
+    client_codegen.ModulePaths.push_back(yona_lib.string());
+    REQUIRE(client_codegen.compile(client->Expression.get()) != nullptr);
+    const string ir = client_codegen.emit_ir();
+    CHECK(ir.find("call i1 @YonaTestCollisionAvailable(i64 0)") !=
+          string::npos);
+    CHECK(ir.find("rawAvailable__genfn") == string::npos);
   }
 
   TEST_CASE("Opaque exported ADTs omit constructors from their interface") {

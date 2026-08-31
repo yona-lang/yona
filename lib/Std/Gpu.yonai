@@ -67,7 +67,7 @@ GENFN_BEGIN allocPinnedFloats allocPinnedFloats
 allocPinnedFloats : Int -> PinnedFloats
 allocPinnedFloats n = PinnedFloats (rawAllocPinnedFloats n)
 GENFN_END
-GENFN_DEP available rawStdGpuAvailable YONA Std\Gpu available FN 1 INT -> BOOL
+GENFN_DEP available rawStdGpuAvailable NATIVE YonaStdGpuAvailable FN 1 INT -> BOOL
 GENFN_BEGIN available available
 available : () -> Bool
 available () = rawStdGpuAvailable 0
@@ -262,7 +262,7 @@ materialize buffer =
         Buffer values -> rawMaterialize values
     end
 GENFN_END
-GENFN_DEP physicalDeviceCount rawStdGpuPhysicalDeviceCount YONA Std\Gpu physicalDeviceCount FN 1 INT -> INT
+GENFN_DEP physicalDeviceCount rawStdGpuPhysicalDeviceCount NATIVE YonaStdGpuPhysicalDeviceCount FN 1 INT -> INT
 GENFN_BEGIN physicalDeviceCount physicalDeviceCount
 physicalDeviceCount : () -> Int
 physicalDeviceCount () = rawStdGpuPhysicalDeviceCount 0

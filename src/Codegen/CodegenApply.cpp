@@ -1584,12 +1584,18 @@ Codegen::codegen_extern_call(ApplyExpr *node, const std::string &fn_name,
                              const std::vector<TypedValue> &all_args) {
   auto ext_it = imports_.extern_functions.find(fn_name);
   std::string mangled = ext_it->second;
+  const bool is_private_native_dependency = std::ranges::any_of(
+      active_private_dependency_overlays_, [&](const auto *overlay) {
+        return overlay && overlay->native_dependency_names.contains(fn_name);
+      });
 
   // On-demand GENFN re-parse. Source bodies compile in this Codegen
   // instance, so `perform` inside an imported function sees the current
   // handler_stack_ (effect-row GENFN, not a C++ name list). Types that
   // differ from the pre-compiled signature also force remonomorphization.
-  auto genfn_it = imports_.imported_sources.find(mangled);
+  auto genfn_it = is_private_native_dependency
+                      ? imports_.imported_sources.end()
+                      : imports_.imported_sources.find(mangled);
   bool types_differ = false;
   if (genfn_it != imports_.imported_sources.end()) {
     auto meta_it2 = imports_.meta.find(mangled);

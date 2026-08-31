@@ -16,6 +16,29 @@ TEST_CASE("GPU: physicalDeviceCount is non-negative") {
   CHECK(YonaStdGpuPhysicalDeviceCount(0) >= 0);
 }
 
+TEST_CASE("GPU: disable override forces the CPU discovery fallback") {
+  const char *Previous = std::getenv("YONA_GPU_DISABLE_VULKAN");
+  const bool HadPrevious = Previous != nullptr;
+  const std::string Saved = HadPrevious ? Previous : "";
+#if defined(_WIN32)
+  (void)_putenv_s("YONA_GPU_DISABLE_VULKAN", "1");
+#else
+  (void)setenv("YONA_GPU_DISABLE_VULKAN", "1", 1);
+#endif
+
+  CHECK(YonaStdGpuAvailable(0) == 0);
+  CHECK(YonaStdGpuPhysicalDeviceCount(0) == 0);
+
+#if defined(_WIN32)
+  (void)_putenv_s("YONA_GPU_DISABLE_VULKAN", HadPrevious ? Saved.c_str() : "");
+#else
+  if (HadPrevious)
+    (void)setenv("YONA_GPU_DISABLE_VULKAN", Saved.c_str(), 1);
+  else
+    (void)unsetenv("YONA_GPU_DISABLE_VULKAN");
+#endif
+}
+
 TEST_CASE("GPU: vulkan ctx init when discovery says compute is available") {
   if (YonaStdGpuAvailable(0) != 1) {
     return;
