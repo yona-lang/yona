@@ -520,6 +520,87 @@ git add include/yona/Runtime/Platform/IoUring.h \
 git commit -m "fix: restore C linkage for platform I/O headers"
 ```
 
+### Task 7: Share the platform I/O context contract
+
+**Files:**
+
+- Create: `include/yona/Runtime/Platform/IoContext.h`
+- Modify: `include/yona/Runtime/Platform/IoUring.h`
+- Modify: `include/yona/Runtime/Platform/Kqueue.h`
+- Test: C++ syntax-only composition of both public platform headers
+
+**Interfaces:**
+
+- Consumes: the identical `YonaIoOperationKind`, `YonaIoContext`, registry
+  table-size constant, and registry function declarations currently duplicated
+  by the Linux and macOS platform headers.
+- Produces: one canonical C-compatible I/O context contract included by both
+  platform-specific APIs.
+
+- [ ] **Step 1: Reproduce the duplicate-type failure**
+
+Run:
+
+```bash
+clang++ -std=gnu++23 -Iinclude -x c++ -fsyntax-only - <<'EOF'
+#include "yona/Runtime/Platform/IoUring.h"
+#include "yona/Runtime/Platform/Kqueue.h"
+EOF
+```
+
+Expected: C++ rejects duplicate `YonaIoOperationKind` and `YonaIoContext`
+definitions.
+
+- [ ] **Step 2: Create the canonical shared header**
+
+Create `IoContext.h` with its own include guard, direct `<stddef.h>` and
+`<stdint.h>` includes, canonical C++ linkage guards, the complete existing
+operation enum and context struct, `YONA_IO_CONTEXT_TABLE_SIZE`, and these
+declarations:
+
+```c
+void YonaRuntimeIoContextPut(uint64_t Id, YonaIoContext *Context);
+YonaIoContext *YonaRuntimeIoContextTake(uint64_t Id);
+```
+
+Do not rename enum members, struct fields, the constant, or the registry API.
+
+- [ ] **Step 3: Consume the shared contract from each platform header**
+
+Add this include to both platform headers:
+
+```c
+#include "yona/Runtime/Platform/IoContext.h"
+```
+
+Remove only the duplicated enum, struct, table-size macro, and registry
+function declarations. Retain all io_uring/kqueue-specific declarations and
+their linkage guards.
+
+- [ ] **Step 4: Verify header composition and runtime linking**
+
+Run:
+
+```bash
+clang++ -std=gnu++23 -Iinclude -x c++ -fsyntax-only - <<'EOF'
+#include "yona/Runtime/Platform/IoUring.h"
+#include "yona/Runtime/Platform/Kqueue.h"
+EOF
+cmake --build --preset build-debug-linux --target tests
+```
+
+Expected: the syntax-only check exits zero and the test executable remains
+linked successfully.
+
+- [ ] **Step 5: Commit the shared contract**
+
+```bash
+git add include/yona/Runtime/Platform/IoContext.h \
+  include/yona/Runtime/Platform/IoUring.h \
+  include/yona/Runtime/Platform/Kqueue.h
+git commit -m "fix: share the platform I/O context contract"
+```
+
 ## Follow-up Plan Sequence
 
 After this plan produces a buildable test runner, create and execute focused
