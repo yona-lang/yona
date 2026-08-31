@@ -38,7 +38,7 @@ typedef struct {
   int ExitCode;
 } YonaProcess;
 
-static char *buildWindowsCommandLine(const char *Executable,
+static char *buildWindowsCommandLine(const char *ArgumentZero,
                                      int64_t *ArgumentSequence);
 
 /* ----- Console ----- */
@@ -477,7 +477,7 @@ static char *quoteWindowsArgument(const char *Argument) {
   return Result;
 }
 
-static char *buildWindowsCommandLine(const char *Executable,
+static char *buildWindowsCommandLine(const char *ArgumentZero,
                                      int64_t *ArgumentSequence) {
   int64_t ArgumentCount =
       ArgumentSequence ? YonaRuntimeSequenceLength(ArgumentSequence) : 0;
@@ -490,7 +490,7 @@ static char *buildWindowsCommandLine(const char *Executable,
   Out[0] = '\0';
   for (int64_t I = 0; I <= ArgumentCount; I++) {
     const char *Argument = I == 0
-                               ? Executable
+                               ? ArgumentZero
                                : (const char *)(intptr_t)YonaRuntimeSequenceGet(
                                      ArgumentSequence, I - 1);
     char *Q = quoteWindowsArgument(Argument);
@@ -583,43 +583,72 @@ char *YonaStdProcessTempFile(const char *Prefix, const char *Suffix) {
   return copyRuntimeString(Named);
 }
 
-int64_t YonaStdProcessRun(const char *File, int64_t *ArgumentSequence) {
-  if (!File || !File[0])
+static char *copyNativeExecutablePath(const char *File) {
+  size_t Length = strlen(File);
+  char *Native = (char *)malloc(Length + 1);
+  if (!Native)
+    return NULL;
+  memcpy(Native, File, Length + 1);
+  for (char *Cursor = Native; *Cursor; Cursor++) {
+    if (*Cursor == '/')
+      *Cursor = '\\';
+  }
+  return Native;
+}
+
+static int isBareExecutableName(const char *File) {
+  return !strchr(File, '/') && !strchr(File, '\\') && !strchr(File, ':');
+}
+
+static char *searchExecutablePath(const char *File) {
+  DWORD Required = SearchPathA(NULL, File, ".exe", 0, NULL, NULL);
+  if (Required == 0)
+    return NULL;
+  char *Resolved = (char *)malloc((size_t)Required);
+  if (!Resolved)
+    return NULL;
+  DWORD Written = SearchPathA(NULL, File, ".exe", Required, Resolved, NULL);
+  if (Written == 0 || Written >= Required) {
+    free(Resolved);
+    return NULL;
+  }
+  return Resolved;
+}
+
+static BOOL createRunProcess(const char *Executable, const char *ArgumentZero,
+                             int64_t *ArgumentSequence, STARTUPINFOA *Si,
+                             PROCESS_INFORMATION *Pi) {
+  char *CommandLine = buildWindowsCommandLine(ArgumentZero, ArgumentSequence);
+  if (!CommandLine)
+    return FALSE;
+  BOOL Ok = CreateProcessA(Executable, CommandLine, NULL, NULL, TRUE, 0, NULL,
+                           NULL, Si, Pi);
+  free(CommandLine);
+  return Ok;
+}
+
+static int64_t runWindowsProcess(const char *File, const char *ArgumentZero,
+                                 int64_t *ArgumentSequence) {
+  if (!File || !File[0] || !ArgumentZero)
     return -1;
-  size_t Flen = strlen(File);
-  char *Native = (char *)malloc(Flen + 1);
+  char *Native = copyNativeExecutablePath(File);
   if (!Native)
     return -1;
-  memcpy(Native, File, Flen + 1);
-  for (char *P = Native; *P; P++) {
-    if (*P == '/')
-      *P = '\\';
-  }
-  char *CommandLine = buildWindowsCommandLine(File, ArgumentSequence);
-  if (!CommandLine) {
-    free(Native);
-    return -1;
-  }
   STARTUPINFOA Si;
   memset(&Si, 0, sizeof(Si));
   Si.cb = sizeof(Si);
   PROCESS_INFORMATION Pi;
   memset(&Pi, 0, sizeof(Pi));
-  BOOL Ok = CreateProcessA(Native, CommandLine, NULL, NULL, TRUE, 0, NULL, NULL,
-                           &Si, &Pi);
-  if (!Ok) {
-    /* CreateProcess may mutate lpCommandLine; rebuild for PATH search. */
-    free(CommandLine);
-    CommandLine = buildWindowsCommandLine(File, ArgumentSequence);
-    if (!CommandLine) {
-      free(Native);
-      return -1;
+  BOOL Ok = createRunProcess(Native, ArgumentZero, ArgumentSequence, &Si, &Pi);
+  if (!Ok && isBareExecutableName(File)) {
+    char *Resolved = searchExecutablePath(Native);
+    if (Resolved) {
+      memset(&Pi, 0, sizeof(Pi));
+      Ok = createRunProcess(Resolved, ArgumentZero, ArgumentSequence, &Si, &Pi);
+      free(Resolved);
     }
-    Ok = CreateProcessA(NULL, CommandLine, NULL, NULL, TRUE, 0, NULL, NULL, &Si,
-                        &Pi);
   }
   free(Native);
-  free(CommandLine);
   if (!Ok)
     return -1;
   CloseHandle(Pi.hThread);
@@ -634,6 +663,15 @@ int64_t YonaStdProcessRun(const char *File, int64_t *ArgumentSequence) {
   }
   CloseHandle(Pi.hProcess);
   return (int64_t)(int)Code;
+}
+
+int64_t YonaStdProcessRun(const char *File, int64_t *ArgumentSequence) {
+  return runWindowsProcess(File, File, ArgumentSequence);
+}
+
+int64_t YonaStdProcessRunWithArgv0(const char *File, const char *ArgumentZero,
+                                   int64_t *ArgumentSequence) {
+  return runWindowsProcess(File, ArgumentZero, ArgumentSequence);
 }
 
 int64_t YonaStdProcessExecArgs(const char *File, int64_t *ArgumentSequence) {

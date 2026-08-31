@@ -40,7 +40,7 @@ typedef struct {
   int ExitCode;                     /* exit status (valid if exited==1) */
 } YonaProcess;
 
-static char **buildPosixArgumentVector(const char *Executable,
+static char **buildPosixArgumentVector(const char *ArgumentZero,
                                        int64_t *ArgumentSequence) {
   int64_t ArgumentCount =
       ArgumentSequence ? YonaRuntimeSequenceLength(ArgumentSequence) : 0;
@@ -50,7 +50,7 @@ static char **buildPosixArgumentVector(const char *Executable,
       (char **)calloc((size_t)ArgumentCount + 2, sizeof(char *));
   if (!ArgumentVector)
     return NULL;
-  ArgumentVector[0] = (char *)Executable;
+  ArgumentVector[0] = (char *)ArgumentZero;
   for (int64_t Index = 0; Index < ArgumentCount; Index++) {
     ArgumentVector[Index + 1] =
         (char *)(intptr_t)YonaRuntimeSequenceGet(ArgumentSequence, Index);
@@ -483,10 +483,12 @@ char *YonaStdProcessTempFile(const char *Prefix, const char *Suffix) {
   return Result;
 }
 
-int64_t YonaStdProcessRun(const char *File, int64_t *ArgumentSequence) {
-  if (!File || !File[0])
+static int64_t runPosixProcess(const char *File, const char *ArgumentZero,
+                               int64_t *ArgumentSequence) {
+  if (!File || !File[0] || !ArgumentZero)
     return -1;
-  char **ArgumentVector = buildPosixArgumentVector(File, ArgumentSequence);
+  char **ArgumentVector =
+      buildPosixArgumentVector(ArgumentZero, ArgumentSequence);
   if (!ArgumentVector)
     return -1;
   pid_t ProcessId = fork();
@@ -507,6 +509,15 @@ int64_t YonaStdProcessRun(const char *File, int64_t *ArgumentSequence) {
   if (WIFSIGNALED(Status))
     return -(int64_t)WTERMSIG(Status);
   return -1;
+}
+
+int64_t YonaStdProcessRun(const char *File, int64_t *ArgumentSequence) {
+  return runPosixProcess(File, File, ArgumentSequence);
+}
+
+int64_t YonaStdProcessRunWithArgv0(const char *File, const char *ArgumentZero,
+                                   int64_t *ArgumentSequence) {
+  return runPosixProcess(File, ArgumentZero, ArgumentSequence);
 }
 
 int64_t YonaStdProcessExecArgs(const char *File, int64_t *ArgumentSequence) {

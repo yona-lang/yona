@@ -31,7 +31,7 @@ clang-format.
 - Modify: `test/Fixtures/Codegen/stdlib_process_run.yona`
 - Modify: matching expected fixture output if the new assertions require it
 
-- [ ] **Step 1: Add failing ABI/behavior coverage**
+- [x] **Step 1: Add failing ABI/behavior coverage**
 
 Add a focused process regression for
 `runWithArgv0 : String -> String -> Seq -> Int` that launches a small child and
@@ -40,14 +40,14 @@ including spaces/metacharacters, are preserved. Retain a control proving
 ordinary `run` still supplies the executable as argv0 and treats its sequence
 as arguments after it.
 
-- [ ] **Step 2: Implement POSIX argument-vector separation**
+- [x] **Step 2: Implement POSIX argument-vector separation**
 
 Generalize the Linux/macOS internal argument-vector builder to accept a
 separate argument-zero value. Route existing `run` through it with
 `ArgumentZero = File`; expose `YonaStdProcessRunWithArgv0` with the explicit
 value. Preserve current fork/exec/wait status and allocation semantics.
 
-- [ ] **Step 3: Implement Windows executable/argv0 separation**
+- [x] **Step 3: Implement Windows executable/argv0 separation**
 
 Build a quoted command line whose first token is explicit argv0 while passing
 the real normalized executable as `lpApplicationName`. If a bare PATH name
@@ -56,7 +56,7 @@ needs resolution, use `SearchPathA`, rebuild the mutable command line, and call
 `CreateProcessA(NULL, customCommandLine, ...)`, which would try to execute the
 script-visible argv0.
 
-- [ ] **Step 4: Verify all platform sources and commit**
+- [x] **Step 4: Verify all platform sources and commit**
 
 Build the runtime/tests graph, run the focused process ABI/runtime tests, and
 compile the non-host platform sources where existing cross-platform syntax
@@ -174,4 +174,3 @@ update plan/design status in one combined documentation commit.
 - [ ] **Step 4: Commit**
 
 Commit as `docs: record runner and tooling stabilization`.
-

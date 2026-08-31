@@ -14,6 +14,7 @@ FN pid 1 INT -> INT
 AFN readAll 1 INT -> STRING
 FN readLine 1 INT -> STRING
 FN run 2 STRING SEQ -> INT
+FN runWithArgv0 3 STRING STRING SEQ -> INT
 FN setenv 2 STRING STRING -> INT
 FN spawn 2 STRING SEQ -> LINEAR
 FN tempDir 0 -> STRING

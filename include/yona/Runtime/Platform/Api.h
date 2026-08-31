@@ -85,6 +85,8 @@ char *YonaStdProcessExecutablePath(void);
 char *YonaStdProcessTempDir(void);
 char *YonaStdProcessTempFile(const char *Prefix, const char *Suffix);
 int64_t YonaStdProcessRun(const char *File, int64_t *ArgumentSequence);
+int64_t YonaStdProcessRunWithArgv0(const char *File, const char *ArgumentZero,
+                                   int64_t *ArgumentSequence);
 int64_t YonaStdProcessExecArgs(const char *File, int64_t *ArgumentSequence);
 
 void *YonaStdProcessSpawn(const char *Executable, int64_t *ArgumentSequence);

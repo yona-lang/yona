@@ -1,2 +1,18 @@
-import run from Std\Process in
-run "/bin/sh" ["-c", "exit 7"]
+import executablePath, exit, getArgs, run, runWithArgv0 from Std\Process in
+let explicitZero = "yona-visible-zero",
+    literal = "literal & ; $() text"
+in case getArgs of
+  [_] ->
+    let explicitStatus =
+          runWithArgv0 executablePath explicitZero ["explicit", literal],
+        ordinaryStatus = run executablePath ["ordinary", literal]
+    in explicitStatus * 100 + ordinaryStatus
+  [argv0, mode, argument] ->
+    exit (if mode == "explicit" && argv0 == explicitZero && argument == literal
+          then 17
+          else if mode == "ordinary" && argv0 == executablePath &&
+                  argument == literal
+               then 19
+               else 91)
+  _ -> exit 93
+end
