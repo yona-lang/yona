@@ -551,6 +551,16 @@ else()
 endif()
 add_dependencies(yona-repl yona_runtime)
 
+if(NOT YONA_LINK_STATIC_CLI AND UNIX)
+	if(APPLE)
+		set(_yona_cli_install_rpath "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+	else()
+		set(_yona_cli_install_rpath "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+	endif()
+	set_target_properties(yonac yona-repl yls PROPERTIES
+		INSTALL_RPATH "${_yona_cli_install_rpath}")
+endif()
+
 install(TARGETS yonac yona-repl yls
 	RUNTIME DESTINATION bin)
 
