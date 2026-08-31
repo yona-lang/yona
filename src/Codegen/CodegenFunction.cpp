@@ -488,8 +488,16 @@ void Codegen::collect_free_vars(AstNode *node,
       if (auto *va = dynamic_cast<ValueAlias *>(a)) {
         collect_free_vars(va->expr, bound, free_vars);
         nb.insert(va->identifier->name->value);
-      } else if (auto *la = dynamic_cast<LambdaAlias *>(a))
+      } else if (auto *la = dynamic_cast<LambdaAlias *>(a)) {
+        // A nested lambda may reference a value from this function's lexical
+        // scope (including the enclosing function itself). Its own alias is
+        // bound for recursive calls and must not be reported as an outer free
+        // variable.
+        auto lambda_bound = bound;
+        lambda_bound.insert(la->name->value);
+        collect_free_vars(la->lambda, lambda_bound, free_vars);
         nb.insert(la->name->value);
+      }
     }
     collect_free_vars(e->expr, nb, free_vars);
     break;
@@ -1078,10 +1086,30 @@ Codegen::compile_function(const std::string &name,
   const DeferredFunction def = input_def;
   PrivateGenfnDependencyOverlay dependency_overlay(*this, def.imported_owner);
 
-  const auto source_self = deferred_functions_.find(def.ast->name);
-  const bool has_source_self_alias = def.ast->name != name &&
-                                     source_self != deferred_functions_.end() &&
-                                     source_self->second.ast == def.ast;
+  // The specialization name is an implementation detail. Recursive calls
+  // written in this exact source AST still use its lexical name, including
+  // imported GENFNs for which no source-name entry exists in
+  // deferred_functions_. Do not install the alias for unrelated imported
+  // bodies: their local name may intentionally resolve to a dependency.
+  std::unordered_set<std::string> source_bound_names;
+  for (auto *pattern : def.ast->patterns)
+    bind_pattern_names(pattern, source_bound_names);
+  std::unordered_set<std::string> source_free_names;
+  for (auto *body : def.ast->bodies) {
+    if (auto *unguarded = dynamic_cast<BodyWithoutGuards *>(body)) {
+      collect_free_vars(unguarded->expr, source_bound_names, source_free_names);
+    } else if (auto *guarded = dynamic_cast<BodyWithGuards *>(body)) {
+      collect_free_vars(guarded->guard, source_bound_names, source_free_names);
+      collect_free_vars(guarded->expr, source_bound_names, source_free_names);
+    }
+  }
+  const bool has_source_self_alias =
+      def.ast->name != name && source_free_names.count(def.ast->name) != 0;
+  const auto previous_source_self = named_values_.find(def.ast->name);
+  const bool had_previous_source_self =
+      previous_source_self != named_values_.end();
+  const TypedValue previous_source_self_value =
+      had_previous_source_self ? previous_source_self->second : TypedValue{};
 
   // If the function has a type annotation, use it to determine param types
   // instead of relying on caller's arg types (which may be wrong).
@@ -1997,6 +2025,12 @@ Codegen::compile_function(const std::string &name,
   current_arena_ = saved_outer_arena;
   current_group_ = saved_outer_group;
   named_values_ = saved_values;
+  if (has_source_self_alias) {
+    if (had_previous_source_self)
+      named_values_[def.ast->name] = previous_source_self_value;
+    else
+      named_values_.erase(def.ast->name);
+  }
   debug_.scope = saved_di_scope;
   if (saved_block)
     builder_->SetInsertPoint(saved_block, saved_point);

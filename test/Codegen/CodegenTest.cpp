@@ -2364,6 +2364,34 @@ TEST_SUITE("Diagnostics") {
     CHECK(diag.error_count() >= 1);
   }
 
+  TEST_CASE("Expression diagnostics do not verify incomplete case IR") {
+    const string source = "case 1 of 1 -> missing end";
+    DiagnosticEngine diag;
+    [[maybe_unused]] const SourceId DiagnosticSource =
+        set_diagnostic_source(diag, source, "case-diagnostic.yona");
+
+    parser::Parser parser;
+    auto result = parser.parseExpression(source, "case-diagnostic.yona");
+    REQUIRE(result.has_value());
+    REQUIRE(result->Expression != nullptr);
+
+    Codegen codegen("case_diagnostic", &diag);
+    std::ostringstream captured_stderr;
+    auto *module = [&]() {
+      struct RestoreStderr {
+        std::streambuf *previous;
+        ~RestoreStderr() { std::cerr.rdbuf(previous); }
+      } restore{std::cerr.rdbuf(captured_stderr.rdbuf())};
+      return codegen.compile(result->Expression.get());
+    }();
+
+    CHECK(module == nullptr);
+    CHECK(diag.has_errors());
+    CHECK(diag.error_count() >= 1);
+    CHECK(captured_stderr.str().find("Module verification failed") ==
+          string::npos);
+  }
+
   TEST_CASE("Codegen suggests similar names for typos") {
     DiagnosticEngine diag;
     string source = "let myVariable = 42 in myVarible + 1";

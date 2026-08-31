@@ -222,7 +222,7 @@ Commit as `fix: retain imported generic dependency owners`.
 - Modify: `test/Codegen/AdtTest.cpp`
 - Modify: `test/Codegen/CodegenTest.cpp`
 
-- [ ] **Step 1: Witness both failure modes**
+- [x] **Step 1: Witness both failure modes**
 
 Run `Lazy stream takeStream` and add an expression-compilation regression that
 produces a diagnostic during case lowering. Confirm imported specializations
@@ -231,26 +231,26 @@ to verify incomplete recovery IR. Retain `Annotated ADT case functions
 heap-box non-recursive results`: its imported recursive `run` body exposes the
 same missing lexical-self alias and subsequent cross-function case blocks.
 
-- [ ] **Step 2: Bind the source-level self alias narrowly**
+- [x] **Step 2: Bind the source-level self alias narrowly**
 
 When a deferred AST's lexical name differs from the specialization name, bind
 that lexical name to the function being compiled for the function body and ABI
 rebuild scope, even when no local deferred-map alias exists. Restrict the alias
 to the same AST and restore prior state afterward.
 
-- [ ] **Step 3: Stop expression compilation after diagnostics**
+- [x] **Step 3: Stop expression compilation after diagnostics**
 
 Make expression `Codegen::compile(AstNode *)` mirror module compilation's error
 guard immediately after `codegen_main`, before transfer-drop flushing and LLVM
 verification. Do not weaken verification or add artificial terminators to all
 case early-return paths.
 
-- [ ] **Step 4: Verify stream and case suites**
+- [x] **Step 4: Verify stream and case suites**
 
 Run the focused stream case, annotated ADT heap-box case, all ADT/case Codegen
 tests, and the new diagnostic regression.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit as `fix: preserve imported recursive specializations`.
 

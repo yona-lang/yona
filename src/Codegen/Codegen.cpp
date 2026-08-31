@@ -607,6 +607,12 @@ Module *Codegen::compile(AstNode *node) {
   auto fn = codegen_main(node);
   if (!fn)
     return nullptr;
+  // A diagnostic-producing expression may intentionally leave recovery CFG
+  // blocks incomplete. Match module compilation by returning the diagnostic
+  // result before materializing deferred drops or asking LLVM to verify IR
+  // that will never be emitted.
+  if (Session->errorCount() > 0 || Session->diagnostics().has_errors())
+    return nullptr;
   // Transfer reconciliation records drops while nested control-flow is
   // still under construction. Materialize them only after every generated
   // function has a complete CFG, so LLVM dominance analysis never sees a
