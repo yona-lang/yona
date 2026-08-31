@@ -196,6 +196,21 @@ TEST_SUITE("Pattern ownership") {
                             "tag=STRING allocs=2 frees=2 leaked=0");
   }
 
+  TEST_CASE("sequence storage transfers anonymous heap children") {
+    assert_zero_alloc_leaks("import formatInt from Std\\Convert in "
+                            "case [formatInt 1] of _ -> 0 end",
+                            "sequence_anonymous_string_child", "0",
+                            "tag=STRING allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("grouped let aggregates do not return arena-backed children") {
+    const auto ir = assert_zero_alloc_leaks(
+        "let first = true, second = [1] in (first, second)",
+        "grouped_let_tuple_escape", "(true, [1])",
+        "tag=SEQ allocs=1 frees=1 leaked=0");
+    CHECK(ir.find("YonaRuntimeArenaAllocate") == std::string::npos);
+  }
+
   TEST_CASE("failed tuple patterns release retained prefix bindings") {
     assert_zero_alloc_leaks("case ([1], :no) of (x, :yes) -> 1; _ -> 0 end",
                             "tuple_pattern_symbol_prefix_mismatch", "0",
@@ -203,6 +218,22 @@ TEST_SUITE("Pattern ownership") {
     assert_zero_alloc_leaks("case ([1], 2) of (x, 3) -> 1; _ -> 0 end",
                             "tuple_pattern_literal_prefix_mismatch", "0",
                             "tag=SEQ allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("failed head-tail literals release retained heap prefixes") {
+    assert_zero_alloc_leaks("import formatInt from Std\\Convert in "
+                            "let text = formatInt 1 in case [text, \"b\"] of "
+                            "[first, \"z\" | rest] -> 1; _ -> 0 end",
+                            "head_tail_literal_prefix_mismatch", "0",
+                            "tag=STRING allocs=1 frees=1 leaked=0");
+  }
+
+  TEST_CASE("failed composite heads release temporary scrutinees once") {
+    assert_zero_alloc_leaks("let matched = case [(1, \"two\")] of "
+                            "[(1, \"wrong\") | _] -> false; _ -> true end, "
+                            "later = [1] in (matched, later)",
+                            "composite_head_mismatch_scrutinee_release",
+                            "(true, [1])");
   }
 
   TEST_CASE("temporary scalar constructor cases release their scrutinee") {
@@ -421,12 +452,12 @@ TEST_SUITE("Pattern ownership") {
   }
 
   TEST_CASE("caught heap exceptions transfer their owners exactly once") {
-    const auto caught_ir = assert_zero_alloc_leaks(
-        "try case (InvalidSyntax \"boom\", [1]) of "
-        "(error, values) -> raise error end "
-        "catch InvalidSyntax message -> 1; _ -> 0 end",
-        "caught_pattern_bound_heap_exception", "1",
-        "tag=ADT allocs=1 frees=1 leaked=0");
+    const auto caught_ir =
+        assert_zero_alloc_leaks("try case (InvalidSyntax \"boom\", [1]) of "
+                                "(error, values) -> raise error end "
+                                "catch InvalidSyntax message -> 1; _ -> 0 end",
+                                "caught_pattern_bound_heap_exception", "1",
+                                "tag=ADT allocs=1 frees=1 leaked=0");
     CHECK(caught_ir.find("call void @YonaRuntimeRaiseOwned") !=
           std::string::npos);
     CHECK(caught_ir.find("call void @YonaRuntimeConsumeExceptionOwner") !=
@@ -481,12 +512,12 @@ TEST_SUITE("Pattern ownership") {
         "caught_heap_exception_sequence_escape", "4",
         "tag=SEQ allocs=1 frees=1 leaked=0");
 
-    const auto reraise_ir = assert_zero_alloc_leaks(
-        "try (try raise InvalidSyntax \"boom\" "
-        "catch ParsedValueOutOfRange _ -> 0 end) "
-        "catch InvalidSyntax message -> 2; _ -> 0 end",
-        "unmatched_heap_exception_reraise", "2",
-        "tag=ADT allocs=1 frees=1 leaked=0");
+    const auto reraise_ir =
+        assert_zero_alloc_leaks("try (try raise InvalidSyntax \"boom\" "
+                                "catch ParsedValueOutOfRange _ -> 0 end) "
+                                "catch InvalidSyntax message -> 2; _ -> 0 end",
+                                "unmatched_heap_exception_reraise", "2",
+                                "tag=ADT allocs=1 frees=1 leaked=0");
     CHECK(reraise_ir.find("call void @YonaRuntimeReraise") !=
           std::string::npos);
 
@@ -497,13 +528,12 @@ TEST_SUITE("Pattern ownership") {
         "nested_heap_exception_transfer", "3",
         "tag=ADT allocs=2 frees=2 leaked=0");
 
-    assert_zero_alloc_leaks(
-        "let message = [7] in "
-        "let caught = try raise InvalidSyntax \"boom\" "
-        "catch InvalidSyntax message -> 0 end in "
-        "case message of [value] -> value; _ -> caught end",
-        "caught_exception_binding_shadow_restore", "7",
-        "tag=ADT allocs=1 frees=1 leaked=0");
+    assert_zero_alloc_leaks("let message = [7] in "
+                            "let caught = try raise InvalidSyntax \"boom\" "
+                            "catch InvalidSyntax message -> 0 end in "
+                            "case message of [value] -> value; _ -> caught end",
+                            "caught_exception_binding_shadow_restore", "7",
+                            "tag=ADT allocs=1 frees=1 leaked=0");
   }
 
   TEST_CASE("async exception propagation transfers its owner to the caller") {
@@ -512,8 +542,7 @@ TEST_SUITE("Pattern ownership") {
         "\"YonaTestAsyncRaiseOwned\" in "
         "try let failed = raiseOwned 0, sibling = [1] in 0 "
         "catch InvalidSyntax message -> 5; _ -> 0 end",
-        "async_heap_exception_owner", "5",
-        "tag=ADT allocs=1 frees=1 leaked=0");
+        "async_heap_exception_owner", "5", "tag=ADT allocs=1 frees=1 leaked=0");
     CHECK(ir.find("YonaRuntimeAsyncCall") != std::string::npos);
   }
 

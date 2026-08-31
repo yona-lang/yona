@@ -23,8 +23,8 @@ using llvm::Constant;
 using llvm::ConstantInt;
 using llvm::Function;
 using llvm::FunctionType;
-using llvm::IRBuilder;
 using llvm::IntegerType;
+using llvm::IRBuilder;
 using llvm::PointerType;
 using llvm::StructType;
 using llvm::Value;
@@ -284,11 +284,17 @@ TypedValue Codegen::codegen_seq(ValuesSequenceExpr *node) {
     } else if (store_val->getType() != i64_ty) {
       store_val = builder_->CreateZExtOrTrunc(store_val, i64_ty);
     }
-    // Storing a heap-typed element into a seq makes the seq a co-owner.
-    // rc_inc the original value before storing the i64 cast — the seq
-    // destructor will rc_dec via the heap_flag path on cleanup.
-    if (is_heap_type(tv.type) && tv.val && !isa<Constant>(tv.val) &&
-        !tv.val->getType()->isStructTy())
+    // Sequence storage follows the same ownership rule as tuples: borrowed
+    // and lexically named values keep their current owner, so the sequence
+    // takes an independent reference. A truly anonymous owned temporary
+    // transfers its existing reference directly to the sequence.
+    const auto named_owner = named_binding_for_value(tv.val);
+    const bool has_lexical_owner =
+        named_owner && !imports_.extern_functions.contains(*named_owner);
+    const bool needs_independent_owner =
+        tv.heap_ownership == HeapOwnership::Borrowed || has_lexical_owner;
+    if (needs_independent_owner && is_heap_type(tv.type) && tv.val &&
+        !isa<Constant>(tv.val) && !tv.val->getType()->isStructTy())
       emit_rc_inc(tv.val, tv.type);
     builder_->CreateCall(rt_.seq_set_, {seq, idx, store_val});
   }
@@ -514,8 +520,8 @@ TypedValue Codegen::codegen_cons(ConsLeftExpr *node) {
     }
   }
   // Mark the new seq as containing heap elements so the destructor walks
-  // and frees them. YonaRuntimeSequencePrepend inherits the source seq's heap_flag,
-  // but on `x :: []` the right side is empty with heap_flag=0, so we
+  // and frees them. YonaRuntimeSequencePrepend inherits the source seq's
+  // heap_flag, but on `x :: []` the right side is empty with heap_flag=0, so we
   // need to set it explicitly when the cons-ed element is heap-typed.
   if (is_heap_type(elem.type))
     builder_->CreateCall(rt_.seq_set_heap_,
@@ -752,8 +758,7 @@ TypedValue Codegen::codegen_seq_generator(SeqGeneratorExpr *node) {
   auto *ext =
       static_cast<ValueCollectionExtractorExpr *>(node->collectionExtractor);
   if (!ext || !ext->collection) {
-    report_error(node->Range,
-                 "sequence generator missing source collection");
+    report_error(node->Range, "sequence generator missing source collection");
     return {};
   }
 
@@ -1104,8 +1109,7 @@ TypedValue Codegen::codegen_set_generator(SetGeneratorExpr *node) {
   auto *ext =
       static_cast<ValueCollectionExtractorExpr *>(node->collectionExtractor);
   if (!ext || !ext->collection) {
-    report_error(node->Range,
-                 "set generator missing source collection");
+    report_error(node->Range, "set generator missing source collection");
     return {};
   }
 
@@ -1178,8 +1182,7 @@ TypedValue Codegen::codegen_dict_generator(DictGeneratorExpr *node) {
   auto *ext =
       static_cast<ValueCollectionExtractorExpr *>(node->collectionExtractor);
   if (!ext || !ext->collection) {
-    report_error(node->Range,
-                 "dict generator missing source collection");
+    report_error(node->Range, "dict generator missing source collection");
     return {};
   }
 

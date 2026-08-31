@@ -49,6 +49,12 @@ void Codegen::emit_arm_scrutinee_drop(const std::optional<TypedValue> &drop,
     return;
   emit_frame_transfer(drop->val);
   emit_rc_dec(drop->val, drop->type);
+  // Releasing a case-owned sequence discharges the same ownership obligation
+  // as handing it to a consuming operation. Record that fact so branch
+  // reconciliation does not synthesize a second release when a sibling arm
+  // consumes the scrutinee through a head-tail pattern.
+  if (drop->type == CType::SEQ)
+    mark_transferred(drop->val, TransferDomain::Seq);
 }
 
 void Codegen::emit_active_arm_drops(Value *escaping) {
@@ -138,6 +144,24 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
                                        Value *seq_ptr, BasicBlock *body_bb,
                                        BasicBlock *next_bb) {
   auto i64_ty = LType::getInt64Ty(*context_);
+  auto *fn = builder_->GetInsertBlock()->getParent();
+
+  auto branch_to_match_or_cleanup = [&](Value *condition,
+                                        const llvm::Twine &match_name) {
+    auto *match_bb = BasicBlock::Create(*context_, match_name, fn);
+    if (arm_drop_stack_.empty() || arm_drop_stack_.back().empty()) {
+      builder_->CreateCondBr(condition, match_bb, next_bb);
+    } else {
+      auto *cleanup_bb =
+          BasicBlock::Create(*context_, match_name + ".failed", fn);
+      builder_->CreateCondBr(condition, match_bb, cleanup_bb);
+      builder_->SetInsertPoint(cleanup_bb);
+      for (const auto &[value, type] : arm_drop_stack_.back())
+        emit_rc_dec(value, type);
+      builder_->CreateBr(next_bb);
+    }
+    builder_->SetInsertPoint(match_bb);
+  };
 
   if (htp->heads.size() == 1) {
     auto *count_ptr =
@@ -231,11 +255,7 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
               TypedValue{elem_val, head_type});
         }
         if (predicate) {
-          auto *matched =
-              BasicBlock::Create(*context_, "head.literal.match",
-                                 builder_->GetInsertBlock()->getParent());
-          builder_->CreateCondBr(predicate, matched, next_bb);
-          builder_->SetInsertPoint(matched);
+          branch_to_match_or_cleanup(predicate, "head.literal.match");
         }
       }
     } else if (hp->get_type() == ast::AST_TUPLE_PATTERN) {
@@ -259,12 +279,6 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
         tuple_identity = &scrutinee.semantic_subtypes.front();
       for (size_t ti = 0; ti < tp->patterns.size(); ti++) {
         auto *sub = tp->patterns[ti];
-        if (sub->get_type() != ast::AST_PATTERN_VALUE)
-          continue;
-        auto *pv = static_cast<PatternValue *>(sub);
-        auto *id = std::get_if<IdentifierExpr *>(&pv->expr);
-        if (!id)
-          continue;
         auto *gep = builder_->CreateGEP(i64_ty, tuple_ptr,
                                         {ConstantInt::get(i64_ty, ti + 2)},
                                         "tuple_head_gep");
@@ -275,6 +289,28 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
                 : nullptr;
         const CType element_type =
             element_identity ? element_identity->type : CType::INT;
+        if (sub->get_type() != ast::AST_PATTERN_VALUE)
+          continue;
+        auto *pv = static_cast<PatternValue *>(sub);
+        if (auto *symbol = std::get_if<SymbolExpr *>(&pv->expr)) {
+          branch_to_match_or_cleanup(
+              builder_->CreateICmpEQ(
+                  elem,
+                  ConstantInt::get(i64_ty, intern_symbol((*symbol)->value))),
+              "tuple.head.symbol.match");
+          continue;
+        }
+        if (auto *literal =
+                std::get_if<ast::LiteralExpr<void *> *>(&pv->expr)) {
+          branch_to_match_or_cleanup(emit_literal_pattern_predicate(
+                                         reinterpret_cast<AstNode *>(*literal),
+                                         TypedValue{elem, element_type}),
+                                     "tuple.head.literal.match");
+          continue;
+        }
+        auto *id = std::get_if<IdentifierExpr *>(&pv->expr);
+        if (!id)
+          continue;
         Value *typed_elem = elem;
         if (is_heap_type(element_type))
           typed_elem = builder_->CreateIntToPtr(
@@ -306,13 +342,17 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
       if (!adt_ptr->getType()->isPointerTy())
         adt_ptr =
             builder_->CreateIntToPtr(adt_ptr, PointerType::get(*context_, 0));
+      auto *record_tag = builder_->CreateCall(rt_.adt_get_tag_, {adt_ptr});
+      branch_to_match_or_cleanup(
+          builder_->CreateICmpEQ(
+              record_tag, ConstantInt::get(i64_ty, static_cast<int8_t>(
+                                                       ctor_it->second.tag))),
+          "record.head.tag.match");
       for (auto &[field_name, field_pattern] : record->items) {
         if (!field_name || field_pattern->get_type() != ast::AST_PATTERN_VALUE)
           continue;
         auto *pattern_value = static_cast<PatternValue *>(field_pattern);
         auto *identifier = std::get_if<IdentifierExpr *>(&pattern_value->expr);
-        if (!identifier)
-          continue;
         for (size_t fi = 0; fi < ctor_it->second.field_names.size(); ++fi) {
           if (ctor_it->second.field_names[fi] != field_name->value)
             continue;
@@ -330,6 +370,24 @@ bool Codegen::codegen_pattern_headtail(HeadTailsPattern *htp, CaseExpr *node,
           const auto &shape = fi < ctor_it->second.field_shapes.size()
                                   ? ctor_it->second.field_shapes[fi]
                                   : fallback;
+          if (!identifier) {
+            if (auto *symbol =
+                    std::get_if<SymbolExpr *>(&pattern_value->expr)) {
+              branch_to_match_or_cleanup(
+                  builder_->CreateICmpEQ(
+                      raw, ConstantInt::get(i64_ty,
+                                            intern_symbol((*symbol)->value))),
+                  "record.head.symbol.match");
+            } else if (auto *literal = std::get_if<ast::LiteralExpr<void *> *>(
+                           &pattern_value->expr)) {
+              branch_to_match_or_cleanup(
+                  emit_literal_pattern_predicate(
+                      reinterpret_cast<AstNode *>(*literal),
+                      TypedValue{raw, shape.type}),
+                  "record.head.literal.match");
+            }
+            break;
+          }
           Value *typed = raw;
           if (shape.type == CType::FLOAT)
             typed = builder_->CreateBitCast(raw, LType::getDoubleTy(*context_));

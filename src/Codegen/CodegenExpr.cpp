@@ -1290,6 +1290,31 @@ std::unordered_set<std::string> Codegen::analyze_let_escaping(LetExpr *node) {
         check_escape(de->steps.back(), ret_pos);
       return;
     }
+    // Returning a collection also returns every value stored in it. Propagate
+    // return position through aggregate literals so an arena-backed binding is
+    // never embedded in an object that outlives the let scope.
+    if (n->get_type() == ast::AST_TUPLE_EXPR) {
+      for (auto *value : static_cast<TupleExpr *>(n)->values)
+        check_escape(value, ret_pos);
+      return;
+    }
+    if (n->get_type() == ast::AST_VALUES_SEQUENCE_EXPR) {
+      for (auto *value : static_cast<ValuesSequenceExpr *>(n)->values)
+        check_escape(value, ret_pos);
+      return;
+    }
+    if (n->get_type() == ast::AST_SET_EXPR) {
+      for (auto *value : static_cast<SetExpr *>(n)->values)
+        check_escape(value, ret_pos);
+      return;
+    }
+    if (n->get_type() == ast::AST_DICT_EXPR) {
+      for (const auto &[key, value] : static_cast<DictExpr *>(n)->values) {
+        check_escape(key, ret_pos);
+        check_escape(value, ret_pos);
+      }
+      return;
+    }
     if (n->get_type() == ast::AST_FUNCTION_EXPR) {
       auto *fe = static_cast<FunctionExpr *>(n);
       std::function<void(AstNode *)> walk = [&](AstNode *nd) {
@@ -1665,29 +1690,20 @@ TypedValue Codegen::codegen_let(LetExpr *node) {
   codegen_let_aliases(node, arena, non_escaping, scope_bindings,
                       binding_is_arena);
 
-  // 5. Task group body allocation policy:
-  // On Windows, keep alias allocations arena-backed for leak-free raise unwind,
-  // but keep body temporaries on RC heap to avoid grouped-let seq crash.
-#ifndef _WIN32
-  if (has_group && arena)
-    current_arena_ = arena;
-#endif
-
-  // 6. Codegen body
+  // 5. Codegen the result on the regular RC heap. The task-group arena is
+  // destroyed when this let ends, while the result is returned to its caller.
+  // Only bindings proven non-escaping may use the group arena.
   auto result = codegen(node->expr);
-
-  if (has_group && arena)
-    current_arena_ = saved_arena;
 
   const bool body_terminated = current_block_terminated();
 
-  // 7. Await children before scope cleanup (only on fall-through path; raise/
+  // 6. Await children before scope cleanup (only on fall-through path; raise/
   //    other terminators skip IR here — runtime unwind calls
   //    YonaRuntimeTaskGroupEnd).
   if (has_group && !body_terminated)
     builder_->CreateCall(rt_.group_await_all_, {current_group_});
 
-  // 8. Cleanup scope (group arena: YonaRuntimeTaskGroupEnd destroys bump
+  // 7. Cleanup scope (group arena: YonaRuntimeTaskGroupEnd destroys bump
   // memory)
   if (!body_terminated)
     cleanup_let_scope(scope_bindings, binding_is_arena, result, arena,
@@ -1703,7 +1719,7 @@ TypedValue Codegen::codegen_let(LetExpr *node) {
 
   current_arena_ = saved_arena;
 
-  // 9. Clean up deferred generators not consumed by fusion
+  // 8. Clean up deferred generators not consumed by fusion
   for (auto *alias : node->aliases)
     if (auto *va = dynamic_cast<ValueAlias *>(alias))
       deferred_generators_.erase(va->identifier->name->value);
