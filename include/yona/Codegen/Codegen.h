@@ -1143,6 +1143,8 @@ private:
   /// imported GENFN. Each affected local name is restored exactly, including
   /// bindings hidden by the overlay.
   struct PrivateGenfnDependencyOverlay {
+    enum class DependencyProvenance { Yona, Native };
+
     struct SavedBinding {
       std::string name;
       std::optional<std::string> external;
@@ -1153,7 +1155,7 @@ private:
 
     Codegen &cg;
     std::vector<SavedBinding> saved_bindings;
-    std::unordered_set<std::string> native_dependency_names;
+    std::unordered_map<std::string, DependencyProvenance> dependency_provenance;
     bool restored = false;
     PrivateGenfnDependencyOverlay(Codegen &cg,
                                   const std::optional<std::string> &owner);

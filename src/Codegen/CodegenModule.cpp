@@ -1217,8 +1217,9 @@ Codegen::PrivateGenfnDependencyOverlay::PrivateGenfnDependencyOverlay(
     cg.deferred_functions_.erase(local_name);
     cg.named_values_.erase(local_name);
     cg.imports_.extern_functions[local_name] = dependency.c_symbol;
-    if (dependency.is_native)
-      native_dependency_names.insert(local_name);
+    dependency_provenance.emplace(local_name, dependency.is_native
+                                                  ? DependencyProvenance::Native
+                                                  : DependencyProvenance::Yona);
   }
 }
 

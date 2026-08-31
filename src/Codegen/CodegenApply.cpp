@@ -1624,10 +1624,19 @@ Codegen::codegen_extern_call(ApplyExpr *node, const std::string &fn_name,
                              const std::vector<TypedValue> &all_args) {
   auto ext_it = imports_.extern_functions.find(fn_name);
   std::string mangled = ext_it->second;
-  const bool is_private_native_dependency = std::ranges::any_of(
-      active_private_dependency_overlays_, [&](const auto *overlay) {
-        return overlay && overlay->native_dependency_names.contains(fn_name);
-      });
+  bool is_private_native_dependency = false;
+  for (auto overlay = active_private_dependency_overlays_.rbegin();
+       overlay != active_private_dependency_overlays_.rend(); ++overlay) {
+    if (!*overlay)
+      continue;
+    const auto provenance = (*overlay)->dependency_provenance.find(fn_name);
+    if (provenance == (*overlay)->dependency_provenance.end())
+      continue;
+    is_private_native_dependency =
+        provenance->second ==
+        PrivateGenfnDependencyOverlay::DependencyProvenance::Native;
+    break;
+  }
 
   // On-demand GENFN re-parse. Source bodies compile in this Codegen
   // instance, so `perform` inside an imported function sees the current

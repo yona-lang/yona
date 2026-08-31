@@ -2053,6 +2053,35 @@ available () = rawAvailable 0
     CHECK(ir.find("rawAvailable__genfn") == string::npos);
   }
 
+  TEST_CASE("Nested GENFN dependency overlays use the innermost provenance") {
+    const fs::path yona_lib =
+        yona::test::link::scratch_root() / "yona_lib_nested_provenance";
+    fs::create_directories(yona_lib / "Test");
+    const fs::path interface_path =
+        yona_lib / "Test" / "NestedProvenance.yonai";
+
+    ofstream(interface_path) << R"(MODULE Test\NestedProvenance
+FN inner 1 INT -> INT
+FN top 1 INT -> INT
+FN yonaHelper 1 INT -> INT
+GENFN_DEP inner helper YONA Test\NestedProvenance yonaHelper FN 1 INT -> INT
+GENFN_BEGIN inner inner
+inner value = helper value
+GENFN_END
+GENFN_DEP top helper NATIVE YonaStdMathAbs FN 1 INT -> INT
+GENFN_BEGIN top top
+top value = inner value
+GENFN_END
+GENFN_BEGIN yonaHelper yonaHelper
+yonaHelper value = value + 1
+GENFN_END
+)";
+
+    const string source = R"(import top from Test\NestedProvenance in top 5)";
+    CHECK(compile_and_run(source, nullptr, nullptr, "nested_genfn_provenance",
+                          nullptr, 0, &yona_lib) == "6");
+  }
+
   TEST_CASE("Opaque exported ADTs omit constructors from their interface") {
     namespace fs = std::filesystem;
     fs::path yona_lib = yona::test::link::scratch_root() / "yona_lib_opaque";
