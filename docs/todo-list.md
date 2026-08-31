@@ -250,6 +250,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   runtime release recursively frees the same tuple/Linear/endpoint/channel
   shape.
 
+- [ ] **Generated binary File programs do not release ByteArray temporaries
+  or read results.** Repro: run the `binary_write_read` fixture, then execute
+  its generated program with `YONA_ALLOC_STATS=1`; output is correct (`12`)
+  and all six File/Linear ADTs are freed, but both ByteArrays remain leaked.
+
 - [ ] **Binary I/O fixtures infer a `FileHandle` as `Int` at native call
   boundaries.** Repro: run `tests.exe -tc="Fixture-based codegen tests"`;
   `binary_chunks`, `binary_seek`, and `binary_write_read` report an expected
