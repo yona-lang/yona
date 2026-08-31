@@ -12,6 +12,17 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `YonaRuntimePlatformSubmitFileDescriptorByteWrite`; each path registers a
   separate direct-result context without freeing its original `Ctx`.
 
+- [ ] **Installed Yona executable targets collide with their output file.**
+  Repro: run `ctest --preset unit-tests-linux -R
+  installed_consumer_contract`; Ninja rejects `yona_language_consumer`
+  because the phony custom target names itself as an input and multiple rules
+  generate the same path.
+
+- [ ] **Vulkan-enabled generated programs omit the loader link dependency.**
+  Repro: run `ctest --preset unit-tests-linux -R doctest_stdlib_gpu`; linking
+  the stdlib GPU conformance fixture reports unresolved `vk*` symbols from
+  `runtime/libyona_runtime.a` and returns `LINK_ERROR`.
+
 - [ ] **Platform I/O registry declarations lack C++ linkage guards.** Repro:
   run `cmake --build --preset build-debug-linux`; linking `tests` reports
   undefined `YonaRuntimeIoContextPut`/`YonaRuntimeIoContextTake` references
