@@ -6,6 +6,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **Canonical zero-arity interface functions import as values instead of
+  `Unit -> T`.** Repro: run `./out/build/x64-debug-linux/tests
+  -tc="Interface files preserve sibling-wrapped FN effect rows"`; `wrap ()`
+  reports an expected `Int` versus `(() -> ...)` mismatch before the effect
+  row can be checked.
+
 - [ ] **The semantic generic-source service cannot reparse its owned source.**
   Repro: run `./out/build/x64-debug-linux/tests -tc="Semantics generic source
   service retains GENFN source ownership"`; `GenericFunctionSourceService`
