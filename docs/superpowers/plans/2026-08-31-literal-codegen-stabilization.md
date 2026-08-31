@@ -75,6 +75,59 @@ Run Lexer, parser/pattern, and character codegen fixtures including string
 rejection and non-BMP controls. Commit as
 `fix: validate Unicode character literals`.
 
+## Task 1B: Make character AST printing parseable
+
+**Files:**
+
+- Modify: `src/Syntax/Ast.cpp`
+- Modify: focused AST/parser tests under `test/Syntax/`
+
+- [ ] **Step 1: Add print-round-trip RED coverage**
+
+Construct and print character nodes for U+03BB, U+1F600, U+10FFFF, ASCII quote,
+backslash, newline, and NUL. Reparse every printed spelling and assert the same
+scalar value. Confirm non-ASCII currently emits unsupported `\x...` escapes.
+
+- [ ] **Step 2: Emit canonical lexer-supported escapes**
+
+Keep existing short escapes for ASCII controls and delimiters. Emit `\u` plus
+exactly four uppercase hex digits for remaining BMP values and `\U` plus
+exactly eight for supplementary values. Preserve and restore the caller's
+stream formatting flags and fill character.
+
+- [ ] **Step 3: Verify and commit**
+
+Run AST/parser formatting tests and the Unicode fixture, then commit as
+`fix: print parseable character literals`.
+
+## Task 1C: Reject malformed raw UTF-8 safely
+
+**Files:**
+
+- Modify: `src/Syntax/Lexer.cpp`
+- Modify only if a decoded-width result is required: `include/yona/Syntax/Lexer.h`
+- Modify: `test/Syntax/LexerTest.cpp`
+
+- [ ] **Step 1: Add raw-byte RED coverage**
+
+Test overlong `C0 80`, `E0 80 80`, and `F0 80 80 80`, an encoded surrogate
+`ED A0 80`, and above-U+10FFFF `F4 90 80 80`. Assert `INVALID_CHARACTER`,
+bounded recovery, and no exception/crash; retain valid two-, three-, and
+four-byte boundary controls.
+
+- [ ] **Step 2: Validate decoding before cursor advancement**
+
+Reject illegal lead-byte ranges, non-minimal encodings, surrogate scalars, and
+values above U+10FFFF in the UTF-8 decoder. Make cursor advancement use the
+validated encoded width (or an equivalent lead-byte-derived width), so an
+invalid/overlong result cannot desynchronize `Current` from `SourceText`.
+Recovery must consume at least one raw byte and stay within the source range.
+
+- [ ] **Step 3: Verify and commit**
+
+Run the full Lexer suite, parser recovery controls, and malformed-input CLI
+repros, then commit as `fix: reject malformed UTF-8 source`.
+
 ## Task 2: Centralize literal predicates across pattern shapes
 
 **Files:**
