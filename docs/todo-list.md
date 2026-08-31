@@ -26,6 +26,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   `'\x3bb'`, but the lexer supports only `\u`/`\U` Unicode escapes, so the
   printed AST cannot be parsed back.
 
+- [ ] **Malformed or non-scalar raw UTF-8 can escape lexer validation or crash
+  `yonac`.** Repro: pipe the overlong bytes `C0 80` inside a character literal
+  to `yonac --emit-ir`; cursor accounting reaches `string_view::substr` out of
+  range. Raw surrogate `ED A0 80` and above-U+10FFFF `F4 90 80 80` sequences
+  are also accepted as character values instead of rejected.
+
 - [ ] **Byte and character literals are accepted by parsing and typing but
   rejected by codegen.** Repro: compile `case [2b] of [1b] -> 1; _ -> 2 end`
   (or the analogous character sequence); codegen reports `unsupported
