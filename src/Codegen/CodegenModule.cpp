@@ -1388,10 +1388,7 @@ void Codegen::register_sibling_genfns(const std::string &mangled) {
       compiled_functions_.erase(ifs.local_name);
       deferred_functions_.erase(ifs.local_name);
       named_values_.erase(ifs.local_name);
-      codegen_function_def(func_ast, ifs.local_name);
-      if (const auto deferred = deferred_functions_.find(ifs.local_name);
-          deferred != deferred_functions_.end())
-        deferred->second.imported_owner = dep_mangled;
+      codegen_function_def(func_ast, ifs.local_name, dep_mangled);
       registered_dependencies.insert(dep_mangled);
       reachable_sources.push_back(ifs.source_text);
       discovered_dependency = true;
@@ -1469,7 +1466,7 @@ Codegen::materialize_imported_function_value(const std::string &name) {
       imports_.imported_ast_nodes.push_back(
           std::unique_ptr<FunctionExpr>(func_ast));
       register_sibling_genfns(mangled);
-      codegen_function_def(func_ast, name);
+      codegen_function_def(func_ast, name, mangled);
       auto def_it = deferred_functions_.find(name);
       if (def_it != deferred_functions_.end()) {
         compile_function(name, def_it->second, dummy_args);

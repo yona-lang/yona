@@ -550,8 +550,14 @@ void Codegen::collect_free_vars(AstNode *node,
     for (auto *pat : fn->patterns)
       bind_pattern_names(pat, nb);
     for (auto *body : fn->bodies) {
-      if (auto *bwg = dynamic_cast<BodyWithoutGuards *>(body))
-        collect_free_vars(bwg->expr, nb, free_vars, descend_nested_lambdas);
+      if (auto *unguarded = dynamic_cast<BodyWithoutGuards *>(body)) {
+        collect_free_vars(unguarded->expr, nb, free_vars,
+                          descend_nested_lambdas);
+      } else if (auto *guarded = dynamic_cast<BodyWithGuards *>(body)) {
+        collect_free_vars(guarded->guard, nb, free_vars,
+                          descend_nested_lambdas);
+        collect_free_vars(guarded->expr, nb, free_vars, descend_nested_lambdas);
+      }
     }
     break;
   }
@@ -576,6 +582,25 @@ void Codegen::collect_free_vars(AstNode *node,
   default:
     break;
   }
+}
+
+bool Codegen::function_references_lexical_self(FunctionExpr *function) {
+  if (!function || function->name.empty())
+    return false;
+
+  std::unordered_set<std::string> bound_names;
+  for (auto *pattern : function->patterns)
+    bind_pattern_names(pattern, bound_names);
+  std::unordered_set<std::string> free_names;
+  for (auto *body : function->bodies) {
+    if (auto *unguarded = dynamic_cast<BodyWithoutGuards *>(body)) {
+      collect_free_vars(unguarded->expr, bound_names, free_names, true);
+    } else if (auto *guarded = dynamic_cast<BodyWithGuards *>(body)) {
+      collect_free_vars(guarded->guard, bound_names, free_names, true);
+      collect_free_vars(guarded->expr, bound_names, free_names, true);
+    }
+  }
+  return free_names.count(function->name) != 0;
 }
 
 void Codegen::bind_parameter_pattern(PatternNode *pat,
@@ -652,7 +677,9 @@ void Codegen::bind_parameter_pattern(PatternNode *pat,
 // ===== Functions (deferred compilation) =====
 
 TypedValue Codegen::codegen_function_def(FunctionExpr *node,
-                                         const std::string &name) {
+                                         const std::string &name,
+                                         std::optional<std::string>
+                                             imported_owner) {
   set_debug_loc(node->Range);
   std::string fn_name =
       name.empty()
@@ -667,6 +694,7 @@ TypedValue Codegen::codegen_function_def(FunctionExpr *node,
   // analysis.
   DeferredFunction def;
   def.ast = node;
+  def.imported_owner = std::move(imported_owner);
   std::unordered_set<std::string> bound;
   for (size_t i = 0; i < node->patterns.size(); i++) {
     std::string pname = "arg" + std::to_string(i);
@@ -1096,22 +1124,6 @@ Codegen::compile_function(const std::string &name,
   // imported GENFNs for which no source-name entry exists in
   // deferred_functions_. Do not install the alias for unrelated imported
   // bodies: their local name may intentionally resolve to a dependency.
-  std::unordered_set<std::string> source_bound_names;
-  for (auto *pattern : def.ast->patterns)
-    bind_pattern_names(pattern, source_bound_names);
-  std::unordered_set<std::string> source_free_names;
-  for (auto *body : def.ast->bodies) {
-    if (auto *unguarded = dynamic_cast<BodyWithoutGuards *>(body)) {
-      collect_free_vars(unguarded->expr, source_bound_names, source_free_names,
-                        true);
-    } else if (auto *guarded = dynamic_cast<BodyWithGuards *>(body)) {
-      collect_free_vars(guarded->guard, source_bound_names, source_free_names,
-                        true);
-      collect_free_vars(guarded->expr, source_bound_names, source_free_names,
-                        true);
-    }
-  }
-
   const auto local_source = deferred_functions_.find(def.ast->name);
   const bool has_local_source_identity =
       local_source != deferred_functions_.end() &&
@@ -1132,7 +1144,7 @@ Codegen::compile_function(const std::string &name,
       break;
   }
   const bool has_source_self_alias =
-      def.ast->name != name && source_free_names.count(def.ast->name) != 0 &&
+      def.ast->name != name && function_references_lexical_self(def.ast) &&
       (has_local_source_identity || def.imported_owner.has_value()) &&
       !is_trait_redispatch_body;
   const auto previous_source_self = named_values_.find(def.ast->name);

@@ -1230,7 +1230,7 @@ Codegen::resolve_apply_function(const std::string &fn_name,
             imports_.imported_ast_nodes.push_back(
                 std::unique_ptr<FunctionExpr>(function));
             register_sibling_genfns(resolved);
-            codegen_function_def(function, specialization);
+            codegen_function_def(function, specialization, resolved);
             if (auto deferred = deferred_functions_.find(specialization);
                 deferred != deferred_functions_.end())
               compile_function(specialization, deferred->second, all_args);
@@ -1280,7 +1280,7 @@ Codegen::resolve_apply_function(const std::string &fn_name,
             imports_.imported_ast_nodes.push_back(
                 std::unique_ptr<FunctionExpr>(function));
             register_sibling_genfns(resolved);
-            codegen_function_def(function, resolved);
+            codegen_function_def(function, resolved, resolved);
             if (auto deferred = deferred_functions_.find(resolved);
                 deferred != deferred_functions_.end()) {
               compile_function(resolved, deferred->second, all_args);
@@ -1649,13 +1649,9 @@ Codegen::codegen_extern_call(ApplyExpr *node, const std::string &fn_name,
           std::unique_ptr<FunctionExpr>(func_ast));
       int errors_before = Session->errorCount();
       register_sibling_genfns(mangled);
-      codegen_function_def(func_ast, materialization_name);
+      codegen_function_def(func_ast, materialization_name, mangled);
       auto def_it2 = deferred_functions_.find(materialization_name);
       if (def_it2 != deferred_functions_.end()) {
-        // Retain the exact defining GENFN identity. Recursive source aliases
-        // and private dependencies must be scoped by this owner, while trait
-        // implementation owners deliberately redispatch same-named methods.
-        def_it2->second.imported_owner = mangled;
         compile_function(materialization_name, def_it2->second, all_args);
         auto cf_it2 = compiled_functions_.find(materialization_name);
         if (Session->errorCount() > errors_before) {

@@ -476,7 +476,7 @@ TypedValue Codegen::codegen_comparison(AstNode *left_node, AstNode *right_node,
             imports_.imported_ast_nodes.push_back(
                 std::unique_ptr<FunctionExpr>(function));
             register_sibling_genfns(instance_symbol);
-            codegen_function_def(function, specialization);
+            codegen_function_def(function, specialization, instance_symbol);
             if (auto deferred = deferred_functions_.find(specialization);
                 deferred != deferred_functions_.end()) {
               compile_function(specialization, deferred->second, args);
@@ -1861,7 +1861,7 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr *node) {
                 GenfnNameIsolation iso(*this, mangled);
                 install_private_genfn_ctors(mangled);
                 register_sibling_genfns(mangled);
-                codegen_function_def(func_ast, node->name->value);
+                codegen_function_def(func_ast, node->name->value, mangled);
                 auto local_def_it = deferred_functions_.find(node->name->value);
                 if (local_def_it == deferred_functions_.end()) {
                   iso.restore();
@@ -1953,7 +1953,7 @@ TypedValue Codegen::codegen_identifier(IdentifierExpr *node) {
             GenfnNameIsolation iso(*this, mangled);
             install_private_genfn_ctors(mangled);
             register_sibling_genfns(mangled);
-            codegen_function_def(func_ast, node->name->value);
+            codegen_function_def(func_ast, node->name->value, mangled);
             auto local_def_it = deferred_functions_.find(node->name->value);
             if (local_def_it != deferred_functions_.end()) {
               auto local_cf =

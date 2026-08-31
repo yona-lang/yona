@@ -2810,6 +2810,34 @@ TEST_SUITE("Diagnostics") {
 
 TEST_SUITE("Imported HOF") {
 
+  TEST_CASE("Lexical self analysis descends into nested guarded functions") {
+    parser::Parser parser;
+    auto parsed = parser.parseModule(R"(
+module Test\NestedGuardedSelf
+inner n = if true -> outer n
+)",
+                                     "nested_guarded_self.yona");
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->Module->functions.size() == 1);
+    auto *nested = parsed->Module->functions.front();
+    REQUIRE(nested->bodies.size() == 1);
+    REQUIRE(dynamic_cast<ast::BodyWithGuards *>(nested->bodies.front()) !=
+            nullptr);
+
+    parsed->Module->functions.clear();
+    vector<ast::FunctionBody *> bodies = {
+        new ast::BodyWithoutGuards(nested->Range, nested)};
+    ast::FunctionExpr outer(nested->Range, "outer", {}, std::move(bodies));
+    CHECK(Codegen::function_references_lexical_self(&outer));
+  }
+
+  TEST_CASE("Aliased imported recursive GENFN remains first-class") {
+    CHECK(
+        compile_and_run(
+            R"(import map as listMap from Std\List in let m = listMap in m (\x -> x + 1) [1, 2, 3])",
+            nullptr, nullptr, "imported_hof_recursive_alias") == "[2, 3, 4]");
+  }
+
   TEST_CASE("Imported module function as first-class HOF argument") {
     // `length` is used as a value (passed to `map`), not called. Must
     // materialize a closure; wrapping in a lambda already works.

@@ -329,6 +329,10 @@ public:
   finite_case_coverage(ast::CaseExpr *node) const;
   CasePatternAnalysis analyze_case_patterns(ast::CaseExpr *node) const;
 
+  /// Whether a function's body references its own lexical source name,
+  /// including references nested in local function values.
+  static bool function_references_lexical_self(ast::FunctionExpr *function);
+
   /// After `compile_module`, type-check the module as a unit (`check_module`)
   /// so exported wrappers see private siblings, then copy inferred latent
   /// effect rows onto FN metadata for `.yonai` emission.
@@ -1005,7 +1009,9 @@ private:
   TypedValue codegen_main_node(MainNode *node);
 
   // Functions (deferred compilation)
-  TypedValue codegen_function_def(FunctionExpr *node, const std::string &name);
+  TypedValue codegen_function_def(
+      FunctionExpr *node, const std::string &name,
+      std::optional<std::string> imported_owner = std::nullopt);
   TypedValue codegen_apply(ApplyExpr *node);
   TypedValue codegen_lambda_alias(LambdaAlias *node);
   TypedValue emit_accelerator_kernel(const yona::compiler::AccelMatch &match);
