@@ -5,6 +5,7 @@
 
 #include <array>
 #include <iomanip>
+#include <locale>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -36,6 +37,16 @@ using yona::ast::TuplePattern;
 using yona::parser::ParsedExpression;
 using yona::parser::ParseError;
 using yona::parser::Parser;
+
+namespace {
+
+class GroupedHexPunct final : public std::numpunct<char> {
+protected:
+  char do_thousands_sep() const override { return '_'; }
+  string do_grouping() const override { return "\1"; }
+};
+
+} // namespace
 
 TEST_SUITE("Std Format parser regressions") {
 
@@ -255,16 +266,32 @@ end
     CharacterExpr character(yona::SourceRange::unknown(),
                             static_cast<wchar_t>(char32_t{0x03BB}));
     ostringstream printed;
+    printed.imbue(std::locale(std::locale::classic(), new GroupedHexPunct));
     printed << std::hex << std::showbase << std::nouppercase
             << std::setfill('*');
+    printed.precision(7);
+    printed.width(19);
     const auto flags = printed.flags();
     const auto fill = printed.fill();
+    const auto precision = printed.precision();
+    const auto width = printed.width();
+    const auto locale = printed.getloc();
 
     printed << character;
 
     CHECK(printed.str() == R"('\u03BB')");
     CHECK(printed.flags() == flags);
     CHECK(printed.fill() == fill);
+    CHECK(printed.precision() == precision);
+    CHECK(printed.width() == width);
+    CHECK(printed.getloc() == locale);
+
+    Parser parser;
+    auto reparsed = parser.parseExpression(printed.str(), "<styled-character>");
+    REQUIRE(reparsed.has_value());
+    auto *round_tripped = dynamic_cast<CharacterExpr *>(reparsed.value().get());
+    REQUIRE(round_tripped);
+    CHECK(static_cast<char32_t>(round_tripped->value) == char32_t{0x03BB});
   }
 
   TEST_CASE("field update validates its target before transferring ownership") {

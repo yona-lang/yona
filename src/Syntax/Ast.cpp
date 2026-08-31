@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <iomanip>
 #include <iostream>
 #include <numeric>
 #include <utility>
@@ -21,20 +20,38 @@ namespace {
 class StreamFormatGuard {
   std::ostream &stream_;
   std::ios_base::fmtflags flags_;
+  std::streamsize precision_;
+  std::streamsize width_;
   char fill_;
 
 public:
   explicit StreamFormatGuard(std::ostream &stream)
-      : stream_(stream), flags_(stream.flags()), fill_(stream.fill()) {}
+      : stream_(stream), flags_(stream.flags()), precision_(stream.precision()),
+        width_(stream.width()), fill_(stream.fill()) {
+    stream_.width(0);
+  }
 
   ~StreamFormatGuard() {
     stream_.flags(flags_);
+    stream_.precision(precision_);
     stream_.fill(fill_);
+    stream_.width(width_);
   }
 
   StreamFormatGuard(const StreamFormatGuard &) = delete;
   StreamFormatGuard &operator=(const StreamFormatGuard &) = delete;
 };
+
+void writeUnicodeEscape(std::ostream &os, uint32_t scalar) {
+  constexpr char hex_digits[] = "0123456789ABCDEF";
+  const size_t digits = scalar <= 0xFFFF ? 4 : 8;
+  char escape[10] = {'\\', digits == 4 ? 'u' : 'U'};
+  for (size_t offset = 0; offset < digits; ++offset) {
+    escape[digits + 1 - offset] = hex_digits[scalar & 0xF];
+    scalar >>= 4;
+  }
+  os.write(escape, static_cast<std::streamsize>(digits + 2));
+}
 
 } // namespace
 
@@ -148,38 +165,35 @@ CharacterExpr::CharacterExpr(SourceRange token, const wchar_t value)
 void CharacterExpr::print(std::ostream &os) const {
   StreamFormatGuard format_guard(os);
   const auto scalar = static_cast<uint32_t>(static_cast<char32_t>(value));
-  os << '\'';
+  os.put('\'');
   switch (scalar) {
   case '\n':
-    os << "\\n";
+    os.write("\\n", 2);
     break;
   case '\r':
-    os << "\\r";
+    os.write("\\r", 2);
     break;
   case '\t':
-    os << "\\t";
+    os.write("\\t", 2);
     break;
   case '\\':
-    os << "\\\\";
+    os.write("\\\\", 2);
     break;
   case '\'':
-    os << "\\'";
+    os.write("\\'", 2);
     break;
   case '\0':
-    os << "\\0";
+    os.write("\\0", 2);
     break;
   default:
     if (scalar >= 32 && scalar <= 126) {
-      os << static_cast<char>(scalar);
+      os.put(static_cast<char>(scalar));
     } else {
-      const int width = scalar <= 0xFFFF ? 4 : 8;
-      os << (width == 4 ? "\\u" : "\\U") << std::hex << std::uppercase
-         << std::noshowbase << std::noshowpos << std::right << std::setfill('0')
-         << std::setw(width) << scalar;
+      writeUnicodeEscape(os, scalar);
     }
     break;
   }
-  os << '\'';
+  os.put('\'');
 }
 
 UnitExpr::UnitExpr(SourceRange token)
