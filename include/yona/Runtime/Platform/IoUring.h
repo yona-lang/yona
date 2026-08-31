@@ -19,6 +19,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum YonaIoOperationKind {
   YonaIoOperationReadFile,
   YonaIoOperationWriteFile,
@@ -50,5 +54,9 @@ void YonaRuntimeIoUringCancelGroup(const uint64_t *IoIds, int Count);
 
 void YonaRuntimeIoContextPut(uint64_t Id, YonaIoContext *Context);
 YonaIoContext *YonaRuntimeIoContextTake(uint64_t Id);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* YONA_RUNTIME_PLATFORM_IOURING_H */

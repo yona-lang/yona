@@ -18,6 +18,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum YonaIoOperationKind {
   YonaIoOperationReadFile,
   YonaIoOperationWriteFile,
@@ -64,5 +68,9 @@ void YonaRuntimeKqueueCancelGroup(const uint64_t *IoIds, int Count);
 
 void YonaRuntimeIoContextPut(uint64_t Id, YonaIoContext *Context);
 YonaIoContext *YonaRuntimeIoContextTake(uint64_t Id);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* YONA_RUNTIME_PLATFORM_KQUEUE_H */
