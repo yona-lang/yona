@@ -239,7 +239,7 @@ void YonaRuntimeIoUringCancel(uint64_t TargetOperationId) {
   pthread_mutex_unlock(&YonaIoRingMutex);
 }
 
-void YonaRuntimeIoUringCancelGroup(uint64_t *IoIds, int Count) {
+void YonaRuntimeIoUringCancelGroup(const uint64_t *IoIds, int Count) {
   for (int Index = 0; Index < Count; Index++)
     YonaRuntimeIoUringCancel(IoIds[Index]);
 }
