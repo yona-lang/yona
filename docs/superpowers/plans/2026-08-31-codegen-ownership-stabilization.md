@@ -178,6 +178,11 @@ Cancel an in-flight managed ByteArray write and prove the retained submit pin is
 released through `YonaRuntimeRelease`, while raw buffers for read/accept/connect
 continue to use `free`. Assert zero allocation leaks and no invalid free.
 
+Also force async submission failure for managed file/string/ByteArray reads and
+network receives. Those paths must release the buffer allocated before submit
+instead of freeing only the context; cover at least one String and one ByteArray
+allocation counter.
+
 - [ ] **Step 2: Complete the macOS context/identifier migration**
 
 Use the canonical `YonaIoContext` fields and declared parameter spelling in all
