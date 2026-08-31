@@ -349,6 +349,9 @@ sqrt (pow 2.0 10.0)            # => 32.0
 
 extern async readFile : String -> String in
 readFile "data.txt"            # non-blocking; auto-awaited at use
+
+extern inspect : String -> Int = "native_inspect" borrow "1" in
+inspect ("temporary" ++ "")    # native_inspect observes but does not consume
 ```
 
 `extern name : Type in body` declares an external C symbol with a Yona type; the
@@ -357,6 +360,14 @@ linker resolves it. Type mapping: `Int` ↔ `i64`, `Float` ↔ `double`, `Bool` 
 two-argument C function returning `C`. The `async` modifier submits the call to
 the runtime's thread pool and yields a promise, awaited transparently at use
 sites (§6.2).
+
+Native declarations have no body from which ownership can be inferred. Append
+`borrow "01..."` after the optional C symbol to mark exactly which parameters
+the native function observes without consuming; the mask length must equal the
+Yona arity. A caller then retains ownership and releases anonymous temporaries
+after the call. This is supported for synchronous and io-completion externs.
+Thread-pool `async` and native-task externs reject masks until their task
+contexts can pin borrowed arguments through completion or cancellation.
 
 ## 4. Patterns
 

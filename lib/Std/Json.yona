@@ -29,21 +29,21 @@ type Json =
 ## ```
 ## parse "{\"id\":1}"   # => Ok (JsonObject [("id", JsonInt 1)])
 ## ```
-extern parse : String -> Result (Json, String) = "YonaStdJsonParse"
+extern parse : String -> Result (Json, String) = "YonaStdJsonParse" borrow "1"
 
 ## Compact JSON text for `j`.
 ##
 ## ```
 ## stringify (JsonInt 1)   # => "1"
 ## ```
-extern stringify : Json -> String = "YonaStdJsonStringify"
+extern stringify : Json -> String = "YonaStdJsonStringify" borrow "1"
 
-extern stringifyString : String -> String = "YonaStdJsonStringifyString"
+extern stringifyString : String -> String = "YonaStdJsonStringifyString" borrow "1"
 extern stringifyBool : Bool -> String = "YonaStdJsonStringifyBool"
 extern stringifyFloat : Float -> String = "YonaStdJsonStringifyFloat"
 extern null : String = "YonaStdJsonNull"
-extern parseInt : String -> Int = "YonaStdJsonParseInt"
-extern parseFloat : String -> Float = "YonaStdJsonParseFloat"
+extern parseInt : String -> Int = "YonaStdJsonParseInt" borrow "1"
+extern parseFloat : String -> Float = "YonaStdJsonParseFloat" borrow "1"
 
 ## Look up `key` in a JSON object. `None` if `j` is not an object or the key is missing.
 get : Json -> String -> Option Json

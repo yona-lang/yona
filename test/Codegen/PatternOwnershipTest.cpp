@@ -36,7 +36,8 @@ std::string assert_zero_alloc_leaks(const std::string &source,
                                     const std::string &expected_stats = {},
                                     const fs::path &module_root = {},
                                     const fs::path &module_object = {},
-                                    std::size_t minimum_retain_calls = 0) {
+                                    std::size_t minimum_retain_calls = 0,
+                                    bool poison_malloc = false) {
   REQUIRE(yona::test::link::ensure_runtime_objects());
 
   parser::Parser parser;
@@ -85,7 +86,13 @@ std::string assert_zero_alloc_leaks(const std::string &source,
   REQUIRE(yona::test::link::link_objs_to_exe(objects, executable));
 
   const auto combined =
-      yona::test::link::executeWithAllocationStats(executable);
+      poison_malloc
+          ? yona::test::link::executeAndCapture(
+                executable, {},
+                {.CaptureStderr = true,
+                 .EnvironmentOverrides = {{"YONA_ALLOC_STATS", "1"},
+                                          {"MALLOC_PERTURB_", "165"}}})
+          : yona::test::link::executeWithAllocationStats(executable);
   REQUIRE(combined != "RUN_ERROR");
   INFO("Full output:\n" << combined);
   REQUIRE(combined.find("alloc-stats") != std::string::npos);
@@ -215,7 +222,8 @@ TEST_SUITE("Pattern ownership") {
     assert_zero_alloc_leaks("import formatInt from Std\\Convert in "
                             "let first = [formatInt 1], second = [2] in 0",
                             "grouped_let_arena_heap_child", "0",
-                            "tag=STRING allocs=1 frees=1 leaked=0");
+                            "tag=STRING allocs=1 frees=1 leaked=0", {}, {}, 0,
+                            true);
   }
 
   TEST_CASE("failed tuple patterns release retained prefix bindings") {

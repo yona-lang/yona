@@ -1676,6 +1676,11 @@ unique_ptr<ExprNode> ParserImpl::parse_extern_decl() {
     skip_newlines();
   }
 
+  vector<bool> borrowed_params;
+  if (!parse_extern_borrow_mask(borrowed_params))
+    return nullptr;
+  skip_newlines();
+
   expect(TokenType::YIN, "Expected 'in' after extern type annotation");
   skip_newlines();
 
@@ -1689,6 +1694,7 @@ unique_ptr<ExprNode> ParserImpl::parse_extern_decl() {
   auto declaration = make_unique<ExternDeclExpr>(loc, name, *type_ann,
                                                  body.release(), ext_promise);
   declaration->c_symbol = std::move(c_symbol);
+  declaration->borrowed_params = std::move(borrowed_params);
   return declaration;
 }
 

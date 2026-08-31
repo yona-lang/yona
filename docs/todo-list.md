@@ -6,6 +6,58 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [x] **Task-backed interface rows bypass extern borrow-mask rejection.** Repro:
+  import a hand-authored `.yonai` row `AFN inspect 1 STRING -> INT borrow 1`
+  or its native-task equivalent; the interface reader accepts the mask and
+  imported promise registration reaches the same unpinned asynchronous borrow
+  path rejected for source extern declarations. Borrowed `IO` rows are safe and
+  must remain accepted. Fixed in the canonical interface reader, with negative
+  `AFN`/`NAT` rows and the existing positive borrowed-`IO` round trip covering
+  the boundary.
+
+- [x] **Async extern borrow masks leak anonymous caller temporaries.** Repro:
+  compile and run
+  `extern async parseInt : String -> Int = "YonaStdJsonParseInt" borrow "1"
+  in parseInt ("1" ++ "")` with `YONA_ALLOC_STATS=1`; the worker safely reads
+  the value, but the caller never releases it and reports
+  `tag=STRING allocs=1 frees=0 leaked=1` because asynchronous borrowing lacks a
+  task-owned lifetime pin. Fixed conservatively by rejecting borrow masks on
+  thread-pool and native-task externs until those paths provide task-owned
+  argument pins; synchronous and io-completion externs remain supported.
+
+- [x] **Bare extern borrow contracts are consumed as return-type arguments.**
+  Repro: compile
+  `extern inspect : String -> Int borrow "1" in inspect "value"`; the type
+  parser treats contextual `borrow` as an argument to `Int` and reports
+  `Built-in type 'Int' does not accept a type argument` before the extern
+  ownership parser can read the mask. Fixed by recognizing a quoted contextual
+  borrow mask as the end of a type application, with expression and module
+  parser regressions for the bare form.
+
+- [x] **`Std\\Parallel.pfor` documents a processed-element count but always
+  returns zero.** Repro: evaluate `pfor identity [1, 2, 3]`; the public API
+  promises `3`, while the fold body preserves its zero accumulator and returns
+  `0`. Fixed by counting the completed parallel-comprehension result, with the
+  runtime conformance fixture now requiring `3`.
+
+- [x] **Native JSON observers omit borrowed-input ownership metadata.** Repro:
+  compile and run
+  `import parse from Std\\Json in case parse ("1" ++ "") of Ok _ -> 0;
+  Err _ -> 1 end` with `YONA_ALLOC_STATS=1`; the result is `0`, but the
+  temporary input reports `tag=STRING allocs=1 frees=0 leaked=1` because the
+  non-consuming native `parse` contract lacks `borrow 1`. Fixed with explicit
+  source-owned extern borrow masks for all five JSON observers, regenerated
+  interface metadata, and linked allocation regressions.
+
+- [x] **Arena-allocated sequences leave their flags/offset word
+  uninitialized.** Repro: run
+  `MALLOC_PERTURB_=165 ./out/build/x64-debug-linux/tests
+  -tc='grouped let cleanup releases aggregate heap children' --no-skip`;
+  arena destruction interprets poisoned metadata as a heap flag and element
+  offset, then the generated program exits with `RUN_ERROR`. Fixed by making
+  arena sequence lowering initialize both header words and retaining the
+  poisoned-allocator execution as a regression.
+
 The 2026-08-31 Linux stabilization closed every host-reproducible item below.
 The checked entries retain their original reproductions for regression history;
 the fixes cover frontend scalar/type-shape preservation, canonical interfaces,

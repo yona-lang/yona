@@ -15,5 +15,5 @@ pmap f xs = [| f x for x = xs ]
 ## Parallel for-each — applies f to each element concurrently
 ## for side effects. Returns the number of elements processed.
 pfor f xs =
-    let _ = [| f x for x = xs ] in
-    0
+    import length from Std\List in
+    length [| f x for x = xs ]

@@ -17,7 +17,8 @@
 - Generated programs now balance aggregate, tuple, constructor, record,
   sequence, channel, ByteArray, root-result, exception, closure-capture, and
   nested-let ownership. Arena destruction recursively releases managed
-  children, while branch merges normalize borrowed and owned provenance.
+  children, arena sequences initialize their complete flat-layout metadata,
+  and branch merges normalize borrowed and owned provenance.
 - Async file/network cancellation and submission failures release their owned
   contexts and buffers on Linux and macOS; native observational array contracts
   carry complete borrow masks and generated binary-I/O programs release their
@@ -28,7 +29,13 @@
   prerequisites while excluding only `clang-format`.
 - Stdlib and fixture contracts were regenerated or corrected for Bool,
   Parallel, Channel, Time, Log, Http, Json, File, GPU, traits, streams, and
-  effectful I/O. The Linux debug build and complete CTest preset are green.
+  effectful I/O. `Std\Parallel.pfor` now returns its documented processed-item
+  count. The Linux debug build and complete CTest preset are green.
+- Synchronous and io-completion extern declarations can record exact
+  non-consuming parameter contracts with `borrow "01..."`; generated
+  interfaces preserve those masks. Task-backed externs reject masks until they
+  can pin arguments through completion. The JSON parse/stringify observers now
+  release temporary caller-owned inputs correctly in generated programs.
 - Raised heap exceptions now transfer an explicit owner through catches,
   rethrows, and async task groups; catch payload bindings are clause-scoped and
   remain valid when returned from a handler.

@@ -99,8 +99,9 @@ not treated as native Windows verification.
 
 Final evidence on 2026-08-31: the debug target graph builds, focused ownership
 and codegen fixtures pass (including 175,140 fixture assertions and 881 pattern
-ownership assertions), allocator-disabled Valgrind controls report no JSON/LSP
-use-after-free, and all 10 tests in `unit-tests-linux` pass.
+ownership assertions), poisoned-allocation coverage validates arena sequence
+metadata, allocator-disabled Valgrind controls report no JSON/LSP use-after-free,
+and all 10 tests in `unit-tests-linux` pass.
 
 ## Documentation
 

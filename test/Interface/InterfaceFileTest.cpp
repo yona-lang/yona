@@ -80,6 +80,10 @@ TEST_CASE("canonical interface rejects malformed and ambiguous input") {
       {"arity mismatch", "MODULE Std\\Example\nFN fetch 2 STRING -> STRING\n"},
       {"borrow mask mismatch",
        "MODULE Std\\Example\nFN fetch 1 STRING -> STRING borrow 00\n"},
+      {"thread-pool borrow mask without lifetime pin",
+       "MODULE Std\\Example\nAFN fetch 1 STRING -> STRING borrow 1\n"},
+      {"native-task borrow mask without lifetime pin",
+       "MODULE Std\\Example\nNAT fetch 1 STRING -> STRING borrow 1\n"},
       {"duplicate effect operation",
        "MODULE Std\\Example\nFN fetch 0 -> STRING effects Fs.read,Fs.read\n"},
       {"generated implementation target",
@@ -197,5 +201,19 @@ TEST_CASE("native array interfaces preserve their complete borrow contracts") {
         ActualMask += Borrowed ? '1' : '0';
       CHECK(ActualMask == ExpectedMask);
     }
+  }
+}
+
+TEST_CASE("native JSON interfaces preserve observational borrow contracts") {
+  const auto Parsed = yona::interface::readModule(yona::test::repo_root() /
+                                                  "lib" / "Std" / "Json.yonai");
+  REQUIRE(Parsed.has_value());
+
+  for (const auto *Name :
+       {"parse", "stringify", "stringifyString", "parseInt", "parseFloat"}) {
+    CAPTURE(Name);
+    const auto *Function = yona::interface::findFunction(*Parsed, Name);
+    REQUIRE(Function != nullptr);
+    CHECK(Function->BorrowedParameters == std::vector<bool>{true});
   }
 }

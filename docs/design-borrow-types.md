@@ -17,11 +17,12 @@ Today, **callee-reads-only** heap parameters are handled by:
 2. **Optional `@borrow`** on parameters — same rules as inference, enforced
    at **E0603**, documented in source.
 
-Neither appears in **types** or **`.yonai`**, so cross-module APIs cannot
-state “this parameter is borrowed” except via prose or duplicated `@borrow`
-on every defining clause. A type-level **`&T`** (name TBD; `Borrowed T` as an
-app is equivalent) fixes signatures, tooling, and a single source of truth
-for “pass without claiming ownership / skip Perceus DUP at this boundary.”
+Neither appears in **types**. Borrow masks do appear in **`.yonai`**, and native
+declarations can provide them explicitly with `borrow "01..."`; ordinary Yona
+functions still rely on inference or duplicated `@borrow` annotations on every
+defining clause. A type-level **`&T`** (name TBD; `Borrowed T` as an app is
+equivalent) fixes signatures, tooling, and a single source of truth for “pass
+without claiming ownership / skip Perceus DUP at this boundary.”
 
 ## 2. Non-goals
 

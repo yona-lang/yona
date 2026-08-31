@@ -74,15 +74,18 @@ FN YonaStdUserInspectName 1 STRING -> INT borrow 1
 ```
 
 Importers read `.yonai` to get constructor info and function signatures.
-The optional `borrow` bitmask records inferred read-only heap parameters;
+The optional `borrow` bitmask records read-only heap parameters;
 `borrow 1` means the first parameter is borrowed, while omitted metadata means
 all parameters use the normal owned/callee-consumes convention.
-Borrowed parameters are not source syntax. They are compiler-generated
-metadata and are only inferred when the parameter is non-escaping. The analysis
-stays conservative for forwarding calls and exception paths: forwarded
-arguments inherit borrow only from a known borrowed callee parameter, functions
-that can directly `raise` keep owned cleanup, and anonymous borrowed
-temporaries are cleaned up by the caller after the call.
+Function bodies infer this metadata when a parameter is non-escaping. Native
+declarations, which have no analyzable body, may state the same ABI contract
+explicitly with `borrow "01..."` after the optional C symbol. The analysis stays
+conservative for forwarding calls and exception paths: forwarded arguments
+inherit borrow only from a known borrowed callee parameter, functions that can
+directly `raise` keep owned cleanup, and anonymous borrowed temporaries are
+cleaned up by the caller after the call. Thread-pool `async` and native-task
+externs reject explicit masks until their task contexts pin borrowed arguments;
+synchronous and io-completion externs support them.
 `yonac -I lib main.yona` searches `lib/` for `.yonai` files.
 
 ## Remaining Work

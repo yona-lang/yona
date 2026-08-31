@@ -204,6 +204,7 @@ Modules bind to C functions with `extern` declarations. Three forms:
 extern sqrt : Float -> Float                       # bare: Yona name == C symbol
 extern getEnv : String -> String = "getenv"        # aliased: rename the C symbol
 extern async slowCompute : Int -> Int = "my_slow"  # thread-pool async → Promise
+extern inspect : String -> Int = "inspect" borrow "1" # non-consuming input
 ```
 
 - **Bare form** — for C functions whose names already fit Yona (`sqrt`, `puts`).
@@ -215,6 +216,11 @@ extern async slowCompute : Int -> Int = "my_slow"  # thread-pool async → Promi
   names everywhere else.
 - **Async form** — the call is dispatched to the thread pool and returns a
   `Promise`, transparently awaited at the use site. Combinable with aliasing.
+- **Borrow contract** — an optional quoted bitmask after the C symbol marks
+  parameters the native function only observes. Its length must match the Yona
+  arity; `borrow "10"` borrows the first argument and consumes the second.
+  Synchronous and io-completion externs support masks; thread-pool `async` and
+  native-task externs reject them until task-owned argument pinning is available.
 
 Type mapping across the boundary:
 

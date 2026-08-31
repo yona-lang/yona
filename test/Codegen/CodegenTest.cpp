@@ -462,6 +462,31 @@ static void assert_linked_yona_zero_alloc_leaks(const string &obj_path,
   }
 }
 
+static void assert_yona_source_zero_alloc_leaks(const string &source,
+                                                const string &artifact_stem) {
+  ensure_runtime_archive();
+  parser::Parser parser;
+  Codegen codegen(artifact_stem);
+  codegen.ModulePaths.push_back(yona::test::lib_dir().string());
+  DiagnosticEngine diagnostics;
+  typechecker::TypeChecker checker(diagnostics);
+  YONA_TEST_INSTALL_PRELUDE(codegen, parser, checker);
+  checker.add_module_path(yona::test::lib_dir().string());
+
+  auto parsed = parser.parseExpression(source, artifact_stem + ".yona");
+  REQUIRE(parsed.has_value());
+  checker.check(parsed->Expression.get());
+  REQUIRE(checker.solve_constraints());
+  REQUIRE_FALSE(checker.has_errors());
+  codegen.set_type_checker(&checker);
+  REQUIRE(codegen.compile(parsed->Expression.get()) != nullptr);
+
+  const auto object =
+      yona::test::link::scratch_root() / ("yona_" + artifact_stem + ".o");
+  REQUIRE(codegen.emit_object_file(object.string()));
+  assert_linked_yona_zero_alloc_leaks(object.string(), artifact_stem);
+}
+
 static string read_file(const fs::path &path) {
   ifstream f(path);
   if (!f.is_open())
@@ -621,6 +646,49 @@ end in save ("/tmp/" ++ "yona_file_native_ownership") ("borrowed" ++ "-content")
     REQUIRE(codegen.emit_object_file(Object.string()));
     assert_linked_yona_zero_alloc_leaks(Object.string(),
                                         "yona_file_native_ownership");
+  }
+
+  TEST_CASE("Std Json native observers borrow heap inputs") {
+    const std::vector<std::pair<string, string>> cases = {
+        {"json_parse_borrow",
+         R"(import parse from Std\Json in case parse ("1" ++ "") of Ok _ -> 0; Err _ -> 1 end)"},
+        {"json_stringify_borrow",
+         R"(import stringify, JsonString from Std\Json in stringify (JsonString ("x" ++ "")))"},
+        {"json_stringify_string_borrow",
+         R"(import stringifyString from Std\Json in stringifyString ("x" ++ ""))"},
+        {"json_parse_int_borrow",
+         R"(import parseInt from Std\Json in parseInt ("1" ++ ""))"},
+        {"json_parse_float_borrow",
+         R"(import parseFloat from Std\Json in parseFloat ("1.5" ++ ""))"},
+    };
+
+    for (const auto &[name, source] : cases) {
+      CAPTURE(name);
+      assert_yona_source_zero_alloc_leaks(source, name);
+    }
+  }
+
+  TEST_CASE("task-backed externs reject borrow masks without lifetime pins") {
+    for (const string kind : {"async", "native"}) {
+      CAPTURE(kind);
+      const string source = "extern " + kind +
+                            " inspect : String -> Int = \"YonaTestInspect\" "
+                            "borrow \"1\" in inspect \"value\"";
+      parser::Parser parser;
+      auto parsed = parser.parseExpression(source, "extern_task_borrow.yona");
+      REQUIRE(parsed.has_value());
+
+      DiagnosticEngine diagnostics;
+      Codegen codegen("extern_task_borrow", &diagnostics);
+      typechecker::TypeChecker checker(diagnostics);
+      YONA_TEST_INSTALL_PRELUDE(codegen, parser, checker);
+      checker.check(parsed->Expression.get());
+      REQUIRE(checker.solve_constraints());
+      REQUIRE_FALSE(checker.has_errors());
+      codegen.set_type_checker(&checker);
+      (void)codegen.compile(parsed->Expression.get());
+      CHECK(diagnostics.has_errors());
+    }
   }
 
   TEST_CASE("nested try success uses inner result") {

@@ -235,6 +235,9 @@ map, `pfor f xs` for parallel side effects:
 ```yona
 import pmap from Std\Parallel in
 pmap (\x -> x * x) [1, 2, 3]         # => [1, 4, 9]
+
+import pfor from Std\Parallel in
+pfor (\x -> x + 1) [1, 2, 3]         # => 3 completed elements
 ```
 
 Use parallel comprehensions when the work is embarrassingly parallel and the

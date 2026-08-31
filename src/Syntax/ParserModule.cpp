@@ -17,6 +17,33 @@ bool ParserImpl::try_consume_borrow_annotation() {
   return true;
 }
 
+bool ParserImpl::parse_extern_borrow_mask(vector<bool> &borrowed_params) {
+  if (!check(TokenType::YIDENTIFIER) || current().lexeme != "borrow")
+    return true;
+
+  advance();
+  skip_newlines();
+  if (!check(TokenType::YSTRING)) {
+    error(ParseError::Type::INVALID_SYNTAX,
+          "Expected a quoted 0/1 mask after 'borrow'");
+    return false;
+  }
+
+  const auto mask = get<string>(advance().value);
+  if (mask.empty() || std::any_of(mask.begin(), mask.end(), [](const char bit) {
+        return bit != '0' && bit != '1';
+      })) {
+    error(ParseError::Type::INVALID_SYNTAX,
+          "Extern borrow mask must contain only '0' and '1'");
+    return false;
+  }
+
+  borrowed_params.reserve(mask.size());
+  for (const char bit : mask)
+    borrowed_params.push_back(bit == '1');
+  return true;
+}
+
 unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
   SourceRange start_loc = current_location();
 
@@ -142,6 +169,10 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
               error(ParseError::Type::INVALID_SYNTAX,
                     "Expected string literal after '=' in extern declaration");
             }
+          }
+          if (!parse_extern_borrow_mask(decl->borrowed_params)) {
+            delete decl;
+            continue;
           }
           extern_declarations.push_back(decl);
         }

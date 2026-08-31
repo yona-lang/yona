@@ -221,8 +221,8 @@ nonempty seqs; nonzero `/` on `AST_DIVIDE_EXPR`.
 
 | Layer | `@borrow` | `&T` / lifetimes / borrowed fields |
 |-------|-----------|-------------------------------------|
-| Parser | implemented (`@borrow` on params) | missing (`&` is `&&` / `YAND`) |
-| AST | `FunctionExpr::param_borrow` | no `MBorrow` |
+| Parser | implemented (`@borrow` on params; `borrow "01..."` on externs) | missing (`&` is `&&` / `YAND`) |
+| AST | `FunctionExpr::param_borrow`; `ExternDeclExpr::borrowed_params` | no `MBorrow` |
 | Typechecker | **E0603** ([`src/Semantics/TypeChecker.cpp`](../src/Semantics/TypeChecker.cpp) `check_param_borrow_annotations`; escape via [`BorrowEscapeAnalysis`](../include/yona/Semantics/BorrowEscapeAnalysis.h)) | missing |
 | Codegen | Same skip-DUP as inference ([`src/Codegen/CodegenExpr.cpp`](../src/Codegen/CodegenExpr.cpp)) | design-only |
 | `.yonai` | `borrow 01…` bitmask ([`src/Codegen/CodegenModule.cpp`](../src/Codegen/CodegenModule.cpp)) | no `&` in printed types |
@@ -230,7 +230,8 @@ nonempty seqs; nonzero `/` on `AST_DIVIDE_EXPR`.
 
 **Positive:** `TEST_CASE("@borrow accepted when parameter is only read")`;
 codegen `borrow_closure_param.yona`, `borrow_foldl_closure.yona`;
-`Interface files preserve inferred borrow metadata` (expects `borrow 1`).
+`Interface files preserve inferred borrow metadata` (expects `borrow 1`), and
+native JSON observers regenerate explicit extern masks.
 **Negative:** `@borrow rejected when parameter is returned`;
 `@borrow rejected on non-identifier pattern` (E0603).
 

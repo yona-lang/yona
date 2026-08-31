@@ -262,7 +262,9 @@ fixtures. Commit as `fix: regenerate typed GPU channel interface`.
 
 Build the debug preset; run ownership/allocation, channel, ADT, closure,
 dictionary, interface, GPU fallback, and full fixture suites; then run the full
-CTest preset and `git diff --check`.
+CTest preset and `git diff --check`. Run aggregate cleanup with
+`MALLOC_PERTURB_=165` so arena sequence header initialization is checked
+against poisoned allocator contents.
 
 - [x] **Step 2: Record combined results later**
 

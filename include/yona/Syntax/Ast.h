@@ -1703,6 +1703,10 @@ public:
   compiler::types::Type declared_type; // type annotation
   ExprNode *body;                      // expression using the extern
   ExternPromiseKind extern_promise = ExternPromiseKind::Sync;
+  /// Explicit native ABI ownership mask from `borrow "01..."`. True means
+  /// the native callee observes the corresponding argument without consuming
+  /// it. Empty means no explicit contract was supplied.
+  vector<bool> borrowed_params;
 
   explicit ExternDeclExpr(
       SourceRange token, string name, compiler::types::Type type,

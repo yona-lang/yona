@@ -224,12 +224,16 @@ TypedValue Codegen::codegen_seq(ValuesSequenceExpr *node) {
 
   Value *seq;
   if (current_arena_) {
-    // Arena allocation: allocate payload and set length manually
+    // Arena allocation bypasses YonaRuntimeSequenceAllocate, so initialize
+    // both flat-sequence header words here. SequenceSetHeap preserves the
+    // offset half of the flags word and therefore requires a zero base value.
     auto payload_bytes = ConstantInt::get(
         i64_ty, (n + 2) * sizeof(int64_t)); // +2 for count+heap_flag
     seq = emit_arena_alloc(1 /* RC_TYPE_SEQ */, payload_bytes);
-    // Set length at seq[0]
     builder_->CreateStore(count, seq);
+    auto *flags = builder_->CreateGEP(
+        i64_ty, seq, {ConstantInt::get(i64_ty, 1)}, "arena_seq_flags");
+    builder_->CreateStore(ConstantInt::get(i64_ty, 0), flags);
   } else {
     seq = builder_->CreateCall(rt_.seq_alloc_, {count}, "seq");
   }

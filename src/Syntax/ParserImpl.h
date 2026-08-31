@@ -260,6 +260,10 @@ public:
   parse_function_clause(const string &expected_name);
   /// Consumes `@borrow` when present (two tokens: `@` and identifier `borrow`).
   bool try_consume_borrow_annotation();
+
+  /// Parse an optional `borrow "01..."` native ownership contract.
+  /// Returns false only when the marker is present but malformed.
+  bool parse_extern_borrow_mask(vector<bool> &borrowed_params);
   unique_ptr<AdtDeclNode> parse_adt_declaration();
   unique_ptr<TraitDeclNode> parse_trait_declaration();
   unique_ptr<InstanceDeclNode> parse_instance_declaration();

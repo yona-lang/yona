@@ -11,13 +11,13 @@ FN asInt 1 ADT(Json) -> ADT(Option,INT) effects - effectscheme $##
 FN asString 1 ADT(Json) -> ADT(Option,STRING) effects - effectscheme $##
 FN get 2 ADT(Json) STRING -> ADT(Option,ADT(Json)) effects - effectscheme $##;$/r##
 FN null 0 -> STRING
-FN parse 1 STRING -> ADT(Result,ADT(Json),STRING)
-FN parseFloat 1 STRING -> FLOAT
-FN parseInt 1 STRING -> INT
-FN stringify 1 ADT(Json) -> STRING
+FN parse 1 STRING -> ADT(Result,ADT(Json),STRING) borrow 1
+FN parseFloat 1 STRING -> FLOAT borrow 1
+FN parseInt 1 STRING -> INT borrow 1
+FN stringify 1 ADT(Json) -> STRING borrow 1
 FN stringifyBool 1 BOOL -> STRING
 FN stringifyFloat 1 FLOAT -> STRING
-FN stringifyString 1 STRING -> STRING
+FN stringifyString 1 STRING -> STRING borrow 1
 GENFN_CTOR asInt Some Option 0 1 2 1 fields _0:VAR(a)
 GENFN_CTOR asInt None Option 1 0 2 1
 GENFN_CTOR asInt JsonInt Json 2 1 7 1 fields _0:INT

@@ -126,6 +126,28 @@ TEST_SUITE("Std Format parser regressions") {
     CHECK(declaration->extern_promise == ExternPromiseKind::ThreadPool);
   }
 
+  TEST_CASE("externs preserve explicit borrowed parameter contracts") {
+    Parser parser;
+    auto result = parser.parseExpression(
+        R"(extern inspect : String -> Int borrow "1" in inspect "value")",
+        "<extern-borrow-test>");
+
+    REQUIRE(result.has_value());
+    auto *declaration = dynamic_cast<ExternDeclExpr *>(result.value().get());
+    REQUIRE(declaration);
+    CHECK(declaration->borrowed_params == std::vector<bool>{true});
+
+    auto module = parser.parseModule(R"(
+module Test\ExternBorrow
+extern inspect : String -> Int borrow "1"
+)",
+                                     "<extern-borrow-module-test>");
+    REQUIRE(module.has_value());
+    REQUIRE(module.value()->extern_declarations.size() == 1);
+    CHECK(module.value()->extern_declarations.front()->borrowed_params ==
+          std::vector<bool>{true});
+  }
+
   TEST_CASE("parenthesized lambda parameter is one tuple pattern") {
     Parser parser;
     auto result = parser.parseExpression(R"(\(left, right) -> left + right)",

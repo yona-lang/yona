@@ -713,6 +713,13 @@ private:
         return false;
       }
     }
+    if (SawBorrow && (Value.Kind == FunctionKind::ThreadPool ||
+                      Value.Kind == FunctionKind::Native)) {
+      error(Line,
+            "task-backed function contracts cannot borrow parameters without "
+            "task-owned lifetime pins");
+      return false;
+    }
     if (Value.Effects.IsHigherOrder && !Value.Effects.IsKnown)
       error(Line, "hof requires an explicit effects row");
     return true;

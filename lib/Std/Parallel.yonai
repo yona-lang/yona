@@ -3,8 +3,8 @@ FN pfor 2 FUNCTION(VAR(a),VAR(b)) Seq(VAR(a)) -> INT effects | hof effectscheme 
 FN pmap 2 FUNCTION(VAR(a),VAR(b)) Seq(VAR(a)) -> Seq(VAR(b)) effects | hof effectscheme $##;$/p##f0;$/r##f0
 GENFN_BEGIN pfor pfor
 pfor f xs =
-    let _ = [| f x for x = xs ] in
-    0
+    import length from Std\List in
+    length [| f x for x = xs ]
 GENFN_END
 GENFN_BEGIN pmap pmap
 pmap f xs = [| f x for x = xs ]

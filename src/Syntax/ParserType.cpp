@@ -248,6 +248,12 @@ unique_ptr<compiler::types::Type> ParserImpl::parse_primary_type() {
 
     vector<compiler::types::Type> type_arguments;
     while (check(TokenType::YIDENTIFIER) || check(TokenType::YLPAREN)) {
+      // `borrow "01..."` terminates an extern signature. It is contextual
+      // rather than a reserved token, so stop before treating `borrow` as a
+      // type argument when the quoted mask immediately follows it.
+      if (check(TokenType::YIDENTIFIER) && current().lexeme == "borrow" &&
+          !is_at_end() && peek(1).type == TokenType::YSTRING)
+        break;
       auto argument = parse_argument_atom();
       if (!argument) {
         error(ParseError::Type::INVALID_SYNTAX,

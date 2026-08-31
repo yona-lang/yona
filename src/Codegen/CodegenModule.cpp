@@ -1837,11 +1837,32 @@ TypedValue Codegen::codegen_extern_decl(ExternDeclExpr *node) {
   // contract here lets wrapper methods infer and export the same borrow
   // mask. Mutable/consuming runtime APIs remain on the normal callee-owns
   // path.
-  cf.borrowed_params.assign(param_ctypes.size(), false);
-  const bool is_array_observer = node->name.starts_with("primitiveSize") ||
-                                 node->name.starts_with("primitiveGet");
-  if (is_array_observer && !cf.borrowed_params.empty())
-    cf.borrowed_params[0] = true;
+  if (!node->borrowed_params.empty()) {
+    if (node->extern_promise == ast::ExternPromiseKind::ThreadPool ||
+        node->extern_promise == ast::ExternPromiseKind::NativePtr) {
+      report_error(
+          node->Range,
+          "borrow masks are not supported on task-backed extern '" +
+              node->name +
+              "' until its arguments have task-owned lifetime pins");
+      return {};
+    }
+    if (node->borrowed_params.size() != param_ctypes.size()) {
+      report_error(node->Range,
+                   "extern borrow mask for '" + node->name + "' has " +
+                       std::to_string(node->borrowed_params.size()) +
+                       " entries, but the function has " +
+                       std::to_string(param_ctypes.size()) + " parameters");
+      return {};
+    }
+    cf.borrowed_params = node->borrowed_params;
+  } else {
+    cf.borrowed_params.assign(param_ctypes.size(), false);
+    const bool is_array_observer = node->name.starts_with("primitiveSize") ||
+                                   node->name.starts_with("primitiveGet");
+    if (is_array_observer && !cf.borrowed_params.empty())
+      cf.borrowed_params[0] = true;
+  }
   if (is_promise_extern)
     cf.promise_inner_type = ret_ctype;
   compiled_functions_[node->name] = cf;
