@@ -1,6 +1,6 @@
 MODULE Std\Parallel
-FN pfor 2 FUNCTION INT -> INT
-FN pmap 2 FUNCTION INT -> SEQ
+FN pfor 2 FUNCTION(VAR(a),VAR(b)) Seq(VAR(a)) -> INT effects | hof effectscheme $##;$/p##f0;$/r##f0
+FN pmap 2 FUNCTION(VAR(a),VAR(b)) Seq(VAR(a)) -> Seq(VAR(b)) effects | hof effectscheme $##;$/p##f0;$/r##f0
 GENFN_BEGIN pfor pfor
 pfor f xs =
     let _ = [| f x for x = xs ] in

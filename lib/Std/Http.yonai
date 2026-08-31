@@ -11,16 +11,16 @@ ADT Request 1 4
   CTOR Request 0 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
 ADT Response 1 3
   CTOR Response 0 3 fields status:INT rawHeaders:STRING body:STRING
-FN formatRequest 2 STRING ADT(Request) -> STRING borrow 11 effects -
-FN get 3 STRING INT STRING -> ADT(Response) effects -
+FN formatRequest 2 STRING ADT(Request) -> STRING borrow 11 effects - effectscheme $##;$/r##
+FN get 3 STRING INT STRING -> ADT(Response) effects - effectscheme $##;$/r##;$/r/r##
 FN notFound 0 -> ADT(Response) effects -
-FN ok 1 STRING -> ADT(Response) effects -
-FN parseResponse 1 STRING -> ADT(Response) effects -
-FN post 4 STRING INT STRING STRING -> ADT(Response) effects -
-FN request 4 ADT(Method) STRING INT STRING -> ADT(Request) effects -
-FN response 2 INT STRING -> ADT(Response) effects -
-FN send 3 STRING INT ADT(Request) -> ADT(Response) effects -
-FN serve 3 STRING INT FUNCTION(ADT(Request),ADT(Response)) -> INT effects |
+FN ok 1 STRING -> ADT(Response) effects - effectscheme $##
+FN parseResponse 1 STRING -> ADT(Response) effects - effectscheme $##
+FN post 4 STRING INT STRING STRING -> ADT(Response) effects - effectscheme $##;$/r##;$/r/r##;$/r/r/r##
+FN request 4 ADT(Method) STRING INT STRING -> ADT(Request) effects - effectscheme $##;$/r##;$/r/r##;$/r/r/r##
+FN response 2 INT STRING -> ADT(Response) effects - effectscheme $##;$/r##
+FN send 3 STRING INT ADT(Request) -> ADT(Response) effects - effectscheme $##;$/r##;$/r/r##
+FN serve 3 STRING INT FUNCTION(ADT(Request),ADT(Response)) -> INT effects - effectscheme $##;$/r##;$/r/r##;$/r/r/p##
 FN serverError 0 -> ADT(Response) effects -
 GENFN_CTOR formatRequest Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
 GENFN_CTOR formatRequest Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
@@ -38,13 +38,42 @@ formatRequest host req =
     else
         method ++ " " ++ p ++ " HTTP/1.1\r\nHost: " ++ host ++ "\r\nUser-Agent: Yona\r\nConnection: close\r\n\r\n"
 GENFN_END
+GENFN_CTOR formatResponse Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_BEGIN formatResponse formatResponse
+formatResponse : Response -> String
+formatResponse resp =
+    import intToString from Std\Types in
+    import length from Std\String in
+    let s = resp.status,
+        b = resp.body in
+    "HTTP/1.1 " ++ (intToString s) ++ " OK\r\nContent-Length: " ++ (intToString (length b)) ++ "\r\nConnection: close\r\n\r\n" ++ b
+GENFN_END
 GENFN_CTOR get Get Method 0 0 7 0
 GENFN_CTOR get Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
 GENFN_CTOR get Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
-GENFN_CTOR get Post Method 1 0 7 0
 GENFN_BEGIN get get
 get : String -> Int -> String -> Response
 get host port path = send host port (Request { method = Get, path = path, headers = 0, body = "" })
+GENFN_END
+GENFN_CTOR methodString Get Method 0 0 7 0
+GENFN_CTOR methodString Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR methodString Post Method 1 0 7 0
+GENFN_CTOR methodString Put Method 2 0 7 0
+GENFN_CTOR methodString Delete Method 3 0 7 0
+GENFN_CTOR methodString Patch Method 4 0 7 0
+GENFN_CTOR methodString Head Method 5 0 7 0
+GENFN_CTOR methodString Options Method 6 0 7 0
+GENFN_BEGIN methodString methodString
+methodString : Method -> String
+methodString m = case m of
+    Get -> "GET"
+    Post -> "POST"
+    Put -> "PUT"
+    Delete -> "DELETE"
+    Patch -> "PATCH"
+    Head -> "HEAD"
+    Options -> "OPTIONS"
+end
 GENFN_END
 GENFN_CTOR notFound Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
 GENFN_BEGIN notFound notFound
@@ -62,7 +91,7 @@ parseResponse : String -> Response
 parseResponse raw =
     import substring, indexOf, drop from Std\String in
     import toInt from Std\String in
-    let status = toInt (substring raw 9 3),
+    let status = toInt (substring raw 9 12),
         bodyStart = indexOf "\r\n\r\n" raw in
     if bodyStart >= 0 then
         Response { status = status, rawHeaders = substring raw 0 bodyStart, body = drop (bodyStart + 4) raw }
@@ -87,7 +116,6 @@ GENFN_BEGIN response response
 response : Int -> String -> Response
 response status body = Response { status = status, rawHeaders = "", body = body }
 GENFN_END
-GENFN_CTOR send Get Method 0 0 7 0
 GENFN_CTOR send Linear Linear 0 1 1 1 fields _0:VAR(a)
 GENFN_CTOR send Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
 GENFN_CTOR send Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
@@ -113,6 +141,36 @@ serve host port handler =
     import tcpListen from Std\Net in
     case tcpListen host port of
         Linear listener -> serveLoop listener handler
+    end
+GENFN_END
+GENFN_CTOR serveLoop Get Method 0 0 7 0
+GENFN_CTOR serveLoop Linear Linear 0 1 1 1 fields _0:VAR(a)
+GENFN_CTOR serveLoop Request Request 0 4 1 4 fields method:ADT(Method) path:STRING headers:INT body:STRING
+GENFN_CTOR serveLoop Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING
+GENFN_CTOR serveLoop Post Method 1 0 7 0
+GENFN_CTOR serveLoop Put Method 2 0 7 0
+GENFN_CTOR serveLoop Delete Method 3 0 7 0
+GENFN_BEGIN serveLoop serveLoop
+serveLoop : Int -> (Request -> Response) -> Int
+serveLoop listener handler =
+    import tcpAccept, send as netSend, recv, close from Std\Net in
+    import split, indexOf, drop from Std\String in
+    case tcpAccept listener of
+        Linear client -> do
+            raw = recv client 65536
+            firstLine = case split "\r\n" raw of [h|_] -> h; _ -> "GET / HTTP/1.1" end
+            parts = split " " firstLine
+            method = case parts of [m|_] -> m; _ -> "GET" end
+            path = case parts of [_|[p|_]] -> p; _ -> "/" end
+            bodyStart = indexOf "\r\n\r\n" raw
+            body = if bodyStart >= 0 then drop (bodyStart + 4) raw else ""
+            methodVal = case method of "GET" -> Get; "POST" -> Post; "PUT" -> Put; "DELETE" -> Delete; _ -> Get end
+            req = Request { method = methodVal, path = path, headers = 0, body = body }
+            resp = handler req
+            netSend client (formatResponse resp)
+            close client
+            serveLoop listener handler
+        end
     end
 GENFN_END
 GENFN_CTOR serverError Response Response 0 3 1 3 fields status:INT rawHeaders:STRING body:STRING

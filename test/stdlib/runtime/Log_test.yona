@@ -4,6 +4,6 @@ in
 let cases = [
     testCase "Log level round trips" (\_ -> do
         setLevel 2
-        check "level" (getLevel () == 2)
+        check "level" (getLevel == 2)
     end)
 ] in render (run cases)

@@ -63,7 +63,7 @@ parseResponse : String -> Response
 parseResponse raw =
     import substring, indexOf, drop from Std\String in
     import toInt from Std\String in
-    let status = toInt (substring raw 9 3),
+    let status = toInt (substring raw 9 12),
         bodyStart = indexOf "\r\n\r\n" raw in
     if bodyStart >= 0 then
         Response { status = status, rawHeaders = substring raw 0 bodyStart, body = drop (bodyStart + 4) raw }

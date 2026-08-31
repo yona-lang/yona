@@ -4,7 +4,7 @@ import now, epoch, elapsed, format, sleep from Std\Time,
 in
 let cases = [
     testCase "Time clocks are nonnegative" (\_ ->
-        let start = now (), finish = now () in check "clock" (elapsed start finish >= 0 && epoch () > 0)),
+        let start = now, finish = now in check "clock" (elapsed start finish >= 0 && epoch > 0)),
     testCase "Time formats a stable-width timestamp" (\_ ->
         check "format width" (length (format 0) == 19)),
     testCase "Time accepts a zero sleep" (\_ -> do

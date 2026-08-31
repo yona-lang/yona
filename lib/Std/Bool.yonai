@@ -1,11 +1,11 @@
 MODULE Std\Bool
-FN and 2 INT INT -> INT
-FN implies 2 INT INT -> INT
-FN not 1 INT -> BOOL
-FN or 2 INT INT -> BOOL
-FN unless 2 INT FUNCTION -> SYMBOL borrow 01
-FN when 2 INT FUNCTION -> INT borrow 01
-FN xor 2 INT INT -> BOOL
+FN and 2 BOOL BOOL -> BOOL borrow 10 effects - effectscheme $##;$/r##
+FN implies 2 BOOL BOOL -> BOOL borrow 10 effects - effectscheme $##;$/r##
+FN not 1 BOOL -> BOOL borrow 1 effects - effectscheme $##
+FN or 2 BOOL BOOL -> BOOL borrow 10 effects - effectscheme $##;$/r##
+FN unless 2 BOOL FUNCTION(UNIT,SYMBOL) -> SYMBOL borrow 11 effects | effectscheme $##;$/r##f0;$/r/p##f0
+FN when 2 BOOL FUNCTION(UNIT,SYMBOL) -> SYMBOL borrow 11 effects | effectscheme $##;$/r##f0;$/r/p##f0
+FN xor 2 BOOL BOOL -> BOOL borrow 10 effects - effectscheme $##;$/r##
 GENFN_BEGIN and and
 and a b = if a then b else false
 GENFN_END
