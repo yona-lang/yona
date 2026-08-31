@@ -89,21 +89,21 @@ non-GPU channel fixture, and allocation-stat probes. Commit as
 - Modify as needed: shared ownership helpers in `include/yona/Codegen/Codegen.h`
 - Modify: focused ADT allocation tests under `test/Codegen/`
 
-- [ ] **Step 1: Isolate named and temporary field ownership**
+- [x] **Step 1: Isolate named and temporary field ownership**
 
 Prove `Some [1]`, nested constructors, and multi-field ADTs retain named heap
 arguments when required but do not leak anonymous heap expressions. Include a
 returned-constructor control so eliminating a duplicate cannot create a
 dangling field.
 
-- [ ] **Step 2: Transfer exactly one expression-owned reference**
+- [x] **Step 2: Transfer exactly one expression-owned reference**
 
 Teach ADT construction whether a field carrier is an owned temporary or a
 borrowed/named value. Transfer a temporary directly into the new ADT; duplicate
 only a borrowed value. Reuse existing transfer tracking instead of adding a
 constructor-specific leak exemption.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run ADT, Option/Result, constructor-pattern, exception-frame, and allocation
 suites. Commit as `fix: transfer temporary ADT fields`.

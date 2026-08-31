@@ -808,15 +808,15 @@ private:
                    *seq_contains_ = nullptr, *seq_difference_ = nullptr;
     // Sets
     llvm::Function *set_alloc_ = nullptr, *set_insert_ = nullptr,
-                   *set_set_heap_ = nullptr,
-                   *set_contains_ = nullptr, *set_size_ = nullptr,
-                   *set_elements_ = nullptr, *set_union_ = nullptr,
-                   *set_intersection_ = nullptr, *set_difference_ = nullptr;
+                   *set_set_heap_ = nullptr, *set_contains_ = nullptr,
+                   *set_size_ = nullptr, *set_elements_ = nullptr,
+                   *set_union_ = nullptr, *set_intersection_ = nullptr,
+                   *set_difference_ = nullptr;
     // Dicts
     llvm::Function *dict_alloc_ = nullptr, *dict_put_ = nullptr,
-                   *dict_set_heap_ = nullptr,
-                   *dict_get_ = nullptr, *dict_size_ = nullptr,
-                   *dict_contains_ = nullptr, *dict_keys_ = nullptr;
+                   *dict_set_heap_ = nullptr, *dict_get_ = nullptr,
+                   *dict_size_ = nullptr, *dict_contains_ = nullptr,
+                   *dict_keys_ = nullptr;
     // ADTs
     llvm::Function *adt_alloc_ = nullptr, *adt_get_tag_ = nullptr,
                    *adt_get_field_ = nullptr, *adt_set_field_ = nullptr,
@@ -1041,6 +1041,8 @@ private:
                                 const std::string &callee_name);
   void wrap_function_args_in_closures(std::vector<TypedValue> &all_args);
 
+  std::optional<std::string> named_binding_for_value(llvm::Value *value) const;
+
   TypedValue codegen_adt_construct(const std::string &fn_name,
                                    const std::vector<TypedValue> &all_args);
   std::unordered_map<std::string, CompiledFunction>::iterator
@@ -1258,7 +1260,6 @@ private:
 
   // "Did you mean?" suggestion for undefined names
   std::string suggest_similar(const std::string &name) const;
-
 };
 
 } // namespace yona::compiler::codegen

@@ -889,6 +889,16 @@ void Codegen::wrap_function_args_in_closures(
   }
 }
 
+std::optional<std::string>
+Codegen::named_binding_for_value(llvm::Value *value) const {
+  if (!value)
+    return std::nullopt;
+  for (const auto &[name, binding] : named_values_)
+    if (binding.val == value)
+      return name;
+  return std::nullopt;
+}
+
 TypedValue
 Codegen::codegen_adt_construct(const std::string &fn_name,
                                const std::vector<TypedValue> &all_args) {
@@ -957,11 +967,12 @@ Codegen::codegen_adt_construct(const std::string &fn_name,
     int64_t adt_heap_mask = 0;
     for (size_t ai = 0; ai < all_args.size() && ai < (size_t)info.arity; ai++) {
       Value *arg_val = to_i64(all_args[ai]);
-      // Storing a heap-typed value into the ADT transfers/shares
-      // ownership — rc_inc so the field's lifetime is tied to the ADT,
-      // not the original binding.
+      // Anonymous heap expressions already own one reference, which moves
+      // directly into this field. A named value is still owned by its lexical
+      // binding, so the ADT needs an independent retained reference.
       if (is_heap_value(all_args[ai]) &&
-          !all_args[ai].val->getType()->isStructTy())
+          !all_args[ai].val->getType()->isStructTy() &&
+          named_binding_for_value(all_args[ai].val))
         emit_rc_inc(all_args[ai].val, all_args[ai].type);
       builder_->CreateCall(rt_.adt_set_field_,
                            {node_ptr, ConstantInt::get(i64_ty, ai), arg_val});
@@ -1431,12 +1442,7 @@ Codegen::codegen_higher_order_call(const std::string &fn_name,
         auto *is_borrowed = builder_->CreateICmpNE(
             bit, ConstantInt::get(i64_ty, 0), "arg_is_borrowed");
 
-        std::string binding;
-        for (const auto &[name, value] : named_values_)
-          if (value.val == argument.val) {
-            binding = name;
-            break;
-          }
+        auto binding = named_binding_for_value(argument.val).value_or("");
 
         // A recursive local function's environment is its first LLVM
         // parameter. Passing that self value to a borrowing callback
@@ -2128,12 +2134,8 @@ void Codegen::prepare_callee_owned_heap_args(
       continue;
     if (all_args[ai].val->getType()->isStructTy())
       continue;
-    std::string named_as;
-    for (auto &[k, v] : named_values_)
-      if (v.val == all_args[ai].val) {
-        named_as = k;
-        break;
-      }
+    const auto named_as =
+        named_binding_for_value(all_args[ai].val).value_or("");
     if (!is_heap_type(ct) && all_args[ai].boxed_heap) {
       if (named_as.empty())
         continue;
@@ -2191,13 +2193,7 @@ void Codegen::cleanup_borrowed_temporary_args(
     if (all_args[ai].val->getType()->isStructTy())
       continue;
 
-    bool is_named = false;
-    for (auto &[k, v] : named_values_)
-      if (v.val == all_args[ai].val) {
-        is_named = true;
-        break;
-      }
-    if (!is_named)
+    if (!named_binding_for_value(all_args[ai].val))
       emit_rc_dec(all_args[ai].val, ct);
   }
 }
@@ -2492,13 +2488,7 @@ TypedValue Codegen::emit_direct_call(const std::string &fn_name,
       continue;
     if (all_args[ai].val->getType()->isStructTy())
       continue;
-    bool is_named = false;
-    for (auto &[k, v] : named_values_)
-      if (v.val == all_args[ai].val) {
-        is_named = true;
-        break;
-      }
-    if (!is_named) {
+    if (!named_binding_for_value(all_args[ai].val)) {
       if (ai < cf.borrowed_params.size() && cf.borrowed_params[ai])
         continue;
       if (ct == CType::SEQ)

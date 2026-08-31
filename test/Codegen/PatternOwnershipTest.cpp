@@ -142,13 +142,46 @@ TEST_SUITE("Pattern ownership") {
   }
 
   TEST_CASE("constructor bindings may escape as the selected arm result") {
-    assert_zero_alloc_leaks("case Some [1] of Some xs -> xs; None -> [] end",
+    assert_zero_alloc_leaks("let extracted = "
+                            "case Some [1] of Some xs -> xs; None -> [] end in "
+                            "case extracted of [x] -> x; _ -> 0 end",
                             "constructor_binding_escape");
   }
 
   TEST_CASE("temporary heap-field constructor cases isolate field ownership") {
     assert_zero_alloc_leaks("case Some [1] of Some xs -> 0; None -> 0 end",
                             "temporary_heap_constructor_case");
+  }
+
+  TEST_CASE("constructors retain heap values borrowed from named bindings") {
+    assert_zero_alloc_leaks(
+        "let xs = [1], wrapped = Some xs in "
+        "case wrapped of Some _ -> case xs of [x] -> x; _ -> 0 end; "
+        "None -> 0 end",
+        "named_constructor_field");
+  }
+
+  TEST_CASE("returned constructors own temporary heap fields exactly once") {
+    assert_zero_alloc_leaks(
+        "let make xs = Some xs in "
+        "case make [1] of "
+        "Some values -> case values of [x] -> x; _ -> 0 end; "
+        "None -> 0 end",
+        "returned_temporary_constructor");
+  }
+
+  TEST_CASE("nested constructors transfer temporary heap ownership") {
+    assert_zero_alloc_leaks(
+        "case Some (Some [1]) of "
+        "Some inner -> case inner of Some xs -> 0; None -> 0 end; "
+        "None -> 0 end",
+        "nested_temporary_constructor");
+  }
+
+  TEST_CASE("multi-field constructors transfer each temporary heap field") {
+    assert_zero_alloc_leaks("import TestReport from Std\\Test in "
+                            "let report = TestReport 1 2 [\"line\"] in 0",
+                            "multi_field_temporary_constructor");
   }
 
   TEST_CASE("generated channel programs release their endpoint graph") {
