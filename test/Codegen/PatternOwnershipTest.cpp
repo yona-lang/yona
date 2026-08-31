@@ -114,7 +114,9 @@ std::string assert_zero_alloc_leaks(const std::string &source,
 
 void assert_generic_record_zero_alloc_leaks(
     const std::string &source, const std::string &artifact_stem,
-    const std::string &expected_output) {
+    const std::string &expected_output,
+    const std::string &expected_stats = "tag=SEQ allocs=2 frees=2 leaked=0",
+    std::size_t minimum_retain_calls = 3) {
   const auto module_root =
       yona::test::link::scratch_root() / ("yona_" + artifact_stem + "_modules");
   fs::create_directories(module_root / "Test");
@@ -145,8 +147,8 @@ make value = Box { item = value }
       (module_root / "Test" / "PatternRecord.yonai").string()));
 
   assert_zero_alloc_leaks(source, artifact_stem, expected_output,
-                          "tag=SEQ allocs=2 frees=2 leaked=0", module_root,
-                          module_object, 3);
+                          expected_stats, module_root, module_object,
+                          minimum_retain_calls);
 }
 
 } // namespace
@@ -214,6 +216,26 @@ TEST_SUITE("Pattern ownership") {
         "case replacement of _ -> "
         "case extracted of [result] -> result; _ -> 0 end end",
         "generic_record_binding_lifetime", "1");
+  }
+
+  TEST_CASE("generic record tuple fields retain their concrete shape") {
+    assert_generic_record_zero_alloc_leaks(
+        "import Test\\PatternRecord in "
+        "case make ([1], [2]) of "
+        "Box { item = (left, right) } -> "
+        "case left of [x] -> "
+        "case right of [y] -> x * 10 + y; _ -> 0 end; _ -> 0 end end",
+        "generic_record_tuple_shape", "12");
+  }
+
+  TEST_CASE("generic record function fields retain their return shape") {
+    assert_generic_record_zero_alloc_leaks(
+        "import Test\\PatternRecord in "
+        "let values n = [n] in "
+        "case make values of Box { item = f } -> "
+        "case f 1 of [x] -> x; _ -> 0 end end",
+        "generic_record_function_shape", "1",
+        "tag=SEQ allocs=1 frees=1 leaked=0", 2);
   }
 
   TEST_CASE("temporary heap-field constructor cases isolate field ownership") {

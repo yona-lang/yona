@@ -1008,6 +1008,9 @@ Codegen::codegen_adt_construct(const std::string &fn_name,
         identity.arguments = !all_args[fi].semantic_subtypes.empty()
                                  ? all_args[fi].semantic_subtypes
                                  : all_args[fi].adt_semantic_arguments;
+        if (identity.arguments.empty())
+          for (const auto subtype : all_args[fi].subtypes)
+            identity.arguments.push_back({subtype, {}, {}});
       }
     }
     for (auto &a : all_args)

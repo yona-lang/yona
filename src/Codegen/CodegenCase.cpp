@@ -1458,6 +1458,9 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
                ++parameter) {
             if (parameters->second[parameter] != declared.name)
               continue;
+            if (parameter < scrutinee.adt_semantic_arguments.size())
+              return field_shape_from_semantic_identity(
+                  scrutinee.adt_semantic_arguments[parameter]);
             if (parameter < scrutinee.adt_type_arguments.size())
               shape.type = scrutinee.adt_type_arguments[parameter];
             else if (field_index < scrutinee.subtypes.size())
@@ -1511,6 +1514,11 @@ TypedValue Codegen::codegen_case(CaseExpr *node) {
           TypedValue bound{typed_value, shape.type};
           if (shape.type == CType::FUNCTION) {
             bound.subtypes = {shape.function_return_type};
+            auto return_identity = shape.function_return_identity;
+            return_identity.type = shape.function_return_type;
+            if (return_identity.adt_name.empty())
+              return_identity.adt_name = shape.function_return_adt_name;
+            bound.semantic_subtypes = {std::move(return_identity)};
             bound.adt_type_name = shape.function_return_adt_name;
           } else if (shape.type == CType::TUPLE) {
             for (const auto &element : shape.tuple_elements)

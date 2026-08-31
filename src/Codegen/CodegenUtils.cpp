@@ -24,6 +24,23 @@ using llvm::PointerType;
 using llvm::Value;
 using LType = llvm::Type;
 
+Codegen::AdtInfo::FieldShape Codegen::field_shape_from_semantic_identity(
+    const SemanticTypeIdentity &identity) {
+  AdtInfo::FieldShape shape;
+  shape.type = identity.type;
+  if (identity.type == CType::TUPLE) {
+    for (const auto &element : identity.arguments)
+      shape.tuple_elements.push_back(
+          field_shape_from_semantic_identity(element));
+  } else if (identity.type == CType::FUNCTION && !identity.arguments.empty()) {
+    const auto &result = identity.arguments.back();
+    shape.function_return_type = result.type;
+    shape.function_return_adt_name = result.adt_name;
+    shape.function_return_identity = result;
+  }
+  return shape;
+}
+
 namespace {
 bool identifier_used_as_callee(AstNode *node, const std::string &name) {
   if (!node)

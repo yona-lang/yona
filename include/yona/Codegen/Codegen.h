@@ -626,6 +626,7 @@ private:
       std::vector<FieldShape> tuple_elements;
       CType function_return_type = CType::INT;
       std::string function_return_adt_name;
+      SemanticTypeIdentity function_return_identity;
     };
 
     std::string type_name;
@@ -650,6 +651,8 @@ private:
 
   static AdtInfo::FieldShape
   field_shape_from_field_type(const ast::FieldType &field_type);
+  static AdtInfo::FieldShape
+  field_shape_from_semantic_identity(const SemanticTypeIdentity &identity);
   struct CFFISignature {
     CType return_type;
     std::vector<CType> param_types;
