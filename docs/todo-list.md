@@ -11,11 +11,12 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
   (or the analogous character sequence); codegen reports `unsupported
   expression type` before pattern matching.
 
-- [ ] **Value, tuple, and head-tail literal patterns ignore some or all
-  literals.** Repro: match a string, float, or boolean literal pattern against
-  a different value of the same type, including as a tuple field or sequence
-  head; codegen enters the literal arm because these lowering paths either
-  emit predicates only for integers and symbols or only bind identifiers.
+- [ ] **Literal-pattern lowering is inconsistent outside integer and symbol
+  controls.** Repro: match a string, float, or boolean literal against a
+  different value of the same type as a direct value, or-pattern alternative,
+  tuple/constructor field, or sequence head; codegen enters the literal arm
+  because these paths either emit only integer/symbol predicates or only bind
+  identifiers.
 
 - [ ] **Exact sequence patterns ignore string-literal elements when case arms
   have the same length.** Repro: compile
