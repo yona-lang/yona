@@ -1836,6 +1836,21 @@ Codegen::compile_function(const std::string &name,
       }
     }
 
+    // A generic call can temporarily expose the universal pointer carrier
+    // while its semantic result and the function's provisional ABI already
+    // agree on a scalar (or vice versa). Preserve that stable semantic ABI:
+    // rebuilding from the erased carrier makes a second compilation return
+    // the original type and leaves invalid IR (`ret i64` in a ptr function).
+    if (!has_annotated_ret && body_tv.type == preliminary_ret &&
+        body_tv.val->getType() != ret_type) {
+      if (body_tv.val->getType()->isIntegerTy() && ret_type->isPointerTy())
+        body_tv.val = builder_->CreateIntToPtr(body_tv.val, ret_type,
+                                               "inferred_result_ptr");
+      else if (body_tv.val->getType()->isPointerTy() && ret_type->isIntegerTy())
+        body_tv.val = builder_->CreatePtrToInt(body_tv.val, ret_type,
+                                               "inferred_result_int");
+    }
+
     if (body_tv.val->getType() != ret_type) {
       bool has_external_users = false;
       for (auto *user : fn->users()) {

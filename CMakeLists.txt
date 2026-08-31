@@ -718,6 +718,7 @@ add_executable(tests
 	"${PROJECT_SOURCE_DIR}/test/Codegen/AcceleratorLoweringTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/AdtTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/CodegenTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Codegen/GenericAbiTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/PatternOwnershipTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/RepeatedOwnershipTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Codegen/TypedIrLoweringTest.cpp"
