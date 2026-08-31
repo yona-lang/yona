@@ -1,0 +1,5 @@
+let byteValue _ = 65b,
+    characterValue _ = 'A',
+    apply f x = f x
+in byteValue () + characterValue () + apply (\_ -> 0b) () +
+    apply (\_ -> '\0') ()

@@ -2140,6 +2140,10 @@ TypedValue Codegen::codegen(AstNode *node) {
     return codegen_main_node(static_cast<MainNode *>(node));
   case ast::AST_INTEGER_EXPR:
     return codegen_integer(static_cast<IntegerExpr *>(node));
+  case ast::AST_BYTE_EXPR:
+    return codegen_byte(static_cast<ByteExpr *>(node));
+  case ast::AST_CHARACTER_EXPR:
+    return codegen_character(static_cast<CharacterExpr *>(node));
   case ast::AST_FLOAT_EXPR:
     return codegen_float(static_cast<FloatExpr *>(node));
   case ast::AST_TRUE_LITERAL_EXPR:

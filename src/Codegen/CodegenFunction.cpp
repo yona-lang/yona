@@ -1244,6 +1244,8 @@ Codegen::compile_function(const std::string &name, const DeferredFunction &def,
       return {llvm_type(CType::STRING), CType::STRING};
     if (ct == ast::AST_INTEGER_EXPR)
       return {i64_ty, CType::INT};
+    if (ct == ast::AST_BYTE_EXPR || ct == ast::AST_CHARACTER_EXPR)
+      return {i64_ty, CType::INT};
     if (ct == ast::AST_FLOAT_EXPR)
       return {llvm_type(CType::FLOAT), CType::FLOAT};
     if (ct == ast::AST_TRUE_LITERAL_EXPR || ct == ast::AST_FALSE_LITERAL_EXPR)

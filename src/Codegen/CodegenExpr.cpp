@@ -226,6 +226,18 @@ TypedValue Codegen::codegen_integer(IntegerExpr *node) {
   return {ConstantInt::get(LType::getInt64Ty(*context_), node->value),
           CType::INT};
 }
+TypedValue Codegen::codegen_byte(ByteExpr *node) {
+  set_debug_loc(node->Range);
+  return {ConstantInt::get(LType::getInt64Ty(*context_),
+                           static_cast<uint64_t>(node->value)),
+          CType::INT};
+}
+TypedValue Codegen::codegen_character(CharacterExpr *node) {
+  set_debug_loc(node->Range);
+  return {ConstantInt::get(LType::getInt64Ty(*context_),
+                           static_cast<uint32_t>(node->value)),
+          CType::INT};
+}
 TypedValue Codegen::codegen_float(FloatExpr *node) {
   set_debug_loc(node->Range);
   return {ConstantFP::get(LType::getDoubleTy(*context_), node->value),

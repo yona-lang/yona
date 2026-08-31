@@ -109,8 +109,10 @@ using ast::AstNode;
 using ast::BinaryOpExpr;
 using ast::BodyWithGuards;
 using ast::BodyWithoutGuards;
+using ast::ByteExpr;
 using ast::CaseClause;
 using ast::CaseExpr;
+using ast::CharacterExpr;
 using ast::CollectionExtractorExpr;
 using ast::ConsLeftExpr;
 using ast::ConsRightExpr;
@@ -898,6 +900,8 @@ private:
 
   // Literals
   TypedValue codegen_integer(IntegerExpr *node);
+  TypedValue codegen_byte(ByteExpr *node);
+  TypedValue codegen_character(CharacterExpr *node);
   TypedValue codegen_float(FloatExpr *node);
   TypedValue codegen_bool_true(TrueLiteralExpr *node);
   TypedValue codegen_bool_false(FalseLiteralExpr *node);

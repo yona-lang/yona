@@ -25,13 +25,13 @@ next-arm block and a true predicate continues in a fresh match block.
 - Modify: `src/Codegen/CodegenFunction.cpp`
 - Add or modify focused fixtures under: `test/Fixtures/Codegen/`
 
-- [ ] **Step 1: Add focused RED coverage**
+- [x] **Step 1: Add focused RED coverage**
 
 Add scalar, tuple, and sequence-value fixtures using byte and character
 literals. Confirm parsing and typing succeed but core dispatch reports
 `unsupported expression type`.
 
-- [ ] **Step 2: Lower both literals through the scalar carrier**
+- [x] **Step 2: Lower both literals through the scalar carrier**
 
 Add explicit byte and character codegen operations returning their unsigned
 byte / code-point values as `i64` with the existing scalar ABI tag. Add both
@@ -39,7 +39,7 @@ AST kinds to core dispatch and to every return-type prepass used before
 function creation. Do not invent new heap layouts or public runtime entry
 points.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run the focused fixtures plus literal/parser/typechecker controls, then commit
 as `fix: lower byte and character literals`.
