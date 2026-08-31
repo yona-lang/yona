@@ -31,7 +31,9 @@ std::string read_file(const fs::path &path) {
 }
 
 void assert_zero_alloc_leaks(const std::string &source,
-                             const std::string &artifact_stem) {
+                             const std::string &artifact_stem,
+                             const std::string &expected_output = {},
+                             const std::string &expected_stats = {}) {
   REQUIRE(yona::test::link::ensure_runtime_objects());
 
   parser::Parser parser;
@@ -69,6 +71,10 @@ void assert_zero_alloc_leaks(const std::string &source,
   REQUIRE(combined != "RUN_ERROR");
   INFO("Full output:\n" << combined);
   REQUIRE(combined.find("alloc-stats") != std::string::npos);
+  if (!expected_output.empty())
+    CHECK(combined.starts_with(expected_output + "\n[alloc-stats]"));
+  if (!expected_stats.empty())
+    CHECK(combined.find(expected_stats) != std::string::npos);
 
   std::size_t leak_rows = 0;
   for (std::size_t position = 0;
@@ -97,6 +103,33 @@ TEST_SUITE("Pattern ownership") {
                             "owned_tuple_alias_drop");
   }
 
+  TEST_CASE("destructuring a named tuple preserves its enclosing owner") {
+    assert_zero_alloc_leaks(
+        "let t = ([1], [2]) in "
+        "let (x, y) = t in "
+        "case t of (a, b) -> case a of [value] -> value; _ -> 0 end end",
+        "named_tuple_alias_reuse", "1");
+  }
+
+  TEST_CASE("named tuple reuse survives an intervening tuple allocation") {
+    assert_zero_alloc_leaks(
+        "let t = ([1], [2]) in "
+        "let (x, y) = t in "
+        "let q = (3, 4) in "
+        "case q of _ -> case t of "
+        "(a, b) -> case a of [value] -> value; _ -> 0 end end end",
+        "named_tuple_alias_slot_reuse", "1");
+  }
+
+  TEST_CASE("failed tuple patterns release retained prefix bindings") {
+    assert_zero_alloc_leaks("case ([1], :no) of (x, :yes) -> 1; _ -> 0 end",
+                            "tuple_pattern_symbol_prefix_mismatch", "0",
+                            "tag=SEQ allocs=1 frees=1 leaked=0");
+    assert_zero_alloc_leaks("case ([1], 2) of (x, 3) -> 1; _ -> 0 end",
+                            "tuple_pattern_literal_prefix_mismatch", "0",
+                            "tag=SEQ allocs=1 frees=1 leaked=0");
+  }
+
   TEST_CASE("temporary scalar constructor cases release their scrutinee") {
     assert_zero_alloc_leaks("case Some 1 of Some x -> 0; None -> 0 end",
                             "temporary_scalar_constructor_case");
@@ -104,8 +137,8 @@ TEST_SUITE("Pattern ownership") {
 
   TEST_CASE("constructor bindings are released when a guard rejects an arm") {
     assert_zero_alloc_leaks(
-        "case Some [1] of Some xs | false -> 1; Some xs -> 0; None -> 2 end",
-        "constructor_binding_guard_failure");
+        "case Some [1] of Some xs if false -> 1; Some xs -> 0; None -> 2 end",
+        "constructor_binding_guard_failure", "0");
   }
 
   TEST_CASE("constructor bindings may escape as the selected arm result") {

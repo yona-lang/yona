@@ -456,6 +456,23 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
     is_ptr = true;
   }
 
+  auto branch_to_match_or_cleanup = [&](Value *condition,
+                                        const llvm::Twine &match_name) {
+    auto *match_bb = BasicBlock::Create(*context_, match_name, fn);
+    if (arm_drop_stack_.empty() || arm_drop_stack_.back().empty()) {
+      builder_->CreateCondBr(condition, match_bb, next_bb);
+    } else {
+      auto *cleanup_bb =
+          BasicBlock::Create(*context_, match_name + ".failed", fn);
+      builder_->CreateCondBr(condition, match_bb, cleanup_bb);
+      builder_->SetInsertPoint(cleanup_bb);
+      for (const auto &[value, type] : arm_drop_stack_.back())
+        emit_rc_dec(value, type);
+      builder_->CreateBr(next_bb);
+    }
+    builder_->SetInsertPoint(match_bb);
+  };
+
   for (size_t ti = 0; ti < tp->patterns.size(); ti++) {
     Value *elem;
     if (is_ptr) {
@@ -480,10 +497,8 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
           else if (cmp_val->getType()->isIntegerTy())
             cmp_val = builder_->CreateZExtOrTrunc(cmp_val, i64_ty);
         }
-        auto *match_bb = BasicBlock::Create(*context_, "tuple.sym.match", fn);
-        builder_->CreateCondBr(builder_->CreateICmpEQ(cmp_val, sym_val),
-                               match_bb, next_bb);
-        builder_->SetInsertPoint(match_bb);
+        branch_to_match_or_cleanup(builder_->CreateICmpEQ(cmp_val, sym_val),
+                                   "tuple.sym.match");
       } else if (auto *id = std::get_if<IdentifierExpr *>(&pv->expr)) {
         // Heap-typed elements were stored as i64-cast pointers; restore
         // the pointer so downstream pattern matching can use heap layout.
@@ -517,12 +532,10 @@ bool Codegen::codegen_pattern_tuple(TuplePattern *tp,
           Value *cmp_val = elem;
           if (cmp_val->getType() != i64_ty)
             cmp_val = builder_->CreateZExtOrTrunc(cmp_val, i64_ty);
-          auto *match_bb = BasicBlock::Create(*context_, "tuple.lit.match", fn);
-          builder_->CreateCondBr(
+          branch_to_match_or_cleanup(
               builder_->CreateICmpEQ(cmp_val,
                                      ConstantInt::get(i64_ty, ie->value)),
-              match_bb, next_bb);
-          builder_->SetInsertPoint(match_bb);
+              "tuple.lit.match");
         }
       }
     } else if (sub->get_type() == ast::AST_TUPLE_PATTERN) {

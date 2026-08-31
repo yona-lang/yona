@@ -1560,10 +1560,13 @@ void Codegen::codegen_let_aliases(
               }
             }
           }
-          // A pattern alias consumes its RHS tuple. Heap children bound above
-          // now own retained references; releasing the aggregate drops the
-          // tuple's original child references and the tuple itself.
-          emit_rc_dec(tuple_ptr, CType::TUPLE);
+          // An anonymous pattern RHS transfers its tuple to the destructuring
+          // alias. Heap children bound above now own retained references, so
+          // releasing that aggregate drops its original child references.
+          // A named RHS remains owned by its enclosing value binding and may
+          // still be used after destructuring; its scope cleanup releases it.
+          if (pa->expr->get_type() != ast::AST_IDENTIFIER_EXPR)
+            emit_rc_dec(tuple_ptr, CType::TUPLE);
         }
       }
     }
