@@ -3,11 +3,13 @@
  * Content-Length framing on stdin needs this.
  */
 
+#include "yona/Runtime/Core/Api.h"
 #include "yona/Support/Process.h"
 
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -34,9 +36,11 @@ char *YonaStdIoReadExactBytes(int64_t fd, int64_t n);
 int64_t YonaStdIoReadExact(int64_t fd, int64_t n);
 char *YonaStdFileReadExactBytes(int64_t handle, int64_t n);
 int64_t YonaStdFileReadExact(int64_t handle, int64_t n);
+int64_t YonaStdFileCloseFileHandle(int64_t handle);
+int64_t YonaStdFileWriteBytes(int64_t handle, int64_t bytes);
+int64_t YonaRuntimeIoAwait(int64_t io_id);
 void YonaStdIoWriteBytes(int64_t fd, const char *s);
 int64_t YonaStdStringLength(const char *s);
-void *YonaRuntimeAllocateStringWithLength(size_t bytes, size_t string_length);
 void YonaRuntimeRelease(void *ptr);
 }
 
@@ -61,6 +65,18 @@ std::string take_rc(char *s) {
   std::string out(s, static_cast<size_t>(YonaStdStringLength(s)));
   YonaRuntimeRelease(s);
   return out;
+}
+
+int native_file_descriptor(std::FILE *file) {
+#if defined(_WIN32)
+  return _fileno(file);
+#else
+  return fileno(file);
+#endif
+}
+
+int64_t runtime_reference_count(void *value) {
+  return static_cast<int64_t *>(value)[-2];
 }
 
 } // namespace
@@ -157,6 +173,38 @@ TEST_SUITE("IoReadExact") {
   }
 
 #if defined(__linux__)
+  TEST_CASE("closeFileHandle releases its transferred FileHandle") {
+    constexpr const char *ChildEnvironment =
+        "YONA_TEST_FILE_CLOSE_OWNERSHIP_CHILD";
+    if (std::getenv(ChildEnvironment)) {
+      int descriptors[2];
+      REQUIRE(make_pipe(descriptors) == 0);
+      auto *handle = static_cast<int64_t *>(YonaRuntimeAdtAllocate(0, 1));
+      REQUIRE(handle != nullptr);
+      YonaRuntimeAdtSetField(handle, 0, descriptors[0]);
+      YonaRuntimeAdtSetHeapMask(handle, 0);
+
+      CHECK(YonaStdFileCloseFileHandle(
+                static_cast<int64_t>(reinterpret_cast<intptr_t>(handle))) == 0);
+      CHECK(pipe_close(descriptors[0]) == -1);
+      REQUIRE(pipe_close(descriptors[1]) == 0);
+      return;
+    }
+
+    const auto executable = std::filesystem::canonical("/proc/self/exe");
+    const auto result = yona::support::executeProcess(
+        executable, {"-tc=closeFileHandle releases its transferred FileHandle"},
+        {.CaptureStdout = true,
+         .CaptureStderr = true,
+         .EnvironmentOverrides = {{ChildEnvironment, "1"},
+                                  {"YONA_ALLOC_STATS", "1"}}});
+    REQUIRE_FALSE(result.ExecutionFailed);
+    REQUIRE(result.ExitCode == 0);
+    INFO(result.StandardError);
+    CHECK(result.StandardError.find("tag=ADT allocs=1 frees=1 leaked=0") !=
+          std::string::npos);
+  }
+
   TEST_CASE("Length-tagged allocation registers its stats reporter") {
     constexpr const char *ChildEnvironment =
         "YONA_TEST_LENGTH_TAGGED_STATS_CHILD";
@@ -218,6 +266,27 @@ TEST_SUITE("IoReadExact") {
           std::string::npos);
   }
 #endif
+
+  TEST_CASE("writeBytes keeps its asynchronous ByteArray pin internal") {
+    std::FILE *file = std::tmpfile();
+    REQUIRE(file != nullptr);
+    const int file_descriptor = native_file_descriptor(file);
+    REQUIRE(file_descriptor >= 0);
+    int64_t handle[] = {0, 1, 0, file_descriptor};
+    void *bytes = YonaRuntimeByteArrayFromString("abc");
+    REQUIRE(bytes != nullptr);
+    REQUIRE(runtime_reference_count(bytes) == 1);
+
+    const int64_t io_id = YonaStdFileWriteBytes(
+        static_cast<int64_t>(reinterpret_cast<intptr_t>(handle)),
+        static_cast<int64_t>(reinterpret_cast<intptr_t>(bytes)));
+    REQUIRE(io_id > 0);
+    CHECK(YonaRuntimeIoAwait(io_id) == 3);
+    CHECK(runtime_reference_count(bytes) == 1);
+
+    YonaRuntimeRelease(bytes);
+    CHECK(std::fclose(file) == 0);
+  }
 
 #if defined(_WIN32)
   TEST_CASE("readExact and writeBytes set CRT stdio to binary mode") {

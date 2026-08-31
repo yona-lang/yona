@@ -1180,6 +1180,7 @@ int64_t YonaStdFileOpenFile(const char *Path, int64_t ModeI64) {
 int64_t YonaStdFileCloseFileHandle(int64_t HandleI64) {
   int Fd = fhFd(HandleI64);
   YonaRuntimePlatformCloseFileHandle(Fd);
+  YonaRuntimeRelease((void *)(intptr_t)HandleI64);
   return 0;
 }
 

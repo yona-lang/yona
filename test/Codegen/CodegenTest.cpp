@@ -533,6 +533,94 @@ TEST_SUITE("Codegen IR") {
     CHECK(ir_contains(raising_ir, "call void @YonaRuntimeFramePush"));
   }
 
+  TEST_CASE("Std File native calls borrow observational heap parameters") {
+    const string source = R"(
+import appendFile, exists, openFile, writeBytes, seek, closeFileHandle from Std\File,
+       fromString from Std\ByteArray in
+let touch path content bytes = do
+    appendFile path content
+    exists path
+    case openFile path Write of
+        Linear h -> do
+            writeBytes h bytes
+            seek h 0 SeekSet
+            closeFileHandle h
+        end
+    end
+end in touch "/tmp/yona_file_owner_ir" "x" (fromString "y")
+)";
+
+    parser::Parser parser;
+    Codegen codegen("file_native_borrow_ir");
+    codegen.set_opt_level(0);
+    codegen.ModulePaths.push_back(yona::test::lib_dir().string());
+    DiagnosticEngine diagnostics;
+    typechecker::TypeChecker checker(diagnostics);
+    YONA_TEST_INSTALL_PRELUDE(codegen, parser, checker);
+    checker.add_module_path(yona::test::lib_dir().string());
+
+    auto parsed = parser.parseExpression(source, "file_native_borrow_ir.yona");
+    REQUIRE(parsed.has_value());
+    checker.check(parsed->Expression.get());
+    REQUIRE(checker.solve_constraints());
+    REQUIRE_FALSE(checker.has_errors());
+    codegen.set_type_checker(&checker);
+    REQUIRE(codegen.compile(parsed->Expression.get()) != nullptr);
+
+    const auto body = ir_function_body(codegen.emit_ir(), "touch");
+    REQUIRE_FALSE(body.empty());
+    const auto Count = [&](const string &Needle) {
+      std::size_t Result = 0;
+      for (std::size_t Position = 0;
+           (Position = body.find(Needle, Position)) != string::npos;
+           Position += Needle.size())
+        ++Result;
+      return Result;
+    };
+
+    CHECK(Count("call void @YonaRuntimeRetain") == 2);
+    CHECK(body.find("call void @YonaRuntimeRetain(ptr %path)") == string::npos);
+    CHECK(body.find("call void @YonaRuntimeRetain(ptr %content)") ==
+          string::npos);
+    CHECK(body.find("call void @YonaRuntimeRetain(ptr %bytes)") ==
+          string::npos);
+    CHECK(Count("call void @YonaRuntimeRelease(ptr %adt_node") == 2);
+  }
+
+  TEST_CASE("Std File borrowed heap inputs are caller-released") {
+    ensure_runtime_archive();
+    const string source = R"(
+import appendFile, remove from Std\File in
+let save path content = do
+    appendFile path content
+    remove path
+    0
+end in save ("/tmp/" ++ "yona_file_native_ownership") ("borrowed" ++ "-content")
+)";
+
+    parser::Parser parser;
+    Codegen codegen("file_native_ownership");
+    codegen.ModulePaths.push_back(yona::test::lib_dir().string());
+    DiagnosticEngine diagnostics;
+    typechecker::TypeChecker checker(diagnostics);
+    YONA_TEST_INSTALL_PRELUDE(codegen, parser, checker);
+    checker.add_module_path(yona::test::lib_dir().string());
+
+    auto parsed = parser.parseExpression(source, "file_native_ownership.yona");
+    REQUIRE(parsed.has_value());
+    checker.check(parsed->Expression.get());
+    REQUIRE(checker.solve_constraints());
+    REQUIRE_FALSE(checker.has_errors());
+    codegen.set_type_checker(&checker);
+    REQUIRE(codegen.compile(parsed->Expression.get()) != nullptr);
+
+    const auto Object =
+        yona::test::link::scratch_root() / "yona_file_native_ownership.o";
+    REQUIRE(codegen.emit_object_file(Object.string()));
+    assert_linked_yona_zero_alloc_leaks(Object.string(),
+                                        "yona_file_native_ownership");
+  }
+
   TEST_CASE("nested try success uses inner result") {
     CHECK(compile_and_run("try (try 1 catch _ -> 2 end) catch _ -> 3 end",
                           nullptr, nullptr, "nested_try_success") == "1");

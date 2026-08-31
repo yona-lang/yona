@@ -993,6 +993,5 @@ int64_t YonaRuntimePlatformSubmitFileDescriptorByteWrite(int Fd, void *Bytes,
   if (_lseeki64(Fd, Offset, SEEK_SET) < 0)
     return ioRegisterDirectResult((void *)(intptr_t)-1);
   int N = (int)write(Fd, Data, (unsigned)Len);
-  YonaRuntimeRelease(Bytes);
   return ioRegisterDirectResult((void *)(intptr_t)(N >= 0 ? (int64_t)N : -1));
 }

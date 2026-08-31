@@ -64,42 +64,44 @@ TEST_CASE("Std File exposes canonical typed resource contracts") {
     return *Found;
   };
 
-  const auto &Open = Find("openFile");
-  CHECK(Open.ParameterTypes ==
-        std::vector<std::string>{"STRING", "ADT(FileMode)"});
-  CHECK(Open.ReturnType == "LINEAR(ADT(FileHandle))");
-  CHECK(Open.BorrowedParameters == std::vector<bool>{false, false});
+  const auto CheckFunction =
+      [&](const std::string &Name, std::vector<std::string> Parameters,
+          const std::string &ReturnType, std::vector<bool> BorrowedParameters) {
+        const auto &Function = Find(Name);
+        CHECK(Function.ParameterTypes == Parameters);
+        CHECK(Function.ReturnType == ReturnType);
+        CHECK(Function.BorrowedParameters == BorrowedParameters);
+      };
 
-  const auto &Close = Find("closeFileHandle");
-  CHECK(Close.ParameterTypes == std::vector<std::string>{"ADT(FileHandle)"});
-  CHECK(Close.ReturnType == "UNIT");
-  CHECK(Close.BorrowedParameters == std::vector<bool>{false});
-
-  const auto CheckBorrowedHandle = [&](const std::string &Name,
-                                       std::vector<std::string> Parameters,
-                                       const std::string &ReturnType) {
-    const auto &Function = Find(Name);
-    CHECK(Function.ParameterTypes == Parameters);
-    CHECK(Function.ReturnType == ReturnType);
-    std::vector<bool> ExpectedBorrowed(Parameters.size(), false);
-    ExpectedBorrowed.front() = true;
-    CHECK(Function.BorrowedParameters == ExpectedBorrowed);
-  };
-
-  CheckBorrowedHandle("flush", {"ADT(FileHandle)"}, "BOOL");
-  CheckBorrowedHandle("readBytes", {"ADT(FileHandle)", "INT"}, "BYTE_ARRAY");
-  CheckBorrowedHandle("readExact", {"ADT(FileHandle)", "INT"},
-                      "ADT(Result,STRING,STRING)");
-  CheckBorrowedHandle("readExactBytes", {"ADT(FileHandle)", "INT"}, "STRING");
-  CheckBorrowedHandle("readChunks", {"ADT(FileHandle)", "INT"},
-                      "ADT(Iterator,BYTE_ARRAY)");
-  CheckBorrowedHandle("seek", {"ADT(FileHandle)", "INT", "ADT(Whence)"}, "INT");
-  CheckBorrowedHandle("tell", {"ADT(FileHandle)"}, "INT");
-  CheckBorrowedHandle("truncate", {"ADT(FileHandle)", "INT"}, "BOOL");
-  CheckBorrowedHandle("writeBytes", {"ADT(FileHandle)", "BYTE_ARRAY"}, "INT");
-
-  CHECK(Find("listDir").ReturnType == "Seq(STRING)");
-  CHECK(Find("readLines").ReturnType == "ADT(Iterator,STRING)");
+  CheckFunction("appendFile", {"STRING", "STRING"}, "BOOL", {true, true});
+  CheckFunction("closeFileHandle", {"ADT(FileHandle)"}, "UNIT", {false});
+  CheckFunction("exists", {"STRING"}, "BOOL", {true});
+  CheckFunction("flush", {"ADT(FileHandle)"}, "BOOL", {true});
+  CheckFunction("listDir", {"STRING"}, "Seq(STRING)", {true});
+  CheckFunction("openFile", {"STRING", "ADT(FileMode)"},
+                "LINEAR(ADT(FileHandle))", {true, true});
+  CheckFunction("readBytes", {"ADT(FileHandle)", "INT"}, "BYTE_ARRAY",
+                {true, false});
+  CheckFunction("readChunks", {"ADT(FileHandle)", "INT"},
+                "ADT(Iterator,BYTE_ARRAY)", {true, false});
+  CheckFunction("readExact", {"ADT(FileHandle)", "INT"},
+                "ADT(Result,STRING,STRING)", {true, false});
+  CheckFunction("readExactBytes", {"ADT(FileHandle)", "INT"}, "STRING",
+                {true, false});
+  CheckFunction("readFile", {"STRING"}, "STRING", {true});
+  CheckFunction("readFileBytes", {"STRING"}, "BYTE_ARRAY", {true});
+  CheckFunction("readLines", {"STRING"}, "ADT(Iterator,STRING)", {true});
+  CheckFunction("remove", {"STRING"}, "BOOL", {true});
+  CheckFunction("seek", {"ADT(FileHandle)", "INT", "ADT(Whence)"}, "INT",
+                {true, false, true});
+  CheckFunction("size", {"STRING"}, "INT", {true});
+  CheckFunction("tell", {"ADT(FileHandle)"}, "INT", {true});
+  CheckFunction("truncate", {"ADT(FileHandle)", "INT"}, "BOOL", {true, false});
+  CheckFunction("writeBytes", {"ADT(FileHandle)", "BYTE_ARRAY"}, "INT",
+                {true, true});
+  CheckFunction("writeFile", {"STRING", "STRING"}, "BOOL", {true, true});
+  CheckFunction("writeFileBytes", {"STRING", "BYTE_ARRAY"}, "BOOL",
+                {true, true});
 }
 
 TEST_CASE("Std File requires one explicit Linear handle unwrap") {
