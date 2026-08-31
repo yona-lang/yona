@@ -287,6 +287,176 @@ TypeChecker::EffectRowInfo TypeChecker::effect_row_info(MonoTypePtr type) {
   return info;
 }
 
+TypeChecker::InterfaceSignature TypeChecker::serialize_interface_signature(
+    MonoTypePtr type, std::size_t visible_parameter_count) {
+  auto *visible_type = zonk(type);
+  if (!visible_type)
+    throw std::invalid_argument(
+        "cannot serialize a null inferred interface type");
+
+  // A module definition with no source patterns is inferred as a Unit thunk
+  // so its body can carry effects. That arrow is an implementation detail of
+  // the checker, not a parameter in the exported interface contract.
+  if (visible_parameter_count == 0) {
+    auto *hidden = unifier_.resolve(visible_type);
+    if (!hidden || hidden->tag != MonoType::Arrow) {
+      throw std::invalid_argument(
+          "parameterless module binding is missing its hidden Unit arrow");
+    }
+    auto *parameter = unifier_.resolve(hidden->param_type);
+    if (!parameter || parameter->tag != MonoType::Con ||
+        parameter->con != TyCon::Unit) {
+      throw std::invalid_argument(
+          "parameterless module binding has a non-Unit hidden parameter");
+    }
+    visible_type = hidden->return_type;
+  }
+
+  std::vector<MonoTypePtr> parameter_types;
+  parameter_types.reserve(visible_parameter_count);
+  auto *return_type = visible_type;
+  for (std::size_t index = 0; index < visible_parameter_count; ++index) {
+    auto *arrow = unifier_.resolve(return_type);
+    if (!arrow || arrow->tag != MonoType::Arrow) {
+      throw std::invalid_argument(
+          "inferred interface type has fewer arrows than source parameters");
+    }
+    parameter_types.push_back(arrow->param_type);
+    return_type = arrow->return_type;
+  }
+
+  std::unordered_map<TypeId, std::string> variable_names;
+  auto variable_name = [&](TypeId id) -> const std::string & {
+    if (const auto found = variable_names.find(id);
+        found != variable_names.end())
+      return found->second;
+    const std::size_t ordinal = variable_names.size();
+    std::string name;
+    if (ordinal < 26)
+      name.assign(1, static_cast<char>('a' + ordinal));
+    else
+      name = "t" + std::to_string(ordinal);
+    return variable_names.emplace(id, std::move(name)).first->second;
+  };
+
+  std::function<std::string(MonoTypePtr)> descriptor;
+  descriptor = [&](MonoTypePtr current) -> std::string {
+    current = unifier_.resolve(current);
+    if (!current)
+      throw std::invalid_argument(
+          "cannot serialize a null nested interface type");
+    switch (current->tag) {
+    case MonoType::Var:
+      return "VAR(" + variable_name(current->var_id) + ")";
+    case MonoType::Con:
+      switch (current->con) {
+      case TyCon::Int:
+        return "INT";
+      case TyCon::Float:
+        return "FLOAT";
+      case TyCon::Bool:
+        return "BOOL";
+      case TyCon::String:
+        return "STRING";
+      case TyCon::Char:
+        return "CHAR";
+      case TyCon::Byte:
+        return "BYTE";
+      case TyCon::Symbol:
+        return "SYMBOL";
+      case TyCon::Unit:
+        return "UNIT";
+      case TyCon::ByteArray:
+        return "BYTE_ARRAY";
+      case TyCon::Seq:
+        return "SEQ";
+      case TyCon::Set:
+        return "SET";
+      case TyCon::Dict:
+        return "DICT";
+      case TyCon::Tuple:
+        return "TUPLE";
+      case TyCon::Function:
+        return "FUNCTION";
+      case TyCon::Promise:
+        return "PROMISE";
+      }
+      break;
+    case MonoType::Arrow:
+      return "FUNCTION(" + descriptor(current->param_type) + "," +
+             descriptor(current->return_type) + ")";
+    case MonoType::MTuple: {
+      std::string result = "TUPLE(";
+      for (std::size_t index = 0; index < current->elements.size(); ++index) {
+        if (index)
+          result += ',';
+        result += descriptor(current->elements[index]);
+      }
+      return result + ")";
+    }
+    case MonoType::MRecord:
+      // The current interface grammar has only the ABI-level RECORD token and
+      // cannot preserve structural fields or a row rest. Do not publish a
+      // descriptor that would silently weaken the inferred contract.
+      throw std::invalid_argument(
+          "structural record types are not representable in interfaces");
+    case MonoType::App: {
+      const auto application = [&](std::string_view name,
+                                   std::size_t arity) -> std::string {
+        if (current->args.size() != arity)
+          throw std::invalid_argument("interface type '" + current->type_name +
+                                      "' has an unsupported arity");
+        std::string result(name);
+        result += '(';
+        for (std::size_t index = 0; index < current->args.size(); ++index) {
+          if (index)
+            result += ',';
+          result += descriptor(current->args[index]);
+        }
+        return result + ')';
+      };
+      if (current->type_name == "Linear")
+        return application("LINEAR", 1);
+      if (current->type_name == "Seq")
+        return application("Seq", 1);
+      if (current->type_name == "Set")
+        return application("Set", 1);
+      if (current->type_name == "Dict")
+        return application("Dict", 2);
+      if (current->type_name == "Promise")
+        return application("Promise", 1);
+      // A legacy bare ADT descriptor is imported as this anonymous wildcard
+      // application. It has no nominal name that can be made more precise by
+      // a forwarding source binding, so preserve the wildcard spelling.
+      if (current->type_name == "ADT" && current->args.size() == 1)
+        return "ADT";
+      if (current->type_name == "ByteArray" && current->args.empty())
+        return "BYTE_ARRAY";
+      if (current->type_name == "IntArray" && current->args.empty())
+        return "INT_ARRAY";
+      if (current->type_name == "FloatArray" && current->args.empty())
+        return "FLOAT_ARRAY";
+      if (current->type_name.empty())
+        throw std::invalid_argument(
+            "cannot serialize an unnamed interface type application");
+      std::string result = "ADT(" + current->type_name;
+      for (auto *argument : current->args)
+        result += ',' + descriptor(argument);
+      return result + ')';
+    }
+    }
+    throw std::invalid_argument("unsupported inferred interface type");
+  };
+
+  InterfaceSignature signature;
+  signature.parameter_descriptors.reserve(parameter_types.size());
+  for (auto *parameter : parameter_types)
+    signature.parameter_descriptors.push_back(descriptor(parameter));
+  signature.return_descriptor = descriptor(return_type);
+  signature.effect_scheme = serialize_effect_scheme(visible_type);
+  return signature;
+}
+
 bool TypeChecker::is_effect_free(MonoTypePtr type) {
   if (!type)
     return false;

@@ -26,7 +26,8 @@ TEST_CASE("Semantics interface catalog installs Prelude without Codegen") {
   const auto Identity = Catalog.imported_function_sig("Prelude", "identity");
   REQUIRE(Identity.has_value());
   REQUIRE(Identity->param_descriptors.size() == 1);
-  CHECK(Identity->return_descriptor == "INT");
+  CHECK(Identity->param_descriptors.front() == "VAR(a)");
+  CHECK(Identity->return_descriptor == "VAR(a)");
 
   const auto Some = Catalog.imported_function_sig("Prelude", "Some");
   REQUIRE(Some.has_value());

@@ -114,14 +114,14 @@ Commit as `fix: restore canonical interface call shapes`.
 - Modify only if required by the public contract: `test/Semantics/TypeCheckerTest.cpp`
 - Regenerate affected canonical interfaces under: `lib/`
 
-- [ ] **Step 1: Add descriptor RED assertions**
+- [x] **Step 1: Add descriptor RED assertions**
 
 In existing exported effect-row tests, assert that generated unannotated
 functions serialize their inferred semantic parameter and return descriptors,
 including `VAR(...)`, `FUNCTION(...)`, and `TUPLE(...)`, rather than guessed
 ABI `INT` shapes. Confirm the producer currently emits incompatible guesses.
 
-- [ ] **Step 2: Add one canonical semantic type serializer**
+- [x] **Step 2: Add one canonical semantic type serializer**
 
 Expose a TypeChecker operation that serializes a zonked `MonoType` into the
 canonical descriptor grammar, assigning stable variable names within one
@@ -132,7 +132,7 @@ outer layer before serializing the exported value. Thus `x = 42` remains a
 zero-arity `INT` value, while `wrap = \() -> ...` returns
 `FUNCTION(UNIT,...)` with its visible effect scheme rooted at `$`.
 
-- [ ] **Step 3: Overlay inferred structure and effects together**
+- [x] **Step 3: Overlay inferred structure and effects together**
 
 Extend `Codegen::populate_interface_effect_rows` so the checked semantic type
 replaces interface parameter/return descriptors in `imports_.meta` and the
@@ -141,14 +141,14 @@ effect scheme. Preserve all LLVM `CType` fields and linkage metadata. Update
 the Trait module-emission test helper to call this canonical post-typecheck
 pass before it emits `.yonai`, matching the CLI path.
 
-- [ ] **Step 4: Regenerate affected packaged interfaces**
+- [x] **Step 4: Regenerate affected packaged interfaces**
 
 Recompile the source-owned `.yona` modules whose checked-in `.yonai` rows
 currently encode generic exports as exact `INT` placeholders, including
 `Prelude` and `Std\\Function`. Inspect the diff and retain only deterministic
 canonical interface changes produced by the repaired compiler.
 
-- [ ] **Step 5: Verify effect-row and import round trips**
+- [x] **Step 5: Verify effect-row and import round trips**
 
 Run all interface effect-row Codegen cases and the semantic effect-row suite.
 Expected GREEN: exported, higher-order open-rest, sibling-wrapper, and
@@ -157,7 +157,7 @@ Also run `yonac module dependencies respect whole-module import bindings`;
 the resolver and dependency SCCs are already correct, so the heterogeneous
 String call must pass once imported `apply`/`identity` retain their HM schemes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Commit as `fix: serialize inferred interface signatures`.
 

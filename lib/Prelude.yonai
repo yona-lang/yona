@@ -624,10 +624,10 @@ FN Sized_Result_size 1 ADT(Result,VAR(element),VAR(error)) -> INT
 FN Sized_Seq_size 1 Seq(VAR(element)) -> INT
 FN Sized_Set_size 1 Set(VAR(element)) -> INT
 FN Sized_String_size 1 STRING -> INT
-FN compose 3 FUNCTION FUNCTION INT -> INT borrow 110 effects | hof effectscheme $##;$/p##f0;$/r##;$/r/p##f1;$/r/r##f1|f0
-FN const 2 INT INT -> INT borrow 01 effects - effectscheme $##;$/r##
-FN flip 3 FUNCTION INT INT -> INT borrow 100 effects | hof effectscheme $##;$/p##f0;$/p/r##f1;$/r##;$/r/r##f0|f1
-FN identity 1 INT -> INT effects - effectscheme $##
+FN compose 3 FUNCTION(VAR(a),VAR(b)) FUNCTION(VAR(c),VAR(a)) VAR(c) -> VAR(b) borrow 110 effects | hof effectscheme $##;$/p##f0;$/r##;$/r/p##f1;$/r/r##f1|f0
+FN const 2 VAR(a) VAR(b) -> VAR(a) borrow 01 effects - effectscheme $##;$/r##
+FN flip 3 FUNCTION(VAR(a),FUNCTION(VAR(b),VAR(c))) VAR(b) VAR(a) -> VAR(c) borrow 100 effects | hof effectscheme $##;$/p##f0;$/p/r##f1;$/r##;$/r/r##f0|f1
+FN identity 1 VAR(a) -> VAR(a) effects - effectscheme $##
 GENFN_DEP Array_ByteArray_Int_get primitiveGetByteArray NATIVE YonaRuntimeArrayByteArrayGet FN 2 BYTE_ARRAY INT -> INT borrow 10
 GENFN_BEGIN Array_ByteArray_Int_get get
 get : ByteArray -> Int -> Int

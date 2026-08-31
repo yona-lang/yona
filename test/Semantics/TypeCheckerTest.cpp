@@ -2206,6 +2206,44 @@ end
     delete main_node;
   }
 
+  TEST_CASE("Canonical interface signatures cover representable type shapes") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *integer = arena.make_con(TyCon::Int);
+    auto *floating = arena.make_con(TyCon::Float);
+    auto *boolean = arena.make_con(TyCon::Bool);
+    auto *string = arena.make_con(TyCon::String);
+    auto *byte_array = arena.make_con(TyCon::ByteArray);
+    auto *box = arena.make_app("Box", {integer});
+    auto *linear_box = arena.make_app("Linear", {box});
+    auto *result = arena.make_tuple(
+        {arena.make_app("Seq", {integer}), arena.make_app("Set", {string}),
+         arena.make_app("Dict", {integer, boolean}),
+         arena.make_app("Option", {floating}), byte_array});
+    auto *function = arena.make_arrow(linear_box, result);
+
+    const auto signature = checker.serialize_interface_signature(function, 1);
+    REQUIRE(signature.parameter_descriptors.size() == 1);
+    CHECK(signature.parameter_descriptors[0] == "LINEAR(ADT(Box,INT))");
+    CHECK(signature.return_descriptor ==
+          "TUPLE(Seq(INT),Set(STRING),Dict(INT,BOOL),ADT(Option,FLOAT),"
+          "BYTE_ARRAY)");
+    CHECK(signature.effect_scheme == "$##");
+
+    auto *legacy_adt = arena.make_app("ADT", {integer});
+    const auto forwarded_legacy_adt = checker.serialize_interface_signature(
+        arena.make_arrow(legacy_adt, legacy_adt), 1);
+    CHECK(forwarded_legacy_adt.parameter_descriptors ==
+          std::vector<std::string>{"ADT"});
+    CHECK(forwarded_legacy_adt.return_descriptor == "ADT");
+
+    auto *record = arena.make_record({{"field", integer}});
+    CHECK_THROWS_AS(checker.serialize_interface_signature(
+                        arena.make_arrow(record, integer), 1),
+                    std::invalid_argument);
+  }
+
   TEST_CASE("Effect row: function with unhandled perform has latent row") {
     yona::compiler::DiagnosticEngine diag;
     diag.enable_warning(WarningFlag::UnhandledEffect);

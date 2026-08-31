@@ -1,12 +1,12 @@
 MODULE Std\Function
-FN apply 2 INT FUNCTION -> INT borrow 01 effects |
-FN compose 3 FUNCTION FUNCTION INT -> INT borrow 110 effects | hof
-FN const 2 INT INT -> INT effects -
-FN fix 2 FUNCTION INT -> INT effects | hof
-FN flip 3 FUNCTION INT INT -> INT borrow 100 effects | hof
-FN identity 1 INT -> INT effects -
-FN on 4 FUNCTION FUNCTION INT INT -> INT borrow 1100 effects | hof
-FN pipe 2 INT SEQ -> INT effects |
+FN apply 2 VAR(a) FUNCTION(VAR(a),VAR(b)) -> VAR(b) borrow 01 effects | effectscheme $##;$/r##f0;$/r/p##f0
+FN compose 3 FUNCTION(VAR(a),VAR(b)) FUNCTION(VAR(c),VAR(a)) VAR(c) -> VAR(b) borrow 110 effects | hof effectscheme $##;$/p##f0;$/r##;$/r/p##f1;$/r/r##f1|f0
+FN const 2 VAR(a) VAR(b) -> VAR(a) borrow 01 effects - effectscheme $##;$/r##
+FN fix 2 FUNCTION(FUNCTION(VAR(a),VAR(b)),FUNCTION(VAR(a),VAR(b))) VAR(a) -> VAR(b) effects | hof effectscheme $##;$/p##f0;$/p/p##f0|f1;$/p/r##f1;$/r##f2|f3
+FN flip 3 FUNCTION(VAR(a),FUNCTION(VAR(b),VAR(c))) VAR(b) VAR(a) -> VAR(c) borrow 100 effects | hof effectscheme $##;$/p##f0;$/p/r##f1;$/r##;$/r/r##f0|f1
+FN identity 1 VAR(a) -> VAR(a) effects - effectscheme $##
+FN on 4 FUNCTION(VAR(a),FUNCTION(VAR(a),VAR(b))) FUNCTION(VAR(c),VAR(a)) VAR(c) VAR(c) -> VAR(b) borrow 1100 effects | hof effectscheme $##;$/p##f0;$/p/r##f1;$/r##;$/r/p##f2;$/r/r##;$/r/r/r##f0|f2|f1
+FN pipe 2 VAR(a) Seq(FUNCTION(VAR(a),VAR(a))) -> VAR(a) effects | effectscheme $##;$/r##f0;$/r/p/a0##f0
 GENFN_BEGIN apply apply
 apply x f = f x
 GENFN_END

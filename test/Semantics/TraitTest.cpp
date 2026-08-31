@@ -45,6 +45,12 @@ static string compile_and_run_trait(const string &mod_source,
     return "MOD_CODEGEN_ERROR";
   if (mod_codegen.errorCount() > 0)
     return "MOD_CODEGEN_ERRORS";
+  DiagnosticEngine mod_diag;
+  typechecker::TypeChecker mod_checker(mod_diag);
+  mod_codegen.populate_interface_effect_rows(mod_result.value().get(),
+                                             mod_checker);
+  if (mod_checker.has_errors())
+    return "MOD_TYPE_ERROR";
 
   fs::path mod_obj = yona::test::link::scratch_root() / "trait_mod_test.o";
   if (!mod_codegen.emit_object_file(mod_obj.string()))
@@ -763,6 +769,31 @@ import doubledSquare from Test\Secret in doubledSquare 5
       return "MOD_CODEGEN_ERROR";
     if (mod_codegen.errorCount() > 0)
       return "MOD_CODEGEN_ERRORS";
+    const auto diagnostics_before_interface = mod_diag.records().size();
+    std::vector<typechecker::MonoTypePtr> facts_before_interface;
+    facts_before_interface.reserve(mod_result.value()->functions.size());
+    for (auto *function : mod_result.value()->functions)
+      facts_before_interface.push_back(mod_checker.type_of(function));
+    mod_codegen.populate_interface_effect_rows(mod_result.value().get(),
+                                               mod_checker);
+    if (mod_checker.has_errors())
+      return "MOD_TYPE_ERROR";
+    if (mod_diag.records().size() != diagnostics_before_interface)
+      return "MOD_INTERFACE_RECHECK_DIAGNOSTICS";
+    for (size_t index = 0; index < mod_result.value()->functions.size();
+         ++index) {
+      auto *function = mod_result.value()->functions[index];
+      if (mod_checker.type_of(function) != facts_before_interface[index])
+        return "MOD_INTERFACE_RECHECK_FACTS";
+      const auto first = mod_checker.serialize_interface_signature(
+          facts_before_interface[index], function->patterns.size());
+      const auto second = mod_checker.serialize_interface_signature(
+          facts_before_interface[index], function->patterns.size());
+      if (first.parameter_descriptors != second.parameter_descriptors ||
+          first.return_descriptor != second.return_descriptor ||
+          first.effect_scheme != second.effect_scheme)
+        return "MOD_INTERFACE_UNSTABLE_SIGNATURE";
+    }
 
     fs::path trait_lib =
         yona::test::link::scratch_root() / "yona_trait_lib_derive";

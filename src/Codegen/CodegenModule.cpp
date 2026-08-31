@@ -1898,8 +1898,15 @@ void Codegen::populate_interface_effect_rows(ast::ModuleDecl *mod,
 
   // Sibling-aware: private helpers must be in scope while inferring exports
   // (same path compile_module uses for .yonai FN rows). Per-function check()
-  // cannot see unexported names and reports a spurious E0104.
-  tc.check_module(mod);
+  // cannot see unexported names and reports a spurious E0104. Reuse a caller's
+  // completed module check: checking the same declarations twice on one
+  // TypeChecker duplicates constraints and can destabilize generalized vars.
+  const bool module_already_checked = std::all_of(
+      mod->functions.begin(), mod->functions.end(), [&](auto *function) {
+        return !function || tc.type_of(function) != nullptr;
+      });
+  if (!module_already_checked)
+    tc.check_module(mod);
 
   std::unordered_set<std::string> export_set(mod->exports.begin(),
                                              mod->exports.end());
@@ -1909,23 +1916,29 @@ void Codegen::populate_interface_effect_rows(ast::ModuleDecl *mod,
     auto *ty = tc.type_of(func);
     if (!ty)
       continue;
+    const auto signature =
+        tc.serialize_interface_signature(ty, func->patterns.size());
     auto row = tc.effect_row_info(tc.zonk(ty));
     std::string mangled = mangle_name(fqn, func->name);
     auto it = imports_.meta.find(mangled);
     if (it != imports_.meta.end()) {
+      it->second.param_type_descriptors = signature.parameter_descriptors;
+      it->second.return_type_descriptor = signature.return_descriptor;
       it->second.effect_ops = row.ops;
       it->second.effect_row_known = true;
       it->second.effect_open_rest = row.open_rest;
       it->second.effect_hof = row.hof;
-      it->second.effect_scheme = tc.serialize_effect_scheme(tc.zonk(ty));
+      it->second.effect_scheme = signature.effect_scheme;
     }
     auto cf_it = compiled_functions_.find(func->name);
     if (cf_it != compiled_functions_.end()) {
+      cf_it->second.param_type_descriptors = signature.parameter_descriptors;
+      cf_it->second.return_type_descriptor = signature.return_descriptor;
       cf_it->second.effect_ops = row.ops;
       cf_it->second.effect_row_known = true;
       cf_it->second.effect_open_rest = row.open_rest;
       cf_it->second.effect_hof = row.hof;
-      cf_it->second.effect_scheme = tc.serialize_effect_scheme(tc.zonk(ty));
+      cf_it->second.effect_scheme = signature.effect_scheme;
     }
   }
 }

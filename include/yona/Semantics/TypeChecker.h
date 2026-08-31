@@ -20,6 +20,7 @@
 #include "yona/Support/Diagnostic.h"
 #include "yona/Syntax/Ast.h"
 
+#include <cstddef>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
@@ -192,6 +193,23 @@ public:
     bool hof = false;
   };
   EffectRowInfo effect_row_info(MonoTypePtr type);
+
+  /// Canonical structural contract for one exported source binding.
+  ///
+  /// `visible_parameter_count` is the number of patterns written on the
+  /// module definition. A zero-pattern definition has one checker-internal
+  /// `Unit` binding arrow, which this operation strips before serializing the
+  /// source-visible value. Type variables are named deterministically across
+  /// the complete signature. Malformed or unrepresentable types throw
+  /// `std::invalid_argument` rather than falling back to an ABI guess.
+  struct InterfaceSignature {
+    std::vector<std::string> parameter_descriptors;
+    std::string return_descriptor;
+    std::string effect_scheme;
+  };
+  InterfaceSignature
+  serialize_interface_signature(MonoTypePtr type,
+                                std::size_t visible_parameter_count);
 
   /// True only for a known, closed empty effect row. This is the semantic
   /// fact consumed by --require-effect-free; a missing interface row is not

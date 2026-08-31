@@ -1767,6 +1767,7 @@ fetch path = perform Fs.read path
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
+    CHECK(yonai.find("FN fetch 1 VAR(a) -> VAR(b)") != string::npos);
     CHECK(yonai.find("effects Fs.read") != string::npos);
 
     parser::Parser p2;
@@ -1781,6 +1782,59 @@ fetch path = perform Fs.read path
     checker.add_module_path(yona_lib.string());
     checker.check(parsed->Expression.get());
     CHECK(checker.has_direct_errors());
+  }
+
+  TEST_CASE("Interface files serialize inferred polymorphic signatures") {
+    namespace fs = std::filesystem;
+    fs::path yona_lib =
+        yona::test::link::scratch_root() / "yona_lib_inferred_signatures";
+    fs::create_directories(yona_lib / "Test");
+
+    parser::Parser module_parser;
+    auto module = module_parser.parseModule(R"(
+module Test\Inferred
+
+export identity, apply, pair, value
+
+identity x = x
+apply f x = f x
+pair x = (x, x)
+value = 42
+)",
+                                            "inferred_signatures.yona");
+    REQUIRE(module.has_value());
+
+    Codegen module_codegen("inferred_signatures_mod");
+    REQUIRE(module_codegen.compile_module(module.value().get()) != nullptr);
+    DiagnosticEngine module_diag;
+    typechecker::TypeChecker module_checker(module_diag);
+    module_codegen.populate_interface_effect_rows(module.value().get(),
+                                                  module_checker);
+    REQUIRE_FALSE(module_checker.has_errors());
+
+    const fs::path interface_path = yona_lib / "Test" / "Inferred.yonai";
+    REQUIRE(module_codegen.emit_interface_file(interface_path.string()));
+    const string yonai = read_file(interface_path);
+    CHECK(yonai.find("FN identity 1 VAR(a) -> VAR(a)") != string::npos);
+    CHECK(yonai.find("FN apply 2 FUNCTION(VAR(a),VAR(b)) VAR(a) -> VAR(b)") !=
+          string::npos);
+    CHECK(yonai.find("FN pair 1 VAR(a) -> TUPLE(VAR(a),VAR(a))") !=
+          string::npos);
+    CHECK(yonai.find("FN value 0 -> INT") != string::npos);
+
+    parser::Parser client_parser;
+    auto client = client_parser.parseExpression(
+        R"(import identity, apply from Test\Inferred in
+            (identity 1, identity "two", apply identity 3,
+             apply identity "four"))",
+        "inferred_signatures_client.yona");
+    REQUIRE(client.has_value());
+    REQUIRE(client->Expression != nullptr);
+    DiagnosticEngine client_diag;
+    typechecker::TypeChecker client_checker(client_diag);
+    client_checker.add_module_path(yona_lib.string());
+    client_checker.check(client->Expression.get());
+    CHECK_FALSE(client_checker.has_errors());
   }
 
   TEST_CASE("Opaque exported ADTs omit constructors from their interface") {
@@ -1887,6 +1941,8 @@ apply f x = f x
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
+    CHECK(yonai.find("FN apply 2 FUNCTION(VAR(a),VAR(b)) VAR(a) -> VAR(b)") !=
+          string::npos);
     CHECK(yonai.find("effects |") != string::npos);
     CHECK(yonai.find("hof") != string::npos);
 
@@ -1931,6 +1987,8 @@ use f g n = (f n, g n)
     const fs::path iface = yona_lib / "Test" / "EffectScheme.yonai";
     REQUIRE(exporter_codegen.emit_interface_file(iface.string()));
     const string yonai = read_file(iface);
+    CHECK(yonai.find("FN use 3 FUNCTION(VAR(a),VAR(b)) FUNCTION(VAR(a),VAR(c)) "
+                     "VAR(a) -> TUPLE(VAR(b),VAR(c))") != string::npos);
     CHECK(yonai.find("effectscheme $#") != string::npos);
 
     parser::Parser client_parser;
@@ -2030,7 +2088,8 @@ wrap = \() -> readSecret ()
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
-    CHECK(yonai.find("FN wrap 0 -> INT effects Fs.read") != string::npos);
+    CHECK(yonai.find("FN wrap 0 -> FUNCTION(UNIT,VAR(a)) effects Fs.read") !=
+          string::npos);
 
     parser::Parser p2;
     string expr = R"(import wrap from Test\Wrap in wrap ())";
