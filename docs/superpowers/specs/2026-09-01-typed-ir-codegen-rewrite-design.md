@@ -18,7 +18,7 @@ optimization levels and supported architectures.
 
 ## Evidence and root causes
 
-Independent review and source-level validation confirmed twenty problem
+Independent review and source-level validation confirmed twenty-three problem
 areas. One reported partial-application issue is not currently reachable, but
 the unsafe path is a latent invariant hazard and will be deleted or made
 unrepresentable.
@@ -417,9 +417,11 @@ The rewrite is not complete until named tests cover:
 - arbitrary unwind-owner counts and recursive loops;
 - non-exhaustive match failure;
 - identical module and expression finalization;
-- path-local TCO cleanup.
+- path-local TCO cleanup;
 - AArch64 SJLJ restore under register pressure until generated-program SJLJ is
-  removed.
+  removed;
+- Bool enforcement for case guards and generator conditions;
+- identical name/type environments across every or-pattern alternative.
 
 The unsafe but currently unreachable partial-wrapper capture path is removed or
 guarded by a verifier assertion and a structural unit test.

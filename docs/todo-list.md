@@ -74,6 +74,16 @@ Program of record:
   unconstrained input operand to occupy `x19`-`x28`; restoring that register
   redirects subsequent context loads. This path disappears when explicit
   control outcomes replace generated-program SJLJ.
+- [ ] **Case guards are not required to be Bool.** Repro: use an `Int` or
+  managed value as a `case` clause guard; semantic inference accepts it and
+  leaves backend behavior to an invalid implicit convention.
+- [ ] **Or-pattern alternatives can bind incompatible environments.** Repro:
+  match `left | right` where the alternatives bind different names or bind
+  the same name at different types; inference mutates one shared environment
+  instead of requiring identical bindings.
+- [ ] **Generator conditions are not required to be Bool.** Repro: use an
+  `Int`, String, or aggregate as a collection-comprehension condition;
+  inference records its type without unifying it with Bool.
 
 - [ ] **The Linux release Prelude artifact build aborts in `yonac`.** Repro:
   `cmake --preset x64-release-linux && cmake --build --preset build-release-linux -j2`
