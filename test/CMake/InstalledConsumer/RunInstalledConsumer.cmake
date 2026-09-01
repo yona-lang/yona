@@ -15,7 +15,7 @@ set(ConsumerBuild
 
 execute_process(
   COMMAND "${CMAKE_COMMAND}" --build "${YONA_BUILD_DIRECTORY}" --target
-          yona_lib yonac yona-repl yls yona_runtime
+          yona_lib yonac yona-repl yls yona_runtime yona_build_prelude_object
   RESULT_VARIABLE ProducerBuildResult)
 if(NOT ProducerBuildResult EQUAL 0)
   message(FATAL_ERROR "building the installable Yona targets failed")
@@ -71,8 +71,7 @@ if(NOT YonaLanguageConsumerResult EQUAL 0)
   message(FATAL_ERROR
     "running installed Yona CMake consumer failed: ${YonaLanguageConsumerError}")
 endif()
-if(NOT YonaLanguageConsumerOutput STREQUAL
-   "installed CMake tool integration\n()\n")
+if(NOT YonaLanguageConsumerOutput STREQUAL "<adt>\n")
   message(FATAL_ERROR
     "installed Yona CMake consumer produced unexpected output: ${YonaLanguageConsumerOutput}")
 endif()

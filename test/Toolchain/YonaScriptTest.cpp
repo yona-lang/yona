@@ -141,6 +141,24 @@ TEST_CASE("yona runs a file") {
   CHECK(r.out == "3");
 }
 
+TEST_CASE("yona runner uses the active Prelude artifact") {
+  IsolatedTempDir Workspace("yona_runner_prelude_precedence");
+  const fs::path source = Workspace.path() / "program.yona";
+  const fs::path stale_prelude = Workspace.path() / "Prelude.o";
+  {
+    std::ofstream stream(source);
+    stream << "1 + 2\n";
+  }
+  {
+    std::ofstream stream(stale_prelude);
+    stream << "not an object file\n";
+  }
+
+  const auto run = run_yona({source.string()}, "", {.CaptureStderr = true});
+  CHECK_MESSAGE(run.status == 0, run.out);
+  CHECK(run.out == "3");
+}
+
 #ifndef _WIN32
 TEST_CASE("yona shebang script is executable") {
   auto src = write_temp_yona("script_shebang", "#!/usr/bin/env yona\n1 + 2\n");
@@ -279,6 +297,42 @@ TEST_CASE("yonac - reads stdin") {
   CHECK(compile.status == 0);
   REQUIRE(fs::exists(out));
   auto run = runProcess(out);
+  CHECK(run.status == 0);
+  CHECK(run.out == "3");
+}
+
+TEST_CASE("yonac prefers the active sysroot Prelude object") {
+  IsolatedTempDir Workspace("yonac_prelude_precedence");
+  IsolatedTempDir PartialSysroot("yonac_partial_sysroot");
+  const fs::path source = Workspace.path() / "program.yona";
+  const fs::path stale_prelude = Workspace.path() / "Prelude.o";
+  const fs::path stale_sysroot_prelude =
+      PartialSysroot.path() / "artifacts" / "Prelude.o";
+  const fs::path output =
+      Workspace.path() / ("program" + yona::test::link::exe_suffix());
+  {
+    std::ofstream stream(source);
+    stream << "1 + 2\n";
+  }
+  {
+    std::ofstream stream(stale_prelude);
+    stream << "not an object file\n";
+  }
+  fs::create_directories(stale_sysroot_prelude.parent_path());
+  {
+    std::ofstream stream(stale_sysroot_prelude);
+    stream << "not an object file\n";
+  }
+
+  const auto compile = runProcess(tool("yonac"),
+                                  {"--sysroot", PartialSysroot.path().string(),
+                                   "-I", yona::test::lib_dir().string(), "-o",
+                                   output.string(), source.string()},
+                                  {.CaptureStderr = true});
+  REQUIRE_MESSAGE(compile.status == 0, compile.out);
+  REQUIRE(fs::exists(output));
+
+  const auto run = runProcess(output);
   CHECK(run.status == 0);
   CHECK(run.out == "3");
 }

@@ -202,6 +202,20 @@ static filesystem::path canonical_if_exists(const filesystem::path &p) {
   return ec ? p : c;
 }
 
+// CMake builds the Prelude object beside the active runtime archive. Prefer
+// that matched artifact over incidental Prelude.o files in user, source, or
+// working directories; otherwise a stale object can carry an incompatible
+// runtime ABI into the final link.
+static filesystem::path
+find_active_build_prelude_object(const filesystem::path &sysroot) {
+#ifdef _WIN32
+  constexpr const char *PreludeObjectName = "Prelude.obj";
+#else
+  constexpr const char *PreludeObjectName = "Prelude.o";
+#endif
+  return canonical_if_exists(sysroot / "artifacts" / PreludeObjectName);
+}
+
 static bool run_overlay_checkers(ast::AstNode *root, DiagnosticEngine &diag,
                                  typechecker::TypeChecker &tc,
                                  bool skip_refinement, bool skip_linear) {
@@ -1088,6 +1102,7 @@ int main(int argc, char *argv[]) {
 
   // Link expression into executable.
   string rt_obj;
+  filesystem::path runtime_sysroot;
 #ifdef _WIN32
   constexpr const char *RuntimeArchiveName = "yona_runtime.lib";
 #else
@@ -1100,6 +1115,7 @@ int main(int argc, char *argv[]) {
         auto archive = canonical_if_exists(base / RuntimeArchiveName);
         if (!archive.empty()) {
           rt_obj = archive.string();
+          runtime_sysroot = root;
           return true;
         }
       }
@@ -1130,13 +1146,24 @@ int main(int argc, char *argv[]) {
       packaged_pcre2.empty() ? "-lpcre2-8" : packaged_pcre2;
 #endif
 
-  // Find Prelude.o for linking
-  string prelude_obj;
-  for (auto &dir : codegen.ModulePaths) {
-    auto candidate = filesystem::path(dir) / "Prelude.o";
-    if (filesystem::exists(candidate)) {
-      prelude_obj = candidate.string();
-      break;
+  // An active build artifact belongs to the selected runtime and must win over
+  // incidental Prelude objects in the module search path. Packaged and custom
+  // sysroots keep their existing module-path lookup as the fallback.
+  string prelude_obj =
+      find_active_build_prelude_object(runtime_sysroot).string();
+  if (prelude_obj.empty()) {
+#ifdef _WIN32
+    constexpr const char *PreludeObjectName = "Prelude.obj";
+#else
+    constexpr const char *PreludeObjectName = "Prelude.o";
+#endif
+    for (const auto &dir : codegen.ModulePaths) {
+      auto candidate =
+          canonical_if_exists(filesystem::path(dir) / PreludeObjectName);
+      if (!candidate.empty()) {
+        prelude_obj = candidate.string();
+        break;
+      }
     }
   }
 

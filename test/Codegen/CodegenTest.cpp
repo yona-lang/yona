@@ -749,7 +749,7 @@ end in save ("/tmp/" ++ "yona_file_native_ownership") ("borrowed" ++ "-content")
 
 TEST_SUITE("Codegen E2E") {
 
-  TEST_CASE("CMake provides a deterministic Prelude test object") {
+  TEST_CASE("CMake provides the active-build Prelude object") {
 #ifdef YONA_TEST_PRELUDE_OBJECT
     const fs::path prelude_object(YONA_TEST_PRELUDE_OBJECT);
     CHECK(prelude_object.is_absolute());

@@ -613,12 +613,13 @@ foreach(_yona_quality_command IN ITEMS
 		VERBATIM)
 endforeach()
 
-# Tests link generated programs against Prelude's exported constructors and
-# functions. Build that object deterministically in the binary tree; never
-# depend on a developer-local, ignored lib/Prelude.o.
-set(YONA_TEST_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/test_artifacts")
-set(YONA_TEST_PRELUDE_OBJECT "${YONA_TEST_ARTIFACT_DIR}/Prelude${CMAKE_C_OUTPUT_EXTENSION}")
-set(YONA_TEST_PRELUDE_INTERFACE "${YONA_TEST_ARTIFACT_DIR}/Prelude.yonai")
+# In-tree Yona tools and tests link generated programs against Prelude's
+# exported constructors and functions. Build that object deterministically in
+# the active binary tree; never depend on a developer-local, ignored
+# lib/Prelude.o.
+set(YONA_BUILD_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/artifacts")
+set(YONA_BUILD_PRELUDE_OBJECT "${YONA_BUILD_ARTIFACT_DIR}/Prelude${CMAKE_C_OUTPUT_EXTENSION}")
+set(YONA_BUILD_PRELUDE_INTERFACE "${YONA_BUILD_ARTIFACT_DIR}/Prelude.yonai")
 set(YONA_TEST_PCRE2_INCLUDE_DIR "")
 if(YONA_PCRE2_INCLUDE_DIRS)
 	list(GET YONA_PCRE2_INCLUDE_DIRS 0 YONA_TEST_PCRE2_INCLUDE_DIR)
@@ -626,22 +627,32 @@ endif()
 set(YONA_TEST_PCRE2_ARCHIVE "${YONA_PCRE2_RUNTIME_ARCHIVE}")
 set(YONA_TEST_PCRE2_CFLAGS "${YONA_PCRE2_CFLAGS}")
 add_custom_command(
-	OUTPUT "${YONA_TEST_PRELUDE_OBJECT}"
-	BYPRODUCTS "${YONA_TEST_PRELUDE_INTERFACE}"
-	COMMAND ${CMAKE_COMMAND} -E make_directory "${YONA_TEST_ARTIFACT_DIR}"
+	OUTPUT "${YONA_BUILD_PRELUDE_OBJECT}"
+	BYPRODUCTS "${YONA_BUILD_PRELUDE_INTERFACE}"
+	COMMAND ${CMAKE_COMMAND} -E make_directory "${YONA_BUILD_ARTIFACT_DIR}"
 	COMMAND $<TARGET_FILE:yonac>
 		--sysroot "${CMAKE_CURRENT_BINARY_DIR}"
 		-I "${CMAKE_CURRENT_SOURCE_DIR}/lib"
 		--emit-obj
-		-o "${YONA_TEST_PRELUDE_OBJECT}"
+		-o "${YONA_BUILD_PRELUDE_OBJECT}"
 		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yona"
 	DEPENDS yonac
+		yona_runtime
 		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yona"
 		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yonai"
-	COMMENT "Building deterministic Prelude object for tests"
+	COMMENT "Building active-build Prelude object"
 	VERBATIM
 )
-add_custom_target(yona_test_prelude_object DEPENDS "${YONA_TEST_PRELUDE_OBJECT}")
+add_custom_target(yona_build_prelude_object DEPENDS "${YONA_BUILD_PRELUDE_OBJECT}")
+install(FILES "${YONA_BUILD_PRELUDE_OBJECT}"
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/artifacts")
+
+# Keep the test-facing names stable while the artifact is shared with the
+# in-tree Yona tools.
+set(YONA_TEST_ARTIFACT_DIR "${YONA_BUILD_ARTIFACT_DIR}")
+set(YONA_TEST_PRELUDE_OBJECT "${YONA_BUILD_PRELUDE_OBJECT}")
+set(YONA_TEST_PRELUDE_INTERFACE "${YONA_BUILD_PRELUDE_INTERFACE}")
+add_custom_target(yona_test_prelude_object DEPENDS yona_build_prelude_object)
 
 # Absolute repo path for tests (fixtures, lib/, src/) regardless of process CWD (e.g. CTest).
 # Generated for repository-aware test helpers.

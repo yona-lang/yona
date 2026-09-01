@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- CMake-built Yona tools now link the current build's generated Prelude object
+  instead of an ignored, potentially stale `lib/Prelude.o`, so local builds do
+  not mix obsolete `yona_rt_*` calls with the `YonaRuntime*` runtime archive.
+  `yonac` applies the same active-sysroot precedence when called by the runner
+  or directly, ahead of arbitrary module-path objects. Installed sysroots now
+  ship and validate that artifact as well.
 - Completed the Linux open-bug stabilization sweep. Literal lowering now
   validates Unicode and compares every supported scalar consistently across
   direct, alternative, tuple, constructor, record, exact-sequence, and

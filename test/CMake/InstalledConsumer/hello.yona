@@ -1,3 +1,1 @@
-import println from Std\Io in
-
-println "installed CMake tool integration"
+Some 1

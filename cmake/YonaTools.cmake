@@ -13,6 +13,11 @@ list(SORT YonaStdlibInputs)
 #   yona_add_executable(<name> SOURCE <main.yona> [OUTPUT_NAME <name>])
 #
 function(yona_add_executable Name)
+
+  if(NOT TARGET yona_build_prelude_object)
+    message(FATAL_ERROR
+      "yona_add_executable(${Name}) requires yona_build_prelude_object")
+  endif()
   cmake_parse_arguments(YonaExecutable "" "SOURCE;OUTPUT_NAME" "" ${ARGN})
   if(NOT YonaExecutable_SOURCE)
     message(FATAL_ERROR
@@ -38,10 +43,11 @@ function(yona_add_executable Name)
       "YONAC_CC=${CCompiler}"
       $<TARGET_FILE:yonac>
       --sysroot "${CMAKE_BINARY_DIR}"
+      -I "${YONA_BUILD_ARTIFACT_DIR}"
       -I "${CMAKE_SOURCE_DIR}/lib"
       -o "${OutputPath}"
       "${SourcePath}"
-    DEPENDS yonac yona_runtime "${SourcePath}" ${YonaStdlibInputs}
+    DEPENDS yonac yona_runtime yona_build_prelude_object "${SourcePath}" ${YonaStdlibInputs}
     COMMENT "Building Yona tool ${YonaExecutable_OUTPUT_NAME}"
     VERBATIM)
   add_custom_target(${Name} ALL DEPENDS "${OutputPath}")

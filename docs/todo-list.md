@@ -6,6 +6,31 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [x] **Installed `yonac` lacks the Prelude object required for expression
+  links.** Repro: pipe `Some 1` into
+  `test-install/bin/yonac --sysroot test-install/lib64/yona - -o out`; because
+  installation ships `Prelude.yonai` but not a matching object, the compiler
+  falls back to a stale `Prelude.o` in the caller's directory and fails to
+  link against `YonaRuntime*`. Fixed by installing the active Prelude object
+  under the sysroot's `artifacts/` directory and requiring it in the package
+  configuration contract.
+
+- [x] **The in-tree `yona` runner reverts to stale Prelude discovery when it
+  invokes its sibling compiler.** Repro: leave a legacy-ABI `Prelude.o` at the
+  repository root and run `out/build/x64-debug-linux/yona -e '1 + 2'`; the
+  runner calls `yonac` without the active build's artifact/module paths, so it
+  links that object against `YonaRuntime*` and exits 1. Fixed by making
+  `yonac` prefer `--sysroot/artifacts/Prelude.{o,obj}` before arbitrary module
+  search paths, which keeps the Prelude and runtime ABI matched.
+
+- [x] **CMake-built Yona tools can link an ignored, stale source-tree
+  `Prelude.o`.** Repro: leave an old `lib/Prelude.o` in place, then run
+  `cmake --preset x64-debug-linux && cmake --build --preset build-debug-linux`;
+  the `yona` custom target links legacy `yona_rt_*` calls from that file against
+  the current `YonaRuntime*` archive and fails with undefined references.
+  Fixed by making the generated Prelude a build artifact and placing its
+  directory before source `lib/` when CMake builds Yona tools.
+
 - [x] **Task-backed interface rows bypass extern borrow-mask rejection.** Repro:
   import a hand-authored `.yonai` row `AFN inspect 1 STRING -> INT borrow 1`
   or its native-task equivalent; the interface reader accepts the mask and
