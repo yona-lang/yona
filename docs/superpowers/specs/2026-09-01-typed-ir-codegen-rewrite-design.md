@@ -48,17 +48,19 @@ implementation paths.
 
 ## Chosen strategy
 
-Use a vertical-slice replacement. The legacy backend remains temporarily as a
-test oracle for behavior already known to be correct. Each language family is
-implemented end to end in the new pipeline, tested, and then removed from the
-legacy path. There is no public fallback switch and no silent per-expression
-fallback. A construct is either supported by the new backend or rejected with
-a source diagnostic during its migration window.
+Use a big-bang backend cutover with continuously tested internal milestones.
+The complete Typed IR pipeline is built in parallel through a test-only entry
+point. The legacy backend remains frozen as an oracle for behavior already
+known to be correct, but no generated function may mix legacy and new
+ownership, callable, control-outcome, or runtime ABI conventions. Once the new
+backend passes the complete parity and platform matrix, the compiler switches
+atomically and the legacy implementation is deleted.
 
-A big-bang replacement was rejected because it would defer execution feedback
-until every language feature had moved. Repairing the legacy backend first was
-rejected because it would duplicate work and encode its implicit contracts
-into the replacement.
+The implementation is still divided into vertical milestones so failures are
+localized and every layer is exercised early. Those milestones do not become
+partial production cutovers. Repairing the legacy backend first was rejected
+because it would duplicate work and encode its implicit contracts into the
+replacement.
 
 ## Pipeline
 
@@ -341,9 +343,10 @@ not inspect partially emitted LLVM CFGs.
 10. **Cutover:** complete parity matrix, remove legacy Codegen and obsolete
     runtime entry points, enable verified arena optimizations separately.
 
-Each slice removes its corresponding legacy implementation after its parity
-gate. Temporary coexistence is internal and cannot silently mix ownership or
-ABI conventions in one generated function.
+Each milestone extends only the parallel backend and its tests. Temporary
+coexistence is internal and cannot silently mix ownership or ABI conventions
+in one generated function. Legacy removal happens once, during the final
+cutover, after the complete backend passes all gates.
 
 ## Testing strategy
 
