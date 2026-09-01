@@ -165,11 +165,9 @@ static string compile_and_run(const string &code,
   if (!yona::test::link::append_runtime_objects(objs))
     return "RT_COMPILE_ERROR";
 
-  const auto extra_libs = yona::test::link::pcreLinkArguments();
-
   fs::path exe_path = yona::test::link::scratch_root() /
                       (exe_stem + yona::test::link::exe_suffix());
-  if (!yona::test::link::link_objs_to_exe(objs, exe_path, extra_libs))
+  if (!yona::test::link::link_objs_to_exe(objs, exe_path))
     return "LINK_ERROR";
 
   if (stdin_data)
@@ -3313,7 +3311,6 @@ TEST_SUITE("Regex") {
 
       fs::path exe_out = yona::test::link::scratch_root() /
                          ("regex_link_test" + yona::test::link::exe_suffix());
-      const auto libs = yona::test::link::pcreLinkArguments();
       // C-backed Std modules ship their public ABI in the runtime object. The
       // source module above is compiled to validate and emit its interface,
       // but linking both its export trampolines and the runtime ABI would
@@ -3321,7 +3318,7 @@ TEST_SUITE("Regex") {
       vector<fs::path> robj = {expr_obj};
       if (!yona::test::link::append_runtime_objects(robj))
         return "RT_COMPILE_ERROR";
-      if (!yona::test::link::link_objs_to_exe(robj, exe_out, libs))
+      if (!yona::test::link::link_objs_to_exe(robj, exe_out))
         return "LINK_ERROR";
 
       return yona::test::link::executeAndCapture(exe_out);

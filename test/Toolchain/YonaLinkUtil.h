@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -116,6 +117,8 @@ inline void append_vulkan_link_arguments(std::vector<std::string> &args) {
 #endif
 }
 
+inline std::vector<std::string> runtimeLinkArguments();
+
 inline bool link_objs_to_exe(const std::vector<std::filesystem::path> &objs,
                              const std::filesystem::path &exe_out,
                              const std::vector<std::string> &extra_args = {}) {
@@ -144,6 +147,8 @@ inline bool link_objs_to_exe(const std::vector<std::filesystem::path> &objs,
   args.insert(args.end(), {"-lm", "-lpthread", "-rdynamic"});
 #endif
   args.insert(args.end(), extra_args.begin(), extra_args.end());
+  const auto runtime_link_args = runtimeLinkArguments();
+  args.insert(args.end(), runtime_link_args.begin(), runtime_link_args.end());
   append_vulkan_link_arguments(args);
 
   const auto QuietResult =
@@ -193,7 +198,7 @@ inline std::vector<std::string> splitFlags(std::string_view text) {
   return args;
 }
 
-inline std::vector<std::string> pcreLinkArguments() {
+inline std::vector<std::string> runtimeLinkArguments() {
   std::ifstream manifest(YONA_TEST_RUNTIME_LINK_MANIFEST);
   if (manifest) {
     std::vector<std::string> arguments;
