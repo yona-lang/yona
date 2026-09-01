@@ -94,6 +94,12 @@ type parameters, and effect rows. Nominal identity and recursive type
 arguments are preserved; physical representation is separate from semantic
 identity.
 
+The immutable structural type vocabulary and its intern table live in
+`yona_model`, below both `yona_interface` and `yona_typed_ir` in the component
+graph. Typed IR modules own a table instance and refer to it with strong
+`model::TypeId` values. Display strings are derived data and are never used as
+semantic or ABI identity.
+
 Function types include:
 
 - ordered parameter types and ownership contracts;
@@ -208,6 +214,12 @@ Version the interface format and serialize structural signatures, calling
 conventions, ownership contracts, effect rows, nominal declarations, and
 generic Typed IR bodies required for specialization. Cross-module generic
 calls no longer reparse source embedded in `.yonai` files.
+
+The interface component stores generic Typed IR fragments as canonical,
+length-prefixed opaque bytes because it cannot depend upward on Typed IR. The
+Typed IR component owns fragment encoding, decoding, and verification. This
+keeps the component graph acyclic while allowing the interface reader to
+validate framing and reject incompatible versions deterministically.
 
 Specialization keys use complete structural types, effects, ownership, and
 calling convention. A generated wrapper is exported only when crossing a
