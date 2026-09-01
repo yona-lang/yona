@@ -130,11 +130,10 @@ TypedValue Codegen::codegen_handle(HandleExpr *node) {
       params.push_back(i64_ty);
     params.push_back(ptr_ty); // resume: i64 (*)(i64)
 
-    auto *fn = Function::Create(llvm::FunctionType::get(i64_ty, params, false),
-                                Function::InternalLinkage,
-                                "handler_" + op_key + "_" +
-                                    std::to_string(lambda_counter_++),
-                                module_);
+    auto *fn = Function::Create(
+        llvm::FunctionType::get(i64_ty, params, false),
+        Function::InternalLinkage,
+        "handler_" + op_key + "_" + std::to_string(lambda_counter_++), module_);
 
     auto sb = builder_->GetInsertBlock();
     auto sp = builder_->GetInsertPoint();

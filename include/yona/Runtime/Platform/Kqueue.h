@@ -13,12 +13,12 @@
 #ifndef YONA_RUNTIME_PLATFORM_KQUEUE_H
 #define YONA_RUNTIME_PLATFORM_KQUEUE_H
 
+#include "yona/Runtime/Platform/IoContext.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-
-#include "yona/Runtime/Platform/IoContext.h"
 
 #ifdef __cplusplus
 extern "C" {

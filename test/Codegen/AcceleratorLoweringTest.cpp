@@ -16,13 +16,6 @@
 #include <string>
 #include <variant>
 
-using yona::compiler::AccelKernel;
-using yona::compiler::AccelMatch;
-using yona::compiler::DiagnosticEngine;
-using yona::compiler::collect_transparent_matches;
-using yona::compiler::is_unlowerable_column_apply;
-using yona::compiler::match_transparent_apply;
-using yona::compiler::codegen::Codegen;
 using yona::ast::ApplyExpr;
 using yona::ast::AstNode;
 using yona::ast::ExprCall;
@@ -30,6 +23,13 @@ using yona::ast::ExprNode;
 using yona::ast::ImportExpr;
 using yona::ast::MainNode;
 using yona::ast::ValueExpr;
+using yona::compiler::AccelKernel;
+using yona::compiler::AccelMatch;
+using yona::compiler::collect_transparent_matches;
+using yona::compiler::DiagnosticEngine;
+using yona::compiler::is_unlowerable_column_apply;
+using yona::compiler::match_transparent_apply;
+using yona::compiler::codegen::Codegen;
 namespace parser = yona::parser;
 namespace typechecker = yona::compiler::typechecker;
 namespace fs = std::filesystem;
@@ -201,7 +201,7 @@ foldl (\a b -> a + b) 0 (map (\x -> x + 1) xs)
   std::istringstream stream(source);
   auto parse_result = parser.parseExpression(stream.str(), "<stream>");
   REQUIRE(parse_result);
-    REQUIRE(parse_result->Expression);
+  REQUIRE(parse_result->Expression);
   type_checker.check(parse_result->Expression.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());
@@ -228,7 +228,7 @@ foldl (\a b -> a + b) 0 (map (\x -> x * x) (fromSeq [1, 2, 3]))
   std::istringstream stream(source);
   auto parse_result = parser.parseExpression(stream.str(), "<stream>");
   REQUIRE(parse_result);
-    REQUIRE(parse_result->Expression);
+  REQUIRE(parse_result->Expression);
   type_checker.check(parse_result->Expression.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());
@@ -256,7 +256,7 @@ foldl (\a b -> a + b) 0 (map (\x -> x + x * x) (fromSeq [1, 2, 3]))
   std::istringstream stream(source);
   auto parse_result = parser.parseExpression(stream.str(), "<stream>");
   REQUIRE(parse_result);
-    REQUIRE(parse_result->Expression);
+  REQUIRE(parse_result->Expression);
   type_checker.check(parse_result->Expression.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());
@@ -284,7 +284,7 @@ foldl (\a b -> a + b) 0 (map (\x -> x + 1) (fromSeq [1, 2, 3]))
   std::istringstream stream(source);
   auto parse_result = parser.parseExpression(stream.str(), "<stream>");
   REQUIRE(parse_result);
-    REQUIRE(parse_result->Expression);
+  REQUIRE(parse_result->Expression);
   type_checker.check(parse_result->Expression.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());
@@ -361,7 +361,7 @@ foldl (\a b -> a + b) 0 (map (\x -> x + x * x) (fromSeq [1, 2, 3]))
   std::istringstream stream(source);
   auto parse_result = parser.parseExpression(stream.str(), "<stream>");
   REQUIRE(parse_result);
-    REQUIRE(parse_result->Expression);
+  REQUIRE(parse_result->Expression);
   type_checker.check(parse_result->Expression.get());
   REQUIRE_FALSE(type_checker.has_direct_errors());
   CHECK(type_checker.solve_constraints());

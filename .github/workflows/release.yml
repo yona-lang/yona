@@ -35,7 +35,7 @@ jobs:
 
       - name: Report embedded LLD
         run:
-          python3 scripts/ci/report-embedded-lld.py
+          python3 scripts/ci/report_embedded_lld.py
           out/build/x64-release-linux/CMakeCache.txt "Linux release"
 
       - name: Run tests
@@ -84,7 +84,7 @@ jobs:
 
       - name: Report embedded LLD
         run:
-          python3 scripts/ci/report-embedded-lld.py
+          python3 scripts/ci/report_embedded_lld.py
           out/build/arm64-release-macos/CMakeCache.txt "macOS ARM64 release"
 
       - name: Run tests
@@ -157,7 +157,7 @@ jobs:
         shell: bash
         run: |
           PY="$(command -v python3 || command -v python)"
-          "$PY" scripts/ci/report-embedded-lld.py out/build/${{ matrix.build_dir }}/CMakeCache.txt "Windows ${{ matrix.arch }} release"
+          "$PY" scripts/ci/report_embedded_lld.py out/build/${{ matrix.build_dir }}/CMakeCache.txt "Windows ${{ matrix.arch }} release"
 
       - name: Run tests
         shell: pwsh

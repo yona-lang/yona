@@ -514,8 +514,7 @@ void Codegen::declare_runtime() {
   rt_.reraise_ = decl("YonaRuntimeReraise", vd, {});
   rt_.get_exc_sym_ = decl("YonaRuntimeGetExceptionSymbol", i64, {});
   rt_.get_exc_msg_ = decl("YonaRuntimeGetExceptionMessage", ptr, {});
-  rt_.consume_exc_owner_ =
-      decl("YonaRuntimeConsumeExceptionOwner", vd, {i64});
+  rt_.consume_exc_owner_ = decl("YonaRuntimeConsumeExceptionOwner", vd, {i64});
   rt_.raise_->addFnAttr(llvm::Attribute::NoReturn);
   rt_.raise_owned_->addFnAttr(llvm::Attribute::NoReturn);
   rt_.reraise_->addFnAttr(llvm::Attribute::NoReturn);

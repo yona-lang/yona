@@ -38,10 +38,9 @@ struct ParsedGenericModule final {
 class GenericFunctionSourceService final {
 public:
   [[nodiscard]] std::expected<ParsedGenericModule, std::vector<std::string>>
-  parseGenericModule(const std::string &LocalName,
-                     const std::string &SourceText,
-                     const std::vector<GenericConstructorMetadata> &Constructors)
-      const;
+  parseGenericModule(
+      const std::string &LocalName, const std::string &SourceText,
+      const std::vector<GenericConstructorMetadata> &Constructors) const;
 };
 
 } // namespace yona::semantics

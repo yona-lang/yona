@@ -27,10 +27,11 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *Data,
   int64_t RuntimeLine = 0;
   int64_t RuntimeCharacter = 0;
   YonaRuntimeUtf8OffsetToUtf16(Bytes, Size, Offset, &RuntimeLine,
-                            &RuntimeCharacter);
-  (void)YonaRuntimeUtf16PositionToUtf8(Bytes, Size, RuntimeLine, RuntimeCharacter);
+                               &RuntimeCharacter);
+  (void)YonaRuntimeUtf16PositionToUtf8(Bytes, Size, RuntimeLine,
+                                       RuntimeCharacter);
   (void)YonaRuntimeUtf16PositionToUtf8(Bytes, Size, static_cast<int64_t>(Line),
-                                    static_cast<int64_t>(Character));
+                                       static_cast<int64_t>(Character));
 
   const auto Uri = yona::lsp::file_uri(Input);
   (void)yona::lsp::uri_to_path(Uri);

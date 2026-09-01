@@ -7,8 +7,8 @@
 #include "yona/Syntax/AstVisitor.h"
 
 #include <any>
-#include <cstddef>
 #include <concepts>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <memory>
@@ -72,8 +72,8 @@ using std::function;
 using std::get;
 using std::map;
 using std::move;
-using std::nullptr_t;
 using std::nullopt;
+using std::nullptr_t;
 using std::optional;
 using std::ostream;
 using std::pair;
@@ -814,8 +814,8 @@ public:
   ExprNode *end;
   ExprNode *step;
 
-  explicit RangeSequenceExpr(SourceRange token, ExprNode *start,
-                             ExprNode *end, ExprNode *step);
+  explicit RangeSequenceExpr(SourceRange token, ExprNode *start, ExprNode *end,
+                             ExprNode *step);
   template <typename ResultType>
   ResultType accept(const AstVisitor<ResultType> &visitor) const {
     return visitor.visit(
@@ -1817,8 +1817,7 @@ public:
   NameExpr *name;
   FunctionExpr *lambda;
 
-  explicit LambdaAlias(SourceRange token, NameExpr *name,
-                       FunctionExpr *lambda);
+  explicit LambdaAlias(SourceRange token, NameExpr *name, FunctionExpr *lambda);
   template <typename ResultType>
   ResultType accept(const AstVisitor<ResultType> &visitor) const {
     return visitor.visit(
@@ -2411,8 +2410,7 @@ public:
   IdentifierExpr *identifier;
   DataStructurePattern *pattern;
 
-  explicit AsDataStructurePattern(SourceRange token,
-                                  IdentifierExpr *identifier,
+  explicit AsDataStructurePattern(SourceRange token, IdentifierExpr *identifier,
                                   DataStructurePattern *pattern);
   template <typename ResultType>
   ResultType accept(const AstVisitor<ResultType> &visitor) const {
@@ -3029,9 +3027,9 @@ public:
   ExprNode *body;           ///< Handler body expression
 
   /// Operation handler constructor
-  explicit HandlerClause(SourceRange token, string effect_name,
-                         string op_name, vector<string> arg_names,
-                         string resume_name, ExprNode *body);
+  explicit HandlerClause(SourceRange token, string effect_name, string op_name,
+                         vector<string> arg_names, string resume_name,
+                         ExprNode *body);
   /// Return handler constructor
   explicit HandlerClause(SourceRange token, string return_binding,
                          ExprNode *body);

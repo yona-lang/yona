@@ -98,7 +98,7 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then
             YLS="${YLS}.exe"
           fi
-          "$PY" scripts/ci/smoke-yls.py "$YLS"
+          "$PY" scripts/ci/smoke_yls.py "$YLS"
 
       - name: Smoke yls-yona
         if: success()
@@ -109,14 +109,14 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then
             YLSY="${YLSY}.exe"
           fi
-          "$PY" scripts/ci/smoke-yls-yona.py "$YLSY"
+          "$PY" scripts/ci/smoke_yls_yona.py "$YLSY"
 
       - name: Report embedded LLD
         if: success()
         shell: bash
         run: |
           PY="$(command -v python3 || command -v python)"
-          "$PY" scripts/ci/report-embedded-lld.py "out/build/${{ matrix.build_dir }}/CMakeCache.txt" "${{ matrix.name }}"
+          "$PY" scripts/ci/report_embedded_lld.py "out/build/${{ matrix.build_dir }}/CMakeCache.txt" "${{ matrix.name }}"
 
       - name: Validate linker modes
         if: success() && runner.os != 'Windows'
@@ -175,7 +175,7 @@ jobs:
             echo "No JUnit XML to summarize" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          "$PY" scripts/ci/summarize-junit.py --title "${{ matrix.name }}" "${files[@]}"
+          "$PY" scripts/ci/summarize_junit.py --title "${{ matrix.name }}" "${files[@]}"
 
       - name: Test report
         uses: dorny/test-reporter@v1
@@ -222,7 +222,7 @@ jobs:
             echo "No test-results.xml artifacts" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          python3 scripts/ci/summarize-junit.py --table "${files[@]}"
+          python3 scripts/ci/summarize_junit.py --table "${files[@]}"
 
   # Package only. Marketplace / Open VSX publish lives in release.yml (v* tags).
   vscode-extension:

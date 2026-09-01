@@ -6,6 +6,58 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [x] **A failed module parse leaks its parsed module-name expression.** Repro:
+  build `fuzz-check` with ASan/LSan and run `yona_fuzz_parser` on
+  `module Fuzz\\Example\n\nexport identity\n\nidentity value = value\n`;
+  `ParserImpl::parse_module_name` allocates `NameExpr`, but an error path in
+  `parse_module_internal` does not retain or destroy it.
+
+- [x] **Malformed module function clauses can exhaust parser recovery.** Repro:
+  run the parser fuzzer on
+  `module Fuzz\\ntity\n\nidexport id\n\nidexport identity\n\nidentity \n`;
+  malformed pattern recovery repeatedly allocates in `parse_pattern_primary`
+  until libFuzzer's 10-second timeout fires.
+
+- [x] **A malformed `let` expression leaks partially parsed bindings.** Repro:
+  run the ASan/LSan parser fuzzer on `let answer = wer\n`; missing `in`
+  leaves the binding expression's application AST detached during
+  `parse_alias`/`parse_let_expr` error handling.
+
+- [x] **macOS builds disagree on the kqueue cancellation-group parameter
+  qualifier.** Repro: configure and build either macOS preset; Clang rejects
+  `YonaRuntimeKqueueCancelGroup(uint64_t *, int)` in `KqueueMacOs.c` because
+  `Kqueue.h` declares `const uint64_t *`.
+
+- [x] **Vulkan-enabled Linux builds use an undeclared loader-symbol name.**
+  Repro: configure with `-DYONA_ENABLE_VULKAN=ON` and build `tests`; the
+  non-Windows `yonaVulkanLoaderDynamicSymbol` path passes undeclared `name`
+  rather than its `Name` parameter to `dlsym`.
+
+- [x] **The standalone interface fuzzer omits its model dependency.** Repro:
+  configure with `-DYONA_BUILD_FUZZERS=ON -DBUILD_TESTING=OFF` and build
+  `fuzz-check`; linking `yona_fuzz_interface` leaves
+  `yona::model::ModuleIdentity` unresolved because `yona_interface` is linked
+  without `yona_model`.
+
+- [x] **Embedded LLD archives are ordered before their driver dependencies.**
+  Repro: build the shared compiler library with embedded LLD enabled, then
+  link `yls` or `yonac`; static `lldELF` references remain unresolved from
+  `libyona_lib.so` because `lldCommon` appears before its dependent driver
+  archive.
+
+- [x] **The multi-platform yls smoke step names a nonexistent script.** Repro:
+  run a Windows matrix build; the workflow invokes
+  `scripts/ci/smoke-yls.py`, but the tracked script is `smoke_yls.py`.
+
+- [x] **Release jobs use a nonexistent embedded-LLD report script.** Repro:
+  run any `release.yml` build job; its report step invokes
+  `scripts/ci/report-embedded-lld.py`, while the tracked script is
+  `report_embedded_lld.py`.
+
+- [x] **The multi-platform JUnit summary steps use a nonexistent script.**
+  Repro: run a matrix test job; it invokes `scripts/ci/summarize-junit.py`,
+  while the tracked script is `summarize_junit.py`.
+
 - [x] **Installed `yonac` lacks the Prelude object required for expression
   links.** Repro: pipe `Some 1` into
   `test-install/bin/yonac --sysroot test-install/lib64/yona - -o out`; because

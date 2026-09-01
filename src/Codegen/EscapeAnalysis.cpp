@@ -9,13 +9,6 @@
 
 namespace yona::compiler::codegen {
 using ast::ApplyExpr;
-using ast::AstNode;
-using ast::CaseExpr;
-using ast::ExprCall;
-using ast::FunctionExpr;
-using ast::IdentifierExpr;
-using ast::LetExpr;
-using ast::ScopedNode;
 using ast::AST_APPLY_EXPR;
 using ast::AST_CASE_EXPR;
 using ast::AST_DO_EXPR;
@@ -28,14 +21,21 @@ using ast::AST_PATTERN_VALUE;
 using ast::AST_TUPLE_EXPR;
 using ast::AST_VALUE_ALIAS;
 using ast::AST_VALUES_SEQUENCE_EXPR;
+using ast::AstNode;
 using ast::BodyWithGuards;
 using ast::BodyWithoutGuards;
+using ast::CaseExpr;
 using ast::DoExpr;
+using ast::ExprCall;
 using ast::ExprNode;
+using ast::FunctionExpr;
+using ast::IdentifierExpr;
 using ast::IfExpr;
 using ast::LambdaAlias;
+using ast::LetExpr;
 using ast::NameCall;
 using ast::PatternValue;
+using ast::ScopedNode;
 using ast::TupleExpr;
 using ast::ValueAlias;
 using ast::ValueExpr;

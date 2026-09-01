@@ -191,12 +191,11 @@ int main(int argc, char *argv[]) {
       linker_mode_raw = env_mode;
   }
   if (!yona::toolchain::resolveLinkerPlan(linker_mode_raw, sysroots,
-                                            linker_selection, linker_error)) {
+                                          linker_selection, linker_error)) {
     cerr << "Error: " << linker_error << endl;
     return 1;
   }
-  const bool require_inprocess =
-      yona::toolchain::requireInProcessLldFromEnv();
+  const bool require_inprocess = yona::toolchain::requireInProcessLldFromEnv();
   if (linker_selection.UseInProcessLld &&
       !yona::toolchain::inProcessLldAvailable()) {
     if (require_inprocess) {

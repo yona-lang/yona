@@ -165,24 +165,49 @@ TEST_CASE("native array interfaces preserve their complete borrow contracts") {
       std::pair<std::string, std::vector<std::pair<std::string, std::string>>>;
   const std::vector<Contract> Contracts = {
       {"ByteArray",
-       {{"alloc", "0"},     {"concat", "11"}, {"foldl", "101"},
-        {"fromSeq", "1"},   {"fromString", "1"},
-        {"get", "10"},      {"head", "1"},
-        {"join", "11"},     {"length", "1"},
-        {"map", "11"},      {"set", "100"},
-        {"slice", "100"},   {"tail", "1"},
-        {"toSeq", "1"},     {"toString", "1"}}},
+       {{"alloc", "0"},
+        {"concat", "11"},
+        {"foldl", "101"},
+        {"fromSeq", "1"},
+        {"fromString", "1"},
+        {"get", "10"},
+        {"head", "1"},
+        {"join", "11"},
+        {"length", "1"},
+        {"map", "11"},
+        {"set", "100"},
+        {"slice", "100"},
+        {"tail", "1"},
+        {"toSeq", "1"},
+        {"toString", "1"}}},
       {"IntArray",
-       {{"alloc", "0"},   {"cons", "01"},  {"fill", "00"},
-        {"filter", "11"}, {"foldl", "101"}, {"fromSeq", "1"},
-        {"get", "10"},    {"head", "1"},   {"join", "11"},
-        {"length", "1"},  {"map", "11"},   {"set", "100"},
-        {"slice", "100"}, {"tail", "1"},   {"toSeq", "1"}}},
+       {{"alloc", "0"},
+        {"cons", "01"},
+        {"fill", "00"},
+        {"filter", "11"},
+        {"foldl", "101"},
+        {"fromSeq", "1"},
+        {"get", "10"},
+        {"head", "1"},
+        {"join", "11"},
+        {"length", "1"},
+        {"map", "11"},
+        {"set", "100"},
+        {"slice", "100"},
+        {"tail", "1"},
+        {"toSeq", "1"}}},
       {"FloatArray",
-       {{"alloc", "0"},  {"cons", "01"}, {"fill", "00"},
-        {"foldl", "101"}, {"get", "10"},   {"head", "1"},
-        {"join", "11"},  {"length", "1"}, {"map", "11"},
-        {"set", "100"},  {"tail", "1"}}},
+       {{"alloc", "0"},
+        {"cons", "01"},
+        {"fill", "00"},
+        {"foldl", "101"},
+        {"get", "10"},
+        {"head", "1"},
+        {"join", "11"},
+        {"length", "1"},
+        {"map", "11"},
+        {"set", "100"},
+        {"tail", "1"}}},
   };
 
   for (const auto &[ModuleName, Functions] : Contracts) {
@@ -193,8 +218,8 @@ TEST_CASE("native array interfaces preserve their complete borrow contracts") {
     CHECK(Parsed->Functions.size() == Functions.size());
     for (const auto &[FunctionName, ExpectedMask] : Functions) {
       CAPTURE(FunctionName);
-      const auto *Function = yona::interface::findFunction(*Parsed,
-                                                           FunctionName);
+      const auto *Function =
+          yona::interface::findFunction(*Parsed, FunctionName);
       REQUIRE(Function != nullptr);
       std::string ActualMask;
       for (const bool Borrowed : Function->BorrowedParameters)

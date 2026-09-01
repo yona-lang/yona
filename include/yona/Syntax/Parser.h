@@ -138,7 +138,6 @@ public:
   /// Register prelude ADT constructors (Linear, Option, Result).
   /// Call before parsing to make prelude types available for pattern matching.
   void register_prelude_constructors();
-
 };
 
 #ifdef _MSC_VER

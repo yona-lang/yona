@@ -567,8 +567,7 @@ void SubtractExpr::print(std::ostream &os) const {
   os << *left << "-" << *right;
 }
 
-LeftShiftExpr::LeftShiftExpr(SourceRange token, ExprNode *left,
-                             ExprNode *right)
+LeftShiftExpr::LeftShiftExpr(SourceRange token, ExprNode *left, ExprNode *right)
     : BinaryOpExpr(token, left, right) {}
 
 void LeftShiftExpr::print(std::ostream &os) const {
@@ -628,8 +627,7 @@ void ConsLeftExpr::print(std::ostream &os) const {
   os << *left << "-|" << *right;
 }
 
-ConsRightExpr::ConsRightExpr(SourceRange token, ExprNode *left,
-                             ExprNode *right)
+ConsRightExpr::ConsRightExpr(SourceRange token, ExprNode *left, ExprNode *right)
     : BinaryOpExpr(token, left, right) {}
 
 void ConsRightExpr::print(std::ostream &os) const {
@@ -664,8 +662,7 @@ void BitwiseXorExpr::print(std::ostream &os) const {
   os << *left << "^" << *right;
 }
 
-BitwiseOrExpr::BitwiseOrExpr(SourceRange token, ExprNode *left,
-                             ExprNode *right)
+BitwiseOrExpr::BitwiseOrExpr(SourceRange token, ExprNode *left, ExprNode *right)
     : BinaryOpExpr(token, left, right) {}
 
 void BitwiseOrExpr::print(std::ostream &os) const {
@@ -680,8 +677,7 @@ void LogicalAndExpr::print(std::ostream &os) const {
   os << *left << "&&" << *right;
 }
 
-LogicalOrExpr::LogicalOrExpr(SourceRange token, ExprNode *left,
-                             ExprNode *right)
+LogicalOrExpr::LogicalOrExpr(SourceRange token, ExprNode *left, ExprNode *right)
     : BinaryOpExpr(token, left, right) {}
 
 void LogicalOrExpr::print(std::ostream &os) const {
@@ -700,16 +696,14 @@ void PipeLeftExpr::print(std::ostream &os) const {
   os << *left << " <| " << *right;
 }
 
-PipeRightExpr::PipeRightExpr(SourceRange token, ExprNode *left,
-                             ExprNode *right)
+PipeRightExpr::PipeRightExpr(SourceRange token, ExprNode *left, ExprNode *right)
     : BinaryOpExpr(token, left, right) {}
 
 void PipeRightExpr::print(std::ostream &os) const {
   os << *left << " |> " << *right;
 }
 
-LetExpr::LetExpr(SourceRange token, vector<AliasExpr *> aliases,
-                 ExprNode *expr)
+LetExpr::LetExpr(SourceRange token, vector<AliasExpr *> aliases, ExprNode *expr)
     : ScopedNode(token), aliases(nodes_with_parent(std::move(aliases), this)),
       expr(expr->with_parent<ExprNode>(this)) {}
 
@@ -870,8 +864,8 @@ void WithExpr::print(std::ostream &os) const {
   os << "end";
 }
 
-FieldAccessExpr::FieldAccessExpr(SourceRange token,
-                                 IdentifierExpr *identifier, NameExpr *name)
+FieldAccessExpr::FieldAccessExpr(SourceRange token, IdentifierExpr *identifier,
+                                 NameExpr *name)
     : ExprNode(token),
       identifier(identifier->with_parent<IdentifierExpr>(this)),
       name(name->with_parent<NameExpr>(this)) {}
@@ -885,8 +879,7 @@ void FieldAccessExpr::print(std::ostream &os) const {
   os << *identifier << '.' << *name;
 }
 
-FieldUpdateExpr::FieldUpdateExpr(SourceRange token,
-                                 IdentifierExpr *identifier,
+FieldUpdateExpr::FieldUpdateExpr(SourceRange token, IdentifierExpr *identifier,
                                  vector<pair<NameExpr *, ExprNode *>> updates)
     : ExprNode(token),
       identifier(identifier->with_parent<IdentifierExpr>(this)),
@@ -966,8 +959,7 @@ FqnAlias::~FqnAlias() {
 
 void FqnAlias::print(std::ostream &os) const { os << *name << " = " << *fqn; }
 
-FunctionAlias::FunctionAlias(SourceRange token, NameExpr *name,
-                             NameExpr *alias)
+FunctionAlias::FunctionAlias(SourceRange token, NameExpr *name, NameExpr *alias)
     : AliasExpr(token), name(name->with_parent<NameExpr>(this)),
       alias(alias ? alias->with_parent<NameExpr>(this) : nullptr) {}
 
@@ -1227,9 +1219,8 @@ PatternWithoutGuards::~PatternWithoutGuards() { delete expr; }
 void PatternWithoutGuards::print(std::ostream &os) const { os << *expr; }
 
 PatternExpr::PatternExpr(
-    SourceRange token,
-    const variant<Pattern *, PatternWithoutGuards *,
-                  vector<PatternWithGuards *>> &patternExpr)
+    SourceRange token, const variant<Pattern *, PatternWithoutGuards *,
+                                     vector<PatternWithGuards *>> &patternExpr)
     : ExprNode(token), patternExpr(patternExpr) {
   // Set parent pointers for the pattern expressions
   if (holds_alternative<Pattern *>(this->patternExpr)) {
@@ -1490,8 +1481,8 @@ void TailsHeadPattern::print(std::ostream &os) const {
 }
 
 HeadTailsHeadPattern::HeadTailsHeadPattern(
-    SourceRange token, vector<PatternWithoutSequence *> left,
-    TailPattern *tail, vector<PatternWithoutSequence *> right)
+    SourceRange token, vector<PatternWithoutSequence *> left, TailPattern *tail,
+    vector<PatternWithoutSequence *> right)
     : PatternNode(token), left(nodes_with_parent(std::move(left), this)),
       tail(tail->with_parent<TailPattern>(this)),
       right(nodes_with_parent(std::move(right), this)) {}

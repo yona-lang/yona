@@ -13,19 +13,19 @@
 #include <sstream>
 #include <string>
 
+using yona::lsp::Analysis;
+using yona::lsp::default_module_paths;
+using yona::lsp::file_uri;
 using yona::lsp::Json;
 using yona::lsp::JsonRpc;
 using yona::lsp::LspDiagnostic;
-using yona::lsp::Analysis;
+using yona::lsp::offset_to_position;
 using yona::lsp::Position;
+using yona::lsp::position_to_offset;
 using yona::lsp::Range;
+using yona::lsp::RpcMessage;
 using yona::lsp::Server;
 using yona::lsp::SymbolInfo;
-using yona::lsp::RpcMessage;
-using yona::lsp::default_module_paths;
-using yona::lsp::file_uri;
-using yona::lsp::offset_to_position;
-using yona::lsp::position_to_offset;
 
 TEST_CASE("UTF-16 mapper: ASCII") {
   auto p = offset_to_position("ab\ncd", 4);

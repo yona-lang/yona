@@ -4,19 +4,14 @@
 #include <unordered_set>
 
 namespace yona::compiler::pattern_analysis {
-using ast::AstNode;
-using ast::CaseClause;
-using ast::CaseExpr;
-using ast::LiteralExpr;
-using ast::PatternNode;
 using ast::AsDataStructurePattern;
 using ast::AST_AS_DATA_STRUCTURE_PATTERN;
 using ast::AST_BYTE_EXPR;
+using ast::AST_CHARACTER_EXPR;
 using ast::AST_CONSTRUCTOR_PATTERN;
 using ast::AST_FALSE_LITERAL_EXPR;
 using ast::AST_FLOAT_EXPR;
 using ast::AST_HEAD_TAILS_PATTERN;
-using ast::AST_CHARACTER_EXPR;
 using ast::AST_INTEGER_EXPR;
 using ast::AST_OR_PATTERN;
 using ast::AST_PATTERN_VALUE;
@@ -28,14 +23,19 @@ using ast::AST_TUPLE_PATTERN;
 using ast::AST_UNDERSCORE_NODE;
 using ast::AST_UNDERSCORE_PATTERN;
 using ast::AST_UNIT_EXPR;
+using ast::AstNode;
 using ast::ByteExpr;
+using ast::CaseClause;
+using ast::CaseExpr;
+using ast::CharacterExpr;
 using ast::ConstructorPattern;
 using ast::FloatExpr;
 using ast::HeadTailsPattern;
-using ast::CharacterExpr;
 using ast::IdentifierExpr;
 using ast::IntegerExpr;
+using ast::LiteralExpr;
 using ast::OrPattern;
+using ast::PatternNode;
 using ast::PatternValue;
 using ast::RecordPattern;
 using ast::SeqPattern;
@@ -110,10 +110,8 @@ bool covers(PatternNode *cover, PatternNode *candidate) {
     if (candidate->get_type() != AST_PATTERN_VALUE)
       return false;
     auto *other = static_cast<PatternValue *>(candidate);
-    if (auto *left =
-            std::get_if<LiteralExpr<std::nullptr_t> *>(&value->expr)) {
-      auto *right =
-          std::get_if<LiteralExpr<std::nullptr_t> *>(&other->expr);
+    if (auto *left = std::get_if<LiteralExpr<std::nullptr_t> *>(&value->expr)) {
+      auto *right = std::get_if<LiteralExpr<std::nullptr_t> *>(&other->expr);
       return right && static_cast<AstNode *>(*left)->get_type() ==
                           static_cast<AstNode *>(*right)->get_type();
     }

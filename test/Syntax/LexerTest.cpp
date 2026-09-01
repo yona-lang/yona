@@ -11,10 +11,6 @@
 #include <variant>
 #include <vector>
 
-using yona::lexer::Lexer;
-using yona::lexer::Token;
-using yona::lexer::TokenType;
-using yona::lexer::LexError;
 using std::get;
 using std::holds_alternative;
 using std::pair;
@@ -23,11 +19,14 @@ using std::string;
 using std::string_view;
 using std::variant;
 using std::vector;
+using yona::lexer::Lexer;
+using yona::lexer::LexError;
+using yona::lexer::Token;
+using yona::lexer::TokenType;
 
 static Lexer makeLexer(std::string_view Source) {
   auto Sources = std::make_shared<yona::SourceManager>();
-  const auto SourceId =
-      Sources->addSource("<lexer-test>", std::string(Source));
+  const auto SourceId = Sources->addSource("<lexer-test>", std::string(Source));
   return Lexer(std::move(Sources), SourceId);
 }
 
@@ -400,8 +399,8 @@ TEST_SUITE("Lexer") {
   }
 
   TEST_CASE("String unicode escapes reject non-scalar values") {
-    for (const auto source : {R"("\uD800")", R"("\uDFFF")",
-                              R"("\U00110000")"}) {
+    for (const auto source :
+         {R"("\uD800")", R"("\uDFFF")", R"("\U00110000")"}) {
       CAPTURE(source);
       auto lexer = makeLexer(source);
       auto result = lexer.tokenize();

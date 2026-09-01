@@ -155,12 +155,12 @@ struct Token {
 
   // Value for literals
   using LiteralValue =
-      std::variant<std::monostate,  // No value
-                   int64_t,         // INTEGER
-                   double,          // FLOAT
-                   std::string,     // STRING (owned, as it may contain escapes)
-                   char32_t,        // CHARACTER
-                   uint8_t          // BYTE
+      std::variant<std::monostate, // No value
+                   int64_t,        // INTEGER
+                   double,         // FLOAT
+                   std::string,    // STRING (owned, as it may contain escapes)
+                   char32_t,       // CHARACTER
+                   uint8_t         // BYTE
                    >;
   LiteralValue value;
 
@@ -202,8 +202,7 @@ struct LexError {
 /// Separate lexers may share the immutable manager concurrently.
 class YONA_API Lexer {
 public:
-  explicit Lexer(std::shared_ptr<const SourceManager> Sources,
-                 SourceId Source);
+  explicit Lexer(std::shared_ptr<const SourceManager> Sources, SourceId Source);
 
   /// Consume from the current cursor through EOF. On lexical failure all
   /// recovered errors are returned and the partial token vector is discarded.

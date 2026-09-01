@@ -983,12 +983,12 @@ unique_ptr<ExprNode> ParserImpl::parse_let_expr(bool stop_at_in) {
   advance(); // consume 'let'
   skip_newlines();
 
-  vector<AliasExpr *> aliases;
+  vector<unique_ptr<AliasExpr>> aliases;
 
   do {
     auto alias = parse_alias();
     if (alias) {
-      aliases.push_back(alias.release());
+      aliases.push_back(std::move(alias));
     } else {
       break;
     }
@@ -1006,7 +1006,11 @@ unique_ptr<ExprNode> ParserImpl::parse_let_expr(bool stop_at_in) {
     return nullptr;
   }
 
-  return make_unique<LetExpr>(loc, aliases, body.release());
+  vector<AliasExpr *> owned_aliases;
+  owned_aliases.reserve(aliases.size());
+  for (auto &alias : aliases)
+    owned_aliases.push_back(alias.release());
+  return make_unique<LetExpr>(loc, owned_aliases, body.release());
 }
 
 unique_ptr<AliasExpr> ParserImpl::parse_alias() {

@@ -34,12 +34,10 @@ TEST_CASE("source manager rejects foreign source identities") {
 }
 
 TEST_CASE("source manager loads and retains a file buffer") {
-  const auto Suffix = std::chrono::steady_clock::now()
-                          .time_since_epoch()
-                          .count();
+  const auto Suffix =
+      std::chrono::steady_clock::now().time_since_epoch().count();
   const auto Path = std::filesystem::temp_directory_path() /
-                    ("yona-source-manager-" + std::to_string(Suffix) +
-                     ".yona");
+                    ("yona-source-manager-" + std::to_string(Suffix) + ".yona");
   {
     std::ofstream Output(Path, std::ios::binary);
     REQUIRE(Output);

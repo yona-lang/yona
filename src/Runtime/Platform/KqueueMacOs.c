@@ -622,7 +622,7 @@ void YonaRuntimeKqueueCancel(uint64_t TargetOperationId) {
   pthread_mutex_unlock(&YonaKqueueMutex);
 }
 
-void YonaRuntimeKqueueCancelGroup(uint64_t *IoIds, int Count) {
+void YonaRuntimeKqueueCancelGroup(const uint64_t *IoIds, int Count) {
   for (int Index = 0; Index < Count; Index++)
     YonaRuntimeKqueueCancel(IoIds[Index]);
 }

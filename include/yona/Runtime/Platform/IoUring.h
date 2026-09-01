@@ -15,11 +15,11 @@
 #ifndef YONA_RUNTIME_PLATFORM_IOURING_H
 #define YONA_RUNTIME_PLATFORM_IOURING_H
 
+#include "yona/Runtime/Platform/IoContext.h"
+
 #include <linux/io_uring.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include "yona/Runtime/Platform/IoContext.h"
 
 #ifdef __cplusplus
 extern "C" {

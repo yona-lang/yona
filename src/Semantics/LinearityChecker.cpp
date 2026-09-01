@@ -15,11 +15,6 @@
 #include <algorithm>
 
 namespace yona::compiler::typechecker {
-using ast::AstNode;
-using ast::FunctionExpr;
-using ast::IdentifierExpr;
-using ast::LetExpr;
-using ast::PatternNode;
 using ast::ApplyExpr;
 using ast::AST_APPLY_EXPR;
 using ast::AST_CASE_EXPR;
@@ -36,6 +31,7 @@ using ast::AST_MODULE_DECL;
 using ast::AST_PATTERN_VALUE;
 using ast::AST_TUPLE_PATTERN;
 using ast::AST_WITH_EXPR;
+using ast::AstNode;
 using ast::BinaryOpExpr;
 using ast::BodyWithGuards;
 using ast::BodyWithoutGuards;
@@ -45,13 +41,17 @@ using ast::DoExpr;
 using ast::ExprCall;
 using ast::ExprNode;
 using ast::ExternDeclExpr;
+using ast::FunctionExpr;
+using ast::IdentifierExpr;
 using ast::IfExpr;
 using ast::ImportExpr;
 using ast::LambdaAlias;
+using ast::LetExpr;
 using ast::MainNode;
 using ast::ModuleDecl;
 using ast::NameCall;
 using ast::PatternAlias;
+using ast::PatternNode;
 using ast::PatternValue;
 using ast::TuplePattern;
 using ast::ValueAlias;
@@ -276,8 +276,7 @@ void LinearityChecker::check_let(LetExpr *node, LinearEnv &env) {
       check_node(la->lambda, env);
     } else if (auto *pa = dynamic_cast<PatternAlias *>(alias)) {
       check_node(pa->expr, env);
-      track_linear_pattern(pa->pattern, type_of_expr(pa->expr), env,
-                           pa->Range);
+      track_linear_pattern(pa->pattern, type_of_expr(pa->expr), env, pa->Range);
     }
   }
   check_node(node->expr, env);

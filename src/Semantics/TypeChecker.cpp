@@ -27,23 +27,13 @@
 
 namespace yona::compiler::typechecker {
 using ast::ApplyExpr;
-using ast::AstNode;
-using ast::CaseExpr;
-using ast::ExprCall;
-using ast::ExprNode;
-using ast::FunctionExpr;
-using ast::IdentifierExpr;
-using ast::LetExpr;
-using ast::ModuleDecl;
-using ast::NameCall;
-using ast::PatternNode;
-using ast::TupleExpr;
 using ast::AsDataStructurePattern;
 using ast::AST_ADD_EXPR;
 using ast::AST_APPLY_EXPR;
 using ast::AST_AS_DATA_STRUCTURE_PATTERN;
 using ast::AST_BYTE_EXPR;
 using ast::AST_CASE_EXPR;
+using ast::AST_CHARACTER_EXPR;
 using ast::AST_CONS_LEFT_EXPR;
 using ast::AST_CONS_RIGHT_EXPR;
 using ast::AST_CONSTRUCTOR_PATTERN;
@@ -63,7 +53,6 @@ using ast::AST_GT_EXPR;
 using ast::AST_GTE_EXPR;
 using ast::AST_HANDLE_EXPR;
 using ast::AST_HEAD_TAILS_PATTERN;
-using ast::AST_CHARACTER_EXPR;
 using ast::AST_IDENTIFIER_EXPR;
 using ast::AST_IF_EXPR;
 using ast::AST_IMPORT_EXPR;
@@ -89,6 +78,7 @@ using ast::AST_PIPE_RIGHT_EXPR;
 using ast::AST_POWER_EXPR;
 using ast::AST_RAISE_EXPR;
 using ast::AST_RANGE_SEQUENCE_EXPR;
+using ast::AST_RECORD_LITERAL_EXPR;
 using ast::AST_RECORD_PATTERN;
 using ast::AST_REMOVE_EXPR;
 using ast::AST_SEQ_GENERATOR_EXPR;
@@ -107,12 +97,12 @@ using ast::AST_UNDERSCORE_PATTERN;
 using ast::AST_UNIT_EXPR;
 using ast::AST_VALUES_SEQUENCE_EXPR;
 using ast::AST_WITH_EXPR;
-using ast::AST_RECORD_LITERAL_EXPR;
+using ast::AstNode;
 using ast::AstNodeType;
-using ast::LiteralExpr;
 using ast::BinaryOpExpr;
 using ast::BodyWithGuards;
 using ast::BodyWithoutGuards;
+using ast::CaseExpr;
 using ast::CollectionExtractorExpr;
 using ast::ConsLeftExpr;
 using ast::ConsRightExpr;
@@ -121,25 +111,34 @@ using ast::DictExpr;
 using ast::DictGeneratorExpr;
 using ast::DictPattern;
 using ast::DoExpr;
+using ast::ExprCall;
+using ast::ExprNode;
 using ast::ExternDeclExpr;
 using ast::FieldAccessExpr;
 using ast::FieldType;
 using ast::FieldUpdateExpr;
 using ast::FqnExpr;
+using ast::FunctionExpr;
 using ast::FunctionsImport;
 using ast::HandleExpr;
 using ast::HeadTailsPattern;
+using ast::IdentifierExpr;
 using ast::IfExpr;
 using ast::ImportExpr;
 using ast::InExpr;
 using ast::JoinExpr;
 using ast::KeyValueCollectionExtractorExpr;
 using ast::LambdaAlias;
+using ast::LetExpr;
+using ast::LiteralExpr;
 using ast::LogicalNotOpExpr;
 using ast::MainNode;
+using ast::ModuleDecl;
 using ast::ModuleImport;
+using ast::NameCall;
 using ast::OrPattern;
 using ast::PatternAlias;
+using ast::PatternNode;
 using ast::PatternValue;
 using ast::PatternWithoutGuards;
 using ast::PerformExpr;
@@ -153,6 +152,7 @@ using ast::SetExpr;
 using ast::SetGeneratorExpr;
 using ast::SymbolExpr;
 using ast::TryCatchExpr;
+using ast::TupleExpr;
 using ast::TuplePattern;
 using ast::TypedPattern;
 using ast::ValueAlias;
@@ -3297,8 +3297,8 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr *node,
                          node->Range, "in handled expression");
 
   // The result type of the whole handle expression.
-  // If there's a return clause, it transforms the body result â€” so result_type
-  // may differ from body_type. Start with a fresh var.
+  // If there's a return clause, it transforms the body result â€” so
+  // result_type may differ from body_type. Start with a fresh var.
   auto *result_type = arena_.fresh_var(level);
   uf_.add_var(result_type->var_id, level);
 

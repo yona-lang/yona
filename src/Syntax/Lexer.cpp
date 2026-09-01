@@ -131,8 +131,7 @@ std::expected<char32_t, LexError> Lexer::peek_char() const {
     result = ch & 0x07;
   } else {
     return std::unexpected(LexError{LexError::Type::INVALID_CHARACTER,
-                                    "Invalid UTF-8 sequence",
-                                    currentRange()});
+                                    "Invalid UTF-8 sequence", currentRange()});
   }
 
   if (Current + len > SourceText.length()) {
@@ -389,14 +388,13 @@ std::expected<Token, LexError> Lexer::scan_number() {
       size_t idx;
       value = std::stoll(clean_lexeme, &idx);
       if (idx != clean_lexeme.size() || value < 0 || value > 255) {
-        return std::unexpected(LexError{
-            LexError::Type::INVALID_NUMBER_FORMAT,
-            "Byte literal must be between 0 and 255", currentRange()});
+        return std::unexpected(
+            LexError{LexError::Type::INVALID_NUMBER_FORMAT,
+                     "Byte literal must be between 0 and 255", currentRange()});
       }
     } catch (const std::exception &) {
       return std::unexpected(LexError{LexError::Type::INVALID_NUMBER_FORMAT,
-                                      "Invalid byte literal",
-                                      currentRange()});
+                                      "Invalid byte literal", currentRange()});
     }
     return make_token(TokenType::YBYTE, static_cast<uint8_t>(value));
   } else if (has_dot || has_exp) {
@@ -611,8 +609,7 @@ std::expected<Token, LexError> Lexer::scan_character() {
     ch = escaped.value();
   } else if (ch == '\'') {
     return std::unexpected(LexError{LexError::Type::INVALID_CHARACTER_LITERAL,
-                                    "Empty character literal",
-                                    currentRange()});
+                                    "Empty character literal", currentRange()});
   } else {
     skip_char();
   }
@@ -879,7 +876,8 @@ std::expected<Token, LexError> Lexer::scan_token() {
                   SourceText[scan + 1] == '*') {
                 depth++;
                 scan += 2;
-              } else if (SourceText[scan] == '*' && scan + 1 < SourceText.length() &&
+              } else if (SourceText[scan] == '*' &&
+                         scan + 1 < SourceText.length() &&
                          SourceText[scan + 1] == '/') {
                 depth--;
                 scan += 2;
@@ -947,7 +945,7 @@ std::expected<Token, LexError> Lexer::scan_token() {
   // Numbers
   if (is_digit(ch)) {
     Current = TokenStart + 1; // Reset to after first char (safe for digits
-                                 // which are always 1 byte)
+                              // which are always 1 byte)
     return scan_number();
   }
 

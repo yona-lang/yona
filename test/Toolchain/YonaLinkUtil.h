@@ -108,8 +108,7 @@ inline void append_vulkan_link_arguments(std::vector<std::string> &args) {
 #if YONA_HAVE_CONFIGURED_VULKAN_IMPORT_LIB
   args.emplace_back(YONA_CONFIGURED_VULKAN_IMPORT_LIB_PATH);
 #elif YONA_HAVE_CONFIGURED_VULKAN_LIBRARY
-  const std::filesystem::path loader_path =
-      YONA_CONFIGURED_VULKAN_LIBRARY_PATH;
+  const std::filesystem::path loader_path = YONA_CONFIGURED_VULKAN_LIBRARY_PATH;
 #if defined(__APPLE__)
   args.push_back("-Wl,-rpath," + loader_path.parent_path().string());
 #endif

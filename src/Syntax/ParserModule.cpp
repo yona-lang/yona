@@ -214,11 +214,8 @@ unique_ptr<ModuleDecl> ParserImpl::parse_module_internal() {
   }
 
   // Multiple parts: split into package and module
-  auto module_name_node = name->parts.back();
+  auto *module_name = name->parts.back();
   name->parts.pop_back();
-
-  auto module_name =
-      new NameExpr(module_name_node->Range, module_name_node->value);
   auto fqn = std::unique_ptr<FqnExpr>(
       new FqnExpr(source_ctx, name.release(), module_name));
 
@@ -348,8 +345,7 @@ unique_ptr<FunctionExpr> ParserImpl::parse_function() {
   func->param_borrow.resize(func->patterns.size(), false);
 
   // Capture original source text for cross-module monomorphization
-  size_t src_end =
-      previous_location().Offset + previous_location().Length;
+  size_t src_end = previous_location().Offset + previous_location().Length;
   if (!source_.empty() && src_end > src_start && src_end <= source_.size()) {
     func->source_text =
         std::string(source_.substr(src_start, src_end - src_start));
@@ -377,6 +373,8 @@ ParserImpl::parse_function_clause_with_patterns(const string &expected_name) {
     if (pattern) {
       patterns.push_back(pattern.release());
       param_borrow.push_back(borrow);
+    } else {
+      break;
     }
   }
 

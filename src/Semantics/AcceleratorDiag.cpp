@@ -21,12 +21,6 @@
 #include <vector>
 
 namespace yona::compiler {
-using ast::AstNode;
-using ast::ExprCall;
-using ast::FunctionExpr;
-using ast::IdentifierExpr;
-using ast::IntegerExpr;
-using ast::NameCall;
 using ast::ApplyExpr;
 using ast::AST_APPLY_EXPR;
 using ast::AST_CASE_EXPR;
@@ -54,6 +48,7 @@ using ast::AST_TRY_CATCH_EXPR;
 using ast::AST_TUPLE_EXPR;
 using ast::AST_VALUES_SEQUENCE_EXPR;
 using ast::AST_WITH_EXPR;
+using ast::AstNode;
 using ast::BinaryNotOpExpr;
 using ast::BinaryOpExpr;
 using ast::BodyWithGuards;
@@ -64,15 +59,19 @@ using ast::ConsLeftExpr;
 using ast::ConsRightExpr;
 using ast::DictGeneratorExpr;
 using ast::DoExpr;
+using ast::ExprCall;
 using ast::ExprNode;
 using ast::ExternDeclExpr;
 using ast::FieldAccessExpr;
 using ast::FieldUpdateExpr;
 using ast::FqnExpr;
+using ast::FunctionExpr;
 using ast::HandleExpr;
+using ast::IdentifierExpr;
 using ast::IfExpr;
 using ast::ImportExpr;
 using ast::InExpr;
+using ast::IntegerExpr;
 using ast::KeyValueCollectionExtractorExpr;
 using ast::LambdaAlias;
 using ast::LetExpr;
@@ -80,6 +79,7 @@ using ast::LogicalNotOpExpr;
 using ast::MainNode;
 using ast::ModuleCall;
 using ast::ModuleDecl;
+using ast::NameCall;
 using ast::PatternAlias;
 using ast::PatternWithoutGuards;
 using ast::PerformExpr;

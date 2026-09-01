@@ -19,28 +19,28 @@ namespace {
 
 std::string declaredTypeText(const compiler::types::Type &Type) {
   using compiler::types::Bool;
-  using compiler::types::BuiltinTypeStrings;
   using compiler::types::BuiltinType;
+  using compiler::types::BuiltinTypeStrings;
   using compiler::types::Byte;
   using compiler::types::DictCollectionType;
+  using compiler::types::Float128;
   using compiler::types::Float32;
   using compiler::types::Float64;
-  using compiler::types::Float128;
   using compiler::types::FunctionType;
   using compiler::types::NamedType;
   using compiler::types::ProductType;
+  using compiler::types::SignedInt128;
   using compiler::types::SignedInt16;
   using compiler::types::SignedInt32;
   using compiler::types::SignedInt64;
-  using compiler::types::SignedInt128;
   using compiler::types::SingleItemCollectionType;
   using compiler::types::String;
   using compiler::types::Symbol;
   using compiler::types::Unit;
+  using compiler::types::UnsignedInt128;
   using compiler::types::UnsignedInt16;
   using compiler::types::UnsignedInt32;
   using compiler::types::UnsignedInt64;
-  using compiler::types::UnsignedInt128;
   if (const auto *Builtin = std::get_if<BuiltinType>(&Type)) {
     switch (*Builtin) {
     case Bool:

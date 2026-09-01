@@ -93,7 +93,7 @@ TEST_SUITE("Std Format parser regressions") {
   TEST_CASE("package-qualified module calls preserve their canonical FQN") {
     Parser parser;
     auto result = parser.parseExpression(R"(Std\Gpu::available ())",
-                                          "<module-call-test>");
+                                         "<module-call-test>");
 
     REQUIRE(result.has_value());
     auto *apply = dynamic_cast<ApplyExpr *>(result.value().get());
@@ -151,7 +151,7 @@ extern inspect : String -> Int borrow "1"
   TEST_CASE("parenthesized lambda parameter is one tuple pattern") {
     Parser parser;
     auto result = parser.parseExpression(R"(\(left, right) -> left + right)",
-                                          "<lambda-test>");
+                                         "<lambda-test>");
 
     REQUIRE(result.has_value());
     auto *lambda = dynamic_cast<FunctionExpr *>(result->get());
@@ -165,7 +165,7 @@ extern inspect : String -> Int borrow "1"
   TEST_CASE("juxtaposed lambda parameters remain separate") {
     Parser parser;
     auto result = parser.parseExpression(R"(\left right -> left + right)",
-                                          "<lambda-test>");
+                                         "<lambda-test>");
 
     REQUIRE(result.has_value());
     auto *lambda = dynamic_cast<FunctionExpr *>(result->get());
@@ -183,7 +183,7 @@ instance Same Int
     same @borrow left @borrow right = left == right
 end
 )",
-                                      "<borrow-test>");
+                                     "<borrow-test>");
 
     REQUIRE(result.has_value());
     REQUIRE(result.value()->instance_declarations.size() == 1);
@@ -324,7 +324,7 @@ end
     CHECK(dynamic_cast<FieldUpdateExpr *>(valid.value().get()) != nullptr);
 
     auto invalid = parser.parseExpression("(identity person) { field = 1 }",
-                                           "<field-update-test>");
+                                          "<field-update-test>");
     CHECK_FALSE(invalid.has_value());
   }
 
@@ -332,7 +332,7 @@ end
     Parser parser;
 
     auto alias = parser.parseExpression("let (head, tail) = pair in head",
-                                         "<borrow-analysis-test>");
+                                        "<borrow-analysis-test>");
     REQUIRE(alias.has_value());
     CHECK(yona::compiler::analysis::count_identifier_refs(alias.value().get(),
                                                           "pair") == 1);
@@ -358,7 +358,8 @@ end
         escaping_guard.value().get(), "observed", false));
   }
 
-  TEST_CASE("parsed expression owns temporary source after parser destruction") {
+  TEST_CASE(
+      "parsed expression owns temporary source after parser destruction") {
     std::optional<ParsedExpression> Parsed;
     std::string Source = "retainedName";
     {

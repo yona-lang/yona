@@ -144,7 +144,7 @@ TEST_SUITE("LinkerPlan") {
     yona::toolchain::LinkerPlan plan;
     std::string error;
     REQUIRE(yona::toolchain::resolveLinkerPlan("inprocess", {tmp_base}, plan,
-                                                 error));
+                                               error));
     CHECK(plan.UseInProcessLld);
     CHECK(plan.UseBundledLld);
     CHECK_FALSE(plan.BundledLldPath.empty());

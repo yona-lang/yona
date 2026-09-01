@@ -4,6 +4,18 @@
 
 ### Fixed
 
+- Restored every reproducible build and quality gate: generated TextMate
+  grammars are synchronized, Vulkan loader lookup compiles, macOS kqueue
+  declarations agree, standalone interface fuzzing links its model dependency,
+  and CI language-server smoke/report scripts use their tracked underscore
+  names. Embedded LLD archives are now linked in dependency order so shared
+  compiler consumers resolve the driver implementation.
+- Parser error paths now retain ownership while recovering from malformed
+  module names, function clauses, and `let` bindings. The ASan/LSan fuzz gate
+  completes without the former leaks or non-progress timeout.
+- Reformatted the C/C++ source tree with the project's Clang 22 formatter so
+  the repository formatting contract is clean.
+
 - CMake-built Yona tools now link the current build's generated Prelude object
   instead of an ignored, potentially stale `lib/Prelude.o`, so local builds do
   not mix obsolete `yona_rt_*` calls with the `YonaRuntime*` runtime archive.

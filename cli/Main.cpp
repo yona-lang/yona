@@ -23,6 +23,7 @@
 //   --emit-accelerator-report-with-types mod.yona -I lib  # module + types
 
 #include "yona/Codegen/Codegen.h"
+#include "yona/Runtime/Generated/VulkanLinkConfig.h"
 #include "yona/Semantics/AcceleratorDiag.h"
 #include "yona/Semantics/InterfaceCatalog.h"
 #include "yona/Semantics/LinearityChecker.h"
@@ -38,7 +39,6 @@
 #include "yona/Toolchain/InProcessLld.h"
 #include "yona/Toolchain/LinkerPlan.h"
 #include "yona/TypedCore/Abi.h"
-#include "yona/Runtime/Generated/VulkanLinkConfig.h"
 
 #include <llvm/Support/Signals.h>
 
@@ -55,9 +55,9 @@
 #include <unordered_set>
 #include <vector>
 
+using yona::is_module_source;
 using yona::SourceManager;
 using yona::SourceRange;
-using yona::is_module_source;
 using yona::compiler::DiagnosticEngine;
 using yona::compiler::ErrorCode;
 using yona::compiler::WarningFlag;
@@ -69,8 +69,8 @@ namespace parser = yona::parser;
 namespace semantics = yona::semantics;
 namespace termination_analysis = yona::compiler::termination_analysis;
 namespace typechecker = yona::compiler::typechecker;
-using compiler::emit_accelerator_diagnostic_report_for_module;
 using compiler::emit_accelerator_diagnostic_report;
+using compiler::emit_accelerator_diagnostic_report_for_module;
 using compiler::typecheck_module_for_accelerator_report;
 using std::cerr;
 using std::cin;
@@ -534,7 +534,7 @@ static bool require_effect_free(ast::AstNode *root, DiagnosticEngine &diag,
 }
 
 static vector<filesystem::path> discoverSysroots(const char *argv0,
-                                                  const string &sysroot_opt) {
+                                                 const string &sysroot_opt) {
   return yona::toolchain::discoverSysroots(argv0, sysroot_opt);
 }
 
@@ -779,8 +779,7 @@ int main(int argc, char *argv[]) {
           diag.setSources(result.error().front().Sources);
         if (!result.has_value()) {
           for (auto &error : result.error())
-            diag.error(error.Range, compiler::ErrorCode::E0301,
-                       error.Message);
+            diag.error(error.Range, compiler::ErrorCode::E0301, error.Message);
         } else {
           diag.error(SourceRange::unknown(), compiler::ErrorCode::E0301,
                      "parse error");
@@ -826,12 +825,11 @@ int main(int argc, char *argv[]) {
   }
   string linker_error;
   if (!yona::toolchain::resolveLinkerPlan(linker_mode_raw, sysroots,
-                                            linker_selection, linker_error)) {
+                                          linker_selection, linker_error)) {
     cerr << "Error: " << linker_error << endl;
     return 1;
   }
-  const bool require_inprocess =
-      yona::toolchain::requireInProcessLldFromEnv();
+  const bool require_inprocess = yona::toolchain::requireInProcessLldFromEnv();
   if (linker_selection.UseInProcessLld &&
       !yona::toolchain::inProcessLldAvailable()) {
     if (require_inprocess) {
@@ -925,7 +923,8 @@ int main(int argc, char *argv[]) {
       codegen.loadPrelude();
       semantics::InterfaceCatalog Interfaces(codegen.ModulePaths);
       Interfaces.appendEnvironmentSearchPaths();
-      const auto PreludeInstalled = Interfaces.installPrelude(parser, type_checker);
+      const auto PreludeInstalled =
+          Interfaces.installPrelude(parser, type_checker);
       if (!PreludeInstalled || !*PreludeInstalled) {
         cerr << "Error: unable to load Prelude interface" << endl;
         return 1;
@@ -952,7 +951,8 @@ int main(int argc, char *argv[]) {
     codegen.loadPrelude();
     semantics::InterfaceCatalog Interfaces(codegen.ModulePaths);
     Interfaces.appendEnvironmentSearchPaths();
-    const auto PreludeInstalled = Interfaces.installPrelude(parser, type_checker);
+    const auto PreludeInstalled =
+        Interfaces.installPrelude(parser, type_checker);
     if (!PreludeInstalled || !*PreludeInstalled) {
       cerr << "Error: unable to load Prelude interface" << endl;
       return 1;
@@ -998,7 +998,8 @@ int main(int argc, char *argv[]) {
     codegen.loadPrelude();
     semantics::InterfaceCatalog Interfaces(codegen.ModulePaths);
     Interfaces.appendEnvironmentSearchPaths();
-    const auto PreludeInstalled = Interfaces.installPrelude(parser, type_checker);
+    const auto PreludeInstalled =
+        Interfaces.installPrelude(parser, type_checker);
     if (!PreludeInstalled || !*PreludeInstalled) {
       cerr << "Error: unable to load Prelude interface" << endl;
       return 1;
@@ -1045,13 +1046,13 @@ int main(int argc, char *argv[]) {
       return 1;
 
     if (emit_accelerator_report) {
-      emit_accelerator_diagnostic_report(std::cout, parse_result->Expression.get(),
-                                         &type_checker, filename);
+      emit_accelerator_diagnostic_report(
+          std::cout, parse_result->Expression.get(), &type_checker, filename);
       return 0;
     }
 
-    if (!run_overlay_checkers(parse_result->Expression.get(), diag, type_checker,
-                              flag_no_refinement, flag_no_linear))
+    if (!run_overlay_checkers(parse_result->Expression.get(), diag,
+                              type_checker, flag_no_refinement, flag_no_linear))
       return 1;
 
     llvm_mod = codegen.compile(parse_result->Expression.get());

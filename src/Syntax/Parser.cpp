@@ -195,9 +195,8 @@ bool ParserImpl::check_ahead(TokenType type) const {
 
 // --- ParseError formatting ---
 string ParseError::format() const {
-  string result =
-      (Sources ? Sources->format(Range) : string("<unknown>:0:0")) + ": " +
-      Message;
+  string result = (Sources ? Sources->format(Range) : string("<unknown>:0:0")) +
+                  ": " + Message;
 
   if (ExpectedToken) {
     result +=

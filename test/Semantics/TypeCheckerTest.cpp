@@ -21,32 +21,32 @@
 #include <stdexcept>
 #include <type_traits>
 
-using yona::compiler::DiagnosticEngine;
-using yona::compiler::DiagLevel;
-using yona::compiler::ErrorCode;
-using yona::compiler::WarningFlag;
-using yona::compiler::parse_error_code;
+using std::string;
 using yona::SourceRange;
+using yona::compiler::DiagLevel;
+using yona::compiler::DiagnosticEngine;
+using yona::compiler::ErrorCode;
+using yona::compiler::parse_error_code;
+using yona::compiler::WarningFlag;
 using yona::compiler::typechecker::EffectConstraintResult;
 using yona::compiler::typechecker::EffectNormalForm;
 using yona::compiler::typechecker::EffectRef;
 using yona::compiler::typechecker::EffectSolver;
-using yona::compiler::typechecker::MonoType;
-using yona::compiler::typechecker::MonoTypePtr;
-using yona::compiler::typechecker::TyCon;
-using yona::compiler::typechecker::TypeArena;
-using yona::compiler::typechecker::TypeEnv;
-using yona::compiler::typechecker::TypeScheme;
-using yona::compiler::typechecker::UnionFind;
-using yona::compiler::typechecker::Unifier;
-using yona::compiler::typechecker::TypeChecker;
 using yona::compiler::typechecker::FactEnv;
 using yona::compiler::typechecker::Interval;
 using yona::compiler::typechecker::module_function_components;
+using yona::compiler::typechecker::MonoType;
+using yona::compiler::typechecker::MonoTypePtr;
 using yona::compiler::typechecker::RefinementChecker;
+using yona::compiler::typechecker::TyCon;
+using yona::compiler::typechecker::TypeArena;
+using yona::compiler::typechecker::TypeChecker;
+using yona::compiler::typechecker::TypeEnv;
+using yona::compiler::typechecker::TypeScheme;
+using yona::compiler::typechecker::Unifier;
+using yona::compiler::typechecker::UnionFind;
 using yona::compiler::types::BuiltinType;
 using yona::compiler::types::RefinePredicate;
-using std::string;
 
 TEST_SUITE("TypeChecker") {
 
@@ -1039,10 +1039,10 @@ TEST_SUITE("TypeChecker") { // reopen suite
     TypeChecker checker(diagnostics);
     YONA_TEST_INSTALL_PRELUDE(codegen, parser, checker);
 
-    auto parsed = parser.parseExpression(
-        "try raise InvalidSyntax \"boom\" "
-        "catch InvalidSyntax message -> message end",
-        "<stream>");
+    auto parsed =
+        parser.parseExpression("try raise InvalidSyntax \"boom\" "
+                               "catch InvalidSyntax message -> message end",
+                               "<stream>");
     REQUIRE(parsed);
     REQUIRE(parsed->Expression);
     auto *type = checker.check(parsed->Expression.get());
@@ -1952,12 +1952,12 @@ end
                         return record.level == DiagLevel::Error &&
                                record.code == ErrorCode::E0202;
                       }));
-    CHECK_FALSE(std::any_of(
-        unhandled_diag.records().begin(), unhandled_diag.records().end(),
-        [](const auto &record) {
-          return record.level == DiagLevel::Error &&
-                 record.code == ErrorCode::E0100;
-        }));
+    CHECK_FALSE(std::any_of(unhandled_diag.records().begin(),
+                            unhandled_diag.records().end(),
+                            [](const auto &record) {
+                              return record.level == DiagLevel::Error &&
+                                     record.code == ErrorCode::E0100;
+                            }));
 
     yona::parser::Parser handled_parser;
     auto handled = handled_parser.parseExpression(R"(
@@ -1967,7 +1967,7 @@ handle thunk () with
     return val -> val
 end
 )",
-                                                   "<test>");
+                                                  "<test>");
     REQUIRE(handled.has_value());
     DiagnosticEngine handled_diag;
     TypeChecker handled_checker(handled_diag);
@@ -1986,7 +1986,6 @@ end
     REQUIRE(pure_type != nullptr);
     CHECK(pretty_print(pure_checker.zonk(pure_type)) == "Int");
     CHECK_FALSE(pure_checker.has_direct_errors());
-
   }
 
   TEST_CASE("Native zero-arity FN imports remain values") {
@@ -2089,8 +2088,7 @@ end
     SUBCASE("bare ABI-only descriptors are independent fresh wildcards") {
       yona::parser::Parser parser;
       auto parsed = parser.parseExpression(
-          R"(import legacy from Test\Shapes in legacy "left" true)",
-          "<test>");
+          R"(import legacy from Test\Shapes in legacy "left" true)", "<test>");
       REQUIRE(parsed.has_value());
       DiagnosticEngine diag;
       TypeChecker checker(diag);
@@ -2130,8 +2128,7 @@ end
     SUBCASE("exact scalar atoms reject mismatches") {
       yona::parser::Parser parser;
       auto parsed = parser.parseExpression(
-          R"(import exact from Test\Shapes in exact "not-an-int")",
-          "<test>");
+          R"(import exact from Test\Shapes in exact "not-an-int")", "<test>");
       REQUIRE(parsed.has_value());
       DiagnosticEngine diag;
       TypeChecker checker(diag);

@@ -6,12 +6,12 @@
 #include <string_view>
 
 using yona::ast::ApplyExpr;
-using yona::ast::ExprNode;
 using yona::ast::AST_CASE_EXPR;
 using yona::ast::AST_CONSTRUCTOR_PATTERN;
 using yona::ast::AST_UNDERSCORE_PATTERN;
 using yona::ast::CaseExpr;
 using yona::ast::ConstructorPattern;
+using yona::ast::ExprNode;
 using yona::parser::Parser;
 
 namespace {

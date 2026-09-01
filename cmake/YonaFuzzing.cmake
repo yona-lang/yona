@@ -136,7 +136,7 @@ endfunction()
 yona_add_fuzzer(yona_fuzz_parser
     "fuzz/Syntax/ParserFuzzer.cpp" Parser yona_lib_static)
 yona_add_fuzzer(yona_fuzz_interface
-    "fuzz/Interface/InterfaceFuzzer.cpp" Interface yona_interface)
+    "fuzz/Interface/InterfaceFuzzer.cpp" Interface yona_interface yona_model)
 yona_add_fuzzer(yona_fuzz_json_rpc
     "fuzz/Lsp/JsonRpcFuzzer.cpp" JsonRpc yona_lib_static)
 target_sources(yona_fuzz_json_rpc PRIVATE $<TARGET_OBJECTS:yona_lsp>)

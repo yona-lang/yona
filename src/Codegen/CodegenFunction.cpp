@@ -676,10 +676,9 @@ void Codegen::bind_parameter_pattern(PatternNode *pat,
 
 // ===== Functions (deferred compilation) =====
 
-TypedValue Codegen::codegen_function_def(FunctionExpr *node,
-                                         const std::string &name,
-                                         std::optional<std::string>
-                                             imported_owner) {
+TypedValue
+Codegen::codegen_function_def(FunctionExpr *node, const std::string &name,
+                              std::optional<std::string> imported_owner) {
   set_debug_loc(node->Range);
   std::string fn_name =
       name.empty()
@@ -823,8 +822,8 @@ TypedValue Codegen::codegen_function_def(FunctionExpr *node,
     // bit-cast, flat ADTs boxed).  Indirect callers decode it from the
     // closure header's return tag.
     auto fn_type = llvm::FunctionType::get(i64_ty, param_types, false);
-    auto *fn = Function::Create(fn_type, Function::InternalLinkage, fn_name,
-                                module_);
+    auto *fn =
+        Function::Create(fn_type, Function::InternalLinkage, fn_name, module_);
 
     // Register preliminary for recursive calls (closure_env set below after
     // entry block)
@@ -1450,8 +1449,7 @@ Codegen::compile_function(const std::string &name,
   if (fn && fn->isDeclaration() && fn->getFunctionType() == fn_type) {
     fn->setLinkage(Function::InternalLinkage);
   } else {
-    fn = Function::Create(fn_type, Function::InternalLinkage, name,
-                          module_);
+    fn = Function::Create(fn_type, Function::InternalLinkage, name, module_);
   }
 
   // Borrow inference must run before preliminary registration so recursive

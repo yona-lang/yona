@@ -31,8 +31,7 @@ const char *color_green() { return stderr_is_tty() ? "\033[1;32m" : ""; }
 
 } // anonymous namespace
 
-DiagnosticEngine::DiagnosticEngine(
-    std::shared_ptr<const SourceManager> Sources)
+DiagnosticEngine::DiagnosticEngine(std::shared_ptr<const SourceManager> Sources)
     : Sources(std::move(Sources)) {
   enable_warning(WarningFlag::LinearLeak);
 }
@@ -73,8 +72,7 @@ void DiagnosticEngine::setSources(
 }
 
 std::string DiagnosticEngine::formatRange(SourceRange Range) const {
-  return Sources && Range.isValid() ? Sources->format(Range)
-                                    : "<unknown>:0:0";
+  return Sources && Range.isValid() ? Sources->format(Range) : "<unknown>:0:0";
 }
 
 std::string_view DiagnosticEngine::sourceName(SourceRange Range) const {

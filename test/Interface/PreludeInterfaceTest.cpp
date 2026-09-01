@@ -12,8 +12,8 @@
 #include <sstream>
 
 namespace fs = std::filesystem;
-using yona::compiler::codegen::Codegen;
 using yona::compiler::DiagnosticEngine;
+using yona::compiler::codegen::Codegen;
 namespace parser = yona::parser;
 namespace typechecker = yona::compiler::typechecker;
 

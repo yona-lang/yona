@@ -238,9 +238,9 @@ static void *yonaVulkanLoaderDynamicSymbol(const char *Name) {
 #else
   void *p = NULL;
   if (YonaVulkanDynamicLibrary)
-    p = dlsym(YonaVulkanDynamicLibrary, name);
+    p = dlsym(YonaVulkanDynamicLibrary, Name);
   if (!p)
-    p = dlsym(RTLD_DEFAULT, name);
+    p = dlsym(RTLD_DEFAULT, Name);
   return p;
 #endif
 }

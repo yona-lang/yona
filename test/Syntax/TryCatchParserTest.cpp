@@ -5,9 +5,6 @@
 #include <string>
 #include <string_view>
 
-using yona::ast::ExprNode;
-using yona::ast::IdentifierExpr;
-using yona::ast::TryCatchExpr;
 using yona::ast::AST_CASE_EXPR;
 using yona::ast::AST_DO_EXPR;
 using yona::ast::AST_IDENTIFIER_EXPR;
@@ -17,7 +14,10 @@ using yona::ast::AST_RAISE_EXPR;
 using yona::ast::AST_TRY_CATCH_EXPR;
 using yona::ast::CaseExpr;
 using yona::ast::DoExpr;
+using yona::ast::ExprNode;
+using yona::ast::IdentifierExpr;
 using yona::ast::LetExpr;
+using yona::ast::TryCatchExpr;
 using yona::ast::ValueAlias;
 using yona::parser::Parser;
 
@@ -119,8 +119,8 @@ TEST_SUITE("TryCatchParser") {
 
   TEST_CASE("try as let binding RHS does not swallow in") {
     Parser parser;
-    auto result = parser.parseExpression("let x = try 1 catch _ -> 2 end in x",
-                                          "<test>");
+    auto result =
+        parser.parseExpression("let x = try 1 catch _ -> 2 end in x", "<test>");
     REQUIRE(result.has_value());
     REQUIRE((*result)->get_type() == AST_LET_EXPR);
     auto *let = static_cast<LetExpr *>(result->get());
@@ -137,8 +137,8 @@ TEST_SUITE("TryCatchParser") {
     Parser parser;
     auto result =
         parser.parseExpression("let always_raise xs = raise 42 in try "
-                                "always_raise [1] catch _ -> 0 end",
-                                "<test>");
+                               "always_raise [1] catch _ -> 0 end",
+                               "<test>");
     REQUIRE(result.has_value());
     REQUIRE((*result)->get_type() == AST_LET_EXPR);
     auto *let = static_cast<LetExpr *>(result->get());
@@ -173,10 +173,10 @@ TEST_SUITE("TryCatchParser") {
   TEST_CASE("multiple catch arms under one catch") {
     Parser parser;
     auto result = parser.parseExpression("try raise 1 catch\n"
-                                          "    _ -> 10\n"
-                                          "    _ -> 20\n"
-                                          "end",
-                                          "<test>");
+                                         "    _ -> 10\n"
+                                         "    _ -> 20\n"
+                                         "end",
+                                         "<test>");
     REQUIRE(result.has_value());
     auto *tc = as_try(result->get());
     REQUIRE(tc->catchExpr);

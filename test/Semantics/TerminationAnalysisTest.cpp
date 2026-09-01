@@ -91,7 +91,7 @@ module Test\GuardedDescent
 type Nat = Zero | Succ Nat
 loop (Succ rest) = if true -> loop rest
 )",
-                                      "<termination-test>");
+                                     "<termination-test>");
 
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->Module->functions.size() == 1);

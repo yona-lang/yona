@@ -9,12 +9,6 @@
 #include "yona/Semantics/TypeChecker.h"
 
 namespace yona::compiler::typechecker {
-using ast::AstNode;
-using ast::ExprNode;
-using ast::IdentifierExpr;
-using ast::IntegerExpr;
-using ast::LetExpr;
-using ast::LiteralExpr;
 using ast::AddExpr;
 using ast::ApplyExpr;
 using ast::AST_APPLY_EXPR;
@@ -35,6 +29,7 @@ using ast::AST_PATTERN_VALUE;
 using ast::AST_SEQ_PATTERN;
 using ast::AST_UNDERSCORE_PATTERN;
 using ast::AST_VALUES_SEQUENCE_EXPR;
+using ast::AstNode;
 using ast::BinaryOpExpr;
 using ast::BodyWithGuards;
 using ast::BodyWithoutGuards;
@@ -42,12 +37,17 @@ using ast::CaseExpr;
 using ast::DivideExpr;
 using ast::DoExpr;
 using ast::EqExpr;
+using ast::ExprNode;
 using ast::FunctionExpr;
 using ast::GteExpr;
 using ast::GtExpr;
+using ast::IdentifierExpr;
 using ast::IfExpr;
 using ast::ImportExpr;
+using ast::IntegerExpr;
 using ast::LambdaAlias;
+using ast::LetExpr;
+using ast::LiteralExpr;
 using ast::LogicalAndExpr;
 using ast::LteExpr;
 using ast::LtExpr;
@@ -537,8 +537,8 @@ void RefinementChecker::check_apply(ApplyExpr *node, const FactEnv &facts) {
   }
 
   // Check user-registered refined type requirements
-  // (requires type annotation integration â€” checked against registered refined
-  // types)
+  // (requires type annotation integration â€” checked against registered
+  // refined types)
 
   // Recurse into arguments
   for (auto &arg_variant : node->args) {

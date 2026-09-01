@@ -1840,11 +1840,10 @@ TypedValue Codegen::codegen_extern_decl(ExternDeclExpr *node) {
   if (!node->borrowed_params.empty()) {
     if (node->extern_promise == ast::ExternPromiseKind::ThreadPool ||
         node->extern_promise == ast::ExternPromiseKind::NativePtr) {
-      report_error(
-          node->Range,
-          "borrow masks are not supported on task-backed extern '" +
-              node->name +
-              "' until its arguments have task-owned lifetime pins");
+      report_error(node->Range,
+                   "borrow masks are not supported on task-backed extern '" +
+                       node->name +
+                       "' until its arguments have task-owned lifetime pins");
       return {};
     }
     if (node->borrowed_params.size() != param_ctypes.size()) {

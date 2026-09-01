@@ -32,16 +32,16 @@ using yona::ast::CaseExpr;
 using yona::ast::LetExpr;
 using yona::ast::PerformExpr;
 using yona::ast::ValueAlias;
-using yona::compiler::DiagnosticEngine;
 using yona::compiler::DiagLevel;
+using yona::compiler::DiagnosticEngine;
+using yona::compiler::emit_accelerator_diagnostic_report;
+using yona::compiler::emit_accelerator_diagnostic_report_for_module;
 using yona::compiler::ErrorCode;
+using yona::compiler::typecheck_module_for_accelerator_report;
 using yona::compiler::WarningFlag;
 using yona::compiler::codegen::Codegen;
 using yona::compiler::codegen::CodegenSession;
 using yona::compiler::codegen::DeriveAdtInfo;
-using yona::compiler::emit_accelerator_diagnostic_report;
-using yona::compiler::emit_accelerator_diagnostic_report_for_module;
-using yona::compiler::typecheck_module_for_accelerator_report;
 namespace ast = yona::ast;
 namespace compiler = yona::compiler;
 namespace parser = yona::parser;
@@ -416,9 +416,9 @@ static void run_yona_fixture_tree(const fs::path &fixtures_dir) {
                      "\"params\":{\"capabilities\":{}}}";
       string actual =
           compile_and_run(source, env_k, env_v, name.c_str(), stdin_data);
-      actual.erase(std::remove(actual.begin(), actual.end(), '\r'), actual.end());
-      while (!actual.empty() &&
-             (actual.back() == '\n' || actual.back() == ' '))
+      actual.erase(std::remove(actual.begin(), actual.end(), '\r'),
+                   actual.end());
+      while (!actual.empty() && (actual.back() == '\n' || actual.back() == ' '))
         actual.pop_back();
       CHECK_MESSAGE(actual == expected, "Fixture '", name, "': expected '",
                     expected, "' but got '", actual, "'");
@@ -494,7 +494,8 @@ static string read_file(const fs::path &path) {
   stringstream buf;
   buf << f.rdbuf();
   string content = buf.str();
-  content.erase(std::remove(content.begin(), content.end(), '\r'), content.end());
+  content.erase(std::remove(content.begin(), content.end(), '\r'),
+                content.end());
   // Trim trailing whitespace/newlines
   while (!content.empty() && (content.back() == '\n' ||
                               content.back() == '\r' || content.back() == ' '))
