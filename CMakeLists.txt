@@ -590,12 +590,20 @@ elseif(YONA_PCRE2_TARGET)
 	endif()
 endif()
 if(CMAKE_EXE_LINKER_FLAGS MATCHES "(^| )-fsanitize=[^ ]+")
+	set(YONA_SANITIZER_LINK_OPTIONS "")
 	separate_arguments(_yona_runtime_linker_flags NATIVE_COMMAND "${CMAKE_EXE_LINKER_FLAGS}")
 	foreach(_yona_runtime_linker_flag IN LISTS _yona_runtime_linker_flags)
 		if(_yona_runtime_linker_flag MATCHES "^-fsanitize=")
 			list(APPEND YONA_RUNTIME_DRIVER_LINK_ARGS "${_yona_runtime_linker_flag}")
 			list(APPEND YONA_RUNTIME_LLD_LINK_ARGS "${_yona_runtime_linker_flag}")
+			list(APPEND YONA_SANITIZER_LINK_OPTIONS "${_yona_runtime_linker_flag}")
 		endif()
+	endforeach()
+	# An instrumented exported library must propagate its sanitizer runtime to
+	# ordinary CMake consumers as well as to `yonac`-generated executables.
+	foreach(_yona_sanitized_target IN ITEMS yona_lib yona_lib_static yona_runtime)
+		target_link_options(${_yona_sanitized_target} PUBLIC
+			${YONA_SANITIZER_LINK_OPTIONS})
 	endforeach()
 endif()
 string(REPLACE ";" "\n" _yona_runtime_driver_link_contents

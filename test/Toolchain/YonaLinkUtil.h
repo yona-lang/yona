@@ -202,8 +202,7 @@ inline std::vector<std::string> runtimeLinkArguments() {
   std::ifstream manifest(YONA_TEST_RUNTIME_LINK_MANIFEST);
   if (manifest) {
     std::vector<std::string> arguments;
-    const std::filesystem::path manifest_dir(
-        YONA_TEST_RUNTIME_LINK_MANIFEST);
+    const std::filesystem::path manifest_dir(YONA_TEST_RUNTIME_LINK_MANIFEST);
     for (std::string argument; std::getline(manifest, argument);)
       if (!argument.empty()) {
         if (argument.front() != '-' &&
