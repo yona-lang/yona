@@ -6,6 +6,75 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+### Typed IR Codegen rewrite blockers
+
+Program of record:
+[2026-09-01-typed-ir-codegen-rewrite-design.md](./superpowers/specs/2026-09-01-typed-ir-codegen-rewrite-design.md).
+
+- [ ] **Dynamic closure arity cannot implement general currying.** Repro:
+  under-apply a runtime-selected closure with more than one remaining argument;
+  the loaded arity is treated as non-constant and every remaining argument is
+  passed in one call.
+- [ ] **Capturing closures disagree with their universal argument ABI.** Repro:
+  call a closure that captures an outer value and accepts `Float`; the caller
+  uses an FP register while the closure entry reads an integer carrier.
+- [ ] **Effect handlers can embed SSA values from an enclosing function.**
+  Repro: reference a non-constant outer parameter from a handler clause; the
+  separately emitted handler function receives a foreign LLVM value.
+- [ ] **Effect arguments, results, and resumptions lose type and ownership.**
+  Repro: perform and resume an operation carrying `Float`, Bool, or a managed
+  aggregate; handler lowering hard-codes `i64` and `CType::INT`.
+- [ ] **Zero- and one-argument async externs use the wrong callback ABI.**
+  Repro: invoke `extern async` with a `Float -> Float` signature; the worker
+  calls it as `int64_t (*)(int64_t)`.
+- [ ] **Escape analysis misses transitive aggregate containment.** Repro:
+  `let xs = [1], wrapped = Some xs in wrapped` can return a heap ADT whose
+  child was freed with its arena.
+- [ ] **Some pattern payload bindings outlive an unretained temporary owner.**
+  Repro: `case [["x"]] of [x] -> x end` can release the temporary scrutinee
+  while returning its borrowed heap child.
+- [ ] **`typeOf` stores unmanaged globals in managed String fields.** Repro:
+  inspect the type of an ADT/channel and release the returned type value; ADT
+  destruction reads an RC header before an LLVM global string.
+- [ ] **Exception lowering corrupts non-string and multi-field ADTs.** Repro:
+  raise a nullary, Int-field, or two-field exception; lowering always reads
+  field zero as a string pointer and catch reconstructs only that field.
+- [ ] **Set/dictionary ownership metadata is installed after insertion.**
+  Repro: insert duplicate managed keys or values; replacement occurs while
+  heap flags are zero and leaks or mismanages the replaced owner.
+- [ ] **Sequence generators consume borrowed named sources.** Repro: reuse a
+  uniquely owned named sequence after an unguarded or fused comprehension;
+  generator `tail` may mutate it and release elements.
+- [ ] **ADT field update applies LLVM aggregate operations to heap pointers.**
+  Repro: update a field of a uniform heap ADT; the non-recursive path still
+  emits `CreateInsertValue` against the pointer representation.
+- [ ] **Guarded and multi-equation functions are not lowered canonically.**
+  Repro: define multiple pattern equations or guarded bodies; later patterns
+  are discarded and Codegen repeatedly selects only `bodies[0]`.
+- [ ] **Closure free-variable discovery is incomplete.** Repro: reference an
+  outer variable only beneath `try`, `with`, effects, records, fields, or a
+  generator; the generated closure omits the capture.
+- [ ] **`with` does not finalize resources when its body raises.** Repro: raise
+  after successful acquisition; close is emitted only on a normal,
+  unterminated body block.
+- [ ] **SJLJ cleanup omits locals, TCO functions, and functions over 16 owners.**
+  Repro: raise with a live heap local, from a self-tail-recursive function, or
+  from a function with seventeen owned heap parameters.
+- [ ] **Non-exhaustive `case` fabricates a result.** Repro: execute a runtime
+  no-match edge; lowering feeds zero/null into the result PHI instead of
+  raising `MatchError` and cleaning the scrutinee.
+- [ ] **Module compilation omits queued asymmetric ownership drops.** Repro:
+  compile a module function with branch-asymmetric sequence/map transfer;
+  unlike expression compilation, module finalization never flushes the drops.
+- [ ] **TCO cleanup state is global to the generated function.** Repro: combine
+  multiple recursive branches with a base return; the first emitted tail call
+  suppresses cleanup on syntactically later CFG paths.
+- [ ] **AArch64 SJLJ restore can overwrite its buffer base register.** Repro:
+  compile the inline long-jump helper under enough register pressure for its
+  unconstrained input operand to occupy `x19`-`x28`; restoring that register
+  redirects subsequent context loads. This path disappears when explicit
+  control outcomes replace generated-program SJLJ.
+
 - [ ] **The Linux release Prelude artifact build aborts in `yonac`.** Repro:
   `cmake --preset x64-release-linux && cmake --build --preset build-release-linux -j2`
   aborts while building `artifacts/Prelude.o` with `double free or corruption
