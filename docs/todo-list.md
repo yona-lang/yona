@@ -6,6 +6,11 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 
 ## Bugs
 
+- [ ] **The Linux release Prelude artifact build aborts in `yonac`.** Repro:
+  `cmake --preset x64-release-linux && cmake --build --preset build-release-linux -j2`
+  aborts while building `artifacts/Prelude.o` with `double free or corruption
+  (!prev)` followed by `pure virtual method called`.
+
 - [ ] **Windows `Std\Convert` rejects the Bool case expected by its conformance
   suite.** `foundation_Convert_test` reports one failure for “Parse Bool is
   explicit and case sensitive” (`16 passed, 1 failed`) only on Windows.

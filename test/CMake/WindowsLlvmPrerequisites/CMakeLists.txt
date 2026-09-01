@@ -77,13 +77,13 @@ foreach(_pcre_contract
     "YONA_PCRE2_RUNTIME_ARCHIVE"
     "PCRE2_STATIC"
     "yona_runtime_pcre2"
-    "YONAC_EXE_LINK_PCRE2")
+    "yona_runtime_link.driver.args")
   yona_require_file_contains("${YONA_SOURCE_DIR}/CMakeLists.txt" "${_pcre_contract}")
 endforeach()
 set(_yonac_cli "${YONA_SOURCE_DIR}/cli/Main.cpp")
-yona_require_file_contains("${_yonac_cli}" "const string pcre2_lld_arg =")
-yona_require_file_contains("${_yonac_cli}" "packaged_pcre2.empty() ? \"-lpcre2-8\"")
-yona_require_file_contains("${_yonac_cli}" "lld_args.push_back(pcre2_lld_arg);")
+yona_require_file_contains("${_yonac_cli}" "yona_runtime_link.driver.args")
+yona_require_file_contains("${_yonac_cli}" "append_runtime_link_manifest")
+yona_require_file_omits("${_yonac_cli}" "packaged_pcre2.empty() ? \"-lpcre2-8\"")
 yona_require_file_contains("${_yonac_cli}" "yona::support::executeProcess")
 yona_require_file_contains("${_yonac_cli}" "runProcess(cc_link, link_args)")
 yona_require_file_omits("${_yonac_cli}" "system(")

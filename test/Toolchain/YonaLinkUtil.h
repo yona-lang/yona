@@ -194,6 +194,20 @@ inline std::vector<std::string> splitFlags(std::string_view text) {
 }
 
 inline std::vector<std::string> pcreLinkArguments() {
+  std::ifstream manifest(YONA_TEST_RUNTIME_LINK_MANIFEST);
+  if (manifest) {
+    std::vector<std::string> arguments;
+    const std::filesystem::path manifest_dir(
+        YONA_TEST_RUNTIME_LINK_MANIFEST);
+    for (std::string argument; std::getline(manifest, argument);)
+      if (!argument.empty()) {
+        if (argument.front() != '-' &&
+            std::filesystem::path(argument).is_relative())
+          argument = (manifest_dir.parent_path() / argument).string();
+        arguments.push_back(std::move(argument));
+      }
+    return arguments;
+  }
   const std::filesystem::path configured_archive(YONA_TEST_PCRE2_ARCHIVE);
   if (!configured_archive.empty() &&
       std::filesystem::exists(configured_archive))

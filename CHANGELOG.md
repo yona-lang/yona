@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Generated-program links now read a runtime-side manifest produced by CMake,
+  so `yonac` and in-tree fixtures use the resolved PCRE2 and sanitizer link
+  arguments after `yona_runtime` on Linux, macOS, and Windows. Bundled runtime
+  dependencies use paths relative to the manifest, preserving sysroot
+  relocatability.
+
 - Restored every reproducible build and quality gate: generated TextMate
   grammars are synchronized, Vulkan loader lookup compiles, macOS kqueue
   declarations agree, standalone interface fuzzing links its model dependency,

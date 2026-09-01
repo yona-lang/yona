@@ -146,6 +146,7 @@ endif()
 set(YONA_PCRE2_TARGET "")
 set(YONA_PCRE2_INCLUDE_DIRS "")
 set(YONA_PCRE2_CFLAGS "")
+set(YONA_PCRE2_LINK_ARGUMENTS "")
 set(YONA_PCRE2_BUNDLED_STATIC OFF)
 if(NOT YONA_FORCE_BUNDLED_PCRE2)
     # PCRE2's own config package exposes PCRE2::8BIT.  Prefer it on every
@@ -202,6 +203,17 @@ if(NOT YONA_FORCE_BUNDLED_PCRE2)
             set(YONA_PCRE2_TARGET PkgConfig::PCRE2)
             set(YONA_PCRE2_INCLUDE_DIRS ${PCRE2_INCLUDE_DIRS})
             set(YONA_PCRE2_CFLAGS ${PCRE2_CFLAGS})
+            foreach(_yona_pcre2_directory IN LISTS PCRE2_LIBRARY_DIRS)
+                list(APPEND YONA_PCRE2_LINK_ARGUMENTS "-L${_yona_pcre2_directory}")
+            endforeach()
+            foreach(_yona_pcre2_library IN LISTS PCRE2_LINK_LIBRARIES)
+                if(IS_ABSOLUTE "${_yona_pcre2_library}" OR
+                   _yona_pcre2_library MATCHES "^-l")
+                    list(APPEND YONA_PCRE2_LINK_ARGUMENTS "${_yona_pcre2_library}")
+                else()
+                    list(APPEND YONA_PCRE2_LINK_ARGUMENTS "-l${_yona_pcre2_library}")
+                endif()
+            endforeach()
             message(STATUS "Found system PCRE2: ${PCRE2_LIBRARIES}")
         endif()
     endif()
@@ -518,10 +530,6 @@ if(Vulkan_FOUND AND NOT WIN32)
 	# cli/Main.cpp: yonac-linked exe pulls vk* from gpu_stub → link libvulkan.
 	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_POSIX_VULKAN=1)
 endif()
-if(PCRE2_FOUND)
-	target_compile_definitions(yonac PRIVATE YONAC_EXE_LINK_PCRE2=1)
-endif()
-
 # Copy a bundled PCRE2 archive next to the canonical runtime archive. `yonac`
 # links user programs outside CMake and therefore cannot consume an imported
 # CMake target after installation.
@@ -545,6 +553,66 @@ if(YONA_PCRE2_BUNDLED_STATIC)
 		DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/runtime")
 endif()
 add_dependencies(yonac yona_runtime)
+
+# `yonac` and fixture tests link generated programs outside CMake.  Persist
+# CMake's resolved runtime dependencies beside the archive, one argument per
+# line, rather than reconstructing package-manager search paths in C++.
+set(YONA_RUNTIME_DRIVER_LINK_ARGS "")
+set(YONA_RUNTIME_LLD_LINK_ARGS "")
+if(YONA_PCRE2_BUNDLED_STATIC)
+	list(APPEND YONA_RUNTIME_DRIVER_LINK_ARGS "yona_pcre2${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	list(APPEND YONA_RUNTIME_LLD_LINK_ARGS "yona_pcre2${CMAKE_STATIC_LIBRARY_SUFFIX}")
+elseif(YONA_PCRE2_TARGET)
+	get_target_property(_yona_pcre2_location ${YONA_PCRE2_TARGET} IMPORTED_LOCATION)
+	if(_yona_pcre2_location STREQUAL "_yona_pcre2_location-NOTFOUND")
+		get_target_property(_yona_pcre2_configs ${YONA_PCRE2_TARGET} IMPORTED_CONFIGURATIONS)
+		foreach(_yona_pcre2_config IN LISTS _yona_pcre2_configs)
+			get_target_property(_yona_pcre2_location ${YONA_PCRE2_TARGET}
+				IMPORTED_LOCATION_${_yona_pcre2_config})
+			if(NOT _yona_pcre2_location STREQUAL "_yona_pcre2_location-NOTFOUND")
+				break()
+			endif()
+		endforeach()
+	endif()
+	if(_yona_pcre2_location AND NOT _yona_pcre2_location STREQUAL "_yona_pcre2_location-NOTFOUND")
+		list(APPEND YONA_RUNTIME_DRIVER_LINK_ARGS "${_yona_pcre2_location}")
+		list(APPEND YONA_RUNTIME_LLD_LINK_ARGS "${_yona_pcre2_location}")
+		if(APPLE)
+			get_filename_component(_yona_pcre2_directory "${_yona_pcre2_location}" DIRECTORY)
+			list(APPEND YONA_RUNTIME_DRIVER_LINK_ARGS "-Wl,-rpath,${_yona_pcre2_directory}")
+			list(APPEND YONA_RUNTIME_LLD_LINK_ARGS "-rpath" "${_yona_pcre2_directory}")
+		endif()
+	elseif(YONA_PCRE2_LINK_ARGUMENTS)
+		list(APPEND YONA_RUNTIME_DRIVER_LINK_ARGS ${YONA_PCRE2_LINK_ARGUMENTS})
+		list(APPEND YONA_RUNTIME_LLD_LINK_ARGS ${YONA_PCRE2_LINK_ARGUMENTS})
+	else()
+		message(FATAL_ERROR "Unable to determine a concrete PCRE2 linker path for generated programs")
+	endif()
+endif()
+if(CMAKE_EXE_LINKER_FLAGS MATCHES "(^| )-fsanitize=[^ ]+")
+	separate_arguments(_yona_runtime_linker_flags NATIVE_COMMAND "${CMAKE_EXE_LINKER_FLAGS}")
+	foreach(_yona_runtime_linker_flag IN LISTS _yona_runtime_linker_flags)
+		if(_yona_runtime_linker_flag MATCHES "^-fsanitize=")
+			list(APPEND YONA_RUNTIME_DRIVER_LINK_ARGS "${_yona_runtime_linker_flag}")
+			list(APPEND YONA_RUNTIME_LLD_LINK_ARGS "${_yona_runtime_linker_flag}")
+		endif()
+	endforeach()
+endif()
+string(REPLACE ";" "\n" _yona_runtime_driver_link_contents
+	"${YONA_RUNTIME_DRIVER_LINK_ARGS}")
+string(REPLACE ";" "\n" _yona_runtime_lld_link_contents
+	"${YONA_RUNTIME_LLD_LINK_ARGS}")
+set(YONA_RUNTIME_DRIVER_LINK_MANIFEST
+	"${YONA_RUNTIME_ARTIFACT_DIR}/yona_runtime_link.driver.args")
+set(YONA_RUNTIME_LLD_LINK_MANIFEST
+	"${YONA_RUNTIME_ARTIFACT_DIR}/yona_runtime_link.lld.args")
+file(GENERATE OUTPUT "${YONA_RUNTIME_DRIVER_LINK_MANIFEST}"
+	CONTENT "${_yona_runtime_driver_link_contents}\n")
+file(GENERATE OUTPUT "${YONA_RUNTIME_LLD_LINK_MANIFEST}"
+	CONTENT "${_yona_runtime_lld_link_contents}\n")
+install(FILES "${YONA_RUNTIME_DRIVER_LINK_MANIFEST}"
+	"${YONA_RUNTIME_LLD_LINK_MANIFEST}"
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/yona/runtime")
 
 # REPL executable (invoked by the Yona-written `yona` runner)
 add_executable(yona-repl "${PROJECT_SOURCE_DIR}/repl/Main.cpp")
@@ -626,6 +694,7 @@ if(YONA_PCRE2_INCLUDE_DIRS)
 endif()
 set(YONA_TEST_PCRE2_ARCHIVE "${YONA_PCRE2_RUNTIME_ARCHIVE}")
 set(YONA_TEST_PCRE2_CFLAGS "${YONA_PCRE2_CFLAGS}")
+set(YONA_TEST_RUNTIME_LINK_MANIFEST "${YONA_RUNTIME_DRIVER_LINK_MANIFEST}")
 add_custom_command(
 	OUTPUT "${YONA_BUILD_PRELUDE_OBJECT}"
 	BYPRODUCTS "${YONA_BUILD_PRELUDE_INTERFACE}"

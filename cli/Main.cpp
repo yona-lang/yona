@@ -172,34 +172,29 @@ static string yona_windows_vulkan_import_lib_path() {
 }
 #endif
 
-/** A pinned PCRE2 fallback is copied next to the packaged runtime archive.
- * Keep this lookup relative to the selected sysroot so installed Windows
- * compilers never depend on a package manager or a build-tree path. */
-static string
-find_packaged_pcre2_archive(const vector<filesystem::path> &sysroots) {
-#ifdef _WIN32
-  constexpr const char *ArchiveName = "yona_pcre2.lib";
-#else
-  constexpr const char *ArchiveName = "yona_pcre2.a";
-#endif
-  for (const auto &root : sysroots) {
-    for (const auto &base :
-         {root / "runtime", root / "lib" / "yona" / "runtime"}) {
-      const auto candidate = base / ArchiveName;
-      std::error_code error;
-      if (filesystem::exists(candidate, error) && !error)
-        return filesystem::weakly_canonical(candidate, error).string();
-    }
-  }
-  return {};
-}
-
 static filesystem::path canonical_if_exists(const filesystem::path &p) {
   std::error_code ec;
   if (!filesystem::exists(p, ec))
     return {};
   auto c = filesystem::weakly_canonical(p, ec);
   return ec ? p : c;
+}
+
+static bool append_runtime_link_manifest(vector<string> &arguments,
+                                         const filesystem::path &runtime,
+                                         bool for_lld) {
+  ifstream manifest(runtime.parent_path() /
+                    (for_lld ? "yona_runtime_link.lld.args"
+                             : "yona_runtime_link.driver.args"));
+  if (!manifest)
+    return false;
+  for (string argument; getline(manifest, argument);)
+    if (!argument.empty()) {
+      if (argument.front() != '-' && filesystem::path(argument).is_relative())
+        argument = (runtime.parent_path() / argument).string();
+      arguments.push_back(std::move(argument));
+    }
+  return true;
 }
 
 // CMake builds the Prelude object beside the active runtime archive. Prefer
@@ -1131,22 +1126,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-#ifdef YONAC_EXE_LINK_PCRE2
-  const string packaged_pcre2 = find_packaged_pcre2_archive(sysroots);
-  const string pcre2_lld_arg =
-      packaged_pcre2.empty() ? "-lpcre2-8" : packaged_pcre2;
-#ifdef _WIN32
-  if (packaged_pcre2.empty()) {
-    diag.error(SourceRange::unknown(), compiler::ErrorCode::E0401,
-               "packaged PCRE2 archive is missing from the runtime sysroot; "
-               "rebuild with the pinned Std\\Regex dependency");
-    return 1;
-  }
-#endif
-  const string pcre2_link_arg =
-      packaged_pcre2.empty() ? "-lpcre2-8" : packaged_pcre2;
-#endif
-
   // An active build artifact belongs to the selected runtime and must win over
   // incidental Prelude objects in the module search path. Packaged and custom
   // sysroots keep their existing module-path lookup as the fallback.
@@ -1207,9 +1186,11 @@ int main(int argc, char *argv[]) {
     for (const auto &a : yona::toolchain::inProcessLldAfterInputArgs())
       lld_args.push_back(a);
 #endif
-#ifdef YONAC_EXE_LINK_PCRE2
-    lld_args.push_back(pcre2_lld_arg);
-#endif
+    if (!append_runtime_link_manifest(lld_args, rt_obj, true)) {
+      diag.error(SourceRange::unknown(), compiler::ErrorCode::E0401,
+                 "runtime linker manifest is missing beside yona_runtime");
+      return 1;
+    }
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {
       string vk_dir = yona_posix_vulkan_lib_dir();
@@ -1260,9 +1241,11 @@ int main(int argc, char *argv[]) {
     link_args.push_back(output_file);
     link_args.push_back("-lws2_32");
     link_args.push_back("-ldbghelp");
-#ifdef YONAC_EXE_LINK_PCRE2
-    link_args.push_back(pcre2_link_arg);
-#endif
+    if (!append_runtime_link_manifest(link_args, rt_obj, false)) {
+      diag.error(SourceRange::unknown(), compiler::ErrorCode::E0401,
+                 "runtime linker manifest is missing beside yona_runtime");
+      return 1;
+    }
     {
       string vk_lib = yona_windows_vulkan_import_lib_path();
       if (!vk_lib.empty())
@@ -1277,9 +1260,11 @@ int main(int argc, char *argv[]) {
     link_args.push_back("-lpthread");
     link_args.push_back("-rdynamic");
 #endif
-#ifdef YONAC_EXE_LINK_PCRE2
-    link_args.push_back(pcre2_link_arg);
-#endif
+    if (!append_runtime_link_manifest(link_args, rt_obj, false)) {
+      diag.error(SourceRange::unknown(), compiler::ErrorCode::E0401,
+                 "runtime linker manifest is missing beside yona_runtime");
+      return 1;
+    }
 #ifdef YONAC_EXE_LINK_POSIX_VULKAN
     {
       string vk_dir = yona_posix_vulkan_lib_dir();
