@@ -3,7 +3,7 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 engine=${YONA_CONTAINER_ENGINE:-podman}
-image=${YONA_ARM64_QEMU_IMAGE:-localhost/yona-arm64-qemu:fedora-42}
+image=${YONA_ARM64_QEMU_IMAGE:-localhost/yona-arm64-qemu:fedora-44}
 containerfile="$root_dir/containers/arm64/Containerfile"
 
 command -v "$engine" >/dev/null || {

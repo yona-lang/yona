@@ -17,7 +17,7 @@ sudo systemctl restart systemd-binfmt
 Verify emulation before building Yona:
 
 ```bash
-podman run --rm --arch arm64 registry.fedoraproject.org/fedora:42 uname -m
+podman run --rm --arch arm64 registry.fedoraproject.org/fedora:44 uname -m
 ```
 
 The command must print `aarch64`. The container installs its own LLVM, CMake,
