@@ -1,0 +1,20 @@
+FROM registry.fedoraproject.org/fedora:42
+
+RUN dnf --assumeyes install \
+    clang \
+    cli11-devel \
+    cmake \
+    doctest-devel \
+    git \
+    libxml2-devel \
+    lld \
+    llvm \
+    llvm-devel \
+    llvm-libs \
+    ninja-build \
+    pcre2-devel \
+    pkgconf-pkg-config \
+    python3 && \
+    dnf clean all
+
+WORKDIR /workspace

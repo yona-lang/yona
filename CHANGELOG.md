@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Added a pinned Fedora ARM64 QEMU container and focused-test script so ARM
+  regressions can be reproduced locally without relying on hosted CI.
+
 - Generated-program links now read a runtime-side manifest produced by CMake,
   so `yonac` and in-tree fixtures use the resolved PCRE2 and sanitizer link
   arguments after `yona_runtime` on Linux, macOS, and Windows. Instrumented
