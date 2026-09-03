@@ -85,10 +85,10 @@ Program of record:
   `Int`, String, or aggregate as a collection-comprehension condition;
   inference records its type without unifying it with Bool.
 
-- [ ] **The Linux release Prelude artifact build aborts in `yonac`.** Repro:
-  `cmake --preset x64-release-linux && cmake --build --preset build-release-linux -j2`
-  aborts while building `artifacts/Prelude.o` with `double free or corruption
-  (!prev)` followed by `pure virtual method called`.
+- [ ] **The Linux Prelude artifact build aborts in `yonac`.** Repro:
+  `cmake --preset x64-debug-linux && cmake --build --preset build-debug-linux -j2`
+  (also x64 Release) aborts while building `artifacts/Prelude.o` with `double
+  free or corruption (!prev)` followed by `pure virtual method called`.
 
 - [ ] **Windows `Std\Convert` rejects the Bool case expected by its conformance
   suite.** `foundation_Convert_test` reports one failure for “Parse Bool is

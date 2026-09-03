@@ -22,6 +22,8 @@ def main() -> int:
     release = (ROOT / ".github/workflows/release.yml").read_text()
     msi = (ROOT / "packaging/windows/build-msi.ps1").read_text()
     async_win32 = (ROOT / "src/Runtime/Concurrency/AsyncWin32.c").read_text()
+    sjlj = (ROOT / "include/yona/Runtime/Platform/SjLj.h").read_text()
+    codegen_expr = (ROOT / "src/Codegen/CodegenExpr.cpp").read_text()
     failures: list[str] = []
 
     require(
@@ -106,6 +108,19 @@ def main() -> int:
         failures.append(
             "Windows async workers must not call the x64-only __builtin_setjmp directly."
         )
+    require(
+        sjlj,
+        r"stp x19, x20.*?stp x27, x28.*?str d8.*?str d15.*?"
+        r"ldr d8.*?ldr d15.*?ldp x19, x20.*?ldp x27, x28",
+        "AArch64 runtime SJLJ must preserve all ABI-callee-saved registers.",
+        failures,
+    )
+    require(
+        codegen_expr,
+        r"stp x19, x20.*?stp x27, x28.*?str d8.*?str d15",
+        "AArch64 generated try blocks must save all ABI-callee-saved registers.",
+        failures,
+    )
     require(
         msi,
         r"\$architectureOutDir = Join-Path \$absOutDir \$Architecture.*?"

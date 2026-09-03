@@ -16,7 +16,9 @@
 - `src/Runtime/Platform/IoUringLinux.c` — the single ring and `io_ctx` table (must not be header-static; file/net/os are separate TUs).
 - `include/yona/Runtime/Platform/Kqueue.h` — macOS kqueue API + the same `YonaIoContext` layout.
 - `src/Runtime/Platform/KqueueMacOs.c` — the single kqueue, worker pool, and `io_ctx` table.
-- `include/yona/Runtime/Platform/SjLj.h` — `YONA_SJLJ_SETJMP` / `yonaSjLjLongJump` (AArch64 inline asm; `__builtin_*` elsewhere).
+- `include/yona/Runtime/Platform/SjLj.h` — `YONA_SJLJ_SETJMP` /
+  `yonaSjLjLongJump` (AArch64 inline asm saves FP/SP/PC plus the complete
+  AAPCS64 callee-saved GPR/SIMD context; `__builtin_*` elsewhere).
 
 ## Platform boundary
 

@@ -2241,12 +2241,30 @@ TypedValue Codegen::codegen_try_catch(TryCatchExpr *node) {
                                       "str x2, [$1, #8]\n\t"
                                       "mov x2, sp\n\t"
                                       "str x2, [$1, #16]\n\t"
+                                      "stp x19, x20, [$1, #24]\n\t"
+                                      "stp x21, x22, [$1, #40]\n\t"
+                                      "stp x23, x24, [$1, #56]\n\t"
+                                      "stp x25, x26, [$1, #72]\n\t"
+                                      "stp x27, x28, [$1, #88]\n\t"
+                                      "str d8, [$1, #104]\n\t"
+                                      "str d9, [$1, #112]\n\t"
+                                      "str d10, [$1, #120]\n\t"
+                                      "str d11, [$1, #128]\n\t"
+                                      "str d12, [$1, #136]\n\t"
+                                      "str d13, [$1, #144]\n\t"
+                                      "str d14, [$1, #152]\n\t"
+                                      "str d15, [$1, #160]\n\t"
                                       "mov ${0:w}, wzr\n\t"
                                       "b 2f\n\t"
                                       "1:\n\t"
                                       "mov ${0:w}, #1\n\t"
                                       "2:",
-                                      "=&r,r,~{x2},~{memory}", true);
+                                      "=&r,r,~{x2},~{x19},~{x20},~{x21},"
+                                      "~{x22},~{x23},~{x24},~{x25},~{x26},"
+                                      "~{x27},~{x28},~{v8},~{v9},~{v10},"
+                                      "~{v11},~{v12},~{v13},~{v14},~{v15},"
+                                      "~{memory}",
+                                      true);
   auto *try_result = builder_->CreateCall(sj_asm, {jmp_buf_ptr}, "try.setjmp");
   llvm::cast<llvm::CallInst>(try_result)->setCanReturnTwice();
 #else

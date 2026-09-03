@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- AArch64 `try`/`catch` and async worker exceptions now preserve the complete
+  AAPCS64 callee-saved register context across the runtime SJLJ trampoline.
+  Heap values live at a `try` boundary therefore retain their valid ownership
+  after a native call raises.
+
 - Added a pinned Fedora ARM64 QEMU container and focused-test script so ARM
   regressions can be reproduced locally without relying on hosted CI.
 

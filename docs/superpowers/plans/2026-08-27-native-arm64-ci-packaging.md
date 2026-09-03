@@ -139,6 +139,11 @@ release archives.
   bug: a long left-associated `++` chain recursively traversed its left spine
   in both type inference and lowering. Both passes now process that spine
   iteratively; the native ARM64 focused fixture passes.
+- A Fedora 44 ARM64 QEMU run reproduced an ownership leak after a native
+  `raise` crossed `try`/`catch`. The target-specific SJLJ context now saves and
+  restores AAPCS64's callee-saved GPR and SIMD registers in both generated
+  code and runtime async workers; the focused endpoint-ownership regression is
+  green under emulation.
 - Generated Windows fixture executables now carry an embedded `asInvoker`
   manifest, avoiding installer-heuristic elevation failures. The Windows line
   iterator state also reserves its native finalizer field, matching the shared

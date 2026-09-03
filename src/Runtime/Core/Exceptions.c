@@ -60,20 +60,12 @@ typedef struct YonaFrame {
 
 _Thread_local YonaFrame *YonaCurrentFrame = NULL;
 
-/* SJLJ jmp_buf: 5 pointers per LLVM's llvm.eh.sjlj.setjmp / __builtin_setjmp
- * contract (frame, pc, sp, plus 2 target-reserved slots). Both worker threads
- * and codegen-emitted try/catch save into the same slots, so the runtime
- * longjmp (yonaSjLjLongJump) is layout-compatible with both. We do NOT use the
- * C runtime's setjmp/longjmp here: on Windows MSVC, setjmp uses SEH-based
- * unwinding that walks the SEH chain on longjmp and crashes when we longjmp
- * from a worker frame back into codegen-emitted main (which has no SEH
- * metadata). yona_sjlj_* save only FP/SP/IP, never touch the SEH chain, and
- * match llvm.eh.sjlj.setjmp on every target (AArch64 uses inline asm because
- * Clang rejects __builtin_setjmp there). */
-typedef void *YonaSjljBufT[5];
+/* The shared target-aware SJLJ context. Non-AArch64 targets use LLVM/GCC's
+ * five-word buffer; AArch64 additionally preserves the ABI-callee-saved
+ * registers that a long jump bypasses restoring through normal epilogues. */
 
 typedef struct {
-  YonaSjljBufT Buf[YONA_MAX_TRY_DEPTH];
+  YonaSjLjBufT Buf[YONA_MAX_TRY_DEPTH];
   int Depth;
   YonaException Current;
   YonaFrame *SavedFrame[YONA_MAX_TRY_DEPTH];
@@ -185,7 +177,7 @@ void *YonaRuntimeTryBegin(void) {
   }
   YonaExc.SavedFrame[YonaExc.Depth] = YonaCurrentFrame;
   YonaTryDepth = YonaExc.Depth + 1;
-  return YonaExc.Buf[YonaExc.Depth++];
+  return &YonaExc.Buf[YonaExc.Depth++];
 }
 
 void YonaRuntimeTryEnd(void) {
@@ -236,7 +228,7 @@ static void raiseCurrent(void) {
   /* Task-group bump arenas: free wholesale for scopes being torn past. */
   unwindTaskGroupArenasTo(YonaExc.Depth);
 #if defined(__clang__) || defined(__GNUC__)
-  yonaSjLjLongJump(YonaExc.Buf[YonaExc.Depth]);
+  yonaSjLjLongJump(&YonaExc.Buf[YonaExc.Depth]);
 #else
   /* MSVC build of yona_lib.dll is loaded only by yonac.exe (compiler driver),
    * which never executes user IR — try/catch unwinding is dead code there.
