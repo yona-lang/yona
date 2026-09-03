@@ -265,6 +265,7 @@ and `832718332da4210473fb31e017505c9937079122ec40970252c7863395b7a0c1`;
 - Create: `include/yona/Semantics/StructuralTypeProjection.h`
 - Create: `src/Semantics/StructuralTypeProjection.cpp`
 - Create: `test/Model/StructuralTypeTest.cpp`
+- Create: `test/Support/StructuralTypeTestAccess.h`
 - Modify: `include/yona/Model/EffectSolver.h`
 - Modify: `include/yona/Model/InferType.h`
 - Modify: `include/yona/Model/TypeArena.h`
@@ -295,6 +296,26 @@ and `832718332da4210473fb31e017505c9937079122ec40970252c7863395b7a0c1`;
   `sharedTypeArena()`, `sources()`, and `bindingFor(const ast::AstNode *)`,
   plus the canonical inferred effect operation table, without retaining
   `TypeChecker` storage.
+
+Implement Task 2 as four test-driven, independently reviewed sub-milestones,
+while retaining the aggregate Task 2 acceptance gate below:
+
+1. **2A — structural table and declarations:** strong domains, append
+   transactions, `StructuralDeclarationCatalog`, graph/catalog validation,
+   remapping, and test-only failure/collision injection.
+2. **2B — canonical encoding:** alpha-normalized rooted and module encoders,
+   exact two-section framing, decoding, fingerprints, and corruption tests.
+3. **2C — solved effects and inference sums:** domain-bound effect atoms,
+   coordinated catalog/solver transactions, complete scheme instantiation,
+   and explicit normalized inference sums.
+4. **2D — semantic projection:** checker-owned projection input, atomic
+   structural projection, declaration/node facts, and durable
+   `SemanticModel` integration.
+
+Each sub-milestone must demonstrate RED before implementation, pass its
+focused tests, receive task-scoped review with no open Critical or Important
+finding, and land as its own commit. The final Task 2 review covers the
+aggregate range and the complete focused command.
 
 - [ ] **Step 1: Write structural interning and lifetime tests**
 
@@ -526,6 +547,25 @@ struct ResourceDeclaration {
   ResourceShareability Shareability;
   std::optional<std::string> TryRetainNativeSymbol;
   std::string ReleaseNativeSymbol;
+};
+struct NominalDeclarationArity {
+  NominalTypeKey Key;
+  std::uint32_t TypeParameterCount;
+};
+class TypeTable;
+class StructuralDeclarationCatalog final {
+public:
+  [[nodiscard]] std::expected<void, std::string>
+  addNominal(NominalDeclarationArity Declaration);
+  [[nodiscard]] std::expected<void, std::string>
+  addResource(ResourceDeclaration Declaration);
+  [[nodiscard]] std::optional<std::uint32_t>
+  nominalArity(const NominalTypeKey &Key) const noexcept;
+  [[nodiscard]] const ResourceDeclaration *
+  resource(const NominalTypeKey &Key) const noexcept;
+  [[nodiscard]] std::expected<void, std::string>
+  validate(const TypeTable &Types,
+           std::span<const TypeId> RuntimeRoots = {}) const;
 };
 enum class AbiOpaqueKind : std::uint8_t {
   ExceptionValue = 0, EffectRequest = 1, ControlOutcome = 2,
@@ -820,6 +860,25 @@ destroy the transaction and compare all four arena sizes, canonical bytes,
 domains, generations, and existing-record addresses byte-for-byte with the
 pre-transaction snapshot.
 
+`TypeTable::intern` and `TypeTable::validate()` deliberately validate only
+structural shape, domain-qualified references, normalization, and acyclicity;
+they do not own or consult declarations. A nominal/resource application may
+therefore be staged before its declaration is available. The separate
+model-level `StructuralDeclarationCatalog` is assembled from the complete
+local/imported declaration view before semantic projection or interface
+publication. Its closure validation rejects unknown declarations, wrong
+nominal/resource arity, conflicting resource policy, and a runtime-reachable
+resource without policy. Tests that exercise wrong arity call this boundary,
+not raw table interning.
+
+Allocation/reserve failure and hash-collision tests use only
+`test/Support/StructuralTypeTestAccess.h`. The RAII access object installs a
+thread-local deterministic allocation/reserve failure countdown and optional
+constant bucket/fingerprint overrides, and always restores defaults. It is a
+friend/internal seam enabled only for the test target; it is not an installed
+header or production API. Full structural equality/canonical bytes, never the
+forced hash, remain the final identity check.
+
 `remapInto` is declaration seeded rather than occurrence discovered. The
 caller pairs each source binder owner with the already-created destination
 owner; the remapper validates equal owner kind, declaration arity, and effect
@@ -1019,6 +1078,18 @@ std::expected<DecodedInterfaceTables, CanonicalEncodingError>
 decodeInterfaceTables(std::span<const std::byte> TypeSectionPayload,
                       std::span<const std::byte> EffectSectionPayload);
 ```
+
+The two module payloads have one exact envelope. `TypeSectionPayload` is
+`encoding_version:u32le`, `binder_count:u32le`, the canonical binder records,
+`type_count:u32le`, then canonical type records. `EffectSectionPayload` is
+`encoding_version:u32le`, `effect_count:u32le`, then canonical effect records.
+Both versions equal `CanonicalStructuralEncodingVersion`. Effect records use
+the binder and type indices established by the type section; there is no
+second binder table and no implicit binder discovery. The decoder reads the
+binder table solely from the type payload, validates both versions before
+allocating records, rejects noncanonical order/reference/trailing bytes, and
+then reconstructs effects in the same fresh `TypeTable` domain. Re-encoding a
+successful decode must reproduce both payloads byte-for-byte.
 
 V2 readers decode the module-wide form and reconstruct binder-aware isolated
 operation graphs with `encodeOperationDeclarationGraph`; runtime descriptor
@@ -1282,6 +1353,8 @@ The solver deliberately remains ignorant of semantic types:
 
 ```cpp
 using EffectAtomId = std::uint32_t;
+using EffectAtomCatalogDomain = std::uint64_t;
+inline constexpr EffectAtomCatalogDomain InvalidEffectAtomCatalogDomain = 0;
 struct EffectProjection {
   EffectVarId Variable;
   std::vector<EffectAtomId> ExcludedAtoms;
@@ -1297,6 +1370,7 @@ EffectConstraintResult EffectSolver::addAtom(EffectRef, EffectAtomId);
 EffectConstraintResult EffectSolver::equateAtoms(EffectAtomId,
                                                  EffectAtomId);
 EffectAtomId EffectSolver::canonicalAtom(EffectAtomId) const;
+EffectAtomCatalogDomain EffectSolver::atomDomain() const noexcept;
 ```
 
 `join`, `include`, `equate`, graph freeze/instantiate, and masks preserve those
@@ -1331,15 +1405,35 @@ public:
   class AppendTransaction {
   public:
     EffectAtomId intern(SolvedEffectAtom Atom);
-    void commit();
+    [[nodiscard]] std::expected<void, std::string> prepareCommit();
+    void commitPrepared() noexcept;
     ~AppendTransaction(); // rolls back unless committed
   };
+  EffectAtomCatalog();
+  [[nodiscard]] EffectAtomCatalogDomain domain() const noexcept;
   [[nodiscard]] AppendTransaction beginAppend();
   [[nodiscard]] bool valid(EffectAtomId Atom) const noexcept;
   [[nodiscard]] const SolvedEffectAtom &at(EffectAtomId Atom) const;
   [[nodiscard]] std::string format(EffectAtomId Atom) const;
 };
 ```
+
+Each catalog receives one nonzero, process-unique, nonserialized domain and
+the matching `EffectSolver` is constructed/bound with that domain. Atom IDs
+remain dense ordinals, but are valid only in the catalog named by the solver's
+domain; projection checks `Effects.atomDomain() == EffectAtoms.domain()` before
+walking a graph. A foreign solver/catalog pair is therefore rejected before
+an ordinal can index the wrong catalog.
+
+Solver graph instantiation and catalog append are explicit two-phase
+transactions. The instantiator callback stages catalog atoms while the solver
+stages graph nodes. Both sides then run `prepareCommit`, validate every
+callback mapping, atom ordinal, representative and domain, and reserve all
+storage. Only after both prepare barriers succeed may both
+`commitPrepared() noexcept`; any earlier failure destroys both transactions
+and leaves their generations, graph storage, catalog storage and published
+IDs unchanged. No callback-returned raw atom becomes observable before this
+coordinated commit.
 
 An operation atom resolves to one qualified key plus ordered, fully solved
 monotype and effect-root arguments. `MayRaise` and `MayCancel` are explicit
@@ -1626,6 +1720,11 @@ struct SemanticProjectionBatch {
   std::span<const TraitInstanceProjection> Instances;
   std::span<const DeriveRequestProjection> Derivations;
 };
+
+// The returned spans borrow checker-owned projection vectors and remain valid
+// only until the next non-const TypeChecker operation or checker destruction.
+const SemanticProjectionBatch &
+TypeChecker::structuralProjectionInput() const noexcept;
 struct ProjectedSchemeInstantiation {
   SchemeIdentity Scheme;
   std::vector<model::TypeId> TypeArguments;
@@ -1803,6 +1902,19 @@ private:
 };
 ```
 
+`TypeChecker` owns the vectors referenced by `SemanticProjectionBatch` and
+populates them while checking, rather than reconstructing them from solved
+types afterward. Every site that establishes a callable also records exactly
+one `CallableTypeContract`, including explicit ownership and convention; no
+later phase derives either from Arrow shape. Before
+`structuralProjectionInput()` becomes observable, the checker completes and
+canonicalizes its operation-atom catalog. The batch is a borrow-only view
+valid until the next non-const checker operation or checker destruction, and
+the semantic-model construction path immediately passes it to
+`freezeSemanticBatch` while the checker is alive. `SemanticModel` retains no
+span, `MonoTypePtr`, `EffectRef`, catalog reference, or other checker-owned
+storage.
+
 `freezeSemanticBatch` first validates unique raw declaration-scope IDs, owner
 kinds, a finite acyclic declaration forest, unique AST-node ownership,
 operation keys, and derive-request targets. The forest spans Nominal,
@@ -1876,8 +1988,18 @@ struct StructuralTypeProjection::ProjectionScope {
 };
 ```
 
-The batch is staged against a cloned append transaction and publishes no type,
-effect, declaration, operation, or node fact on error. No binder map or context-sensitive
+The batch is staged by one private `StructuralProjectionTransaction`. It owns
+one `TypeTableAppendTransaction`, the complete unpublished
+`ProjectedSemanticBatch`, declaration-catalog rows, node-fact vectors, and all
+scope maps/memos. Projection first writes only provisional IDs into these
+private buffers. Its prepare barrier calls the table transaction's
+`prepareCommit`, rewrites every private ID through `resolved`, validates the
+complete declaration catalog and all node/binder facts, and pre-reserves or
+prebuilds every publication destination. Only then does it call the table's
+nonthrowing `commitPrepared` and move the already-allocated buffers into the
+semantic model through a nonthrowing publish step. There is no table clone or
+copy, and an error destroys the transaction without publishing any type,
+effect, declaration, operation, or node fact. No binder map or context-sensitive
 memo survives the batch or a failed projection. `ClosedTypeMemo_` is used only
 by the empty-scope closed-value API. `NonArrowMemo` is never consulted for
 Arrow nodes. Function types are
@@ -2100,26 +2222,39 @@ git diff --check
 Expected: all focused cases pass; `yona_interface` still links only
 `yona_model` and does not acquire a Typed IR dependency.
 
-- [ ] **Step 6: Commit the structural boundary**
+- [ ] **Step 6: Commit and review each structural sub-milestone**
 
 ```bash
 git add include/yona/Model/StructuralType.h src/Model/StructuralType.cpp \
-  include/yona/Model/CanonicalEncoding.h src/Model/CanonicalEncoding.cpp \
-  include/yona/Model/EffectSolver.h src/Model/EffectSolver.cpp \
+  test/Model/StructuralTypeTest.cpp test/Support/StructuralTypeTestAccess.h \
+  include/yona/Model/ModuleIdentity.h src/Model/ModuleIdentity.cpp \
+  cmake/YonaComponents.cmake CMakeLists.txt
+git commit -m "feat: add transactional structural type table"
+
+git add include/yona/Model/CanonicalEncoding.h \
+  src/Model/CanonicalEncoding.cpp test/Model/StructuralTypeTest.cpp
+git commit -m "feat: add canonical structural encoding"
+
+git add include/yona/Model/EffectSolver.h src/Model/EffectSolver.cpp \
   include/yona/Model/InferType.h include/yona/Model/TypeArena.h \
   src/Model/TypeArena.cpp include/yona/Semantics/Unification.h \
-  src/Semantics/Unification.cpp \
-  include/yona/Model/ModuleIdentity.h src/Model/ModuleIdentity.cpp \
-  include/yona/Semantics/StructuralTypeProjection.h \
+  src/Semantics/Unification.cpp test/Model/EffectSolverTest.cpp \
+  test/Semantics/TypeCheckerTest.cpp
+git commit -m "feat: preserve typed effect identities"
+
+git add include/yona/Semantics/StructuralTypeProjection.h \
   src/Semantics/StructuralTypeProjection.cpp \
   include/yona/Semantics/TypeChecker.h src/Semantics/TypeChecker.cpp \
   include/yona/Semantics/SemanticModel.h src/Semantics/SemanticModel.cpp \
-  test/Model/StructuralTypeTest.cpp test/Model/EffectSolverTest.cpp \
   test/Semantics/TypeCheckerTest.cpp test/Semantics/SemanticModelTest.cpp \
-  cmake/YonaComponents.cmake CMakeLists.txt
-git add docs/superpowers/plans/2026-09-01-typed-ir-codegen-rewrite.md
-git commit -m "feat: add canonical structural types"
+  cmake/YonaComponents.cmake CMakeLists.txt \
+  docs/superpowers/plans/2026-09-01-typed-ir-codegen-rewrite.md
+git commit -m "feat: project structural semantic model"
 ```
+
+After each commit, run the relevant focused tests and an independent review
+against the preceding commit. After the fourth commit, run Step 5 verbatim and
+review the aggregate Task 2 range before checking off the task.
 
 ### Task 3: Replace the bootstrap container with canonical SSA Typed IR
 

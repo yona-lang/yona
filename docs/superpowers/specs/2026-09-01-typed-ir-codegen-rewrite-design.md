@@ -191,6 +191,47 @@ coordinated module arena is also prepared, may publish in a nonthrowing step.
 No provisional ID is externally observable, and abandoning any stage restores
 the table and all coordinated arenas byte-for-byte.
 
+Declaration policy is deliberately separate from structural interning. A
+model-level `StructuralDeclarationCatalog` owns nominal arities and complete
+resource policies for local and imported declarations. `TypeTable` validates
+only structural graph integrity and domain-qualified references; projection,
+interface decoding, and executable-root closure validation consult the
+catalog to reject unknown or wrong-arity nominal/resource applications. This
+keeps the table interface-independent and avoids making nominal declaration
+order part of structural identity.
+
+Semantic projection is one private publication transaction, not a cloned
+`TypeTable`. It owns a `TypeTableAppendTransaction` plus unpublished
+declaration, operation, and node-fact buffers. Preparation resolves every
+provisional ID in those buffers, validates the declaration catalog and all
+semantic facts, and reserves every destination. Only then may the table and
+already-prepared buffers publish through nonthrowing commits. Failure destroys
+the private state and leaves both the table and `SemanticModel` unchanged.
+
+The `TypeChecker` is the sole producer of a borrow-only
+`SemanticProjectionBatch`, valid until its next mutation or destruction. It
+records every callable's ownership and calling convention at the semantic
+site that establishes them and completes the effect-operation catalog before
+exposing the batch. Projection consumes the batch immediately and never
+guesses a callable contract from a `MonoType` shape; the resulting
+`SemanticModel` owns only projected IDs and durable model data.
+
+Effect atom IDs belong to one explicit nonzero catalog domain. The effect
+solver is bound to that domain, and projection rejects a solver/catalog domain
+mismatch before reading an atom. Catalog append and solver instantiation use
+coordinated prepare/commit transactions: callbacks may stage atoms and graph
+nodes, but both sides validate and reserve first and then publish
+nonthrowingly, or both roll back without exposing a stale raw atom.
+
+Canonical module framing stores the shared binder table at the start of the
+type-section payload: version, binder count and records, then type count and
+records. The effect-section payload stores its own matching version followed
+by effect count and records, whose binder/type references use the canonical
+indices established by the type section. Decoding reads binders only from the
+type section, validates both versions, ordering, references, and trailing
+bytes, then reconstructs effects. Deterministic allocation/hash-failure and
+collision seams exist only in the test build and are not installed APIs.
+
 An unboxed Sum value is one `YonaAbiValue` carrying the immutable descriptor of
 its actual alternative, never the Sum descriptor or a synthetic numeric tag.
 `InjectSumInst` is the only construction operation. It copies a Trivial
