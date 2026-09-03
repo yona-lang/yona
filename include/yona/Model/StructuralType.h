@@ -469,6 +469,8 @@ public:
   [[nodiscard]] const EffectRow &effect(EffectRowId Id) const;
   [[nodiscard]] bool valid(TypeId Id) const noexcept;
   [[nodiscard]] bool valid(EffectRowId Id) const noexcept;
+  [[nodiscard]] bool valid(TypeParameterId Id) const noexcept;
+  [[nodiscard]] bool valid(EffectVariableId Id) const noexcept;
   [[nodiscard]] std::size_t typeCount() const noexcept;
   [[nodiscard]] std::size_t effectCount() const noexcept;
   [[nodiscard]] std::expected<TypeRemap, std::string>
@@ -494,8 +496,6 @@ private:
     std::optional<std::uint64_t> ConstantFingerprint;
   };
 
-  [[nodiscard]] bool valid(TypeParameterId Id) const noexcept;
-  [[nodiscard]] bool valid(EffectVariableId Id) const noexcept;
   [[nodiscard]] static bool faultPoint() noexcept;
   [[nodiscard]] static std::size_t hashKey(const std::string &Key) noexcept;
 

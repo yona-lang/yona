@@ -28,6 +28,7 @@ target_link_libraries(yona_support PRIVATE ${llvm_libs})
 # semantic analysis.  The effect solver is included here because TypeArena
 # owns its solver-local EffectRef values.
 add_library(yona_model OBJECT
+  "${PROJECT_SOURCE_DIR}/src/Model/CanonicalEncoding.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/EffectSolver.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/ModuleIdentity.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/StructuralType.cpp"

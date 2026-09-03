@@ -2,7 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- Added version 2 canonical structural graph and module-table encoding with
+  alpha-normalized binders, strict fresh-domain decoding, deterministic
+  remaps, and complete-byte fingerprints.
+
 ### Fixed
+
+- Canonical structural encoding now validates alpha-normalized binders,
+  including phantom parameters, against the allocating type-table domain and
+  rejects forged same-domain IDs.
 
 - AArch64 `try`/`catch` and async worker exceptions now preserve the complete
   AAPCS64 callee-saved register context across the runtime SJLJ trampoline.
