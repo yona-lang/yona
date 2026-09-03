@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -114,6 +115,17 @@ std::string ModuleIdentity::mangle(std::string_view Symbol) const {
   for (const std::string &Segment : Segments)
     Result += Segment;
   Result += exportWords(Symbol);
+  return Result;
+}
+
+std::size_t ModuleIdentityHasher::operator()(
+    const ModuleIdentity &Identity) const noexcept {
+  std::size_t Result = 0;
+  for (const auto &Segment : Identity.segments()) {
+    Result ^= std::hash<std::string>{}(Segment) +
+              static_cast<std::size_t>(0x9e3779b9u) + (Result << 6u) +
+              (Result >> 2u);
+  }
   return Result;
 }
 

@@ -830,6 +830,7 @@ add_executable(tests
 	"${PROJECT_SOURCE_DIR}/test/Lsp/LspTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Lsp/ProtocolTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Model/ModuleIdentityTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Model/StructuralTypeTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Runtime/NetRuntimeTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Interface/InterfaceFileTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Interface/PreludeInterfaceTest.cpp"

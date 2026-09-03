@@ -1,6 +1,8 @@
 #ifndef YONA_MODEL_MODULEIDENTITY_H
 #define YONA_MODEL_MODULEIDENTITY_H
 
+#include <compare>
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -36,8 +38,18 @@ public:
   /// shared mutable state and is thread-safe.
   [[nodiscard]] std::string mangle(std::string_view Symbol) const;
 
+  friend bool operator==(const ModuleIdentity &,
+                         const ModuleIdentity &) noexcept = default;
+  friend auto operator<=>(const ModuleIdentity &,
+                          const ModuleIdentity &) noexcept = default;
+
 private:
   std::vector<std::string> Segments;
+};
+
+struct ModuleIdentityHasher final {
+  [[nodiscard]] std::size_t
+  operator()(const ModuleIdentity &Identity) const noexcept;
 };
 
 /// Parse ModuleName and produce its canonical public C export spelling.

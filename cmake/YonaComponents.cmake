@@ -30,6 +30,7 @@ target_link_libraries(yona_support PRIVATE ${llvm_libs})
 add_library(yona_model OBJECT
   "${PROJECT_SOURCE_DIR}/src/Model/EffectSolver.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/ModuleIdentity.cpp"
+  "${PROJECT_SOURCE_DIR}/src/Model/StructuralType.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/TypeArena.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/TypeEnv.cpp"
 )
