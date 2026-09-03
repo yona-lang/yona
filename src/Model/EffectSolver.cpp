@@ -15,7 +15,7 @@ namespace {
 
 enum class EffectNodeKind : std::uint8_t {
   Empty,
-  Labels,
+  Atoms,
   FlexibleMeta,
   DerivedLeast,
   RigidOpaque,
@@ -25,35 +25,35 @@ enum class EffectNodeKind : std::uint8_t {
 
 std::atomic<std::uint64_t> next_effect_solver_owner{1};
 
-void normalize_labels(std::vector<std::string> &labels) {
-  std::sort(labels.begin(), labels.end());
-  labels.erase(std::unique(labels.begin(), labels.end()), labels.end());
+void normalize_atoms(std::vector<EffectAtomId> &Atoms) {
+  std::sort(Atoms.begin(), Atoms.end());
+  Atoms.erase(std::unique(Atoms.begin(), Atoms.end()), Atoms.end());
 }
 
-void merge_labels(std::vector<std::string> &target,
-                  const std::vector<std::string> &source) {
-  target.insert(target.end(), source.begin(), source.end());
-  normalize_labels(target);
+void merge_atoms(std::vector<EffectAtomId> &Target,
+                 const std::vector<EffectAtomId> &Source) {
+  Target.insert(Target.end(), Source.begin(), Source.end());
+  normalize_atoms(Target);
 }
 
 void normalize_summary(EffectNormalForm &summary) {
-  normalize_labels(summary.known_labels);
+  normalize_atoms(summary.known_atoms);
   for (auto &tail : summary.tails)
-    normalize_labels(tail.excluded_labels);
-  std::sort(
-      summary.tails.begin(), summary.tails.end(),
-      [](const EffectProjection &left, const EffectProjection &right) {
-        return std::tie(left.variable, left.opaque, left.excluded_labels) <
-               std::tie(right.variable, right.opaque, right.excluded_labels);
-      });
+    normalize_atoms(tail.excluded_atoms);
+  std::sort(summary.tails.begin(), summary.tails.end(),
+            [](const EffectProjection &left, const EffectProjection &right) {
+              return std::tie(left.variable, left.opaque, left.excluded_atoms) <
+                     std::tie(right.variable, right.opaque,
+                              right.excluded_atoms);
+            });
   summary.tails.erase(std::unique(summary.tails.begin(), summary.tails.end()),
                       summary.tails.end());
 }
 
 void merge_summary(EffectNormalForm &target, const EffectNormalForm &source) {
-  target.known_labels.insert(target.known_labels.end(),
-                             source.known_labels.begin(),
-                             source.known_labels.end());
+  target.known_atoms.insert(target.known_atoms.end(),
+                            source.known_atoms.begin(),
+                            source.known_atoms.end());
   target.tails.insert(target.tails.end(), source.tails.begin(),
                       source.tails.end());
   normalize_summary(target);
@@ -64,13 +64,16 @@ void merge_summary(EffectNormalForm &target, const EffectNormalForm &source) {
 struct EffectGraphTemplate::Data {
   struct Node {
     EffectNodeKind kind = EffectNodeKind::Empty;
+    std::uint32_t original_index = 0;
     EffectVarId original_variable = 0;
-    std::vector<std::string> labels;
+    std::vector<EffectAtomId> atoms;
     std::vector<std::uint32_t> inputs;
     std::optional<std::uint32_t> binding;
-    std::vector<std::string> excluded_labels;
+    std::vector<EffectAtomId> excluded_atoms;
   };
 
+  EffectAtomCatalogDomain atom_domain = InvalidEffectAtomCatalogDomain;
+  std::uint64_t source_owner = 0;
   std::vector<Node> nodes;
   std::vector<std::uint32_t> roots;
   std::vector<std::pair<std::uint32_t, std::uint32_t>> equalities;
@@ -80,25 +83,53 @@ struct EffectSolver::Impl {
   struct Node {
     EffectNodeKind kind = EffectNodeKind::Empty;
     EffectVarId variable = 0;
-    std::vector<std::string> labels;
+    std::vector<EffectAtomId> atoms;
     std::vector<EffectRef> inputs;
     std::optional<EffectRef> binding;
-    std::vector<std::string> excluded_labels;
+    std::vector<EffectAtomId> excluded_atoms;
   };
 
   std::uint64_t owner =
       next_effect_solver_owner.fetch_add(1, std::memory_order_relaxed);
   std::vector<Node> nodes{{}};
+  EffectAtomCatalogDomain atom_domain = InvalidEffectAtomCatalogDomain;
+  EffectAtomMaskValidator mask_validator;
   EffectVarId next_variable = 0;
-  std::map<std::vector<std::string>, EffectRef> label_cache;
+  std::map<std::vector<EffectAtomId>, EffectRef> atom_cache;
   std::map<std::vector<std::uint32_t>, EffectRef> join_cache;
-  std::map<std::pair<std::uint32_t, std::vector<std::string>>, EffectRef>
+  std::map<std::pair<std::uint32_t, std::vector<EffectAtomId>>, EffectRef>
       mask_cache;
   std::vector<std::pair<EffectRef, EffectRef>> equality_constraints;
+  std::vector<EffectAtomId> atom_parents;
+  std::uint64_t generation = 0;
 
-  Impl() {
+  explicit Impl(EffectAtomCatalogDomain AtomDomain,
+                EffectAtomMaskValidator MaskValidator)
+      : atom_domain(AtomDomain), mask_validator(std::move(MaskValidator)) {
     if (owner == 0)
       throw std::overflow_error("effect solver owner id space exhausted");
+    if (atom_domain == InvalidEffectAtomCatalogDomain)
+      throw std::invalid_argument(
+          "effect solver requires a nonzero atom domain");
+  }
+
+  void ensure_atom(EffectAtomId Atom) {
+    while (atom_parents.size() <= Atom)
+      atom_parents.push_back(static_cast<EffectAtomId>(atom_parents.size()));
+  }
+
+  [[nodiscard]] EffectAtomId canonical_atom(EffectAtomId Atom) const {
+    if (Atom >= atom_parents.size())
+      return Atom;
+    while (atom_parents[Atom] != Atom)
+      Atom = atom_parents[Atom];
+    return Atom;
+  }
+
+  void canonicalize_atoms(std::vector<EffectAtomId> &Atoms) const {
+    for (auto &Atom : Atoms)
+      Atom = canonical_atom(Atom);
+    normalize_atoms(Atoms);
   }
 
   [[nodiscard]] EffectRef empty_ref() const noexcept {
@@ -115,6 +146,7 @@ struct EffectSolver::Impl {
   EffectRef append(Node node) {
     const auto index = static_cast<std::uint32_t>(nodes.size());
     nodes.push_back(std::move(node));
+    ++generation;
     return EffectRef{owner, index};
   }
 
@@ -152,8 +184,11 @@ struct EffectSolver::Impl {
     require(effect);
     const auto &node = nodes[effect.index];
     switch (node.kind) {
-    case EffectNodeKind::Labels:
-      return EffectNormalForm{node.labels, {}};
+    case EffectNodeKind::Atoms: {
+      auto Atoms = node.atoms;
+      canonicalize_atoms(Atoms);
+      return EffectNormalForm{std::move(Atoms), {}};
+    }
     case EffectNodeKind::FlexibleMeta:
       return EffectNormalForm{{}, {{node.variable, {}, false}}};
     case EffectNodeKind::RigidOpaque:
@@ -180,7 +215,7 @@ struct EffectSolver::Impl {
           node.inputs.begin(), node.inputs.end(),
           [&](EffectRef input) { return is_symbolic(input, seen); });
     case EffectNodeKind::Empty:
-    case EffectNodeKind::Labels:
+    case EffectNodeKind::Atoms:
       return false;
     }
     return false;
@@ -203,8 +238,8 @@ struct EffectSolver::Impl {
     switch (node.kind) {
     case EffectNodeKind::Empty:
       break;
-    case EffectNodeKind::Labels:
-      result.known_labels = node.labels;
+    case EffectNodeKind::Atoms:
+      result.known_atoms = node.atoms;
       break;
     case EffectNodeKind::FlexibleMeta:
       result.tails.push_back(EffectProjection{node.variable, {}, false});
@@ -214,7 +249,7 @@ struct EffectSolver::Impl {
       break;
     case EffectNodeKind::DerivedLeast:
     case EffectNodeKind::Join: {
-      result.known_labels = node.labels;
+      result.known_atoms = node.atoms;
       for (const auto input : node.inputs)
         merge_summary(result, summarize_impl(input, active, follow_equalities));
       break;
@@ -223,12 +258,14 @@ struct EffectSolver::Impl {
       result = node.inputs.empty() ? EffectNormalForm{}
                                    : summarize_impl(node.inputs.front(), active,
                                                     follow_equalities);
-      std::erase_if(result.known_labels, [&](const std::string &label) {
-        return std::binary_search(node.excluded_labels.begin(),
-                                  node.excluded_labels.end(), label);
+      canonicalize_atoms(result.known_atoms);
+      auto Excluded = node.excluded_atoms;
+      canonicalize_atoms(Excluded);
+      std::erase_if(result.known_atoms, [&](EffectAtomId Atom) {
+        return std::binary_search(Excluded.begin(), Excluded.end(), Atom);
       });
       for (auto &tail : result.tails)
-        merge_labels(tail.excluded_labels, node.excluded_labels);
+        merge_atoms(tail.excluded_atoms, Excluded);
       break;
     }
     }
@@ -303,17 +340,20 @@ struct EffectSolver::Impl {
   }
 
   BooleanExpression boolean_expression(EffectRef effect,
-                                       const std::string &label) const {
+                                       EffectAtomId Atom) const {
+    Atom = canonical_atom(Atom);
     effect = resolve_binding(effect);
     const auto &node = nodes[effect.index];
     BooleanExpression result;
     switch (node.kind) {
     case EffectNodeKind::Empty:
       break;
-    case EffectNodeKind::Labels:
-      result.constant =
-          std::binary_search(node.labels.begin(), node.labels.end(), label);
+    case EffectNodeKind::Atoms: {
+      auto Atoms = node.atoms;
+      canonicalize_atoms(Atoms);
+      result.constant = std::binary_search(Atoms.begin(), Atoms.end(), Atom);
       break;
+    }
     case EffectNodeKind::FlexibleMeta:
     case EffectNodeKind::RigidOpaque:
       result.atoms.push_back(effect_variable_atom(node.variable));
@@ -323,39 +363,41 @@ struct EffectSolver::Impl {
       break;
     case EffectNodeKind::Join:
       for (const auto input : node.inputs)
-        merge_boolean_expression(result, boolean_expression(input, label));
+        merge_boolean_expression(result, boolean_expression(input, Atom));
       break;
     case EffectNodeKind::Mask:
-      if (!std::binary_search(node.excluded_labels.begin(),
-                              node.excluded_labels.end(), label) &&
-          !node.inputs.empty())
-        result = boolean_expression(node.inputs.front(), label);
+      if (!node.inputs.empty()) {
+        auto Excluded = node.excluded_atoms;
+        canonicalize_atoms(Excluded);
+        if (!std::binary_search(Excluded.begin(), Excluded.end(), Atom))
+          result = boolean_expression(node.inputs.front(), Atom);
+      }
       break;
     }
     return result;
   }
 
-  using DerivedFact = std::pair<std::uint32_t, std::string>;
+  using DerivedFact = std::pair<std::uint32_t, EffectAtomId>;
 
   bool equality_constraints_satisfiable(
       std::vector<DerivedFact> *forced_facts = nullptr) const {
     if (equality_constraints.empty())
       return true;
 
-    std::vector<std::string> labels;
+    std::vector<EffectAtomId> Atoms;
     for (const auto &node : nodes) {
-      labels.insert(labels.end(), node.labels.begin(), node.labels.end());
-      labels.insert(labels.end(), node.excluded_labels.begin(),
-                    node.excluded_labels.end());
+      Atoms.insert(Atoms.end(), node.atoms.begin(), node.atoms.end());
+      Atoms.insert(Atoms.end(), node.excluded_atoms.begin(),
+                   node.excluded_atoms.end());
     }
-    normalize_labels(labels);
+    canonicalize_atoms(Atoms);
 
     struct HornRule {
       std::vector<BooleanAtom> body;
       std::optional<BooleanAtom> head;
     };
 
-    for (const auto &label : labels) {
+    for (const auto Atom : Atoms) {
       std::vector<HornRule> rules;
       auto add_rule = [&](std::vector<BooleanAtom> body,
                           std::optional<BooleanAtom> head) {
@@ -382,18 +424,20 @@ struct EffectSolver::Impl {
         if (node.kind != EffectNodeKind::DerivedLeast)
           continue;
         BooleanExpression definition;
-        definition.constant =
-            std::binary_search(node.labels.begin(), node.labels.end(), label);
+        definition.constant = [&] {
+          auto NodeAtoms = node.atoms;
+          canonicalize_atoms(NodeAtoms);
+          return std::binary_search(NodeAtoms.begin(), NodeAtoms.end(), Atom);
+        }();
         for (const auto input : node.inputs)
-          merge_boolean_expression(definition,
-                                   boolean_expression(input, label));
+          merge_boolean_expression(definition, boolean_expression(input, Atom));
         add_implication(definition,
                         BooleanExpression{false, {derived_atom(index)}});
       }
 
       for (const auto &[left, right] : equality_constraints) {
-        const auto left_expression = boolean_expression(left, label);
-        const auto right_expression = boolean_expression(right, label);
+        const auto left_expression = boolean_expression(left, Atom);
+        const auto right_expression = boolean_expression(right, Atom);
         add_implication(left_expression, right_expression);
         add_implication(right_expression, left_expression);
       }
@@ -430,7 +474,7 @@ struct EffectSolver::Impl {
         const auto atom = derived_atom(index);
         if (!horn_satisfiable({atom})) {
           if (forced_facts)
-            forced_facts->emplace_back(index, label);
+            forced_facts->emplace_back(index, Atom);
         } else {
           non_forced_derived_atoms.push_back(atom);
         }
@@ -462,10 +506,10 @@ struct EffectSolver::Impl {
     std::vector<DerivedFact> forced_facts;
     if (!equality_constraints_satisfiable(&forced_facts))
       return EffectConstraintResult::Conflict;
-    for (const auto &[index, label] : forced_facts) {
-      auto &labels = nodes[index].labels;
-      labels.push_back(label);
-      normalize_labels(labels);
+    for (const auto &[index, Atom] : forced_facts) {
+      auto &Atoms = nodes[index].atoms;
+      Atoms.push_back(canonical_atom(Atom));
+      canonicalize_atoms(Atoms);
     }
     for (const auto &constraint : equality_constraints)
       if (local_constraint_status(constraint) ==
@@ -518,6 +562,7 @@ struct EffectSolver::Impl {
       }
       return EffectConstraintResult::Conflict;
     }
+    ++generation;
     return local_constraint_status(constraint);
   }
 
@@ -544,6 +589,7 @@ struct EffectSolver::Impl {
       node.binding.reset();
       return BindResult::Conflict;
     }
+    ++generation;
     return status == EffectConstraintResult::Deferred
                ? BindResult::BoundDeferred
                : BindResult::Bound;
@@ -562,30 +608,38 @@ EffectGraphTemplate &
 EffectGraphTemplate::operator=(EffectGraphTemplate &&) noexcept = default;
 EffectGraphTemplate::~EffectGraphTemplate() = default;
 
-EffectSolver::EffectSolver() : impl_(std::make_unique<Impl>()) {}
+EffectSolver::EffectSolver(EffectAtomCatalogDomain AtomDomain,
+                           EffectAtomMaskValidator MaskValidator)
+    : impl_(std::make_unique<Impl>(AtomDomain, std::move(MaskValidator))) {}
 EffectSolver::EffectSolver(EffectSolver &&) noexcept = default;
 EffectSolver &EffectSolver::operator=(EffectSolver &&) noexcept = default;
 EffectSolver::~EffectSolver() = default;
 
 EffectRef EffectSolver::empty() const noexcept { return impl_->empty_ref(); }
 
-EffectRef EffectSolver::labels(std::vector<std::string> labels) {
-  normalize_labels(labels);
-  if (labels.empty())
+EffectAtomCatalogDomain EffectSolver::atomDomain() const noexcept {
+  return impl_->atom_domain;
+}
+
+EffectRef EffectSolver::atoms(std::vector<EffectAtomId> Atoms) {
+  for (const auto Atom : Atoms)
+    impl_->ensure_atom(Atom);
+  impl_->canonicalize_atoms(Atoms);
+  if (Atoms.empty())
     return empty();
-  if (const auto found = impl_->label_cache.find(labels);
-      found != impl_->label_cache.end())
+  if (const auto found = impl_->atom_cache.find(Atoms);
+      found != impl_->atom_cache.end())
     return found->second;
   Impl::Node node;
-  node.kind = EffectNodeKind::Labels;
-  node.labels = labels;
+  node.kind = EffectNodeKind::Atoms;
+  node.atoms = Atoms;
   const auto result = impl_->append(std::move(node));
-  impl_->label_cache.emplace(std::move(labels), result);
+  impl_->atom_cache.emplace(std::move(Atoms), result);
   return result;
 }
 
-EffectRef EffectSolver::labels(std::initializer_list<std::string> labels) {
-  return this->labels(std::vector<std::string>(labels));
+EffectRef EffectSolver::atoms(std::initializer_list<EffectAtomId> Atoms) {
+  return this->atoms(std::vector<EffectAtomId>(Atoms));
 }
 
 EffectRef EffectSolver::flexible() {
@@ -655,19 +709,26 @@ EffectRef EffectSolver::join(std::initializer_list<EffectRef> effects) {
 }
 
 EffectRef EffectSolver::mask(EffectRef source,
-                             std::vector<std::string> excluded_labels) {
+                             std::vector<EffectAtomId> ExcludedAtoms) {
   source = impl_->resolve_binding(source);
-  normalize_labels(excluded_labels);
-  if (source == empty() || excluded_labels.empty())
+  for (const auto Atom : ExcludedAtoms) {
+    if (impl_->mask_validator && !impl_->mask_validator(Atom))
+      throw std::invalid_argument(
+          "effect masks require published operation atoms");
+    impl_->ensure_atom(Atom);
+  }
+  impl_->canonicalize_atoms(ExcludedAtoms);
+  if (source == empty() || ExcludedAtoms.empty())
     return source;
 
   const auto &source_node = impl_->nodes[source.index];
   if (source_node.kind == EffectNodeKind::Mask && !source_node.inputs.empty()) {
-    merge_labels(excluded_labels, source_node.excluded_labels);
+    merge_atoms(ExcludedAtoms, source_node.excluded_atoms);
+    impl_->canonicalize_atoms(ExcludedAtoms);
     source = source_node.inputs.front();
   }
 
-  const auto key = std::make_pair(source.index, excluded_labels);
+  const auto key = std::make_pair(source.index, ExcludedAtoms);
   if (const auto found = impl_->mask_cache.find(key);
       found != impl_->mask_cache.end())
     return found->second;
@@ -675,7 +736,7 @@ EffectRef EffectSolver::mask(EffectRef source,
   Impl::Node node;
   node.kind = EffectNodeKind::Mask;
   node.inputs.push_back(source);
-  node.excluded_labels = excluded_labels;
+  node.excluded_atoms = ExcludedAtoms;
   const auto result = impl_->append(std::move(node));
   impl_->mask_cache.emplace(key, result);
   return result;
@@ -683,24 +744,131 @@ EffectRef EffectSolver::mask(EffectRef source,
 
 EffectRef
 EffectSolver::mask(EffectRef source,
-                   std::initializer_list<std::string> excluded_labels) {
-  return mask(source, std::vector<std::string>(excluded_labels));
+                   std::initializer_list<EffectAtomId> ExcludedAtoms) {
+  return mask(source, std::vector<EffectAtomId>(ExcludedAtoms));
 }
 
-EffectConstraintResult EffectSolver::add_label(EffectRef derived,
-                                               std::string label) {
-  derived = impl_->resolve_binding(derived);
-  if (impl_->nodes[derived.index].kind != EffectNodeKind::DerivedLeast)
+EffectConstraintResult EffectSolver::addAtom(EffectRef Derived,
+                                             EffectAtomId Atom) {
+  impl_->ensure_atom(Atom);
+  Atom = impl_->canonical_atom(Atom);
+  Derived = impl_->resolve_binding(Derived);
+  if (impl_->nodes[Derived.index].kind != EffectNodeKind::DerivedLeast)
     throw std::invalid_argument(
-        "effect labels can only be added to a derived cell");
-  auto &labels = impl_->nodes[derived.index].labels;
-  const auto previous = labels;
-  labels.push_back(std::move(label));
-  normalize_labels(labels);
+        "effect atoms can only be added to a derived cell");
+  auto &Atoms = impl_->nodes[Derived.index].atoms;
+  const auto Previous = Atoms;
+  Atoms.push_back(Atom);
+  impl_->canonicalize_atoms(Atoms);
   const auto status = impl_->settle_constraints();
   if (status == EffectConstraintResult::Conflict)
-    labels = previous;
+    Atoms = Previous;
+  else if (Atoms != Previous)
+    ++impl_->generation;
   return status;
+}
+
+EffectConstraintResult
+EffectSolver::materializeMaskMatches(EffectRef Root,
+                                     const EffectMaskMatcher &Match) {
+  impl_->require(Root);
+  if (!Match)
+    throw std::invalid_argument("effect mask matcher is empty");
+
+  std::unordered_set<std::uint32_t> Reachable;
+  const auto Visit = [&](const auto &Self, EffectRef Current) -> void {
+    impl_->require(Current);
+    if (!Reachable.insert(Current.index).second)
+      return;
+    const auto &Node = impl_->nodes[Current.index];
+    if (Node.binding)
+      Self(Self, *Node.binding);
+    for (const auto Input : Node.inputs)
+      Self(Self, Input);
+  };
+  Visit(Visit, Root);
+  bool Expanded = true;
+  while (Expanded) {
+    const auto Before = Reachable.size();
+    for (const auto &[Left, Right] : impl_->equality_constraints) {
+      if (Reachable.contains(Left.index) || Reachable.contains(Right.index)) {
+        Visit(Visit, Left);
+        Visit(Visit, Right);
+      }
+    }
+    Expanded = Reachable.size() != Before;
+  }
+
+  struct Change {
+    std::uint32_t Index;
+    std::vector<EffectAtomId> Before;
+    std::vector<EffectAtomId> After;
+  };
+  std::vector<Change> Changes;
+  for (const auto Index : Reachable) {
+    const auto &Node = impl_->nodes[Index];
+    if (Node.kind != EffectNodeKind::Mask || Node.inputs.empty() ||
+        Node.excluded_atoms.empty())
+      continue;
+    auto Exclusions = Node.excluded_atoms;
+    const auto Source = summarize(Node.inputs.front());
+    for (const auto Pattern : Node.excluded_atoms)
+      for (const auto Candidate : Source.known_atoms)
+        if (Match(impl_->canonical_atom(Pattern),
+                  impl_->canonical_atom(Candidate))) {
+          if (impl_->mask_validator &&
+              !impl_->mask_validator(impl_->canonical_atom(Candidate)))
+            throw std::invalid_argument(
+                "effect mask matcher selected a non-operation atom");
+          Exclusions.push_back(Candidate);
+        }
+    impl_->canonicalize_atoms(Exclusions);
+    if (Exclusions != Node.excluded_atoms)
+      Changes.push_back({Index, Node.excluded_atoms, std::move(Exclusions)});
+  }
+  if (Changes.empty())
+    return EffectConstraintResult::Solved;
+
+  for (const auto &Change : Changes)
+    impl_->nodes[Change.Index].excluded_atoms = Change.After;
+  impl_->mask_cache.clear();
+  const auto Result = impl_->settle_constraints();
+  if (Result == EffectConstraintResult::Conflict) {
+    for (const auto &Change : Changes)
+      impl_->nodes[Change.Index].excluded_atoms = Change.Before;
+    impl_->mask_cache.clear();
+    return Result;
+  }
+  ++impl_->generation;
+  return Result;
+}
+
+EffectConstraintResult EffectSolver::equateAtoms(EffectAtomId Left,
+                                                 EffectAtomId Right) {
+  impl_->ensure_atom(Left);
+  impl_->ensure_atom(Right);
+  Left = impl_->canonical_atom(Left);
+  Right = impl_->canonical_atom(Right);
+  if (Left == Right)
+    return EffectConstraintResult::Solved;
+  if (Right < Left)
+    std::swap(Left, Right);
+
+  const auto PreviousParents = impl_->atom_parents;
+  impl_->atom_parents[Right] = Left;
+  const auto Status = impl_->settle_constraints();
+  if (Status == EffectConstraintResult::Conflict) {
+    impl_->atom_parents = PreviousParents;
+    return Status;
+  }
+  impl_->atom_cache.clear();
+  impl_->mask_cache.clear();
+  ++impl_->generation;
+  return Status;
+}
+
+EffectAtomId EffectSolver::canonicalAtom(EffectAtomId Atom) const {
+  return impl_->canonical_atom(Atom);
 }
 
 EffectConstraintResult EffectSolver::include(EffectRef source,
@@ -721,6 +889,8 @@ EffectConstraintResult EffectSolver::include(EffectRef source,
     if (status == EffectConstraintResult::Conflict)
       inputs.erase(std::remove(inputs.begin(), inputs.end(), source),
                    inputs.end());
+    else
+      ++impl_->generation;
     return status;
   }
   return impl_->settle_constraints();
@@ -755,6 +925,9 @@ EffectConstraintResult EffectSolver::equate(EffectRef left, EffectRef right) {
 EffectNormalForm EffectSolver::summarize(EffectRef effect) const {
   std::unordered_set<std::uint32_t> active;
   auto result = impl_->summarize_impl(effect, active, true);
+  impl_->canonicalize_atoms(result.known_atoms);
+  for (auto &Tail : result.tails)
+    impl_->canonicalize_atoms(Tail.excluded_atoms);
   normalize_summary(result);
   return result;
 }
@@ -819,6 +992,8 @@ EffectGraphTemplate EffectSolver::freeze(std::vector<EffectRef> roots) const {
   }
 
   auto data = std::make_shared<EffectGraphTemplate::Data>();
+  data->atom_domain = impl_->atom_domain;
+  data->source_owner = impl_->owner;
   std::unordered_map<std::uint32_t, std::uint32_t> local_index;
   for (const auto index : reachable) {
     local_index[index] = static_cast<std::uint32_t>(data->nodes.size());
@@ -828,9 +1003,12 @@ EffectGraphTemplate EffectSolver::freeze(std::vector<EffectRef> roots) const {
     const auto &source = impl_->nodes[index];
     auto &target = data->nodes[local_index.at(index)];
     target.kind = source.kind;
+    target.original_index = index;
     target.original_variable = source.variable;
-    target.labels = source.labels;
-    target.excluded_labels = source.excluded_labels;
+    target.atoms = source.atoms;
+    target.excluded_atoms = source.excluded_atoms;
+    impl_->canonicalize_atoms(target.atoms);
+    impl_->canonicalize_atoms(target.excluded_atoms);
     for (const auto input : source.inputs)
       target.inputs.push_back(local_index.at(input.index));
     if (source.binding)
@@ -846,59 +1024,196 @@ EffectGraphTemplate EffectSolver::freeze(std::vector<EffectRef> roots) const {
   return EffectGraphTemplate(std::move(data));
 }
 
-EffectInstantiation
-EffectSolver::instantiate(const EffectGraphTemplate &graph) {
-  if (!graph.data_)
-    throw std::invalid_argument("cannot instantiate an empty effect template");
-  const auto &data = *graph.data_;
-  std::vector<EffectRef> mapping(data.nodes.size());
-  EffectInstantiation result;
+struct EffectSolver::InstantiationTransaction::State {
+  EffectSolver *Solver = nullptr;
+  std::uint64_t Generation = 0;
+  EffectVarId NextVariable = 0;
+  std::vector<EffectSolver::Impl::Node> Nodes;
+  std::vector<std::pair<EffectRef, EffectRef>> Equalities;
+  EffectInstantiation Result;
+  std::optional<EffectAtomId> MaxAtom;
+  bool Prepared = false;
+  bool Committed = false;
+};
 
-  for (std::size_t index = 0; index < data.nodes.size(); ++index) {
-    const auto &source = data.nodes[index];
-    switch (source.kind) {
-    case EffectNodeKind::Empty:
-      mapping[index] = empty();
-      break;
-    case EffectNodeKind::FlexibleMeta:
-      mapping[index] = flexible();
-      result.variables[source.original_variable] = mapping[index];
-      break;
-    case EffectNodeKind::RigidOpaque:
-      mapping[index] = opaque();
-      result.variables[source.original_variable] = mapping[index];
-      break;
-    default: {
-      Impl::Node node;
-      node.kind = source.kind;
-      node.labels = source.labels;
-      node.excluded_labels = source.excluded_labels;
-      mapping[index] = impl_->append(std::move(node));
-      break;
+EffectSolver::InstantiationTransaction::InstantiationTransaction(
+    std::unique_ptr<State> State)
+    : State_(std::move(State)) {}
+EffectSolver::InstantiationTransaction::InstantiationTransaction(
+    InstantiationTransaction &&) noexcept = default;
+EffectSolver::InstantiationTransaction &
+EffectSolver::InstantiationTransaction::operator=(
+    InstantiationTransaction &&) noexcept = default;
+EffectSolver::InstantiationTransaction::~InstantiationTransaction() = default;
+
+std::expected<void, std::string>
+EffectSolver::InstantiationTransaction::prepareCommit(
+    const std::function<bool(EffectAtomId)> &ValidAtom,
+    const std::function<bool(EffectAtomId)> &ValidMaskAtom) {
+  if (!State_ || !State_->Solver)
+    return std::unexpected("effect instantiation transaction is empty");
+  if (State_->Prepared || State_->Committed)
+    return std::unexpected("effect instantiation transaction already prepared");
+  auto &Impl = *State_->Solver->impl_;
+  if (Impl.generation != State_->Generation)
+    return std::unexpected("effect solver changed during instantiation");
+  for (const auto &Node : State_->Nodes) {
+    for (const auto Atom : Node.atoms) {
+      if (!ValidAtom(Atom))
+        return std::unexpected("instantiated effect atom is not staged");
+      State_->MaxAtom = std::max(State_->MaxAtom.value_or(Atom), Atom);
     }
+    for (const auto Atom : Node.excluded_atoms) {
+      if (!ValidAtom(Atom))
+        return std::unexpected("instantiated mask atom is not staged");
+      if (!ValidMaskAtom(Atom))
+        return std::unexpected(
+            "instantiated mask atom is not an operation atom");
+      State_->MaxAtom = std::max(State_->MaxAtom.value_or(Atom), Atom);
     }
   }
+  try {
+    Impl.nodes.reserve(Impl.nodes.size() + State_->Nodes.size());
+    Impl.equality_constraints.reserve(Impl.equality_constraints.size() +
+                                      State_->Equalities.size());
+    if (State_->MaxAtom)
+      Impl.atom_parents.reserve(static_cast<std::size_t>(*State_->MaxAtom) + 1);
+  } catch (const std::bad_alloc &) {
+    return std::unexpected("unable to reserve effect graph storage");
+  }
+  State_->Prepared = true;
+  return {};
+}
 
-  for (std::size_t index = 0; index < data.nodes.size(); ++index) {
-    if (data.nodes[index].kind == EffectNodeKind::Empty)
+void EffectSolver::InstantiationTransaction::commitPrepared() noexcept {
+  if (!State_ || !State_->Prepared || State_->Committed)
+    std::terminate();
+  auto &Impl = *State_->Solver->impl_;
+  if (State_->MaxAtom)
+    while (Impl.atom_parents.size() <= *State_->MaxAtom)
+      Impl.atom_parents.push_back(
+          static_cast<EffectAtomId>(Impl.atom_parents.size()));
+  for (auto &Node : State_->Nodes)
+    Impl.nodes.push_back(std::move(Node));
+  for (const auto Equality : State_->Equalities)
+    Impl.equality_constraints.push_back(Equality);
+  Impl.next_variable = State_->NextVariable;
+  ++Impl.generation;
+  State_->Committed = true;
+}
+
+const EffectInstantiation &
+EffectSolver::InstantiationTransaction::result() const {
+  if (!State_ || !State_->Committed)
+    throw std::logic_error(
+        "effect instantiation result is unavailable before commit");
+  return State_->Result;
+}
+
+std::expected<EffectSolver::InstantiationTransaction, std::string>
+EffectSolver::beginInstantiation(const EffectGraphTemplate &Graph,
+                                 EffectAtomInstantiator InstantiateAtom) {
+  if (!Graph.data_)
+    return std::unexpected("cannot instantiate an empty effect template");
+  const auto &Data = *Graph.data_;
+  if (Data.atom_domain != impl_->atom_domain)
+    return std::unexpected("effect template belongs to another atom catalog");
+
+  auto State = std::make_unique<InstantiationTransaction::State>();
+  State->Solver = this;
+  State->Generation = impl_->generation;
+  State->NextVariable = impl_->next_variable;
+  std::vector<EffectRef> Mapping(Data.nodes.size());
+  State->Nodes.reserve(Data.nodes.size());
+
+  for (std::size_t Index = 0; Index < Data.nodes.size(); ++Index) {
+    const auto &Source = Data.nodes[Index];
+    if (Source.kind == EffectNodeKind::Empty) {
+      Mapping[Index] = empty();
+    } else {
+      const auto NewIndex =
+          static_cast<std::uint32_t>(impl_->nodes.size() + State->Nodes.size());
+      Mapping[Index] = EffectRef{impl_->owner, NewIndex};
+      Impl::Node Node;
+      Node.kind = Source.kind;
+      if (Source.kind == EffectNodeKind::FlexibleMeta ||
+          Source.kind == EffectNodeKind::RigidOpaque) {
+        Node.variable = State->NextVariable++;
+        State->Result.variables.emplace(Source.original_variable,
+                                        Mapping[Index]);
+      }
+      State->Nodes.push_back(std::move(Node));
+    }
+    State->Result.references.emplace(
+        EffectRef{Data.source_owner, Source.original_index}, Mapping[Index]);
+  }
+
+  std::unordered_map<EffectAtomId, EffectAtomId> AtomMapping;
+  const auto InstantiateAtoms = [&](const std::vector<EffectAtomId> &Source,
+                                    std::vector<EffectAtomId> &Destination)
+      -> std::expected<void, std::string> {
+    Destination.reserve(Source.size());
+    for (const auto Raw : Source) {
+      const auto Atom = canonicalAtom(Raw);
+      if (const auto Found = AtomMapping.find(Atom);
+          Found != AtomMapping.end()) {
+        Destination.push_back(Found->second);
+        continue;
+      }
+      auto Instantiated = InstantiateAtom(Atom, State->Result.references);
+      if (!Instantiated)
+        return std::unexpected(Instantiated.error());
+      const auto Canonical = canonicalAtom(*Instantiated);
+      AtomMapping.emplace(Atom, Canonical);
+      Destination.push_back(Canonical);
+    }
+    impl_->canonicalize_atoms(Destination);
+    return {};
+  };
+
+  for (std::size_t Index = 0; Index < Data.nodes.size(); ++Index) {
+    const auto &Source = Data.nodes[Index];
+    if (Source.kind == EffectNodeKind::Empty)
       continue;
-    auto &target = impl_->nodes[mapping[index].index];
-    target.inputs.clear();
-    for (const auto input : data.nodes[index].inputs)
-      target.inputs.push_back(mapping.at(input));
-    if (data.nodes[index].binding)
-      target.binding = mapping.at(*data.nodes[index].binding);
+    auto &Target = State->Nodes[Mapping[Index].index - impl_->nodes.size()];
+    if (auto Result = InstantiateAtoms(Source.atoms, Target.atoms); !Result)
+      return std::unexpected(Result.error());
+    if (auto Result =
+            InstantiateAtoms(Source.excluded_atoms, Target.excluded_atoms);
+        !Result)
+      return std::unexpected(Result.error());
+    for (const auto Input : Source.inputs)
+      Target.inputs.push_back(Mapping.at(Input));
+    if (Source.binding)
+      Target.binding = Mapping.at(*Source.binding);
   }
-  for (const auto &[left, right] : data.equalities)
-    impl_->equality_constraints.emplace_back(mapping.at(left),
-                                             mapping.at(right));
-  result.roots.reserve(data.roots.size());
-  for (const auto root : data.roots)
-    result.roots.push_back(mapping.at(root));
-  if (result.roots.empty())
-    throw std::logic_error("effect graph template has no roots");
-  result.root = result.roots.front();
-  return result;
+  for (const auto &[Left, Right] : Data.equalities)
+    State->Equalities.emplace_back(Mapping.at(Left), Mapping.at(Right));
+  for (const auto Root : Data.roots)
+    State->Result.roots.push_back(Mapping.at(Root));
+  if (State->Result.roots.empty())
+    return std::unexpected("effect graph template has no roots");
+  State->Result.root = State->Result.roots.front();
+  return InstantiationTransaction(std::move(State));
+}
+
+EffectInstantiation
+EffectSolver::instantiate(const EffectGraphTemplate &Graph) {
+  auto Transaction = beginInstantiation(
+      Graph,
+      [](EffectAtomId Atom, const EffectReferenceMap &)
+          -> std::expected<EffectAtomId, std::string> { return Atom; });
+  if (!Transaction)
+    throw std::invalid_argument(Transaction.error());
+  const auto AlwaysValid = [](EffectAtomId) { return true; };
+  const auto ValidMaskAtom = [&](EffectAtomId Atom) {
+    return !impl_->mask_validator || impl_->mask_validator(Atom);
+  };
+  if (auto Prepared = Transaction->prepareCommit(AlwaysValid, ValidMaskAtom);
+      !Prepared)
+    throw std::logic_error(Prepared.error());
+  Transaction->commitPrepared();
+  return Transaction->result();
 }
 
 } // namespace yona::compiler::typechecker

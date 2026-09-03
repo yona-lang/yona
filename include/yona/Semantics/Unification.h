@@ -10,6 +10,8 @@
 #include "yona/Semantics/UnionFind.h"
 #include "yona/Support/Diagnostic.h"
 
+#include <set>
+
 namespace yona::compiler::typechecker {
 
 /// Mutable unification facade borrowing one arena, union-find, and diagnostic
@@ -37,6 +39,10 @@ private:
                    const std::string &context);
   bool unify_effects(EffectRef left, EffectRef right, const SourceRange &loc,
                      const std::string &context);
+  bool reconcile_effect_atoms(const SourceRange &loc,
+                              const std::string &context);
+  bool solved_types_equal(MonoTypePtr left, MonoTypePtr right,
+                          std::set<std::pair<MonoTypePtr, MonoTypePtr>> &seen);
   bool occurs_in(TypeId var_id, MonoTypePtr type);
   void adjust_levels(MonoTypePtr type, int level);
 

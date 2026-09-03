@@ -236,6 +236,7 @@ public:
   bool has_unknown_effect_rows() const { return has_unknown_effect_rows_; }
 
 private:
+  friend struct TypeCheckerTestPeer;
   /// Main recursive inference. Returns inferred monotype.
   MonoTypePtr infer(ast::AstNode *node, std::shared_ptr<TypeEnv> env,
                     int level);
@@ -286,10 +287,14 @@ private:
 
   /// Generalize a type at the given level: free vars with level > given become
   /// quantified.
-  TypeScheme generalize(MonoTypePtr type, int level);
+  TypeScheme generalize(MonoTypePtr type, int level,
+                        std::vector<Constraint> Constraints = {});
 
   /// Instantiate a polymorphic scheme with fresh variables at the given level.
-  MonoTypePtr instantiate(const TypeScheme &scheme, int level);
+  MonoTypePtr instantiate(const TypeScheme &scheme, int level,
+                          std::vector<MonoTypePtr> *TypeArguments = nullptr,
+                          std::vector<EffectRef> *EffectArguments = nullptr);
+  MonoTypePtr instantiate_binding(const TypeScheme &scheme, int level);
 
   /// Collect free type variables with level > given level.
   void collect_free_vars(MonoTypePtr type, int level,
@@ -298,7 +303,8 @@ private:
   /// Substitute type variables according to a mapping.
   MonoTypePtr substitute(
       MonoTypePtr type, const std::unordered_map<TypeId, MonoTypePtr> &subst,
-      const std::vector<std::pair<EffectRef, EffectRef>> &effect_subst = {});
+      const std::vector<std::pair<EffectRef, EffectRef>> &effect_subst = {},
+      bool ValidateEffects = true);
 
   // --- Helpers ---
 
@@ -311,7 +317,20 @@ private:
 
   void include_ambient_effect(EffectRef effect, const SourceRange &loc,
                               const std::string &context);
-  void collect_effect_roots(MonoTypePtr type, std::vector<EffectRef> &roots);
+  bool materialize_effect_masks(EffectRef effect, const SourceRange &loc,
+                                const std::string &context);
+  void collect_effect_roots(MonoTypePtr type,
+                            std::vector<SchemeEffectRoot> &roots);
+  EffectAtomId
+  intern_operation_atom(const model::EffectOperationKey &Key,
+                        std::vector<MonoTypePtr> TypeArguments = {},
+                        std::vector<EffectRef> EffectArguments = {});
+  model::EffectOperationKey resolved_effect_key(std::string_view EffectName,
+                                                std::string_view OperationName);
+  [[nodiscard]] std::optional<model::NominalTypeKey>
+  resolved_nominal_key(std::string_view TypeName) const;
+  [[nodiscard]] model::NominalTypeKey
+  resolved_trait_key(std::string_view TraitName) const;
 
   /// Record the inferred type for an AST node.
   void record(ast::AstNode *node, MonoTypePtr type);
@@ -331,6 +350,7 @@ private:
   /// ADT constructor registry, including declared field shapes when known.
   struct ConstructorInfo {
     std::string adt_name;
+    model::NominalTypeKey adt_key;
     int arity;
     std::vector<std::string> type_params; ///< from the ADT definition
     std::vector<ast::FieldType> field_types;
@@ -352,10 +372,14 @@ private:
   std::unordered_map<std::string, std::vector<std::string>> trait_superclasses_;
   std::unordered_map<std::string, std::vector<std::string>> trait_type_params_;
   std::unordered_map<std::string, std::vector<std::string>> adt_type_params_;
+  model::ModuleIdentity current_module_{"Main"};
+  std::unordered_map<std::string, model::NominalTypeKey> nominal_keys_;
+  std::unordered_map<std::string, model::NominalTypeKey> trait_keys_;
 
   /// Deferred trait constraints gathered during inference.
   struct DeferredConstraint {
     std::string trait_name;
+    std::optional<model::NominalTypeKey> resolved_trait;
     std::vector<MonoTypePtr> types;
     SourceRange loc;
     std::string context;
@@ -369,6 +393,12 @@ private:
                        SourceRange source, std::string detail)
         : trait_name(std::move(name)), types(std::move(arguments)),
           loc(std::move(source)), context(std::move(detail)) {}
+    DeferredConstraint(model::NominalTypeKey Trait,
+                       std::vector<MonoTypePtr> Arguments, SourceRange Source,
+                       std::string Detail)
+        : trait_name(Trait.Name), resolved_trait(std::move(Trait)),
+          types(std::move(Arguments)), loc(std::move(Source)),
+          context(std::move(Detail)) {}
   };
   std::vector<DeferredConstraint> deferred_constraints_;
   std::unordered_map<const ast::ApplyExpr *, SelectedTraitInstance>
@@ -400,8 +430,10 @@ private:
   /// Effect operation registry: "Effect.op" → (param_types, return_type)
   struct EffectOpInfo {
     std::string effect_name;
-    std::vector<MonoTypePtr> param_types;
-    MonoTypePtr return_type;
+    model::EffectOperationKey key;
+    TypeScheme signature;
+    std::size_t type_argument_count = 0;
+    std::size_t parameter_count = 0;
   };
   std::unordered_map<std::string, EffectOpInfo> effect_ops_;
 
@@ -411,7 +443,7 @@ private:
     EffectRef effect;
   };
   std::vector<CollectedRow> latent_effect_stack_;
-  std::unordered_map<std::string, SourceRange> effect_origins_;
+  std::unordered_map<EffectAtomId, SourceRange> effect_origins_;
   std::vector<SourceRange> unhandled_effect_locations_;
   bool require_effect_free_ = false;
   bool has_unknown_effect_rows_ = false;
@@ -440,11 +472,16 @@ private:
                         const std::string &module_fqn,
                         const std::string &func_name,
                         const std::string &bind_name, int level);
-  MonoTypePtr mono_from_import_sig(const ImportedFnSig &sig, int level,
-                                   std::unordered_map<std::string, MonoTypePtr>
-                                       *descriptor_variables = nullptr);
-  MonoTypePtr mono_from_interface_function(const interface::Function &Function,
-                                           int Level);
+  MonoTypePtr mono_from_import_sig(
+      const ImportedFnSig &sig, int level,
+      std::unordered_map<std::string, MonoTypePtr> *descriptor_variables =
+          nullptr,
+      const model::ModuleIdentity *source_module = nullptr,
+      const std::unordered_set<std::string> *source_nominals = nullptr);
+  MonoTypePtr mono_from_interface_function(
+      const interface::Function &Function, int Level,
+      const model::ModuleIdentity *SourceModule = nullptr,
+      const std::unordered_set<std::string> *SourceNominals = nullptr);
   MonoTypePtr from_ast_type(const yona::compiler::types::Type &t, int level);
   MonoTypePtr
   from_ast_type_impl(const yona::compiler::types::Type &t, int level,

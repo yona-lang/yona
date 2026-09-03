@@ -18,7 +18,7 @@ namespace yona::compiler::typechecker {
 
 class TypeArena {
 public:
-  TypeArena() = default;
+  TypeArena();
   TypeArena(const TypeArena &) = delete;
   TypeArena &operator=(const TypeArena &) = delete;
   TypeArena(TypeArena &&) = delete;
@@ -40,9 +40,17 @@ public:
   /// Create a named type application (e.g., Option Int). Argument pointers are
   /// borrowed, while the vector and name are copied into the arena node.
   MonoTypePtr make_app(const std::string &name, std::vector<MonoTypePtr> args);
+  MonoTypePtr make_app(model::NominalTypeKey Key,
+                       std::vector<MonoTypePtr> Arguments,
+                       std::string DisplayName = {});
 
   /// Create a tuple type.
   MonoTypePtr make_tuple(std::vector<MonoTypePtr> elems);
+
+  /// Create a normalized anonymous sum. Nested sums are flattened,
+  /// alternatives are ordered structurally and duplicates are removed.
+  /// Empty sums are rejected and singleton sums collapse to their member.
+  MonoTypePtr make_sum(std::vector<MonoTypePtr> Alternatives);
 
   /// Create a record type (closed or open row).
   MonoTypePtr
@@ -59,8 +67,13 @@ public:
   /// destruction and mutable access shares the arena's synchronization rules.
   EffectSolver &effect_solver() noexcept { return effect_solver_; }
   const EffectSolver &effect_solver() const noexcept { return effect_solver_; }
+  EffectAtomCatalog &effect_atoms() noexcept { return effect_atoms_; }
+  const EffectAtomCatalog &effect_atoms() const noexcept {
+    return effect_atoms_;
+  }
 
 private:
+  EffectAtomCatalog effect_atoms_;
   EffectSolver effect_solver_;
   std::deque<MonoType> storage_;
   TypeId next_id_ = 0;

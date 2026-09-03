@@ -31,7 +31,144 @@ MonoTypePtr Unifier::resolve(MonoTypePtr type) {
 
 bool Unifier::unify(MonoTypePtr a, MonoTypePtr b, const SourceRange &loc,
                     const std::string &context) {
-  return unify_inner(resolve(a), resolve(b), loc, context);
+  if (!unify_inner(resolve(a), resolve(b), loc, context))
+    return false;
+  return reconcile_effect_atoms(loc, context);
+}
+
+bool Unifier::solved_types_equal(
+    MonoTypePtr Left, MonoTypePtr Right,
+    std::set<std::pair<MonoTypePtr, MonoTypePtr>> &Seen) {
+  Left = resolve(Left);
+  Right = resolve(Right);
+  if (Left == Right)
+    return true;
+  if (!Left || !Right || Left->tag != Right->tag)
+    return false;
+  if (!Seen.emplace(Left, Right).second)
+    return true;
+
+  switch (Left->tag) {
+  case MonoType::Var:
+    return Left->var_id == Right->var_id;
+  case MonoType::Con:
+    return Left->con == Right->con;
+  case MonoType::App: {
+    const bool SameIdentity =
+        (Left->resolved_key || Right->resolved_key)
+            ? Left->resolved_key && Right->resolved_key &&
+                  *Left->resolved_key == *Right->resolved_key
+            : Left->type_name == Right->type_name;
+    if (!SameIdentity || Left->args.size() != Right->args.size())
+      return false;
+    for (std::size_t Index = 0; Index < Left->args.size(); ++Index)
+      if (!solved_types_equal(Left->args[Index], Right->args[Index], Seen))
+        return false;
+    return true;
+  }
+  case MonoType::Arrow:
+    return solved_types_equal(Left->param_type, Right->param_type, Seen) &&
+           solved_types_equal(Left->return_type, Right->return_type, Seen) &&
+           arena_.effect_solver().summarize(Left->arrow_effect) ==
+               arena_.effect_solver().summarize(Right->arrow_effect);
+  case MonoType::MTuple:
+    if (Left->elements.size() != Right->elements.size())
+      return false;
+    for (std::size_t Index = 0; Index < Left->elements.size(); ++Index)
+      if (!solved_types_equal(Left->elements[Index], Right->elements[Index],
+                              Seen))
+        return false;
+    return true;
+  case MonoType::MRecord:
+    if (Left->record_fields.size() != Right->record_fields.size() ||
+        static_cast<bool>(Left->row_rest) != static_cast<bool>(Right->row_rest))
+      return false;
+    for (std::size_t Index = 0; Index < Left->record_fields.size(); ++Index) {
+      if (Left->record_fields[Index].first !=
+              Right->record_fields[Index].first ||
+          !solved_types_equal(Left->record_fields[Index].second,
+                              Right->record_fields[Index].second, Seen))
+        return false;
+    }
+    return !Left->row_rest ||
+           solved_types_equal(Left->row_rest, Right->row_rest, Seen);
+  case MonoType::Sum: {
+    if (Left->sum_alternatives.size() != Right->sum_alternatives.size())
+      return false;
+    std::vector<bool> Matched(Right->sum_alternatives.size());
+    for (const auto *LeftAlternative : Left->sum_alternatives) {
+      bool Found = false;
+      for (std::size_t Index = 0; Index < Right->sum_alternatives.size();
+           ++Index) {
+        if (Matched[Index])
+          continue;
+        auto CandidateSeen = Seen;
+        if (!solved_types_equal(LeftAlternative, Right->sum_alternatives[Index],
+                                CandidateSeen))
+          continue;
+        Seen = std::move(CandidateSeen);
+        Matched[Index] = true;
+        Found = true;
+        break;
+      }
+      if (!Found)
+        return false;
+    }
+    return true;
+  }
+  }
+  return false;
+}
+
+bool Unifier::reconcile_effect_atoms(const SourceRange &loc,
+                                     const std::string &context) {
+  auto &Effects = arena_.effect_solver();
+  const auto &Catalog = arena_.effect_atoms();
+  bool Changed = true;
+  while (Changed) {
+    Changed = false;
+    for (EffectAtomId Left = 0; Left < Catalog.size(); ++Left) {
+      const auto *LeftOperation =
+          std::get_if<OperationEffectAtom>(&Catalog.at(Left));
+      if (!LeftOperation)
+        continue;
+      for (EffectAtomId Right = Left + 1; Right < Catalog.size(); ++Right) {
+        if (Effects.canonicalAtom(Left) == Effects.canonicalAtom(Right))
+          continue;
+        const auto *RightOperation =
+            std::get_if<OperationEffectAtom>(&Catalog.at(Right));
+        if (!RightOperation || LeftOperation->Key != RightOperation->Key ||
+            LeftOperation->TypeArguments.size() !=
+                RightOperation->TypeArguments.size() ||
+            LeftOperation->EffectArguments.size() !=
+                RightOperation->EffectArguments.size())
+          continue;
+
+        std::set<std::pair<MonoTypePtr, MonoTypePtr>> Seen;
+        bool Same = true;
+        for (std::size_t Index = 0;
+             Same && Index < LeftOperation->TypeArguments.size(); ++Index)
+          Same = solved_types_equal(LeftOperation->TypeArguments[Index],
+                                    RightOperation->TypeArguments[Index], Seen);
+        for (std::size_t Index = 0;
+             Same && Index < LeftOperation->EffectArguments.size(); ++Index)
+          Same = Effects.summarize(LeftOperation->EffectArguments[Index]) ==
+                 Effects.summarize(RightOperation->EffectArguments[Index]);
+        if (!Same)
+          continue;
+        if (Effects.equateAtoms(Left, Right) ==
+            EffectConstraintResult::Conflict) {
+          diag_.error(loc, ErrorCode::E0100,
+                      "incompatible effect rows after solving operation "
+                      "arguments" +
+                          (context.empty() ? "" : " " + context));
+          return false;
+        }
+        Changed = true;
+      }
+    }
+  }
+  return true;
 }
 
 bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceRange &loc,
@@ -130,7 +267,11 @@ bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceRange &loc,
       }
       return true;
     }
-    if (a->type_name != b->type_name || a->args.size() != b->args.size()) {
+    const bool IdentityMismatch = (a->resolved_key || b->resolved_key)
+                                      ? (!a->resolved_key || !b->resolved_key ||
+                                         *a->resolved_key != *b->resolved_key)
+                                      : a->type_name != b->type_name;
+    if (IdentityMismatch || a->args.size() != b->args.size()) {
       diag_.error(loc, ErrorCode::E0100,
                   "type mismatch: " + pretty_print(a) + " vs " +
                       pretty_print(b) + (context.empty() ? "" : " " + context));
@@ -214,6 +355,75 @@ bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceRange &loc,
     return true;
   }
 
+  case MonoType::Sum: {
+    const auto normalize = [&](MonoTypePtr Sum) {
+      std::vector<MonoTypePtr> Alternatives;
+      const auto append = [&](const auto &Self,
+                              MonoTypePtr Alternative) -> void {
+        Alternative = resolve(Alternative);
+        if (Alternative && Alternative->tag == MonoType::Sum) {
+          for (const auto *Nested : Alternative->sum_alternatives)
+            Self(Self, Nested);
+        } else if (Alternative) {
+          Alternatives.push_back(Alternative);
+        }
+      };
+      for (const auto *Alternative : Sum->sum_alternatives)
+        append(append, Alternative);
+      std::ranges::sort(Alternatives, {}, [](MonoTypePtr Alternative) {
+        if (Alternative->tag == MonoType::Var)
+          return "~" + std::to_string(Alternative->var_id);
+        return pretty_print(Alternative);
+      });
+      std::vector<MonoTypePtr> Unique;
+      for (const auto *Alternative : Alternatives) {
+        const bool Duplicate =
+            std::ranges::any_of(Unique, [&](MonoTypePtr Existing) {
+              std::set<std::pair<MonoTypePtr, MonoTypePtr>> Seen;
+              return solved_types_equal(Existing, Alternative, Seen);
+            });
+        if (!Duplicate)
+          Unique.push_back(Alternative);
+      }
+      Alternatives = std::move(Unique);
+      return Alternatives;
+    };
+    auto Left = normalize(a);
+    auto Right = normalize(b);
+    if (Left.size() != Right.size()) {
+      diag_.error(loc, ErrorCode::E0100,
+                  "sum alternatives differ: " + pretty_print(a) + " vs " +
+                      pretty_print(b) + (context.empty() ? "" : " " + context));
+      return false;
+    }
+
+    // Consume already-equal alternatives before allowing type variables to
+    // bind. This preserves exact members such as `Int` in `a | Int` and
+    // avoids pairing `a` with `Int` merely because variable IDs sort first.
+    for (auto LeftIt = Left.begin(); LeftIt != Left.end();) {
+      const auto RightIt =
+          std::ranges::find_if(Right, [&](MonoTypePtr Candidate) {
+            std::set<std::pair<MonoTypePtr, MonoTypePtr>> Seen;
+            return solved_types_equal(*LeftIt, Candidate, Seen);
+          });
+      if (RightIt == Right.end()) {
+        ++LeftIt;
+        continue;
+      }
+      LeftIt = Left.erase(LeftIt);
+      Right.erase(RightIt);
+    }
+    const auto ShapeKey = [](MonoTypePtr Type) {
+      return Type->tag == MonoType::Var ? std::string{"~"} : pretty_print(Type);
+    };
+    std::ranges::sort(Left, {}, ShapeKey);
+    std::ranges::sort(Right, {}, ShapeKey);
+    for (std::size_t Index = 0; Index < Left.size(); ++Index)
+      if (!unify(Left[Index], Right[Index], loc, context))
+        return false;
+    return true;
+  }
+
   default:
     return false;
   }
@@ -260,6 +470,12 @@ bool Unifier::occurs_in(TypeId var_id, MonoTypePtr type) {
       return true;
     return false;
   }
+  if (type->tag == MonoType::Sum) {
+    for (auto *Alternative : type->sum_alternatives)
+      if (occurs_in(var_id, Alternative))
+        return true;
+    return false;
+  }
   return false;
 }
 
@@ -288,6 +504,9 @@ void Unifier::adjust_levels(MonoTypePtr type, int level) {
     if (type->row_rest)
       adjust_levels(type->row_rest, level);
   }
+  if (type->tag == MonoType::Sum)
+    for (auto *Alternative : type->sum_alternatives)
+      adjust_levels(Alternative, level);
 }
 
 // Convert a var_id to a user-facing name: a, b, ..., z, a1, b1, ...
@@ -321,17 +540,25 @@ struct PrintCtx {
   }
 };
 
-std::string pretty_print_effect(const EffectNormalForm &effect, PrintCtx &ctx) {
+std::string pretty_print_effect(const EffectNormalForm &effect, PrintCtx &ctx,
+                                const EffectAtomCatalog *Atoms) {
   if (effect.empty())
     return "";
   std::string row = "!{";
-  for (size_t i = 0; i < effect.known_labels.size(); ++i) {
+  std::vector<std::string> Known;
+  Known.reserve(effect.known_atoms.size());
+  for (const auto Atom : effect.known_atoms)
+    Known.push_back(Atoms && Atoms->valid(Atom)
+                        ? Atoms->format(Atom)
+                        : "atom(" + std::to_string(Atom) + ")");
+  std::ranges::sort(Known);
+  for (size_t i = 0; i < Known.size(); ++i) {
     if (i)
       row += ",";
-    row += effect.known_labels[i];
+    row += Known[i];
   }
   if (!effect.tails.empty()) {
-    if (!effect.known_labels.empty())
+    if (!effect.known_atoms.empty())
       row += " | ";
     else
       row += "|";
@@ -344,12 +571,19 @@ std::string pretty_print_effect(const EffectNormalForm &effect, PrintCtx &ctx) {
       row += ctx.effect_name_for(tail.variable);
       if (tail.opaque)
         row += ")";
-      if (!tail.excluded_labels.empty()) {
+      if (!tail.excluded_atoms.empty()) {
         row += " \\ {";
-        for (size_t j = 0; j < tail.excluded_labels.size(); ++j) {
+        std::vector<std::string> Excluded;
+        Excluded.reserve(tail.excluded_atoms.size());
+        for (const auto Atom : tail.excluded_atoms)
+          Excluded.push_back(Atoms && Atoms->valid(Atom)
+                                 ? Atoms->format(Atom)
+                                 : "atom(" + std::to_string(Atom) + ")");
+        std::ranges::sort(Excluded);
+        for (size_t j = 0; j < Excluded.size(); ++j) {
           if (j)
             row += ",";
-          row += tail.excluded_labels[j];
+          row += Excluded[j];
         }
         row += "}";
       }
@@ -400,8 +634,9 @@ std::string pretty_print_rec(MonoTypePtr type, PrintCtx &ctx) {
     return "?";
   }
   case MonoType::Arrow: {
-    const auto row = pretty_print_effect(
-        type->effect_solver->summarize(type->arrow_effect), ctx);
+    const auto row =
+        pretty_print_effect(type->effect_solver->summarize(type->arrow_effect),
+                            ctx, type->effect_atoms);
     return "(" + pretty_print_rec(type->param_type, ctx) + " -> " + row +
            pretty_print_rec(type->return_type, ctx) + ")";
   }
@@ -434,6 +669,16 @@ std::string pretty_print_rec(MonoTypePtr type, PrintCtx &ctx) {
       s += pretty_print_rec(type->row_rest, ctx);
     }
     return s + " }";
+  }
+  case MonoType::Sum: {
+    std::string Result;
+    for (std::size_t Index = 0; Index < type->sum_alternatives.size();
+         ++Index) {
+      if (Index)
+        Result += " | ";
+      Result += pretty_print_rec(type->sum_alternatives[Index], ctx);
+    }
+    return Result;
   }
   default:
     return "?";

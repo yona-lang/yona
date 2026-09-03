@@ -17,9 +17,11 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_map>
 
 using std::string;
 using yona::SourceRange;
@@ -33,6 +35,7 @@ using yona::compiler::typechecker::EffectNormalForm;
 using yona::compiler::typechecker::EffectRef;
 using yona::compiler::typechecker::EffectSolver;
 using yona::compiler::typechecker::FactEnv;
+using yona::compiler::typechecker::ImportedFnSig;
 using yona::compiler::typechecker::Interval;
 using yona::compiler::typechecker::module_function_components;
 using yona::compiler::typechecker::MonoType;
@@ -47,6 +50,185 @@ using yona::compiler::typechecker::Unifier;
 using yona::compiler::typechecker::UnionFind;
 using yona::compiler::types::BuiltinType;
 using yona::compiler::types::RefinePredicate;
+
+namespace yona::compiler::typechecker {
+struct TypeCheckerTestPeer {
+  static void addVariable(TypeChecker &Checker, MonoTypePtr Variable,
+                          int Level) {
+    Checker.uf_.add_var(Variable->var_id, Level);
+  }
+  static TypeScheme generalize(TypeChecker &Checker, MonoTypePtr Type,
+                               int Level) {
+    return Checker.generalize(Type, Level);
+  }
+  static TypeScheme generalize(TypeChecker &Checker, MonoTypePtr Type,
+                               int Level, std::vector<Constraint> Constraints) {
+    return Checker.generalize(Type, Level, std::move(Constraints));
+  }
+  static MonoTypePtr instantiate(TypeChecker &Checker, const TypeScheme &Scheme,
+                                 int Level) {
+    return Checker.instantiate(Scheme, Level);
+  }
+  static MonoTypePtr instantiate(TypeChecker &Checker, const TypeScheme &Scheme,
+                                 int Level,
+                                 std::vector<MonoTypePtr> &TypeArguments,
+                                 std::vector<EffectRef> &EffectArguments) {
+    return Checker.instantiate(Scheme, Level, &TypeArguments, &EffectArguments);
+  }
+  static MonoTypePtr fromAstType(TypeChecker &Checker, const types::Type &Type,
+                                 int Level) {
+    return Checker.from_ast_type(Type, Level);
+  }
+  static std::optional<TypeScheme> lookup(TypeChecker &Checker,
+                                          const std::string &Name) {
+    return Checker.root_env_->lookup(Name);
+  }
+  static MonoTypePtr
+  importSignature(TypeChecker &Checker, const ImportedFnSig &Signature,
+                  const yona::model::ModuleIdentity &Module) {
+    const std::unordered_set<std::string> Nominals{"Token"};
+    return Checker.mono_from_import_sig(Signature, 0, nullptr, &Module,
+                                        &Nominals);
+  }
+  static std::size_t deferredConstraintCount(const TypeChecker &Checker) {
+    return Checker.deferred_constraints_.size();
+  }
+  static MonoTypePtr deferredConstraintType(const TypeChecker &Checker,
+                                            std::size_t Index) {
+    return Checker.deferred_constraints_.at(Index).types.at(0);
+  }
+  static std::optional<model::NominalTypeKey>
+  deferredConstraintTrait(const TypeChecker &Checker, std::size_t Index) {
+    return Checker.deferred_constraints_.at(Index).resolved_trait;
+  }
+  static void setCurrentModule(TypeChecker &Checker,
+                               model::ModuleIdentity Module) {
+    Checker.current_module_ = std::move(Module);
+  }
+};
+} // namespace yona::compiler::typechecker
+
+using yona::compiler::typechecker::TypeCheckerTestPeer;
+
+namespace {
+
+using yona::compiler::typechecker::EffectAtomId;
+using yona::compiler::typechecker::EffectGraphTemplate;
+using yona::compiler::typechecker::EffectInstantiation;
+using yona::compiler::typechecker::OperationEffectAtom;
+using yona::model::EffectOperationKey;
+using yona::model::ModuleIdentity;
+using yona::model::NominalTypeKey;
+
+EffectAtomId internTestEffect(TypeArena &Arena, const std::string &Label) {
+  const auto Dot = Label.rfind('.');
+  const auto Effect = Dot == std::string::npos ? Label : Label.substr(0, Dot);
+  const auto Operation =
+      Dot == std::string::npos ? std::string{"perform"} : Label.substr(Dot + 1);
+  auto Transaction = Arena.effect_atoms().beginAppend();
+  const auto Atom = Transaction.intern(OperationEffectAtom{
+      EffectOperationKey{NominalTypeKey{ModuleIdentity{"Main"}, Effect},
+                         Operation},
+      {},
+      {}});
+  REQUIRE(Transaction.prepareCommit().has_value());
+  Transaction.commitPrepared();
+  return Atom;
+}
+
+EffectRef testEffects(TypeArena &Arena,
+                      std::initializer_list<std::string> Labels) {
+  std::vector<EffectAtomId> Atoms;
+  Atoms.reserve(Labels.size());
+  for (const auto &Label : Labels)
+    Atoms.push_back(internTestEffect(Arena, Label));
+  return Arena.effect_solver().atoms(std::move(Atoms));
+}
+
+struct TestEffectProjection {
+  yona::compiler::typechecker::EffectVarId variable = 0;
+  std::vector<std::string> excluded_labels;
+  bool opaque = false;
+  bool operator==(const TestEffectProjection &) const = default;
+};
+
+struct TestEffectNormalForm {
+  std::vector<std::string> known_labels;
+  std::vector<TestEffectProjection> tails;
+  [[nodiscard]] bool is_open() const noexcept { return !tails.empty(); }
+  [[nodiscard]] bool empty() const noexcept {
+    return known_labels.empty() && tails.empty();
+  }
+  bool operator==(const TestEffectNormalForm &) const = default;
+};
+
+/// Test-only adapter that keeps the pre-2C behavioral solver cases readable
+/// while driving the production typed-atom API underneath.
+class TestEffectSolver final {
+public:
+  EffectRef empty() const noexcept { return Arena_.effect_solver().empty(); }
+  EffectRef flexible() { return Arena_.effect_solver().flexible(); }
+  EffectRef derived() { return Arena_.effect_solver().derived(); }
+  EffectRef opaque() { return Arena_.effect_solver().opaque(); }
+
+  EffectRef labels(std::initializer_list<std::string> Labels) {
+    return testEffects(Arena_, Labels);
+  }
+  EffectRef join(std::initializer_list<EffectRef> Effects) {
+    return Arena_.effect_solver().join(Effects);
+  }
+  EffectRef mask(EffectRef Source,
+                 std::initializer_list<std::string> Excluded) {
+    std::vector<EffectAtomId> Atoms;
+    Atoms.reserve(Excluded.size());
+    for (const auto &Label : Excluded)
+      Atoms.push_back(internTestEffect(Arena_, Label));
+    return Arena_.effect_solver().mask(Source, std::move(Atoms));
+  }
+  EffectConstraintResult add_label(EffectRef Derived,
+                                   const std::string &Label) {
+    return Arena_.effect_solver().addAtom(Derived,
+                                          internTestEffect(Arena_, Label));
+  }
+  EffectConstraintResult include(EffectRef Source, EffectRef Derived) {
+    return Arena_.effect_solver().include(Source, Derived);
+  }
+  EffectConstraintResult equate(EffectRef Left, EffectRef Right) {
+    return Arena_.effect_solver().equate(Left, Right);
+  }
+  std::optional<yona::compiler::typechecker::EffectVarId>
+  variable_id(EffectRef Effect) const {
+    return Arena_.effect_solver().variable_id(Effect);
+  }
+  EffectGraphTemplate freeze(EffectRef Root) const {
+    return Arena_.effect_solver().freeze(Root);
+  }
+  EffectInstantiation instantiate(const EffectGraphTemplate &Graph) {
+    return Arena_.effect_solver().instantiate(Graph);
+  }
+  TestEffectNormalForm summarize(EffectRef Effect) const {
+    const auto Typed = Arena_.effect_solver().summarize(Effect);
+    TestEffectNormalForm Result;
+    for (const auto Atom : Typed.known_atoms)
+      Result.known_labels.push_back(Arena_.effect_atoms().format(Atom));
+    std::ranges::sort(Result.known_labels);
+    for (const auto &Tail : Typed.tails) {
+      TestEffectProjection Projection{.variable = Tail.variable,
+                                      .opaque = Tail.opaque};
+      for (const auto Atom : Tail.excluded_atoms)
+        Projection.excluded_labels.push_back(
+            Arena_.effect_atoms().format(Atom));
+      std::ranges::sort(Projection.excluded_labels);
+      Result.tails.push_back(std::move(Projection));
+    }
+    return Result;
+  }
+
+private:
+  TypeArena Arena_;
+};
+
+} // namespace
 
 TEST_SUITE("TypeChecker") {
 
@@ -72,7 +254,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: joins are associative commutative and idempotent") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto state = solver.labels({"State.get", "State.get"});
     const auto log = solver.labels({"Log.log"});
 
@@ -87,7 +269,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: flexible equality binds an exact row") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto flexible = solver.flexible();
     const auto state = solver.labels({"State.get"});
 
@@ -101,7 +283,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: independent callback rows join without equality") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto first = solver.flexible();
     const auto second = solver.flexible();
     const auto body = solver.derived();
@@ -123,7 +305,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: derived cycles use the least fixed point") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto left = solver.derived();
     const auto right = solver.derived();
     solver.include(right, left);
@@ -140,7 +322,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: opaque leaves cannot be rebound or closed") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto opaque = solver.opaque();
 
     const auto before = solver.summarize(opaque);
@@ -154,7 +336,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: masks apply to effects learned after construction") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto callback = solver.flexible();
     const auto source =
         solver.join({solver.labels({"State.get", "Log.log"}), callback});
@@ -176,7 +358,7 @@ singleton value = Yield value (\_ -> Nil)
 
   TEST_CASE(
       "EffectSolver: graph templates clone independent variables and cells") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto first = solver.flexible();
     const auto second = solver.flexible();
     const auto body = solver.derived();
@@ -216,7 +398,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: equality stays live as derived cells grow") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto left = solver.derived();
     const auto right = solver.derived();
 
@@ -230,7 +412,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: equality propagates opaque rows through templates") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto derived = solver.derived();
     const auto opaque = solver.opaque();
 
@@ -250,7 +432,7 @@ singleton value = Yield value (\_ -> Nil)
 
   TEST_CASE("EffectSolver: deferred recursive equality rejects a contradictory "
             "binding") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto row = solver.flexible();
     const auto row_id = solver.variable_id(row).value();
     const auto recursive = solver.join({row, solver.labels({"State.get"})});
@@ -275,7 +457,7 @@ singleton value = Yield value (\_ -> Nil)
   TEST_CASE("EffectSolver: derived equality rejects incompatible callback "
             "binding in either order") {
     SUBCASE("constraint before callback binding") {
-      EffectSolver solver;
+      TestEffectSolver solver;
       const auto callback = solver.flexible();
       const auto body = solver.derived();
       solver.include(callback, body);
@@ -290,7 +472,7 @@ singleton value = Yield value (\_ -> Nil)
     }
 
     SUBCASE("callback binding before constraint") {
-      EffectSolver solver;
+      TestEffectSolver solver;
       const auto callback = solver.flexible();
       const auto body = solver.derived();
       solver.include(callback, body);
@@ -304,7 +486,7 @@ singleton value = Yield value (\_ -> Nil)
 
   TEST_CASE(
       "EffectSolver: derived equality constraints remain live after cloning") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto callback = solver.flexible();
     const auto callback_id = solver.variable_id(callback).value();
     const auto body = solver.derived();
@@ -327,7 +509,7 @@ singleton value = Yield value (\_ -> Nil)
   TEST_CASE("EffectSolver: derived equality permits compatible direct and "
             "nested growth") {
     SUBCASE("direct derived cell absorbs a closed equality") {
-      EffectSolver solver;
+      TestEffectSolver solver;
       const auto body = solver.derived();
       const auto state = solver.labels({"State.get"});
 
@@ -336,7 +518,7 @@ singleton value = Yield value (\_ -> Nil)
     }
 
     SUBCASE("derived cell nested under a join can grow to equality") {
-      EffectSolver solver;
+      TestEffectSolver solver;
       const auto body = solver.derived();
       const auto expression = solver.join({body, solver.labels({"Log.log"})});
       const auto expected = solver.labels({"Log.log", "State.get"});
@@ -351,7 +533,7 @@ singleton value = Yield value (\_ -> Nil)
   TEST_CASE(
       "EffectSolver: derived mutations reject conflicts transactionally") {
     SUBCASE("local label") {
-      EffectSolver solver;
+      TestEffectSolver solver;
       const auto body = solver.derived();
       const auto state = solver.labels({"State.get"});
       REQUIRE(solver.equate(body, state) != EffectConstraintResult::Conflict);
@@ -362,7 +544,7 @@ singleton value = Yield value (\_ -> Nil)
     }
 
     SUBCASE("inclusion edge") {
-      EffectSolver solver;
+      TestEffectSolver solver;
       const auto body = solver.derived();
       const auto state = solver.labels({"State.get"});
       REQUIRE(solver.equate(body, state) != EffectConstraintResult::Conflict);
@@ -375,7 +557,7 @@ singleton value = Yield value (\_ -> Nil)
 
   TEST_CASE(
       "EffectSolver: derived equality constraints are validated jointly") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto body = solver.derived();
     const auto state = solver.labels({"State.get"});
 
@@ -398,7 +580,7 @@ singleton value = Yield value (\_ -> Nil)
 
   TEST_CASE(
       "EffectSolver: nested equality saturates derived facts and templates") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto body = solver.derived();
     const auto expression = solver.join({body, solver.labels({"Log.log"})});
     const auto expected = solver.labels({"Log.log", "State.get"});
@@ -416,7 +598,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: ambiguous derived equality has no least solution") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto first = solver.derived();
     const auto second = solver.derived();
     const auto either = solver.join({first, second});
@@ -433,7 +615,7 @@ singleton value = Yield value (\_ -> Nil)
 
   TEST_CASE("EffectSolver: symbolic rows carry deferred derived choices "
             "through templates") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto body = solver.derived();
     const auto callback = solver.flexible();
     const auto callback_id = solver.variable_id(callback).value();
@@ -444,7 +626,7 @@ singleton value = Yield value (\_ -> Nil)
     CHECK(solver.summarize(expression).is_open());
 
     const auto graph = solver.freeze(expression);
-    EffectSolver clone_solver;
+    auto &clone_solver = solver;
     const auto clone = clone_solver.instantiate(graph);
     REQUIRE(clone.variables.contains(callback_id));
     CHECK(clone_solver.summarize(clone.root).is_open());
@@ -457,7 +639,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: opaque rows carry deferred derived choices") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto body = solver.derived();
     const auto imported = solver.opaque();
     const auto expression = solver.join({body, imported});
@@ -469,7 +651,7 @@ singleton value = Yield value (\_ -> Nil)
     CHECK(summary.tails.front().opaque);
 
     const auto graph = solver.freeze(expression);
-    EffectSolver clone_solver;
+    auto &clone_solver = solver;
     const auto clone = clone_solver.instantiate(graph);
     const auto cloned_summary = clone_solver.summarize(clone.root);
     REQUIRE(cloned_summary.tails.size() == 1);
@@ -477,7 +659,7 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: opaque equality constraints are validated jointly") {
-    EffectSolver solver;
+    TestEffectSolver solver;
     const auto opaque = solver.opaque();
     const auto opaque_id = solver.variable_id(opaque).value();
 
@@ -495,8 +677,8 @@ singleton value = Yield value (\_ -> Nil)
   }
 
   TEST_CASE("EffectSolver: foreign handles are rejected") {
-    EffectSolver first_solver;
-    EffectSolver second_solver;
+    TestEffectSolver first_solver;
+    TestEffectSolver second_solver;
     const auto local = first_solver.flexible();
     const auto foreign = second_solver.labels({"Log.log"});
 
@@ -530,6 +712,415 @@ singleton value = Yield value (\_ -> Nil)
     CHECK(fn->tag == MonoType::Arrow);
     CHECK(fn->param_type == int_t);
     CHECK(fn->return_type == str_t);
+  }
+
+  TEST_CASE("TypeArena: sums normalize as an idempotent commutative set") {
+    TypeArena arena;
+    auto *integer = arena.make_con(TyCon::Int);
+    auto *string = arena.make_con(TyCon::String);
+    auto *nested = arena.make_sum({string, integer, integer});
+    REQUIRE(nested->tag == MonoType::Sum);
+    CHECK(pretty_print(nested) == "Int | String");
+
+    auto *flattened = arena.make_sum({nested, string});
+    REQUIRE(flattened->tag == MonoType::Sum);
+    CHECK(pretty_print(flattened) == "Int | String");
+    CHECK(arena.make_sum({integer, integer}) == integer);
+    CHECK_THROWS_AS(arena.make_sum({}), std::invalid_argument);
+  }
+
+  TEST_CASE("Unifier: sums compare normalized alternatives exactly") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier unifier(arena, uf, diag);
+    auto *integer = arena.make_con(TyCon::Int);
+    auto *string = arena.make_con(TyCon::String);
+    auto *left = arena.make_sum({integer, string});
+    auto *right = arena.make_sum({string, integer});
+
+    CHECK(unifier.unify(left, right, SourceRange::unknown()));
+    CHECK_FALSE(unifier.unify(left, integer, SourceRange::unknown()));
+  }
+
+  TEST_CASE("Unifier: sum matching resolves generic alternatives") {
+    TypeArena Arena;
+    UnionFind Types;
+    DiagnosticEngine Diagnostics;
+    Unifier Unify(Arena, Types, Diagnostics);
+    auto *Parameter = Arena.fresh_var(0);
+    Types.add_var(Parameter->var_id, 0);
+    auto *Integer = Arena.make_con(TyCon::Int);
+    auto *String = Arena.make_con(TyCon::String);
+
+    CHECK(Unify.unify(Arena.make_sum({Parameter, Integer}),
+                      Arena.make_sum({String, Integer}),
+                      SourceRange::unknown()));
+    CHECK(Unify.resolve(Parameter) == String);
+  }
+
+  TEST_CASE("TypeChecker: source sum annotations become inference sums") {
+    auto SourceSum = std::make_shared<yona::compiler::types::SumType>();
+    SourceSum->types.insert(BuiltinType::String);
+    SourceSum->types.insert(BuiltinType::SignedInt64);
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+
+    auto *Inferred = TypeCheckerTestPeer::fromAstType(
+        Checker, yona::compiler::types::Type{SourceSum}, 0);
+    REQUIRE(Inferred->tag == MonoType::Sum);
+    CHECK(pretty_print(Inferred) == "Int | String");
+  }
+
+  TEST_CASE("TypeChecker: scheme traversal visits every sum alternative") {
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    auto &Arena = Checker.arena();
+    auto *Parameter = Arena.fresh_var(1);
+    TypeCheckerTestPeer::addVariable(Checker, Parameter, 1);
+    const auto Effects = Arena.effect_solver().flexible();
+    auto *Callable = Arena.make_arrow(Parameter, Parameter, Effects);
+    auto *Body = Arena.make_sum({Arena.make_con(TyCon::Int), Callable});
+
+    const auto Scheme = TypeCheckerTestPeer::generalize(Checker, Body, 0);
+    CHECK(Scheme.quantified_vars == std::vector{Parameter->var_id});
+    REQUIRE(Scheme.quantified_effect_variables.size() == 1);
+    REQUIRE(Scheme.effect_roots.size() == 1);
+    CHECK(Scheme.effect_roots.front().Arrow->tag == MonoType::Arrow);
+
+    auto *First = TypeCheckerTestPeer::instantiate(Checker, Scheme, 0);
+    auto *Second = TypeCheckerTestPeer::instantiate(Checker, Scheme, 0);
+    REQUIRE(First->tag == MonoType::Sum);
+    REQUIRE(Second->tag == MonoType::Sum);
+    const auto FirstArrow =
+        std::ranges::find_if(First->sum_alternatives, [](MonoTypePtr Type) {
+          return Type->tag == MonoType::Arrow;
+        });
+    const auto SecondArrow =
+        std::ranges::find_if(Second->sum_alternatives, [](MonoTypePtr Type) {
+          return Type->tag == MonoType::Arrow;
+        });
+    REQUIRE(FirstArrow != First->sum_alternatives.end());
+    REQUIRE(SecondArrow != Second->sum_alternatives.end());
+    CHECK((*FirstArrow)->param_type != (*SecondArrow)->param_type);
+    CHECK((*FirstArrow)->arrow_effect != (*SecondArrow)->arrow_effect);
+  }
+
+  TEST_CASE("Unifier: resolved nominal identity is qualified") {
+    TypeArena arena;
+    UnionFind uf;
+    DiagnosticEngine diag;
+    Unifier unifier(arena, uf, diag);
+    const yona::model::NominalTypeKey local{yona::model::ModuleIdentity{"Main"},
+                                            "Option"};
+    const yona::model::NominalTypeKey imported{
+        yona::model::ModuleIdentity{"Other"}, "Option"};
+    auto *integer = arena.make_con(TyCon::Int);
+
+    CHECK_FALSE(unifier.unify(arena.make_app(local, {integer}),
+                              arena.make_app(imported, {integer}),
+                              SourceRange::unknown()));
+    CHECK(unifier.unify(arena.make_app(local, {integer}),
+                        arena.make_app(local, {integer}),
+                        SourceRange::unknown()));
+
+    yona::compiler::typechecker::Constraint left(local, integer);
+    yona::compiler::typechecker::Constraint right(imported, integer);
+    CHECK(left.resolved_trait != right.resolved_trait);
+  }
+
+  TEST_CASE("TypeChecker: local nominal and trait identities are qualified") {
+    const auto Check = [](const std::string &Module) {
+      yona::parser::Parser Parser;
+      auto Parsed = Parser.parseModule("module " + Module + R"(
+
+type Token = Token
+
+trait Same a
+    same : a -> Bool
+end
+)",
+                                       Module + ".yona");
+      REQUIRE(Parsed.has_value());
+      DiagnosticEngine Diagnostics;
+      auto Checker = std::make_unique<TypeChecker>(Diagnostics);
+      Checker->check_module(Parsed.value().get());
+      REQUIRE_FALSE(Checker->has_errors());
+      const auto Constructor = TypeCheckerTestPeer::lookup(*Checker, "Token");
+      const auto Method = TypeCheckerTestPeer::lookup(*Checker, "same");
+      REQUIRE(Constructor.has_value());
+      REQUIRE(Constructor->body->resolved_key.has_value());
+      REQUIRE(Method.has_value());
+      REQUIRE(Method->constraints.size() == 1);
+      REQUIRE(Method->constraints.front().resolved_trait.has_value());
+      return std::pair{*Constructor->body->resolved_key,
+                       *Method->constraints.front().resolved_trait};
+    };
+
+    const auto Alpha = Check("Alpha");
+    const auto Beta = Check("Beta");
+    CHECK(Alpha.first != Beta.first);
+    CHECK(Alpha.second != Beta.second);
+  }
+
+  TEST_CASE("TypeChecker: imported nominal identity keeps its module") {
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    Checker.register_adt("Token", {}, {{"Token", 0}}, {{}});
+    const auto Local = TypeCheckerTestPeer::lookup(Checker, "Token");
+    REQUIRE(Local.has_value());
+    REQUIRE(Local->body->resolved_key.has_value());
+
+    ImportedFnSig Signature;
+    Signature.return_descriptor = "ADT(Token)";
+    auto *Imported = TypeCheckerTestPeer::importSignature(
+        Checker, Signature, yona::model::ModuleIdentity{"Other"});
+    REQUIRE(Imported->tag == MonoType::App);
+    REQUIRE(Imported->resolved_key.has_value());
+    CHECK(Imported->resolved_key->Module ==
+          yona::model::ModuleIdentity{"Other"});
+    CHECK(Imported->resolved_key != Local->body->resolved_key);
+  }
+
+  TEST_CASE("TypeChecker: scheme closure includes typed operation arguments") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *parameter = arena.fresh_var(1);
+    TypeCheckerTestPeer::addVariable(checker, parameter, 1);
+    const auto argumentEffects = arena.effect_solver().flexible();
+    auto *nestedArrow = arena.make_arrow(parameter, parameter, argumentEffects);
+
+    auto atomTransaction = arena.effect_atoms().beginAppend();
+    const auto atom =
+        atomTransaction.intern(yona::compiler::typechecker::OperationEffectAtom{
+            yona::model::EffectOperationKey{
+                yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Test"},
+                                            "Fx"},
+                "generic"},
+            {parameter, nestedArrow},
+            {argumentEffects}});
+    REQUIRE(atomTransaction.prepareCommit().has_value());
+    atomTransaction.commitPrepared();
+
+    auto *rootArrow = arena.make_arrow(arena.make_con(TyCon::Unit), parameter,
+                                       arena.effect_solver().atoms({atom}));
+    auto scheme = TypeCheckerTestPeer::generalize(checker, rootArrow, 0);
+    CHECK(scheme.quantified_vars == std::vector{parameter->var_id});
+    REQUIRE(scheme.effect_roots.size() == 2);
+    CHECK(scheme.effect_roots[0].Arrow == scheme.body);
+    CHECK(scheme.effect_roots[1].Arrow == nestedArrow);
+    REQUIRE(scheme.quantified_effect_variables.size() == 1);
+    CHECK(scheme.quantified_effect_variables.front().Variable ==
+          arena.effect_solver().variable_id(argumentEffects));
+
+    auto *first = TypeCheckerTestPeer::instantiate(checker, scheme, 0);
+    auto *second = TypeCheckerTestPeer::instantiate(checker, scheme, 0);
+    REQUIRE(first->tag == MonoType::Arrow);
+    REQUIRE(second->tag == MonoType::Arrow);
+    const auto firstAtoms =
+        arena.effect_solver().summarize(first->arrow_effect).known_atoms;
+    const auto secondAtoms =
+        arena.effect_solver().summarize(second->arrow_effect).known_atoms;
+    REQUIRE(firstAtoms.size() == 1);
+    REQUIRE(secondAtoms.size() == 1);
+    CHECK(firstAtoms.front() != secondAtoms.front());
+    const auto &firstAtom = arena.effect_atoms().at(firstAtoms.front());
+    const auto &secondAtom = arena.effect_atoms().at(secondAtoms.front());
+    const auto &firstOperation =
+        std::get<yona::compiler::typechecker::OperationEffectAtom>(firstAtom);
+    const auto &secondOperation =
+        std::get<yona::compiler::typechecker::OperationEffectAtom>(secondAtom);
+    CHECK(firstOperation.TypeArguments.front() !=
+          secondOperation.TypeArguments.front());
+    CHECK(firstOperation.EffectArguments.front() !=
+          secondOperation.EffectArguments.front());
+    CHECK_THROWS_AS(checker.serialize_effect_scheme(rootArrow),
+                    std::invalid_argument);
+  }
+
+  TEST_CASE("TypeChecker: constraint-only effect roots retain phantom ordered "
+            "arguments") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *phantomType = arena.fresh_var(1);
+    TypeCheckerTestPeer::addVariable(checker, phantomType, 1);
+    const auto phantomEffect = arena.effect_solver().flexible();
+
+    auto atomTransaction = arena.effect_atoms().beginAppend();
+    const auto atom = atomTransaction.intern(OperationEffectAtom{
+        EffectOperationKey{NominalTypeKey{ModuleIdentity{"Imported"}, "Fx"},
+                           "phantom"},
+        {phantomType},
+        {phantomEffect}});
+    REQUIRE(atomTransaction.prepareCommit().has_value());
+    atomTransaction.commitPrepared();
+
+    auto *constraintRoot = arena.make_arrow(
+        arena.make_con(TyCon::Unit), arena.make_con(TyCon::Unit),
+        arena.effect_solver().atoms({atom}));
+    const NominalTypeKey trait{ModuleIdentity{"Imported"}, "Capability"};
+    auto scheme = TypeCheckerTestPeer::generalize(
+        checker, arena.make_con(TyCon::Bool), 0,
+        {yona::compiler::typechecker::Constraint(trait, constraintRoot)});
+
+    CHECK(scheme.quantified_vars == std::vector{phantomType->var_id});
+    REQUIRE(scheme.quantified_effect_variables.size() == 1);
+    CHECK(scheme.quantified_effect_variables.front().Variable ==
+          arena.effect_solver().variable_id(phantomEffect));
+    REQUIRE(scheme.constraints.size() == 1);
+    CHECK(scheme.constraints.front().resolved_trait == trait);
+    REQUIRE(scheme.effect_roots.size() == 1);
+    CHECK(scheme.effect_roots.front().Arrow ==
+          scheme.constraints.front().types.front());
+    REQUIRE(scheme.effect_graph.has_value());
+
+    CHECK(TypeCheckerTestPeer::instantiate(checker, scheme, 0)->tag ==
+          MonoType::Con);
+    CHECK(TypeCheckerTestPeer::instantiate(checker, scheme, 0)->tag ==
+          MonoType::Con);
+    REQUIRE(TypeCheckerTestPeer::deferredConstraintCount(checker) == 2);
+    CHECK(TypeCheckerTestPeer::deferredConstraintTrait(checker, 0) == trait);
+    CHECK(TypeCheckerTestPeer::deferredConstraintTrait(checker, 1) == trait);
+    auto *firstConstraint =
+        TypeCheckerTestPeer::deferredConstraintType(checker, 0);
+    auto *secondConstraint =
+        TypeCheckerTestPeer::deferredConstraintType(checker, 1);
+    REQUIRE(firstConstraint->tag == MonoType::Arrow);
+    REQUIRE(secondConstraint->tag == MonoType::Arrow);
+    const auto firstAtoms = arena.effect_solver()
+                                .summarize(firstConstraint->arrow_effect)
+                                .known_atoms;
+    const auto secondAtoms = arena.effect_solver()
+                                 .summarize(secondConstraint->arrow_effect)
+                                 .known_atoms;
+    REQUIRE(firstAtoms.size() == 1);
+    REQUIRE(secondAtoms.size() == 1);
+    CHECK(firstAtoms.front() != secondAtoms.front());
+    const auto &firstOperation =
+        std::get<OperationEffectAtom>(arena.effect_atoms().at(firstAtoms[0]));
+    const auto &secondOperation =
+        std::get<OperationEffectAtom>(arena.effect_atoms().at(secondAtoms[0]));
+    CHECK(firstOperation.TypeArguments[0] != secondOperation.TypeArguments[0]);
+    CHECK(firstOperation.EffectArguments[0] !=
+          secondOperation.EffectArguments[0]);
+  }
+
+  TEST_CASE("TypeChecker: source generic operations keep solved arguments") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *parameter = arena.fresh_var(0);
+    TypeCheckerTestPeer::addVariable(checker, parameter, 0);
+    checker.register_effect("Identity", "a",
+                            {{"apply", {parameter}, parameter}});
+
+    yona::parser::Parser parser;
+    auto parsed = parser.parseExpression(
+        R"((perform Identity.apply 1, perform Identity.apply "value"))",
+        "<test>");
+    REQUIRE(parsed.has_value());
+    checker.check(parsed.value().get());
+
+    std::vector<TyCon> Arguments;
+    for (EffectAtomId Atom = 0; Atom < arena.effect_atoms().size(); ++Atom) {
+      const auto *Operation =
+          std::get_if<OperationEffectAtom>(&arena.effect_atoms().at(Atom));
+      if (!Operation || Operation->Key.Operation != "apply" ||
+          Operation->TypeArguments.size() != 1)
+        continue;
+      auto *Argument = checker.zonk(Operation->TypeArguments.front());
+      REQUIRE(Argument->tag == MonoType::Con);
+      Arguments.push_back(Argument->con);
+    }
+    std::ranges::sort(Arguments);
+    CHECK(Arguments == std::vector{TyCon::Int, TyCon::String});
+  }
+
+  TEST_CASE(
+      "TypeChecker: source effect declarations retain phantom arguments") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *unit = arena.make_con(TyCon::Unit);
+    checker.register_effect("Pulse", "a", {{"tick", {}, unit}});
+
+    yona::parser::Parser parser;
+    auto parsed =
+        parser.parseExpression(R"((perform Pulse.tick ()))", "<test>");
+    REQUIRE(parsed.has_value());
+    checker.check(parsed.value().get());
+
+    bool Found = false;
+    for (EffectAtomId Atom = 0; Atom < arena.effect_atoms().size(); ++Atom) {
+      const auto *Operation =
+          std::get_if<OperationEffectAtom>(&arena.effect_atoms().at(Atom));
+      if (!Operation || Operation->Key.Operation != "tick")
+        continue;
+      Found = true;
+      CHECK(Operation->TypeArguments.size() == 1);
+    }
+    CHECK(Found);
+  }
+
+  TEST_CASE("TypeChecker: scheme instantiation rejects missing nested roots") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *Unit = arena.make_con(TyCon::Unit);
+    auto *Nested =
+        arena.make_arrow(Unit, Unit, arena.effect_solver().flexible());
+    auto *Outer =
+        arena.make_arrow(Unit, Nested, arena.effect_solver().flexible());
+    TypeScheme Malformed(Outer);
+    Malformed.effect_roots.push_back({Outer, Outer->arrow_effect});
+    Malformed.effect_graph = arena.effect_solver().freeze(
+        {Outer->arrow_effect, Nested->arrow_effect});
+
+    CHECK_THROWS_AS(TypeCheckerTestPeer::instantiate(checker, Malformed, 0),
+                    std::logic_error);
+
+    TypeScheme UndeclaredFlexible(Outer);
+    CHECK_THROWS_AS(
+        TypeCheckerTestPeer::instantiate(checker, UndeclaredFlexible, 0),
+        std::logic_error);
+
+    auto *Phantom = arena.fresh_var(1);
+    TypeCheckerTestPeer::addVariable(checker, Phantom, 1);
+    TypeScheme MissingGraph(Outer);
+    MissingGraph.quantified_vars.push_back(Phantom->var_id);
+    CHECK_THROWS_AS(TypeCheckerTestPeer::instantiate(checker, MissingGraph, 0),
+                    std::logic_error);
+  }
+
+  TEST_CASE("TypeChecker: unused declared binders instantiate independently") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *PhantomType = arena.fresh_var(1);
+    TypeCheckerTestPeer::addVariable(checker, PhantomType, 1);
+    const auto PhantomEffect = arena.effect_solver().flexible();
+    TypeScheme Scheme(arena.make_con(TyCon::Bool));
+    Scheme.quantified_vars.push_back(PhantomType->var_id);
+    Scheme.quantified_effect_variables.push_back(
+        {*arena.effect_solver().variable_id(PhantomEffect),
+         yona::model::EffectVariableKind::Flexible});
+
+    std::vector<MonoTypePtr> FirstTypes;
+    std::vector<EffectRef> FirstEffects;
+    std::vector<MonoTypePtr> SecondTypes;
+    std::vector<EffectRef> SecondEffects;
+    TypeCheckerTestPeer::instantiate(checker, Scheme, 0, FirstTypes,
+                                     FirstEffects);
+    TypeCheckerTestPeer::instantiate(checker, Scheme, 0, SecondTypes,
+                                     SecondEffects);
+    REQUIRE(FirstTypes.size() == 1);
+    REQUIRE(FirstEffects.size() == 1);
+    REQUIRE(SecondTypes.size() == 1);
+    REQUIRE(SecondEffects.size() == 1);
+    CHECK(FirstTypes.front() != SecondTypes.front());
+    CHECK(FirstEffects.front() != SecondEffects.front());
   }
 
   TEST_CASE("TypeArena: effect owner address remains stable") {
@@ -637,22 +1228,23 @@ singleton value = Yield value (\_ -> Nil)
     Unifier u(arena, uf, diag);
     auto *int_t = arena.make_con(TyCon::Int);
     const auto open_effect = arena.effect_solver().flexible();
-    const auto state_effect = arena.effect_solver().labels({"State.get"});
+    const auto state_atom = internTestEffect(arena, "State.get");
+    const auto state_effect = arena.effect_solver().atoms({state_atom});
     auto *open = arena.make_arrow(int_t, int_t, open_effect);
     auto *state = arena.make_arrow(int_t, int_t, state_effect);
 
     REQUIRE(u.unify(open, state, SourceRange::unknown()));
     CHECK(arena.effect_solver().summarize(open->arrow_effect) ==
-          EffectNormalForm{{"State.get"}, {}});
+          EffectNormalForm{{state_atom}, {}});
     CHECK(arena.effect_solver().summarize(state->arrow_effect) ==
-          EffectNormalForm{{"State.get"}, {}});
+          EffectNormalForm{{state_atom}, {}});
   }
 
   TEST_CASE("TypeArena: arrow effects must belong to its solver") {
     TypeArena first;
     TypeArena second;
     auto *integer = first.make_con(TyCon::Int);
-    const auto foreign = second.effect_solver().labels({"State.get"});
+    const auto foreign = testEffects(second, {"State.get"});
 
     CHECK_THROWS_AS(first.make_arrow(integer, integer, foreign),
                     std::invalid_argument);
@@ -664,10 +1256,9 @@ singleton value = Yield value (\_ -> Nil)
     DiagnosticEngine diag;
     Unifier u(arena, uf, diag);
     auto *int_t = arena.make_con(TyCon::Int);
-    auto *state = arena.make_arrow(int_t, int_t,
-                                   arena.effect_solver().labels({"State.get"}));
-    auto *log = arena.make_arrow(int_t, int_t,
-                                 arena.effect_solver().labels({"Log.log"}));
+    auto *state =
+        arena.make_arrow(int_t, int_t, testEffects(arena, {"State.get"}));
+    auto *log = arena.make_arrow(int_t, int_t, testEffects(arena, {"Log.log"}));
 
     CHECK_FALSE(u.unify(state, log, SourceRange::unknown()));
     CHECK(diag.has_errors());
@@ -679,10 +1270,8 @@ singleton value = Yield value (\_ -> Nil)
     DiagnosticEngine diag;
     Unifier u(arena, uf, diag);
     auto *int_t = arena.make_con(TyCon::Int);
-    auto *fn1 = arena.make_arrow(int_t, int_t,
-                                 arena.effect_solver().labels({"Fs.read"}));
-    auto *fn2 = arena.make_arrow(int_t, int_t,
-                                 arena.effect_solver().labels({"Fs.read"}));
+    auto *fn1 = arena.make_arrow(int_t, int_t, testEffects(arena, {"Fs.read"}));
+    auto *fn2 = arena.make_arrow(int_t, int_t, testEffects(arena, {"Fs.read"}));
     CHECK(u.unify(fn1, fn2, SourceRange::unknown()));
   }
 
@@ -692,10 +1281,9 @@ singleton value = Yield value (\_ -> Nil)
     DiagnosticEngine diag;
     Unifier u(arena, uf, diag);
     auto *int_t = arena.make_con(TyCon::Int);
-    auto *fn1 = arena.make_arrow(int_t, int_t,
-                                 arena.effect_solver().labels({"Fs.read"}));
-    auto *fn2 = arena.make_arrow(int_t, int_t,
-                                 arena.effect_solver().labels({"Net.post"}));
+    auto *fn1 = arena.make_arrow(int_t, int_t, testEffects(arena, {"Fs.read"}));
+    auto *fn2 =
+        arena.make_arrow(int_t, int_t, testEffects(arena, {"Net.post"}));
     CHECK(!u.unify(fn1, fn2, SourceRange::unknown()));
   }
 
@@ -707,11 +1295,12 @@ singleton value = Yield value (\_ -> Nil)
     auto *int_t = arena.make_con(TyCon::Int);
     const auto flexible = arena.effect_solver().flexible();
     auto *open = arena.make_arrow(int_t, int_t, flexible);
-    auto *closed = arena.make_arrow(int_t, int_t,
-                                    arena.effect_solver().labels({"Fs.read"}));
+    const auto fs_atom = internTestEffect(arena, "Fs.read");
+    auto *closed =
+        arena.make_arrow(int_t, int_t, arena.effect_solver().atoms({fs_atom}));
     REQUIRE(u.unify(open, closed, SourceRange::unknown()));
     CHECK(arena.effect_solver().summarize(flexible) ==
-          EffectNormalForm{{"Fs.read"}, {}});
+          EffectNormalForm{{fs_atom}, {}});
   }
 
   TEST_CASE("Unifier: occurs check prevents infinite types") {
@@ -786,7 +1375,7 @@ singleton value = Yield value (\_ -> Nil)
     CHECK(pretty_print(fn) == "(Int -> Bool)");
     auto *eff = arena.make_arrow(arena.make_con(TyCon::Int),
                                  arena.make_con(TyCon::Bool),
-                                 arena.effect_solver().labels({"Fs.read"}));
+                                 testEffects(arena, {"Fs.read"}));
     CHECK(pretty_print(eff) == "(Int -> !{Fs.read} Bool)");
     auto *opt = arena.make_app("Option", {arena.make_con(TyCon::Int)});
     CHECK(pretty_print(opt) == "Option Int");
@@ -799,8 +1388,8 @@ singleton value = Yield value (\_ -> Nil)
     TypeArena arena;
     auto &effects = arena.effect_solver();
     const auto row = effects.join(
-        {effects.flexible(), effects.labels({"Log.log", "Fs.read"}),
-         effects.flexible(), effects.labels({"Fs.read"})});
+        {effects.flexible(), testEffects(arena, {"Log.log", "Fs.read"}),
+         effects.flexible(), testEffects(arena, {"Fs.read"})});
     auto *fn = arena.make_arrow(arena.make_con(TyCon::Int),
                                 arena.make_con(TyCon::Bool), row);
 
@@ -2290,6 +2879,31 @@ end
                     std::invalid_argument);
   }
 
+  TEST_CASE(
+      "Effect scheme: legacy round-trip preserves Main operation identity") {
+    DiagnosticEngine diagnostics;
+    TypeChecker checker(diagnostics);
+    auto &arena = checker.arena();
+    auto *unit = arena.make_con(TyCon::Unit);
+    const auto Operation = internTestEffect(arena, "Audit.ping");
+    auto *original =
+        arena.make_arrow(unit, unit, arena.effect_solver().atoms({Operation}));
+
+    const auto Encoded = checker.serialize_effect_scheme(original);
+    CHECK(Encoded.find("Main\\Audit.ping") != std::string::npos);
+    TypeCheckerTestPeer::setCurrentModule(checker, ModuleIdentity{"Other"});
+    auto *restored = checker.apply_effect_scheme(original, Encoded);
+    REQUIRE(restored != nullptr);
+    REQUIRE(restored->tag == MonoType::Arrow);
+    const auto Atoms =
+        arena.effect_solver().summarize(restored->arrow_effect).known_atoms;
+    REQUIRE(Atoms.size() == 1);
+    const auto *RestoredOperation =
+        std::get_if<OperationEffectAtom>(&arena.effect_atoms().at(Atoms[0]));
+    REQUIRE(RestoredOperation != nullptr);
+    CHECK(RestoredOperation->Key.Effect.Module == ModuleIdentity{"Main"});
+  }
+
   TEST_CASE("Effect row: function with unhandled perform has latent row") {
     yona::compiler::DiagnosticEngine diag;
     diag.enable_warning(WarningFlag::UnhandledEffect);
@@ -2306,7 +2920,7 @@ end
     auto *t = checker.check(result->Expression.get());
     REQUIRE(t != nullptr);
     auto printed = pretty_print(checker.zonk(t));
-    CHECK(printed.find("!{State.get}") != std::string::npos);
+    CHECK(printed.find("!{State.get<") != std::string::npos);
     CHECK(!checker.has_direct_errors()); // captured on the arrow, not top-level
   }
 
@@ -2328,6 +2942,145 @@ end
     auto printed = pretty_print(checker.zonk(t));
     CHECK(printed.find("!{") == std::string::npos);
     CHECK(!checker.has_errors());
+  }
+
+  TEST_CASE("Effect row: generic handler masks the protected application") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto &arena = checker.arena();
+    auto *parameter = arena.fresh_var(0);
+    TypeCheckerTestPeer::addVariable(checker, parameter, 0);
+    checker.register_effect("Identity", "a",
+                            {{"apply", {parameter}, parameter}});
+
+    yona::parser::Parser parser;
+    auto result = parser.parseExpression(
+        R"((\u -> handle perform Identity.apply 1 with
+  Identity.apply ignored resume -> 1
+  return value -> value
+end))",
+        "<test>");
+    REQUIRE(result.has_value());
+    auto *type = checker.check(result.value().get());
+    REQUIRE(type != nullptr);
+    const auto Operations = checker.closed_effect_ops(type);
+    CHECK(Operations.empty());
+    CHECK_FALSE(checker.has_errors());
+  }
+
+  TEST_CASE("Effect row: generic handler masks only protected applications") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto &arena = checker.arena();
+    auto *parameter = arena.fresh_var(0);
+    TypeCheckerTestPeer::addVariable(checker, parameter, 0);
+    checker.register_effect("Identity", "a",
+                            {{"apply", {parameter}, parameter}});
+
+    yona::parser::Parser parser;
+    auto seed =
+        parser.parseExpression(R"((perform Identity.apply "seed"))", "<seed>");
+    REQUIRE(seed.has_value());
+    checker.check(seed.value().get());
+
+    auto result = parser.parseExpression(
+        R"((\f -> handle (perform Identity.apply 1, f ()) with
+  Identity.apply ignored resume -> (1, ())
+  return value -> value
+end))",
+        "<test>");
+    REQUIRE(result.has_value());
+    auto *type = checker.check(result.value().get());
+    REQUIRE(type != nullptr);
+    REQUIRE(type->tag == MonoType::Arrow);
+
+    std::optional<EffectAtomId> IntegerApplication;
+    std::optional<EffectAtomId> StringApplication;
+    for (EffectAtomId Atom = 0; Atom < arena.effect_atoms().size(); ++Atom) {
+      const auto *Operation =
+          std::get_if<OperationEffectAtom>(&arena.effect_atoms().at(Atom));
+      if (!Operation || Operation->Key.Operation != "apply" ||
+          Operation->TypeArguments.size() != 1)
+        continue;
+      auto *Argument = checker.zonk(Operation->TypeArguments.front());
+      if (Argument->tag == MonoType::Con && Argument->con == TyCon::Int)
+        IntegerApplication = Atom;
+      if (Argument->tag == MonoType::Con && Argument->con == TyCon::String)
+        StringApplication = Atom;
+    }
+    REQUIRE(IntegerApplication.has_value());
+    REQUIRE(StringApplication.has_value());
+    const auto Summary = arena.effect_solver().summarize(type->arrow_effect);
+    REQUIRE(Summary.tails.size() == 1);
+    CHECK(std::ranges::find(Summary.tails.front().excluded_atoms,
+                            *IntegerApplication) !=
+          Summary.tails.front().excluded_atoms.end());
+    CHECK(std::ranges::find(Summary.tails.front().excluded_atoms,
+                            *StringApplication) ==
+          Summary.tails.front().excluded_atoms.end());
+  }
+
+  TEST_CASE(
+      "Effect row: generic handler resolves an open callback application") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto &arena = checker.arena();
+    auto *parameter = arena.fresh_var(0);
+    TypeCheckerTestPeer::addVariable(checker, parameter, 0);
+    checker.register_effect("Identity", "a",
+                            {{"apply", {parameter}, parameter}});
+
+    yona::parser::Parser parser;
+    auto result = parser.parseExpression(R"(
+let callback n = perform Identity.apply n in
+(\f -> handle f 1 with
+  Identity.apply value resume -> resume value
+  return value -> value
+end) callback
+)",
+                                         "<test>");
+    REQUIRE(result.has_value());
+    checker.check(result.value().get());
+    CHECK_FALSE(checker.has_direct_errors());
+    CHECK_FALSE(diag.has_errors());
+  }
+
+  TEST_CASE(
+      "Effect row: generic handler masks only the constrained application") {
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    auto &arena = checker.arena();
+    auto *parameter = arena.fresh_var(0);
+    TypeCheckerTestPeer::addVariable(checker, parameter, 0);
+    checker.register_effect("Identity", "a",
+                            {{"apply", {parameter}, parameter}});
+
+    yona::parser::Parser parser;
+    auto result = parser.parseExpression(R"((\u -> handle
+  (perform Identity.apply 1, perform Identity.apply "value")
+with
+  Identity.apply value resume -> (value + 1, "")
+  return value -> value
+end))",
+                                         "<test>");
+    REQUIRE(result.has_value());
+    auto *type = checker.check(result.value().get());
+    REQUIRE(type != nullptr);
+    REQUIRE(type->tag == MonoType::Arrow);
+
+    const auto Operations =
+        arena.effect_solver().summarize(type->arrow_effect).known_atoms;
+    REQUIRE(Operations.size() == 1);
+    const auto *Application =
+        std::get_if<OperationEffectAtom>(&arena.effect_atoms().at(
+            arena.effect_solver().canonicalAtom(Operations.front())));
+    REQUIRE(Application != nullptr);
+    REQUIRE(Application->TypeArguments.size() == 1);
+    auto *Argument = checker.zonk(Application->TypeArguments.front());
+    REQUIRE(Argument != nullptr);
+    CHECK(Argument->tag == MonoType::Con);
+    CHECK(Argument->con == TyCon::String);
+    CHECK_FALSE(checker.has_errors());
   }
 
   TEST_CASE("Effect row: partial handler leaves remaining ops") {
@@ -2551,7 +3304,7 @@ end
     REQUIRE(t != nullptr);
     auto printed = pretty_print(checker.zonk(t));
     // a -> (b -> !{State.get} Int) â€” outer arrow is pure
-    CHECK(printed.find("!{State.get}") != std::string::npos);
+    CHECK(printed.find("!{State.get<") != std::string::npos);
     // The first (outer) arrow should not itself carry the row.
     auto outer_end = printed.find("->");
     REQUIRE(outer_end != std::string::npos);
@@ -2669,7 +3422,7 @@ end
     auto *t = checker.check(result->Expression.get());
     REQUIRE(t != nullptr);
     auto printed = pretty_print(checker.zonk(t));
-    CHECK(printed.find("!{State.get}") != std::string::npos);
+    CHECK(printed.find("!{State.get<") != std::string::npos);
     CHECK(printed.find("!{|") == std::string::npos);
     CHECK(!checker.has_errors());
   }
@@ -2845,12 +3598,14 @@ second n = (perform State.get ()) + first n
         checker.is_effect_free(checker.type_of(result.value()->functions[0])));
     CHECK_FALSE(
         checker.is_effect_free(checker.type_of(result.value()->functions[1])));
-    CHECK(checker.closed_effect_ops(
-              checker.type_of(result.value()->functions[0])) ==
-          std::vector<std::string>{"State.get"});
-    CHECK(checker.closed_effect_ops(
-              checker.type_of(result.value()->functions[1])) ==
-          std::vector<std::string>{"State.get"});
+    const auto FirstOperations = checker.closed_effect_ops(
+        checker.type_of(result.value()->functions[0]));
+    const auto SecondOperations = checker.closed_effect_ops(
+        checker.type_of(result.value()->functions[1]));
+    REQUIRE(FirstOperations.size() == 1);
+    REQUIRE(SecondOperations.size() == 1);
+    CHECK(FirstOperations.front().starts_with("State.get<"));
+    CHECK(SecondOperations.front().starts_with("State.get<"));
   }
 
   TEST_CASE(
@@ -3031,9 +3786,11 @@ result = use get log 0
     REQUIRE_FALSE(checker.has_direct_errors());
     REQUIRE_FALSE(diag.has_errors());
     REQUIRE(result.value()->functions.size() == 4);
-    CHECK(checker.closed_effect_ops(
-              checker.type_of(result.value()->functions[3])) ==
-          std::vector<std::string>{"Log.log", "State.get"});
+    const auto Operations = checker.closed_effect_ops(
+        checker.type_of(result.value()->functions[3]));
+    REQUIRE(Operations.size() == 2);
+    CHECK(Operations[0] == "Log.log");
+    CHECK(Operations[1].starts_with("State.get<"));
   }
 
   TEST_CASE("Effect row: three independent callbacks form a "
@@ -3071,9 +3828,12 @@ result = use get log 0
       REQUIRE_FALSE(checker.has_direct_errors());
       REQUIRE_FALSE(diag.has_errors());
       REQUIRE(result.value()->functions.size() == 5);
-      CHECK(checker.closed_effect_ops(
-                checker.type_of(result.value()->functions[4])) ==
-            std::vector<std::string>{"Log.log", "Net.ping", "State.get"});
+      const auto Operations = checker.closed_effect_ops(
+          checker.type_of(result.value()->functions[4]));
+      REQUIRE(Operations.size() == 3);
+      CHECK(Operations[0] == "Log.log");
+      CHECK(Operations[1] == "Net.ping");
+      CHECK(Operations[2].starts_with("State.get<"));
     }
   }
 
@@ -3154,7 +3914,7 @@ use f g n = (f n, g n)
         final_arrow(original)->arrow_effect);
     const auto restored_summary = checker.arena().effect_solver().summarize(
         final_arrow(restored)->arrow_effect);
-    CHECK(original_summary.known_labels == restored_summary.known_labels);
+    CHECK(original_summary.known_atoms == restored_summary.known_atoms);
     CHECK(checker.effect_row_info(original).open_rest);
     CHECK(checker.effect_row_info(restored).open_rest);
     REQUIRE(restored_summary.tails.size() == 2);

@@ -2,6 +2,8 @@
 #define YONA_MODEL_EFFECTSOLVER_H
 #include <compare>
 #include <cstdint>
+#include <expected>
+#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -12,6 +14,9 @@
 namespace yona::compiler::typechecker {
 
 using EffectVarId = std::uint32_t;
+using EffectAtomId = std::uint32_t;
+using EffectAtomCatalogDomain = std::uint64_t;
+inline constexpr EffectAtomCatalogDomain InvalidEffectAtomCatalogDomain = 0;
 
 /// Stable solver-local handle to an effect expression.
 ///
@@ -28,10 +33,19 @@ struct EffectRef {
   auto operator<=>(const EffectRef &) const = default;
 };
 
+struct EffectRefHasher final {
+  [[nodiscard]] std::size_t operator()(EffectRef Effect) const noexcept {
+    auto Seed = std::hash<std::uint64_t>{}(Effect.owner);
+    Seed ^= std::hash<std::uint32_t>{}(Effect.index) +
+            static_cast<std::size_t>(0x9e3779b9u) + (Seed << 6u) + (Seed >> 2u);
+    return Seed;
+  }
+};
+
 /// A still-open effect variable, optionally viewed through a handler mask.
 struct EffectProjection {
   EffectVarId variable = 0;
-  std::vector<std::string> excluded_labels;
+  std::vector<EffectAtomId> excluded_atoms;
   bool opaque = false;
 
   bool operator==(const EffectProjection &) const = default;
@@ -39,12 +53,12 @@ struct EffectProjection {
 
 /// Deterministic semantic summary consumed by later compiler integration.
 struct EffectNormalForm {
-  std::vector<std::string> known_labels;
+  std::vector<EffectAtomId> known_atoms;
   std::vector<EffectProjection> tails;
 
   [[nodiscard]] bool is_open() const noexcept { return !tails.empty(); }
   [[nodiscard]] bool empty() const noexcept {
-    return known_labels.empty() && tails.empty();
+    return known_atoms.empty() && tails.empty();
   }
   bool operator==(const EffectNormalForm &) const = default;
 };
@@ -84,7 +98,18 @@ struct EffectInstantiation {
   std::vector<EffectRef> roots;
   /// Original template variable id -> fresh solver-local variable handle.
   std::unordered_map<EffectVarId, EffectRef> variables;
+  /// Every source graph reference mapped to its fresh destination reference.
+  std::unordered_map<EffectRef, EffectRef, EffectRefHasher> references;
 };
+
+using EffectReferenceMap =
+    std::unordered_map<EffectRef, EffectRef, EffectRefHasher>;
+using EffectAtomInstantiator =
+    std::function<std::expected<EffectAtomId, std::string>(
+        EffectAtomId, const EffectReferenceMap &)>;
+using EffectAtomMaskValidator = std::function<bool(EffectAtomId)>;
+using EffectMaskMatcher =
+    std::function<bool(EffectAtomId Pattern, EffectAtomId Candidate)>;
 
 /// Positive effect-constraint graph. Aggregation is ACI join/inclusion;
 /// equality is an explicit, separate operation.
@@ -98,7 +123,10 @@ struct EffectInstantiation {
 /// mutates or destroys the solver.
 class EffectSolver {
 public:
-  EffectSolver();
+  class InstantiationTransaction;
+
+  explicit EffectSolver(EffectAtomCatalogDomain AtomDomain,
+                        EffectAtomMaskValidator MaskValidator = {});
   EffectSolver(const EffectSolver &) = delete;
   EffectSolver &operator=(const EffectSolver &) = delete;
   EffectSolver(EffectSolver &&) noexcept;
@@ -106,19 +134,24 @@ public:
   ~EffectSolver();
 
   [[nodiscard]] EffectRef empty() const noexcept;
-  EffectRef labels(std::vector<std::string> labels);
-  EffectRef labels(std::initializer_list<std::string> labels);
+  [[nodiscard]] EffectAtomCatalogDomain atomDomain() const noexcept;
+  EffectRef atoms(std::vector<EffectAtomId> Atoms);
+  EffectRef atoms(std::initializer_list<EffectAtomId> Atoms);
   EffectRef flexible();
   EffectRef derived();
   EffectRef opaque();
 
   EffectRef join(std::vector<EffectRef> effects);
   EffectRef join(std::initializer_list<EffectRef> effects);
-  EffectRef mask(EffectRef source, std::vector<std::string> excluded_labels);
+  EffectRef mask(EffectRef source, std::vector<EffectAtomId> ExcludedAtoms);
   EffectRef mask(EffectRef source,
-                 std::initializer_list<std::string> excluded_labels);
+                 std::initializer_list<EffectAtomId> ExcludedAtoms);
 
-  EffectConstraintResult add_label(EffectRef derived, std::string label);
+  EffectConstraintResult addAtom(EffectRef Derived, EffectAtomId Atom);
+  EffectConstraintResult equateAtoms(EffectAtomId Left, EffectAtomId Right);
+  EffectConstraintResult materializeMaskMatches(EffectRef Root,
+                                                const EffectMaskMatcher &Match);
+  [[nodiscard]] EffectAtomId canonicalAtom(EffectAtomId Atom) const;
   EffectConstraintResult include(EffectRef source, EffectRef derived);
   EffectConstraintResult equate(EffectRef left, EffectRef right);
 
@@ -135,10 +168,35 @@ public:
   /// remains independently owned. Throws std::invalid_argument when graph is
   /// empty; malformed internal graph data raises std::logic_error.
   EffectInstantiation instantiate(const EffectGraphTemplate &graph);
+  [[nodiscard]] std::expected<InstantiationTransaction, std::string>
+  beginInstantiation(const EffectGraphTemplate &Graph,
+                     EffectAtomInstantiator InstantiateAtom);
 
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
+};
+
+class EffectSolver::InstantiationTransaction final {
+public:
+  InstantiationTransaction(InstantiationTransaction &&) noexcept;
+  InstantiationTransaction &operator=(InstantiationTransaction &&) noexcept;
+  InstantiationTransaction(const InstantiationTransaction &) = delete;
+  InstantiationTransaction &
+  operator=(const InstantiationTransaction &) = delete;
+  ~InstantiationTransaction();
+
+  [[nodiscard]] std::expected<void, std::string>
+  prepareCommit(const std::function<bool(EffectAtomId)> &ValidAtom,
+                const std::function<bool(EffectAtomId)> &ValidMaskAtom);
+  void commitPrepared() noexcept;
+  [[nodiscard]] const EffectInstantiation &result() const;
+
+private:
+  struct State;
+  std::unique_ptr<State> State_;
+  explicit InstantiationTransaction(std::unique_ptr<State> State);
+  friend class EffectSolver;
 };
 
 } // namespace yona::compiler::typechecker
