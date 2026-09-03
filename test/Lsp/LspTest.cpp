@@ -299,7 +299,11 @@ TEST_CASE("LSP imported interface contract preserves UTF-16 navigation") {
                              "\"\xF0\x9F\x98\x80\" in identity 2";
   a.analyze("file:///tmp/imported-trait.yona", source);
 
-  CHECK(a.diagnostics().empty());
+  const auto Diagnostics = a.diagnostics();
+  CAPTURE(Diagnostics.empty()
+              ? std::string{}
+              : Diagnostics.front().code + ": " + Diagnostics.front().message);
+  CHECK(Diagnostics.empty());
   bool has_compare_completion = false;
   for (const auto &item : a.completions(Position{0, 0}))
     has_compare_completion =

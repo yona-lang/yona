@@ -13,19 +13,425 @@
 #include "yona/Semantics/TypeChecker.h"
 
 #include "yona/Interface/Reader.h"
+#include "yona/Model/InferenceEffectClosure.h"
 #include "yona/Model/ModuleIdentity.h"
 #include "yona/Semantics/BorrowEscapeAnalysis.h"
 #include "yona/Semantics/ModuleFunctionDependencies.h"
 
 #include <algorithm>
+#include <deque>
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <unordered_map>
 #include <variant>
 
 namespace yona::compiler::typechecker {
+namespace {
+
+SourceRange sourceExtent(const DiagnosticEngine &Diagnostics,
+                         const ast::AstNode *Root) {
+  if (!Root)
+    return SourceRange::unknown();
+  const auto &Sources = Diagnostics.sources();
+  if (!Sources || !Root->Range.isValid() ||
+      Root->Range.Source.value() >= Sources->size())
+    return Root->Range;
+  return SourceRange{Root->Range.Source, 1, 1, 0,
+                     Sources->text(Root->Range.Source).size()};
+}
+
+/// Read-only alpha-equivalence for complete imported inference contracts.
+///
+/// Catalog producers borrow one TypeArena, but independently decoded rows may
+/// use different raw binder ids and allocations.  Duplicate compatibility is
+/// therefore structural rather than pointer- or id-based.  This comparator is
+/// intentionally local to the v1/v2 admission boundary; the structural model
+/// remains the authority after projection.
+class ImportedContractComparator final {
+public:
+  using ResolveType = std::function<MonoTypePtr(MonoTypePtr)>;
+
+  ImportedContractComparator(const EffectSolver &Effects,
+                             const EffectAtomCatalog &Atoms,
+                             ResolveType Resolve)
+      : Effects_(Effects), Atoms_(Atoms), Resolve_(std::move(Resolve)) {}
+
+  [[nodiscard]] bool
+  function(const ImportedFunctionDeclarationProjection &Left,
+           const ImportedFunctionDeclarationProjection &Right) {
+    if (!schemePreamble(Left.Scheme, Right.Scheme) ||
+        Left.ParameterOwnerships != Right.ParameterOwnerships ||
+        Left.ResultContract != Right.ResultContract ||
+        Left.Convention != Right.Convention ||
+        !constraints(Left.Scheme.constraints, Right.Scheme.constraints) ||
+        !type(Left.Scheme.body, Right.Scheme.body) ||
+        !effectRoots(Left.Scheme, Right.Scheme))
+      return false;
+    return callables(Left.CallableContracts, Right.CallableContracts);
+  }
+
+  [[nodiscard]] bool
+  operation(const ImportedOperationDeclarationProjection &Left,
+            const ImportedOperationDeclarationProjection &Right) {
+    resetBindings(Left.TypeParameters, Right.TypeParameters,
+                  Left.EffectVariables, Right.EffectVariables);
+    if (Left.TypeParameters.size() != Right.TypeParameters.size() ||
+        !sameEffectVariableKinds(Left.EffectVariables, Right.EffectVariables) ||
+        Left.ParameterOwnerships != Right.ParameterOwnerships ||
+        Left.ResultContract != Right.ResultContract ||
+        Left.ParameterTypes.size() != Right.ParameterTypes.size() ||
+        !constraints(Left.Constraints, Right.Constraints))
+      return false;
+    for (std::size_t Index = 0; Index < Left.ParameterTypes.size(); ++Index)
+      if (!type(Left.ParameterTypes[Index], Right.ParameterTypes[Index]))
+        return false;
+    return type(Left.ResultType, Right.ResultType) &&
+           effect(Left.Effects, Right.Effects) &&
+           callables(Left.CallableContracts, Right.CallableContracts);
+  }
+
+  [[nodiscard]] static bool
+  resource(const ImportedResourceDeclarationProjection &Left,
+           const ImportedResourceDeclarationProjection &Right) {
+    return Left.TypeParameters.size() == Right.TypeParameters.size() &&
+           Left.AbiKind == Right.AbiKind &&
+           Left.Shareability == Right.Shareability &&
+           Left.TryRetainNativeSymbol == Right.TryRetainNativeSymbol &&
+           Left.ReleaseNativeSymbol == Right.ReleaseNativeSymbol;
+  }
+
+private:
+  [[nodiscard]] static bool
+  sameEffectVariableKinds(std::span<const QuantifiedEffectVariable> Left,
+                          std::span<const QuantifiedEffectVariable> Right) {
+    if (Left.size() != Right.size())
+      return false;
+    for (std::size_t Index = 0; Index < Left.size(); ++Index)
+      if (Left[Index].Kind != Right[Index].Kind)
+        return false;
+    return true;
+  }
+
+  void resetBindings(std::span<const TypeId> LeftTypes,
+                     std::span<const TypeId> RightTypes,
+                     std::span<const QuantifiedEffectVariable> LeftEffects,
+                     std::span<const QuantifiedEffectVariable> RightEffects) {
+    LeftTypes_.clear();
+    RightTypes_.clear();
+    LeftEffects_.clear();
+    RightEffects_.clear();
+    for (std::size_t Index = 0; Index < LeftTypes.size(); ++Index)
+      LeftTypes_.emplace(LeftTypes[Index], Index);
+    for (std::size_t Index = 0; Index < RightTypes.size(); ++Index)
+      RightTypes_.emplace(RightTypes[Index], Index);
+    for (std::size_t Index = 0; Index < LeftEffects.size(); ++Index)
+      LeftEffects_.emplace(LeftEffects[Index].Variable, Index);
+    for (std::size_t Index = 0; Index < RightEffects.size(); ++Index)
+      RightEffects_.emplace(RightEffects[Index].Variable, Index);
+  }
+
+  [[nodiscard]] bool schemePreamble(const TypeScheme &Left,
+                                    const TypeScheme &Right) {
+    resetBindings(Left.quantified_vars, Right.quantified_vars,
+                  Left.quantified_effect_variables,
+                  Right.quantified_effect_variables);
+    return Left.quantified_vars.size() == Right.quantified_vars.size() &&
+           sameEffectVariableKinds(Left.quantified_effect_variables,
+                                   Right.quantified_effect_variables) &&
+           Left.effect_graph.has_value() == Right.effect_graph.has_value();
+  }
+
+  [[nodiscard]] bool effectRoots(const TypeScheme &Left,
+                                 const TypeScheme &Right) {
+    if (Left.effect_roots.size() != Right.effect_roots.size())
+      return false;
+    for (std::size_t Index = 0; Index < Left.effect_roots.size(); ++Index)
+      if (!type(Left.effect_roots[Index].Arrow,
+                Right.effect_roots[Index].Arrow) ||
+          !effect(Left.effect_roots[Index].Effect,
+                  Right.effect_roots[Index].Effect))
+        return false;
+    return true;
+  }
+
+  [[nodiscard]] bool constraintIdentity(const Constraint &Left,
+                                        const Constraint &Right) const {
+    if (Left.resolved_trait || Right.resolved_trait)
+      return Left.resolved_trait && Right.resolved_trait &&
+             *Left.resolved_trait == *Right.resolved_trait;
+    return Left.trait_name == Right.trait_name;
+  }
+
+  [[nodiscard]] bool constraint(const Constraint &Left,
+                                const Constraint &Right) {
+    if (!constraintIdentity(Left, Right) ||
+        Left.types.size() != Right.types.size())
+      return false;
+    for (std::size_t Index = 0; Index < Left.types.size(); ++Index)
+      if (!type(Left.types[Index], Right.types[Index]))
+        return false;
+    return true;
+  }
+
+  [[nodiscard]] bool constraints(std::span<const Constraint> Left,
+                                 std::span<const Constraint> Right) {
+    if (Left.size() != Right.size())
+      return false;
+    std::vector<bool> Matched(Right.size());
+    for (const auto &LeftConstraint : Left) {
+      bool Found = false;
+      for (std::size_t Index = 0; Index < Right.size(); ++Index)
+        if (!Matched[Index] && constraint(LeftConstraint, Right[Index])) {
+          Matched[Index] = true;
+          Found = true;
+          break;
+        }
+      if (!Found)
+        return false;
+    }
+    return true;
+  }
+
+  [[nodiscard]] bool callable(const CallableTypeContract &Left,
+                              const CallableTypeContract &Right) {
+    return Left.ParameterOwnerships == Right.ParameterOwnerships &&
+           Left.ResultContract == Right.ResultContract &&
+           Left.Convention == Right.Convention && type(Left.Arrow, Right.Arrow);
+  }
+
+  [[nodiscard]] bool applicationMetadata(const MonoType &Left,
+                                         const MonoType &Right) {
+    if (Left.promise_result_contract != Right.promise_result_contract ||
+        Left.promise_effects.valid() != Right.promise_effects.valid())
+      return false;
+    return !Left.promise_effects.valid() ||
+           effect(Left.promise_effects, Right.promise_effects);
+  }
+
+  [[nodiscard]] bool callables(std::span<const CallableTypeContract> Left,
+                               std::span<const CallableTypeContract> Right) {
+    if (Left.size() != Right.size())
+      return false;
+    std::vector<bool> Matched(Right.size());
+    for (const auto &LeftCallable : Left) {
+      bool Found = false;
+      for (std::size_t Index = 0; Index < Right.size(); ++Index)
+        if (!Matched[Index] && callable(LeftCallable, Right[Index])) {
+          Matched[Index] = true;
+          Found = true;
+          break;
+        }
+      if (!Found)
+        return false;
+    }
+    return true;
+  }
+
+  [[nodiscard]] bool type(MonoTypePtr Left, MonoTypePtr Right) {
+    Left = Resolve_(Left);
+    Right = Resolve_(Right);
+    if (Left == Right)
+      return Left != nullptr;
+    if (!Left || !Right || Left->tag != Right->tag)
+      return false;
+    const auto Active = std::pair{Left, Right};
+    if (!ActiveTypes_.insert(Active).second)
+      return true;
+    const auto Finish = [&](bool Equal) {
+      ActiveTypes_.erase(Active);
+      return Equal;
+    };
+    switch (Left->tag) {
+    case MonoType::Var: {
+      const auto LeftBinder = LeftTypes_.find(Left->var_id);
+      const auto RightBinder = RightTypes_.find(Right->var_id);
+      return Finish(LeftBinder != LeftTypes_.end() ||
+                            RightBinder != RightTypes_.end()
+                        ? LeftBinder != LeftTypes_.end() &&
+                              RightBinder != RightTypes_.end() &&
+                              LeftBinder->second == RightBinder->second
+                        : Left->var_id == Right->var_id);
+    }
+    case MonoType::Con:
+      return Finish(Left->con == Right->con);
+    case MonoType::App: {
+      const bool SameIdentity =
+          (Left->resolved_key || Right->resolved_key)
+              ? Left->resolved_key && Right->resolved_key &&
+                    *Left->resolved_key == *Right->resolved_key
+              : Left->type_name == Right->type_name;
+      if (!SameIdentity || Left->args.size() != Right->args.size() ||
+          !applicationMetadata(*Left, *Right))
+        return Finish(false);
+      for (std::size_t Index = 0; Index < Left->args.size(); ++Index)
+        if (!type(Left->args[Index], Right->args[Index]))
+          return Finish(false);
+      return Finish(true);
+    }
+    case MonoType::Arrow:
+      return Finish(type(Left->param_type, Right->param_type) &&
+                    type(Left->return_type, Right->return_type) &&
+                    effect(Left->arrow_effect, Right->arrow_effect));
+    case MonoType::MTuple:
+      if (Left->elements.size() != Right->elements.size())
+        return Finish(false);
+      for (std::size_t Index = 0; Index < Left->elements.size(); ++Index)
+        if (!type(Left->elements[Index], Right->elements[Index]))
+          return Finish(false);
+      return Finish(true);
+    case MonoType::MRecord:
+      if (Left->record_fields.size() != Right->record_fields.size() ||
+          static_cast<bool>(Left->row_rest) !=
+              static_cast<bool>(Right->row_rest))
+        return Finish(false);
+      for (std::size_t Index = 0; Index < Left->record_fields.size(); ++Index)
+        if (Left->record_fields[Index].first !=
+                Right->record_fields[Index].first ||
+            !type(Left->record_fields[Index].second,
+                  Right->record_fields[Index].second))
+          return Finish(false);
+      return Finish(!Left->row_rest || type(Left->row_rest, Right->row_rest));
+    case MonoType::Sum: {
+      if (Left->sum_alternatives.size() != Right->sum_alternatives.size())
+        return Finish(false);
+      std::vector<bool> Matched(Right->sum_alternatives.size());
+      for (const auto *LeftAlternative : Left->sum_alternatives) {
+        bool Found = false;
+        for (std::size_t Index = 0; Index < Right->sum_alternatives.size();
+             ++Index)
+          if (!Matched[Index] &&
+              type(LeftAlternative, Right->sum_alternatives[Index])) {
+            Matched[Index] = true;
+            Found = true;
+            break;
+          }
+        if (!Found)
+          return Finish(false);
+      }
+      return Finish(true);
+    }
+    }
+    return Finish(false);
+  }
+
+  [[nodiscard]] bool atom(EffectAtomId Left, EffectAtomId Right) {
+    try {
+      Left = Effects_.canonicalAtom(Left);
+      Right = Effects_.canonicalAtom(Right);
+      if (!Atoms_.valid(Left) || !Atoms_.valid(Right))
+        return false;
+      const auto &LeftAtom = Atoms_.at(Left);
+      const auto &RightAtom = Atoms_.at(Right);
+      if (LeftAtom.index() != RightAtom.index())
+        return false;
+      const auto *LeftOperation = std::get_if<OperationEffectAtom>(&LeftAtom);
+      if (!LeftOperation)
+        return true;
+      const auto &RightOperation = std::get<OperationEffectAtom>(RightAtom);
+      if (LeftOperation->Key != RightOperation.Key ||
+          LeftOperation->TypeArguments.size() !=
+              RightOperation.TypeArguments.size() ||
+          LeftOperation->EffectArguments.size() !=
+              RightOperation.EffectArguments.size())
+        return false;
+      for (std::size_t Index = 0; Index < LeftOperation->TypeArguments.size();
+           ++Index)
+        if (!type(LeftOperation->TypeArguments[Index],
+                  RightOperation.TypeArguments[Index]))
+          return false;
+      for (std::size_t Index = 0; Index < LeftOperation->EffectArguments.size();
+           ++Index)
+        if (!effect(LeftOperation->EffectArguments[Index],
+                    RightOperation.EffectArguments[Index]))
+          return false;
+      return true;
+    } catch (const std::invalid_argument &) {
+      return false;
+    }
+  }
+
+  [[nodiscard]] bool atomSet(std::span<const EffectAtomId> Left,
+                             std::span<const EffectAtomId> Right) {
+    if (Left.size() != Right.size())
+      return false;
+    std::vector<bool> Matched(Right.size());
+    for (const auto LeftAtom : Left) {
+      bool Found = false;
+      for (std::size_t Index = 0; Index < Right.size(); ++Index)
+        if (!Matched[Index] && atom(LeftAtom, Right[Index])) {
+          Matched[Index] = true;
+          Found = true;
+          break;
+        }
+      if (!Found)
+        return false;
+    }
+    return true;
+  }
+
+  [[nodiscard]] bool tail(const EffectProjection &Left,
+                          const EffectProjection &Right) {
+    if (Left.opaque != Right.opaque ||
+        !atomSet(Left.excluded_atoms, Right.excluded_atoms))
+      return false;
+    const auto LeftBinder = LeftEffects_.find(Left.variable);
+    const auto RightBinder = RightEffects_.find(Right.variable);
+    return LeftBinder != LeftEffects_.end() ||
+                   RightBinder != RightEffects_.end()
+               ? LeftBinder != LeftEffects_.end() &&
+                     RightBinder != RightEffects_.end() &&
+                     LeftBinder->second == RightBinder->second
+               : Left.variable == Right.variable;
+  }
+
+  [[nodiscard]] bool effect(EffectRef Left, EffectRef Right) {
+    const auto Active = std::pair{Left, Right};
+    if (!ActiveEffects_.insert(Active).second)
+      return true;
+    const auto Finish = [&](bool Equal) {
+      ActiveEffects_.erase(Active);
+      return Equal;
+    };
+    try {
+      const auto LeftNormal = Effects_.summarize(Left);
+      const auto RightNormal = Effects_.summarize(Right);
+      if (!atomSet(LeftNormal.known_atoms, RightNormal.known_atoms) ||
+          LeftNormal.tails.size() != RightNormal.tails.size())
+        return Finish(false);
+      std::vector<bool> Matched(RightNormal.tails.size());
+      for (const auto &LeftTail : LeftNormal.tails) {
+        bool Found = false;
+        for (std::size_t Index = 0; Index < RightNormal.tails.size(); ++Index)
+          if (!Matched[Index] && tail(LeftTail, RightNormal.tails[Index])) {
+            Matched[Index] = true;
+            Found = true;
+            break;
+          }
+        if (!Found)
+          return Finish(false);
+      }
+      return Finish(true);
+    } catch (const std::invalid_argument &) {
+      return Finish(false);
+    }
+  }
+
+  const EffectSolver &Effects_;
+  const EffectAtomCatalog &Atoms_;
+  ResolveType Resolve_;
+  std::unordered_map<TypeId, std::size_t> LeftTypes_;
+  std::unordered_map<TypeId, std::size_t> RightTypes_;
+  std::unordered_map<EffectVarId, std::size_t> LeftEffects_;
+  std::unordered_map<EffectVarId, std::size_t> RightEffects_;
+  std::set<std::pair<MonoTypePtr, MonoTypePtr>> ActiveTypes_;
+  std::set<std::pair<EffectRef, EffectRef>> ActiveEffects_;
+};
+
+} // namespace
+
 using ast::ApplyExpr;
 using ast::AsDataStructurePattern;
 using ast::AST_ADD_EXPR;
@@ -97,6 +503,80 @@ using ast::AST_UNDERSCORE_PATTERN;
 using ast::AST_UNIT_EXPR;
 using ast::AST_VALUES_SEQUENCE_EXPR;
 using ast::AST_WITH_EXPR;
+
+struct TypeChecker::ProjectionStorage final {
+  std::optional<TypeScheme> RootScheme;
+  std::vector<model::ParameterOwnership> RootOwnerships;
+  std::vector<CallableTypeContract> CallableContracts;
+  std::vector<NodeSemanticProjection> NodeFacts;
+  std::vector<DeclarationScopeProjection> Scopes;
+  std::vector<FunctionSchemeProjection> Functions;
+  std::deque<std::vector<model::ParameterOwnership>> OperationOwnerships;
+  std::deque<std::vector<CallableTypeContract>> OperationCallableContracts;
+  std::vector<OperationSchemeProjection> Operations;
+  std::vector<NominalDeclarationProjection> Nominals;
+  std::vector<ResourceDeclarationProjection> Resources;
+  std::vector<TraitDeclarationProjection> Traits;
+  std::vector<TraitInstanceProjection> Instances;
+  std::vector<DeriveRequestProjection> Derivations;
+  std::vector<ImportedDeclarationCatalogEntry> ImportedDeclarations;
+  std::deque<TypeScheme> ModuleSchemes;
+  std::deque<std::vector<model::ParameterOwnership>> ModuleOwnerships;
+  std::deque<std::vector<CallableTypeContract>> ModuleCallableContracts;
+  std::deque<std::vector<NodeSemanticProjection>> ModuleNodeFacts;
+  std::deque<std::vector<TypeId>> ModuleTypeParameters;
+  std::deque<std::vector<MonoTypePtr>> ConstructorFields;
+  std::deque<std::vector<ConstructorProjection>> Constructors;
+  std::deque<std::vector<Constraint>> DeclarationConstraints;
+  std::deque<std::vector<TraitMethodProjection>> TraitMethods;
+  std::deque<std::vector<MonoTypePtr>> InstanceArguments;
+  std::deque<std::vector<TraitMethodBindingProjection>> InstanceMethods;
+  std::deque<std::vector<model::NominalTypeKey>> DerivedTraits;
+  const ast::AstNode *SourceRoot = nullptr;
+  SourceRange SourceExtent = SourceRange::unknown();
+  SemanticProjectionBatch Batch;
+
+  void clear() {
+    Batch = {};
+    Functions.clear();
+    Scopes.clear();
+    NodeFacts.clear();
+    CallableContracts.clear();
+    RootOwnerships.clear();
+    RootScheme.reset();
+    Operations.clear();
+    OperationCallableContracts.clear();
+    OperationOwnerships.clear();
+    Nominals.clear();
+    Resources.clear();
+    Traits.clear();
+    Instances.clear();
+    Derivations.clear();
+    ImportedDeclarations.clear();
+    Constructors.clear();
+    ConstructorFields.clear();
+    DerivedTraits.clear();
+    InstanceMethods.clear();
+    InstanceArguments.clear();
+    TraitMethods.clear();
+    DeclarationConstraints.clear();
+    ModuleTypeParameters.clear();
+    ModuleNodeFacts.clear();
+    ModuleCallableContracts.clear();
+    ModuleOwnerships.clear();
+    ModuleSchemes.clear();
+    SourceRoot = nullptr;
+    SourceExtent = SourceRange::unknown();
+  }
+
+  void publish() noexcept {
+    Batch =
+        SemanticProjectionBatch{Scopes,     Functions,   Operations,
+                                Nominals,   Resources,   Traits,
+                                Instances,  Derivations, ImportedDeclarations,
+                                SourceRoot, SourceExtent};
+  }
+};
 using ast::AstNode;
 using ast::AstNodeType;
 using ast::BinaryOpExpr;
@@ -198,6 +678,37 @@ static std::string fqn_to_string(FqnExpr *fqn) {
   return s;
 }
 
+static std::string
+instance_method_symbol(std::string_view Trait,
+                       std::span<const std::string> TypeNames,
+                       std::string_view Method) {
+  std::string Result(Trait);
+  for (const auto &Type : TypeNames)
+    Result += "_" + Type;
+  Result += "_";
+  Result += Method;
+  return Result;
+}
+
+static std::string instance_method_symbol(const ast::InstanceDeclNode &Instance,
+                                          std::string_view Method) {
+  return instance_method_symbol(Instance.trait_name, Instance.type_names,
+                                Method);
+}
+
+static bool
+same_callable_contracts(std::span<const CallableTypeContract> Left,
+                        std::span<const CallableTypeContract> Right) {
+  if (Left.size() != Right.size())
+    return false;
+  for (std::size_t Index = 0; Index < Left.size(); ++Index)
+    if (Left[Index].ParameterOwnerships != Right[Index].ParameterOwnerships ||
+        Left[Index].ResultContract != Right[Index].ResultContract ||
+        Left[Index].Convention != Right[Index].Convention)
+      return false;
+  return true;
+}
+
 /// A parameterless module binding serializes as an implementation-only root
 /// arrow at `$`; a source-visible thunk starts at `$/r`.  Rebase that visible
 /// subtree without decoding and re-encoding individual effect entries: labels,
@@ -247,9 +758,1508 @@ normalize_zero_arity_thunk_scheme(std::string_view encoded) {
 }
 
 TypeChecker::TypeChecker(DiagnosticEngine &diag)
-    : unifier_(arena_, uf_, diag), diag_(diag) {
+    : unifier_(arena_, uf_, diag), diag_(diag),
+      projection_storage_(std::make_unique<ProjectionStorage>()) {
   root_env_ = std::make_shared<TypeEnv>();
   register_builtins(*root_env_, arena_);
+  for (const auto &[Name, Scheme] : root_env_->locals())
+    scheme_identities_.insert_or_assign(
+        Scheme.body, model::FunctionDeclarationIdentity{model::SymbolIdentity{
+                         model::ModuleIdentity{"Prelude"}, Name}});
+}
+
+TypeChecker::~TypeChecker() = default;
+
+const SemanticProjectionBatch &
+TypeChecker::structuralProjectionInput() const noexcept {
+  return projection_storage_->Batch;
+}
+
+void TypeChecker::begin_check_session() {
+  type_map_.clear();
+  deferred_constraints_.clear();
+  selected_trait_instances_.clear();
+  trait_method_uses_.clear();
+  collection_key_types_.clear();
+  collection_key_operations_.clear();
+  sum_injections_.clear();
+  node_effects_.clear();
+  operation_occurrences_.clear();
+  operation_atoms_.clear();
+  legacy_untyped_effect_atoms_.clear();
+  imported_function_declarations_.clear();
+  instantiations_.clear();
+  function_callable_contracts_.clear();
+  expression_callable_contracts_.clear();
+  function_schemes_.clear();
+  projection_function_types_.clear();
+  projection_function_identities_.clear();
+  trait_default_owners_.clear();
+  instance_method_owners_.clear();
+  projection_trait_type_parameters_.clear();
+  projection_nominal_declarations_.clear();
+  projection_trait_methods_.clear();
+  projection_extern_declarations_.clear();
+  projection_instance_type_parameters_.clear();
+  function_inference_stack_.clear();
+  concurrency_boundaries_.clear();
+  capture_frames_.clear();
+  function_capture_types_.clear();
+  named_function_capture_types_.clear();
+  latent_effect_stack_.clear();
+  evaluation_effect_stack_.clear();
+  isolated_evaluation_roots_.clear();
+  effect_origins_.clear();
+  unhandled_effect_locations_.clear();
+  recursive_self_contexts_.clear();
+  predeclared_function_body_effects_.clear();
+  projection_root_ = nullptr;
+  projection_root_type_ = nullptr;
+  projection_visible_parameter_count_ = 0;
+  projection_module_ = nullptr;
+  projection_module_functions_.clear();
+  projection_storage_->clear();
+  projection_storage_->publish();
+}
+
+void TypeChecker::populateImportedProjectionCatalog(SourceRange Range) {
+  auto &Output = projection_storage_->ImportedDeclarations;
+  Output.clear();
+
+  const auto canonicalIdentity =
+      [](const ImportedDeclarationCatalogEntry &Entry) {
+        auto Result = std::to_string(static_cast<unsigned>(Entry.Kind)) + ":";
+        Result += std::visit(
+            [](const auto &Value) -> std::string {
+              using T = std::decay_t<decltype(Value)>;
+              if constexpr (std::same_as<T, model::NominalTypeKey>)
+                return Value.Module.fqn() + "\\" + Value.Name;
+              else if constexpr (std::same_as<T, model::EffectOperationKey>)
+                return Value.Effect.Module.fqn() + "\\" + Value.Effect.Name +
+                       "." + Value.Operation;
+              else if constexpr (std::same_as<
+                                     T, model::FunctionDeclarationIdentity>)
+                return std::visit(
+                    [](const auto &Function) {
+                      using F = std::decay_t<decltype(Function)>;
+                      if constexpr (std::same_as<F, model::SymbolIdentity>)
+                        return Function.Module.fqn() + "\\" + Function.Name;
+                      else
+                        return Function.Module.fqn() + "\\<local>";
+                    },
+                    Value);
+              else
+                return std::string("<instance>");
+            },
+            Entry.Identity);
+        return Result;
+      };
+  const auto sameIdentity = [](const ImportedDeclarationCatalogEntry &Left,
+                               const ImportedDeclarationCatalogEntry &Right) {
+    if (Left.Kind != Right.Kind ||
+        Left.Identity.index() != Right.Identity.index())
+      return false;
+    if (const auto *Key = std::get_if<model::NominalTypeKey>(&Left.Identity))
+      return *Key == std::get<model::NominalTypeKey>(Right.Identity);
+    if (const auto *Identity =
+            std::get_if<model::FunctionDeclarationIdentity>(&Left.Identity))
+      return *Identity ==
+             std::get<model::FunctionDeclarationIdentity>(Right.Identity);
+    if (const auto *Key =
+            std::get_if<model::EffectOperationKey>(&Left.Identity))
+      return *Key == std::get<model::EffectOperationKey>(Right.Identity);
+    return false;
+  };
+  const auto Add = [&](ImportedDeclarationCatalogEntry Entry) {
+    Entry.Range = Range;
+    std::ranges::sort(Entry.TraitMethods);
+    Entry.TraitMethods.erase(std::ranges::unique(Entry.TraitMethods).begin(),
+                             Entry.TraitMethods.end());
+    const auto Existing = std::ranges::find_if(
+        Output, [&](const auto &Value) { return sameIdentity(Value, Entry); });
+    if (Existing == Output.end())
+      Output.push_back(std::move(Entry));
+    else {
+      const auto HasRichContract = [](const auto &Value) {
+        return Value.Function.has_value() || Value.Operation.has_value() ||
+               Value.Resource.has_value();
+      };
+      const bool ExistingRich = HasRichContract(*Existing);
+      const bool EntryRich = HasRichContract(Entry);
+      ImportedContractComparator Compare(
+          arena_.effect_solver(), arena_.effect_atoms(),
+          [&](MonoTypePtr Type) { return unifier_.resolve(Type); });
+      const bool SameRichContract = [&] {
+        if (!ExistingRich || !EntryRich)
+          return true;
+        if (Existing->Function || Entry.Function)
+          return Existing->Function && Entry.Function &&
+                 Compare.function(*Existing->Function, *Entry.Function);
+        if (Existing->Operation || Entry.Operation)
+          return Existing->Operation && Entry.Operation &&
+                 Compare.operation(*Existing->Operation, *Entry.Operation);
+        return Existing->Resource && Entry.Resource &&
+               ImportedContractComparator::resource(*Existing->Resource,
+                                                    *Entry.Resource);
+      }();
+      const bool ConflictingShape =
+          Existing->TypeArity != Entry.TypeArity ||
+          Existing->EffectArity != Entry.EffectArity ||
+          (!Existing->TraitMethods.empty() && !Entry.TraitMethods.empty() &&
+           Existing->TraitMethods != Entry.TraitMethods) ||
+          !SameRichContract;
+      if (ConflictingShape) {
+        const auto Identity = canonicalIdentity(Entry).substr(2);
+        diag_.error(Range, ErrorCode::E0100,
+                    "conflicting imported declaration catalog rows for '" +
+                        Identity + "' (type " +
+                        std::to_string(Existing->TypeArity) + " vs " +
+                        std::to_string(Entry.TypeArity) + ", effect " +
+                        std::to_string(Existing->EffectArity) + " vs " +
+                        std::to_string(Entry.EffectArity) + ")");
+        ++error_count_;
+        return;
+      }
+      if (!ExistingRich && EntryRich) {
+        Existing->TypeArity = Entry.TypeArity;
+        Existing->EffectArity = Entry.EffectArity;
+      }
+      Existing->Derivable = Existing->Derivable || Entry.Derivable;
+      if (Entry.Function)
+        Existing->Function = std::move(Entry.Function);
+      if (Entry.Operation)
+        Existing->Operation = std::move(Entry.Operation);
+      if (Entry.Resource)
+        Existing->Resource = std::move(Entry.Resource);
+      Existing->TraitMethods.insert(Existing->TraitMethods.end(),
+                                    Entry.TraitMethods.begin(),
+                                    Entry.TraitMethods.end());
+      std::ranges::sort(Existing->TraitMethods);
+      Existing->TraitMethods.erase(
+          std::ranges::unique(Existing->TraitMethods).begin(),
+          Existing->TraitMethods.end());
+    }
+  };
+  const auto HasNominal = [&](model::BinderOwnerKind Kind,
+                              const model::NominalTypeKey &Key) {
+    return std::ranges::any_of(Output, [&](const auto &Entry) {
+      const auto *Existing =
+          std::get_if<model::NominalTypeKey>(&Entry.Identity);
+      return Entry.Kind == Kind && Existing && *Existing == Key;
+    });
+  };
+  const auto HasFunction =
+      [&](const model::FunctionDeclarationIdentity &Identity) {
+        return std::ranges::any_of(Output, [&](const auto &Entry) {
+          const auto *Existing =
+              std::get_if<model::FunctionDeclarationIdentity>(&Entry.Identity);
+          return Entry.Kind == model::BinderOwnerKind::Function && Existing &&
+                 *Existing == Identity;
+        });
+      };
+  const auto HasOperation = [&](const model::EffectOperationKey &Key) {
+    return std::ranges::any_of(Output, [&](const auto &Entry) {
+      const auto *Existing =
+          std::get_if<model::EffectOperationKey>(&Entry.Identity);
+      return Entry.Kind == model::BinderOwnerKind::Operation && Existing &&
+             *Existing == Key;
+    });
+  };
+
+  if (import_src_) {
+    std::vector<std::string> Modules(registered_import_modules_.begin(),
+                                     registered_import_modules_.end());
+    std::ranges::sort(Modules);
+    for (const auto &Module : Modules) {
+      auto Entries = import_src_->imported_declarations(Module);
+      std::ranges::sort(Entries, [&](const auto &Left, const auto &Right) {
+        return canonicalIdentity(Left) < canonicalIdentity(Right);
+      });
+      for (auto &Entry : Entries)
+        Add(std::move(Entry));
+    }
+  }
+
+  std::unordered_set<model::FunctionDeclarationIdentity,
+                     model::FunctionDeclarationIdentityHasher>
+      ReferencedFunctions;
+  for (const auto &[_, Instantiation] : instantiations_)
+    ReferencedFunctions.insert(Instantiation.Scheme);
+  const auto RememberTarget = [&](const TraitMethodSelectionProjection &Use) {
+    if (const auto *Resolved =
+            std::get_if<ResolvedTraitTargetProjection>(&Use.Evidence))
+      ReferencedFunctions.insert(Resolved->SelectedTarget);
+  };
+  for (const auto &[_, Use] : trait_method_uses_)
+    RememberTarget(Use);
+  for (const auto &[_, Operations] : collection_key_operations_) {
+    RememberTarget(Operations.Hash);
+    RememberTarget(Operations.Equals);
+  }
+
+  for (const auto &[Identity, Contract] : imported_function_declarations_)
+    Add({model::BinderOwnerKind::Function,
+         Identity,
+         Contract.Scheme.quantified_vars.size(),
+         static_cast<std::size_t>(std::ranges::count_if(
+             Contract.Scheme.quantified_effect_variables,
+             [](const auto &Variable) {
+               return Variable.Kind == model::EffectVariableKind::Flexible;
+             })),
+         {},
+         false,
+         Range,
+         Contract});
+
+  for (const auto &[Identity, Contract] :
+       registered_interface_function_declarations_)
+    if (ReferencedFunctions.contains(Identity) &&
+        !imported_function_declarations_.contains(Identity))
+      Add({model::BinderOwnerKind::Function,
+           Identity,
+           Contract.Scheme.quantified_vars.size(),
+           static_cast<std::size_t>(std::ranges::count_if(
+               Contract.Scheme.quantified_effect_variables,
+               [](const auto &Variable) {
+                 return Variable.Kind == model::EffectVariableKind::Flexible;
+               })),
+           {},
+           false,
+           Range,
+           Contract});
+
+  for (const auto &[Name, Key] : nominal_keys_)
+    if (Key.Module != current_module_ &&
+        !HasNominal(model::BinderOwnerKind::Nominal, Key)) {
+      const auto Parameters = adt_type_params_.find(Name);
+      Add({model::BinderOwnerKind::Nominal,
+           Key,
+           Parameters == adt_type_params_.end() ? 0 : Parameters->second.size(),
+           0,
+           {},
+           false,
+           Range});
+    }
+  for (const auto &[Name, Key] : trait_keys_)
+    if (Key.Module != current_module_ &&
+        !HasNominal(model::BinderOwnerKind::Trait, Key)) {
+      const auto Parameters = trait_type_params_.find(Name);
+      std::vector<std::string> Methods;
+      if (const auto Found = trait_methods_.find(Name);
+          Found != trait_methods_.end())
+        Methods.assign(Found->second.begin(), Found->second.end());
+      const bool Derivable = Name == "Eq" || Name == "Hash" || Name == "Ord" ||
+                             Name == "Show" || Name == "Send" ||
+                             Name == "Shareable";
+      Add({model::BinderOwnerKind::Trait, Key,
+           Parameters == trait_type_params_.end() ? 0
+                                                  : Parameters->second.size(),
+           0, std::move(Methods), Derivable, Range});
+    }
+  for (const auto &[_, Scheme] : root_env_->locals()) {
+    const auto Identity = scheme_identities_.find(Scheme.body);
+    if (Identity == scheme_identities_.end() ||
+        !std::visit(
+            [&](const auto &Value) { return Value.Module != current_module_; },
+            Identity->second))
+      continue;
+    if (HasFunction(Identity->second))
+      continue;
+    const auto EffectArity = static_cast<std::size_t>(std::ranges::count_if(
+        Scheme.quantified_effect_variables, [](const auto &Variable) {
+          return Variable.Kind == model::EffectVariableKind::Flexible;
+        }));
+    Add({model::BinderOwnerKind::Function,
+         Identity->second,
+         Scheme.quantified_vars.size(),
+         EffectArity,
+         {},
+         false,
+         Range});
+  }
+  const auto ParameterOwnership = [&](MonoTypePtr Type) {
+    Type = unifier_.resolve(Type);
+    return Type && Type->tag == MonoType::Con && Type->con != TyCon::String
+               ? model::ParameterOwnership::Trivial
+               : model::ParameterOwnership::Consume;
+  };
+  const auto ResultOwnership = [&](MonoTypePtr Type) {
+    Type = unifier_.resolve(Type);
+    return Type && Type->tag == MonoType::Con && Type->con != TyCon::String
+               ? model::ResultOwnership::Trivial
+               : model::ResultOwnership::Owned;
+  };
+  for (const auto &[_, Operation] : effect_ops_)
+    if (Operation.key.Effect.Module != current_module_ &&
+        !HasOperation(Operation.key)) {
+      const auto *Signature = Operation.signature.body;
+      if (!Signature || Signature->tag != MonoType::MTuple ||
+          Signature->elements.size() != Operation.parameter_count + 1) {
+        diag_.error(Range, ErrorCode::E0100,
+                    "malformed registered effect signature for '" +
+                        Operation.key.Effect.Module.fqn() + "\\" +
+                        Operation.key.Effect.Name + "." +
+                        Operation.key.Operation + "'");
+        ++error_count_;
+        continue;
+      }
+      ImportedOperationDeclarationProjection Contract;
+      Contract.TypeParameters = Operation.signature.quantified_vars;
+      Contract.EffectVariables =
+          Operation.signature.quantified_effect_variables;
+      Contract.Constraints = Operation.signature.constraints;
+      Contract.ParameterTypes.assign(Signature->elements.begin(),
+                                     Signature->elements.begin() +
+                                         Operation.parameter_count);
+      Contract.ParameterOwnerships.reserve(Operation.parameter_count);
+      for (const auto *Parameter : Contract.ParameterTypes)
+        Contract.ParameterOwnerships.push_back(ParameterOwnership(Parameter));
+      Contract.ResultType = Signature->elements.back();
+      Contract.ResultContract = ResultOwnership(Contract.ResultType);
+      Contract.Effects = arena_.effect_solver().empty();
+      Contract.CallableContracts = Operation.callable_contracts;
+      Add({model::BinderOwnerKind::Operation,
+           Operation.key,
+           Operation.type_argument_count,
+           static_cast<std::size_t>(std::ranges::count_if(
+               Operation.signature.quantified_effect_variables,
+               [](const auto &Variable) {
+                 return Variable.Kind == model::EffectVariableKind::Flexible;
+               })),
+           {},
+           false,
+           Range,
+           std::nullopt,
+           std::move(Contract)});
+    }
+  const auto AddTarget = [&](const TraitMethodSelectionProjection &Selection) {
+    const auto *Resolved =
+        std::get_if<ResolvedTraitTargetProjection>(&Selection.Evidence);
+    if (!Resolved ||
+        std::visit(
+            [&](const auto &Value) { return Value.Module == current_module_; },
+            Resolved->SelectedTarget))
+      return;
+    if (HasFunction(Resolved->SelectedTarget))
+      return;
+    Add({model::BinderOwnerKind::Function,
+         Resolved->SelectedTarget,
+         Resolved->TargetTypeArguments.size(),
+         Resolved->TargetEffectArguments.size(),
+         {},
+         false,
+         Range});
+  };
+  for (const auto &[_, Selection] : trait_method_uses_)
+    AddTarget(Selection);
+  for (const auto &[_, Operations] : collection_key_operations_) {
+    AddTarget(Operations.Hash);
+    AddTarget(Operations.Equals);
+  }
+
+  std::ranges::sort(Output, [&](const auto &Left, const auto &Right) {
+    return canonicalIdentity(Left) < canonicalIdentity(Right);
+  });
+}
+
+void TypeChecker::refreshStructuralProjection(
+    ast::AstNode *Root, MonoTypePtr RootType,
+    std::size_t VisibleParameterCount) {
+  projection_root_ = Root;
+  projection_root_type_ = RootType;
+  projection_visible_parameter_count_ = VisibleParameterCount;
+  auto &Storage = *projection_storage_;
+  Storage.clear();
+  if (!Root || !RootType) {
+    Storage.publish();
+    return;
+  }
+  Storage.SourceRoot = Root;
+  Storage.SourceExtent = sourceExtent(diag_, Root);
+
+  std::unordered_map<MonoTypePtr, MonoTypePtr> Rebuilt;
+  std::function<MonoTypePtr(MonoTypePtr)> rebuild = [&](MonoTypePtr Input) {
+    Input = unifier_.resolve(Input);
+    if (!Input)
+      return static_cast<MonoTypePtr>(nullptr);
+    if (const auto Found = Rebuilt.find(Input); Found != Rebuilt.end())
+      return Found->second;
+    MonoTypePtr Result = nullptr;
+    switch (Input->tag) {
+    case MonoType::Var:
+    case MonoType::Con:
+      Result = Input;
+      break;
+    case MonoType::App: {
+      std::vector<MonoTypePtr> Arguments;
+      Arguments.reserve(Input->args.size());
+      for (const auto *Argument : Input->args)
+        Arguments.push_back(rebuild(Argument));
+      if (Input->type_name == "Promise" && Input->promise_result_contract &&
+          !Arguments.empty())
+        Result = arena_.make_promise(Arguments.front(),
+                                     *Input->promise_result_contract,
+                                     Input->promise_effects);
+      else
+        Result = Input->resolved_key
+                     ? arena_.make_app(*Input->resolved_key,
+                                       std::move(Arguments), Input->type_name)
+                     : arena_.make_app(Input->type_name, std::move(Arguments));
+      break;
+    }
+    case MonoType::Arrow:
+      Result =
+          arena_.make_arrow(rebuild(Input->param_type),
+                            rebuild(Input->return_type), Input->arrow_effect);
+      break;
+    case MonoType::MTuple: {
+      std::vector<MonoTypePtr> Elements;
+      Elements.reserve(Input->elements.size());
+      for (const auto *Element : Input->elements)
+        Elements.push_back(rebuild(Element));
+      Result = arena_.make_tuple(std::move(Elements));
+      break;
+    }
+    case MonoType::MRecord: {
+      std::vector<std::pair<std::string, MonoTypePtr>> Fields;
+      Fields.reserve(Input->record_fields.size());
+      for (const auto &[Name, Field] : Input->record_fields)
+        Fields.emplace_back(Name, rebuild(Field));
+      Result = arena_.make_record(std::move(Fields), rebuild(Input->row_rest));
+      break;
+    }
+    case MonoType::Sum: {
+      std::vector<MonoTypePtr> Alternatives;
+      Alternatives.reserve(Input->sum_alternatives.size());
+      for (const auto *Alternative : Input->sum_alternatives)
+        Alternatives.push_back(rebuild(Alternative));
+      Result = arena_.make_sum(std::move(Alternatives));
+      break;
+    }
+    }
+    Rebuilt.emplace(Input, Result);
+    return Result;
+  };
+
+  const auto *ZonedRoot = rebuild(RootType);
+  Storage.RootScheme =
+      generalize(ZonedRoot, -1,
+                 dynamic_cast<const ast::FunctionExpr *>(Root)
+                     ? constraints_for_function(
+                           dynamic_cast<const ast::FunctionExpr *>(Root))
+                     : std::vector<Constraint>{});
+
+  std::vector<std::pair<const ast::AstNode *, MonoTypePtr>> OrderedFacts;
+  OrderedFacts.reserve(type_map_.size());
+  for (const auto &[Node, Type] : type_map_)
+    if (Node && Type) {
+      const ast::FunctionExpr *NearestFunction = nullptr;
+      for (auto *Current = Node; Current; Current = Current->parent)
+        if ((NearestFunction =
+                 dynamic_cast<const ast::FunctionExpr *>(Current)))
+          break;
+      if (NearestFunction && NearestFunction != Root)
+        continue;
+      OrderedFacts.emplace_back(Node, rebuild(Type));
+    }
+  std::ranges::sort(OrderedFacts, [](const auto &Left, const auto &Right) {
+    if (Left.first->Range.Offset != Right.first->Range.Offset)
+      return Left.first->Range.Offset < Right.first->Range.Offset;
+    if (Left.first->Range.Length != Right.first->Range.Length)
+      return Left.first->Range.Length < Right.first->Range.Length;
+    return Left.first < Right.first;
+  });
+  Storage.NodeFacts.reserve(OrderedFacts.size());
+  for (const auto &[Node, InferredType] : OrderedFacts) {
+    const auto *Type = Node == Root ? Storage.RootScheme->body : InferredType;
+    std::optional<SchemeInstantiationProjection> Instantiation;
+    if (const auto Found = instantiations_.find(Node);
+        Found != instantiations_.end()) {
+      Instantiation = Found->second;
+      for (auto *&Argument : Instantiation->TypeArguments)
+        Argument = rebuild(Argument);
+    }
+    auto Occurrence = operation_occurrences_.find(Node);
+    std::optional<OperationOccurrenceProjection> Operation;
+    if (Occurrence != operation_occurrences_.end()) {
+      Operation = Occurrence->second;
+      std::visit(
+          [&](auto &Fact) {
+            for (auto *&Argument : Fact.Application.TypeArguments)
+              Argument = rebuild(Argument);
+            for (auto *&Parameter : Fact.Application.ParameterTypes)
+              Parameter = rebuild(Parameter);
+            Fact.Application.ResultType = rebuild(Fact.Application.ResultType);
+            if constexpr (std::is_same_v<std::decay_t<decltype(Fact)>,
+                                         PerformProjection>)
+              Fact.ContinuationResultType =
+                  rebuild(Fact.ContinuationResultType);
+            else
+              Fact.SourceResumeType = rebuild(Fact.SourceResumeType);
+          },
+          *Operation);
+    }
+    const auto Effects = node_effects_.find(Node);
+    std::optional<TraitMethodSelectionProjection> TraitUse;
+    if (const auto Found = trait_method_uses_.find(Node);
+        Found != trait_method_uses_.end())
+      TraitUse = Found->second;
+    std::optional<CollectionKeyOperationsProjection> KeyOperations;
+    if (const auto Found = collection_key_operations_.find(Node);
+        Found != collection_key_operations_.end())
+      KeyOperations = Found->second;
+    std::optional<SumInjectionProjection> SumInjection;
+    if (const auto Found = sum_injections_.find(Node);
+        Found != sum_injections_.end())
+      SumInjection = SumInjectionProjection{rebuild(Found->second.Alternative),
+                                            rebuild(Found->second.Sum)};
+    Storage.NodeFacts.push_back(NodeSemanticProjection{
+        Node, Type,
+        Effects == node_effects_.end() ? arena_.effect_solver().empty()
+                                       : Effects->second,
+        std::move(Instantiation), std::move(Operation), std::move(TraitUse),
+        std::move(KeyOperations), std::move(SumInjection), Node->Range});
+  }
+
+  auto parameterOwnership = [](MonoTypePtr Type) {
+    if (Type && Type->tag == MonoType::Con && Type->con != TyCon::String)
+      return model::ParameterOwnership::Trivial;
+    return model::ParameterOwnership::Borrow;
+  };
+  auto resultOwnership = [](MonoTypePtr Type) {
+    if (Type && Type->tag == MonoType::Con && Type->con != TyCon::String)
+      return model::ResultOwnership::Trivial;
+    return model::ResultOwnership::Owned;
+  };
+
+  for (const auto &[Node, _] : OrderedFacts) {
+    const auto Recorded = expression_callable_contracts_.find(Node);
+    if (Recorded == expression_callable_contracts_.end())
+      continue;
+    for (const auto &Contract : Recorded->second) {
+      auto Copy = Contract;
+      Copy.Arrow = rebuild(Contract.Arrow);
+      const auto Duplicate = std::ranges::find_if(
+          Storage.CallableContracts, [&](const auto &Existing) {
+            return Existing.Arrow == Copy.Arrow &&
+                   Existing.ParameterOwnerships == Copy.ParameterOwnerships &&
+                   Existing.ResultContract == Copy.ResultContract &&
+                   Existing.Convention == Copy.Convention;
+          });
+      if (Duplicate == Storage.CallableContracts.end())
+        Storage.CallableContracts.push_back(std::move(Copy));
+    }
+  }
+  const auto remapContractArrows = [&](const auto &Self, MonoTypePtr Before,
+                                       MonoTypePtr After) -> void {
+    Before = unifier_.resolve(Before);
+    After = unifier_.resolve(After);
+    if (!Before || !After || Before->tag != After->tag)
+      return;
+    if (Before->tag == MonoType::Arrow) {
+      for (auto &Contract : Storage.CallableContracts)
+        if (Contract.Arrow == Before)
+          Contract.Arrow = After;
+      Self(Self, Before->param_type, After->param_type);
+      Self(Self, Before->return_type, After->return_type);
+      return;
+    }
+    if (Before->tag == MonoType::App) {
+      for (std::size_t Index = 0;
+           Index < Before->args.size() && Index < After->args.size(); ++Index)
+        Self(Self, Before->args[Index], After->args[Index]);
+    } else if (Before->tag == MonoType::MTuple) {
+      for (std::size_t Index = 0;
+           Index < Before->elements.size() && Index < After->elements.size();
+           ++Index)
+        Self(Self, Before->elements[Index], After->elements[Index]);
+    } else if (Before->tag == MonoType::MRecord) {
+      for (std::size_t Index = 0; Index < Before->record_fields.size() &&
+                                  Index < After->record_fields.size();
+           ++Index)
+        Self(Self, Before->record_fields[Index].second,
+             After->record_fields[Index].second);
+      Self(Self, Before->row_rest, After->row_rest);
+    } else if (Before->tag == MonoType::Sum) {
+      for (std::size_t Index = 0; Index < Before->sum_alternatives.size() &&
+                                  Index < After->sum_alternatives.size();
+           ++Index)
+        Self(Self, Before->sum_alternatives[Index],
+             After->sum_alternatives[Index]);
+    }
+  };
+  remapContractArrows(remapContractArrows, ZonedRoot, Storage.RootScheme->body);
+  refine_callable_contract_ownership(Storage.CallableContracts);
+
+  if (ZonedRoot->tag == MonoType::Arrow) {
+    auto RootContract = std::ranges::find_if(
+        Storage.CallableContracts, [&](const auto &Contract) {
+          return Contract.Arrow == Storage.RootScheme->body;
+        });
+    if (RootContract != Storage.CallableContracts.end())
+      Storage.RootOwnerships = RootContract->ParameterOwnerships;
+    else {
+      Storage.clear();
+      Storage.publish();
+      return;
+    }
+  }
+
+  const model::FunctionDeclarationIdentity Identity =
+      model::LocalFunctionIdentity{current_module_, {0}};
+  Storage.Scopes.push_back(DeclarationScopeProjection{
+      1, std::nullopt, model::BinderOwnerKind::Function, Identity,
+      Storage.RootScheme->quantified_vars,
+      Storage.RootScheme->quantified_effect_variables,
+      Storage.CallableContracts, Root->Range});
+  const auto RootContract = std::ranges::find_if(
+      Storage.CallableContracts, [&](const auto &Contract) {
+        return Contract.Arrow == Storage.RootScheme->body;
+      });
+  const auto ResultContract = ZonedRoot->tag == MonoType::Arrow
+                                  ? RootContract->ResultContract
+                                  : resultOwnership(ZonedRoot);
+  Storage.Functions.push_back(FunctionSchemeProjection{
+      1, *Storage.RootScheme, Storage.RootOwnerships, ResultContract,
+      model::CallingConvention::DirectYona, Identity, std::nullopt,
+      DeclarationVisibility::Private, Storage.NodeFacts, Root->Range, Root});
+
+  ProjectionDeclarationId NextScope = 2;
+  std::vector<const ast::FunctionExpr *> LocalFunctions;
+  LocalFunctions.reserve(function_schemes_.size());
+  for (const auto &[Function, _] : projection_function_types_)
+    if (Function != Root)
+      LocalFunctions.push_back(Function);
+  std::ranges::sort(LocalFunctions, [](const auto *Left, const auto *Right) {
+    if (Left->Range.Offset != Right->Range.Offset)
+      return Left->Range.Offset < Right->Range.Offset;
+    return Left < Right;
+  });
+  std::unordered_map<const ast::FunctionExpr *, ProjectionDeclarationId>
+      LocalScopes;
+  for (const auto *Function : LocalFunctions)
+    LocalScopes.emplace(Function, NextScope++);
+
+  for (const auto *Function : LocalFunctions) {
+    const auto Type = type_map_.find(const_cast<ast::FunctionExpr *>(Function));
+    if (Type == type_map_.end() || !Type->second)
+      continue;
+    Storage.ModuleSchemes.push_back(
+        generalize(Type->second, -1, constraints_for_function(Function)));
+    auto &Scheme = Storage.ModuleSchemes.back();
+
+    Storage.ModuleCallableContracts.emplace_back();
+    auto &Contracts = Storage.ModuleCallableContracts.back();
+    if (const auto Found = function_callable_contracts_.find(Function);
+        Found != function_callable_contracts_.end())
+      for (const auto &Recorded : Found->second) {
+        auto Copy = Recorded;
+        Copy.Arrow = rebuild(Recorded.Arrow);
+        Contracts.push_back(std::move(Copy));
+      }
+    const auto BeforeRoot = rebuild(Type->second);
+    const auto remapLocalContracts = [&](const auto &Self, MonoTypePtr Before,
+                                         MonoTypePtr After) -> void {
+      Before = unifier_.resolve(Before);
+      After = unifier_.resolve(After);
+      if (!Before || !After || Before->tag != After->tag)
+        return;
+      if (Before->tag == MonoType::Arrow) {
+        for (auto &Contract : Contracts)
+          if (Contract.Arrow == Before)
+            Contract.Arrow = After;
+        Self(Self, Before->param_type, After->param_type);
+        Self(Self, Before->return_type, After->return_type);
+      } else if (Before->tag == MonoType::App) {
+        for (std::size_t Index = 0;
+             Index < Before->args.size() && Index < After->args.size(); ++Index)
+          Self(Self, Before->args[Index], After->args[Index]);
+      } else if (Before->tag == MonoType::MTuple) {
+        for (std::size_t Index = 0;
+             Index < Before->elements.size() && Index < After->elements.size();
+             ++Index)
+          Self(Self, Before->elements[Index], After->elements[Index]);
+      } else if (Before->tag == MonoType::MRecord) {
+        for (std::size_t Index = 0; Index < Before->record_fields.size() &&
+                                    Index < After->record_fields.size();
+             ++Index)
+          Self(Self, Before->record_fields[Index].second,
+               After->record_fields[Index].second);
+        Self(Self, Before->row_rest, After->row_rest);
+      } else if (Before->tag == MonoType::Sum) {
+        for (std::size_t Index = 0; Index < Before->sum_alternatives.size() &&
+                                    Index < After->sum_alternatives.size();
+             ++Index)
+          Self(Self, Before->sum_alternatives[Index],
+               After->sum_alternatives[Index]);
+      }
+    };
+    remapLocalContracts(remapLocalContracts, BeforeRoot, Scheme.body);
+    refine_callable_contract_ownership(Contracts);
+    auto RootContract =
+        std::ranges::find_if(Contracts, [&](const auto &Contract) {
+          return Contract.Arrow == Scheme.body;
+        });
+    Storage.ModuleOwnerships.emplace_back();
+    auto &Ownerships = Storage.ModuleOwnerships.back();
+    auto LocalResultContract = resultOwnership(Scheme.body);
+    if (RootContract != Contracts.end()) {
+      RootContract->Convention = model::CallingConvention::ClosureEntry;
+      Ownerships = RootContract->ParameterOwnerships;
+      LocalResultContract = RootContract->ResultContract;
+    }
+
+    Storage.ModuleNodeFacts.emplace_back();
+    auto &Facts = Storage.ModuleNodeFacts.back();
+    for (const auto &[Node, NodeType] : type_map_) {
+      const ast::FunctionExpr *NearestFunction = nullptr;
+      for (auto *Current = Node; Current; Current = Current->parent)
+        if ((NearestFunction =
+                 dynamic_cast<const ast::FunctionExpr *>(Current)))
+          break;
+      if (NearestFunction != Function || !NodeType)
+        continue;
+      std::optional<SchemeInstantiationProjection> Instantiation;
+      if (const auto Found = instantiations_.find(Node);
+          Found != instantiations_.end()) {
+        Instantiation = Found->second;
+        for (auto *&Argument : Instantiation->TypeArguments)
+          Argument = rebuild(Argument);
+      }
+      std::optional<OperationOccurrenceProjection> Operation;
+      if (const auto Found = operation_occurrences_.find(Node);
+          Found != operation_occurrences_.end()) {
+        Operation = Found->second;
+        std::visit(
+            [&](auto &Fact) {
+              for (auto *&Argument : Fact.Application.TypeArguments)
+                Argument = rebuild(Argument);
+              for (auto *&Parameter : Fact.Application.ParameterTypes)
+                Parameter = rebuild(Parameter);
+              Fact.Application.ResultType =
+                  rebuild(Fact.Application.ResultType);
+              if constexpr (std::is_same_v<std::decay_t<decltype(Fact)>,
+                                           PerformProjection>)
+                Fact.ContinuationResultType =
+                    rebuild(Fact.ContinuationResultType);
+              else
+                Fact.SourceResumeType = rebuild(Fact.SourceResumeType);
+            },
+            *Operation);
+      }
+      const auto Effects = node_effects_.find(Node);
+      std::optional<TraitMethodSelectionProjection> TraitUse;
+      if (const auto Found = trait_method_uses_.find(Node);
+          Found != trait_method_uses_.end())
+        TraitUse = Found->second;
+      std::optional<CollectionKeyOperationsProjection> KeyOperations;
+      if (const auto Found = collection_key_operations_.find(Node);
+          Found != collection_key_operations_.end())
+        KeyOperations = Found->second;
+      std::optional<SumInjectionProjection> SumInjection;
+      if (const auto Found = sum_injections_.find(Node);
+          Found != sum_injections_.end())
+        SumInjection = SumInjectionProjection{
+            rebuild(Found->second.Alternative), rebuild(Found->second.Sum)};
+      Facts.push_back(NodeSemanticProjection{
+          Node, Node == Function ? Scheme.body : rebuild(NodeType),
+          Effects == node_effects_.end() ? arena_.effect_solver().empty()
+                                         : Effects->second,
+          std::move(Instantiation), std::move(Operation), std::move(TraitUse),
+          std::move(KeyOperations), std::move(SumInjection), Node->Range});
+    }
+    std::ranges::sort(Facts, [](const auto &Left, const auto &Right) {
+      if (Left.Range.Offset != Right.Range.Offset)
+        return Left.Range.Offset < Right.Range.Offset;
+      if (Left.Range.Length != Right.Range.Length)
+        return Left.Range.Length < Right.Range.Length;
+      return Left.Node < Right.Node;
+    });
+
+    std::optional<ProjectionDeclarationId> Parent = 1;
+    for (auto *Current = Function->parent; Current; Current = Current->parent) {
+      const auto *Enclosing = dynamic_cast<const ast::FunctionExpr *>(Current);
+      if (!Enclosing)
+        continue;
+      if (const auto Found = LocalScopes.find(Enclosing);
+          Found != LocalScopes.end())
+        Parent = Found->second;
+      break;
+    }
+    const auto Scope = LocalScopes.at(Function);
+    const model::FunctionDeclarationIdentity LocalIdentity =
+        model::LocalFunctionIdentity{
+            current_module_,
+            {static_cast<std::uint32_t>(Function->Range.Offset)}};
+    Storage.Scopes.push_back(DeclarationScopeProjection{
+        Scope, Parent, model::BinderOwnerKind::Function, LocalIdentity,
+        Scheme.quantified_vars, Scheme.quantified_effect_variables, Contracts,
+        Function->Range});
+    Storage.Functions.push_back(FunctionSchemeProjection{
+        Scope, Scheme, Ownerships, LocalResultContract,
+        model::CallingConvention::ClosureEntry, LocalIdentity, std::nullopt,
+        DeclarationVisibility::Private, Facts, Function->Range, Function});
+  }
+
+  std::vector<const EffectOpInfo *> RegisteredOperations;
+  RegisteredOperations.reserve(effect_ops_.size());
+  for (const auto &[_, Operation] : effect_ops_)
+    RegisteredOperations.push_back(&Operation);
+  std::ranges::sort(RegisteredOperations,
+                    [](const EffectOpInfo *Left, const EffectOpInfo *Right) {
+                      return Left->key < Right->key;
+                    });
+  for (const auto *Operation : RegisteredOperations) {
+    if (Operation->key.Effect.Module != current_module_)
+      continue;
+    const auto *Signature = Operation->signature.body;
+    if (!Signature || Signature->tag != MonoType::MTuple ||
+        Signature->elements.size() != Operation->parameter_count + 1)
+      continue;
+    Storage.OperationOwnerships.emplace_back();
+    auto &Ownerships = Storage.OperationOwnerships.back();
+    Ownerships.reserve(Operation->parameter_count);
+    for (std::size_t Index = 0; Index < Operation->parameter_count; ++Index)
+      Ownerships.push_back(parameterOwnership(Signature->elements[Index]));
+
+    Storage.OperationCallableContracts.emplace_back();
+    auto &Contracts = Storage.OperationCallableContracts.back();
+    Contracts = Operation->callable_contracts;
+
+    const auto ScopeId = NextScope++;
+    Storage.Scopes.push_back(DeclarationScopeProjection{
+        ScopeId, std::nullopt, model::BinderOwnerKind::Operation,
+        Operation->key, Operation->signature.quantified_vars,
+        Operation->signature.quantified_effect_variables, Contracts,
+        Root->Range});
+    Storage.Operations.push_back(OperationSchemeProjection{
+        ScopeId, Operation->key, Operation->signature.quantified_vars,
+        Operation->signature.quantified_effect_variables,
+        Operation->signature.constraints,
+        std::span<const MonoTypePtr>(Signature->elements.data(),
+                                     Operation->parameter_count),
+        Ownerships, Signature->elements.back(),
+        resultOwnership(Signature->elements.back()),
+        DeclarationVisibility::Module, arena_.effect_solver().empty(),
+        Root->Range});
+  }
+  populateImportedProjectionCatalog(Root->Range);
+  Storage.publish();
+}
+
+void TypeChecker::refreshModuleStructuralProjection(
+    ast::ModuleDecl *Module,
+    const std::vector<std::pair<ast::FunctionExpr *, MonoTypePtr>> &Functions) {
+  auto &Storage = *projection_storage_;
+  Storage.clear();
+  if (!Module) {
+    Storage.publish();
+    return;
+  }
+  Storage.SourceRoot = Module;
+  Storage.SourceExtent = sourceExtent(diag_, Module);
+
+  const auto parameterOwnership = [](MonoTypePtr Type, bool Borrowed = false) {
+    if (Type && Type->tag == MonoType::Con && Type->con != TyCon::String)
+      return model::ParameterOwnership::Trivial;
+    return Borrowed ? model::ParameterOwnership::Borrow
+                    : model::ParameterOwnership::Consume;
+  };
+  const auto resultOwnership = [](MonoTypePtr Type) {
+    if (Type && Type->tag == MonoType::Con && Type->con != TyCon::String)
+      return model::ResultOwnership::Trivial;
+    return model::ResultOwnership::Owned;
+  };
+  const auto exported = [](std::span<const std::string> Names,
+                           std::string_view Name) {
+    return std::ranges::find(Names, Name) != Names.end();
+  };
+
+  ProjectionDeclarationId NextScope = 1;
+  for (const auto &Extern : projection_extern_declarations_) {
+    if (!Extern.Node)
+      continue;
+    Storage.ModuleSchemes.push_back(Extern.Scheme);
+    auto &Scheme = Storage.ModuleSchemes.back();
+    Storage.ModuleOwnerships.push_back(Extern.ParameterOwnerships);
+    auto &Ownerships = Storage.ModuleOwnerships.back();
+    Storage.ModuleCallableContracts.push_back(Extern.CallableContracts);
+    auto &Contracts = Storage.ModuleCallableContracts.back();
+    const auto Scope = NextScope++;
+    const model::FunctionDeclarationIdentity Identity =
+        model::SymbolIdentity{current_module_, Extern.Node->name};
+    Storage.Scopes.push_back(DeclarationScopeProjection{
+        Scope, std::nullopt, model::BinderOwnerKind::Function, Identity,
+        Scheme.quantified_vars, Scheme.quantified_effect_variables, Contracts,
+        Extern.Node->Range});
+    const bool Public = exported(Module->exports, Extern.Node->name);
+    Storage.Functions.push_back(FunctionSchemeProjection{
+        Scope,
+        Scheme,
+        Ownerships,
+        Extern.ResultContract,
+        model::CallingConvention::NativeExtern,
+        Identity,
+        Public ? std::optional<model::SymbolIdentity>{model::SymbolIdentity{
+                     current_module_, Extern.Node->name}}
+               : std::nullopt,
+        Public ? DeclarationVisibility::Public : DeclarationVisibility::Private,
+        {},
+        Extern.Node->Range,
+        Extern.Node});
+  }
+  for (auto *Declaration : Module->adt_declarations) {
+    if (!Declaration)
+      continue;
+    const model::NominalTypeKey Key{current_module_, Declaration->name};
+    const auto Recorded = projection_nominal_declarations_.find(Declaration);
+    if (Recorded == projection_nominal_declarations_.end())
+      continue;
+    Storage.ModuleTypeParameters.emplace_back();
+    auto &Parameters = Storage.ModuleTypeParameters.back();
+    for (const auto *Variable : Recorded->second.TypeParameters)
+      Parameters.push_back(Variable->var_id);
+    Storage.ModuleCallableContracts.emplace_back();
+    auto &Contracts = Storage.ModuleCallableContracts.back();
+    Contracts = Recorded->second.CallableContracts;
+
+    Storage.Constructors.emplace_back();
+    auto &Constructors = Storage.Constructors.back();
+    Constructors.reserve(Declaration->variants.size());
+    for (std::size_t Tag = 0; Tag < Declaration->variants.size(); ++Tag) {
+      const auto *Constructor = Declaration->variants[Tag];
+      if (!Constructor)
+        continue;
+      Storage.ConstructorFields.emplace_back();
+      auto &Fields = Storage.ConstructorFields.back();
+      if (Tag < Recorded->second.ConstructorFields.size())
+        Fields = Recorded->second.ConstructorFields[Tag];
+      Constructors.push_back(ConstructorProjection{
+          Constructor->name, static_cast<std::uint32_t>(Tag), Fields,
+          Constructor->Range});
+    }
+    const auto Scope = NextScope++;
+    Storage.Scopes.push_back(
+        DeclarationScopeProjection{Scope,
+                                   std::nullopt,
+                                   model::BinderOwnerKind::Nominal,
+                                   Key,
+                                   Parameters,
+                                   {},
+                                   Contracts,
+                                   Declaration->Range});
+    Storage.Nominals.push_back(NominalDeclarationProjection{
+        Scope, Key, Constructors,
+        exported(Module->exported_types, Declaration->name)
+            ? DeclarationVisibility::Public
+            : DeclarationVisibility::Private,
+        exported(Module->opaque_exported_types, Declaration->name),
+        Declaration->Range});
+    if (!Declaration->derive_traits.empty()) {
+      Storage.DerivedTraits.emplace_back();
+      auto &Traits = Storage.DerivedTraits.back();
+      Traits.reserve(Declaration->derive_traits.size());
+      for (const auto &Trait : Declaration->derive_traits)
+        Traits.push_back(resolved_trait_key(Trait));
+      Storage.Derivations.push_back(
+          DeriveRequestProjection{Key, Traits, Declaration->Range});
+    }
+  }
+
+  std::unordered_map<std::string, ProjectionDeclarationId> TraitMethodScopes;
+  for (auto *Declaration : Module->trait_declarations) {
+    if (!Declaration)
+      continue;
+    const model::NominalTypeKey Key{current_module_, Declaration->name};
+    Storage.ModuleTypeParameters.emplace_back();
+    auto &Parameters = Storage.ModuleTypeParameters.back();
+    std::unordered_map<std::string, MonoTypePtr> TraitVariables;
+    const auto RecordedParameters =
+        projection_trait_type_parameters_.find(Declaration);
+    for (std::size_t Index = 0; Index < Declaration->type_params.size();
+         ++Index) {
+      const auto &Name = Declaration->type_params[Index];
+      auto *Variable =
+          RecordedParameters != projection_trait_type_parameters_.end() &&
+                  Index < RecordedParameters->second.size()
+              ? RecordedParameters->second[Index]
+              : arena_.fresh_var(0);
+      if (RecordedParameters == projection_trait_type_parameters_.end() ||
+          Index >= RecordedParameters->second.size())
+        uf_.add_var(Variable->var_id, 0);
+      TraitVariables.emplace(Name, Variable);
+      Parameters.push_back(Variable->var_id);
+    }
+    Storage.DeclarationConstraints.emplace_back();
+    auto &Superclasses = Storage.DeclarationConstraints.back();
+    for (const auto &[Superclass, ParameterName] : Declaration->superclasses) {
+      const auto Name =
+          ParameterName.empty() && !Declaration->type_params.empty()
+              ? Declaration->type_params.front()
+              : ParameterName;
+      const auto Parameter = TraitVariables.find(Name);
+      if (Parameter != TraitVariables.end())
+        Superclasses.emplace_back(resolved_trait_key(Superclass),
+                                  Parameter->second);
+    }
+    const auto TraitScope = NextScope++;
+    Storage.Scopes.push_back(
+        DeclarationScopeProjection{TraitScope,
+                                   std::nullopt,
+                                   model::BinderOwnerKind::Trait,
+                                   Key,
+                                   Parameters,
+                                   {},
+                                   {},
+                                   Declaration->Range});
+
+    Storage.TraitMethods.emplace_back();
+    auto &Methods = Storage.TraitMethods.back();
+    const auto RecordedMethods = projection_trait_methods_.find(Declaration);
+    if (RecordedMethods == projection_trait_methods_.end() ||
+        RecordedMethods->second.size() != Declaration->methods.size())
+      continue;
+    for (std::size_t MethodIndex = 0; MethodIndex < Declaration->methods.size();
+         ++MethodIndex) {
+      const auto &Method = Declaration->methods[MethodIndex];
+      const auto &Seed = RecordedMethods->second[MethodIndex];
+      Storage.ModuleSchemes.push_back(Seed.Scheme);
+      auto &Scheme = Storage.ModuleSchemes.back();
+
+      Storage.ModuleOwnerships.emplace_back();
+      auto &Ownerships = Storage.ModuleOwnerships.back();
+      Ownerships = Seed.ParameterOwnerships;
+      Storage.ModuleCallableContracts.emplace_back();
+      auto &Contracts = Storage.ModuleCallableContracts.back();
+      Contracts = Seed.CallableContracts;
+      const auto MethodScope = NextScope++;
+      const auto Identity =
+          model::FunctionDeclarationIdentity{model::SymbolIdentity{
+              current_module_, Declaration->name + "_" + Method.name}};
+      Storage.Scopes.push_back(DeclarationScopeProjection{
+          MethodScope, TraitScope, model::BinderOwnerKind::Function, Identity,
+          Scheme.quantified_vars, Scheme.quantified_effect_variables, Contracts,
+          Declaration->Range});
+      TraitMethodScopes.emplace(Declaration->name + "." + Method.name,
+                                MethodScope);
+      std::optional<ResolvedTraitTargetProjection> DefaultTarget;
+      if (Method.default_impl) {
+        const auto Target =
+            projection_function_identities_.find(Method.default_impl);
+        if (Target != projection_function_identities_.end())
+          DefaultTarget = ResolvedTraitTargetProjection{Target->second, {}, {}};
+      }
+      Methods.push_back(TraitMethodProjection{
+          MethodScope, Method.name, Scheme, Ownerships, Seed.ResultContract,
+          model::CallingConvention::DirectYona, std::move(DefaultTarget),
+          Declaration->Range});
+    }
+    Storage.Traits.push_back(TraitDeclarationProjection{
+        TraitScope, Key, Superclasses, Methods,
+        exported(Module->exported_traits, Declaration->name)
+            ? DeclarationVisibility::Public
+            : DeclarationVisibility::Private,
+        Declaration->Range,
+        Declaration->name == "Eq" || Declaration->name == "Hash" ||
+            Declaration->name == "Ord" || Declaration->name == "Show" ||
+            Declaration->name == "Send" || Declaration->name == "Shareable"});
+  }
+
+  const auto simpleInstanceType = [&](std::string_view Name) -> MonoTypePtr {
+    if (Name == "Int")
+      return arena_.make_con(TyCon::Int);
+    if (Name == "Float")
+      return arena_.make_con(TyCon::Float);
+    if (Name == "Bool")
+      return arena_.make_con(TyCon::Bool);
+    if (Name == "String")
+      return arena_.make_con(TyCon::String);
+    if (Name == "Char")
+      return arena_.make_con(TyCon::Char);
+    if (Name == "Byte")
+      return arena_.make_con(TyCon::Byte);
+    if (Name == "Symbol")
+      return arena_.make_con(TyCon::Symbol);
+    if (Name == "Unit" || Name == "()")
+      return arena_.make_con(TyCon::Unit);
+    if (Name == "ByteArray")
+      return arena_.make_con(TyCon::ByteArray);
+    if (Name == "IntArray" || Name == "FloatArray")
+      return arena_.make_app(std::string(Name), {});
+    if (const auto Key = resolved_nominal_key(Name))
+      return arena_.make_app(*Key, {}, std::string(Name));
+    return arena_.make_app(
+        model::NominalTypeKey{current_module_, std::string(Name)}, {},
+        std::string(Name));
+  };
+  std::unordered_map<const ast::InstanceDeclNode *, ProjectionDeclarationId>
+      InstanceScopes;
+  for (auto *Declaration : Module->instance_declarations) {
+    if (!Declaration)
+      continue;
+    Storage.ModuleTypeParameters.emplace_back();
+    auto &Parameters = Storage.ModuleTypeParameters.back();
+    std::unordered_map<std::string, MonoTypePtr> Variables;
+    const auto RecordedParameters =
+        projection_instance_type_parameters_.find(Declaration);
+    for (std::size_t Index = 0; Index < Declaration->type_params.size();
+         ++Index) {
+      const auto &Name = Declaration->type_params[Index];
+      auto *Variable =
+          RecordedParameters != projection_instance_type_parameters_.end() &&
+                  Index < RecordedParameters->second.size()
+              ? RecordedParameters->second[Index]
+              : arena_.fresh_var(0);
+      if (RecordedParameters == projection_instance_type_parameters_.end() ||
+          Index >= RecordedParameters->second.size())
+        uf_.add_var(Variable->var_id, 0);
+      Variables.emplace(Name, Variable);
+      Parameters.push_back(Variable->var_id);
+    }
+    Storage.InstanceArguments.emplace_back();
+    auto &Arguments = Storage.InstanceArguments.back();
+    for (std::size_t Index = 0; Index < Declaration->type_names.size();
+         ++Index) {
+      const auto &Name = Declaration->type_names[Index];
+      if (const auto Variable = Variables.find(Name);
+          Variable != Variables.end()) {
+        Arguments.push_back(Variable->second);
+        continue;
+      }
+      auto *Head = simpleInstanceType(Name);
+      if (!Variables.empty() && (Index == 0 || Name == "Tuple")) {
+        std::vector<MonoTypePtr> TypeArguments;
+        TypeArguments.reserve(Declaration->type_params.size());
+        for (const auto &Parameter : Declaration->type_params)
+          TypeArguments.push_back(Variables.at(Parameter));
+        if (Name == "Tuple")
+          Head = arena_.make_tuple(std::move(TypeArguments));
+        else if (Name == "Seq" || Name == "Set" || Name == "Dict")
+          Head = arena_.make_app(Name, std::move(TypeArguments));
+        else if (Head->tag == MonoType::App)
+          Head =
+              Head->resolved_key
+                  ? arena_.make_app(*Head->resolved_key,
+                                    std::move(TypeArguments), Head->type_name)
+                  : arena_.make_app(Head->type_name, std::move(TypeArguments));
+      }
+      Arguments.push_back(Head);
+    }
+    Storage.DeclarationConstraints.emplace_back();
+    auto &Constraints = Storage.DeclarationConstraints.back();
+    for (const auto &[Trait, Parameter] : Declaration->constraints) {
+      if (const auto Found = Variables.find(Parameter);
+          Found != Variables.end())
+        Constraints.emplace_back(resolved_trait_key(Trait), Found->second);
+    }
+    const auto Trait = resolved_trait_key(Declaration->trait_name);
+    const auto Scope = NextScope++;
+    Storage.Scopes.push_back(DeclarationScopeProjection{
+        Scope,
+        std::nullopt,
+        model::BinderOwnerKind::Instance,
+        InstanceScopeIdentityProjection{Trait, Arguments, Constraints},
+        Parameters,
+        {},
+        {},
+        Declaration->Range});
+    InstanceScopes.emplace(Declaration, Scope);
+    Storage.InstanceMethods.emplace_back();
+    auto &Methods = Storage.InstanceMethods.back();
+    for (const auto *Method : Declaration->methods) {
+      if (!Method)
+        continue;
+      const auto MethodScope =
+          TraitMethodScopes.find(Declaration->trait_name + "." + Method->name);
+      if (MethodScope == TraitMethodScopes.end())
+        continue;
+      const auto Target = projection_function_identities_.find(Method);
+      if (Target == projection_function_identities_.end())
+        continue;
+      Methods.push_back(TraitMethodBindingProjection{
+          Scope, MethodScope->second, Method->name,
+          ResolvedTraitTargetProjection{Target->second, {}, {}},
+          Method->Range});
+    }
+    Storage.Instances.push_back(TraitInstanceProjection{
+        Scope, Trait, Arguments, Constraints, Methods,
+        DeclarationVisibility::Module, Declaration->Range});
+  }
+
+  std::unordered_map<const ast::FunctionExpr *, ProjectionDeclarationId>
+      FunctionScopes;
+  for (const auto &[Function, Type] : Functions) {
+    if (!Function || !Type)
+      continue;
+    Storage.ModuleSchemes.push_back(generalize(
+        unifier_.resolve(Type), -1, constraints_for_function(Function)));
+    auto &Scheme = Storage.ModuleSchemes.back();
+    const auto eraseInherited = [&](const auto &Owners) {
+      if (const auto Owner = Owners.find(Function); Owner != Owners.end())
+        if (const auto Parameters = [&]() -> const std::vector<MonoTypePtr> * {
+              if constexpr (std::is_same_v<std::decay_t<decltype(Owners)>,
+                                           decltype(trait_default_owners_)>) {
+                const auto Found =
+                    projection_trait_type_parameters_.find(Owner->second);
+                return Found == projection_trait_type_parameters_.end()
+                           ? nullptr
+                           : &Found->second;
+              } else {
+                const auto Found =
+                    projection_instance_type_parameters_.find(Owner->second);
+                return Found == projection_instance_type_parameters_.end()
+                           ? nullptr
+                           : &Found->second;
+              }
+            }())
+          std::erase_if(Scheme.quantified_vars, [&](TypeId Variable) {
+            return std::ranges::any_of(*Parameters, [&](MonoTypePtr Parameter) {
+              return Parameter && Parameter->var_id == Variable;
+            });
+          });
+    };
+    eraseInherited(trait_default_owners_);
+    eraseInherited(instance_method_owners_);
+    Storage.ModuleOwnerships.emplace_back();
+    auto &Ownerships = Storage.ModuleOwnerships.back();
+    auto *Stage = Scheme.body;
+    for (std::size_t Index = 0; Index < Function->patterns.size() && Stage &&
+                                Stage->tag == MonoType::Arrow;
+         ++Index) {
+      const bool Borrowed = Index < Function->param_borrow.size() &&
+                            Function->param_borrow[Index];
+      Ownerships.push_back(parameterOwnership(Stage->param_type, Borrowed));
+      Stage = Stage->return_type;
+    }
+
+    Storage.ModuleNodeFacts.emplace_back();
+    auto &Facts = Storage.ModuleNodeFacts.back();
+    for (const auto &[Node, NodeType] : type_map_) {
+      const ast::FunctionExpr *NearestFunction = nullptr;
+      for (auto *Current = Node; Current; Current = Current->parent)
+        if ((NearestFunction =
+                 dynamic_cast<const ast::FunctionExpr *>(Current)))
+          break;
+      if (NearestFunction == Function && NodeType) {
+        std::optional<SchemeInstantiationProjection> Instantiation;
+        if (const auto Found = instantiations_.find(Node);
+            Found != instantiations_.end()) {
+          Instantiation = Found->second;
+          for (auto *&Argument : Instantiation->TypeArguments)
+            Argument = zonk(Argument);
+        }
+        auto Occurrence = operation_occurrences_.find(Node);
+        std::optional<OperationOccurrenceProjection> Operation;
+        if (Occurrence != operation_occurrences_.end()) {
+          Operation = Occurrence->second;
+          std::visit(
+              [&](auto &Fact) {
+                for (auto *&Argument : Fact.Application.TypeArguments)
+                  Argument = zonk(Argument);
+                for (auto *&Parameter : Fact.Application.ParameterTypes)
+                  Parameter = zonk(Parameter);
+                Fact.Application.ResultType = zonk(Fact.Application.ResultType);
+                if constexpr (std::is_same_v<std::decay_t<decltype(Fact)>,
+                                             PerformProjection>)
+                  Fact.ContinuationResultType =
+                      zonk(Fact.ContinuationResultType);
+                else
+                  Fact.SourceResumeType = zonk(Fact.SourceResumeType);
+              },
+              *Operation);
+        }
+        const auto Effects = node_effects_.find(Node);
+        std::optional<TraitMethodSelectionProjection> TraitUse;
+        if (const auto Found = trait_method_uses_.find(Node);
+            Found != trait_method_uses_.end())
+          TraitUse = Found->second;
+        std::optional<CollectionKeyOperationsProjection> KeyOperations;
+        if (const auto Found = collection_key_operations_.find(Node);
+            Found != collection_key_operations_.end())
+          KeyOperations = Found->second;
+        std::optional<SumInjectionProjection> SumInjection;
+        if (const auto Found = sum_injections_.find(Node);
+            Found != sum_injections_.end())
+          SumInjection = SumInjectionProjection{zonk(Found->second.Alternative),
+                                                zonk(Found->second.Sum)};
+        Facts.push_back(NodeSemanticProjection{
+            Node, Node == Function ? Scheme.body : zonk(NodeType),
+            Effects == node_effects_.end() ? arena_.effect_solver().empty()
+                                           : Effects->second,
+            std::move(Instantiation), std::move(Operation), std::move(TraitUse),
+            std::move(KeyOperations), std::move(SumInjection), Node->Range});
+      }
+    }
+    std::ranges::sort(Facts, [](const auto &Left, const auto &Right) {
+      if (Left.Range.Offset != Right.Range.Offset)
+        return Left.Range.Offset < Right.Range.Offset;
+      if (Left.Range.Length != Right.Range.Length)
+        return Left.Range.Length < Right.Range.Length;
+      return Left.Node < Right.Node;
+    });
+
+    Storage.ModuleCallableContracts.emplace_back();
+    auto &Contracts = Storage.ModuleCallableContracts.back();
+    if (const auto Recorded = function_callable_contracts_.find(Function);
+        Recorded != function_callable_contracts_.end())
+      Contracts.insert(Contracts.end(), Recorded->second.begin(),
+                       Recorded->second.end());
+    const auto remapContractArrows = [&](const auto &Self, MonoTypePtr Before,
+                                         MonoTypePtr After) -> void {
+      Before = unifier_.resolve(Before);
+      After = unifier_.resolve(After);
+      if (!Before || !After || Before->tag != After->tag)
+        return;
+      if (Before->tag == MonoType::Arrow) {
+        for (auto &Contract : Contracts)
+          if (Contract.Arrow == Before)
+            Contract.Arrow = After;
+        Self(Self, Before->param_type, After->param_type);
+        Self(Self, Before->return_type, After->return_type);
+      } else if (Before->tag == MonoType::App) {
+        for (std::size_t Index = 0;
+             Index < Before->args.size() && Index < After->args.size(); ++Index)
+          Self(Self, Before->args[Index], After->args[Index]);
+      } else if (Before->tag == MonoType::MTuple) {
+        for (std::size_t Index = 0;
+             Index < Before->elements.size() && Index < After->elements.size();
+             ++Index)
+          Self(Self, Before->elements[Index], After->elements[Index]);
+      } else if (Before->tag == MonoType::MRecord) {
+        for (std::size_t Index = 0; Index < Before->record_fields.size() &&
+                                    Index < After->record_fields.size();
+             ++Index)
+          Self(Self, Before->record_fields[Index].second,
+               After->record_fields[Index].second);
+        Self(Self, Before->row_rest, After->row_rest);
+      } else if (Before->tag == MonoType::Sum) {
+        for (std::size_t Index = 0; Index < Before->sum_alternatives.size() &&
+                                    Index < After->sum_alternatives.size();
+             ++Index)
+          Self(Self, Before->sum_alternatives[Index],
+               After->sum_alternatives[Index]);
+      }
+    };
+    remapContractArrows(remapContractArrows, Type, Scheme.body);
+    refine_callable_contract_ownership(Contracts);
+    const bool IsLocal = std::holds_alternative<model::LocalFunctionIdentity>(
+        projection_function_identities_.contains(Function)
+            ? projection_function_identities_.at(Function)
+            : model::FunctionDeclarationIdentity{
+                  model::SymbolIdentity{current_module_, Function->name}});
+    const auto Convention = IsLocal ? model::CallingConvention::ClosureEntry
+                                    : model::CallingConvention::DirectYona;
+    if (Scheme.body && Scheme.body->tag == MonoType::Arrow) {
+      const auto Root =
+          std::ranges::find_if(Contracts, [&](const auto &Contract) {
+            return Contract.Arrow == Scheme.body;
+          });
+      if (Root != Contracts.end()) {
+        Root->ParameterOwnerships = Ownerships;
+        Root->ResultContract = resultOwnership(Stage);
+        Root->Convention = Convention;
+      }
+    }
+
+    const auto ProjectedIdentity =
+        projection_function_identities_.find(Function);
+    const auto Identity =
+        ProjectedIdentity == projection_function_identities_.end()
+            ? model::FunctionDeclarationIdentity{model::SymbolIdentity{
+                  current_module_, Function->name}}
+            : ProjectedIdentity->second;
+    std::optional<ProjectionDeclarationId> Parent;
+    if (const auto Owner = trait_default_owners_.find(Function);
+        Owner != trait_default_owners_.end()) {
+      const auto Method =
+          TraitMethodScopes.find(Owner->second->name + "." + Function->name);
+      if (Method != TraitMethodScopes.end())
+        Parent = Method->second;
+    } else if (const auto Owner = instance_method_owners_.find(Function);
+               Owner != instance_method_owners_.end()) {
+      if (const auto Instance = InstanceScopes.find(Owner->second);
+          Instance != InstanceScopes.end())
+        Parent = Instance->second;
+    } else {
+      for (auto *Current = Function->parent; Current;
+           Current = Current->parent) {
+        const auto *Enclosing =
+            dynamic_cast<const ast::FunctionExpr *>(Current);
+        if (!Enclosing)
+          continue;
+        if (const auto Found = FunctionScopes.find(Enclosing);
+            Found != FunctionScopes.end())
+          Parent = Found->second;
+        break;
+      }
+    }
+    const auto Scope = NextScope++;
+    FunctionScopes.emplace(Function, Scope);
+    Storage.Scopes.push_back(DeclarationScopeProjection{
+        Scope, Parent, model::BinderOwnerKind::Function, Identity,
+        Scheme.quantified_vars, Scheme.quantified_effect_variables, Contracts,
+        Function->Range});
+    const auto ResultContract =
+        Scheme.body && Scheme.body->tag == MonoType::Arrow
+            ? std::ranges::find_if(Contracts,
+                                   [&](const auto &Contract) {
+                                     return Contract.Arrow == Scheme.body;
+                                   })
+                  ->ResultContract
+            : resultOwnership(Scheme.body);
+    const bool IsNested = Parent.has_value();
+    const bool Public = !IsNested && exported(Module->exports, Function->name);
+    Storage.Functions.push_back(FunctionSchemeProjection{
+        Scope, Scheme, Ownerships, ResultContract, Convention, Identity,
+        Public ? std::optional<model::SymbolIdentity>{model::SymbolIdentity{
+                     current_module_, Function->name}}
+               : std::nullopt,
+        Public ? DeclarationVisibility::Public : DeclarationVisibility::Private,
+        Facts, Function->Range, Function});
+  }
+
+  std::vector<const EffectOpInfo *> RegisteredOperations;
+  RegisteredOperations.reserve(effect_ops_.size());
+  for (const auto &[_, Operation] : effect_ops_)
+    RegisteredOperations.push_back(&Operation);
+  std::ranges::sort(RegisteredOperations,
+                    [](const EffectOpInfo *Left, const EffectOpInfo *Right) {
+                      return Left->key < Right->key;
+                    });
+  for (const auto *Operation : RegisteredOperations) {
+    if (Operation->key.Effect.Module != current_module_)
+      continue;
+    const auto *Signature = Operation->signature.body;
+    if (!Signature || Signature->tag != MonoType::MTuple ||
+        Signature->elements.size() != Operation->parameter_count + 1)
+      continue;
+    Storage.OperationOwnerships.emplace_back();
+    auto &Ownerships = Storage.OperationOwnerships.back();
+    for (std::size_t Index = 0; Index < Operation->parameter_count; ++Index)
+      Ownerships.push_back(parameterOwnership(Signature->elements[Index]));
+    Storage.OperationCallableContracts.emplace_back();
+    auto &Contracts = Storage.OperationCallableContracts.back();
+    Contracts = Operation->callable_contracts;
+    const auto Scope = NextScope++;
+    Storage.Scopes.push_back(DeclarationScopeProjection{
+        Scope, std::nullopt, model::BinderOwnerKind::Operation, Operation->key,
+        Operation->signature.quantified_vars,
+        Operation->signature.quantified_effect_variables, Contracts,
+        Module->Range});
+    Storage.Operations.push_back(OperationSchemeProjection{
+        Scope, Operation->key, Operation->signature.quantified_vars,
+        Operation->signature.quantified_effect_variables,
+        Operation->signature.constraints,
+        std::span<const MonoTypePtr>(Signature->elements.data(),
+                                     Operation->parameter_count),
+        Ownerships, Signature->elements.back(),
+        resultOwnership(Signature->elements.back()),
+        DeclarationVisibility::Module, arena_.effect_solver().empty(),
+        Module->Range});
+  }
+
+  populateImportedProjectionCatalog(Module->Range);
+  Storage.publish();
 }
 
 void TypeChecker::add_module_path(std::string path) {
@@ -275,9 +2285,20 @@ TypeChecker::EffectRowInfo TypeChecker::effect_row_info(MonoTypePtr type) {
     const auto summary = arena_.effect_solver().summarize(
         arena_.effect_solver().join(std::move(stages)));
     info.ops.reserve(summary.known_atoms.size());
-    for (const auto Atom : summary.known_atoms)
-      info.ops.push_back(arena_.effect_atoms().format(
-          arena_.effect_solver().canonicalAtom(Atom)));
+    for (const auto Atom : summary.known_atoms) {
+      const auto Canonical = arena_.effect_solver().canonicalAtom(Atom);
+      const auto &Solved = arena_.effect_atoms().at(Canonical);
+      if (const auto *Operation = std::get_if<OperationEffectAtom>(&Solved)) {
+        std::string Name;
+        const auto Module = Operation->Key.Effect.Module.fqn();
+        if (Module != "Main" && Module != Operation->Key.Effect.Name)
+          Name += Module + "\\";
+        Name += Operation->Key.Effect.Name + "." + Operation->Key.Operation;
+        info.ops.push_back(std::move(Name));
+      } else {
+        info.ops.push_back(arena_.effect_atoms().format(Canonical));
+      }
+    }
     std::ranges::sort(info.ops);
     info.open_rest = summary.is_open();
   } else if (z->tag == MonoType::Var) {
@@ -446,7 +2467,11 @@ TypeChecker::InterfaceSignature TypeChecker::serialize_interface_signature(
       if (current->type_name.empty())
         throw std::invalid_argument(
             "cannot serialize an unnamed interface type application");
-      std::string result = "ADT(" + current->type_name;
+      const std::string Identity = current->resolved_key
+                                       ? current->resolved_key->Module.fqn() +
+                                             "\\" + current->resolved_key->Name
+                                       : current->type_name;
+      std::string result = "ADT(" + Identity;
       for (auto *argument : current->args)
         result += ',' + descriptor(argument);
       return result + ')';
@@ -517,10 +2542,14 @@ std::string TypeChecker::serialize_effect_scheme(MonoTypePtr type) {
       const auto Canonical = arena_.effect_solver().canonicalAtom(Atom);
       const auto *Operation = std::get_if<OperationEffectAtom>(
           &arena_.effect_atoms().at(Canonical));
-      if (!Operation || !Operation->TypeArguments.empty() ||
-          !Operation->EffectArguments.empty())
+      if (!Operation)
         throw std::invalid_argument(
-            "typed effect applications require structural interfaces");
+            "built-in effect facts require structural interfaces");
+      // The checked-in v1 interface grammar stores only qualified operation
+      // keys. This is the one lossy compatibility boundary: inference and the
+      // v2-ready structural projection retain the complete ordered type and
+      // effect application, while legacy serialization deliberately emits
+      // only its key until Task 17 retires v1.
       Labels.push_back(Operation->Key.Effect.Module.fqn() + "\\" +
                        Operation->Key.Effect.Name + "." +
                        Operation->Key.Operation);
@@ -602,8 +2631,10 @@ MonoTypePtr TypeChecker::apply_effect_scheme(MonoTypePtr type,
         valid = false;
         continue;
       }
-      Atoms.push_back(intern_operation_atom(
-          resolved_effect_key(Label.substr(0, Dot), Label.substr(Dot + 1))));
+      const auto Atom = intern_operation_atom(
+          resolved_effect_key(Label.substr(0, Dot), Label.substr(Dot + 1)));
+      legacy_untyped_effect_atoms_.insert(Atom);
+      Atoms.push_back(Atom);
     }
     std::sort(Atoms.begin(), Atoms.end());
     Atoms.erase(std::unique(Atoms.begin(), Atoms.end()), Atoms.end());
@@ -780,6 +2811,7 @@ MonoTypePtr TypeChecker::apply_effect_scheme(MonoTypePtr type,
 }
 
 void TypeChecker::check_module(ast::ModuleDecl *mod) {
+  begin_check_session();
   if (!mod)
     return;
   current_module_ = model::ModuleIdentity(mod->fqn->to_string());
@@ -805,6 +2837,83 @@ void TypeChecker::check_module(ast::ModuleDecl *mod) {
     }
     register_adt(adt->name, adt->type_params, constructors, field_types,
                  field_names);
+    // Preserve the exact declaration-owned graph now, while the annotation
+    // variables and source convention are known. Projection later only copies
+    // this seed; it never guesses callable semantics from Arrow shape.
+    auto &NominalSeed = projection_nominal_declarations_[adt];
+    std::unordered_map<std::string, MonoTypePtr> DeclarationVariables;
+    for (const auto &Parameter : adt->type_params) {
+      auto *Variable = arena_.fresh_var(0);
+      uf_.add_var(Variable->var_id, 0);
+      DeclarationVariables.emplace(Parameter, Variable);
+      NominalSeed.TypeParameters.push_back(Variable);
+    }
+    std::function<MonoTypePtr(const ast::FieldType &)> ProjectField =
+        [&](const ast::FieldType &Field) -> MonoTypePtr {
+      if (Field.is_function_type) {
+        MonoTypePtr Result = Field.return_types.empty()
+                                 ? arena_.make_con(TyCon::Unit)
+                                 : ProjectField(Field.return_types.front());
+        for (auto Iterator = Field.param_types.rbegin();
+             Iterator != Field.param_types.rend(); ++Iterator)
+          Result = arena_.make_arrow(ProjectField(*Iterator), Result);
+        return Result;
+      }
+      if (Field.is_tuple_type) {
+        std::vector<MonoTypePtr> Elements;
+        for (const auto &Element : Field.tuple_types)
+          Elements.push_back(ProjectField(Element));
+        return arena_.make_tuple(std::move(Elements));
+      }
+      if (const auto Found = DeclarationVariables.find(Field.name);
+          Found != DeclarationVariables.end())
+        return Found->second;
+      const auto Builtin = [&](TyCon Type) { return arena_.make_con(Type); };
+      if (Field.name == "Int")
+        return Builtin(TyCon::Int);
+      if (Field.name == "Float")
+        return Builtin(TyCon::Float);
+      if (Field.name == "Bool")
+        return Builtin(TyCon::Bool);
+      if (Field.name == "String")
+        return Builtin(TyCon::String);
+      if (Field.name == "Char")
+        return Builtin(TyCon::Char);
+      if (Field.name == "Byte")
+        return Builtin(TyCon::Byte);
+      if (Field.name == "Symbol")
+        return Builtin(TyCon::Symbol);
+      if (Field.name == "Unit" || Field.name == "()")
+        return Builtin(TyCon::Unit);
+      std::vector<MonoTypePtr> Arguments;
+      for (const auto &Argument : Field.type_arguments)
+        Arguments.push_back(ProjectField(Argument));
+      if (Field.name == "Promise" && Arguments.size() == 1) {
+        const auto *Success = unifier_.resolve(Arguments.front());
+        return arena_.make_promise(Arguments.front(),
+                                   Success && Success->tag == MonoType::Con &&
+                                           Success->con != TyCon::String
+                                       ? model::ResultOwnership::Trivial
+                                       : model::ResultOwnership::Owned,
+                                   arena_.effect_solver().empty());
+      }
+      if (const auto Resolved = resolved_nominal_key(Field.name))
+        return arena_.make_app(*Resolved, std::move(Arguments), Field.name);
+      return arena_.make_app(model::NominalTypeKey{current_module_, Field.name},
+                             std::move(Arguments), Field.name);
+    };
+    std::vector<MonoTypePtr> DeclarationRoots;
+    for (auto *Constructor : adt->variants) {
+      NominalSeed.ConstructorFields.emplace_back();
+      auto &Fields = NominalSeed.ConstructorFields.back();
+      if (Constructor)
+        for (const auto &Field : Constructor->field_type_names) {
+          Fields.push_back(ProjectField(Field));
+          DeclarationRoots.push_back(Fields.back());
+        }
+    }
+    NominalSeed.CallableContracts = declaration_callable_contracts(
+        DeclarationRoots, model::CallingConvention::ClosureEntry, adt->Range);
     for (const auto &trait_name : adt->derive_traits) {
       bool lawful = true;
       if (trait_name == "Eq" || trait_name == "Ord" || trait_name == "Hash" ||
@@ -928,7 +3037,29 @@ void TypeChecker::check_module(ast::ModuleDecl *mod) {
     if (!ext)
       continue;
     auto *declared = from_ast_type(ext->declared_type, 0);
-    env->bind_scheme(ext->name, generalize(declared, -1));
+    auto Scheme = generalize(declared, -1);
+    auto Contracts = declaration_callable_contracts(
+        std::span<MonoTypePtr const>(&Scheme.body, 1),
+        model::CallingConvention::NativeExtern, ext->Range);
+    std::vector<model::ParameterOwnership> Ownerships;
+    model::ResultOwnership ResultContract = model::ResultOwnership::Trivial;
+    if (const auto Root = std::ranges::find_if(Contracts,
+                                               [&](const auto &Contract) {
+                                                 return Contract.Arrow ==
+                                                        Scheme.body;
+                                               });
+        Root != Contracts.end()) {
+      Ownerships = Root->ParameterOwnerships;
+      ResultContract = Root->ResultContract;
+    }
+    const model::FunctionDeclarationIdentity Identity =
+        model::SymbolIdentity{current_module_, ext->name};
+    scheme_identities_.insert_or_assign(Scheme.body, Identity);
+    scheme_callable_contracts_.insert_or_assign(Scheme.body, Contracts);
+    projection_extern_declarations_.push_back(
+        ExternDeclarationSeed{ext, Scheme, std::move(Ownerships),
+                              ResultContract, std::move(Contracts)});
+    env->bind_scheme(ext->name, std::move(Scheme));
   }
   // Infer dependency SCCs in callee-first order. Only members of the current
   // recursive component are preliminary and monomorphic; completed sibling
@@ -938,8 +3069,12 @@ void TypeChecker::check_module(ast::ModuleDecl *mod) {
     resolve_exports = [this](const std::string &module_fqn) {
       return import_src_->imported_module_exports(module_fqn);
     };
-  for (const auto &component :
-       module_function_components(mod, resolve_exports)) {
+  const auto Components = module_function_components(
+      mod, std::move(resolve_exports), [this](const std::string &ModuleFqn) {
+        register_imported_nominals(ModuleFqn);
+      });
+  std::vector<std::pair<ast::FunctionExpr *, MonoTypePtr>> ProjectionFunctions;
+  for (const auto &component : Components) {
     std::unordered_map<std::string, MonoTypePtr> prelim;
     if (component.recursive)
       for (auto *func : component.functions) {
@@ -1001,15 +3136,259 @@ void TypeChecker::check_module(ast::ModuleDecl *mod) {
       inferred_functions.emplace_back(func, type);
     }
 
-    for (auto &[func, type] : inferred_functions)
-      env->bind_scheme(func->name, generalize(unifier_.resolve(type), -1));
+    for (auto &[func, type] : inferred_functions) {
+      auto Scheme = generalize(unifier_.resolve(type), -1,
+                               constraints_for_function(func));
+      if (const auto Contracts = expression_callable_contracts_.find(func);
+          Contracts != expression_callable_contracts_.end()) {
+        auto Remapped =
+            remap_callable_contracts(type, Scheme.body, Contracts->second);
+        if (!Remapped.empty())
+          scheme_callable_contracts_.insert_or_assign(Scheme.body,
+                                                      std::move(Remapped));
+      }
+      scheme_identities_.insert_or_assign(
+          Scheme.body, model::FunctionDeclarationIdentity{
+                           model::SymbolIdentity{current_module_, func->name}});
+      env->bind_scheme(func->name, std::move(Scheme));
+      ProjectionFunctions.emplace_back(func, unifier_.resolve(type));
+    }
     for (auto *func : component.functions)
       predeclared_function_body_effects_.erase(func);
   }
+
+  const auto projectMethodBody =
+      [&](ast::FunctionExpr *Function, MonoTypePtr Expected,
+          model::FunctionDeclarationIdentity Identity,
+          const ast::TraitDeclNode *TraitOwner,
+          const ast::InstanceDeclNode *InstanceOwner) {
+        if (!Function)
+          return;
+        auto *Inferred = infer(Function, env, 0);
+        if (!Inferred)
+          return;
+        if (Expected)
+          unifier_.unify(Inferred, Expected, Function->Range,
+                         "against the declared trait method type of '" +
+                             Function->name + "'");
+        auto *Resolved = unifier_.resolve(Inferred);
+        auto Scheme =
+            generalize(Resolved, -1, constraints_for_function(Function));
+        scheme_identities_.insert_or_assign(Scheme.body, Identity);
+        function_schemes_.insert_or_assign(Function, Scheme);
+        projection_function_identities_.insert_or_assign(Function, Identity);
+        if (TraitOwner)
+          trait_default_owners_.insert_or_assign(Function, TraitOwner);
+        if (InstanceOwner)
+          instance_method_owners_.insert_or_assign(Function, InstanceOwner);
+        ProjectionFunctions.emplace_back(Function, Resolved);
+      };
+
+  // Trait defaults and instance methods are executable declarations, not
+  // metadata-only aliases. Infer them in the completed module environment so
+  // their function schemes, callable contracts, and body facts are available
+  // to the structural projection just like ordinary module functions.
+  for (const auto *Trait : mod->trait_declarations) {
+    if (!Trait)
+      continue;
+    std::unordered_map<std::string, MonoTypePtr> Variables;
+    auto &TraitParameters = projection_trait_type_parameters_[Trait];
+    for (const auto &Parameter : Trait->type_params) {
+      auto *Variable = arena_.fresh_var(0);
+      uf_.add_var(Variable->var_id, 0);
+      Variables.emplace(Parameter, Variable);
+      TraitParameters.push_back(Variable);
+    }
+    auto &MethodSeeds = projection_trait_methods_[Trait];
+    const auto TraitKey = resolved_trait_key(Trait->name);
+    for (const auto &Method : Trait->methods) {
+      auto MethodVariables = Variables;
+      auto *Expected =
+          from_ast_type_impl(Method.type_signature, 0, MethodVariables);
+      auto Scheme = generalize(
+          Expected, -1,
+          TraitParameters.empty()
+              ? std::vector<Constraint>{}
+              : std::vector<Constraint>{Constraint(TraitKey, TraitParameters)});
+      std::erase_if(Scheme.quantified_vars, [&](TypeId Variable) {
+        return std::ranges::any_of(TraitParameters, [&](MonoTypePtr Parameter) {
+          return Parameter && Parameter->var_id == Variable;
+        });
+      });
+      auto Contracts = declaration_callable_contracts(
+          std::span<MonoTypePtr const>(&Scheme.body, 1),
+          model::CallingConvention::DirectYona, Trait->Range);
+      std::vector<model::ParameterOwnership> Ownerships;
+      model::ResultOwnership ResultContract = model::ResultOwnership::Trivial;
+      if (const auto Root = std::ranges::find_if(Contracts,
+                                                 [&](const auto &Contract) {
+                                                   return Contract.Arrow ==
+                                                          Scheme.body;
+                                                 });
+          Root != Contracts.end()) {
+        Ownerships = Root->ParameterOwnerships;
+        ResultContract = Root->ResultContract;
+      }
+      MethodSeeds.push_back(
+          TraitMethodDeclarationSeed{std::move(Scheme), std::move(Ownerships),
+                                     ResultContract, std::move(Contracts)});
+      if (Method.default_impl)
+        projectMethodBody(
+            Method.default_impl, Expected,
+            model::FunctionDeclarationIdentity{model::SymbolIdentity{
+                current_module_, Trait->name + "_default_" + Method.name}},
+            Trait, nullptr);
+    }
+  }
+
+  const auto simpleInstanceType = [&](std::string_view Name,
+                                      const auto &Variables) -> MonoTypePtr {
+    if (const auto Found = Variables.find(std::string(Name));
+        Found != Variables.end())
+      return Found->second;
+    if (Name == "Int")
+      return arena_.make_con(TyCon::Int);
+    if (Name == "Float")
+      return arena_.make_con(TyCon::Float);
+    if (Name == "Bool")
+      return arena_.make_con(TyCon::Bool);
+    if (Name == "String")
+      return arena_.make_con(TyCon::String);
+    if (Name == "Char")
+      return arena_.make_con(TyCon::Char);
+    if (Name == "Byte")
+      return arena_.make_con(TyCon::Byte);
+    if (Name == "Symbol")
+      return arena_.make_con(TyCon::Symbol);
+    if (Name == "Unit" || Name == "()")
+      return arena_.make_con(TyCon::Unit);
+    if (Name == "ByteArray")
+      return arena_.make_con(TyCon::ByteArray);
+    if (Name == "IntArray" || Name == "FloatArray")
+      return arena_.make_app(std::string(Name), {});
+    const auto Key = resolved_nominal_key(Name).value_or(
+        model::NominalTypeKey{current_module_, std::string(Name)});
+    return arena_.make_app(Key, {}, std::string(Name));
+  };
+  for (const auto *Instance : mod->instance_declarations) {
+    if (!Instance)
+      continue;
+    const auto Trait = std::ranges::find_if(
+        mod->trait_declarations, [&](const ast::TraitDeclNode *Candidate) {
+          return Candidate && Candidate->name == Instance->trait_name;
+        });
+    std::unordered_map<std::string, MonoTypePtr> InstanceVariables;
+    auto &InstanceParameters = projection_instance_type_parameters_[Instance];
+    for (const auto &Parameter : Instance->type_params) {
+      auto *Variable = arena_.fresh_var(0);
+      uf_.add_var(Variable->var_id, 0);
+      InstanceVariables.emplace(Parameter, Variable);
+      InstanceParameters.push_back(Variable);
+    }
+    std::unordered_map<std::string, MonoTypePtr> TraitVariables;
+    if (Trait != mod->trait_declarations.end()) {
+      for (std::size_t Index = 0; Index < (*Trait)->type_params.size() &&
+                                  Index < Instance->type_names.size();
+           ++Index) {
+        auto *Argument =
+            simpleInstanceType(Instance->type_names[Index], InstanceVariables);
+        if (!InstanceVariables.empty() &&
+            (Index == 0 || Instance->type_names[Index] == "Tuple")) {
+          std::vector<MonoTypePtr> TypeArguments;
+          TypeArguments.reserve(Instance->type_params.size());
+          for (const auto &Parameter : Instance->type_params)
+            TypeArguments.push_back(InstanceVariables.at(Parameter));
+          const auto &Name = Instance->type_names[Index];
+          if (Name == "Tuple")
+            Argument = arena_.make_tuple(std::move(TypeArguments));
+          else if (Name == "Seq" || Name == "Set" || Name == "Dict")
+            Argument = arena_.make_app(Name, std::move(TypeArguments));
+          else if (Argument->tag == MonoType::App)
+            Argument = Argument->resolved_key
+                           ? arena_.make_app(*Argument->resolved_key,
+                                             std::move(TypeArguments),
+                                             Argument->type_name)
+                           : arena_.make_app(Argument->type_name,
+                                             std::move(TypeArguments));
+        }
+        TraitVariables.emplace((*Trait)->type_params[Index], Argument);
+      }
+    }
+    for (auto *Method : Instance->methods) {
+      if (!Method)
+        continue;
+      MonoTypePtr Expected = nullptr;
+      if (Trait != mod->trait_declarations.end()) {
+        const auto Signature = std::ranges::find_if(
+            (*Trait)->methods, [&](const ast::TraitMethodSig &Candidate) {
+              return Candidate.name == Method->name;
+            });
+        if (Signature != (*Trait)->methods.end()) {
+          auto Variables = TraitVariables;
+          Expected =
+              from_ast_type_impl(Signature->type_signature, 0, Variables);
+        }
+      }
+      projectMethodBody(
+          Method, Expected,
+          model::FunctionDeclarationIdentity{model::SymbolIdentity{
+              current_module_,
+              instance_method_symbol(*Instance, Method->name)}},
+          nullptr, Instance);
+    }
+  }
+  std::unordered_set<const ast::FunctionExpr *> ProjectedFunctions;
+  for (const auto &[Function, _] : ProjectionFunctions)
+    ProjectedFunctions.insert(Function);
+  std::vector<const ast::FunctionExpr *> LocalFunctions;
+  for (const auto &[Function, _] : projection_function_types_) {
+    if (!Function || ProjectedFunctions.contains(Function))
+      continue;
+    bool InModule = false;
+    for (auto *Current = Function->parent; Current; Current = Current->parent) {
+      if (Current == mod) {
+        InModule = true;
+        break;
+      }
+      if (const auto *Enclosing =
+              dynamic_cast<const ast::FunctionExpr *>(Current);
+          Enclosing && ProjectedFunctions.contains(Enclosing)) {
+        InModule = true;
+        break;
+      }
+    }
+    if (InModule)
+      LocalFunctions.push_back(Function);
+  }
+  std::ranges::sort(LocalFunctions, [](const auto *Left, const auto *Right) {
+    if (Left->Range.Offset != Right->Range.Offset)
+      return Left->Range.Offset < Right->Range.Offset;
+    return Left < Right;
+  });
+  for (const auto *Function : LocalFunctions) {
+    const auto Type = projection_function_types_.find(Function);
+    if (Type == projection_function_types_.end() || !Type->second)
+      continue;
+    projection_function_identities_.try_emplace(
+        Function,
+        model::FunctionDeclarationIdentity{model::LocalFunctionIdentity{
+            current_module_,
+            {static_cast<std::uint32_t>(Function->Range.Offset)}}});
+    ProjectionFunctions.emplace_back(const_cast<ast::FunctionExpr *>(Function),
+                                     unifier_.resolve(Type->second));
+  }
+  projection_module_ = mod;
+  projection_module_functions_ = std::move(ProjectionFunctions);
 }
 
 MonoTypePtr TypeChecker::check(AstNode *node) {
-  return infer(node, root_env_, 0);
+  begin_check_session();
+  auto *Result = infer(node, root_env_, 0);
+  projection_root_ = node;
+  projection_root_type_ = Result;
+  if (const auto *Function = dynamic_cast<ast::FunctionExpr *>(node))
+    projection_visible_parameter_count_ = Function->patterns.size();
+  return Result;
 }
 
 MonoTypePtr TypeChecker::type_of(AstNode *node) const {
@@ -1029,6 +3408,63 @@ void TypeChecker::record(AstNode *node, MonoTypePtr type) {
   type_map_[node] = type;
 }
 
+MonoTypePtr TypeChecker::constrain_contextual_type(ast::AstNode *Node,
+                                                   MonoTypePtr Actual,
+                                                   MonoTypePtr Expected,
+                                                   const SourceRange &Range,
+                                                   const std::string &Context) {
+  Actual = unifier_.resolve(Actual);
+  Expected = unifier_.resolve(Expected);
+  if (!Actual || !Expected)
+    return Actual;
+  if (Actual->tag == MonoType::App && Actual->type_name == "Promise" &&
+      Actual->promise_result_contract && !Actual->args.empty() &&
+      !(Expected->tag == MonoType::App && Expected->type_name == "Promise")) {
+    const auto AwaitEffects = Actual->promise_effects;
+    include_evaluation_effect(AwaitEffects);
+    const auto Existing = node_effects_.find(Node);
+    node_effects_.insert_or_assign(
+        Node,
+        Existing == node_effects_.end()
+            ? AwaitEffects
+            : arena_.effect_solver().join({Existing->second, AwaitEffects}));
+    unifier_.unify(Actual->args.front(), Expected, Range,
+                   Context + " after awaiting Promise");
+    return unifier_.resolve(Expected);
+  }
+  if (Actual->tag != MonoType::Sum && Expected->tag == MonoType::Sum) {
+    MonoTypePtr Match = nullptr;
+    for (const auto *Alternative : Expected->sum_alternatives) {
+      const auto *Resolved = unifier_.resolve(Alternative);
+      if (!Resolved || Resolved->tag == MonoType::Var)
+        continue;
+      if (pretty_print(Resolved) == pretty_print(Actual) &&
+          (!(Resolved->resolved_key || Actual->resolved_key) ||
+           (Resolved->resolved_key && Actual->resolved_key &&
+            *Resolved->resolved_key == *Actual->resolved_key))) {
+        Match = Alternative;
+        break;
+      }
+    }
+    if (!Match) {
+      const auto Variable = std::ranges::find_if(
+          Expected->sum_alternatives, [&](MonoTypePtr Alternative) {
+            const auto *Resolved = unifier_.resolve(Alternative);
+            return Resolved && Resolved->tag == MonoType::Var;
+          });
+      if (Variable != Expected->sum_alternatives.end())
+        Match = *Variable;
+    }
+    if (Match && unifier_.unify(Actual, Match, Range, Context)) {
+      sum_injections_.insert_or_assign(
+          Node, SumInjectionProjection{unifier_.resolve(Match), Expected});
+      return Expected;
+    }
+  }
+  unifier_.unify(Actual, Expected, Range, Context);
+  return unifier_.resolve(Actual);
+}
+
 MonoTypePtr TypeChecker::zonk(MonoTypePtr type) {
   type = unifier_.resolve(type);
   if (!type)
@@ -1045,6 +3481,10 @@ MonoTypePtr TypeChecker::zonk(MonoTypePtr type) {
     std::vector<MonoTypePtr> args;
     for (auto *a : type->args)
       args.push_back(zonk(a));
+    if (type->type_name == "Promise" && type->promise_result_contract &&
+        !args.empty())
+      return arena_.make_promise(args.front(), *type->promise_result_contract,
+                                 type->promise_effects);
     return type->resolved_key
                ? arena_.make_app(*type->resolved_key, std::move(args),
                                  type->type_name)
@@ -1081,6 +3521,7 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
   if (!node)
     return arena_.make_con(TyCon::Unit);
 
+  evaluation_effect_stack_.push_back({});
   MonoTypePtr result = nullptr;
   auto ty = node->get_type();
 
@@ -1118,9 +3559,12 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
   case AST_UNIT_EXPR:
     result = arena_.make_con(TyCon::Unit);
     break;
-  case AST_MAIN:
-    result = infer(static_cast<MainNode *>(node)->node, env, level);
+  case AST_MAIN: {
+    auto *Child = static_cast<MainNode *>(node)->node;
+    result = infer(Child, env, level);
+    propagate_callable_contracts(node, Child, result);
     break;
+  }
   case AST_IDENTIFIER_EXPR:
     result = infer_identifier(static_cast<IdentifierExpr *>(node), env, level);
     break;
@@ -1159,6 +3603,9 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
       fields.push_back({name, field_type});
     }
     result = arena_.make_record(fields);
+    for (std::size_t Index = 0; Index < rec->fields.size(); ++Index)
+      merge_callable_contracts(node, rec->fields[Index].second,
+                               fields[Index].second);
     break;
   }
   case AST_FIELD_ACCESS_EXPR: {
@@ -1277,6 +3724,13 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
     // raise expr â€” type of the raise is a fresh var (bottom/never returns)
     auto *re = static_cast<RaiseExpr *>(node);
     infer(re->value, env, level);
+    auto Transaction = arena_.effect_atoms().beginAppend();
+    const auto MayRaise = Transaction.intern(MayRaiseEffectAtom{});
+    if (auto Prepared = Transaction.prepareCommit(); !Prepared)
+      throw std::logic_error(Prepared.error());
+    Transaction.commitPrepared();
+    include_ambient_effect(arena_.effect_solver().atoms({MayRaise}),
+                           node->Range, "in raise expression");
     result = arena_.fresh_var(level);
     uf_.add_var(result->var_id, level);
     break;
@@ -1287,12 +3741,24 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
     auto import_env = env->child();
     auto saved_boundaries = concurrency_boundaries_;
     for (auto *clause : imp->clauses) {
+      if (auto *Functions = dynamic_cast<FunctionsImport *>(clause)) {
+        if (Functions->fromFqn)
+          register_imported_nominals(Functions->fromFqn->to_string());
+      } else if (auto *Module = dynamic_cast<ModuleImport *>(clause)) {
+        if (Module->fqn)
+          register_imported_nominals(Module->fqn->to_string());
+      }
+    }
+    for (auto *clause : imp->clauses) {
       if (auto *fi = dynamic_cast<FunctionsImport *>(clause)) {
         std::string mod_fqn = fqn_to_string(fi->fromFqn);
-        if (import_src_)
+        if (import_src_) {
+          const model::ModuleIdentity ImportedModule{mod_fqn};
           for (const auto &instance : import_src_->imported_instances(mod_fqn))
             register_instance(instance.trait_name, instance.type_names,
-                              instance.type_params, instance.constraints);
+                              instance.type_params, instance.constraints,
+                              &ImportedModule);
+        }
         for (auto *fa : fi->aliases) {
           std::string src_name = fa->name->value;
           std::string bind_name = (fa->alias && !fa->alias->value.empty())
@@ -1308,9 +3774,11 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
       } else if (auto *mi = dynamic_cast<ModuleImport *>(clause)) {
         if (import_src_ && mi->fqn) {
           std::string mod = mi->fqn->to_string();
+          const model::ModuleIdentity ImportedModule{mod};
           for (const auto &instance : import_src_->imported_instances(mod))
             register_instance(instance.trait_name, instance.type_names,
-                              instance.type_params, instance.constraints);
+                              instance.type_params, instance.constraints,
+                              &ImportedModule);
           for (auto &name : import_src_->imported_module_exports(mod))
             bind_import_name(import_env, mod, name, name, level);
           if (mod == "Std\\Task")
@@ -1321,6 +3789,7 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
       }
     }
     result = infer(imp->expr, import_env, level);
+    propagate_callable_contracts(node, imp->expr, result);
     concurrency_boundaries_ = std::move(saved_boundaries);
     break;
   }
@@ -1373,6 +3842,7 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
     bind_collection_extractor(gen->collectionExtractor, gen_env, level);
     auto *body_type = infer(gen->reducerExpr, gen_env, level);
     result = arena_.make_app("Set", {body_type});
+    require_collection_key_operations(node, body_type);
     break;
   }
 
@@ -1383,6 +3853,7 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
     auto *key_type = infer(gen->reducerExpr->key, gen_env, level);
     auto *val_type = infer(gen->reducerExpr->value, gen_env, level);
     result = arena_.make_app("Dict", {key_type, val_type});
+    require_collection_key_operations(node, key_type);
     break;
   }
 
@@ -1404,6 +3875,9 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
                        "in set literal (all elements must have same type)");
       }
       result = arena_.make_app("Set", {unifier_.resolve(elem_type)});
+      for (auto *Value : se->values)
+        merge_callable_contracts(node, Value, result->args.front());
+      require_collection_key_operations(node, elem_type);
     }
     break;
   }
@@ -1422,6 +3896,12 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
     }
     result = arena_.make_app(
         "Dict", {unifier_.resolve(key_var), unifier_.resolve(val_var)});
+    for (const auto &[Key, Value] : de->values) {
+      merge_callable_contracts(node, Key, result->args[0]);
+      merge_callable_contracts(node, Value, result->args[1]);
+    }
+    if (!de->values.empty())
+      require_collection_key_operations(node, key_var);
     break;
   }
 
@@ -1440,7 +3920,32 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
 
   case AST_TRY_CATCH_EXPR: {
     auto *tc = static_cast<TryCatchExpr *>(node);
+    // A catch is the built-in MayRaise handler. Infer only the protected
+    // expression in its own row, then mask MayRaise before publishing that
+    // row to the enclosing expression. MayRaise is deliberately illegal in
+    // algebraic-operation masks, so a closed row is filtered directly; an
+    // open tail remains conservative because it may acquire another raise.
+    // Catch bodies remain outside this boundary, so a re-raise correctly
+    // reaches an enclosing catch.
+    const auto TryEffects = arena_.effect_solver().derived();
+    latent_effect_stack_.push_back({TryEffects});
+    isolated_evaluation_roots_.insert(tc->tryExpr);
     auto *try_type = infer(tc->tryExpr, env, level);
+    isolated_evaluation_roots_.erase(tc->tryExpr);
+    latent_effect_stack_.pop_back();
+    const auto TrySummary = arena_.effect_solver().summarize(TryEffects);
+    EffectRef Residual = TryEffects;
+    if (TrySummary.tails.empty()) {
+      auto ResidualAtoms = TrySummary.known_atoms;
+      std::erase_if(ResidualAtoms, [&](EffectAtomId Atom) {
+        Atom = arena_.effect_solver().canonicalAtom(Atom);
+        return arena_.effect_atoms().valid(Atom) &&
+               std::holds_alternative<MayRaiseEffectAtom>(
+                   arena_.effect_atoms().at(Atom));
+      });
+      Residual = arena_.effect_solver().atoms(std::move(ResidualAtoms));
+    }
+    include_ambient_effect(Residual, node->Range, "in try/catch");
     if (tc->catchExpr) {
       for (auto *cp : tc->catchExpr->patterns) {
         // Extract body from the catch pattern's variant
@@ -1483,10 +3988,12 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
         resolved->type_name == "Set" && !resolved->args.empty()) {
       unifier_.unify(elem_type, resolved->args[0], node->Range,
                      "in membership (in) set element");
+      require_collection_key_operations(node, resolved->args[0]);
     } else if (resolved && resolved->tag == MonoType::App &&
                resolved->type_name == "Dict" && !resolved->args.empty()) {
       unifier_.unify(elem_type, resolved->args[0], node->Range,
                      "in membership (in) dict key");
+      require_collection_key_operations(node, resolved->args[0]);
     } else {
       auto *expected_seq = arena_.make_app("Seq", {elem_type});
       unifier_.unify(coll_type, expected_seq, node->Range,
@@ -1528,6 +4035,16 @@ MonoTypePtr TypeChecker::infer(AstNode *node, std::shared_ptr<TypeEnv> env,
     uf_.add_var(result->var_id, level);
     break;
   }
+
+  EffectRef EvaluationEffects = arena_.effect_solver().empty();
+  if (!evaluation_effect_stack_.back().Sources.empty())
+    EvaluationEffects = arena_.effect_solver().join(
+        std::move(evaluation_effect_stack_.back().Sources));
+  evaluation_effect_stack_.pop_back();
+  node_effects_.insert_or_assign(node, EvaluationEffects);
+  if (!evaluation_effect_stack_.empty() &&
+      !isolated_evaluation_roots_.contains(node))
+    evaluation_effect_stack_.back().Sources.push_back(EvaluationEffects);
 
   if (result)
     record(node, result);
@@ -1577,7 +4094,32 @@ MonoTypePtr TypeChecker::infer_identifier(IdentifierExpr *node,
     error_count_++;
     return arena_.fresh_var(level);
   }
-  auto *inferred = instantiate_binding(*scheme, level);
+  std::vector<MonoTypePtr> TypeArguments;
+  std::vector<EffectRef> EffectArguments;
+  const auto ConstraintBegin = deferred_constraints_.size();
+  auto *inferred =
+      instantiate_binding(*scheme, level, &TypeArguments, &EffectArguments);
+  for (std::size_t Index = ConstraintBegin;
+       Index < deferred_constraints_.size(); ++Index) {
+    deferred_constraints_[Index].origin = node;
+    deferred_constraints_[Index].owning_function =
+        function_inference_stack_.empty() ? nullptr
+                                          : function_inference_stack_.back();
+  }
+  if (const auto Contracts = scheme_callable_contracts_.find(scheme->body);
+      Contracts != scheme_callable_contracts_.end()) {
+    auto Instantiated =
+        remap_callable_contracts(scheme->body, inferred, Contracts->second);
+    if (!Instantiated.empty())
+      expression_callable_contracts_.insert_or_assign(node,
+                                                      std::move(Instantiated));
+  }
+  if (const auto Identity = scheme_identities_.find(scheme->body);
+      Identity != scheme_identities_.end())
+    instantiations_.insert_or_assign(
+        node, SchemeInstantiationProjection{
+                  Identity->second, std::move(TypeArguments),
+                  std::move(EffectArguments), node->Range});
   for (auto &frame : capture_frames_) {
     if (env->bound_through(node->name->value, frame.local_root))
       continue;
@@ -1665,6 +4207,14 @@ MonoTypePtr TypeChecker::infer_let(LetExpr *node, std::shared_ptr<TypeEnv> env,
     if (auto *va = dynamic_cast<ValueAlias *>(alias)) {
       auto *rhs_type = infer(va->expr, child_env, level + 1);
       auto scheme = generalize(rhs_type, level);
+      if (const auto Contracts = expression_callable_contracts_.find(va->expr);
+          Contracts != expression_callable_contracts_.end()) {
+        auto Remapped =
+            remap_callable_contracts(rhs_type, scheme.body, Contracts->second);
+        if (!Remapped.empty())
+          scheme_callable_contracts_.insert_or_assign(scheme.body,
+                                                      std::move(Remapped));
+      }
       child_env->bind_scheme(va->identifier->name->value, scheme);
     } else if (auto *pa = dynamic_cast<PatternAlias *>(alias)) {
       auto *rhs_type = infer(pa->expr, child_env, level + 1);
@@ -1688,7 +4238,23 @@ MonoTypePtr TypeChecker::infer_let(LetExpr *node, std::shared_ptr<TypeEnv> env,
   for (const auto &prelim : lambda_prelims) {
     if (!prelim.inferred)
       continue;
-    auto scheme = generalize(prelim.inferred, level);
+    auto scheme = generalize(prelim.inferred, level,
+                             constraints_for_function(prelim.la->lambda));
+    scheme_identities_.insert_or_assign(
+        scheme.body,
+        model::FunctionDeclarationIdentity{model::LocalFunctionIdentity{
+            current_module_,
+            {static_cast<std::uint32_t>(prelim.la->lambda->Range.Offset)}}});
+    function_schemes_.insert_or_assign(prelim.la->lambda, scheme);
+    if (const auto Contracts =
+            expression_callable_contracts_.find(prelim.la->lambda);
+        Contracts != expression_callable_contracts_.end()) {
+      auto Remapped = remap_callable_contracts(prelim.inferred, scheme.body,
+                                               Contracts->second);
+      if (!Remapped.empty())
+        scheme_callable_contracts_.insert_or_assign(scheme.body,
+                                                    std::move(Remapped));
+    }
     child_env->bind_scheme(prelim.la->name->value, scheme);
     if (const auto captures = function_capture_types_.find(prelim.la->lambda);
         captures != function_capture_types_.end())
@@ -1698,7 +4264,9 @@ MonoTypePtr TypeChecker::infer_let(LetExpr *node, std::shared_ptr<TypeEnv> env,
   for (const auto &prelim : lambda_prelims)
     predeclared_function_body_effects_.erase(prelim.la->lambda);
 
-  return infer(node->expr, child_env, level);
+  auto *Result = infer(node->expr, child_env, level);
+  propagate_callable_contracts(node, node->expr, Result);
+  return Result;
 }
 
 // ===== Function =====
@@ -1742,6 +4310,7 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr *node,
   // boundaries. Sequential closures remain unrestricted; spawn and parallel
   // constructs later require each captured value to be Shareable.
   capture_frames_.push_back({fn_env.get(), {}, {}});
+  function_inference_stack_.push_back(node);
 
   // A function body is a least-derived effect cell.  Calls include their
   // callee expression into this cell; independent callbacks therefore form
@@ -1753,9 +4322,13 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr *node,
           : predeclared->second;
   latent_effect_stack_.push_back({body_effect});
   MonoTypePtr body_type = nullptr;
+  std::vector<std::pair<ast::AstNode *, MonoTypePtr>> BodyResults;
   for (auto *body : node->bodies) {
     if (auto *bwg = dynamic_cast<BodyWithoutGuards *>(body)) {
+      isolated_evaluation_roots_.insert(bwg->expr);
       auto *bt = infer(bwg->expr, fn_env, level);
+      isolated_evaluation_roots_.erase(bwg->expr);
+      BodyResults.emplace_back(bwg->expr, bt);
       if (!body_type)
         body_type = bt;
       else
@@ -1764,12 +4337,29 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr *node,
   }
   if (!body_type)
     body_type = arena_.make_con(TyCon::Unit);
-  if (declared_cursor)
-    unifier_.unify(body_type, declared_cursor, node->Range,
-                   "against the declared function result type");
+  if (declared_cursor) {
+    auto *ExpectedResult = unifier_.resolve(declared_cursor);
+    const bool DeclaredPromise = ExpectedResult &&
+                                 ExpectedResult->tag == MonoType::App &&
+                                 ExpectedResult->type_name == "Promise" &&
+                                 ExpectedResult->promise_result_contract &&
+                                 !ExpectedResult->args.empty();
+    if (DeclaredPromise)
+      ExpectedResult = ExpectedResult->args.front();
+    for (const auto &[Body, Type] : BodyResults)
+      constrain_contextual_type(Body, Type, ExpectedResult, Body->Range,
+                                "against the declared function result type");
+    body_type =
+        constrain_contextual_type(node, body_type, ExpectedResult, node->Range,
+                                  "against the declared function result type");
+    if (DeclaredPromise)
+      body_type = declared_cursor;
+    sum_injections_.erase(node);
+  }
 
   function_capture_types_[node] = capture_frames_.back().types;
   capture_frames_.pop_back();
+  function_inference_stack_.pop_back();
 
   const CollectedRow collected = latent_effect_stack_.back();
   latent_effect_stack_.pop_back();
@@ -1792,6 +4382,78 @@ MonoTypePtr TypeChecker::infer_function(FunctionExpr *node,
   }
 
   check_param_borrow_annotations(node);
+
+  auto parameterOwnership = [&](std::size_t Index, MonoTypePtr Type) {
+    const auto *Resolved = unifier_.resolve(Type);
+    if (Resolved && Resolved->tag == MonoType::Con &&
+        Resolved->con != TyCon::String)
+      return model::ParameterOwnership::Trivial;
+    return Index < node->param_borrow.size() && node->param_borrow[Index]
+               ? model::ParameterOwnership::Borrow
+               : model::ParameterOwnership::Consume;
+  };
+  const auto resultOwnership = [&](MonoTypePtr Type) {
+    const auto *Resolved = unifier_.resolve(Type);
+    return Resolved && Resolved->tag == MonoType::Con &&
+                   Resolved->con != TyCon::String
+               ? model::ResultOwnership::Trivial
+               : model::ResultOwnership::Owned;
+  };
+  const std::size_t Arity = std::max<std::size_t>(param_types.size(), 1);
+  std::vector<model::ParameterOwnership> Ownerships;
+  Ownerships.reserve(Arity);
+  auto *Stage = fn_type;
+  for (std::size_t Index = 0;
+       Index < Arity && Stage && Stage->tag == MonoType::Arrow; ++Index) {
+    Ownerships.push_back(parameterOwnership(Index, Stage->param_type));
+    Stage = Stage->return_type;
+  }
+  auto &Contracts = function_callable_contracts_[node];
+  Stage = fn_type;
+  for (std::size_t Index = 0;
+       Index < Ownerships.size() && Stage && Stage->tag == MonoType::Arrow;
+       ++Index) {
+    Contracts.push_back(CallableTypeContract{
+        Stage,
+        {Ownerships.begin() + static_cast<std::ptrdiff_t>(Index),
+         Ownerships.end()},
+        resultOwnership(body_type),
+        Index == 0 ? model::CallingConvention::DirectYona
+                   : model::CallingConvention::ClosureEntry,
+        node->Range});
+    Stage = Stage->return_type;
+  }
+  const std::vector<CallableTypeContract> *ReturnedContracts = nullptr;
+  bool ReturnedContractsAgree = true;
+  for (const auto &[Body, _] : BodyResults) {
+    const auto Found = expression_callable_contracts_.find(Body);
+    if (Found == expression_callable_contracts_.end()) {
+      ReturnedContractsAgree = false;
+      break;
+    }
+    if (!ReturnedContracts)
+      ReturnedContracts = &Found->second;
+    else if (!same_callable_contracts(*ReturnedContracts, Found->second)) {
+      ReturnedContractsAgree = false;
+      break;
+    }
+  }
+  if (ReturnedContractsAgree && ReturnedContracts)
+    for (auto Contract : *ReturnedContracts) {
+      const auto Duplicate =
+          std::ranges::find_if(Contracts, [&](const auto &Existing) {
+            return unifier_.resolve(Existing.Arrow) ==
+                       unifier_.resolve(Contract.Arrow) &&
+                   Existing.ParameterOwnerships ==
+                       Contract.ParameterOwnerships &&
+                   Existing.ResultContract == Contract.ResultContract &&
+                   Existing.Convention == Contract.Convention;
+          });
+      if (Duplicate == Contracts.end())
+        Contracts.push_back(std::move(Contract));
+    }
+  expression_callable_contracts_.insert_or_assign(node, Contracts);
+  projection_function_types_.insert_or_assign(node, fn_type);
   return fn_type;
 }
 
@@ -1849,15 +4511,34 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr *node,
                                      std::shared_ptr<TypeEnv> env, int level) {
   // Infer callee
   MonoTypePtr callee_type = nullptr;
+  std::vector<CallableTypeContract> CalleeContracts;
   size_t constraint_begin = deferred_constraints_.size();
   size_t constraint_end = constraint_begin;
   if (auto *nc = dynamic_cast<NameCall *>(node->call)) {
     auto scheme = env->lookup(nc->name->value);
     if (scheme) {
-      callee_type = instantiate_binding(*scheme, level);
+      std::vector<MonoTypePtr> TypeArguments;
+      std::vector<EffectRef> EffectArguments;
+      callee_type =
+          instantiate_binding(*scheme, level, &TypeArguments, &EffectArguments);
+      if (const auto Contracts = scheme_callable_contracts_.find(scheme->body);
+          Contracts != scheme_callable_contracts_.end())
+        CalleeContracts = remap_callable_contracts(scheme->body, callee_type,
+                                                   Contracts->second);
+      if (const auto Identity = scheme_identities_.find(scheme->body);
+          Identity != scheme_identities_.end())
+        instantiations_.insert_or_assign(
+            node, SchemeInstantiationProjection{
+                      Identity->second, std::move(TypeArguments),
+                      std::move(EffectArguments), node->Range});
       constraint_end = deferred_constraints_.size();
-      for (size_t i = constraint_begin; i < constraint_end; ++i)
+      for (size_t i = constraint_begin; i < constraint_end; ++i) {
         deferred_constraints_[i].origin = node;
+        deferred_constraints_[i].owning_function =
+            function_inference_stack_.empty()
+                ? nullptr
+                : function_inference_stack_.back();
+      }
     } else {
       std::string msg = "undefined function '" + nc->name->value + "'";
       auto names = env->all_names();
@@ -1878,6 +4559,9 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr *node,
     }
   } else if (auto *ec = dynamic_cast<ExprCall *>(node->call)) {
     callee_type = infer(ec->expr, env, level);
+    if (const auto Contracts = expression_callable_contracts_.find(ec->expr);
+        Contracts != expression_callable_contracts_.end())
+      CalleeContracts = Contracts->second;
   } else {
     callee_type = arena_.fresh_var(level);
     uf_.add_var(callee_type->var_id, level);
@@ -1913,6 +4597,11 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr *node,
     auto *arg_type = infer(arg_node, env, level);
 
     auto *resolved = unifier_.resolve(result_type);
+
+    if (resolved && resolved->tag == MonoType::Arrow)
+      arg_type = constrain_contextual_type(
+          arg_node, arg_type, resolved->param_type, arg_node->Range,
+          "at Promise value demand in function application");
 
     auto *result_var = arena_.fresh_var(level);
     uf_.add_var(result_var->var_id, level);
@@ -1987,7 +4676,14 @@ MonoTypePtr TypeChecker::infer_apply(ApplyExpr *node,
     enforce_concurrency_boundary(node, concurrency_callee,
                                  concurrency_boundary);
 
-  return unifier_.resolve(result_type);
+  auto *Result = unifier_.resolve(result_type);
+  if (Result) {
+    auto Contracts = remap_callable_contracts(Result, Result, CalleeContracts);
+    if (!Contracts.empty())
+      expression_callable_contracts_.insert_or_assign(node,
+                                                      std::move(Contracts));
+  }
+  return Result;
 }
 
 void TypeChecker::require_trait(const std::string &trait_name, MonoTypePtr type,
@@ -1996,6 +4692,31 @@ void TypeChecker::require_trait(const std::string &trait_name, MonoTypePtr type,
     return;
   deferred_constraints_.emplace_back(trait_name, unifier_.resolve(type), loc,
                                      std::move(context));
+  deferred_constraints_.back().owning_function =
+      function_inference_stack_.empty() ? nullptr
+                                        : function_inference_stack_.back();
+  deferred_constraints_.back().evidence_role =
+      DeferredConstraint::EvidenceRole::None;
+}
+
+void TypeChecker::require_collection_key_operations(const ast::AstNode *Node,
+                                                    MonoTypePtr KeyType) {
+  if (!Node || !KeyType)
+    return;
+  const auto Add = [&](const char *Trait, const char *Context,
+                       DeferredConstraint::EvidenceRole Role) {
+    deferred_constraints_.emplace_back(Trait, KeyType, Node->Range, Context);
+    auto &Constraint = deferred_constraints_.back();
+    Constraint.origin = Node;
+    Constraint.owning_function = function_inference_stack_.empty()
+                                     ? nullptr
+                                     : function_inference_stack_.back();
+    Constraint.evidence_role = Role;
+  };
+  Add("Hash", "required by collection key operation",
+      DeferredConstraint::EvidenceRole::CollectionHash);
+  Add("Eq", "required by collection key operation",
+      DeferredConstraint::EvidenceRole::CollectionEquals);
 }
 
 void TypeChecker::require_captures_shareable(
@@ -2093,9 +4814,9 @@ bool TypeChecker::materialize_effect_masks(EffectRef effect,
       return true;
     if (!Pattern || !Candidate || !Seen.emplace(Pattern, Candidate).second)
       return Pattern && Candidate;
-    if (Pattern->tag == MonoType::Var)
+    if (Pattern->tag == MonoType::Var || Candidate->tag == MonoType::Var)
       return true;
-    if (Candidate->tag == MonoType::Var || Pattern->tag != Candidate->tag)
+    if (Pattern->tag != Candidate->tag)
       return false;
     switch (Pattern->tag) {
     case MonoType::Var:
@@ -2176,9 +4897,23 @@ bool TypeChecker::materialize_effect_masks(EffectRef effect,
             &arena_.effect_atoms().at(Pattern));
         const auto *CandidateOperation = std::get_if<OperationEffectAtom>(
             &arena_.effect_atoms().at(Candidate));
-        if (!PatternOperation || !CandidateOperation ||
-            PatternOperation->Key != CandidateOperation->Key ||
-            PatternOperation->TypeArguments.size() !=
+        if (!PatternOperation || !CandidateOperation)
+          return false;
+        // V1 interfaces have no operation declarations: their effect rows
+        // contain a key but no declaration-ordered type/effect application.
+        // They also historically exposed source-local effects by short name,
+        // so their defining module is not usable at a client handler site.
+        // Treat only those explicitly tracked legacy candidates as opaque,
+        // short-key matches. Typed v2/source applications below still require
+        // exact qualified identity, arity, and ordered arguments.
+        if (legacy_untyped_effect_atoms_.contains(Candidate))
+          return PatternOperation->Key.Effect.Name ==
+                     CandidateOperation->Key.Effect.Name &&
+                 PatternOperation->Key.Operation ==
+                     CandidateOperation->Key.Operation;
+        if (PatternOperation->Key != CandidateOperation->Key)
+          return false;
+        if (PatternOperation->TypeArguments.size() !=
                 CandidateOperation->TypeArguments.size() ||
             PatternOperation->EffectArguments.size() !=
                 CandidateOperation->EffectArguments.size())
@@ -2207,6 +4942,7 @@ bool TypeChecker::materialize_effect_masks(EffectRef effect,
 void TypeChecker::include_ambient_effect(EffectRef effect,
                                          const SourceRange &loc,
                                          const std::string &context) {
+  include_evaluation_effect(effect);
   if (latent_effect_stack_.empty())
     return;
   if (!materialize_effect_masks(effect, loc, context))
@@ -2220,6 +4956,11 @@ void TypeChecker::include_ambient_effect(EffectRef effect,
   }
 }
 
+void TypeChecker::include_evaluation_effect(EffectRef effect) {
+  if (effect.valid() && !evaluation_effect_stack_.empty())
+    evaluation_effect_stack_.back().Sources.push_back(effect);
+}
+
 void TypeChecker::apply_callee_effects(MonoTypePtr callee,
                                        const SourceRange &apply_loc) {
   const auto effect = callee_effect(callee);
@@ -2229,6 +4970,8 @@ void TypeChecker::apply_callee_effects(MonoTypePtr callee,
     include_ambient_effect(*effect, apply_loc, "in function application");
     return;
   }
+
+  include_evaluation_effect(*effect);
 
   if (!materialize_effect_masks(*effect, apply_loc, "in function application"))
     return;
@@ -2250,44 +4993,6 @@ void TypeChecker::apply_callee_effects(MonoTypePtr callee,
   }
 }
 
-void TypeChecker::collect_effect_roots(MonoTypePtr type,
-                                       std::vector<SchemeEffectRoot> &roots) {
-  type = unifier_.resolve(type);
-  if (!type)
-    return;
-  switch (type->tag) {
-  case MonoType::Arrow:
-    if (std::ranges::none_of(roots, [&](const SchemeEffectRoot &Root) {
-          return Root.Arrow == type;
-        }))
-      roots.push_back(SchemeEffectRoot{type, type->arrow_effect});
-    collect_effect_roots(type->param_type, roots);
-    collect_effect_roots(type->return_type, roots);
-    break;
-  case MonoType::App:
-    for (const auto input : type->args)
-      collect_effect_roots(input, roots);
-    break;
-  case MonoType::MTuple:
-    for (const auto input : type->elements)
-      collect_effect_roots(input, roots);
-    break;
-  case MonoType::MRecord:
-    for (const auto &[_, input] : type->record_fields)
-      collect_effect_roots(input, roots);
-    if (type->row_rest)
-      collect_effect_roots(type->row_rest, roots);
-    break;
-  case MonoType::Sum:
-    for (const auto *Alternative : type->sum_alternatives)
-      collect_effect_roots(Alternative, roots);
-    break;
-  case MonoType::Var:
-  case MonoType::Con:
-    break;
-  }
-}
-
 // ===== If =====
 
 MonoTypePtr TypeChecker::infer_if(IfExpr *node, std::shared_ptr<TypeEnv> env,
@@ -2301,7 +5006,16 @@ MonoTypePtr TypeChecker::infer_if(IfExpr *node, std::shared_ptr<TypeEnv> env,
   unifier_.unify(then_type, else_type, node->Range,
                  "in if branches (then and else must have same type)");
 
-  return unifier_.resolve(then_type);
+  auto *Result = unifier_.resolve(then_type);
+  const auto ThenContracts =
+      expression_callable_contracts_.find(node->thenExpr);
+  const auto ElseContracts =
+      expression_callable_contracts_.find(node->elseExpr);
+  if (ThenContracts != expression_callable_contracts_.end() &&
+      ElseContracts != expression_callable_contracts_.end() &&
+      same_callable_contracts(ThenContracts->second, ElseContracts->second))
+    propagate_callable_contracts(node, node->thenExpr, Result);
+  return Result;
 }
 
 // ===== Binary Operators =====
@@ -2412,9 +5126,17 @@ MonoTypePtr TypeChecker::infer_binary(BinaryOpExpr *node,
   if (name == "==" || name == "!=") {
     deferred_constraints_.push_back(
         {"Eq", left_type, node->Range, "required by operator '" + name + "'"});
+    deferred_constraints_.back().origin = node;
+    deferred_constraints_.back().owning_function =
+        function_inference_stack_.empty() ? nullptr
+                                          : function_inference_stack_.back();
   } else if (name == "<" || name == ">" || name == "<=" || name == ">=") {
     deferred_constraints_.push_back(
         {"Ord", left_type, node->Range, "required by operator '" + name + "'"});
+    deferred_constraints_.back().origin = node;
+    deferred_constraints_.back().owning_function =
+        function_inference_stack_.empty() ? nullptr
+                                          : function_inference_stack_.back();
   }
 
   if (name == "++") {
@@ -2469,7 +5191,11 @@ MonoTypePtr TypeChecker::infer_tuple(TupleExpr *node,
   std::vector<MonoTypePtr> elem_types;
   for (auto *v : node->values)
     elem_types.push_back(infer(v, env, level));
-  return arena_.make_tuple(elem_types);
+  auto *Result = arena_.make_tuple(elem_types);
+  for (std::size_t Index = 0; Index < node->values.size(); ++Index)
+    merge_callable_contracts(node, node->values[Index],
+                             Result->elements[Index]);
+  return Result;
 }
 
 // ===== Sequence =====
@@ -2485,7 +5211,10 @@ MonoTypePtr TypeChecker::infer_seq(ValuesSequenceExpr *node,
     unifier_.unify(elem_type, t, node->Range,
                    "in sequence literal (all elements must have same type)");
   }
-  return arena_.make_app("Seq", {unifier_.resolve(elem_type)});
+  auto *Result = arena_.make_app("Seq", {unifier_.resolve(elem_type)});
+  for (auto *Value : node->values)
+    merge_callable_contracts(node, Value, Result->args.front());
+  return Result;
 }
 
 // ===== Do Block =====
@@ -2552,67 +5281,19 @@ TypeScheme TypeChecker::generalize(MonoTypePtr type, int level,
     else
       scheme.constraints.emplace_back(Constraint.trait_name, std::move(Types));
   }
-  std::unordered_set<const MonoType *> SeenTypes;
-  std::unordered_set<EffectRef, EffectRefHasher> SeenEffects;
-  std::unordered_set<EffectAtomId> SeenAtoms;
-  std::vector<EffectRef> EffectClosure;
-
-  const auto rememberEffect = [&](EffectRef Effect) {
-    if (SeenEffects.insert(Effect).second)
-      EffectClosure.push_back(Effect);
-  };
-  const auto visitType = [&](const auto &Self, MonoTypePtr Current) -> void {
-    Current = unifier_.resolve(Current);
-    if (!Current || !SeenTypes.insert(Current).second)
-      return;
-    if (Current->tag == MonoType::Var) {
-      if (uf_.level(Current->var_id) > level &&
-          std::ranges::find(scheme.quantified_vars, Current->var_id) ==
-              scheme.quantified_vars.end())
-        scheme.quantified_vars.push_back(Current->var_id);
-      return;
-    }
-    switch (Current->tag) {
-    case MonoType::Arrow:
-      scheme.effect_roots.push_back({Current, Current->arrow_effect});
-      rememberEffect(Current->arrow_effect);
-      Self(Self, Current->param_type);
-      Self(Self, Current->return_type);
-      break;
-    case MonoType::App:
-      for (const auto *Argument : Current->args)
-        Self(Self, Argument);
-      break;
-    case MonoType::MTuple:
-      for (const auto *Element : Current->elements)
-        Self(Self, Element);
-      break;
-    case MonoType::MRecord:
-      for (const auto &[_, Field] : Current->record_fields)
-        Self(Self, Field);
-      if (Current->row_rest)
-        Self(Self, Current->row_rest);
-      break;
-    case MonoType::Sum:
-      for (const auto *Alternative : Current->sum_alternatives)
-        Self(Self, Alternative);
-      break;
-    case MonoType::Var:
-    case MonoType::Con:
-      break;
-    }
-  };
-
-  visitType(visitType, type);
-  for (const auto &Constraint : scheme.constraints)
-    for (const auto *ConstraintType : Constraint.types)
-      visitType(visitType, ConstraintType);
-
-  for (std::size_t EffectIndex = 0; EffectIndex < EffectClosure.size();
-       ++EffectIndex) {
-    const auto Summary =
-        arena_.effect_solver().summarize(EffectClosure[EffectIndex]);
-    for (const auto &Tail : Summary.tails) {
+  auto Closure = collectInferenceEffectClosure(
+      type, scheme.constraints, arena_.effect_solver(), arena_.effect_atoms(),
+      [&](MonoTypePtr Current) { return unifier_.resolve(Current); });
+  if (!Closure)
+    throw std::invalid_argument(Closure.error().Message);
+  scheme.effect_roots = Closure->ArrowRoots;
+  for (const auto *Current : Closure->Types)
+    if (Current->tag == MonoType::Var && uf_.level(Current->var_id) > level &&
+        std::ranges::find(scheme.quantified_vars, Current->var_id) ==
+            scheme.quantified_vars.end())
+      scheme.quantified_vars.push_back(Current->var_id);
+  for (const auto &Row : Closure->Effects)
+    for (const auto &Tail : Row.Normal.tails) {
       const auto Kind = Tail.opaque ? model::EffectVariableKind::Opaque
                                     : model::EffectVariableKind::Flexible;
       if (std::ranges::none_of(scheme.quantified_effect_variables,
@@ -2621,26 +5302,13 @@ TypeScheme TypeChecker::generalize(MonoTypePtr type, int level,
                                }))
         scheme.quantified_effect_variables.push_back({Tail.variable, Kind});
     }
-    const auto visitAtom = [&](EffectAtomId RawAtom) {
-      const auto Atom = arena_.effect_solver().canonicalAtom(RawAtom);
-      if (!SeenAtoms.insert(Atom).second)
-        return;
-      const auto &Solved = arena_.effect_atoms().at(Atom);
-      if (const auto *Operation = std::get_if<OperationEffectAtom>(&Solved)) {
-        for (const auto *Argument : Operation->TypeArguments)
-          visitType(visitType, Argument);
-        for (const auto Argument : Operation->EffectArguments)
-          rememberEffect(Argument);
-      }
-    };
-    for (const auto Atom : Summary.known_atoms)
-      visitAtom(Atom);
-    for (const auto &Tail : Summary.tails)
-      for (const auto Atom : Tail.excluded_atoms)
-        visitAtom(Atom);
+  if (!Closure->Effects.empty()) {
+    std::vector<EffectRef> Effects;
+    Effects.reserve(Closure->Effects.size());
+    for (const auto &Row : Closure->Effects)
+      Effects.push_back(Row.Effect);
+    scheme.effect_graph = arena_.effect_solver().freeze(std::move(Effects));
   }
-  if (!EffectClosure.empty())
-    scheme.effect_graph = arena_.effect_solver().freeze(EffectClosure);
   return scheme;
 }
 
@@ -2680,6 +5348,17 @@ MonoTypePtr TypeChecker::substitute(
     std::vector<MonoTypePtr> new_args;
     for (auto *a : type->args)
       new_args.push_back(substitute(a, subst, effect_subst, ValidateEffects));
+    if (type->type_name == "Promise" && type->promise_result_contract &&
+        !new_args.empty()) {
+      auto Effects = type->promise_effects;
+      for (const auto &[Source, Replacement] : effect_subst)
+        if (Effects == Source) {
+          Effects = Replacement;
+          break;
+        }
+      return arena_.make_promise(new_args.front(),
+                                 *type->promise_result_contract, Effects);
+    }
     return type->resolved_key
                ? arena_.make_app(*type->resolved_key, std::move(new_args),
                                  type->type_name)
@@ -2712,13 +5391,324 @@ MonoTypePtr TypeChecker::substitute(
   return type;
 }
 
-MonoTypePtr TypeChecker::instantiate_binding(const TypeScheme &scheme,
-                                             int level) {
+std::vector<CallableTypeContract> TypeChecker::interface_callable_contracts(
+    MonoTypePtr Type, const std::vector<bool> &Borrowed,
+    std::size_t VisibleParameterCount, model::CallingConvention Convention,
+    SourceRange Range) {
+  std::vector<MonoTypePtr> Stages;
+  std::vector<model::ParameterOwnership> Ownerships;
+  auto *Stage = unifier_.resolve(Type);
+  std::size_t Index = 0;
+  while (Index < VisibleParameterCount && Stage &&
+         Stage->tag == MonoType::Arrow) {
+    Stages.push_back(Stage);
+    const auto *Parameter = unifier_.resolve(Stage->param_type);
+    Ownerships.push_back(Parameter && Parameter->tag == MonoType::Con &&
+                                 Parameter->con != TyCon::String
+                             ? model::ParameterOwnership::Trivial
+                         : Index < Borrowed.size() && Borrowed[Index]
+                             ? model::ParameterOwnership::Borrow
+                             : model::ParameterOwnership::Consume);
+    Stage = unifier_.resolve(Stage->return_type);
+    ++Index;
+  }
+  if (Index != VisibleParameterCount)
+    throw std::invalid_argument(
+        "declared function arity exceeds its Arrow signature");
+  const auto ResultContract =
+      Stage && Stage->tag == MonoType::Con && Stage->con != TyCon::String
+          ? model::ResultOwnership::Trivial
+          : model::ResultOwnership::Owned;
+  std::vector<CallableTypeContract> Result;
+  Result.reserve(Stages.size());
+  for (std::size_t ContractIndex = 0; ContractIndex < Stages.size();
+       ++ContractIndex)
+    Result.push_back(CallableTypeContract{
+        Stages[ContractIndex],
+        {Ownerships.begin() + static_cast<std::ptrdiff_t>(ContractIndex),
+         Ownerships.end()},
+        ResultContract,
+        ContractIndex == 0 ? Convention
+                           : model::CallingConvention::ClosureEntry,
+        Range});
+  return Result;
+}
+
+ImportedFunctionDeclarationProjection
+TypeChecker::imported_function_declaration(const TypeScheme &Scheme,
+                                           const std::vector<bool> &Borrowed,
+                                           std::size_t VisibleParameterCount,
+                                           model::CallingConvention Convention,
+                                           SourceRange Range) {
+  auto Contracts = declaration_callable_contracts(
+      std::span<MonoTypePtr const>(&Scheme.body, 1), Convention, Range);
+  auto InterfaceRootContracts = interface_callable_contracts(
+      Scheme.body, Borrowed, VisibleParameterCount, Convention, Range);
+  for (auto &InterfaceContract : InterfaceRootContracts) {
+    const auto Existing = std::ranges::find(Contracts, InterfaceContract.Arrow,
+                                            &CallableTypeContract::Arrow);
+    if (Existing == Contracts.end())
+      Contracts.push_back(std::move(InterfaceContract));
+    else
+      *Existing = std::move(InterfaceContract);
+  }
+  const auto Root = std::ranges::find_if(Contracts, [&](const auto &Contract) {
+    return Contract.Arrow == Scheme.body;
+  });
+  const auto *Resolved = unifier_.resolve(Scheme.body);
+  const auto ResultContract = Root != Contracts.end() ? Root->ResultContract
+                              : Resolved && Resolved->tag == MonoType::Con &&
+                                      Resolved->con != TyCon::String
+                                  ? model::ResultOwnership::Trivial
+                                  : model::ResultOwnership::Owned;
+  return ImportedFunctionDeclarationProjection{
+      Scheme,
+      Root == Contracts.end() ? std::vector<model::ParameterOwnership>{}
+                              : Root->ParameterOwnerships,
+      ResultContract, Convention, std::move(Contracts)};
+}
+
+std::vector<CallableTypeContract>
+TypeChecker::declaration_callable_contracts(std::span<MonoTypePtr const> Roots,
+                                            model::CallingConvention Convention,
+                                            SourceRange Range) {
+  std::vector<CallableTypeContract> Result;
+  std::unordered_set<MonoTypePtr> Seen;
+  const auto Visit = [&](const auto &Self, MonoTypePtr Type,
+                         bool DeclarationRoot) -> void {
+    Type = unifier_.resolve(Type);
+    if (!Type || !Seen.insert(Type).second)
+      return;
+    if (Type->tag == MonoType::Arrow) {
+      std::size_t Arity = 0;
+      for (auto *Stage = Type; Stage && Stage->tag == MonoType::Arrow;
+           Stage = unifier_.resolve(Stage->return_type))
+        ++Arity;
+      auto Contracts = interface_callable_contracts(
+          Type, {}, Arity,
+          DeclarationRoot ? Convention : model::CallingConvention::ClosureEntry,
+          Range);
+      for (auto &Contract : Contracts)
+        if (std::ranges::none_of(Result, [&](const auto &Existing) {
+              return Existing.Arrow == Contract.Arrow;
+            }))
+          Result.push_back(std::move(Contract));
+      Self(Self, Type->param_type, false);
+      Self(Self, Type->return_type, false);
+      return;
+    }
+    if (Type->tag == MonoType::App) {
+      for (auto *Argument : Type->args)
+        Self(Self, Argument, false);
+    } else if (Type->tag == MonoType::MTuple) {
+      for (auto *Element : Type->elements)
+        Self(Self, Element, false);
+    } else if (Type->tag == MonoType::MRecord) {
+      for (const auto &[_, Field] : Type->record_fields)
+        Self(Self, Field, false);
+      Self(Self, Type->row_rest, false);
+    } else if (Type->tag == MonoType::Sum) {
+      for (auto *Alternative : Type->sum_alternatives)
+        Self(Self, Alternative, false);
+    }
+  };
+  for (auto *Root : Roots)
+    Visit(Visit, Root, true);
+  return Result;
+}
+
+std::vector<CallableTypeContract> TypeChecker::remap_callable_contracts(
+    MonoTypePtr Source, MonoTypePtr Destination,
+    std::span<const CallableTypeContract> Contracts) {
+  std::unordered_map<MonoTypePtr, MonoTypePtr> Mapping;
+  const auto Visit = [&](const auto &Self, MonoTypePtr Before,
+                         MonoTypePtr After) -> void {
+    Before = unifier_.resolve(Before);
+    After = unifier_.resolve(After);
+    if (!Before || !After || Before->tag != After->tag ||
+        Mapping.contains(Before))
+      return;
+    Mapping.emplace(Before, After);
+    switch (Before->tag) {
+    case MonoType::Arrow:
+      Self(Self, Before->param_type, After->param_type);
+      Self(Self, Before->return_type, After->return_type);
+      break;
+    case MonoType::App:
+      for (std::size_t Index = 0;
+           Index < Before->args.size() && Index < After->args.size(); ++Index)
+        Self(Self, Before->args[Index], After->args[Index]);
+      break;
+    case MonoType::MTuple:
+      for (std::size_t Index = 0;
+           Index < Before->elements.size() && Index < After->elements.size();
+           ++Index)
+        Self(Self, Before->elements[Index], After->elements[Index]);
+      break;
+    case MonoType::MRecord:
+      for (std::size_t Index = 0; Index < Before->record_fields.size() &&
+                                  Index < After->record_fields.size();
+           ++Index)
+        Self(Self, Before->record_fields[Index].second,
+             After->record_fields[Index].second);
+      Self(Self, Before->row_rest, After->row_rest);
+      break;
+    case MonoType::Sum:
+      for (std::size_t Index = 0; Index < Before->sum_alternatives.size() &&
+                                  Index < After->sum_alternatives.size();
+           ++Index)
+        Self(Self, Before->sum_alternatives[Index],
+             After->sum_alternatives[Index]);
+      break;
+    case MonoType::Var:
+    case MonoType::Con:
+      break;
+    }
+  };
+  Visit(Visit, Source, Destination);
+
+  std::vector<CallableTypeContract> Result;
+  Result.reserve(Contracts.size());
+  for (const auto &Contract : Contracts) {
+    const auto Found = Mapping.find(unifier_.resolve(Contract.Arrow));
+    if (Found == Mapping.end() || !Found->second ||
+        Found->second->tag != MonoType::Arrow)
+      continue;
+    auto Copy = Contract;
+    Copy.Arrow = Found->second;
+    Result.push_back(std::move(Copy));
+  }
+  return Result;
+}
+
+void TypeChecker::propagate_callable_contracts(ast::AstNode *Destination,
+                                               const ast::AstNode *Source,
+                                               MonoTypePtr DestinationType) {
+  const auto Contracts = expression_callable_contracts_.find(Source);
+  const auto SourceType = type_map_.find(const_cast<ast::AstNode *>(Source));
+  if (Contracts == expression_callable_contracts_.end() ||
+      SourceType == type_map_.end()) {
+    expression_callable_contracts_.erase(Destination);
+    return;
+  }
+  auto Remapped = remap_callable_contracts(SourceType->second, DestinationType,
+                                           Contracts->second);
+  if (Remapped.empty())
+    expression_callable_contracts_.erase(Destination);
+  else
+    expression_callable_contracts_.insert_or_assign(Destination,
+                                                    std::move(Remapped));
+}
+
+void TypeChecker::merge_callable_contracts(ast::AstNode *Destination,
+                                           const ast::AstNode *Source,
+                                           MonoTypePtr DestinationType) {
+  const auto Contracts = expression_callable_contracts_.find(Source);
+  const auto SourceType = type_map_.find(const_cast<ast::AstNode *>(Source));
+  if (Contracts == expression_callable_contracts_.end() ||
+      SourceType == type_map_.end())
+    return;
+  auto Remapped = remap_callable_contracts(SourceType->second, DestinationType,
+                                           Contracts->second);
+  auto &DestinationContracts = expression_callable_contracts_[Destination];
+  for (auto &Contract : Remapped) {
+    const auto Duplicate =
+        std::ranges::find_if(DestinationContracts, [&](const auto &Existing) {
+          return Existing.Arrow == Contract.Arrow &&
+                 Existing.ParameterOwnerships == Contract.ParameterOwnerships &&
+                 Existing.ResultContract == Contract.ResultContract &&
+                 Existing.Convention == Contract.Convention;
+        });
+    if (Duplicate == DestinationContracts.end())
+      DestinationContracts.push_back(std::move(Contract));
+  }
+  if (DestinationContracts.empty())
+    expression_callable_contracts_.erase(Destination);
+}
+
+void TypeChecker::refine_callable_contract_ownership(
+    std::span<CallableTypeContract> Contracts) {
+  const auto IsTrivial = [&](MonoTypePtr Type) {
+    Type = unifier_.resolve(Type);
+    return Type && Type->tag == MonoType::Con && Type->con != TyCon::String;
+  };
+  for (auto &Contract : Contracts) {
+    auto *Stage = unifier_.resolve(Contract.Arrow);
+    for (auto &Ownership : Contract.ParameterOwnerships) {
+      if (!Stage || Stage->tag != MonoType::Arrow)
+        break;
+      if (IsTrivial(Stage->param_type))
+        Ownership = model::ParameterOwnership::Trivial;
+      Stage = unifier_.resolve(Stage->return_type);
+    }
+    Contract.ResultContract = IsTrivial(Stage) ? model::ResultOwnership::Trivial
+                                               : model::ResultOwnership::Owned;
+  }
+}
+
+std::vector<Constraint>
+TypeChecker::constraints_for_function(const ast::FunctionExpr *Function) {
+  std::vector<Constraint> Result;
+  const auto ContainsVariable = [&](const auto &Self,
+                                    MonoTypePtr Type) -> bool {
+    Type = unifier_.resolve(Type);
+    if (!Type)
+      return false;
+    if (Type->tag == MonoType::Var)
+      return true;
+    if (Type->tag == MonoType::Arrow)
+      return Self(Self, Type->param_type) || Self(Self, Type->return_type);
+    if (Type->tag == MonoType::App)
+      return std::ranges::any_of(
+          Type->args, [&](MonoTypePtr Value) { return Self(Self, Value); });
+    if (Type->tag == MonoType::MTuple)
+      return std::ranges::any_of(
+          Type->elements, [&](MonoTypePtr Value) { return Self(Self, Value); });
+    if (Type->tag == MonoType::MRecord) {
+      if (Type->row_rest && Self(Self, Type->row_rest))
+        return true;
+      return std::ranges::any_of(Type->record_fields, [&](const auto &Field) {
+        return Self(Self, Field.second);
+      });
+    }
+    if (Type->tag == MonoType::Sum)
+      return std::ranges::any_of(
+          Type->sum_alternatives,
+          [&](MonoTypePtr Value) { return Self(Self, Value); });
+    return false;
+  };
+  for (const auto &Deferred : deferred_constraints_) {
+    if (Deferred.owning_function != Function || Deferred.types.empty())
+      continue;
+    if (!std::ranges::any_of(Deferred.types, [&](MonoTypePtr Type) {
+          return ContainsVariable(ContainsVariable, Type);
+        }))
+      continue;
+    const auto Trait = Deferred.resolved_trait.value_or(
+        resolved_trait_key(Deferred.trait_name));
+    const bool Duplicate = std::ranges::any_of(Result, [&](const auto &Value) {
+      return Value.resolved_trait == Trait && Value.types == Deferred.types;
+    });
+    if (!Duplicate)
+      Result.emplace_back(Trait, Deferred.types);
+  }
+  return Result;
+}
+
+MonoTypePtr
+TypeChecker::instantiate_binding(const TypeScheme &scheme, int level,
+                                 std::vector<MonoTypePtr> *TypeArguments,
+                                 std::vector<EffectRef> *EffectArguments) {
   if (scheme.quantified_vars.empty() && scheme.constraints.empty() &&
       scheme.quantified_effect_variables.empty() && !scheme.effect_graph &&
-      scheme.effect_roots.empty())
+      scheme.effect_roots.empty()) {
+    if (TypeArguments)
+      TypeArguments->clear();
+    if (EffectArguments)
+      EffectArguments->clear();
     return scheme.body;
-  return instantiate(scheme, level);
+  }
+  return instantiate(scheme, level, TypeArguments, EffectArguments);
 }
 
 MonoTypePtr TypeChecker::instantiate(const TypeScheme &scheme, int level,
@@ -2729,82 +5719,20 @@ MonoTypePtr TypeChecker::instantiate(const TypeScheme &scheme, int level,
   if (EffectArguments)
     EffectArguments->clear();
 
-  std::unordered_set<const MonoType *> SeenTypes;
-  std::unordered_set<EffectRef, EffectRefHasher> SeenEffects;
-  std::unordered_set<EffectAtomId> SeenAtoms;
-  std::vector<SchemeEffectRoot> ExpectedRoots;
-  std::vector<EffectRef> EffectClosure;
-  const auto rememberEffect = [&](EffectRef Effect) {
-    if (SeenEffects.insert(Effect).second)
-      EffectClosure.push_back(Effect);
-  };
-  const auto visitType = [&](const auto &Self, MonoTypePtr Current) -> void {
-    Current = unifier_.resolve(Current);
-    if (!Current || !SeenTypes.insert(Current).second)
-      return;
-    switch (Current->tag) {
-    case MonoType::Arrow:
-      ExpectedRoots.push_back({Current, Current->arrow_effect});
-      rememberEffect(Current->arrow_effect);
-      Self(Self, Current->param_type);
-      Self(Self, Current->return_type);
-      break;
-    case MonoType::App:
-      for (const auto *Argument : Current->args)
-        Self(Self, Argument);
-      break;
-    case MonoType::MTuple:
-      for (const auto *Element : Current->elements)
-        Self(Self, Element);
-      break;
-    case MonoType::MRecord:
-      for (const auto &[_, Field] : Current->record_fields)
-        Self(Self, Field);
-      if (Current->row_rest)
-        Self(Self, Current->row_rest);
-      break;
-    case MonoType::Sum:
-      for (const auto *Alternative : Current->sum_alternatives)
-        Self(Self, Alternative);
-      break;
-    case MonoType::Var:
-    case MonoType::Con:
-      break;
-    }
-  };
-  visitType(visitType, scheme.body);
-  for (const auto &Constraint : scheme.constraints)
-    for (const auto *Type : Constraint.types)
-      visitType(visitType, Type);
-  for (std::size_t Index = 0; Index < EffectClosure.size(); ++Index) {
-    const auto Summary = arena_.effect_solver().summarize(EffectClosure[Index]);
-    const auto visitAtom = [&](EffectAtomId RawAtom) {
-      const auto Atom = arena_.effect_solver().canonicalAtom(RawAtom);
-      if (!SeenAtoms.insert(Atom).second)
-        return;
-      if (const auto *Operation = std::get_if<OperationEffectAtom>(
-              &arena_.effect_atoms().at(Atom))) {
-        for (const auto *Argument : Operation->TypeArguments)
-          visitType(visitType, Argument);
-        for (const auto Argument : Operation->EffectArguments)
-          rememberEffect(Argument);
-      }
-    };
-    for (const auto Atom : Summary.known_atoms)
-      visitAtom(Atom);
-    for (const auto &Tail : Summary.tails)
-      for (const auto Atom : Tail.excluded_atoms)
-        visitAtom(Atom);
-  }
+  auto Closure = collectInferenceEffectClosure(
+      scheme.body, scheme.constraints, arena_.effect_solver(),
+      arena_.effect_atoms(),
+      [&](MonoTypePtr Current) { return unifier_.resolve(Current); });
+  if (!Closure)
+    throw std::logic_error(Closure.error().Message);
 
   if (scheme.effect_graph) {
-    if (ExpectedRoots != scheme.effect_roots)
+    if (Closure->ArrowRoots != scheme.effect_roots || Closure->Effects.empty())
       throw std::logic_error("malformed scheme effect root closure");
   } else if (!scheme.effect_roots.empty()) {
     throw std::logic_error("scheme effect roots require a frozen graph");
-  } else if (std::ranges::any_of(ExpectedRoots, [&](const SchemeEffectRoot
-                                                        &Root) {
-               return !arena_.effect_solver().summarize(Root.Effect).empty();
+  } else if (std::ranges::any_of(Closure->Effects, [&](const auto &Row) {
+               return !Row.Normal.empty();
              })) {
     throw std::logic_error(
         "polymorphic effectful scheme requires a frozen graph");
@@ -2926,6 +5854,9 @@ MonoTypePtr TypeChecker::infer_case(CaseExpr *node,
   auto *scrut_type = infer(node->expr, env, level);
 
   MonoTypePtr result_type = nullptr;
+  const ast::AstNode *ContractSource = nullptr;
+  bool CallableContractsAgree = true;
+  bool SawClause = false;
 
   for (auto *clause : node->clauses) {
     auto clause_env = env->child();
@@ -2936,6 +5867,20 @@ MonoTypePtr TypeChecker::infer_case(CaseExpr *node,
 
     // Infer body
     auto *body_type = infer(clause->body, clause_env, level);
+    const auto BodyContracts =
+        expression_callable_contracts_.find(clause->body);
+    if (!SawClause) {
+      ContractSource = BodyContracts == expression_callable_contracts_.end()
+                           ? nullptr
+                           : clause->body;
+    } else if (!ContractSource ||
+               BodyContracts == expression_callable_contracts_.end() ||
+               !same_callable_contracts(
+                   expression_callable_contracts_.at(ContractSource),
+                   BodyContracts->second)) {
+      CallableContractsAgree = false;
+    }
+    SawClause = true;
 
     if (!result_type)
       result_type = body_type;
@@ -2944,8 +5889,11 @@ MonoTypePtr TypeChecker::infer_case(CaseExpr *node,
                      "in case branches (all must have same type)");
   }
 
-  return result_type ? unifier_.resolve(result_type)
-                     : arena_.make_con(TyCon::Unit);
+  auto *Result = result_type ? unifier_.resolve(result_type)
+                             : arena_.make_con(TyCon::Unit);
+  if (CallableContractsAgree && ContractSource)
+    propagate_callable_contracts(node, ContractSource, Result);
+  return Result;
 }
 
 // ===== Pattern Inference =====
@@ -3306,7 +6254,8 @@ void TypeChecker::register_adt(
     const std::string &type_name, const std::vector<std::string> &type_params,
     const std::vector<std::pair<std::string, int>> &constructors,
     const std::vector<std::vector<ast::FieldType>> &field_types,
-    const std::vector<std::vector<std::string>> &field_names) {
+    const std::vector<std::vector<std::string>> &field_names,
+    const model::ModuleIdentity *declaration_module) {
   if (field_types.size() != constructors.size())
     throw std::invalid_argument(
         "ADT registration requires field types for every constructor");
@@ -3315,7 +6264,8 @@ void TypeChecker::register_adt(
         "ADT registration field-name groups must match constructors");
 
   adt_type_params_[type_name] = type_params;
-  const model::NominalTypeKey AdtKey{current_module_, type_name};
+  const model::NominalTypeKey AdtKey{
+      declaration_module ? *declaration_module : current_module_, type_name};
   nominal_keys_.insert_or_assign(type_name, AdtKey);
   for (size_t constructor_index = 0; constructor_index < constructors.size();
        ++constructor_index) {
@@ -3387,7 +6337,11 @@ void TypeChecker::register_adt(
     };
 
     if (arity == 0) {
-      root_env_->bind_scheme(ctor_name, generalize(result_type, -1));
+      auto Scheme = generalize(result_type, -1);
+      scheme_identities_.insert_or_assign(
+          Scheme.body, model::FunctionDeclarationIdentity{
+                           model::SymbolIdentity{AdtKey.Module, ctor_name}});
+      root_env_->bind_scheme(ctor_name, std::move(Scheme));
     } else {
       // Build curried function: a -> b -> ... -> ADT(params)
       // Each constructor arg gets a fresh var (polymorphic)
@@ -3404,23 +6358,31 @@ void TypeChecker::register_adt(
         }
         fn_type = arena_.make_arrow(arg_type, fn_type);
       }
-      root_env_->bind_scheme(ctor_name, generalize(fn_type, -1));
+      auto Scheme = generalize(fn_type, -1);
+      scheme_identities_.insert_or_assign(
+          Scheme.body, model::FunctionDeclarationIdentity{
+                           model::SymbolIdentity{AdtKey.Module, ctor_name}});
+      root_env_->bind_scheme(ctor_name, std::move(Scheme));
     }
   }
 }
 
 // ===== Trait Registration =====
 
-void TypeChecker::register_trait(const std::string &trait_name,
-                                 std::vector<std::string> type_params) {
+void TypeChecker::register_trait(
+    const std::string &trait_name, std::vector<std::string> type_params,
+    const model::ModuleIdentity *declaration_module) {
   trait_type_params_[trait_name] = std::move(type_params);
   trait_keys_.insert_or_assign(
-      trait_name, model::NominalTypeKey{current_module_, trait_name});
+      trait_name, model::NominalTypeKey{declaration_module ? *declaration_module
+                                                           : current_module_,
+                                        trait_name});
 }
 
 void TypeChecker::register_trait_method(const std::string &trait_name,
                                         const std::string &method_name,
                                         MonoTypePtr method_type) {
+  trait_methods_[trait_name].insert(method_name);
   std::vector<TypeId> qvars;
   collect_free_vars(method_type, -1, qvars);
 
@@ -3441,8 +6403,12 @@ void TypeChecker::register_trait_method(const std::string &trait_name,
     constraints.emplace_back(resolved_trait_key(trait_name), constrained);
   }
 
-  root_env_->bind_scheme(method_name,
-                         generalize(method_type, -1, std::move(constraints)));
+  auto Scheme = generalize(method_type, -1, std::move(constraints));
+  const auto Trait = resolved_trait_key(trait_name);
+  scheme_identities_.insert_or_assign(
+      Scheme.body, model::FunctionDeclarationIdentity{model::SymbolIdentity{
+                       Trait.Module, Trait.Name + "." + method_name}});
+  root_env_->bind_scheme(method_name, std::move(Scheme));
 }
 
 void TypeChecker::register_trait_method_descriptor(
@@ -3475,15 +6441,57 @@ void TypeChecker::register_trait_method_descriptor(
   }
 }
 
-void TypeChecker::register_builtin_function(const std::string &function_name,
-                                            MonoTypePtr function_type) {
-  root_env_->bind_scheme(function_name, generalize(function_type, -1));
+void TypeChecker::register_builtin_function(
+    const std::string &function_name, MonoTypePtr function_type,
+    std::size_t visible_parameter_count,
+    const model::ModuleIdentity *source_module) {
+  auto Scheme = generalize(function_type, -1);
+  const model::FunctionDeclarationIdentity Identity{model::SymbolIdentity{
+      source_module ? *source_module : current_module_, function_name}};
+  scheme_identities_.insert_or_assign(Scheme.body, Identity);
+  auto Declaration = imported_function_declaration(
+      Scheme, {}, visible_parameter_count, model::CallingConvention::DirectYona,
+      SourceRange::unknown());
+  scheme_callable_contracts_.insert_or_assign(Scheme.body,
+                                              Declaration.CallableContracts);
+  if (source_module)
+    registered_interface_function_declarations_.insert_or_assign(
+        Identity, std::move(Declaration));
+  root_env_->bind_scheme(function_name, std::move(Scheme));
 }
 
 void TypeChecker::register_interface_function(
-    const interface::Function &Function) {
-  register_builtin_function(Function.Name,
-                            mono_from_interface_function(Function, 0));
+    const interface::Function &Function,
+    const model::ModuleIdentity *source_module,
+    const std::unordered_set<std::string> *source_nominals) {
+  register_builtin_function(
+      Function.Name,
+      mono_from_interface_function(Function, 0, source_module, source_nominals),
+      Function.ParameterTypes.size(), source_module);
+  if (const auto Scheme = root_env_->lookup(Function.Name)) {
+    const auto Convention = [&] {
+      switch (Function.Kind) {
+      case interface::FunctionKind::Synchronous:
+        return model::CallingConvention::DirectYona;
+      case interface::FunctionKind::ThreadPool:
+      case interface::FunctionKind::Io:
+        return model::CallingConvention::AsyncAdapter;
+      case interface::FunctionKind::Native:
+        return model::CallingConvention::NativeExtern;
+      }
+      return model::CallingConvention::DirectYona;
+    }();
+    auto Declaration = imported_function_declaration(
+        *Scheme, Function.BorrowedParameters, Function.ParameterTypes.size(),
+        Convention, SourceRange::unknown());
+    scheme_callable_contracts_.insert_or_assign(Scheme->body,
+                                                Declaration.CallableContracts);
+    if (source_module)
+      registered_interface_function_declarations_.insert_or_assign(
+          model::FunctionDeclarationIdentity{
+              model::SymbolIdentity{*source_module, Function.Name}},
+          std::move(Declaration));
+  }
 }
 
 void TypeChecker::register_trait_superclass(
@@ -3499,22 +6507,106 @@ void TypeChecker::register_trait_superclass(
 void TypeChecker::register_instance(
     const std::string &trait_name, std::vector<std::string> type_names,
     std::vector<std::string> type_params,
-    std::vector<std::pair<std::string, std::string>> constraints) {
+    std::vector<std::pair<std::string, std::string>> constraints,
+    const model::ModuleIdentity *declaration_module) {
+  const auto Module =
+      declaration_module ? *declaration_module : current_module_;
   auto &instances = trait_instances_[trait_name];
   const auto duplicate =
       std::find_if(instances.begin(), instances.end(),
                    [&](const InstanceContract &instance) {
-                     return instance.type_names == type_names &&
+                     return instance.module == Module &&
+                            instance.type_names == type_names &&
                             instance.type_params == type_params &&
                             instance.constraints == constraints;
                    });
   if (duplicate != instances.end())
     return;
-  instances.push_back(
-      {std::move(type_names), std::move(type_params), std::move(constraints)});
+  std::vector<MonoTypePtr> StructuralParameters;
+  StructuralParameters.reserve(type_params.size());
+  std::unordered_map<std::string, MonoTypePtr> Parameters;
+  for (const auto &Name : type_params) {
+    auto *Parameter = arena_.fresh_var(0);
+    uf_.add_var(Parameter->var_id, 0);
+    Parameters.emplace(Name, Parameter);
+    StructuralParameters.push_back(Parameter);
+  }
+  const auto SimpleHead = [&](std::string_view Name) -> MonoTypePtr {
+    if (const auto Found = Parameters.find(std::string(Name));
+        Found != Parameters.end())
+      return Found->second;
+    if (Name == "Int")
+      return arena_.make_con(TyCon::Int);
+    if (Name == "Float")
+      return arena_.make_con(TyCon::Float);
+    if (Name == "Bool")
+      return arena_.make_con(TyCon::Bool);
+    if (Name == "String")
+      return arena_.make_con(TyCon::String);
+    if (Name == "Char")
+      return arena_.make_con(TyCon::Char);
+    if (Name == "Byte")
+      return arena_.make_con(TyCon::Byte);
+    if (Name == "Symbol")
+      return arena_.make_con(TyCon::Symbol);
+    if (Name == "Unit" || Name == "()")
+      return arena_.make_con(TyCon::Unit);
+    if (Name == "ByteArray")
+      return arena_.make_con(TyCon::ByteArray);
+    if (Name == "IntArray" || Name == "FloatArray")
+      return arena_.make_app(std::string(Name), {});
+    const auto Separator = Name.rfind('\\');
+    const auto Key = Separator == std::string_view::npos
+                         ? model::NominalTypeKey{Module, std::string(Name)}
+                         : model::NominalTypeKey{
+                               model::ModuleIdentity{Name.substr(0, Separator)},
+                               std::string(Name.substr(Separator + 1))};
+    return arena_.make_app(Key, {}, std::string(Name));
+  };
+  std::vector<MonoTypePtr> StructuralHeads;
+  StructuralHeads.reserve(type_names.size());
+  for (std::size_t Index = 0; Index < type_names.size(); ++Index) {
+    const auto &Name = type_names[Index];
+    auto *Head = SimpleHead(Name);
+    if (!StructuralParameters.empty() && (Index == 0 || Name == "Tuple")) {
+      if (Name == "Tuple")
+        Head = arena_.make_tuple(StructuralParameters);
+      else if (Name == "Seq" || Name == "Set" || Name == "Dict")
+        Head = arena_.make_app(Name, StructuralParameters);
+      else if (Head->tag == MonoType::App)
+        Head = Head->resolved_key
+                   ? arena_.make_app(*Head->resolved_key, StructuralParameters,
+                                     Head->type_name)
+                   : arena_.make_app(Head->type_name, StructuralParameters);
+    } else if (Index == 0 && Head->tag == MonoType::App && Head->args.empty()) {
+      // A derived instance is registered as `Trait Nominal` without named
+      // instance parameters. Preserve the nominal declaration's arity with
+      // anonymous structural wildcards so `Pair Int String` matches
+      // `Pair _ _` without returning to display-name prefix matching.
+      if (const auto Declared = adt_type_params_.find(Name);
+          Declared != adt_type_params_.end() && !Declared->second.empty()) {
+        std::vector<MonoTypePtr> Wildcards;
+        Wildcards.reserve(Declared->second.size());
+        for ([[maybe_unused]] const auto &Parameter : Declared->second) {
+          auto *Wildcard = arena_.fresh_var(0);
+          uf_.add_var(Wildcard->var_id, 0);
+          Wildcards.push_back(Wildcard);
+        }
+        Head = Head->resolved_key
+                   ? arena_.make_app(*Head->resolved_key, std::move(Wildcards),
+                                     Head->type_name)
+                   : arena_.make_app(Head->type_name, std::move(Wildcards));
+      }
+    }
+    StructuralHeads.push_back(Head);
+  }
+  instances.push_back({Module, std::move(type_names), std::move(type_params),
+                       std::move(constraints), std::move(StructuralHeads),
+                       std::move(StructuralParameters)});
   std::sort(instances.begin(), instances.end(),
             [](const InstanceContract &left, const InstanceContract &right) {
-              return left.type_names < right.type_names;
+              return std::tie(left.module, left.type_names) <
+                     std::tie(right.module, right.type_names);
             });
 }
 
@@ -3522,6 +6614,60 @@ bool TypeChecker::solve_constraints() {
   bool all_ok = true;
   std::unordered_set<std::string> reported;
   std::vector<DeferredConstraint> worklist = deferred_constraints_;
+  struct CollectionEvidence {
+    std::optional<TraitMethodSelectionProjection> Hash;
+    std::optional<TraitMethodSelectionProjection> Equals;
+  };
+  std::unordered_map<const ast::AstNode *, CollectionEvidence>
+      CollectionEvidenceByNode;
+  const auto methodFor = [](const DeferredConstraint &Constraint) {
+    std::string Method = Constraint.trait_name == "Eq"     ? "eq"
+                         : Constraint.trait_name == "Hash" ? "hash"
+                         : Constraint.trait_name == "Ord"  ? "compare"
+                                                           : "call";
+    if (const auto *Application =
+            dynamic_cast<const ast::ApplyExpr *>(Constraint.origin))
+      if (const auto *Named =
+              dynamic_cast<const ast::NameCall *>(Application->call))
+        Method = Named->name->value;
+    return Method;
+  };
+  const auto owningScheme = [&](const DeferredConstraint &Constraint)
+      -> std::optional<SchemeIdentity> {
+    const auto *Function = Constraint.owning_function;
+    if (!Function)
+      return std::nullopt;
+    if (const auto Found = projection_function_identities_.find(Function);
+        Found != projection_function_identities_.end())
+      return Found->second;
+    if (projection_module_ && !Function->name.empty())
+      return model::FunctionDeclarationIdentity{
+          model::SymbolIdentity{current_module_, Function->name}};
+    return model::FunctionDeclarationIdentity{model::LocalFunctionIdentity{
+        current_module_,
+        {Function == projection_root_
+             ? 0U
+             : static_cast<std::uint32_t>(Function->Range.Offset)}}};
+  };
+  const auto publishEvidence = [&](const DeferredConstraint &Constraint,
+                                   TraitMethodSelectionProjection Selection) {
+    if (!Constraint.origin)
+      return;
+    switch (Constraint.evidence_role) {
+    case DeferredConstraint::EvidenceRole::TraitMethod:
+      trait_method_uses_.insert_or_assign(Constraint.origin,
+                                          std::move(Selection));
+      break;
+    case DeferredConstraint::EvidenceRole::CollectionHash:
+      CollectionEvidenceByNode[Constraint.origin].Hash = std::move(Selection);
+      break;
+    case DeferredConstraint::EvidenceRole::CollectionEquals:
+      CollectionEvidenceByNode[Constraint.origin].Equals = std::move(Selection);
+      break;
+    case DeferredConstraint::EvidenceRole::None:
+      break;
+    }
+  };
   for (size_t work_index = 0; work_index < worklist.size(); ++work_index) {
     const auto &dc = worklist[work_index];
     std::vector<MonoTypePtr> resolved;
@@ -3543,8 +6689,28 @@ bool TypeChecker::solve_constraints() {
       if (type_names.back() == "()")
         type_heads.back() = "Unit";
     }
-    if (unresolved || resolved.empty())
+    if (resolved.empty())
       continue;
+
+    if (unresolved) {
+      const auto Owner = owningScheme(dc);
+      if (dc.origin && Owner &&
+          dc.evidence_role != DeferredConstraint::EvidenceRole::None) {
+        const auto Trait =
+            dc.resolved_trait.value_or(resolved_trait_key(dc.trait_name));
+        const Constraint StructuralConstraint{Trait, resolved};
+        publishEvidence(dc, TraitMethodSelectionProjection{
+                                Trait,
+                                methodFor(dc),
+                                resolved,
+                                {},
+                                {},
+                                DeferredTraitEvidenceProjection{
+                                    *Owner, StructuralConstraint},
+                                dc.loc});
+      }
+      continue;
+    }
 
     std::string application = dc.trait_name;
     for (const auto &name : type_names)
@@ -3571,48 +6737,98 @@ bool TypeChecker::solve_constraints() {
     };
     std::vector<Match> matches;
     for (const auto &instance : it->second) {
-      const auto &heads = instance.type_names;
+      const auto &heads = instance.structural_heads;
       if (heads.size() != resolved.size())
         continue;
-      std::unordered_map<std::string, MonoTypePtr> parameters;
-      if (!resolved.empty() && resolved.front()->tag == MonoType::App) {
-        for (size_t i = 0; i < instance.type_params.size() &&
-                           i < resolved.front()->args.size();
-             ++i)
-          parameters[instance.type_params[i]] = zonk(resolved.front()->args[i]);
-      } else if (!resolved.empty() &&
-                 resolved.front()->tag == MonoType::MTuple) {
-        for (size_t i = 0; i < instance.type_params.size() &&
-                           i < resolved.front()->elements.size();
-             ++i)
-          parameters[instance.type_params[i]] =
-              zonk(resolved.front()->elements[i]);
-      }
-      bool compatible = true;
-      for (size_t i = 0; i < heads.size(); ++i) {
-        const bool parameter =
-            std::find(instance.type_params.begin(), instance.type_params.end(),
-                      heads[i]) != instance.type_params.end();
-        if (parameter) {
-          if (const auto found = parameters.find(heads[i]);
-              found != parameters.end()) {
-            auto *bound = zonk(found->second);
-            if (bound->tag == MonoType::Var) {
-              parameters[heads[i]] = resolved[i];
-            } else if (resolved[i]->tag != MonoType::Var &&
-                       pretty_print(bound) != type_names[i]) {
-              compatible = false;
-              break;
-            }
+      std::unordered_map<TypeId, MonoTypePtr> StructuralBindings;
+      std::function<bool(MonoTypePtr, MonoTypePtr)> MatchType;
+      MatchType = [&](MonoTypePtr Pattern, MonoTypePtr Actual) -> bool {
+        Pattern = zonk(Pattern);
+        Actual = zonk(Actual);
+        if (!Pattern || !Actual)
+          return Pattern == Actual;
+        if (Pattern->tag == MonoType::Var) {
+          const auto Bound = StructuralBindings.find(Pattern->var_id);
+          if (Bound == StructuralBindings.end()) {
+            StructuralBindings.emplace(Pattern->var_id, Actual);
+            return true;
           }
-          parameters[heads[i]] = resolved[i];
-        } else if (heads[i] != type_names[i] && heads[i] != type_heads[i]) {
+          return MatchType(Bound->second, Actual);
+        }
+        if (Pattern->tag != Actual->tag)
+          return false;
+        switch (Pattern->tag) {
+        case MonoType::Var:
+          return false;
+        case MonoType::Con:
+          return Pattern->con == Actual->con;
+        case MonoType::App:
+          if (Pattern->resolved_key || Actual->resolved_key) {
+            if (!Pattern->resolved_key || !Actual->resolved_key ||
+                *Pattern->resolved_key != *Actual->resolved_key)
+              return false;
+          } else if (Pattern->type_name != Actual->type_name) {
+            return false;
+          }
+          if (Pattern->args.size() != Actual->args.size())
+            return false;
+          for (std::size_t Index = 0; Index < Pattern->args.size(); ++Index)
+            if (!MatchType(Pattern->args[Index], Actual->args[Index]))
+              return false;
+          return true;
+        case MonoType::MTuple:
+          if (Pattern->elements.size() != Actual->elements.size())
+            return false;
+          for (std::size_t Index = 0; Index < Pattern->elements.size(); ++Index)
+            if (!MatchType(Pattern->elements[Index], Actual->elements[Index]))
+              return false;
+          return true;
+        case MonoType::MRecord:
+          if (Pattern->record_fields.size() != Actual->record_fields.size())
+            return false;
+          for (std::size_t Index = 0; Index < Pattern->record_fields.size();
+               ++Index)
+            if (Pattern->record_fields[Index].first !=
+                    Actual->record_fields[Index].first ||
+                !MatchType(Pattern->record_fields[Index].second,
+                           Actual->record_fields[Index].second))
+              return false;
+          return MatchType(Pattern->row_rest, Actual->row_rest);
+        case MonoType::Sum:
+          if (Pattern->sum_alternatives.size() !=
+              Actual->sum_alternatives.size())
+            return false;
+          for (std::size_t Index = 0; Index < Pattern->sum_alternatives.size();
+               ++Index)
+            if (!MatchType(Pattern->sum_alternatives[Index],
+                           Actual->sum_alternatives[Index]))
+              return false;
+          return true;
+        case MonoType::Arrow:
+          return MatchType(Pattern->param_type, Actual->param_type) &&
+                 MatchType(Pattern->return_type, Actual->return_type) &&
+                 arena_.effect_solver().summarize(Pattern->arrow_effect) ==
+                     arena_.effect_solver().summarize(Actual->arrow_effect);
+        }
+        return false;
+      };
+      bool compatible = true;
+      for (std::size_t Index = 0; Index < heads.size(); ++Index)
+        if (!MatchType(heads[Index], resolved[Index])) {
           compatible = false;
           break;
         }
-      }
-      if (compatible)
-        matches.push_back({&instance, std::move(parameters)});
+      if (!compatible)
+        continue;
+      std::unordered_map<std::string, MonoTypePtr> parameters;
+      for (std::size_t Index = 0; Index < instance.type_params.size() &&
+                                  Index < instance.structural_parameters.size();
+           ++Index)
+        if (const auto Bound = StructuralBindings.find(
+                instance.structural_parameters[Index]->var_id);
+            Bound != StructuralBindings.end())
+          parameters.emplace(instance.type_params[Index], Bound->second);
+      matches.push_back({&instance, std::move(parameters)});
     }
     if (matches.empty()) {
       std::string message = "no instance for '" + application + "'";
@@ -3661,9 +6877,32 @@ bool TypeChecker::solve_constraints() {
 
     const auto &match = matches.front();
     const auto &instance = *match.instance;
-    if (dc.origin)
-      selected_trait_instances_[dc.origin] = {dc.trait_name,
-                                              instance.type_names};
+    if (dc.origin) {
+      if (const auto *Application =
+              dynamic_cast<const ast::ApplyExpr *>(dc.origin))
+        selected_trait_instances_[Application] = {dc.trait_name,
+                                                  instance.type_names};
+      std::vector<MonoTypePtr> TargetTypeArguments;
+      TargetTypeArguments.reserve(instance.type_params.size());
+      for (const auto &Parameter : instance.type_params)
+        if (const auto Bound = match.parameters.find(Parameter);
+            Bound != match.parameters.end())
+          TargetTypeArguments.push_back(Bound->second);
+      const model::FunctionDeclarationIdentity Target = model::SymbolIdentity{
+          instance.module,
+          instance_method_symbol(dc.trait_name, instance.type_names,
+                                 methodFor(dc))};
+      publishEvidence(
+          dc, TraitMethodSelectionProjection{
+                  dc.resolved_trait.value_or(resolved_trait_key(dc.trait_name)),
+                  methodFor(dc),
+                  resolved,
+                  {},
+                  {},
+                  ResolvedTraitTargetProjection{
+                      Target, std::move(TargetTypeArguments), {}},
+                  dc.loc});
+    }
     if (const auto superclasses = trait_superclasses_.find(dc.trait_name);
         superclasses != trait_superclasses_.end()) {
       for (const auto &superclass : superclasses->second)
@@ -3684,7 +6923,68 @@ bool TypeChecker::solve_constraints() {
                             "required by " + application);
     }
   }
-  return all_ok;
+  for (auto &[Node, Evidence] : CollectionEvidenceByNode)
+    if (Evidence.Hash && Evidence.Equals)
+      collection_key_operations_.insert_or_assign(
+          Node, CollectionKeyOperationsProjection{std::move(*Evidence.Hash),
+                                                  std::move(*Evidence.Equals)});
+  for (auto &[Node, Occurrence] : operation_occurrences_) {
+    auto *Perform = std::get_if<PerformProjection>(&Occurrence);
+    if (!Perform || !Node)
+      continue;
+    MonoTypePtr ContinuationResult = nullptr;
+    for (auto *Current = Node->parent; Current; Current = Current->parent) {
+      if (dynamic_cast<const ast::HandleExpr *>(Current)) {
+        if (const auto Found = type_map_.find(Current);
+            Found != type_map_.end())
+          ContinuationResult = unifier_.resolve(Found->second);
+        break;
+      }
+      if (const auto *Function =
+              dynamic_cast<const ast::FunctionExpr *>(Current)) {
+        auto Found = type_map_.find(Current);
+        MonoTypePtr Type = Found == type_map_.end() ? nullptr : Found->second;
+        const auto Arity = std::max<std::size_t>(Function->patterns.size(), 1);
+        for (std::size_t Index = 0; Index < Arity && Type; ++Index) {
+          Type = unifier_.resolve(Type);
+          if (Type->tag != MonoType::Arrow)
+            break;
+          Type = Type->return_type;
+        }
+        ContinuationResult = unifier_.resolve(Type);
+        break;
+      }
+    }
+    if (!ContinuationResult)
+      ContinuationResult = unifier_.resolve(projection_root_type_);
+    if (ContinuationResult)
+      Perform->ContinuationResultType = ContinuationResult;
+
+    EffectRef EnclosingEffects = arena_.effect_solver().empty();
+    for (auto *Current = Node->parent; Current; Current = Current->parent) {
+      const auto Found = node_effects_.find(Current);
+      if (Found == node_effects_.end())
+        continue;
+      EnclosingEffects = Found->second;
+      break;
+    }
+    if (const auto Atom = operation_atoms_.find(Node);
+        Atom != operation_atoms_.end())
+      Perform->ResumeEffects =
+          arena_.effect_solver().mask(EnclosingEffects, {Atom->second});
+  }
+  if (all_ok && !has_errors()) {
+    if (projection_module_)
+      refreshModuleStructuralProjection(projection_module_,
+                                        projection_module_functions_);
+    else
+      refreshStructuralProjection(projection_root_, projection_root_type_,
+                                  projection_visible_parameter_count_);
+  } else {
+    projection_storage_->clear();
+    projection_storage_->publish();
+  }
+  return all_ok && !has_errors();
 }
 
 // ===== Effect Registration =====
@@ -3707,6 +7007,8 @@ TypeChecker::resolved_effect_key(std::string_view EffectName,
 
 std::optional<model::NominalTypeKey>
 TypeChecker::resolved_nominal_key(std::string_view TypeName) const {
+  if (ambiguous_nominal_names_.contains(std::string(TypeName)))
+    return std::nullopt;
   const auto Found = nominal_keys_.find(std::string(TypeName));
   if (Found != nominal_keys_.end())
     return Found->second;
@@ -3717,6 +7019,33 @@ TypeChecker::resolved_nominal_key(std::string_view TypeName) const {
   return model::NominalTypeKey{
       model::ModuleIdentity{TypeName.substr(0, Separator)},
       std::string(TypeName.substr(Separator + 1))};
+}
+
+void TypeChecker::register_imported_nominals(const std::string &ModuleFqn) {
+  if (!import_src_ || ModuleFqn.empty() ||
+      !registered_import_modules_.insert(ModuleFqn).second)
+    return;
+
+  model::ModuleIdentity Module{ModuleFqn};
+  for (auto &Nominal : import_src_->imported_nominals(ModuleFqn)) {
+    const model::NominalTypeKey Key{Module, Nominal.name};
+    if (ambiguous_nominal_names_.contains(Nominal.name))
+      continue;
+    const auto Existing = nominal_keys_.find(Nominal.name);
+    if (Existing != nominal_keys_.end() && Existing->second != Key) {
+      nominal_keys_.erase(Existing);
+      if (ambiguous_nominal_names_.insert(Nominal.name).second) {
+        diag_.error(SourceRange::unknown(), ErrorCode::E0100,
+                    "ambiguous nominal type '" + Nominal.name +
+                        "' is declared by multiple visible modules");
+        ++error_count_;
+      }
+      continue;
+    }
+    nominal_keys_.insert_or_assign(Nominal.name, Key);
+    adt_type_params_.insert_or_assign(Nominal.name,
+                                      std::move(Nominal.type_parameters));
+  }
 }
 
 model::NominalTypeKey
@@ -3748,7 +7077,8 @@ TypeChecker::intern_operation_atom(const model::EffectOperationKey &Key,
 void TypeChecker::register_effect(
     const std::string &effect_name, const std::string &type_param,
     const std::vector<std::tuple<std::string, std::vector<MonoTypePtr>,
-                                 MonoTypePtr>> &operations) {
+                                 MonoTypePtr>> &operations,
+    const model::ModuleIdentity *declaration_module) {
   for (auto &[op_name, param_types, return_type] : operations) {
     std::string key = effect_name + "." + op_name;
     std::vector<MonoTypePtr> SignatureParts = param_types;
@@ -3763,10 +7093,20 @@ void TypeChecker::register_effect(
         Signature.quantified_vars.push_back(Phantom->var_id);
       }
     }
+    const auto CallableContracts = declaration_callable_contracts(
+        SignatureParts, model::CallingConvention::ClosureEntry,
+        SourceRange::unknown());
     effect_ops_.insert_or_assign(
-        key, EffectOpInfo{
-                 effect_name, resolved_effect_key(effect_name, op_name),
-                 std::move(Signature), TypeArgumentCount, param_types.size()});
+        key,
+        EffectOpInfo{effect_name,
+                     declaration_module
+                         ? model::EffectOperationKey{model::NominalTypeKey{
+                                                         *declaration_module,
+                                                         effect_name},
+                                                     op_name}
+                         : resolved_effect_key(effect_name, op_name),
+                     std::move(Signature), TypeArgumentCount,
+                     param_types.size(), CallableContracts});
   }
 }
 
@@ -3776,16 +7116,16 @@ MonoTypePtr TypeChecker::infer_perform(PerformExpr *node,
                                        std::shared_ptr<TypeEnv> env,
                                        int level) {
   std::string op_key = node->effect_name + "." + node->operation_name;
-  const auto Registered = effect_ops_.find(op_key);
-  const auto Key =
-      Registered == effect_ops_.end()
-          ? resolved_effect_key(node->effect_name, node->operation_name)
-          : Registered->second.key;
+  auto Registered = effect_ops_.find(op_key);
+  auto Key = Registered == effect_ops_.end()
+                 ? resolved_effect_key(node->effect_name, node->operation_name)
+                 : Registered->second.key;
 
   // Look up the operation's type signature
   auto it = Registered;
   std::vector<MonoTypePtr> TypeArguments;
   std::vector<EffectRef> EffectArguments;
+  std::vector<MonoTypePtr> ParameterTypes;
   MonoTypePtr ReturnType = nullptr;
   if (it != effect_ops_.end()) {
     auto &info = it->second;
@@ -3798,6 +7138,10 @@ MonoTypePtr TypeChecker::infer_perform(PerformExpr *node,
     TypeArguments.assign(FreshTypes.begin(),
                          FreshTypes.begin() + static_cast<std::ptrdiff_t>(
                                                   info.type_argument_count));
+    ParameterTypes.assign(
+        Signature->elements.begin(),
+        Signature->elements.begin() +
+            static_cast<std::ptrdiff_t>(info.parameter_count));
     // `perform State.get ()` is the 0-arg surface (Unit is not a payload).
     // Ops that actually take Unit (`Gpu.oom`) keep the argument.
     size_t expected = info.parameter_count;
@@ -3828,16 +7172,105 @@ MonoTypePtr TypeChecker::infer_perform(PerformExpr *node,
     for (auto *&Argument : TypeArguments)
       Argument = zonk(Argument);
   } else {
-    // Unknown effect â€” infer args, return fresh var.
+    // Yona has no separate effect declaration syntax. The first source
+    // occurrence therefore establishes the canonical operation scheme; later
+    // performs and handlers instantiate and unify against this one scheme.
+    ParameterTypes.reserve(node->args.size());
     for (auto *arg : node->args)
-      infer(arg, env, level);
+      ParameterTypes.push_back(infer(arg, env, level));
     auto *Variable = arena_.fresh_var(level);
     uf_.add_var(Variable->var_id, level);
     ReturnType = Variable;
+    std::vector<MonoTypePtr> SignatureParts = ParameterTypes;
+    SignatureParts.push_back(ReturnType);
+    auto OccurrenceScheme = generalize(arena_.make_tuple(SignatureParts), -1);
+    const auto findVariable = [&](TypeId Id) -> MonoTypePtr {
+      for (auto *Part : SignatureParts) {
+        std::vector<MonoTypePtr> Pending{Part};
+        std::unordered_set<MonoTypePtr> Seen;
+        while (!Pending.empty()) {
+          auto *Current = unifier_.resolve(Pending.back());
+          Pending.pop_back();
+          if (!Current || !Seen.insert(Current).second)
+            continue;
+          if (Current->tag == MonoType::Var && Current->var_id == Id)
+            return Current;
+          if (Current->tag == MonoType::Arrow) {
+            Pending.push_back(Current->param_type);
+            Pending.push_back(Current->return_type);
+          } else if (Current->tag == MonoType::App) {
+            Pending.insert(Pending.end(), Current->args.begin(),
+                           Current->args.end());
+          } else if (Current->tag == MonoType::MTuple) {
+            Pending.insert(Pending.end(), Current->elements.begin(),
+                           Current->elements.end());
+          } else if (Current->tag == MonoType::MRecord) {
+            for (const auto &[_, Field] : Current->record_fields)
+              Pending.push_back(Field);
+            if (Current->row_rest)
+              Pending.push_back(Current->row_rest);
+          } else if (Current->tag == MonoType::Sum) {
+            Pending.insert(Pending.end(), Current->sum_alternatives.begin(),
+                           Current->sum_alternatives.end());
+          }
+        }
+      }
+      return nullptr;
+    };
+    for (const auto Id : OccurrenceScheme.quantified_vars)
+      if (auto *Argument = findVariable(Id))
+        TypeArguments.push_back(Argument);
+    std::unordered_map<TypeId, MonoTypePtr> DeclarationVariables;
+    for (const auto Id : OccurrenceScheme.quantified_vars) {
+      auto *Variable = arena_.fresh_var(0);
+      uf_.add_var(Variable->var_id, 0);
+      DeclarationVariables.emplace(Id, Variable);
+    }
+    auto Signature =
+        generalize(substitute(OccurrenceScheme.body, DeclarationVariables), -1);
+    const auto TypeArgumentCount = Signature.quantified_vars.size();
+    const auto *DeclarationTuple = Signature.body;
+    const auto CallableContracts = declaration_callable_contracts(
+        DeclarationTuple && DeclarationTuple->tag == MonoType::MTuple
+            ? std::span<MonoTypePtr const>(DeclarationTuple->elements)
+            : std::span<MonoTypePtr const>{},
+        model::CallingConvention::ClosureEntry, node->Range);
+    Registered =
+        effect_ops_
+            .insert_or_assign(
+                op_key, EffectOpInfo{node->effect_name, Key,
+                                     std::move(Signature), TypeArgumentCount,
+                                     ParameterTypes.size(), CallableContracts})
+            .first;
   }
 
-  const auto Atom = intern_operation_atom(Key, std::move(TypeArguments),
-                                          std::move(EffectArguments));
+  const auto Atom = intern_operation_atom(Key, TypeArguments, EffectArguments);
+  operation_atoms_.insert_or_assign(node, Atom);
+  include_evaluation_effect(arena_.effect_solver().atoms({Atom}));
+  if (Registered != effect_ops_.end()) {
+    std::vector<model::ParameterOwnership> Ownerships;
+    Ownerships.reserve(ParameterTypes.size());
+    for (const auto *Parameter : ParameterTypes) {
+      const auto *Resolved = unifier_.resolve(Parameter);
+      Ownerships.push_back(Resolved && Resolved->tag == MonoType::Con &&
+                                   Resolved->con != TyCon::String
+                               ? model::ParameterOwnership::Trivial
+                               : model::ParameterOwnership::Consume);
+    }
+    const auto *ResolvedResult = unifier_.resolve(ReturnType);
+    const auto ResultContract = ResolvedResult &&
+                                        ResolvedResult->tag == MonoType::Con &&
+                                        ResolvedResult->con != TyCon::String
+                                    ? model::ResultOwnership::Trivial
+                                    : model::ResultOwnership::Owned;
+    operation_occurrences_.insert_or_assign(
+        node, PerformProjection{
+                  ResolvedOperationApplicationProjection{
+                      Key, std::move(TypeArguments), std::move(EffectArguments),
+                      std::move(ParameterTypes), std::move(Ownerships),
+                      ReturnType, ResultContract},
+                  ReturnType, arena_.effect_solver().empty(), node->Range});
+  }
   if (!latent_effect_stack_.empty()) {
     effect_origins_.try_emplace(Atom, node->Range);
     const auto result = arena_.effect_solver().addAtom(
@@ -3866,6 +7299,8 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr *node,
   // Collect which operations this handle block covers
   struct HandlerOperation {
     model::EffectOperationKey Key;
+    std::vector<MonoTypePtr> TypeArguments;
+    std::vector<EffectRef> EffectArguments;
     std::vector<MonoTypePtr> ParameterTypes;
     MonoTypePtr ReturnType = nullptr;
   };
@@ -3875,10 +7310,70 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr *node,
   for (auto *clause : node->clauses) {
     if (!clause->is_return_clause) {
       const auto Display = clause->effect_name + "." + clause->operation_name;
-      const auto Registered = effect_ops_.find(Display);
+      auto Registered = effect_ops_.find(Display);
       if (Registered == effect_ops_.end()) {
-        handled_ops.push_back(intern_operation_atom(
-            resolved_effect_key(clause->effect_name, clause->operation_name)));
+        // A handler can be the first source declaration of an operation. Keep
+        // its declaration binders disjoint from this occurrence, just as for
+        // the first `perform`, so the batch owns each binder exactly once.
+        std::vector<MonoTypePtr> OccurrenceParts;
+        OccurrenceParts.reserve(clause->arg_names.size() + 1);
+        for ([[maybe_unused]] const auto &Name : clause->arg_names) {
+          auto *Parameter = arena_.fresh_var(level);
+          uf_.add_var(Parameter->var_id, level);
+          OccurrenceParts.push_back(Parameter);
+        }
+        auto *Return = arena_.fresh_var(level);
+        uf_.add_var(Return->var_id, level);
+        OccurrenceParts.push_back(Return);
+        const auto OccurrenceScheme =
+            generalize(arena_.make_tuple(OccurrenceParts), -1);
+        std::vector<MonoTypePtr> TypeArguments;
+        TypeArguments.reserve(OccurrenceScheme.quantified_vars.size());
+        for (const auto Id : OccurrenceScheme.quantified_vars) {
+          const auto Variable =
+              std::ranges::find_if(OccurrenceParts, [&](const auto *Part) {
+                const auto *Resolved = unifier_.resolve(Part);
+                return Resolved && Resolved->tag == MonoType::Var &&
+                       Resolved->var_id == Id;
+              });
+          if (Variable != OccurrenceParts.end())
+            TypeArguments.push_back(*Variable);
+        }
+        std::unordered_map<TypeId, MonoTypePtr> DeclarationVariables;
+        for (const auto Id : OccurrenceScheme.quantified_vars) {
+          auto *Variable = arena_.fresh_var(0);
+          uf_.add_var(Variable->var_id, 0);
+          DeclarationVariables.emplace(Id, Variable);
+        }
+        auto Declaration = generalize(
+            substitute(OccurrenceScheme.body, DeclarationVariables), -1);
+        const auto *DeclarationTuple = Declaration.body;
+        const auto CallableContracts = declaration_callable_contracts(
+            DeclarationTuple && DeclarationTuple->tag == MonoType::MTuple
+                ? std::span<MonoTypePtr const>(DeclarationTuple->elements)
+                : std::span<MonoTypePtr const>{},
+            model::CallingConvention::ClosureEntry, clause->Range);
+        const auto Key =
+            resolved_effect_key(clause->effect_name, clause->operation_name);
+        Registered =
+            effect_ops_
+                .insert_or_assign(
+                    Display,
+                    EffectOpInfo{clause->effect_name, Key,
+                                 std::move(Declaration),
+                                 OccurrenceScheme.quantified_vars.size(),
+                                 clause->arg_names.size(), CallableContracts})
+                .first;
+        const auto Atom = intern_operation_atom(Key, TypeArguments, {});
+        operation_atoms_.insert_or_assign(clause, Atom);
+        handled_ops.push_back(Atom);
+        HandlerOperations.emplace(clause,
+                                  HandlerOperation{Key,
+                                                   std::move(TypeArguments),
+                                                   {},
+                                                   {OccurrenceParts.begin(),
+                                                    OccurrenceParts.end() - 1},
+                                                   Return});
         continue;
       }
       const auto &Info = Registered->second;
@@ -3893,11 +7388,14 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr *node,
           FreshTypes.begin(),
           FreshTypes.begin() +
               static_cast<std::ptrdiff_t>(Info.type_argument_count));
-      handled_ops.push_back(intern_operation_atom(
-          Info.key, std::move(TypeArguments), std::move(EffectArguments)));
+      handled_ops.push_back(
+          intern_operation_atom(Info.key, TypeArguments, EffectArguments));
+      operation_atoms_.insert_or_assign(clause, handled_ops.back());
       HandlerOperations.emplace(
           clause, HandlerOperation{
                       Info.key,
+                      std::move(TypeArguments),
+                      std::move(EffectArguments),
                       {Signature->elements.begin(),
                        Signature->elements.begin() +
                            static_cast<std::ptrdiff_t>(Info.parameter_count)},
@@ -3911,7 +7409,9 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr *node,
   // instantiation are still removed by this handler.
   const auto body_effect = arena_.effect_solver().derived();
   latent_effect_stack_.push_back({body_effect});
+  isolated_evaluation_roots_.insert(node->body);
   auto *body_type = infer(node->body, env, level);
+  isolated_evaluation_roots_.erase(node->body);
   latent_effect_stack_.pop_back();
 
   std::ranges::sort(handled_ops);
@@ -3967,7 +7467,10 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr *node,
       clause_env->bind(clause->arg_names[i], arg_type);
     }
 
-    // Bind resume: function from op's return type to result type
+    MonoTypePtr SourceResumeType = nullptr;
+    std::optional<CallableTypeContract> ResumeContract;
+    // Bind resume to its explicit continuation contract. Its reinstated row
+    // is the protected body's row with the handled operations removed.
     if (!clause->resume_name.empty()) {
       MonoTypePtr resume_param;
       if (Operation != HandlerOperations.end())
@@ -3976,23 +7479,79 @@ MonoTypePtr TypeChecker::infer_handle(HandleExpr *node,
         resume_param = arena_.fresh_var(level);
         uf_.add_var(resume_param->var_id, level);
       }
-      auto *resume_type = arena_.make_arrow(resume_param, result_type);
-      clause_env->bind(clause->resume_name, resume_type);
+      SourceResumeType =
+          arena_.make_arrow(resume_param, result_type, masked_body_effect);
+      const auto *ResolvedParameter = unifier_.resolve(resume_param);
+      const auto *ResolvedResumeResult = unifier_.resolve(result_type);
+      ResumeContract.emplace(CallableTypeContract{
+          SourceResumeType,
+          {ResolvedParameter && ResolvedParameter->tag == MonoType::Con &&
+                   ResolvedParameter->con != TyCon::String
+               ? model::ParameterOwnership::Trivial
+               : model::ParameterOwnership::Consume},
+          ResolvedResumeResult && ResolvedResumeResult->tag == MonoType::Con &&
+                  ResolvedResumeResult->con != TyCon::String
+              ? model::ResultOwnership::Trivial
+              : model::ResultOwnership::Owned,
+          model::CallingConvention::Continuation,
+          clause->Range});
+      scheme_callable_contracts_.insert_or_assign(
+          SourceResumeType, std::vector<CallableTypeContract>{*ResumeContract});
+      clause_env->bind_scheme(clause->resume_name,
+                              TypeScheme(SourceResumeType));
     }
 
     auto *clause_type = infer(clause->body, clause_env, level);
     unifier_.unify(result_type, clause_type, clause->Range,
                    "in handler clause for " + op_key);
     result_type = unifier_.resolve(result_type);
+    record(clause, result_type);
+
+    if (Operation != HandlerOperations.end()) {
+      std::vector<model::ParameterOwnership> Ownerships;
+      Ownerships.reserve(Operation->second.ParameterTypes.size());
+      for (const auto *Parameter : Operation->second.ParameterTypes) {
+        const auto *Resolved = unifier_.resolve(Parameter);
+        Ownerships.push_back(Resolved && Resolved->tag == MonoType::Con &&
+                                     Resolved->con != TyCon::String
+                                 ? model::ParameterOwnership::Trivial
+                                 : model::ParameterOwnership::Consume);
+      }
+      const auto *ResolvedResult =
+          unifier_.resolve(Operation->second.ReturnType);
+      const auto ResultContract =
+          ResolvedResult && ResolvedResult->tag == MonoType::Con &&
+                  ResolvedResult->con != TyCon::String
+              ? model::ResultOwnership::Trivial
+              : model::ResultOwnership::Owned;
+      if (!SourceResumeType)
+        SourceResumeType = arena_.make_arrow(Operation->second.ReturnType,
+                                             result_type, masked_body_effect);
+      if (!function_inference_stack_.empty() && ResumeContract)
+        function_callable_contracts_[function_inference_stack_.back()]
+            .push_back(*ResumeContract);
+      operation_occurrences_.insert_or_assign(
+          clause,
+          HandlerClauseProjection{
+              ResolvedOperationApplicationProjection{
+                  Operation->second.Key, Operation->second.TypeArguments,
+                  Operation->second.EffectArguments,
+                  Operation->second.ParameterTypes, std::move(Ownerships),
+                  Operation->second.ReturnType, ResultContract},
+              SourceResumeType, masked_body_effect, clause->Range});
+    }
   }
 
   // Keep the mask symbolic until handler-clause inference has constrained the
-  // operation's ordered type/effect arguments.  Materialization can then add
-  // only compatible protected-body atoms (and still discover callback atoms
-  // that flow into an open body tail), rather than eagerly masking every
-  // same-key application.
-  include_ambient_effect(masked_body_effect, node->Range,
-                         "in handled expression");
+  // operation's ordered type/effect arguments. Materialize it here even when
+  // the handle expression has no enclosing latent-effect cell; otherwise a
+  // top-level handle would retain only the handler occurrence's raw atom and
+  // miss an equivalent protected-body instance. The matcher adds only full
+  // type/effect-argument matches, never every application sharing the key.
+  if (materialize_effect_masks(masked_body_effect, node->Range,
+                               "in handled expression"))
+    include_ambient_effect(masked_body_effect, node->Range,
+                           "in handled expression");
 
   return result_type;
 }
@@ -4030,26 +7589,68 @@ void TypeChecker::bind_import_name(std::shared_ptr<TypeEnv> env,
     lin = import_src_->imported_function_sig(module_fqn, func_name);
   }
 
+  std::unordered_set<std::string> SourceNominals;
+  if (interface_module) {
+    for (const auto &Adt : interface_module->Adts)
+      SourceNominals.insert(Adt.Name);
+  } else if (import_src_) {
+    for (const auto &Nominal : import_src_->imported_nominals(module_fqn))
+      SourceNominals.insert(Nominal.name);
+  }
+
   if (row) {
     if (!row->Effects.IsKnown && require_effect_free_)
       has_unknown_effect_rows_ = true;
-    std::unordered_set<std::string> SourceNominals;
-    for (const auto &Adt : interface_module->Adts)
-      SourceNominals.insert(Adt.Name);
     auto *Exact = mono_from_interface_function(
         *row, level, SourceIdentity ? &*SourceIdentity : nullptr,
         &SourceNominals);
-    env->bind_scheme(bind_name, generalize(Exact, level - 1));
+    auto Scheme = generalize(Exact, level - 1);
+    const model::FunctionDeclarationIdentity Identity = model::SymbolIdentity{
+        SourceIdentity.value_or(model::ModuleIdentity{module_fqn}), func_name};
+    scheme_identities_.insert_or_assign(Scheme.body, Identity);
+    const auto Convention = [&] {
+      switch (row->Kind) {
+      case interface::FunctionKind::Synchronous:
+        return model::CallingConvention::DirectYona;
+      case interface::FunctionKind::ThreadPool:
+      case interface::FunctionKind::Io:
+        return model::CallingConvention::AsyncAdapter;
+      case interface::FunctionKind::Native:
+        return model::CallingConvention::NativeExtern;
+      }
+      return model::CallingConvention::DirectYona;
+    }();
+    auto Declaration = imported_function_declaration(
+        Scheme, row->BorrowedParameters, row->ParameterTypes.size(), Convention,
+        SourceRange::unknown());
+    auto Contracts = Declaration.CallableContracts;
+    imported_function_declarations_.insert_or_assign(Identity,
+                                                     std::move(Declaration));
+    scheme_callable_contracts_.insert_or_assign(Scheme.body,
+                                                std::move(Contracts));
+    env->bind_scheme(bind_name, std::move(Scheme));
     return;
   }
   if (lin) {
     if (require_effect_free_)
       has_unknown_effect_rows_ = true;
-    env->bind_scheme(
-        bind_name, generalize(mono_from_import_sig(
-                                  *lin, level, nullptr,
-                                  SourceIdentity ? &*SourceIdentity : nullptr),
-                              -1));
+    auto Scheme = generalize(
+        mono_from_import_sig(
+            *lin, level, nullptr, SourceIdentity ? &*SourceIdentity : nullptr,
+            !SourceNominals.empty() ? &SourceNominals : nullptr),
+        -1);
+    const model::FunctionDeclarationIdentity Identity = model::SymbolIdentity{
+        SourceIdentity.value_or(model::ModuleIdentity{module_fqn}), func_name};
+    scheme_identities_.insert_or_assign(Scheme.body, Identity);
+    auto Declaration = imported_function_declaration(
+        Scheme, lin->borrowed_parameters, lin->param_descriptors.size(),
+        lin->convention, SourceRange::unknown());
+    auto Contracts = Declaration.CallableContracts;
+    imported_function_declarations_.insert_or_assign(Identity,
+                                                     std::move(Declaration));
+    scheme_callable_contracts_.insert_or_assign(Scheme.body,
+                                                std::move(Contracts));
+    env->bind_scheme(bind_name, std::move(Scheme));
     return;
   }
   if (require_effect_free_)
@@ -4104,7 +7705,8 @@ MonoTypePtr TypeChecker::mono_from_import_sig(
     if (tag == "CHANNEL")
       return arena_.make_app("Channel", {fresh()});
     if (tag == "PROMISE")
-      return arena_.make_app("Promise", {fresh()});
+      return arena_.make_promise(fresh(), model::ResultOwnership::Owned,
+                                 arena_.effect_solver().empty());
     if (tag == "FUNCTION")
       return arena_.make_arrow(fresh(), fresh());
     if (tag == "ADT")
@@ -4176,10 +7778,22 @@ MonoTypePtr TypeChecker::mono_from_import_sig(
         return arena_.make_tuple(args);
       if (name == "FUNCTION" && args.size() == 2)
         return arena_.make_arrow(args[0], args[1]);
-      if (name == "LINEAR" && args.size() == 1)
-        return arena_.make_app("Linear", args);
+      if (name == "LINEAR" && args.size() == 1) {
+        if (const auto Key = resolved_nominal_key("Linear"))
+          return arena_.make_app(*Key, std::move(args), "Linear");
+        return arena_.make_app("Linear", std::move(args));
+      }
+      if (name == "Promise" && args.size() == 1) {
+        const auto *Success = unifier_.resolve(args.front());
+        const auto Ownership = Success && Success->tag == MonoType::Con &&
+                                       Success->con != TyCon::String
+                                   ? model::ResultOwnership::Trivial
+                                   : model::ResultOwnership::Owned;
+        return arena_.make_promise(args.front(), Ownership,
+                                   arena_.effect_solver().empty());
+      }
       if (name == "Seq" || name == "SET" || name == "Set" || name == "DICT" ||
-          name == "Dict" || name == "Promise")
+          name == "Dict")
         return arena_.make_app(name == "SET"    ? "Set"
                                : name == "DICT" ? "Dict"
                                                 : name,
@@ -4249,9 +7863,11 @@ MonoTypePtr TypeChecker::mono_from_interface_function(
       const auto Dot = Operation.rfind('.');
       if (Dot == std::string::npos || Dot == 0 || Dot + 1 == Operation.size())
         throw std::invalid_argument("invalid imported effect operation name");
-      Atoms.push_back(intern_operation_atom(
+      const auto Atom = intern_operation_atom(
           resolved_effect_key(std::string_view(Operation).substr(0, Dot),
-                              std::string_view(Operation).substr(Dot + 1))));
+                              std::string_view(Operation).substr(Dot + 1)));
+      legacy_untyped_effect_atoms_.insert(Atom);
+      Atoms.push_back(Atom);
     }
     Sources.push_back(arena_.effect_solver().atoms(std::move(Atoms)));
   }
@@ -4364,6 +7980,12 @@ MonoTypePtr TypeChecker::from_ast_type_impl(
       variables[nt->name] = variable;
       return variable;
     }
+    if (std::holds_alternative<std::nullptr_t>(nt->type)) {
+      if (nt->name == "ByteArray")
+        return arena_.make_con(TyCon::ByteArray);
+      if (nt->name == "IntArray" || nt->name == "FloatArray")
+        return arena_.make_app(nt->name, {});
+    }
     if (!std::holds_alternative<std::nullptr_t>(nt->type)) {
       // Surface syntax writes multi-parameter applications as
       // `Result (a, e)`.  The product here is argument punctuation,
@@ -4385,6 +8007,15 @@ MonoTypePtr TypeChecker::from_ast_type_impl(
       }
       std::vector<MonoTypePtr> Arguments{
           from_ast_type_impl(nt->type, level, variables)};
+      if (nt->name == "Promise") {
+        const auto *Success = unifier_.resolve(Arguments.front());
+        const auto Ownership = Success && Success->tag == MonoType::Con &&
+                                       Success->con != TyCon::String
+                                   ? model::ResultOwnership::Trivial
+                                   : model::ResultOwnership::Owned;
+        return arena_.make_promise(Arguments.front(), Ownership,
+                                   arena_.effect_solver().empty());
+      }
       if (const auto Key = resolved_nominal_key(nt->name))
         return arena_.make_app(*Key, std::move(Arguments), nt->name);
       return arena_.make_app(nt->name, std::move(Arguments));
@@ -4395,8 +8026,14 @@ MonoTypePtr TypeChecker::from_ast_type_impl(
   }
   if (std::holds_alternative<std::shared_ptr<PromiseType>>(t)) {
     auto &pr = std::get<std::shared_ptr<PromiseType>>(t);
-    return from_ast_type_impl(pr->valueType, level,
-                              variables); // auto-await: Promise T ~ T
+    auto *Success = from_ast_type_impl(pr->valueType, level, variables);
+    const auto *Resolved = unifier_.resolve(Success);
+    const auto Ownership = Resolved && Resolved->tag == MonoType::Con &&
+                                   Resolved->con != TyCon::String
+                               ? model::ResultOwnership::Trivial
+                               : model::ResultOwnership::Owned;
+    return arena_.make_promise(Success, Ownership,
+                               arena_.effect_solver().empty());
   }
   if (std::holds_alternative<std::shared_ptr<RefinedType>>(t)) {
     auto &rt = std::get<std::shared_ptr<RefinedType>>(t);

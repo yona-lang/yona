@@ -2106,7 +2106,7 @@ fetch path = perform Fs.read path
 
     string yonai = read_file(iface);
     CHECK(yonai.find("FN fetch 1 VAR(a) -> VAR(b)") != string::npos);
-    CHECK(yonai.find("effects Fs.read") != string::npos);
+    CHECK(yonai.find("effects Test\\Fx\\Fs.read") != string::npos);
 
     parser::Parser p2;
     string expr = R"(import fetch from Test\Fx in fetch "/etc/shadow")";
@@ -2504,8 +2504,8 @@ wrap = \() -> readSecret ()
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
-    CHECK(yonai.find("FN wrap 0 -> FUNCTION(UNIT,VAR(a)) effects Fs.read") !=
-          string::npos);
+    CHECK(yonai.find("FN wrap 0 -> FUNCTION(UNIT,VAR(a)) effects "
+                     "Test\\Wrap\\Fs.read") != string::npos);
 
     parser::Parser p2;
     string expr = R"(import wrap from Test\Wrap in wrap ())";
@@ -2579,7 +2579,7 @@ readSecret = \() -> perform Fs.read "/etc/shadow"
     REQUIRE(mod_codegen.emit_interface_file(iface.string()));
 
     string yonai = read_file(iface);
-    CHECK(yonai.find("effects Fs.read") != string::npos);
+    CHECK(yonai.find("effects Test\\WrapFirst\\Fs.read") != string::npos);
 
     parser::Parser p2;
     string expr = R"(import wrap from Test\WrapFirst in wrap ())";

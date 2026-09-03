@@ -104,6 +104,10 @@ OwnershipKind ownershipFromType(std::string_view Type) {
   return Type.empty() ? OwnershipKind::Unknown : OwnershipKind::Unrestricted;
 }
 
+std::string structuralProjectionCode(StructuralProjectionErrorCode Code) {
+  return "SP" + std::to_string(static_cast<unsigned>(Code) + 1);
+}
+
 } // namespace
 
 std::string_view symbolKindName(SymbolKind Kind) noexcept {
@@ -140,6 +144,8 @@ std::string_view ownershipKindName(OwnershipKind Kind) noexcept {
 
 struct SemanticModel::Impl final {
   std::shared_ptr<const SourceManager> Sources;
+  std::shared_ptr<model::TypeTable> Types =
+      std::make_shared<model::TypeTable>();
   SourceId Source;
   std::string_view Text;
   compiler::typechecker::TypeChecker *TypeChecker = nullptr;
@@ -147,6 +153,8 @@ struct SemanticModel::Impl final {
   std::vector<SemanticOccurrence> Occurrences;
   std::vector<SemanticDiagnostic> DiagnosticRecords;
   std::unordered_map<const ast::AstNode *, NodeSemantics> NodeFacts;
+  std::unordered_map<const ast::AstNode *, BindingId> NodeBindings;
+  ProjectedSemanticBatch StructuralBatch;
   SourceRange RootRange = SourceRange::unknown();
   std::optional<NodeSemantics> RootFacts;
   std::vector<std::unordered_map<std::string, BindingId>> BindingScopes;
@@ -162,6 +170,7 @@ struct SemanticModel::Impl final {
       throw std::invalid_argument("SemanticModel requires a SourceManager");
     Text = this->Sources->text(Source);
     BindingScopes.emplace_back();
+    projectStructuralFacts(Root);
     walk(Root);
     if (Root) {
       RootRange = Root->Range;
@@ -173,6 +182,42 @@ struct SemanticModel::Impl final {
     captureDiagnostics();
     this->TypeChecker = nullptr;
     this->Diagnostics = nullptr;
+  }
+
+  void projectStructuralFacts(ast::AstNode *Root) {
+    if (!TypeChecker)
+      return;
+    model::ModuleIdentity Module{"Main"};
+    if (const auto *Declaration = dynamic_cast<ast::ModuleDecl *>(Root);
+        Declaration && Declaration->fqn)
+      Module = model::ModuleIdentity{Declaration->fqn->to_string()};
+    StructuralTypeProjection Projection(*Types, Module,
+                                        TypeChecker->arena().effect_solver(),
+                                        TypeChecker->arena().effect_atoms());
+    auto Projected = Projection.freezeSemanticBatch(
+        TypeChecker->structuralProjectionInput());
+    if (!Projected) {
+      for (const auto &Failure : Projected.error()) {
+        DiagnosticRecords.push_back(SemanticDiagnostic{
+            Failure.Range, 1, structuralProjectionCode(Failure.Code),
+            Failure.Path.empty() ? Failure.Message
+                                 : Failure.Path + ": " + Failure.Message});
+      }
+      return;
+    }
+    StructuralBatch = std::move(*Projected);
+    for (const auto &Function : StructuralBatch.Functions) {
+      for (const auto &ProjectedFact : Function.NodeFacts) {
+        auto &Facts = NodeFacts[ProjectedFact.Node];
+        Facts.Type = ProjectedFact.Type;
+        Facts.EffectRow = ProjectedFact.Effects;
+        Facts.Instantiation = ProjectedFact.Instantiation;
+        Facts.OperationOccurrence = ProjectedFact.OperationOccurrence;
+        Facts.TraitMethodUse = ProjectedFact.TraitMethodUse;
+        Facts.KeyOperations = ProjectedFact.KeyOperations;
+        Facts.SumInjection = ProjectedFact.SumInjection;
+      }
+    }
   }
 
   [[nodiscard]] BindingId nextBinding() noexcept {
@@ -232,8 +277,14 @@ struct SemanticModel::Impl final {
 
   [[nodiscard]] const NodeSemantics &recordFacts(const ast::AstNode *Node) {
     const auto [Iterator, Inserted] = NodeFacts.try_emplace(Node);
-    if (Inserted)
-      Iterator->second = makeFacts(Node);
+    auto Legacy = makeFacts(Node);
+    if (Inserted) {
+      Iterator->second = std::move(Legacy);
+    } else {
+      Iterator->second.InferredType = std::move(Legacy.InferredType);
+      Iterator->second.Effects = std::move(Legacy.Effects);
+      Iterator->second.Ownership = Legacy.Ownership;
+    }
     return Iterator->second;
   }
 
@@ -287,6 +338,8 @@ struct SemanticModel::Impl final {
       Occurrence.Facts.Ownership =
           ownershipFromType(Occurrence.Facts.InferredType);
     }
+    if (Node)
+      NodeBindings.insert_or_assign(Node, Occurrence.Binding);
     Occurrences.push_back(std::move(Occurrence));
   }
 
@@ -1050,6 +1103,10 @@ const SourceManager &SemanticModel::sourceManager() const noexcept {
   return *Implementation->Sources;
 }
 
+std::shared_ptr<const SourceManager> SemanticModel::sources() const noexcept {
+  return Implementation->Sources;
+}
+
 SourceId SemanticModel::sourceId() const noexcept {
   return Implementation->Source;
 }
@@ -1120,6 +1177,59 @@ SemanticModel::factsFor(const ast::AstNode *Node) const noexcept {
   const auto Iterator = Implementation->NodeFacts.find(Node);
   return Iterator == Implementation->NodeFacts.end() ? nullptr
                                                      : &Iterator->second;
+}
+
+const model::TypeTable &SemanticModel::types() const noexcept {
+  return *Implementation->Types;
+}
+
+std::shared_ptr<model::TypeTable>
+SemanticModel::sharedTypeArena() const noexcept {
+  return Implementation->Types;
+}
+
+std::optional<BindingId>
+SemanticModel::bindingFor(const ast::AstNode *Node) const noexcept {
+  const auto Iterator = Implementation->NodeBindings.find(Node);
+  if (Iterator == Implementation->NodeBindings.end())
+    return std::nullopt;
+  return Iterator->second;
+}
+
+const ProjectedSchemeInstantiation *
+SemanticModel::instantiationFor(const ast::AstNode *Node) const noexcept {
+  const auto *Facts = factsFor(Node);
+  return Facts && Facts->Instantiation ? &*Facts->Instantiation : nullptr;
+}
+
+const ProjectedOperationOccurrence *
+SemanticModel::operationOccurrenceFor(const ast::AstNode *Node) const noexcept {
+  const auto *Facts = factsFor(Node);
+  return Facts && Facts->OperationOccurrence ? &*Facts->OperationOccurrence
+                                             : nullptr;
+}
+
+const ProjectedTraitMethodUseFact *
+SemanticModel::traitMethodUseFor(const ast::AstNode *Node) const noexcept {
+  const auto *Facts = factsFor(Node);
+  return Facts && Facts->TraitMethodUse ? &*Facts->TraitMethodUse : nullptr;
+}
+
+const ProjectedCollectionKeyOperations *
+SemanticModel::keyOperationsFor(const ast::AstNode *Node) const noexcept {
+  const auto *Facts = factsFor(Node);
+  return Facts && Facts->KeyOperations ? &*Facts->KeyOperations : nullptr;
+}
+
+const ProjectedSumInjection *
+SemanticModel::sumInjectionFor(const ast::AstNode *Node) const noexcept {
+  const auto *Facts = factsFor(Node);
+  return Facts && Facts->SumInjection ? &*Facts->SumInjection : nullptr;
+}
+
+std::span<const model::EffectOperationSignature>
+SemanticModel::effectOperations() const noexcept {
+  return Implementation->StructuralBatch.Operations;
 }
 
 } // namespace yona::semantics

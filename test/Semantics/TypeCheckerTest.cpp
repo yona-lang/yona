@@ -4,12 +4,15 @@
 #include "Support/RepoPaths.h"
 #include "Support/SemanticSetup.h"
 #include "yona/Codegen/Codegen.h"
+#include "yona/Interface/Module.h"
 #include "yona/Model/EffectSolver.h"
 #include "yona/Model/InferType.h"
 #include "yona/Model/TypeArena.h"
 #include "yona/Model/TypeEnv.h"
+#include "yona/Semantics/InterfaceCatalog.h"
 #include "yona/Semantics/ModuleFunctionDependencies.h"
 #include "yona/Semantics/RefinementChecker.h"
+#include "yona/Semantics/StructuralTypeProjection.h"
 #include "yona/Semantics/Unification.h"
 #include "yona/Semantics/UnionFind.h"
 #include "yona/Support/Diagnostic.h"
@@ -19,6 +22,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
@@ -104,6 +108,22 @@ struct TypeCheckerTestPeer {
   static void setCurrentModule(TypeChecker &Checker,
                                model::ModuleIdentity Module) {
     Checker.current_module_ = std::move(Module);
+  }
+  static void bind(TypeChecker &Checker, const std::string &Name,
+                   MonoTypePtr Type) {
+    Checker.root_env_->bind(Name, Type);
+  }
+  static EffectRef nodeEffects(const TypeChecker &Checker,
+                               const ast::AstNode *Node) {
+    const auto Found = Checker.node_effects_.find(Node);
+    return Found == Checker.node_effects_.end() ? EffectRef{} : Found->second;
+  }
+  static void addImportedProjectionModule(TypeChecker &Checker,
+                                          std::string Module) {
+    Checker.registered_import_modules_.insert(std::move(Module));
+  }
+  static void populateImportedProjectionCatalog(TypeChecker &Checker) {
+    Checker.populateImportedProjectionCatalog(SourceRange::unknown());
   }
 };
 } // namespace yona::compiler::typechecker
@@ -231,6 +251,1669 @@ private:
 } // namespace
 
 TEST_SUITE("TypeChecker") {
+
+  TEST_CASE("TypeChecker: structural projection input is checker owned and "
+            "records callable contracts") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression("\\x -> x", "projection.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+
+    CHECK(Checker.structuralProjectionInput().Functions.empty());
+    REQUIRE(Checker.solve_constraints());
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Functions.size() == 1);
+    REQUIRE(Batch.Scopes.size() == 1);
+    REQUIRE_FALSE(Batch.Scopes.front().CallableContracts.empty());
+    CHECK(std::ranges::any_of(
+        Batch.Scopes.front().CallableContracts, [&](const auto &Contract) {
+          return Contract.Arrow == Batch.Functions.front().Scheme.body;
+        }));
+    CHECK(Batch.Functions.front().NodeFacts.size() > 0);
+  }
+
+  TEST_CASE("TypeChecker: projection rejects foreign source ownership and "
+            "range-mismatched node facts") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(\value -> value)",
+                                         "projection-source-owner.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.SourceRoot == Parsed->Expression.get());
+    REQUIRE(Batch.SourceExtent.isValid());
+
+    yona::ast::IntegerExpr ForeignRoot(Batch.SourceExtent, 0);
+    auto Foreign = Batch;
+    Foreign.SourceRoot = &ForeignRoot;
+    yona::model::TypeTable ForeignTypes;
+    yona::semantics::StructuralTypeProjection ForeignProjection(
+        ForeignTypes, yona::model::ModuleIdentity{"Main"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto ForeignResult = ForeignProjection.freezeSemanticBatch(Foreign);
+    REQUIRE_FALSE(ForeignResult.has_value());
+    CHECK(ForeignResult.error().front().Path.find("owner") !=
+          std::string::npos);
+    CHECK(ForeignTypes.typeCount() == 0);
+
+    std::vector<yona::compiler::typechecker::FunctionSchemeProjection>
+        Functions(Batch.Functions.begin(), Batch.Functions.end());
+    REQUIRE_FALSE(Functions.empty());
+    std::vector<yona::compiler::typechecker::NodeSemanticProjection> Facts(
+        Functions.front().NodeFacts.begin(), Functions.front().NodeFacts.end());
+    REQUIRE_FALSE(Facts.empty());
+    ++Facts.front().Range.Column;
+    Functions.front().NodeFacts = Facts;
+    auto Mismatched = Batch;
+    Mismatched.Functions = Functions;
+    yona::model::TypeTable RangeTypes;
+    yona::semantics::StructuralTypeProjection RangeProjection(
+        RangeTypes, yona::model::ModuleIdentity{"Main"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto RangeResult = RangeProjection.freezeSemanticBatch(Mismatched);
+    REQUIRE_FALSE(RangeResult.has_value());
+    CHECK(RangeResult.error().front().Path.find("range") != std::string::npos);
+    CHECK(RangeTypes.typeCount() == 0);
+
+    Functions.front().NodeFacts = {};
+    Functions.front().SourceOwner = nullptr;
+    auto Headerless = Batch;
+    Headerless.Functions = Functions;
+    yona::model::TypeTable HeaderlessTypes;
+    yona::semantics::StructuralTypeProjection HeaderlessProjection(
+        HeaderlessTypes, yona::model::ModuleIdentity{"Main"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto HeaderlessResult =
+        HeaderlessProjection.freezeSemanticBatch(Headerless);
+    REQUIRE_FALSE(HeaderlessResult.has_value());
+    CHECK(HeaderlessResult.error().front().Path.find("owner") !=
+          std::string::npos);
+    CHECK(HeaderlessTypes.typeCount() == 0);
+  }
+
+  TEST_CASE("TypeChecker: a root expression returning a callable has an "
+            "explicit callable contract") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(
+        "let f = identity in if true then f else f", "callable-root.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    yona::interface::Function Identity;
+    Identity.Name = "identity";
+    Identity.ParameterTypes = {"VAR(a)"};
+    Identity.ReturnType = "VAR(a)";
+    Identity.BorrowedParameters = {true};
+    const yona::model::ModuleIdentity Prelude{"Prelude"};
+    Checker.register_interface_function(Identity, &Prelude);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Functions.size() == 1);
+    REQUIRE(Batch.Scopes.size() == 1);
+    const auto Contract = std::ranges::find_if(
+        Batch.Scopes.front().CallableContracts, [&](const auto &Candidate) {
+          return Candidate.Arrow == Batch.Functions.front().Scheme.body;
+        });
+    REQUIRE(Contract != Batch.Scopes.front().CallableContracts.end());
+    CHECK(Contract->ParameterOwnerships ==
+          std::vector{yona::model::ParameterOwnership::Borrow});
+    CHECK(Contract->Convention == yona::model::CallingConvention::DirectYona);
+    const auto Imported = std::ranges::find_if(
+        Batch.ImportedDeclarations, [&](const auto &Declaration) {
+          const auto *Function =
+              std::get_if<yona::model::FunctionDeclarationIdentity>(
+                  &Declaration.Identity);
+          return Function &&
+                 *Function ==
+                     yona::model::FunctionDeclarationIdentity{
+                         yona::model::SymbolIdentity{Prelude, "identity"}};
+        });
+    REQUIRE(Imported != Batch.ImportedDeclarations.end());
+    REQUIRE(Imported->Function.has_value());
+    CHECK(Imported->Function->ParameterOwnerships ==
+          std::vector{yona::model::ParameterOwnership::Borrow});
+  }
+
+  TEST_CASE("TypeChecker: wildcard imports retain every admitted complete "
+            "function contract after checker destruction") {
+    namespace fs = std::filesystem;
+    const auto Directory =
+        fs::temp_directory_path() / "yona_task2d_rich_wildcard_import";
+    std::error_code Error;
+    fs::remove_all(Directory, Error);
+    fs::create_directories(Directory / "Test");
+    {
+      std::ofstream Interface(Directory / "Test" / "Rich.yonai");
+      Interface << "MODULE Test\\Rich\n"
+                   "FN first 1 VAR(a) -> VAR(a) borrow 1\n"
+                   "FN second 1 INT -> INT\n";
+    }
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(import Test\Rich in first 2)",
+                                         "wildcard-rich-import.yona");
+    REQUIRE(Parsed.has_value());
+    yona::model::TypeTable Types;
+    yona::semantics::ProjectedSemanticBatch Saved;
+    {
+      DiagnosticEngine Diagnostics;
+      Diagnostics.setSources(Parsed->Sources);
+      TypeChecker Checker(Diagnostics);
+      yona::semantics::InterfaceCatalog Catalog({Directory.string()});
+      Checker.add_module_path(Directory.string());
+      Checker.set_import_type_source(&Catalog);
+      REQUIRE(Checker.check(Parsed->Expression.get()));
+      REQUIRE_FALSE(Checker.has_direct_errors());
+      REQUIRE(Checker.solve_constraints());
+      const auto &Batch = Checker.structuralProjectionInput();
+      const auto RichFunctions = std::ranges::count_if(
+          Batch.ImportedDeclarations, [](const auto &Declaration) {
+            const auto *Identity =
+                std::get_if<yona::model::FunctionDeclarationIdentity>(
+                    &Declaration.Identity);
+            const auto *Symbol =
+                Identity ? std::get_if<yona::model::SymbolIdentity>(&*Identity)
+                         : nullptr;
+            return Symbol &&
+                   Symbol->Module ==
+                       yona::model::ModuleIdentity{"Test\\Rich"} &&
+                   Declaration.Function.has_value();
+          });
+      CHECK(RichFunctions == 2);
+      yona::semantics::StructuralTypeProjection Projection(
+          Types, yona::model::ModuleIdentity{"Main"},
+          Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+      auto Result = Projection.freezeSemanticBatch(Batch);
+      CAPTURE(Result ? std::string{}
+                     : Result.error().front().Path + ": " +
+                           Result.error().front().Message);
+      REQUIRE(Result.has_value());
+      Saved = std::move(*Result);
+    }
+    const yona::model::FunctionDeclarationIdentity First{
+        yona::model::SymbolIdentity{yona::model::ModuleIdentity{"Test\\Rich"},
+                                    "first"}};
+    const auto Fact = std::ranges::find_if(
+        Saved.Functions.front().NodeFacts, [&](const auto &Candidate) {
+          return Candidate.Instantiation &&
+                 Candidate.Instantiation->Scheme == First;
+        });
+    REQUIRE(Fact != Saved.Functions.front().NodeFacts.end());
+    REQUIRE(Fact->Instantiation->TypeArguments.size() == 1);
+    CHECK(std::get<yona::model::PrimitiveType>(
+              Types.at(Fact->Instantiation->TypeArguments.front())) ==
+          yona::model::PrimitiveType::Int);
+    fs::remove_all(Directory, Error);
+  }
+
+  TEST_CASE("TypeChecker: conflicting duplicate imported catalog rows are "
+            "rejected deterministically") {
+    class ConflictingImports final
+        : public yona::compiler::typechecker::ImportTypeSource {
+    public:
+      std::optional<ImportedFnSig>
+      imported_function_sig(const std::string &, const std::string &) override {
+        return std::nullopt;
+      }
+      std::vector<std::string>
+      imported_module_exports(const std::string &) override {
+        return {};
+      }
+      std::vector<yona::compiler::typechecker::ImportedNominalSig>
+      imported_nominals(const std::string &) override {
+        return {{"Thing", {}}};
+      }
+      std::vector<yona::compiler::typechecker::ImportedDeclarationCatalogEntry>
+      imported_declarations(const std::string &) override {
+        const yona::model::NominalTypeKey Thing{
+            yona::model::ModuleIdentity{"Test\\Conflicts"}, "Thing"};
+        return {{yona::model::BinderOwnerKind::Nominal,
+                 Thing,
+                 0,
+                 0,
+                 {},
+                 false,
+                 SourceRange::unknown()},
+                {yona::model::BinderOwnerKind::Nominal,
+                 Thing,
+                 1,
+                 0,
+                 {},
+                 false,
+                 SourceRange::unknown()}};
+      }
+      std::vector<yona::compiler::typechecker::ImportedInstanceSig>
+      imported_instances(const std::string &) override {
+        return {};
+      }
+    } Imports;
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(import Test\Conflicts in 1)",
+                                         "conflicting-imports.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.set_import_type_source(&Imports);
+
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE_FALSE(Checker.has_direct_errors());
+    CHECK_FALSE(Checker.solve_constraints());
+    CHECK(std::ranges::any_of(Diagnostics.records(), [](const auto &Record) {
+      return Record.message.find("conflicting imported declaration") !=
+             std::string::npos;
+    }));
+  }
+
+  TEST_CASE("TypeChecker: imported catalog merging is order-independent and "
+            "idempotent for identical rich rows") {
+    class DuplicateImports final
+        : public yona::compiler::typechecker::ImportTypeSource {
+    public:
+      DuplicateImports(MonoTypePtr Left, MonoTypePtr Right)
+          : Left_(Left), Right_(Right) {}
+      std::optional<ImportedFnSig>
+      imported_function_sig(const std::string &, const std::string &) override {
+        return std::nullopt;
+      }
+      std::vector<std::string>
+      imported_module_exports(const std::string &) override {
+        return {};
+      }
+      std::vector<yona::compiler::typechecker::ImportedNominalSig>
+      imported_nominals(const std::string &) override {
+        return {};
+      }
+      std::vector<yona::compiler::typechecker::ImportedDeclarationCatalogEntry>
+      imported_declarations(const std::string &Module) override {
+        const yona::model::FunctionDeclarationIdentity Identity{
+            yona::model::SymbolIdentity{
+                yona::model::ModuleIdentity{"Test\\Shared"}, "value"}};
+        const auto *Variable = Module == "Test\\A" ? Left_ : Right_;
+        const yona::compiler::typechecker::ImportedFunctionDeclarationProjection
+            Contract{TypeScheme({Variable->var_id}, Variable),
+                     {},
+                     yona::model::ResultOwnership::Owned,
+                     yona::model::CallingConvention::DirectYona,
+                     {}};
+        return {{yona::model::BinderOwnerKind::Function,
+                 Identity,
+                 1,
+                 0,
+                 {},
+                 false,
+                 SourceRange::unknown(),
+                 Contract}};
+      }
+      std::vector<yona::compiler::typechecker::ImportedInstanceSig>
+      imported_instances(const std::string &) override {
+        return {};
+      }
+
+    private:
+      MonoTypePtr Left_;
+      MonoTypePtr Right_;
+    } Imports(nullptr, nullptr);
+
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    auto *Left = Checker.arena().fresh_var(0);
+    auto *Right = Checker.arena().fresh_var(0);
+    TypeCheckerTestPeer::addVariable(Checker, Left, 0);
+    TypeCheckerTestPeer::addVariable(Checker, Right, 0);
+    Imports = DuplicateImports(Left, Right);
+    Checker.set_import_type_source(&Imports);
+    TypeCheckerTestPeer::addImportedProjectionModule(Checker, "Test\\B");
+    TypeCheckerTestPeer::addImportedProjectionModule(Checker, "Test\\A");
+    TypeCheckerTestPeer::populateImportedProjectionCatalog(Checker);
+
+    CHECK_FALSE(Diagnostics.has_errors());
+  }
+
+  TEST_CASE("TypeChecker: imported catalog rejects duplicate Promise metadata "
+            "conflicts") {
+    class PromiseImports final
+        : public yona::compiler::typechecker::ImportTypeSource {
+    public:
+      PromiseImports(MonoTypePtr Left, MonoTypePtr Right)
+          : Left_(Left), Right_(Right) {}
+      std::optional<ImportedFnSig>
+      imported_function_sig(const std::string &, const std::string &) override {
+        return std::nullopt;
+      }
+      std::vector<std::string>
+      imported_module_exports(const std::string &) override {
+        return {};
+      }
+      std::vector<yona::compiler::typechecker::ImportedNominalSig>
+      imported_nominals(const std::string &) override {
+        return {};
+      }
+      std::vector<yona::compiler::typechecker::ImportedDeclarationCatalogEntry>
+      imported_declarations(const std::string &Module) override {
+        const yona::model::FunctionDeclarationIdentity Identity{
+            yona::model::SymbolIdentity{
+                yona::model::ModuleIdentity{"Test\\Shared"}, "later"}};
+        const yona::compiler::typechecker::ImportedFunctionDeclarationProjection
+            Contract{TypeScheme(Module == "Test\\A" ? Left_ : Right_),
+                     {},
+                     yona::model::ResultOwnership::Owned,
+                     yona::model::CallingConvention::DirectYona,
+                     {}};
+        return {{yona::model::BinderOwnerKind::Function,
+                 Identity,
+                 0,
+                 0,
+                 {},
+                 false,
+                 SourceRange::unknown(),
+                 Contract}};
+      }
+      std::vector<yona::compiler::typechecker::ImportedInstanceSig>
+      imported_instances(const std::string &) override {
+        return {};
+      }
+
+    private:
+      MonoTypePtr Left_;
+      MonoTypePtr Right_;
+    };
+
+    const auto CheckConflict = [](bool OwnershipMismatch) {
+      DiagnosticEngine Diagnostics;
+      TypeChecker Checker(Diagnostics);
+      auto &Arena = Checker.arena();
+      const auto *Int = Arena.make_con(TyCon::Int);
+      const auto LeftEffects = Arena.effect_solver().empty();
+      const auto RightEffects =
+          OwnershipMismatch ? LeftEffects : testEffects(Arena, {"Async.await"});
+      const auto *Left = Arena.make_promise(
+          Int, yona::model::ResultOwnership::Owned, LeftEffects);
+      const auto *Right = Arena.make_promise(
+          Int,
+          OwnershipMismatch ? yona::model::ResultOwnership::Trivial
+                            : yona::model::ResultOwnership::Owned,
+          RightEffects);
+      PromiseImports Imports(Left, Right);
+      Checker.set_import_type_source(&Imports);
+      TypeCheckerTestPeer::addImportedProjectionModule(Checker, "Test\\B");
+      TypeCheckerTestPeer::addImportedProjectionModule(Checker, "Test\\A");
+      TypeCheckerTestPeer::populateImportedProjectionCatalog(Checker);
+
+      CHECK(Diagnostics.has_errors());
+      CHECK(std::ranges::any_of(Diagnostics.records(), [](const auto &Record) {
+        return Record.message.find("conflicting imported declaration") !=
+               std::string::npos;
+      }));
+    };
+
+    SUBCASE("result ownership") { CheckConflict(true); }
+    SUBCASE("await effect") { CheckConflict(false); }
+  }
+
+  TEST_CASE("TypeChecker: imported skeleton and rich rows must agree on "
+            "generic arity") {
+    class SkeletonAndRich final
+        : public yona::compiler::typechecker::ImportTypeSource {
+    public:
+      explicit SkeletonAndRich(MonoTypePtr Variable) : Variable_(Variable) {}
+      std::optional<ImportedFnSig>
+      imported_function_sig(const std::string &, const std::string &) override {
+        return std::nullopt;
+      }
+      std::vector<std::string>
+      imported_module_exports(const std::string &) override {
+        return {};
+      }
+      std::vector<yona::compiler::typechecker::ImportedNominalSig>
+      imported_nominals(const std::string &) override {
+        return {};
+      }
+      std::vector<yona::compiler::typechecker::ImportedDeclarationCatalogEntry>
+      imported_declarations(const std::string &Module) override {
+        const yona::model::FunctionDeclarationIdentity Identity{
+            yona::model::SymbolIdentity{
+                yona::model::ModuleIdentity{"Test\\Shared"}, "generic"}};
+        if (Module == "Test\\B") {
+          const yona::compiler::typechecker::
+              ImportedFunctionDeclarationProjection Contract{
+                  TypeScheme({Variable_->var_id}, Variable_),
+                  {},
+                  yona::model::ResultOwnership::Owned,
+                  yona::model::CallingConvention::DirectYona,
+                  {}};
+          return {{yona::model::BinderOwnerKind::Function,
+                   Identity,
+                   1,
+                   0,
+                   {},
+                   false,
+                   SourceRange::unknown(),
+                   Contract}};
+        }
+        return {{yona::model::BinderOwnerKind::Function,
+                 Identity,
+                 0,
+                 0,
+                 {},
+                 false,
+                 SourceRange::unknown()}};
+      }
+      std::vector<yona::compiler::typechecker::ImportedInstanceSig>
+      imported_instances(const std::string &) override {
+        return {};
+      }
+
+    private:
+      MonoTypePtr Variable_;
+    } Imports(nullptr);
+
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    auto *Variable = Checker.arena().fresh_var(0);
+    TypeCheckerTestPeer::addVariable(Checker, Variable, 0);
+    Imports = SkeletonAndRich(Variable);
+    Checker.set_import_type_source(&Imports);
+    TypeCheckerTestPeer::addImportedProjectionModule(Checker, "Test\\B");
+    TypeCheckerTestPeer::addImportedProjectionModule(Checker, "Test\\A");
+    TypeCheckerTestPeer::populateImportedProjectionCatalog(Checker);
+
+    CHECK(Diagnostics.has_errors());
+    CHECK(std::ranges::any_of(Diagnostics.records(), [](const auto &Record) {
+      return Record.message.find("type 0 vs 1") != std::string::npos;
+    }));
+  }
+
+  TEST_CASE("TypeChecker: module structural projection owns qualified "
+            "functions and nominal declarations") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Test\Projection
+
+export unwrap
+export type Box
+export trait Reveal
+
+type Box a = Box a deriving Show
+
+trait Reveal a
+    reveal : a -> String
+    describe : a -> String
+    describe value = "default"
+end
+
+instance Reveal Int
+    reveal value = "int"
+end
+
+unwrap (Box value) = let adapt = \x -> x in adapt value
+)",
+                                     "projection-module.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    const yona::model::ModuleIdentity Prelude{"Prelude"};
+    Checker.register_trait("Show", {"a"}, &Prelude);
+    Checker.check_module(Parsed.value().get());
+    REQUIRE_FALSE(Checker.has_direct_errors());
+    CHECK(Checker.structuralProjectionInput().Functions.empty());
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Functions.size() == 4);
+    REQUIRE(Batch.Nominals.size() == 1);
+    REQUIRE(Batch.Traits.size() == 1);
+    REQUIRE(Batch.Instances.size() == 1);
+    REQUIRE(Batch.Derivations.size() == 1);
+    CHECK(Batch.Nominals.front().Key.Module ==
+          yona::model::ModuleIdentity{"Test\\Projection"});
+    CHECK(Batch.Nominals.front().Key.Name == "Box");
+    REQUIRE(Batch.Nominals.front().Constructors.size() == 1);
+    CHECK(Batch.Nominals.front().Constructors.front().Name == "Box");
+    CHECK(Batch.Traits.front().Key.Name == "Reveal");
+    REQUIRE(Batch.Traits.front().Methods.size() == 2);
+    CHECK(Batch.Traits.front().Methods.front().Name == "reveal");
+    REQUIRE(Batch.Traits.front().Methods[1].DefaultTarget.has_value());
+    CHECK(Batch.Instances.front().Trait == Batch.Traits.front().Key);
+    REQUIRE(Batch.Instances.front().Methods.size() == 1);
+    const auto &DefaultTarget =
+        Batch.Traits.front().Methods[1].DefaultTarget->SelectedTarget;
+    const auto &InstanceTarget =
+        Batch.Instances.front().Methods.front().Target.SelectedTarget;
+    const auto projectedFunction = [&](const auto &Target) {
+      return std::ranges::find_if(Batch.Functions, [&](const auto &Function) {
+        return Function.SourceIdentity == Target;
+      });
+    };
+    const auto DefaultFunction = projectedFunction(DefaultTarget);
+    const auto InstanceFunction = projectedFunction(InstanceTarget);
+    REQUIRE(DefaultFunction != Batch.Functions.end());
+    REQUIRE(InstanceFunction != Batch.Functions.end());
+    const auto scope = [&](yona::semantics::ProjectionDeclarationId Id) {
+      return std::ranges::find_if(
+          Batch.Scopes, [&](const auto &Scope) { return Scope.Id == Id; });
+    };
+    REQUIRE(scope(DefaultFunction->Scope) != Batch.Scopes.end());
+    REQUIRE(scope(DefaultFunction->Scope)->Parent ==
+            Batch.Traits.front().Methods[1].Scope);
+    REQUIRE(scope(InstanceFunction->Scope) != Batch.Scopes.end());
+    REQUIRE(scope(InstanceFunction->Scope)->Parent ==
+            Batch.Instances.front().Scope);
+    const auto LocalFunction =
+        std::ranges::find_if(Batch.Functions, [](const auto &Function) {
+          return Function.SourceIdentity &&
+                 std::holds_alternative<yona::model::LocalFunctionIdentity>(
+                     *Function.SourceIdentity);
+        });
+    REQUIRE(LocalFunction != Batch.Functions.end());
+    const auto UnwrapFunction = projectedFunction(
+        yona::model::FunctionDeclarationIdentity{yona::model::SymbolIdentity{
+            yona::model::ModuleIdentity{"Test\\Projection"}, "unwrap"}});
+    REQUIRE(UnwrapFunction != Batch.Functions.end());
+    REQUIRE(scope(LocalFunction->Scope) != Batch.Scopes.end());
+    CHECK(scope(LocalFunction->Scope)->Parent == UnwrapFunction->Scope);
+    CHECK(Batch.Derivations.front().Type == Batch.Nominals.front().Key);
+    CHECK(Batch.Functions.front().SourceIdentity ==
+          std::optional<yona::model::FunctionDeclarationIdentity>{
+              yona::model::SymbolIdentity{
+                  yona::model::ModuleIdentity{"Test\\Projection"}, "unwrap"}});
+    yona::model::TypeTable Types;
+    yona::semantics::StructuralTypeProjection Projection(
+        Types, yona::model::ModuleIdentity{"Test\\Projection"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto Projected = Projection.freezeSemanticBatch(Batch);
+    const auto ProjectionError = Projected
+                                     ? std::string{}
+                                     : Projected.error().front().Path + ": " +
+                                           Projected.error().front().Message;
+    CAPTURE(ProjectionError);
+    REQUIRE(Projected.has_value());
+    CHECK(Projected->Functions.size() == 4);
+    CHECK(Projected->InterfaceSeed.Nominals.size() == 1);
+    CHECK(Projected->InterfaceSeed.Traits.size() == 1);
+    CHECK(Projected->InterfaceSeed.Instances.size() == 1);
+    CHECK(Projected->InterfaceSeed.Derivations.size() == 1);
+  }
+
+  TEST_CASE("TypeChecker: generic instance method projection inherits the "
+            "instance binder without redeclaring it") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Test\GenericProjection
+
+type Box a = Box a
+
+trait Reveal a
+    reveal : a -> String
+end
+
+instance Reveal (Box a)
+    reveal (Box value) = "box"
+end
+)",
+                                     "generic-projection.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.check_module(Parsed.value().get());
+    REQUIRE_FALSE(Checker.has_direct_errors());
+    REQUIRE(Checker.solve_constraints());
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Instances.size() == 1);
+    REQUIRE(Batch.Instances.front().Methods.size() == 1);
+    const auto Target =
+        Batch.Instances.front().Methods.front().Target.SelectedTarget;
+    const auto Function =
+        std::ranges::find_if(Batch.Functions, [&](const auto &Candidate) {
+          return Candidate.SourceIdentity == Target;
+        });
+    REQUIRE(Function != Batch.Functions.end());
+    CHECK(Function->Scheme.quantified_vars.empty());
+
+    yona::model::TypeTable Types;
+    yona::semantics::StructuralTypeProjection Projection(
+        Types, yona::model::ModuleIdentity{"Test\\GenericProjection"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto Projected = Projection.freezeSemanticBatch(Batch);
+    CAPTURE(Projected ? std::string{} : Projected.error().front().Message);
+    REQUIRE(Projected.has_value());
+    const auto ProjectedFunction =
+        std::ranges::find_if(Projected->Functions, [&](const auto &Candidate) {
+          return Candidate.Scope == Function->Scope;
+        });
+    REQUIRE(ProjectedFunction != Projected->Functions.end());
+    REQUIRE(ProjectedFunction->InheritedTypeParameters.size() == 1);
+    CHECK(ProjectedFunction->DeclaredTypeParameters.empty());
+  }
+
+  TEST_CASE("TypeChecker: generic structural instance method annotations keep "
+            "their structural head identity") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Test\StructuralInstances
+
+trait Same a
+    same : a -> a -> Bool
+end
+
+instance Same (Seq a)
+    same : Seq a -> Seq a -> Bool
+    same _ _ = true
+end
+
+
+instance Same (Set a)
+    same : Set a -> Set a -> Bool
+    same _ _ = true
+end
+
+
+instance Same (Dict key value)
+    same : Dict key value -> Dict key value -> Bool
+    same _ _ = true
+end
+
+
+instance Same (Tuple left right)
+    same : (left, right) -> (left, right) -> Bool
+    same _ _ = true
+end
+
+instance Same ByteArray
+    same : ByteArray -> ByteArray -> Bool
+    same _ _ = true
+end
+
+instance Same IntArray
+    same : IntArray -> IntArray -> Bool
+    same _ _ = true
+end
+
+instance Same FloatArray
+    same : FloatArray -> FloatArray -> Bool
+    same _ _ = true
+end
+
+trait SameHeads a b
+    sameHeads : a -> b -> Bool
+end
+
+instance SameHeads (Dict key value) (key, value)
+    sameHeads : Dict key value -> (key, value) -> Bool
+    sameHeads _ _ = true
+end
+)",
+                                     "structural-instances.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.check_module(Parsed->get());
+    CHECK_FALSE(Checker.has_errors());
+  }
+
+  TEST_CASE("TypeChecker: structural projection records resolved perform "
+            "applications after solving") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(\() -> perform State.get ())",
+                                         "projection-perform.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto *Int = Checker.arena().make_con(TyCon::Int);
+    Checker.register_effect("State", "", {{"get", {}, Int}});
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Functions.size() == 1);
+    const auto Perform = std::ranges::find_if(
+        Batch.Functions.front().NodeFacts, [](const auto &Fact) {
+          return Fact.Node &&
+                 Fact.Node->get_type() == yona::ast::AST_PERFORM_EXPR;
+        });
+    REQUIRE(Perform != Batch.Functions.front().NodeFacts.end());
+    REQUIRE(Perform->OperationOccurrence.has_value());
+    const auto *Occurrence =
+        std::get_if<yona::compiler::typechecker::PerformProjection>(
+            &*Perform->OperationOccurrence);
+    REQUIRE(Occurrence);
+    CHECK(Occurrence->Application.Key.Effect ==
+          yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Main"},
+                                      "State"});
+    CHECK(Occurrence->Application.Key.Operation == "get");
+    CHECK(Occurrence->Application.TypeArguments.empty());
+    CHECK(Occurrence->Application.ResultType == Int);
+  }
+
+  TEST_CASE("TypeChecker: a referenced registered foreign operation publishes "
+            "its complete imported contract") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(\() -> perform State.get ())",
+                                         "projection-imported-perform.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto *Int = Checker.arena().make_con(TyCon::Int);
+    const yona::model::ModuleIdentity Remote{"Test\\Remote"};
+    Checker.register_effect("State", "a", {{"get", {}, Int}}, &Remote);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    const yona::model::EffectOperationKey Key{
+        yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Test\\Remote"},
+                                    "State"},
+        "get"};
+    const auto Imported = std::ranges::find_if(
+        Batch.ImportedDeclarations, [&](const auto &Entry) {
+          const auto *Candidate =
+              std::get_if<yona::model::EffectOperationKey>(&Entry.Identity);
+          return Candidate && *Candidate == Key;
+        });
+    REQUIRE(Imported != Batch.ImportedDeclarations.end());
+    REQUIRE(Imported->Operation.has_value());
+    CHECK(Imported->Operation->TypeParameters.size() == 1);
+    CHECK(Imported->Operation->ParameterTypes.empty());
+    CHECK(Imported->Operation->ResultType == Int);
+
+    yona::model::TypeTable Types;
+    yona::semantics::StructuralTypeProjection Projection(
+        Types, yona::model::ModuleIdentity{"Main"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto Result = Projection.freezeSemanticBatch(Batch);
+    CAPTURE(Result ? std::string{}
+                   : Result.error().front().Path + ": " +
+                         Result.error().front().Message);
+    REQUIRE(Result.has_value());
+  }
+
+  TEST_CASE("TypeChecker: a referenced builtin publishes a source-qualified "
+            "complete imported function contract") {
+    yona::parser::Parser Parser;
+    auto Parsed =
+        Parser.parseExpression(R"(typeOf 1)", "projection-builtin.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto &Arena = Checker.arena();
+    auto *Argument = Arena.fresh_var(0);
+    const yona::model::ModuleIdentity Prelude{"Prelude"};
+    Checker.register_builtin_function(
+        "typeOf", Arena.make_arrow(Argument, Arena.make_con(TyCon::String)), 1,
+        &Prelude);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const yona::model::FunctionDeclarationIdentity Identity{
+        yona::model::SymbolIdentity{Prelude, "typeOf"}};
+    const auto &Batch = Checker.structuralProjectionInput();
+    const auto Imported = std::ranges::find_if(
+        Batch.ImportedDeclarations, [&](const auto &Entry) {
+          const auto *Candidate =
+              std::get_if<yona::model::FunctionDeclarationIdentity>(
+                  &Entry.Identity);
+          return Candidate && *Candidate == Identity;
+        });
+    REQUIRE(Imported != Batch.ImportedDeclarations.end());
+    REQUIRE(Imported->Function.has_value());
+    REQUIRE(Imported->Function->Scheme.quantified_vars.size() == 1);
+    CHECK(Imported->Function->CallableContracts.size() == 1);
+  }
+
+  TEST_CASE("TypeChecker: imported function contracts include Arrows nested "
+            "inside containers") {
+    enum class ContainerKind { Sequence, Tuple, Dictionary, Record };
+    struct ContainerCase {
+      std::string_view Name;
+      std::string_view Source;
+      ContainerKind Kind;
+    };
+    constexpr std::array Cases = {
+        ContainerCase{"sequence", R"(consumeCallbacks [(\x -> x)])",
+                      ContainerKind::Sequence},
+        ContainerCase{"tuple", R"(consumeCallbacks ((\x -> x), 1))",
+                      ContainerKind::Tuple},
+        ContainerCase{"dictionary", R"(consumeCallbacks {1: (\x -> x)})",
+                      ContainerKind::Dictionary},
+        ContainerCase{"record",
+                      R"(consumeCallbacks ({ callback = (\x -> x) }))",
+                      ContainerKind::Record}};
+
+    for (const auto &Case : Cases) {
+      CAPTURE(Case.Name);
+      yona::parser::Parser Parser;
+      auto Parsed = Parser.parseExpression(std::string(Case.Source),
+                                           "projection-nested-callback.yona");
+      REQUIRE(Parsed.has_value());
+      DiagnosticEngine Diagnostics;
+      Diagnostics.setSources(Parsed->Sources);
+      TypeChecker Checker(Diagnostics);
+      auto &Arena = Checker.arena();
+      auto *Int = Arena.make_con(TyCon::Int);
+      auto *Callback = Arena.make_arrow(Int, Int);
+      MonoTypePtr Container = nullptr;
+      switch (Case.Kind) {
+      case ContainerKind::Sequence:
+        Container = Arena.make_app("Seq", {Callback});
+        break;
+      case ContainerKind::Tuple:
+        Container = Arena.make_tuple({Callback, Int});
+        break;
+      case ContainerKind::Dictionary:
+        Container = Arena.make_app("Dict", {Int, Callback});
+        break;
+      case ContainerKind::Record:
+        Container = Arena.make_record({{"callback", Callback}});
+        break;
+      }
+      if (Case.Kind == ContainerKind::Dictionary) {
+        Checker.register_trait("Hash", {"a"});
+        Checker.register_instance("Hash", {"Int"});
+        Checker.register_trait("Eq", {"a"});
+        Checker.register_instance("Eq", {"Int"});
+      }
+      const yona::model::ModuleIdentity Remote{"Test\\Remote"};
+      Checker.register_builtin_function(
+          "consumeCallbacks", Arena.make_arrow(Container, Int), 1, &Remote);
+      REQUIRE(Checker.check(Parsed->Expression.get()));
+      REQUIRE(Checker.solve_constraints());
+
+      const auto &Batch = Checker.structuralProjectionInput();
+      const auto Imported = std::ranges::find_if(
+          Batch.ImportedDeclarations, [](const auto &Entry) {
+            const auto *Identity =
+                std::get_if<yona::model::FunctionDeclarationIdentity>(
+                    &Entry.Identity);
+            const auto *Symbol =
+                Identity ? std::get_if<yona::model::SymbolIdentity>(&*Identity)
+                         : nullptr;
+            return Symbol && Symbol->Name == "consumeCallbacks";
+          });
+      REQUIRE(Imported != Batch.ImportedDeclarations.end());
+      REQUIRE(Imported->Function.has_value());
+      CHECK(Imported->Function->CallableContracts.size() == 2);
+      const auto Nested = std::ranges::find_if(
+          Imported->Function->CallableContracts, [&](const auto &Contract) {
+            return Contract.Arrow != Imported->Function->Scheme.body;
+          });
+      REQUIRE(Nested != Imported->Function->CallableContracts.end());
+      CHECK(Nested->Convention == yona::model::CallingConvention::ClosureEntry);
+      const auto RootScope =
+          std::ranges::find_if(Batch.Scopes, [&](const auto &Scope) {
+            return Scope.Id == Batch.Functions.front().Scope;
+          });
+      REQUIRE(RootScope != Batch.Scopes.end());
+      CHECK(std::ranges::any_of(
+          RootScope->CallableContracts, [](const auto &Contract) {
+            return Contract.Arrow && Contract.Arrow->tag == MonoType::Arrow &&
+                   Contract.Arrow->param_type->tag == MonoType::Con &&
+                   Contract.Arrow->param_type->con == TyCon::Int &&
+                   Contract.Arrow->return_type->tag == MonoType::Con &&
+                   Contract.Arrow->return_type->con == TyCon::Int;
+          }));
+
+      // Dictionary freezing additionally requires complete Hash/Eq method
+      // declarations; that independent fixture is covered by the structural
+      // collection-evidence tests. The root scope assertion above is the
+      // propagation contract under test here.
+      if (Case.Kind == ContainerKind::Dictionary)
+        continue;
+
+      yona::model::TypeTable Types;
+      yona::semantics::StructuralTypeProjection Projection(
+          Types, yona::model::ModuleIdentity{"Main"},
+          Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+      const auto Result = Projection.freezeSemanticBatch(Batch);
+      CAPTURE(Result ? std::string{}
+                     : Result.error().front().Path + ": " +
+                           Result.error().front().Message);
+      REQUIRE(Result.has_value());
+    }
+  }
+
+  TEST_CASE("TypeChecker: imported entry ABIs do not leak into nested "
+            "callbacks") {
+    struct ConventionCase {
+      yona::interface::FunctionKind Kind;
+      yona::model::CallingConvention ExpectedRoot;
+    };
+    constexpr std::array Cases = {
+        ConventionCase{yona::interface::FunctionKind::Native,
+                       yona::model::CallingConvention::NativeExtern},
+        ConventionCase{yona::interface::FunctionKind::Io,
+                       yona::model::CallingConvention::AsyncAdapter}};
+
+    for (const auto &Case : Cases) {
+      CAPTURE(static_cast<int>(Case.Kind));
+      yona::parser::Parser Parser;
+      auto Parsed =
+          Parser.parseExpression(R"(consumeCallbacks [(\x -> x)])",
+                                 "projection-imported-entry-abi.yona");
+      REQUIRE(Parsed.has_value());
+      DiagnosticEngine Diagnostics;
+      Diagnostics.setSources(Parsed->Sources);
+      TypeChecker Checker(Diagnostics);
+      yona::interface::Function Function;
+      Function.Name = "consumeCallbacks";
+      Function.ParameterTypes = {"Seq(FUNCTION)"};
+      Function.ReturnType = "INT";
+      Function.Kind = Case.Kind;
+      const yona::model::ModuleIdentity Remote{"Test\\Remote"};
+      Checker.register_interface_function(Function, &Remote);
+      REQUIRE(Checker.check(Parsed->Expression.get()));
+      REQUIRE(Checker.solve_constraints());
+
+      const auto &Declarations =
+          Checker.structuralProjectionInput().ImportedDeclarations;
+      const auto Imported =
+          std::ranges::find_if(Declarations, [](const auto &Entry) {
+            const auto *Identity =
+                std::get_if<yona::model::FunctionDeclarationIdentity>(
+                    &Entry.Identity);
+            const auto *Symbol =
+                Identity ? std::get_if<yona::model::SymbolIdentity>(&*Identity)
+                         : nullptr;
+            return Symbol && Symbol->Name == "consumeCallbacks";
+          });
+      REQUIRE(Imported != Declarations.end());
+      REQUIRE(Imported->Function.has_value());
+      const auto &FunctionContract = *Imported->Function;
+      const auto Root = std::ranges::find(
+          FunctionContract.CallableContracts, FunctionContract.Scheme.body,
+          &yona::compiler::typechecker::CallableTypeContract::Arrow);
+      const auto Nested = std::ranges::find_if(
+          FunctionContract.CallableContracts, [&](const auto &Contract) {
+            return Contract.Arrow != FunctionContract.Scheme.body;
+          });
+      REQUIRE(Root != FunctionContract.CallableContracts.end());
+      REQUIRE(Nested != FunctionContract.CallableContracts.end());
+      CHECK(Root->Convention == Case.ExpectedRoot);
+      CHECK(Nested->Convention == yona::model::CallingConvention::ClosureEntry);
+    }
+  }
+
+  TEST_CASE("TypeChecker: imported function arity does not flatten a returned "
+            "callable") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"((makeCallback 1) 2)",
+                                         "projection-returned-callback.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto &Arena = Checker.arena();
+    auto *Int = Arena.make_con(TyCon::Int);
+    auto *Returned = Arena.make_arrow(Int, Int);
+    const yona::model::ModuleIdentity Remote{"Test\\Remote"};
+    Checker.register_builtin_function(
+        "makeCallback", Arena.make_arrow(Int, Returned), 1, &Remote);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    const auto Import =
+        std::ranges::find_if(Batch.ImportedDeclarations, [](const auto &Entry) {
+          const auto *Identity =
+              std::get_if<yona::model::FunctionDeclarationIdentity>(
+                  &Entry.Identity);
+          const auto *Symbol =
+              Identity ? std::get_if<yona::model::SymbolIdentity>(&*Identity)
+                       : nullptr;
+          return Symbol && Symbol->Name == "makeCallback";
+        });
+    REQUIRE(Import != Batch.ImportedDeclarations.end());
+    REQUIRE(Import->Function.has_value());
+    REQUIRE(Import->Function->CallableContracts.size() == 2);
+    const auto Root = std::ranges::find(
+        Import->Function->CallableContracts, Import->Function->Scheme.body,
+        &yona::compiler::typechecker::CallableTypeContract::Arrow);
+    REQUIRE(Root != Import->Function->CallableContracts.end());
+    CHECK(Root->ParameterOwnerships.size() == 1);
+
+    yona::model::TypeTable Types;
+    yona::semantics::StructuralTypeProjection Projection(
+        Types, yona::model::ModuleIdentity{"Main"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto Result = Projection.freezeSemanticBatch(Batch);
+    CAPTURE(Result ? std::string{}
+                   : Result.error().front().Path + ": " +
+                         Result.error().front().Message);
+    REQUIRE(Result.has_value());
+  }
+
+  TEST_CASE("TypeChecker: perform facts retain the enclosing continuation "
+            "result and exact suffix row") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(
+        R"(\() -> (perform State.get (), perform Log.write ()))",
+        "projection-perform-suffix.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto *Int = Checker.arena().make_con(TyCon::Int);
+    auto *Unit = Checker.arena().make_con(TyCon::Unit);
+    Checker.register_effect("State", "", {{"get", {}, Int}});
+    Checker.register_effect("Log", "", {{"write", {}, Unit}});
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Facts =
+        Checker.structuralProjectionInput().Functions.front().NodeFacts;
+    const auto Fact = std::ranges::find_if(Facts, [](const auto &Candidate) {
+      if (!Candidate.OperationOccurrence)
+        return false;
+      const auto *Perform =
+          std::get_if<yona::compiler::typechecker::PerformProjection>(
+              &*Candidate.OperationOccurrence);
+      return Perform && Perform->Application.Key.Effect.Name == "State";
+    });
+    REQUIRE(Fact != Facts.end());
+    const auto &Perform =
+        std::get<yona::compiler::typechecker::PerformProjection>(
+            *Fact->OperationOccurrence);
+    REQUIRE(Perform.ContinuationResultType->tag == MonoType::MTuple);
+    CHECK(Perform.ContinuationResultType->elements.size() == 2);
+    const auto Suffix =
+        Checker.arena().effect_solver().summarize(Perform.ResumeEffects);
+    CHECK(std::ranges::none_of(Suffix.known_atoms, [&](const auto Atom) {
+      return Checker.arena().effect_atoms().format(Atom) == "State.get";
+    }));
+    CHECK(std::ranges::any_of(Suffix.known_atoms, [&](const auto Atom) {
+      return Checker.arena().effect_atoms().format(Atom) == "Log.write";
+    }));
+  }
+
+  TEST_CASE("TypeChecker: structural projection records handler continuation "
+            "contracts") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(
+\() -> handle perform State.get () with
+  State.get () resume -> resume 1
+end
+)",
+                                         "projection-handler.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto *Int = Checker.arena().make_con(TyCon::Int);
+    Checker.register_effect("State", "", {{"get", {}, Int}});
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Functions.size() == 1);
+    const auto Handler = std::ranges::find_if(
+        Batch.Functions.front().NodeFacts, [](const auto &Fact) {
+          return Fact.Node &&
+                 Fact.Node->get_type() == yona::ast::AST_HANDLER_CLAUSE;
+        });
+    REQUIRE(Handler != Batch.Functions.front().NodeFacts.end());
+    REQUIRE(Handler->OperationOccurrence.has_value());
+    const auto *Occurrence =
+        std::get_if<yona::compiler::typechecker::HandlerClauseProjection>(
+            &*Handler->OperationOccurrence);
+    REQUIRE(Occurrence);
+    CHECK(Occurrence->Application.Key.Operation == "get");
+    CHECK(Occurrence->SourceResumeType->tag == MonoType::Arrow);
+    CHECK(std::ranges::any_of(
+        Batch.Scopes.front().CallableContracts, [&](const auto &Contract) {
+          return Contract.Arrow == Occurrence->SourceResumeType &&
+                 Contract.Convention ==
+                     yona::model::CallingConvention::Continuation;
+        }));
+
+    yona::model::TypeTable Types;
+    yona::semantics::StructuralTypeProjection Projection(
+        Types, yona::model::ModuleIdentity{"Main"},
+        Checker.arena().effect_solver(), Checker.arena().effect_atoms());
+    const auto Projected = Projection.freezeSemanticBatch(Batch);
+    CAPTURE(Projected ? std::string{}
+                      : Projected.error().front().Path + ": " +
+                            Projected.error().front().Message);
+    REQUIRE(Projected.has_value());
+  }
+
+  TEST_CASE("TypeChecker: a source-only handler establishes the canonical "
+            "operation and exact resume contract") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(
+\() -> handle 0 with
+  State.get () resume -> resume 1
+end
+)",
+                                         "projection-source-handler.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Operations.size() == 1);
+    CHECK(Batch.Operations.front().Key.Effect.Name == "State");
+    CHECK(Batch.Operations.front().Key.Operation == "get");
+    REQUIRE(Batch.Functions.size() == 1);
+    const auto Handler = std::ranges::find_if(
+        Batch.Functions.front().NodeFacts, [](const auto &Fact) {
+          return Fact.Node &&
+                 Fact.Node->get_type() == yona::ast::AST_HANDLER_CLAUSE;
+        });
+    REQUIRE(Handler != Batch.Functions.front().NodeFacts.end());
+    REQUIRE(Handler->OperationOccurrence.has_value());
+    const auto *Occurrence =
+        std::get_if<yona::compiler::typechecker::HandlerClauseProjection>(
+            &*Handler->OperationOccurrence);
+    REQUIRE(Occurrence);
+    REQUIRE(std::ranges::any_of(
+        Batch.Scopes.front().CallableContracts, [&](const auto &Contract) {
+          return Contract.Arrow == Occurrence->SourceResumeType &&
+                 Contract.Convention ==
+                     yona::model::CallingConvention::Continuation;
+        }));
+  }
+
+  TEST_CASE("TypeChecker: every compound node records its completed evaluation "
+            "effects") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(
+\() -> let read = \() -> perform State.get () in
+  if true then read () else 0
+)",
+                                         "projection-node-effects.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto *Int = Checker.arena().make_con(TyCon::Int);
+    Checker.register_effect("State", "", {{"get", {}, Int}});
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Facts =
+        Checker.structuralProjectionInput().Functions.front().NodeFacts;
+    const auto HasStateGet = [&](const auto &Fact) {
+      const auto Summary =
+          Checker.arena().effect_solver().summarize(Fact.Effects);
+      return std::ranges::any_of(Summary.known_atoms, [&](const auto Atom) {
+        return Checker.arena().effect_atoms().format(Atom) == "State.get";
+      });
+    };
+    const auto If = std::ranges::find_if(Facts, [](const auto &Fact) {
+      return Fact.Node && Fact.Node->get_type() == yona::ast::AST_IF_EXPR;
+    });
+    const auto Apply = std::ranges::find_if(Facts, [](const auto &Fact) {
+      return Fact.Node && Fact.Node->get_type() == yona::ast::AST_APPLY_EXPR;
+    });
+    REQUIRE(If != Facts.end());
+    REQUIRE(Apply != Facts.end());
+    CHECK(HasStateGet(*If));
+    CHECK(HasStateGet(*Apply));
+  }
+
+  TEST_CASE("TypeChecker: raise publishes MayRaise on the node and enclosing "
+            "callable row") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(\() -> raise "bad")",
+                                         "projection-raise-effects.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+    const auto &Function =
+        Checker.structuralProjectionInput().Functions.front();
+    const auto Raise =
+        std::ranges::find_if(Function.NodeFacts, [](const auto &F) {
+          return F.Node && F.Node->get_type() == yona::ast::AST_RAISE_EXPR;
+        });
+    REQUIRE(Raise != Function.NodeFacts.end());
+    const auto HasMayRaise = [&](EffectRef Effects) {
+      const auto Summary = Checker.arena().effect_solver().summarize(Effects);
+      return std::ranges::any_of(Summary.known_atoms, [&](const auto Atom) {
+        return std::holds_alternative<
+            yona::compiler::typechecker::MayRaiseEffectAtom>(
+            Checker.arena().effect_atoms().at(Atom));
+      });
+    };
+    CHECK(HasMayRaise(Raise->Effects));
+    CHECK(HasMayRaise(Function.Scheme.body->arrow_effect));
+  }
+
+  TEST_CASE("TypeChecker: source-only effect operations create canonical "
+            "declarations and occurrences") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(\x -> perform Console.write x)",
+                                         "projection-source-effect.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Operations.size() == 1);
+    CHECK(Batch.Operations.front().Key ==
+          yona::model::EffectOperationKey{
+              yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Main"},
+                                          "Console"},
+              "write"});
+    CHECK(std::ranges::any_of(
+        Batch.Functions.front().NodeFacts, [](const auto &Fact) {
+          return Fact.OperationOccurrence &&
+                 std::holds_alternative<
+                     yona::compiler::typechecker::PerformProjection>(
+                     *Fact.OperationOccurrence);
+        }));
+  }
+
+  TEST_CASE("TypeChecker: structural projection records ordered scheme "
+            "instantiations") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(
+        R"(let id = \value -> value in (id 1, id "text"))",
+        "projection-instantiation.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Facts =
+        Checker.structuralProjectionInput().Functions.front().NodeFacts;
+    REQUIRE(Checker.structuralProjectionInput().Functions.size() == 2);
+    REQUIRE(Checker.structuralProjectionInput().Scopes.size() >= 2);
+    const auto Local = std::ranges::find_if(
+        Checker.structuralProjectionInput().Functions,
+        [](const auto &Function) {
+          return Function.SourceIdentity &&
+                 std::holds_alternative<yona::model::LocalFunctionIdentity>(
+                     *Function.SourceIdentity) &&
+                 Function.Convention ==
+                     yona::model::CallingConvention::ClosureEntry;
+        });
+    REQUIRE(Local != Checker.structuralProjectionInput().Functions.end());
+    const auto LocalScope = std::ranges::find_if(
+        Checker.structuralProjectionInput().Scopes,
+        [&](const auto &Scope) { return Scope.Id == Local->Scope; });
+    REQUIRE(LocalScope != Checker.structuralProjectionInput().Scopes.end());
+    CHECK(LocalScope->Parent ==
+          std::optional<yona::compiler::typechecker::ProjectionDeclarationId>{
+              Checker.structuralProjectionInput().Functions.front().Scope});
+    std::vector<const yona::compiler::typechecker::NodeSemanticProjection *>
+        Instantiations;
+    for (const auto &Fact : Facts)
+      if (Fact.Instantiation)
+        Instantiations.push_back(&Fact);
+    REQUIRE(Instantiations.size() == 2);
+    REQUIRE(Instantiations[0]->Instantiation->TypeArguments.size() == 1);
+    REQUIRE(Instantiations[1]->Instantiation->TypeArguments.size() == 1);
+    CHECK(Instantiations[0]->Instantiation->Scheme ==
+          Instantiations[1]->Instantiation->Scheme);
+    CHECK(Instantiations[0]->Instantiation->TypeArguments.front()->tag ==
+          MonoType::Con);
+    CHECK(Instantiations[0]->Instantiation->TypeArguments.front()->con ==
+          TyCon::Int);
+    CHECK(Instantiations[1]->Instantiation->TypeArguments.front()->tag ==
+          MonoType::Con);
+    CHECK(Instantiations[1]->Instantiation->TypeArguments.front()->con ==
+          TyCon::String);
+  }
+
+  TEST_CASE("TypeChecker: structural projection records selected trait and "
+            "collection key evidence") {
+    yona::parser::Parser Parser;
+    auto Parsed =
+        Parser.parseExpression(R"((1 == 1, {1, 2}))", "projection-traits.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.register_trait("Hash", {"a"});
+    Checker.register_instance("Hash", {"Int"});
+    Checker.register_trait("Eq", {"a"});
+    Checker.register_instance("Eq", {"Int"});
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Facts =
+        Checker.structuralProjectionInput().Functions.front().NodeFacts;
+    const auto TraitUse = std::ranges::find_if(Facts, [](const auto &Fact) {
+      return Fact.TraitMethodUse.has_value();
+    });
+    REQUIRE(TraitUse != Facts.end());
+    CHECK(
+        TraitUse->TraitMethodUse->Trait ==
+        yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Main"}, "Eq"});
+    CHECK(TraitUse->TraitMethodUse->Method == "eq");
+    CHECK(std::holds_alternative<
+          yona::compiler::typechecker::ResolvedTraitTargetProjection>(
+        TraitUse->TraitMethodUse->Evidence));
+
+    const auto Keys = std::ranges::find_if(
+        Facts, [](const auto &Fact) { return Fact.KeyOperations.has_value(); });
+    REQUIRE(Keys != Facts.end());
+    CHECK(Keys->KeyOperations->Hash.Trait.Name == "Hash");
+    CHECK(Keys->KeyOperations->Hash.Method == "hash");
+    CHECK(Keys->KeyOperations->Equals.Trait.Name == "Eq");
+    CHECK(Keys->KeyOperations->Equals.Method == "eq");
+    REQUIRE(Keys->KeyOperations->Hash.InstanceArguments.size() == 1);
+    CHECK(Keys->KeyOperations->Hash.InstanceArguments.front()->tag ==
+          MonoType::Con);
+    CHECK(Keys->KeyOperations->Hash.InstanceArguments.front()->con ==
+          TyCon::Int);
+    const auto *HashTarget =
+        std::get_if<yona::compiler::typechecker::ResolvedTraitTargetProjection>(
+            &Keys->KeyOperations->Hash.Evidence);
+    REQUIRE(HashTarget);
+    const auto *HashSymbol =
+        std::get_if<yona::model::SymbolIdentity>(&HashTarget->SelectedTarget);
+    REQUIRE(HashSymbol);
+    CHECK(HashSymbol->Module == yona::model::ModuleIdentity{"Main"});
+  }
+
+  TEST_CASE("TypeChecker: collection evidence requires registered Hash and Eq "
+            "instances") {
+    yona::parser::Parser Parser;
+    auto Parsed =
+        Parser.parseExpression(R"({1, 2})", "projection-missing-hash.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.register_trait("Eq", {"a"});
+    Checker.register_instance("Eq", {"Int"});
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    CHECK_FALSE(Checker.solve_constraints());
+    CHECK(Checker.structuralProjectionInput().Functions.empty());
+  }
+
+  TEST_CASE("TypeChecker: open trait obligations publish deferred evidence in "
+            "their owning scheme") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(\value -> value == value)",
+                                         "projection-deferred-trait.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.register_trait("Eq", {"a"});
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Function =
+        Checker.structuralProjectionInput().Functions.front();
+    REQUIRE(Function.Scheme.constraints.size() == 1);
+    const auto Use =
+        std::ranges::find_if(Function.NodeFacts, [](const auto &F) {
+          return F.TraitMethodUse.has_value();
+        });
+    REQUIRE(Use != Function.NodeFacts.end());
+    const auto *Deferred = std::get_if<
+        yona::compiler::typechecker::DeferredTraitEvidenceProjection>(
+        &Use->TraitMethodUse->Evidence);
+    REQUIRE(Deferred);
+    CHECK(
+        Deferred->Constraint.resolved_trait ==
+        yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Main"}, "Eq"});
+  }
+
+  TEST_CASE("TypeChecker: partial applications propagate the remaining "
+            "callable contract") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(
+        R"(let choose = \first second -> second in choose 1)",
+        "projection-partial-callable.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto *Result = Checker.check(Parsed->Expression.get());
+    REQUIRE(Result);
+    REQUIRE(Checker.zonk(Result)->tag == MonoType::Arrow);
+    REQUIRE(Checker.solve_constraints());
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Functions.size() >= 1);
+    REQUIRE(Batch.Functions.front().Scheme.body->tag == MonoType::Arrow);
+    CHECK(std::ranges::any_of(
+        Batch.Scopes.front().CallableContracts, [&](const auto &Contract) {
+          return Contract.Arrow == Batch.Functions.front().Scheme.body;
+        }));
+  }
+
+  TEST_CASE("TypeChecker: source Promise annotations retain explicit result "
+            "and await contracts") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Test\PromiseProjection
+
+later : Promise Int
+later = 1
+)",
+                                     "projection-promise.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.check_module(Parsed->get());
+    REQUIRE_FALSE(Checker.has_errors());
+    REQUIRE(Checker.solve_constraints());
+    const auto &Function =
+        Checker.structuralProjectionInput().Functions.front();
+    REQUIRE(Function.Scheme.body->tag == MonoType::App);
+    CHECK(Function.Scheme.body->type_name == "Promise");
+    CHECK(Function.Scheme.body->promise_result_contract ==
+          yona::model::ResultOwnership::Trivial);
+    CHECK(Checker.arena()
+              .effect_solver()
+              .summarize(Function.Scheme.body->promise_effects)
+              .empty());
+  }
+
+  TEST_CASE("TypeChecker: module externs publish native callable schemes") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Test\ExternProjection
+
+export raw
+extern raw : Int -> String = "raw_impl"
+
+main = raw 1
+)",
+                                     "projection-extern.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.check_module(Parsed->get());
+    REQUIRE_FALSE(Checker.has_errors());
+    REQUIRE(Checker.solve_constraints());
+    const auto &Batch = Checker.structuralProjectionInput();
+    const auto Extern =
+        std::ranges::find_if(Batch.Functions, [](const auto &F) {
+          const auto *Symbol =
+              F.SourceIdentity
+                  ? std::get_if<yona::model::SymbolIdentity>(&*F.SourceIdentity)
+                  : nullptr;
+          return Symbol && Symbol->Name == "raw";
+        });
+    REQUIRE(Extern != Batch.Functions.end());
+    CHECK(Extern->Convention == yona::model::CallingConvention::NativeExtern);
+    CHECK(Extern->Access ==
+          yona::compiler::typechecker::DeclarationVisibility::Public);
+    const auto Scope = std::ranges::find_if(
+        Batch.Scopes, [&](const auto &S) { return S.Id == Extern->Scope; });
+    REQUIRE(Scope != Batch.Scopes.end());
+    REQUIRE_FALSE(Scope->CallableContracts.empty());
+    CHECK(Scope->CallableContracts.front().Convention ==
+          yona::model::CallingConvention::NativeExtern);
+  }
+
+  TEST_CASE("TypeChecker: trait and extern entry ABIs do not leak into nested "
+            "callbacks") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Test\NestedCallableConventions
+
+trait Consume a
+    consume : Seq (Int -> Int) -> Int
+end
+
+extern raw : Seq (Int -> Int) -> Int = "raw_impl"
+
+main = 1
+)",
+                                     "projection-nested-entry-abi.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.check_module(Parsed->get());
+    REQUIRE_FALSE(Checker.has_errors());
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Batch = Checker.structuralProjectionInput();
+    REQUIRE(Batch.Traits.size() == 1);
+    REQUIRE(Batch.Traits.front().Methods.size() == 1);
+    const auto &Method = Batch.Traits.front().Methods.front();
+    const auto MethodScope =
+        std::ranges::find_if(Batch.Scopes, [&](const auto &Scope) {
+          return Scope.Id == Method.Scope;
+        });
+    REQUIRE(MethodScope != Batch.Scopes.end());
+    const auto MethodRoot = std::ranges::find(
+        MethodScope->CallableContracts, Method.Scheme.body,
+        &yona::compiler::typechecker::CallableTypeContract::Arrow);
+    const auto MethodNested = std::ranges::find_if(
+        MethodScope->CallableContracts, [&](const auto &Contract) {
+          return Contract.Arrow != Method.Scheme.body;
+        });
+    REQUIRE(MethodRoot != MethodScope->CallableContracts.end());
+    REQUIRE(MethodNested != MethodScope->CallableContracts.end());
+    CHECK(MethodRoot->Convention == yona::model::CallingConvention::DirectYona);
+    CHECK(MethodNested->Convention ==
+          yona::model::CallingConvention::ClosureEntry);
+
+    const auto Extern =
+        std::ranges::find_if(Batch.Functions, [](const auto &Function) {
+          const auto *Symbol = Function.SourceIdentity
+                                   ? std::get_if<yona::model::SymbolIdentity>(
+                                         &*Function.SourceIdentity)
+                                   : nullptr;
+          return Symbol && Symbol->Name == "raw";
+        });
+    REQUIRE(Extern != Batch.Functions.end());
+    const auto ExternScope =
+        std::ranges::find_if(Batch.Scopes, [&](const auto &Scope) {
+          return Scope.Id == Extern->Scope;
+        });
+    REQUIRE(ExternScope != Batch.Scopes.end());
+    const auto ExternRoot = std::ranges::find(
+        ExternScope->CallableContracts, Extern->Scheme.body,
+        &yona::compiler::typechecker::CallableTypeContract::Arrow);
+    const auto ExternNested = std::ranges::find_if(
+        ExternScope->CallableContracts, [&](const auto &Contract) {
+          return Contract.Arrow != Extern->Scheme.body;
+        });
+    REQUIRE(ExternRoot != ExternScope->CallableContracts.end());
+    REQUIRE(ExternNested != ExternScope->CallableContracts.end());
+    CHECK(ExternRoot->Convention ==
+          yona::model::CallingConvention::NativeExtern);
+    CHECK(ExternNested->Convention ==
+          yona::model::CallingConvention::ClosureEntry);
+  }
+
+  TEST_CASE("TypeChecker: a Promise is awaited only at an explicit value "
+            "demand and carries its await row") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(consume later)",
+                                         "projection-promise-demand.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    auto *Int = Checker.arena().make_con(TyCon::Int);
+    const auto AwaitEffects = testEffects(Checker.arena(), {"Async.await"});
+    auto *Promise = Checker.arena().make_promise(
+        Int, yona::model::ResultOwnership::Trivial, AwaitEffects);
+    TypeCheckerTestPeer::bind(Checker, "later", Promise);
+    TypeCheckerTestPeer::bind(
+        Checker, "consume",
+        Checker.arena().make_arrow(Int, Int,
+                                   Checker.arena().effect_solver().empty()));
+    auto *Result = Checker.check(Parsed->Expression.get());
+    REQUIRE(Result);
+    CHECK(Checker.zonk(Result)->tag == MonoType::Con);
+    CHECK(Checker.zonk(Result)->con == TyCon::Int);
+    REQUIRE(Checker.solve_constraints());
+    const auto Summary = Checker.arena().effect_solver().summarize(
+        TypeCheckerTestPeer::nodeEffects(Checker, Parsed->Expression.get()));
+    CHECK(std::ranges::any_of(Summary.known_atoms, [&](const auto Atom) {
+      return Checker.arena().effect_atoms().format(Atom) == "Async.await";
+    }));
+  }
+
+  TEST_CASE("TypeChecker: contextual sum results record exact injections") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Test\ProjectionSum
+
+export value
+value : Int | String
+value = 1
+)",
+                                     "projection-sum.yona");
+    REQUIRE(Parsed.has_value());
+
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+    Checker.check_module(Parsed->get());
+    REQUIRE_FALSE(Checker.has_errors());
+    REQUIRE(Checker.solve_constraints());
+
+    const auto &Facts =
+        Checker.structuralProjectionInput().Functions.front().NodeFacts;
+    const auto Injection = std::ranges::find_if(
+        Facts, [](const auto &Fact) { return Fact.SumInjection.has_value(); });
+    REQUIRE(Injection != Facts.end());
+    REQUIRE(Injection->SumInjection->Alternative);
+    REQUIRE(Injection->SumInjection->Sum);
+    CHECK(Injection->SumInjection->Alternative->tag == MonoType::Con);
+    CHECK(Injection->SumInjection->Alternative->con == TyCon::Int);
+    CHECK(Injection->SumInjection->Sum->tag == MonoType::Sum);
+    CHECK(Injection->SumInjection->Sum->sum_alternatives.size() == 2);
+  }
 
   TEST_CASE(
       "TypeChecker: recursive nominal function fields retain type arguments") {
@@ -555,6 +2238,37 @@ singleton value = Yield value (\_ -> Nil)
     }
   }
 
+  TEST_CASE("EffectSolver: unrelated derived bodies remain independent of "
+            "previous equality components") {
+    TestEffectSolver solver;
+    for (int Index = 0; Index < 32; ++Index) {
+      const auto Body = solver.derived();
+      const auto Label = solver.labels({"Fx.op" + std::to_string(Index)});
+      REQUIRE(solver.equate(Body, Label) != EffectConstraintResult::Conflict);
+    }
+    const auto FreshBody = solver.derived();
+    const auto FreshLabel = solver.labels({"Fresh.run"});
+    CHECK(solver.include(FreshLabel, FreshBody) ==
+          EffectConstraintResult::Solved);
+    CHECK(solver.summarize(FreshBody).known_labels ==
+          std::vector<std::string>{"Fresh.run"});
+  }
+
+  TEST_CASE("EffectSolver: snapshots do not join independent equalities "
+            "through the shared empty effect") {
+    TestEffectSolver solver;
+    const auto First = solver.derived();
+    const auto Second = solver.derived();
+    REQUIRE(solver.equate(First, solver.empty()) !=
+            EffectConstraintResult::Conflict);
+    REQUIRE(solver.equate(Second, solver.empty()) !=
+            EffectConstraintResult::Conflict);
+
+    const auto Clone = solver.instantiate(solver.freeze(Second));
+    CHECK_FALSE(Clone.references.contains(First));
+    CHECK(Clone.references.contains(Second));
+  }
+
   TEST_CASE(
       "EffectSolver: derived equality constraints are validated jointly") {
     TestEffectSolver solver;
@@ -806,6 +2520,34 @@ singleton value = Yield value (\_ -> Nil)
     CHECK((*FirstArrow)->arrow_effect != (*SecondArrow)->arrow_effect);
   }
 
+  TEST_CASE("TypeChecker: Promise-only effect rows participate in scheme "
+            "closure and fresh instantiation") {
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    auto &Arena = Checker.arena();
+    const auto AwaitEffects = Arena.effect_solver().flexible();
+    auto *Promise =
+        Arena.make_promise(Arena.make_con(TyCon::Int),
+                           yona::model::ResultOwnership::Trivial, AwaitEffects);
+
+    const auto Scheme = TypeCheckerTestPeer::generalize(Checker, Promise, 0);
+    REQUIRE(Scheme.quantified_effect_variables.size() == 1);
+    CHECK(Scheme.quantified_effect_variables.front().Variable ==
+          Arena.effect_solver().summarize(AwaitEffects).tails.front().variable);
+    REQUIRE(Scheme.effect_graph.has_value());
+    CHECK(Scheme.effect_roots.empty());
+
+    auto *First = TypeCheckerTestPeer::instantiate(Checker, Scheme, 0);
+    auto *Second = TypeCheckerTestPeer::instantiate(Checker, Scheme, 0);
+    REQUIRE(First->tag == MonoType::App);
+    REQUIRE(Second->tag == MonoType::App);
+    REQUIRE(First->promise_effects.valid());
+    REQUIRE(Second->promise_effects.valid());
+    CHECK(First->promise_effects != AwaitEffects);
+    CHECK(Second->promise_effects != AwaitEffects);
+    CHECK(First->promise_effects != Second->promise_effects);
+  }
+
   TEST_CASE("Unifier: resolved nominal identity is qualified") {
     TypeArena arena;
     UnionFind uf;
@@ -882,6 +2624,116 @@ end
     CHECK(Imported->resolved_key != Local->body->resolved_key);
   }
 
+  TEST_CASE("TypeChecker: imported Promise descriptors retain explicit result "
+            "ownership and await effects") {
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    ImportedFnSig Signature;
+    Signature.return_descriptor = "Promise(INT)";
+    auto *Imported = TypeCheckerTestPeer::importSignature(
+        Checker, Signature, yona::model::ModuleIdentity{"Other"});
+    REQUIRE(Imported->tag == MonoType::App);
+    CHECK(Imported->type_name == "Promise");
+    REQUIRE(Imported->args.size() == 1);
+    CHECK(Imported->args.front()->tag == MonoType::Con);
+    CHECK(Imported->args.front()->con == TyCon::Int);
+    CHECK(Imported->promise_result_contract ==
+          yona::model::ResultOwnership::Trivial);
+    CHECK(Checker.arena()
+              .effect_solver()
+              .summarize(Imported->promise_effects)
+              .empty());
+  }
+
+  TEST_CASE(
+      "TypeChecker: selective imported constructors keep nominal identity") {
+    yona::parser::Parser Parser;
+    yona::compiler::codegen::Codegen Codegen(
+        "selective_imported_constructor_nominal_identity");
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    const auto LibPath = yona::test::lib_dir().string();
+    Codegen.ModulePaths.push_back(LibPath);
+    Checker.add_module_path(LibPath);
+    YONA_TEST_INSTALL_PRELUDE(Codegen, Parser, Checker);
+
+    auto Parsed = Parser.parseExpression(
+        R"(import stringify, JsonInt from Std\Json in stringify (JsonInt 1))",
+        "<test>");
+    REQUIRE(Parsed.has_value());
+    REQUIRE(Parsed->Expression);
+    REQUIRE(Checker.check(Parsed->Expression.get()) != nullptr);
+    CHECK(Checker.solve_constraints());
+    CHECK_FALSE(Checker.has_errors());
+  }
+
+  TEST_CASE("TypeChecker: module annotations resolve body-imported nominals") {
+    namespace fs = std::filesystem;
+    const auto Directory =
+        fs::temp_directory_path() / "yona_body_imported_nominal";
+    fs::create_directories(Directory);
+    {
+      std::ofstream Interface(Directory / "Other.yonai");
+      Interface << "MODULE Other\n"
+                   "ADT Token 1 0\n"
+                   "  CTOR Token 0 0\n"
+                   "FN make 0 -> ADT(Token)\n";
+    }
+
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseModule(R"(
+module Consumer
+
+value : Token
+value = import make from Other in make
+)",
+                                     "consumer.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    yona::semantics::InterfaceCatalog Catalog({Directory.string()});
+    Checker.add_module_path(Directory.string());
+    Checker.set_import_type_source(&Catalog);
+
+    Checker.check_module(Parsed->get());
+    CHECK_FALSE(Checker.has_errors());
+    REQUIRE(Checker.solve_constraints());
+    const auto &ProjectionBatch = Checker.structuralProjectionInput();
+    CHECK(std::ranges::any_of(
+        ProjectionBatch.ImportedDeclarations, [](const auto &Declaration) {
+          const auto *Key =
+              std::get_if<yona::model::NominalTypeKey>(&Declaration.Identity);
+          return Declaration.Kind == yona::model::BinderOwnerKind::Nominal &&
+                 Key && Key->Module == yona::model::ModuleIdentity{"Other"} &&
+                 Key->Name == "Token" && Declaration.TypeArity == 0;
+        }));
+    CHECK(std::ranges::any_of(
+        ProjectionBatch.ImportedDeclarations, [](const auto &Declaration) {
+          const auto *Identity =
+              std::get_if<yona::model::FunctionDeclarationIdentity>(
+                  &Declaration.Identity);
+          if (!Identity)
+            return false;
+          const auto *Symbol =
+              std::get_if<yona::model::SymbolIdentity>(Identity);
+          return Declaration.Kind == yona::model::BinderOwnerKind::Function &&
+                 Symbol &&
+                 Symbol->Module == yona::model::ModuleIdentity{"Other"} &&
+                 Symbol->Name == "make" && Declaration.TypeArity == 0;
+        }));
+    auto *Type = Checker.zonk(Checker.type_of(Parsed->get()->functions[0]));
+    REQUIRE(Type != nullptr);
+    REQUIRE(Type->tag == MonoType::Arrow);
+    Type = Checker.zonk(Type->return_type);
+    REQUIRE(Type->resolved_key.has_value());
+    CHECK(Type->resolved_key ==
+          yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Other"},
+                                      "Token"});
+
+    std::error_code Error;
+    fs::remove_all(Directory, Error);
+  }
+
   TEST_CASE("TypeChecker: scheme closure includes typed operation arguments") {
     DiagnosticEngine diagnostics;
     TypeChecker checker(diagnostics);
@@ -935,8 +2787,9 @@ end
           secondOperation.TypeArguments.front());
     CHECK(firstOperation.EffectArguments.front() !=
           secondOperation.EffectArguments.front());
-    CHECK_THROWS_AS(checker.serialize_effect_scheme(rootArrow),
-                    std::invalid_argument);
+    const auto Legacy = checker.serialize_effect_scheme(rootArrow);
+    CHECK(Legacy.find("Test\\Fx.generic") != std::string::npos);
+    CHECK(Legacy.find('<') == std::string::npos);
   }
 
   TEST_CASE("TypeChecker: constraint-only effect roots retain phantom ordered "
@@ -1642,6 +3495,21 @@ TEST_SUITE("TypeChecker") { // reopen suite
           "String");
   }
 
+  TEST_CASE("Inference: catch masks MayRaise propagated through a local call") {
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(
+        "let fail xs = raise 42 in try fail [1] catch _ -> 0 end",
+        "catch-local-call.yona");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    Diagnostics.setSources(Parsed->Sources);
+    TypeChecker Checker(Diagnostics);
+
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    CHECK(Checker.solve_constraints());
+    CHECK_FALSE(Checker.has_direct_errors());
+  }
+
   TEST_CASE("Inference: tuple") {
     CHECK(check_expr_str("(1, \"hello\")") == "(Int, String)");
     CHECK(check_expr_str("(1, 2, 3)") == "(Int, Int, Int)");
@@ -2108,6 +3976,27 @@ TEST_SUITE("TypeChecker") { // reopen
     CHECK(missing_eq == 1);
   }
 
+  TEST_CASE("Trait instance heads distinguish equal display names from "
+            "different modules") {
+    yona::parser::Parser parser;
+    const auto parsed = parser.parseExpression("Box 1 == Box 1", "<stream>");
+    REQUIRE(parsed);
+    REQUIRE(parsed->Expression != nullptr);
+
+    yona::compiler::DiagnosticEngine diag;
+    yona::compiler::typechecker::TypeChecker checker(diag);
+    const yona::model::ModuleIdentity DeclaredTypeModule{"TypesB"};
+    const yona::model::ModuleIdentity InstanceHeadModule{"TypesA"};
+    checker.register_adt("Box", {"a"}, {{"Box", 1}},
+                         {{yona::ast::FieldType::simple("a")}}, {},
+                         &DeclaredTypeModule);
+    checker.register_instance("Eq", {"Box"}, {"a"}, {}, &InstanceHeadModule);
+
+    REQUIRE(checker.check(parsed->Expression.get()) != nullptr);
+    CHECK_FALSE(checker.solve_constraints());
+    CHECK(checker.has_errors());
+  }
+
   TEST_CASE("Ordering operator requires an Ord instance") {
     yona::parser::Parser parser;
     std::istringstream stream("(\\x -> x) < (\\y -> y)");
@@ -2275,8 +4164,6 @@ TEST_SUITE("TypeChecker") { // reopen
     // Wrap perform in a handle so no "unhandled" warning
     auto *lit42 = new yona::ast::IntegerExpr(sc, 42);
     // resume 42
-    auto *resume_id = new yona::ast::IdentifierExpr(
-        sc, new yona::ast::NameExpr(sc, "resume"));
     std::vector<std::variant<yona::ast::ExprNode *, yona::ast::ValueExpr *>>
         resume_args;
     resume_args.push_back(static_cast<yona::ast::ExprNode *>(lit42));
@@ -2287,14 +4174,12 @@ TEST_SUITE("TypeChecker") { // reopen
     auto *handler = new yona::ast::HandlerClause(sc, "State", "get", {},
                                                  "resume", resume_call);
     auto *handle = new yona::ast::HandleExpr(sc, perform_node, {handler});
-    auto *main_node = new yona::ast::MainNode(sc, handle);
+    auto main_node = std::make_unique<yona::ast::MainNode>(sc, handle);
 
-    auto *t = checker.check(main_node);
+    auto *t = checker.check(main_node.get());
     REQUIRE(t != nullptr);
     auto *zt = checker.zonk(t);
     CHECK(pretty_print(zt) == "Int");
-
-    delete main_node;
   }
 
   TEST_CASE("Effect: unhandled perform produces warning") {
@@ -2364,8 +4249,6 @@ TEST_SUITE("TypeChecker") { // reopen
 
     // Log.log handler clause: resume ()
     auto *unit_val = new yona::ast::UnitExpr(sc);
-    auto *resume_id = new yona::ast::IdentifierExpr(
-        sc, new yona::ast::NameExpr(sc, "resume"));
     std::vector<std::variant<yona::ast::ExprNode *, yona::ast::ValueExpr *>>
         resume_args;
     resume_args.push_back(static_cast<yona::ast::ExprNode *>(unit_val));
@@ -2381,14 +4264,12 @@ TEST_SUITE("TypeChecker") { // reopen
 
     auto *handle =
         new yona::ast::HandleExpr(sc, perform_node, {op_handler, ret_handler});
-    auto *main_node = new yona::ast::MainNode(sc, handle);
+    auto main_node = std::make_unique<yona::ast::MainNode>(sc, handle);
 
-    auto *t = checker.check(main_node);
+    auto *t = checker.check(main_node.get());
     REQUIRE(t != nullptr);
     auto *zt = checker.zonk(t);
     CHECK(pretty_print(zt) == "Int");
-
-    delete main_node;
   }
 
   TEST_CASE("Effect: applying unhandled perform lambda is E0202") {
@@ -2517,6 +4398,36 @@ end
     CHECK_FALSE(checker.has_direct_errors());
     std::error_code ec;
     fs::remove_all(dir, ec);
+  }
+
+  TEST_CASE("Effect: v1 qualified operation keys retain short-name handler "
+            "compatibility") {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "yona_yonai_qualified_fx_handle";
+    fs::create_directories(dir / "Test");
+    {
+      std::ofstream out(dir / "Test" / "Fx.yonai");
+      out << "MODULE Test\\Fx\n"
+             "FN fetch 1 STRING -> STRING effects Test\\Fx\\Fs.read\n";
+    }
+    yona::parser::Parser Parser;
+    auto Parsed = Parser.parseExpression(R"(
+import fetch from Test\Fx in
+handle fetch "ok" with
+    Fs.read path resume -> resume path
+    return val -> val
+end
+)",
+                                         "<test>");
+    REQUIRE(Parsed.has_value());
+    DiagnosticEngine Diagnostics;
+    TypeChecker Checker(Diagnostics);
+    Checker.add_module_path(dir.string());
+
+    REQUIRE(Checker.check(Parsed->Expression.get()));
+    CHECK_FALSE(Checker.has_direct_errors());
+    std::error_code Error;
+    fs::remove_all(dir, Error);
   }
 
   TEST_CASE("Imported zero-arity FN remains callable with its known effects") {
@@ -2865,6 +4776,16 @@ end
           "TUPLE(Seq(INT),Set(STRING),Dict(INT,BOOL),ADT(Option,FLOAT),"
           "BYTE_ARRAY)");
     CHECK(signature.effect_scheme == "$##");
+
+    auto *qualified = arena.make_app(
+        yona::model::NominalTypeKey{yona::model::ModuleIdentity{"Other"},
+                                    "Token"},
+        {}, "Token");
+    const auto qualified_signature = checker.serialize_interface_signature(
+        arena.make_arrow(qualified, qualified), 1);
+    CHECK(qualified_signature.parameter_descriptors ==
+          std::vector<std::string>{"ADT(Other\\Token)"});
+    CHECK(qualified_signature.return_descriptor == "ADT(Other\\Token)");
 
     auto *legacy_adt = arena.make_app("ADT", {integer});
     const auto forwarded_legacy_adt = checker.serialize_interface_signature(
@@ -3604,8 +5525,8 @@ second n = (perform State.get ()) + first n
         checker.type_of(result.value()->functions[1]));
     REQUIRE(FirstOperations.size() == 1);
     REQUIRE(SecondOperations.size() == 1);
-    CHECK(FirstOperations.front().starts_with("State.get<"));
-    CHECK(SecondOperations.front().starts_with("State.get<"));
+    CHECK(FirstOperations.front() == "State.get");
+    CHECK(SecondOperations.front() == "State.get");
   }
 
   TEST_CASE(
@@ -3790,7 +5711,7 @@ result = use get log 0
         checker.type_of(result.value()->functions[3]));
     REQUIRE(Operations.size() == 2);
     CHECK(Operations[0] == "Log.log");
-    CHECK(Operations[1].starts_with("State.get<"));
+    CHECK(Operations[1] == "State.get");
   }
 
   TEST_CASE("Effect row: three independent callbacks form a "
@@ -3833,7 +5754,7 @@ result = use get log 0
       REQUIRE(Operations.size() == 3);
       CHECK(Operations[0] == "Log.log");
       CHECK(Operations[1] == "Net.ping");
-      CHECK(Operations[2].starts_with("State.get<"));
+      CHECK(Operations[2] == "State.get");
     }
   }
 

@@ -63,6 +63,28 @@ TEST_CASE("Std Gpu preserves typed float channel helper contracts") {
   CHECK(Drain->ReturnType == "INT");
 }
 
+TEST_CASE("Interface catalog counts implicit generic ADT descriptor binders") {
+  const auto LibraryPath = yona::test::repo_root() / "lib";
+  yona::semantics::InterfaceCatalog Catalog({LibraryPath.string()});
+
+  const auto Declarations = Catalog.imported_declarations("Std\\Stream");
+  const auto Iterate =
+      std::ranges::find_if(Declarations, [](const auto &Entry) {
+        const auto *Identity =
+            std::get_if<yona::model::FunctionDeclarationIdentity>(
+                &Entry.Identity);
+        return Identity &&
+               *Identity == yona::model::FunctionDeclarationIdentity{
+                                yona::model::SymbolIdentity{
+                                    yona::model::ModuleIdentity{"Std\\Stream"},
+                                    "iterate"}};
+      });
+
+  REQUIRE(Iterate != Declarations.end());
+  CHECK(Iterate->TypeArity == 3);
+  CHECK(Iterate->EffectArity == 1);
+}
+
 TEST_CASE("Std File exposes canonical typed resource contracts") {
   const auto LibraryPath = yona::test::repo_root() / "lib";
   yona::semantics::InterfaceCatalog Catalog({LibraryPath.string()});

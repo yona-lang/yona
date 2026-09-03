@@ -135,12 +135,17 @@ bool isTypeDescriptor(std::string_view Value) {
 bool isEffectOperation(std::string_view Value) {
   if (Value.empty())
     return false;
+  const auto Dot = Value.rfind('.');
+  if (Dot == std::string_view::npos || Dot == 0 || Dot + 1 == Value.size() ||
+      !isIdentifier(Value.substr(Dot + 1)))
+    return false;
+  const auto Effect = Value.substr(0, Dot);
   std::size_t Start = 0;
-  while (Start <= Value.size()) {
-    const std::size_t End = Value.find('.', Start);
-    const std::string_view Part =
-        Value.substr(Start, End == std::string_view::npos ? Value.size() - Start
-                                                          : End - Start);
+  while (Start <= Effect.size()) {
+    const auto End = Effect.find('\\', Start);
+    const auto Part = Effect.substr(Start, End == std::string_view::npos
+                                               ? Effect.size() - Start
+                                               : End - Start);
     if (!isIdentifier(Part))
       return false;
     if (End == std::string_view::npos)

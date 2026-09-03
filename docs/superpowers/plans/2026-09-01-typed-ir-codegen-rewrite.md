@@ -264,8 +264,11 @@ and `832718332da4210473fb31e017505c9937079122ec40970252c7863395b7a0c1`;
 - Create: `src/Model/CanonicalEncoding.cpp`
 - Create: `include/yona/Semantics/StructuralTypeProjection.h`
 - Create: `src/Semantics/StructuralTypeProjection.cpp`
+- Create: `include/yona/Model/InferenceEffectClosure.h`
+- Create: `src/Model/InferenceEffectClosure.cpp`
 - Create: `test/Model/StructuralTypeTest.cpp`
 - Create: `test/Support/StructuralTypeTestAccess.h`
+- Create: `test/Semantics/StructuralTypeProjectionTest.cpp`
 - Modify: `include/yona/Model/EffectSolver.h`
 - Modify: `include/yona/Model/InferType.h`
 - Modify: `include/yona/Model/TypeArena.h`
@@ -277,6 +280,10 @@ and `832718332da4210473fb31e017505c9937079122ec40970252c7863395b7a0c1`;
 - Modify: `include/yona/Semantics/TypeChecker.h`
 - Modify: `src/Semantics/TypeChecker.cpp`
 - Modify: `test/Semantics/TypeCheckerTest.cpp`
+- Modify: `src/Semantics/InterfaceCatalog.cpp`
+- Modify: `test/Semantics/InterfaceCatalogTest.cpp`
+- Modify: `src/Syntax/Ast.cpp`
+- Modify: `test/Lsp/LspTest.cpp`
 - Modify: `include/yona/Model/ModuleIdentity.h`
 - Modify: `src/Model/ModuleIdentity.cpp`
 - Modify: `include/yona/Semantics/SemanticModel.h`
@@ -317,7 +324,7 @@ focused tests, receive task-scoped review with no open Critical or Important
 finding, and land as its own commit. The final Task 2 review covers the
 aggregate range and the complete focused command.
 
-- [ ] **Step 1: Write structural interning and lifetime tests**
+- [x] **Step 1: Write structural interning and lifetime tests**
 
 Add tests with these assertions:
 
@@ -413,7 +420,7 @@ borrowed inference Arrow under two distinct legal ownership/calling-convention
 contracts and require distinct structural FunctionType IDs; also assert stable
 ranged error codes for every projection rejection above.
 
-- [ ] **Step 2: Run the tests and confirm missing structural APIs**
+- [x] **Step 2: Run the tests and confirm missing structural APIs**
 
 Run:
 
@@ -425,7 +432,7 @@ cmake --build --preset build-debug-linux --target tests -j2
 Expected: compilation fails because `StructuralType.h`, `TypeTable`, and the
 new `SemanticModel` accessors do not exist.
 
-- [ ] **Step 3: Implement the immutable structural vocabulary**
+- [x] **Step 3: Implement the immutable structural vocabulary**
 
 Define the core public records exactly once in `StructuralType.h`:
 
@@ -693,6 +700,11 @@ source-nameable or an outer v2 root. Public `Sender a` and `Receiver a` are
 distinct parameterized ResourceTypes whose manifest representation selects
 the CHANNEL ABI kind; qualified key plus complete arguments therefore encode
 both endpoint role and payload type without an interchangeable raw handle.
+Task 2 enforces that boundary by accepting canonical `Channel<T>` graphs and
+rejecting bare source carriers; it deliberately leaves the checked-in v1
+`Std\\Channel` source/artifact and frozen legacy-oracle snapshots unchanged.
+Task 15 owns the live `Sender a`/`Receiver a` resource rewrite and v2 artifact
+generation, and Task 17 removes the raw compatibility aliases.
 
 struct EffectTailProjection {
   EffectVariableId Variable;
@@ -870,6 +882,20 @@ publication. Its closure validation rejects unknown declarations, wrong
 nominal/resource arity, conflicting resource policy, and a runtime-reachable
 resource without policy. Tests that exercise wrong arity call this boundary,
 not raw table interning.
+
+An imported declaration admitted by a selective import, wildcard import, or
+re-export carries the complete structural contract available at that boundary:
+function scheme and callable ownership/convention records, operation binders,
+signature and residual effects, or resource binder and ABI policy. The
+registered availability catalog remains distinct from the declarations
+admitted to one module; unrelated registered Prelude entries do not become
+that module's projection input. Projection validates and interns every admitted
+complete row, including unused phantom binders, and referenced registered
+intrinsics, before publication. The unversioned v1 interface remains a
+deliberately isolated key-only compatibility boundary until Tasks 15 and 17;
+only atoms decoded from v1 may use the temporary key-only handler bridge, while
+source and v2-ready structural operation applications always match qualified
+identity and ordered arguments exactly.
 
 Allocation/reserve failure and hash-collision tests use only
 `test/Support/StructuralTypeTestAccess.h`. The RAII access object installs a
@@ -1346,7 +1372,7 @@ and runtime operation/residual-row recursion is represented later by Task
 Extend `ModuleIdentity` with value equality, lexicographic ordering, and
 `ModuleIdentityHasher`; its constructor remains the sole validation boundary.
 
-- [ ] **Step 4: Project solved inference graphs once per semantic model**
+- [x] **Step 4: Project solved inference graphs once per semantic model**
 
 Replace the effect solver's lossy display strings with opaque solver atoms.
 The solver deliberately remains ignorant of semantic types:
@@ -1630,6 +1656,7 @@ struct FunctionSchemeProjection {
   DeclarationVisibility Access;
   std::span<const NodeSemanticProjection> NodeFacts;
   SourceRange Range;
+  const ast::AstNode *SourceOwner;
 };
 struct OperationSchemeProjection {
   ProjectionDeclarationId Scope;
@@ -1710,6 +1737,43 @@ struct DeriveRequestProjection {
   std::span<const model::NominalTypeKey> Traits;
   SourceRange Range;
 };
+struct ImportedFunctionDeclarationProjection {
+  compiler::typechecker::TypeScheme Scheme;
+  std::vector<model::ParameterOwnership> ParameterOwnerships;
+  model::ResultOwnership ResultContract;
+  model::CallingConvention Convention;
+  std::vector<CallableTypeContract> CallableContracts;
+};
+struct ImportedOperationDeclarationProjection {
+  std::vector<compiler::typechecker::TypeId> TypeParameters;
+  std::vector<compiler::typechecker::QuantifiedEffectVariable> EffectVariables;
+  std::vector<compiler::typechecker::Constraint> Constraints;
+  std::vector<compiler::typechecker::MonoTypePtr> ParameterTypes;
+  std::vector<model::ParameterOwnership> ParameterOwnerships;
+  compiler::typechecker::MonoTypePtr ResultType;
+  model::ResultOwnership ResultContract;
+  compiler::typechecker::EffectRef Effects;
+  std::vector<CallableTypeContract> CallableContracts;
+};
+struct ImportedResourceDeclarationProjection {
+  std::vector<compiler::typechecker::TypeId> TypeParameters;
+  model::ResourceAbiKind AbiKind;
+  model::ResourceShareability Shareability;
+  std::optional<std::string> TryRetainNativeSymbol;
+  std::string ReleaseNativeSymbol;
+};
+struct ImportedDeclarationCatalogEntry {
+  model::BinderOwnerKind Kind;
+  ProjectionDeclarationIdentity Identity;
+  std::size_t TypeArity;
+  std::size_t EffectArity;
+  std::vector<std::string> TraitMethods;
+  bool Derivable;
+  SourceRange Range;
+  std::optional<ImportedFunctionDeclarationProjection> Function;
+  std::optional<ImportedOperationDeclarationProjection> Operation;
+  std::optional<ImportedResourceDeclarationProjection> Resource;
+};
 struct SemanticProjectionBatch {
   std::span<const DeclarationScopeProjection> Scopes;
   std::span<const FunctionSchemeProjection> Functions;
@@ -1719,6 +1783,9 @@ struct SemanticProjectionBatch {
   std::span<const TraitDeclarationProjection> Traits;
   std::span<const TraitInstanceProjection> Instances;
   std::span<const DeriveRequestProjection> Derivations;
+  std::span<const ImportedDeclarationCatalogEntry> ImportedDeclarations;
+  const ast::AstNode *SourceRoot;
+  SourceRange SourceExtent;
 };
 
 // The returned spans borrow checker-owned projection vectors and remain valid
@@ -2207,7 +2274,7 @@ recorded resume row reinstalls the handler around resumed body execution.
 Ownership facts mark the resume binding linear and reject duplication or a
 second application rather than promising multi-shot cloning.
 
-- [ ] **Step 5: Wire components and verify**
+- [x] **Step 5: Wire components and verify**
 
 Add `StructuralType.cpp` and `CanonicalEncoding.cpp` to `yona_model`,
 projection to `yona_semantics`, and both tests to `tests`, then run:
@@ -2222,7 +2289,17 @@ git diff --check
 Expected: all focused cases pass; `yona_interface` still links only
 `yona_model` and does not acquire a Typed IR dependency.
 
-- [ ] **Step 6: Commit and review each structural sub-milestone**
+Completion evidence (2026-09-04): after consolidated remediation, the
+standalone Task 2D semantic gate passes 370/370 cases (1,817 assertions), the
+complete integrated executable passes 977/977 cases (183,933 assertions), and
+the same standalone gate passes under ASan+LSan/UBSan with the shared LLVM
+aggregate. The complete debug preset and the isolated LLVM link-mode contract
+also build/pass. `git diff --check` is clean. The repository-wide GCC `-Werror`
+configuration remains blocked before Task 2 sources by pre-existing warnings
+in `Types.h`, `Ast.cpp`, and `Lexer.cpp`; the normal Clang build, focused
+target, integrated executable, and sanitizer target are clean.
+
+- [x] **Step 6: Commit and review each structural sub-milestone**
 
 ```bash
 git add include/yona/Model/StructuralType.h src/Model/StructuralType.cpp \

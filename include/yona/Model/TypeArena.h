@@ -44,6 +44,12 @@ public:
                        std::vector<MonoTypePtr> Arguments,
                        std::string DisplayName = {});
 
+  /// Create a Promise whose result ownership and complete await-effect row
+  /// were established by inference.
+  MonoTypePtr make_promise(MonoTypePtr Success,
+                           model::ResultOwnership ResultContract,
+                           EffectRef AwaitEffects);
+
   /// Create a tuple type.
   MonoTypePtr make_tuple(std::vector<MonoTypePtr> elems);
 

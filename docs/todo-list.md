@@ -11,6 +11,20 @@ shipped-feature status live in `CHANGELOG.md` and the corresponding plans under
 Program of record:
 [2026-09-01-typed-ir-codegen-rewrite-design.md](./superpowers/specs/2026-09-01-typed-ir-codegen-rewrite-design.md).
 
+- [ ] **V1 interface effect rows cannot preserve operation application
+  arguments.** Repro: export calls to two instantiations such as
+  `Fs.read Int` and `Fs.read String`; their unversioned `.yonai` rows both
+  retain only the qualified `Fs.read` key. The temporary v1 handler bridge is
+  deliberately key-only; exact ordered type/effect arguments require the v2
+  interface cutover in Tasks 15 and 17.
+
+- [ ] **Replace the legacy raw `Std\\Channel` surface during the v2 interface
+  cutover.** Repro: the checked-in v1 source/artifact still exposes the
+  unparameterized raw channel handle; Task 2 deliberately accepts only the
+  compiler-internal `Channel<T>` graph and rejects bare carriers. Task 15 must
+  introduce parameterized `Sender a`/`Receiver a` resource declarations and
+  Task 17 must remove the legacy aliases without modifying oracle snapshots.
+
 - [ ] **Dynamic closure arity cannot implement general currying.** Repro:
   under-apply a runtime-selected closure with more than one remaining argument;
   the loaded arity is treated as non-constant and every remaining argument is
@@ -79,11 +93,6 @@ Program of record:
 - [ ] **Generator conditions are not required to be Bool.** Repro: use an
   `Int`, String, or aggregate as a collection-comprehension condition;
   inference records its type without unifying it with Bool.
-
-- [ ] **The Linux Prelude artifact build aborts in `yonac`.** Repro:
-  `cmake --preset x64-debug-linux && cmake --build --preset build-debug-linux -j2`
-  (also x64 Release) aborts while building `artifacts/Prelude.o` with `double
-  free or corruption (!prev)` followed by `pure virtual method called`.
 
 - [ ] **Windows `Std\Convert` rejects the Bool case expected by its conformance
   suite.** `foundation_Convert_test` reports one failure for “Parse Bool is

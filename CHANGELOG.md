@@ -4,11 +4,50 @@
 
 ### Added
 
+- Added checker-owned structural semantic projection with scoped type/effect
+  binders, qualified declarations and evidence, explicit call ownership, and a
+  durable `SemanticModel` snapshot independent of `TypeChecker` lifetime.
+
 - Added version 2 canonical structural graph and module-table encoding with
   alpha-normalized binders, strict fresh-domain decoding, deterministic
   remaps, and complete-byte fingerprints.
 
 ### Fixed
+
+- Structural semantic projection now publishes only committed, model-owned
+  IDs; validates source-owned AST ranges and complete imported function,
+  operation, and resource contracts; checks trait targets after structural
+  substitution, including every nested callable ABI; preserves qualified
+  generic instance heads and aliases; and normalizes native array/channel
+  applications. Promise-only effect rows remain in generalized schemes,
+  imported operation binders and duplicate catalog rows are validated, and
+  derive facts cannot escape their source extent. Handler masks
+  compare exact typed operation applications, with key-only matching confined
+  to decoded v1 interface atoms, while `try` boundaries consume propagated
+  raise effects and foreign effect references produce stable diagnostics.
+  Nested callbacks keep the closure-entry ABI independently of their enclosing
+  declaration, and Promise duplicates compare result ownership and await rows.
+
+- LLVM packages configured for the shared aggregate now remain consistently
+  shared when Yona links the in-process LLD backend, avoiding duplicate LLVM
+  global teardown under sanitizers. LLVM-consuming shared-library tools now
+  declare their direct aggregate dependency as well. Generator parsing
+  transfers identifier ownership without leaking its pattern wrapper, and
+  effect-test AST roots use RAII.
+
+- Frozen effect schemes now traverse only symbolic equality components, so a
+  shared concrete empty row cannot geometrically copy unrelated prior schemes.
+  Prelude semantic analysis consequently remains bounded.
+
+- Interface and annotation inference now predeclare and preserve qualified
+  nominal and effect-operation identities, including generic ADT, tuple, and
+  builtin-array instance heads. This restores YLS, TraitLaws, Prelude, and
+  qualified-effect interface checking without unresolved-name aliases.
+
+- Callable ownership and calling-convention facts now follow selected schemes
+  and expression results through bindings and control flow. LSP semantic-model
+  refresh no longer infers a callable contract from Arrow shape or dereferences
+  a missing explicit contract.
 
 - Canonical structural encoding now validates alpha-normalized binders,
   including phantom parameters, against the allocating type-table domain and

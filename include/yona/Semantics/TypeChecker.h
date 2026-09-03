@@ -15,6 +15,7 @@
 #include "yona/Model/TypeArena.h"
 #include "yona/Model/TypeEnv.h"
 #include "yona/Model/Types.h"
+#include "yona/Semantics/StructuralTypeProjection.h"
 #include "yona/Semantics/Unification.h"
 #include "yona/Semantics/UnionFind.h"
 #include "yona/Support/Diagnostic.h"
@@ -44,6 +45,8 @@ struct ImportedFnSig {
   /// Canonical normalized effect graph for every arrow in the imported
   /// source type. Empty means the row has only its normalized summary.
   std::string effect_scheme;
+  std::vector<bool> borrowed_parameters;
+  model::CallingConvention convention = model::CallingConvention::DirectYona;
 };
 
 /// Complete imported instance head. `type_names` are the concrete head
@@ -54,6 +57,11 @@ struct ImportedInstanceSig {
   std::vector<std::string> type_names;
   std::vector<std::string> type_params;
   std::vector<std::pair<std::string, std::string>> constraints;
+};
+
+struct ImportedNominalSig {
+  std::string name;
+  std::vector<std::string> type_parameters;
 };
 
 /// Supplies canonical imported function and instance contracts to semantics.
@@ -69,6 +77,13 @@ public:
                         const std::string &name) = 0;
   virtual std::vector<std::string>
   imported_module_exports(const std::string &module_fqn) = 0;
+  virtual std::vector<ImportedNominalSig>
+  imported_nominals(const std::string &module_fqn) = 0;
+  /// Return the fully qualified declaration-domain seed owned by the source.
+  /// The checker copies every entry into its projection storage before this
+  /// callback returns to a client-visible batch.
+  virtual std::vector<ImportedDeclarationCatalogEntry>
+  imported_declarations(const std::string &module_fqn) = 0;
   virtual std::vector<ImportedInstanceSig>
   imported_instances(const std::string &module_fqn) = 0;
 };
@@ -90,6 +105,7 @@ class TypeChecker {
 public:
   /// Retain a reference to diag, which must outlive this checker.
   explicit TypeChecker(DiagnosticEngine &diag);
+  ~TypeChecker();
 
   /// When set, `ImportExpr` / wildcard bind `.yonai` Linear overlays. src is
   /// borrowed until replaced or reset with null.
@@ -132,11 +148,14 @@ public:
                const std::vector<std::string> &type_params,
                const std::vector<std::pair<std::string, int>> &constructors,
                const std::vector<std::vector<ast::FieldType>> &field_types,
-               const std::vector<std::vector<std::string>> &field_names = {});
+               const std::vector<std::vector<std::string>> &field_names = {},
+               const model::ModuleIdentity *declaration_module = nullptr);
 
   /// Register a trait method (binds as polymorphic with constraint).
-  void register_trait(const std::string &trait_name,
-                      std::vector<std::string> type_params);
+  void
+  register_trait(const std::string &trait_name,
+                 std::vector<std::string> type_params,
+                 const model::ModuleIdentity *declaration_module = nullptr);
   void register_trait_method(const std::string &trait_name,
                              const std::string &method_name,
                              MonoTypePtr method_type);
@@ -146,13 +165,18 @@ public:
   /// Register a polymorphic compiler/Prelude function without inventing a
   /// trait obligation. This is distinct from `register_trait_method`:
   /// ordinary imported functions are not members of a synthetic trait.
-  void register_builtin_function(const std::string &function_name,
-                                 MonoTypePtr function_type);
+  void register_builtin_function(
+      const std::string &function_name, MonoTypePtr function_type,
+      std::size_t visible_parameter_count,
+      const model::ModuleIdentity *source_module = nullptr);
 
   /// Register one canonical interface function in the implicit root scope.
   /// The function contract is copied into an owned type scheme; no reference
   /// to Function is retained.
-  void register_interface_function(const interface::Function &Function);
+  void register_interface_function(
+      const interface::Function &Function,
+      const model::ModuleIdentity *source_module = nullptr,
+      const std::unordered_set<std::string> *source_nominals = nullptr);
   void register_trait_superclass(const std::string &trait_name,
                                  const std::string &superclass_name);
 
@@ -160,14 +184,16 @@ public:
   void register_instance(
       const std::string &trait_name, std::vector<std::string> type_names,
       std::vector<std::string> type_params = {},
-      std::vector<std::pair<std::string, std::string>> constraints = {});
+      std::vector<std::pair<std::string, std::string>> constraints = {},
+      const model::ModuleIdentity *declaration_module = nullptr);
 
   /// Register an effect declaration with its operations.
   /// Each operation is (name, param_types, return_type).
   void register_effect(
       const std::string &effect_name, const std::string &type_param,
       const std::vector<std::tuple<std::string, std::vector<MonoTypePtr>,
-                                   MonoTypePtr>> &operations);
+                                   MonoTypePtr>> &operations,
+      const model::ModuleIdentity *declaration_module = nullptr);
 
   /// Solve deferred trait constraints. Returns false on unsatisfied
   /// constraints.
@@ -232,6 +258,14 @@ public:
     return unhandled_effect_locations_;
   }
 
+  /// Borrow the completed structural-projection input recorded by this
+  /// checker. Every span points into checker-owned storage and remains valid
+  /// only until the next non-const checker operation or checker destruction.
+  /// A new check keeps this batch unpublished until solve_constraints()
+  /// succeeds, so consumers cannot observe provisional inference state.
+  [[nodiscard]] const SemanticProjectionBatch &
+  structuralProjectionInput() const noexcept;
+
   void set_require_effect_free(bool value) { require_effect_free_ = value; }
   bool has_unknown_effect_rows() const { return has_unknown_effect_rows_; }
 
@@ -294,7 +328,35 @@ private:
   MonoTypePtr instantiate(const TypeScheme &scheme, int level,
                           std::vector<MonoTypePtr> *TypeArguments = nullptr,
                           std::vector<EffectRef> *EffectArguments = nullptr);
-  MonoTypePtr instantiate_binding(const TypeScheme &scheme, int level);
+  MonoTypePtr
+  instantiate_binding(const TypeScheme &scheme, int level,
+                      std::vector<MonoTypePtr> *TypeArguments = nullptr,
+                      std::vector<EffectRef> *EffectArguments = nullptr);
+  std::vector<CallableTypeContract>
+  remap_callable_contracts(MonoTypePtr Source, MonoTypePtr Destination,
+                           std::span<const CallableTypeContract> Contracts);
+  std::vector<CallableTypeContract> interface_callable_contracts(
+      MonoTypePtr Type, const std::vector<bool> &Borrowed,
+      std::size_t VisibleParameterCount, model::CallingConvention Convention,
+      SourceRange Range);
+  ImportedFunctionDeclarationProjection imported_function_declaration(
+      const TypeScheme &Scheme, const std::vector<bool> &Borrowed,
+      std::size_t VisibleParameterCount, model::CallingConvention Convention,
+      SourceRange Range);
+  std::vector<CallableTypeContract>
+  declaration_callable_contracts(std::span<MonoTypePtr const> Roots,
+                                 model::CallingConvention Convention,
+                                 SourceRange Range);
+  void propagate_callable_contracts(ast::AstNode *Destination,
+                                    const ast::AstNode *Source,
+                                    MonoTypePtr DestinationType);
+  void merge_callable_contracts(ast::AstNode *Destination,
+                                const ast::AstNode *Source,
+                                MonoTypePtr DestinationType);
+  void
+  refine_callable_contract_ownership(std::span<CallableTypeContract> Contracts);
+  std::vector<Constraint>
+  constraints_for_function(const ast::FunctionExpr *Function);
 
   /// Collect free type variables with level > given level.
   void collect_free_vars(MonoTypePtr type, int level,
@@ -317,10 +379,9 @@ private:
 
   void include_ambient_effect(EffectRef effect, const SourceRange &loc,
                               const std::string &context);
+  void include_evaluation_effect(EffectRef effect);
   bool materialize_effect_masks(EffectRef effect, const SourceRange &loc,
                                 const std::string &context);
-  void collect_effect_roots(MonoTypePtr type,
-                            std::vector<SchemeEffectRoot> &roots);
   EffectAtomId
   intern_operation_atom(const model::EffectOperationKey &Key,
                         std::vector<MonoTypePtr> TypeArguments = {},
@@ -329,11 +390,24 @@ private:
                                                 std::string_view OperationName);
   [[nodiscard]] std::optional<model::NominalTypeKey>
   resolved_nominal_key(std::string_view TypeName) const;
+  void register_imported_nominals(const std::string &ModuleFqn);
   [[nodiscard]] model::NominalTypeKey
   resolved_trait_key(std::string_view TraitName) const;
 
   /// Record the inferred type for an AST node.
   void record(ast::AstNode *node, MonoTypePtr type);
+  MonoTypePtr constrain_contextual_type(ast::AstNode *Node, MonoTypePtr Actual,
+                                        MonoTypePtr Expected,
+                                        const SourceRange &Range,
+                                        const std::string &Context);
+  void refreshStructuralProjection(ast::AstNode *Root, MonoTypePtr RootType,
+                                   std::size_t VisibleParameterCount = 0);
+  void refreshModuleStructuralProjection(
+      ast::ModuleDecl *Module,
+      const std::vector<std::pair<ast::FunctionExpr *, MonoTypePtr>>
+          &Functions);
+  void populateImportedProjectionCatalog(SourceRange Range);
+  void begin_check_session();
 
   /// Map operator AST type to operator name string for env lookup.
   static std::string op_name(ast::AstNodeType type);
@@ -362,9 +436,12 @@ private:
   std::unordered_map<ast::AstNode *, MonoTypePtr> type_map_;
 
   struct InstanceContract {
+    model::ModuleIdentity module;
     std::vector<std::string> type_names;
     std::vector<std::string> type_params;
     std::vector<std::pair<std::string, std::string>> constraints;
+    std::vector<MonoTypePtr> structural_heads;
+    std::vector<MonoTypePtr> structural_parameters;
   };
   /// Trait name → deterministic set of complete visible instance heads.
   std::unordered_map<std::string, std::vector<InstanceContract>>
@@ -374,16 +451,28 @@ private:
   std::unordered_map<std::string, std::vector<std::string>> adt_type_params_;
   model::ModuleIdentity current_module_{"Main"};
   std::unordered_map<std::string, model::NominalTypeKey> nominal_keys_;
+  std::unordered_set<std::string> ambiguous_nominal_names_;
+  std::unordered_set<std::string> registered_import_modules_;
   std::unordered_map<std::string, model::NominalTypeKey> trait_keys_;
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+      trait_methods_;
 
   /// Deferred trait constraints gathered during inference.
   struct DeferredConstraint {
+    enum class EvidenceRole {
+      TraitMethod,
+      CollectionHash,
+      CollectionEquals,
+      None
+    };
     std::string trait_name;
     std::optional<model::NominalTypeKey> resolved_trait;
     std::vector<MonoTypePtr> types;
     SourceRange loc;
     std::string context;
-    const ast::ApplyExpr *origin = nullptr;
+    const ast::AstNode *origin = nullptr;
+    const ast::FunctionExpr *owning_function = nullptr;
+    EvidenceRole evidence_role = EvidenceRole::TraitMethod;
 
     DeferredConstraint(std::string name, MonoTypePtr type, SourceRange source,
                        std::string detail)
@@ -403,6 +492,66 @@ private:
   std::vector<DeferredConstraint> deferred_constraints_;
   std::unordered_map<const ast::ApplyExpr *, SelectedTraitInstance>
       selected_trait_instances_;
+  std::unordered_map<const ast::AstNode *, TraitMethodSelectionProjection>
+      trait_method_uses_;
+  std::unordered_map<const ast::AstNode *, MonoTypePtr> collection_key_types_;
+  std::unordered_map<const ast::AstNode *, CollectionKeyOperationsProjection>
+      collection_key_operations_;
+  std::unordered_map<const ast::AstNode *, SumInjectionProjection>
+      sum_injections_;
+  std::unordered_map<const ast::AstNode *, EffectRef> node_effects_;
+  std::unordered_map<const ast::AstNode *, OperationOccurrenceProjection>
+      operation_occurrences_;
+  std::unordered_map<const ast::AstNode *, EffectAtomId> operation_atoms_;
+  std::unordered_map<const ast::AstNode *, SchemeInstantiationProjection>
+      instantiations_;
+  std::unordered_map<MonoTypePtr, SchemeIdentity> scheme_identities_;
+  std::unordered_map<const ast::FunctionExpr *,
+                     std::vector<CallableTypeContract>>
+      function_callable_contracts_;
+  std::unordered_map<MonoTypePtr, std::vector<CallableTypeContract>>
+      scheme_callable_contracts_;
+  std::unordered_map<const ast::AstNode *, std::vector<CallableTypeContract>>
+      expression_callable_contracts_;
+  std::unordered_map<const ast::FunctionExpr *, TypeScheme> function_schemes_;
+  std::unordered_map<const ast::FunctionExpr *, MonoTypePtr>
+      projection_function_types_;
+  std::unordered_map<const ast::FunctionExpr *,
+                     model::FunctionDeclarationIdentity>
+      projection_function_identities_;
+  std::unordered_map<const ast::FunctionExpr *, const ast::TraitDeclNode *>
+      trait_default_owners_;
+  std::unordered_map<const ast::FunctionExpr *, const ast::InstanceDeclNode *>
+      instance_method_owners_;
+  std::unordered_map<const ast::TraitDeclNode *, std::vector<MonoTypePtr>>
+      projection_trait_type_parameters_;
+  struct NominalDeclarationSeed {
+    std::vector<MonoTypePtr> TypeParameters;
+    std::vector<std::vector<MonoTypePtr>> ConstructorFields;
+    std::vector<CallableTypeContract> CallableContracts;
+  };
+  std::unordered_map<const ast::AdtDeclNode *, NominalDeclarationSeed>
+      projection_nominal_declarations_;
+  struct TraitMethodDeclarationSeed {
+    TypeScheme Scheme;
+    std::vector<model::ParameterOwnership> ParameterOwnerships;
+    model::ResultOwnership ResultContract = model::ResultOwnership::Trivial;
+    std::vector<CallableTypeContract> CallableContracts;
+  };
+  std::unordered_map<const ast::TraitDeclNode *,
+                     std::vector<TraitMethodDeclarationSeed>>
+      projection_trait_methods_;
+  struct ExternDeclarationSeed {
+    const ast::ExternDeclExpr *Node = nullptr;
+    TypeScheme Scheme;
+    std::vector<model::ParameterOwnership> ParameterOwnerships;
+    model::ResultOwnership ResultContract = model::ResultOwnership::Trivial;
+    std::vector<CallableTypeContract> CallableContracts;
+  };
+  std::vector<ExternDeclarationSeed> projection_extern_declarations_;
+  std::unordered_map<const ast::InstanceDeclNode *, std::vector<MonoTypePtr>>
+      projection_instance_type_parameters_;
+  std::vector<const ast::FunctionExpr *> function_inference_stack_;
 
   enum class ConcurrencyBoundary { TaskSpawn, ChannelSend };
   std::unordered_map<std::string, ConcurrencyBoundary> concurrency_boundaries_;
@@ -419,6 +568,8 @@ private:
 
   void require_trait(const std::string &trait_name, MonoTypePtr type,
                      const SourceRange &loc, std::string context);
+  void require_collection_key_operations(const ast::AstNode *Node,
+                                         MonoTypePtr KeyType);
   void require_captures_shareable(const std::vector<MonoTypePtr> &captures,
                                   const SourceRange &loc,
                                   const std::string &context);
@@ -434,8 +585,26 @@ private:
     TypeScheme signature;
     std::size_t type_argument_count = 0;
     std::size_t parameter_count = 0;
+    std::vector<CallableTypeContract> callable_contracts;
   };
   std::unordered_map<std::string, EffectOpInfo> effect_ops_;
+  // Unversioned interfaces encode effect rows as qualified operation names
+  // only. Keep those deliberately untyped atoms distinct from typed source
+  // applications so the compatibility bridge cannot weaken exact matching
+  // for operation signatures that do carry ordered arguments.
+  std::unordered_set<EffectAtomId> legacy_untyped_effect_atoms_;
+  std::unordered_map<model::FunctionDeclarationIdentity,
+                     ImportedFunctionDeclarationProjection,
+                     model::FunctionDeclarationIdentityHasher>
+      imported_function_declarations_;
+  // Functions installed explicitly in the checker root environment outlive
+  // an individual check session. Keep their structural declarations separate
+  // from declarations discovered while checking source imports, which are
+  // cleared transactionally at the start of the next session.
+  std::unordered_map<model::FunctionDeclarationIdentity,
+                     ImportedFunctionDeclarationProjection,
+                     model::FunctionDeclarationIdentityHasher>
+      registered_interface_function_declarations_;
 
   /// Derived cells collecting effects while inferring function and handler
   /// bodies. A derived cell is the only locally-defaultable effect node.
@@ -443,6 +612,11 @@ private:
     EffectRef effect;
   };
   std::vector<CollectedRow> latent_effect_stack_;
+  struct EvaluationRow {
+    std::vector<EffectRef> Sources;
+  };
+  std::vector<EvaluationRow> evaluation_effect_stack_;
+  std::unordered_set<const ast::AstNode *> isolated_evaluation_roots_;
   std::unordered_map<EffectAtomId, SourceRange> effect_origins_;
   std::vector<SourceRange> unhandled_effect_locations_;
   bool require_effect_free_ = false;
@@ -467,6 +641,15 @@ private:
 
   std::vector<std::string> ModulePaths;
   ImportTypeSource *import_src_ = nullptr;
+
+  struct ProjectionStorage;
+  std::unique_ptr<ProjectionStorage> projection_storage_;
+  ast::AstNode *projection_root_ = nullptr;
+  MonoTypePtr projection_root_type_ = nullptr;
+  std::size_t projection_visible_parameter_count_ = 0;
+  ast::ModuleDecl *projection_module_ = nullptr;
+  std::vector<std::pair<ast::FunctionExpr *, MonoTypePtr>>
+      projection_module_functions_;
 
   void bind_import_name(std::shared_ptr<TypeEnv> env,
                         const std::string &module_fqn,

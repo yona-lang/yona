@@ -1,11 +1,14 @@
 #ifndef YONA_SEMANTICS_SEMANTICMODEL_H
 #define YONA_SEMANTICS_SEMANTICMODEL_H
 
+#include "yona/Semantics/StructuralTypeProjection.h"
 #include "yona/Support/SourceManager.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -39,6 +42,12 @@ private:
   std::uint64_t Value = 0;
 };
 
+struct BindingIdHasher final {
+  [[nodiscard]] std::size_t operator()(BindingId Id) const noexcept {
+    return std::hash<std::uint64_t>{}(Id.value());
+  }
+};
+
 enum class SymbolKind {
   Variable,
   Function,
@@ -66,6 +75,13 @@ struct NodeSemantics {
   std::string InferredType;
   std::string Effects;
   OwnershipKind Ownership = OwnershipKind::Unknown;
+  model::TypeId Type;
+  model::EffectRowId EffectRow;
+  std::optional<ProjectedSchemeInstantiation> Instantiation;
+  std::optional<ProjectedOperationOccurrence> OperationOccurrence;
+  std::optional<ProjectedTraitMethodUseFact> TraitMethodUse;
+  std::optional<ProjectedCollectionKeyOperations> KeyOperations;
+  std::optional<ProjectedSumInjection> SumInjection;
 };
 
 /// One definition or reference in the source program.
@@ -118,6 +134,7 @@ public:
   SemanticModel &operator=(SemanticModel &&) noexcept;
 
   [[nodiscard]] const SourceManager &sourceManager() const noexcept;
+  [[nodiscard]] std::shared_ptr<const SourceManager> sources() const noexcept;
   [[nodiscard]] SourceId sourceId() const noexcept;
   [[nodiscard]] std::string_view sourceText() const noexcept;
   [[nodiscard]] SourceRange rootRange() const noexcept;
@@ -136,6 +153,23 @@ public:
   references(BindingId Binding, bool IncludeDefinition) const;
   [[nodiscard]] const NodeSemantics *
   factsFor(const ast::AstNode *Node) const noexcept;
+  [[nodiscard]] const model::TypeTable &types() const noexcept;
+  [[nodiscard]] std::shared_ptr<model::TypeTable>
+  sharedTypeArena() const noexcept;
+  [[nodiscard]] std::optional<BindingId>
+  bindingFor(const ast::AstNode *Node) const noexcept;
+  [[nodiscard]] const ProjectedSchemeInstantiation *
+  instantiationFor(const ast::AstNode *Node) const noexcept;
+  [[nodiscard]] const ProjectedOperationOccurrence *
+  operationOccurrenceFor(const ast::AstNode *Node) const noexcept;
+  [[nodiscard]] const ProjectedTraitMethodUseFact *
+  traitMethodUseFor(const ast::AstNode *Node) const noexcept;
+  [[nodiscard]] const ProjectedCollectionKeyOperations *
+  keyOperationsFor(const ast::AstNode *Node) const noexcept;
+  [[nodiscard]] const ProjectedSumInjection *
+  sumInjectionFor(const ast::AstNode *Node) const noexcept;
+  [[nodiscard]] std::span<const model::EffectOperationSignature>
+  effectOperations() const noexcept;
 
 private:
   struct Impl;

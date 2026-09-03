@@ -1586,9 +1586,8 @@ unique_ptr<CollectionExtractorExpr> ParserImpl::parse_collection_extractor() {
     return make_unique<ValueCollectionExtractorExpr>(loc, underscore, coll,
                                                      condition);
   } else if (auto pat_val = dynamic_cast<PatternValue *>(pattern.get())) {
-    if (auto id = get_if<IdentifierExpr *>(&pat_val->expr)) {
-      pattern.release();
-      return make_unique<ValueCollectionExtractorExpr>(loc, *id, coll,
+    if (auto *identifier = pat_val->releaseIdentifier()) {
+      return make_unique<ValueCollectionExtractorExpr>(loc, identifier, coll,
                                                        condition);
     }
   }

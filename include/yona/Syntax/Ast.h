@@ -2390,6 +2390,7 @@ public:
       SourceRange token,
       const variant<LiteralExpr<nullptr_t> *, LiteralExpr<void *> *,
                     SymbolExpr *, IdentifierExpr *> &expr);
+  [[nodiscard]] IdentifierExpr *releaseIdentifier();
   template <typename ResultType>
   ResultType accept(const AstVisitor<ResultType> &visitor) const {
     return visitor.visit(

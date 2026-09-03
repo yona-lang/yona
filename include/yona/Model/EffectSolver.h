@@ -135,6 +135,7 @@ public:
 
   [[nodiscard]] EffectRef empty() const noexcept;
   [[nodiscard]] EffectAtomCatalogDomain atomDomain() const noexcept;
+  [[nodiscard]] bool owns(EffectRef effect) const noexcept;
   EffectRef atoms(std::vector<EffectAtomId> Atoms);
   EffectRef atoms(std::initializer_list<EffectAtomId> Atoms);
   EffectRef flexible();

@@ -30,6 +30,7 @@ target_link_libraries(yona_support PRIVATE ${llvm_libs})
 add_library(yona_model OBJECT
   "${PROJECT_SOURCE_DIR}/src/Model/CanonicalEncoding.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/EffectSolver.cpp"
+  "${PROJECT_SOURCE_DIR}/src/Model/InferenceEffectClosure.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/ModuleIdentity.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/StructuralType.cpp"
   "${PROJECT_SOURCE_DIR}/src/Model/TypeArena.cpp"
@@ -78,6 +79,7 @@ add_library(yona_semantics OBJECT
   "${PROJECT_SOURCE_DIR}/src/Semantics/ModuleFunctionDependencies.cpp"
   "${PROJECT_SOURCE_DIR}/src/Semantics/RefinementChecker.cpp"
   "${PROJECT_SOURCE_DIR}/src/Semantics/SemanticModel.cpp"
+  "${PROJECT_SOURCE_DIR}/src/Semantics/StructuralTypeProjection.cpp"
   "${PROJECT_SOURCE_DIR}/src/Semantics/TypeChecker.cpp"
   "${PROJECT_SOURCE_DIR}/src/Semantics/Unification.cpp"
   "${PROJECT_SOURCE_DIR}/src/Semantics/UnionFind.cpp"

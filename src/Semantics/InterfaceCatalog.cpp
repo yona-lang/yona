@@ -6,12 +6,15 @@
 #include "yona/Syntax/Parser.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <map>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -140,6 +143,19 @@ functionSignature(const interface::Function &Function) {
   Result.param_descriptors = Function.ParameterTypes;
   Result.return_descriptor = Function.ReturnType;
   Result.effect_scheme = Function.Effects.Scheme;
+  Result.borrowed_parameters = Function.BorrowedParameters;
+  switch (Function.Kind) {
+  case interface::FunctionKind::Synchronous:
+    Result.convention = model::CallingConvention::DirectYona;
+    break;
+  case interface::FunctionKind::ThreadPool:
+  case interface::FunctionKind::Io:
+    Result.convention = model::CallingConvention::AsyncAdapter;
+    break;
+  case interface::FunctionKind::Native:
+    Result.convention = model::CallingConvention::NativeExtern;
+    break;
+  }
   return Result;
 }
 
@@ -155,6 +171,71 @@ constructorSignature(const interface::Adt &Adt,
     Result.return_descriptor += ",VAR(" + Parameter + ")";
   Result.return_descriptor += ")";
   return Result;
+}
+
+std::size_t
+descriptorTypeArity(const interface::Function &Function,
+                    std::span<const interface::Adt> NominalDeclarations) {
+  std::unordered_set<std::string> Variables;
+  std::size_t AnonymousVariables = 0;
+  const auto Collect = [&](this const auto &Self,
+                           std::string_view Descriptor) -> void {
+    const auto Open = Descriptor.find('(');
+    if (Open == std::string_view::npos) {
+      if (Descriptor == "SEQ" || Descriptor == "SET" ||
+          Descriptor == "PROMISE" || Descriptor == "CHANNEL" ||
+          Descriptor == "ADT" || Descriptor == "LINEAR" ||
+          Descriptor == "TUPLE")
+        ++AnonymousVariables;
+      else if (Descriptor == "DICT" || Descriptor == "FUNCTION")
+        AnonymousVariables += 2;
+      return;
+    }
+    if (!Descriptor.ends_with(')'))
+      return;
+    const auto Name = Descriptor.substr(0, Open);
+    const auto Parts = splitDescriptorArguments(
+        Descriptor.substr(Open + 1, Descriptor.size() - Open - 2));
+    if (Name == "VAR" && Parts.size() == 1) {
+      Variables.emplace(Parts.front());
+      return;
+    }
+    if (Name == "ADT" && Parts.size() == 1) {
+      const auto Declaration = std::ranges::find(
+          NominalDeclarations, Parts.front(), &interface::Adt::Name);
+      if (Declaration != NominalDeclarations.end())
+        AnonymousVariables += Declaration->TypeParameters.size();
+    }
+    const auto Start = Name == "ADT" && !Parts.empty() ? 1u : 0u;
+    for (std::size_t Index = Start; Index < Parts.size(); ++Index)
+      Self(Parts[Index]);
+  };
+  for (const auto &Parameter : Function.ParameterTypes)
+    Collect(Parameter);
+  Collect(Function.ReturnType);
+  return Variables.size() + AnonymousVariables;
+}
+
+std::size_t effectSchemeArity(std::string_view Scheme) {
+  std::unordered_set<std::string> Variables;
+  for (std::size_t Position = 0; Position < Scheme.size();) {
+    if (Scheme[Position] != 'f' || Position + 1 == Scheme.size() ||
+        !std::isdigit(static_cast<unsigned char>(Scheme[Position + 1]))) {
+      ++Position;
+      continue;
+    }
+    const auto Start = ++Position;
+    while (Position < Scheme.size() &&
+           std::isdigit(static_cast<unsigned char>(Scheme[Position])))
+      ++Position;
+    Variables.emplace(Scheme.substr(Start, Position - Start));
+  }
+  return Variables.size();
+}
+
+bool isDerivableTrait(std::string_view Name) {
+  return Name == "Eq" || Name == "Hash" || Name == "Ord" || Name == "Show" ||
+         Name == "Send" || Name == "Shareable";
 }
 
 } // namespace
@@ -240,6 +321,9 @@ InterfaceCatalog::PreludeResult InterfaceCatalog::installPrelude(
     return false;
 
   const auto &Prelude = **Loaded;
+  std::unordered_set<std::string> PreludeNominals;
+  for (const auto &Adt : Prelude.Adts)
+    PreludeNominals.insert(Adt.Name);
   for (const auto &Adt : Prelude.Adts) {
     std::vector<std::pair<std::string, int>> Constructors;
     std::vector<std::vector<ast::FieldType>> FieldTypes;
@@ -265,14 +349,16 @@ InterfaceCatalog::PreludeResult InterfaceCatalog::installPrelude(
           static_cast<int>(Constructor.Arity), FieldNames.back());
     }
     TypeChecker.register_adt(Adt.Name, Adt.TypeParameters, Constructors,
-                             FieldTypes, FieldNames);
+                             FieldTypes, FieldNames, &Prelude.Identity);
   }
 
   for (const auto &Function : Prelude.Functions)
-    TypeChecker.register_interface_function(Function);
+    TypeChecker.register_interface_function(Function, &Prelude.Identity,
+                                            &PreludeNominals);
 
   for (const auto &Trait : Prelude.Traits) {
-    TypeChecker.register_trait(Trait.Name, Trait.TypeParameters);
+    TypeChecker.register_trait(Trait.Name, Trait.TypeParameters,
+                               &Prelude.Identity);
     for (const auto &Supertype : Trait.Supertypes)
       TypeChecker.register_trait_superclass(Trait.Name, Supertype.Name);
     for (const auto &Method : Trait.Methods)
@@ -287,20 +373,26 @@ InterfaceCatalog::PreludeResult InterfaceCatalog::installPrelude(
       Constraints.emplace_back(Constraint.TraitName, Constraint.Parameter);
     TypeChecker.register_instance(Instance.TraitName, Instance.TypeHeads,
                                   Instance.TypeParameters,
-                                  std::move(Constraints));
+                                  std::move(Constraints), &Prelude.Identity);
   }
 
   auto &Arena = TypeChecker.arena();
   auto *Argument = Arena.fresh_var(0);
   TypeChecker.register_builtin_function(
-      "typeOf", Arena.make_arrow(Argument, Arena.make_app("Type", {})));
+      "typeOf",
+      Arena.make_arrow(
+          Argument,
+          Arena.make_app(model::NominalTypeKey{Prelude.Identity, "Type"}, {},
+                         "Type")),
+      1, &Prelude.Identity);
 
   auto *Unit = Arena.make_con(compiler::typechecker::TyCon::Unit);
   auto *Integer = Arena.make_con(compiler::typechecker::TyCon::Int);
   TypeChecker.register_effect("Gpu", "",
                               {{"oom", {Unit}, Unit},
                                {"deviceLost", {Unit}, Unit},
-                               {"fail", {Integer}, Unit}});
+                               {"fail", {Integer}, Unit}},
+                              &Prelude.Identity);
   return true;
 }
 
@@ -337,6 +429,57 @@ InterfaceCatalog::imported_module_exports(const std::string &ModuleFqn) {
     for (const auto &Constructor : Adt.Constructors)
       Result.push_back(Constructor.Name);
   }
+  return Result;
+}
+
+std::vector<compiler::typechecker::ImportedNominalSig>
+InterfaceCatalog::imported_nominals(const std::string &ModuleFqn) {
+  auto Loaded = loadModule(ModuleFqn);
+  if (!Loaded || !*Loaded)
+    return {};
+  std::vector<compiler::typechecker::ImportedNominalSig> Result;
+  Result.reserve((**Loaded).Adts.size());
+  for (const auto &Adt : (**Loaded).Adts)
+    Result.push_back({Adt.Name, Adt.TypeParameters});
+  return Result;
+}
+
+std::vector<compiler::typechecker::ImportedDeclarationCatalogEntry>
+InterfaceCatalog::imported_declarations(const std::string &ModuleFqn) {
+  auto Loaded = loadModule(ModuleFqn);
+  if (!Loaded || !*Loaded)
+    return {};
+  const auto &Module = **Loaded;
+  std::vector<compiler::typechecker::ImportedDeclarationCatalogEntry> Result;
+  Result.reserve(Module.Adts.size() + Module.Traits.size() +
+                 Module.Functions.size());
+  for (const auto &Adt : Module.Adts)
+    Result.push_back({model::BinderOwnerKind::Nominal,
+                      model::NominalTypeKey{Module.Identity, Adt.Name},
+                      Adt.TypeParameters.size(),
+                      0,
+                      {},
+                      false,
+                      SourceRange::unknown()});
+  for (const auto &Trait : Module.Traits) {
+    std::vector<std::string> Methods;
+    Methods.reserve(Trait.Methods.size());
+    for (const auto &Method : Trait.Methods)
+      Methods.push_back(Method.Name);
+    Result.push_back({model::BinderOwnerKind::Trait,
+                      model::NominalTypeKey{Module.Identity, Trait.Name},
+                      Trait.TypeParameters.size(), 0, std::move(Methods),
+                      isDerivableTrait(Trait.Name), SourceRange::unknown()});
+  }
+  for (const auto &Function : Module.Functions)
+    Result.push_back({model::BinderOwnerKind::Function,
+                      model::FunctionDeclarationIdentity{model::SymbolIdentity{
+                          Module.Identity, Function.Name}},
+                      descriptorTypeArity(Function, Module.Adts),
+                      effectSchemeArity(Function.Effects.Scheme),
+                      {},
+                      false,
+                      SourceRange::unknown()});
   return Result;
 }
 

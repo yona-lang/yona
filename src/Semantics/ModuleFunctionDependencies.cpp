@@ -81,8 +81,10 @@ void shadow_generator_binding(const ast::IdentifierOrUnderscore &binding,
 class DependencyCollector {
 public:
   DependencyCollector(ast::ModuleDecl *module,
-                      ModuleExportResolver resolve_exports)
-      : module_(module), resolve_exports_(std::move(resolve_exports)) {
+                      ModuleExportResolver resolve_exports,
+                      ModuleImportObserver observe_import)
+      : module_(module), resolve_exports_(std::move(resolve_exports)),
+        observe_import_(std::move(observe_import)) {
     for (size_t index = 0; index < module_->functions.size(); ++index) {
       auto *function = module_->functions[index];
       if (function && !function->name.empty())
@@ -115,6 +117,7 @@ public:
 private:
   ast::ModuleDecl *module_;
   ModuleExportResolver resolve_exports_;
+  ModuleImportObserver observe_import_;
   std::unordered_map<std::string, size_t> indices_;
   std::vector<std::unordered_set<size_t>> edges_;
   std::vector<bool> self_edges_;
@@ -232,14 +235,23 @@ private:
       auto body_shadowed = shadowed;
       for (auto *clause : import->clauses) {
         if (auto *functions = dynamic_cast<ast::FunctionsImport *>(clause)) {
+          const auto Module = functions->fromFqn
+                                  ? functions->fromFqn->to_string()
+                                  : std::string{};
+          if (observe_import_ && !Module.empty())
+            observe_import_(Module);
           for (auto *alias : functions->aliases)
             if (alias && alias->name)
               body_shadowed.insert(alias->alias ? alias->alias->value
                                                 : alias->name->value);
         } else if (auto *module = dynamic_cast<ast::ModuleImport *>(clause);
-                   module && module->fqn && resolve_exports_) {
-          for (const auto &name : resolve_exports_(module->fqn->to_string()))
-            body_shadowed.insert(name);
+                   module && module->fqn) {
+          const auto Module = module->fqn->to_string();
+          if (observe_import_)
+            observe_import_(Module);
+          if (resolve_exports_)
+            for (const auto &name : resolve_exports_(Module))
+              body_shadowed.insert(name);
         }
       }
       walk(import->expr, body_shadowed, caller);
@@ -408,10 +420,13 @@ private:
 
 std::vector<ModuleFunctionComponent>
 module_function_components(ast::ModuleDecl *module,
-                           ModuleExportResolver resolve_exports) {
+                           ModuleExportResolver resolve_exports,
+                           ModuleImportObserver observe_import) {
   if (!module)
     return {};
-  return DependencyCollector(module, std::move(resolve_exports)).run();
+  return DependencyCollector(module, std::move(resolve_exports),
+                             std::move(observe_import))
+      .run();
 }
 
 } // namespace yona::compiler::typechecker

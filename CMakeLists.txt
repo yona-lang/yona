@@ -402,6 +402,7 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaLlvmLinkMode.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaInProcessLld.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaVulkan.cmake")
 
@@ -460,7 +461,7 @@ separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
 # Find the libraries that correspond to the LLVM components that we wish to use
-llvm_map_components_to_libnames(llvm_libs Support Core IRReader Passes Target native nativecodegen)
+yona_map_llvm_components(llvm_libs Support Core IRReader Passes Target native nativecodegen)
 
 find_package(Threads REQUIRED)
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/YonaComponents.cmake")
@@ -524,7 +525,7 @@ if(YONA_LINK_STATIC_CLI)
 	target_link_libraries(yonac PRIVATE yona_lib_static CLI11::CLI11)
 	target_compile_definitions(yonac PRIVATE YONA_STATIC_BUILD)
 else()
-	target_link_libraries(yonac PRIVATE yona_lib CLI11::CLI11)
+	target_link_libraries(yonac PRIVATE yona_lib ${llvm_libs} CLI11::CLI11)
 endif()
 if(Vulkan_FOUND AND NOT WIN32)
 	# cli/Main.cpp: yonac-linked exe pulls vk* from gpu_stub → link libvulkan.
@@ -630,7 +631,7 @@ if(YONA_LINK_STATIC_CLI)
 	target_link_libraries(yona-repl PRIVATE yona_lib_static)
 	target_compile_definitions(yona-repl PRIVATE YONA_STATIC_BUILD)
 else()
-	target_link_libraries(yona-repl PRIVATE yona_lib)
+	target_link_libraries(yona-repl PRIVATE yona_lib ${llvm_libs})
 endif()
 add_dependencies(yona-repl yona_runtime)
 
@@ -848,6 +849,7 @@ add_executable(tests
 	"${PROJECT_SOURCE_DIR}/test/Semantics/TerminationAnalysisTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Semantics/InterfaceCatalogTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Semantics/SemanticModelTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/StructuralTypeProjectionTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Semantics/TraitTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Syntax/TryCatchParserTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Semantics/TypeCheckerTest.cpp"
@@ -879,6 +881,30 @@ target_include_directories(tests PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/test
 	${CMAKE_CURRENT_BINARY_DIR}/test_config)
 
+# Task 2D has a standalone semantic gate so projection work remains testable
+# while the intentionally frozen legacy-oracle Prelude teardown is retained.
+add_executable(task2d_semantic_tests
+	"${PROJECT_SOURCE_DIR}/test/Support/DoctestMain.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/SemanticModelTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/StructuralTypeProjectionTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/Semantics/TypeCheckerTest.cpp"
+)
+target_link_libraries(task2d_semantic_tests PRIVATE
+	doctest::doctest
+	yona_lib_static
+	yona_runtime
+)
+target_compile_definitions(task2d_semantic_tests PRIVATE
+	YONA_STATIC_BUILD
+	YONA_TEST_CMAKE_EXECUTABLE="${CMAKE_COMMAND}"
+	YONA_TEST_RUNTIME_ARCHIVE="$<TARGET_FILE:yona_runtime>"
+)
+target_include_directories(task2d_semantic_tests PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/include
+	${CMAKE_CURRENT_SOURCE_DIR}/test
+	${CMAKE_CURRENT_BINARY_DIR}/test_config)
+add_test(NAME task2d_semantic_tests COMMAND task2d_semantic_tests)
+
 # Register the test executable with CTest
 add_test(NAME doctest_tests COMMAND tests)
 
@@ -886,6 +912,12 @@ add_test(NAME cmake_windows_llvm_prerequisites
 	COMMAND "${CMAKE_COMMAND}"
 		-S "${CMAKE_CURRENT_SOURCE_DIR}/test/CMake/WindowsLlvmPrerequisites"
 		-B "${CMAKE_CURRENT_BINARY_DIR}/test-cmake/windows-llvm-prerequisites"
+		-DYONA_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(NAME cmake_llvm_link_mode
+	COMMAND "${CMAKE_COMMAND}"
+		-S "${CMAKE_CURRENT_SOURCE_DIR}/test/CMake/LlvmLinkMode"
+		-B "${CMAKE_CURRENT_BINARY_DIR}/test-cmake/llvm-link-mode"
 		-DYONA_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR})
 
 # CMake 3.10 predates FindPython3, while newer CMake versions may disable the

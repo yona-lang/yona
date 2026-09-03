@@ -426,7 +426,8 @@ ModuleDecl::ModuleDecl(
       functions(nodes_with_parent(std::move(functions), this)),
       functionDeclarations(
           nodes_with_parent(std::move(function_declarations), this)),
-      extern_declarations(extern_declarations),
+      extern_declarations(
+          nodes_with_parent(std::move(extern_declarations), this)),
       adt_declarations(nodes_with_parent(std::move(adt_declarations), this)),
       trait_declarations(
           nodes_with_parent(std::move(trait_declarations), this)),
@@ -1345,6 +1346,15 @@ PatternValue::PatternValue(
                   IdentifierExpr *> &expr)
     : PatternNode(token), expr(node_with_parent(expr, this)) {}
 
+IdentifierExpr *PatternValue::releaseIdentifier() {
+  auto *identifier = get_if<IdentifierExpr *>(&expr);
+  if (!identifier)
+    return nullptr;
+  auto *result = *identifier;
+  *identifier = nullptr;
+  return result;
+}
+
 PatternValue::~PatternValue() {
   if (holds_alternative<LiteralExpr<nullptr_t> *>(expr)) {
     delete get<LiteralExpr<nullptr_t> *>(expr);
@@ -1781,7 +1791,11 @@ TypedPattern::TypedPattern(SourceRange token, string name, string type_name)
 
 RecordLiteralExpr::RecordLiteralExpr(SourceRange token,
                                      vector<pair<string, ExprNode *>> fields)
-    : ExprNode(token), fields(std::move(fields)) {}
+    : ExprNode(token), fields(std::move(fields)) {
+  for (auto &[_, field] : this->fields)
+    if (field)
+      field->parent = this;
+}
 
 RecordLiteralExpr::~RecordLiteralExpr() {
   for (auto &[_, expr] : fields)
@@ -1881,7 +1895,11 @@ TraitDeclNode::TraitDeclNode(SourceRange token, string name,
                              vector<pair<string, string>> superclasses)
     : AstNode(token), name(std::move(name)),
       type_params(std::move(type_params)), methods(std::move(methods)),
-      superclasses(std::move(superclasses)) {}
+      superclasses(std::move(superclasses)) {
+  for (auto &method : this->methods)
+    if (method.default_impl)
+      method.default_impl->parent = this;
+}
 
 TraitDeclNode::~TraitDeclNode() {
   for (auto &m : methods) {
@@ -1972,7 +1990,8 @@ void EffectDeclNode::print(std::ostream &os) const { os << "effect " << name; }
 PerformExpr::PerformExpr(SourceRange token, string effect_name,
                          string operation_name, vector<ExprNode *> args)
     : ExprNode(token), effect_name(std::move(effect_name)),
-      operation_name(std::move(operation_name)), args(std::move(args)) {}
+      operation_name(std::move(operation_name)),
+      args(nodes_with_parent(std::move(args), this)) {}
 PerformExpr::~PerformExpr() {
   for (auto *a : args)
     delete a;
@@ -2004,7 +2023,7 @@ void HandlerClause::print(std::ostream &os) const {
 HandleExpr::HandleExpr(SourceRange token, ExprNode *body,
                        vector<HandlerClause *> clauses)
     : ExprNode(token), body(body ? body->with_parent<ExprNode>(this) : nullptr),
-      clauses(std::move(clauses)) {}
+      clauses(nodes_with_parent(std::move(clauses), this)) {}
 HandleExpr::~HandleExpr() {
   delete body;
   for (auto *c : clauses)

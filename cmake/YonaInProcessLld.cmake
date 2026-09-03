@@ -110,7 +110,7 @@ if(YONA_INPROCESS_LLD_AVAILABLE)
 	# Distro lld*.a is built with every LLVM_TARGETS_TO_BUILD backend; the
 	# ELF/MachO/COFF drivers call LLVMInitialize* for each of them (not just
 	# the host). A short AArch64/X86/… list leaves AMDGPU/AVR/Hexagon/… undefined.
-	llvm_map_components_to_libnames(YONA_INPROCESS_LLD_LLVM_LIBS
+	yona_map_llvm_components(YONA_INPROCESS_LLD_LLVM_LIBS
 		${LLVM_TARGETS_TO_BUILD}
 		TargetParser MC MCParser AsmParser
 		Option LibDriver WindowsDriver WindowsManifest LTO DTLTO
@@ -213,7 +213,11 @@ if(YONA_INPROCESS_LLD_AVAILABLE)
 		endif()
 	endif()
 	if(YONA_INPROCESS_LLD_AVAILABLE)
-		set(YONA_INPROCESS_LLD_REASON "${YONA_INPROCESS_LLD_REASON}; linked with multi-target LLVM components")
+		if(LLVM_LINK_LLVM_DYLIB)
+			set(YONA_INPROCESS_LLD_REASON "${YONA_INPROCESS_LLD_REASON}; linked with shared LLVM aggregate")
+		else()
+			set(YONA_INPROCESS_LLD_REASON "${YONA_INPROCESS_LLD_REASON}; linked with multi-target LLVM components")
+		endif()
 	endif()
 endif()
 

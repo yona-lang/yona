@@ -281,6 +281,19 @@ bool Unifier::unify_inner(MonoTypePtr a, MonoTypePtr b, const SourceRange &loc,
       if (!unify(a->args[i], b->args[i], loc, context))
         return false;
     }
+    if (a->type_name == "Promise" &&
+        (a->promise_result_contract || b->promise_result_contract)) {
+      if (!a->promise_result_contract || !b->promise_result_contract ||
+          *a->promise_result_contract != *b->promise_result_contract ||
+          !a->promise_effects.valid() || !b->promise_effects.valid()) {
+        diag_.error(loc, ErrorCode::E0100,
+                    "Promise result contracts do not match" +
+                        (context.empty() ? "" : " " + context));
+        return false;
+      }
+      if (!unify_effects(a->promise_effects, b->promise_effects, loc, context))
+        return false;
+    }
     return true;
   }
 

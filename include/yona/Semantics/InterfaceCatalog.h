@@ -69,6 +69,10 @@ public:
                         const std::string &Name) override;
   std::vector<std::string>
   imported_module_exports(const std::string &ModuleFqn) override;
+  std::vector<compiler::typechecker::ImportedNominalSig>
+  imported_nominals(const std::string &ModuleFqn) override;
+  std::vector<compiler::typechecker::ImportedDeclarationCatalogEntry>
+  imported_declarations(const std::string &ModuleFqn) override;
   std::vector<compiler::typechecker::ImportedInstanceSig>
   imported_instances(const std::string &ModuleFqn) override;
 

@@ -518,6 +518,31 @@ struct EffectSolver::Impl {
     return EffectConstraintResult::Solved;
   }
 
+  /// A mutation of an unconstrained derived component cannot change the
+  /// satisfiability of previously registered equality components. Avoid
+  /// rebuilding the global Horn problem in that case: long-lived checkers
+  /// create many independent function-body cells, and rescanning every old
+  /// equality for each new body edge otherwise grows superlinearly.
+  [[nodiscard]] bool equality_observes(EffectRef Changed) const {
+    const auto DependsOn = [&](EffectRef Root) {
+      std::unordered_set<std::uint32_t> Seen;
+      const auto Visit = [&](const auto &Self, EffectRef Current) -> bool {
+        Current = resolve_binding(Current);
+        if (Current.index == Changed.index)
+          return true;
+        if (!Seen.insert(Current.index).second)
+          return false;
+        const auto &Node = nodes[Current.index];
+        return std::ranges::any_of(
+            Node.inputs, [&](EffectRef Input) { return Self(Self, Input); });
+      };
+      return Visit(Visit, Root);
+    };
+    return std::ranges::any_of(equality_constraints, [&](const auto &Equality) {
+      return DependsOn(Equality.first) || DependsOn(Equality.second);
+    });
+  }
+
   EffectConstraintResult establish_equality(EffectRef left, EffectRef right) {
     require(left);
     require(right);
@@ -619,6 +644,11 @@ EffectRef EffectSolver::empty() const noexcept { return impl_->empty_ref(); }
 
 EffectAtomCatalogDomain EffectSolver::atomDomain() const noexcept {
   return impl_->atom_domain;
+}
+
+bool EffectSolver::owns(EffectRef effect) const noexcept {
+  return effect.valid() && effect.owner == impl_->owner &&
+         effect.index < impl_->nodes.size();
 }
 
 EffectRef EffectSolver::atoms(std::vector<EffectAtomId> Atoms) {
@@ -760,7 +790,9 @@ EffectConstraintResult EffectSolver::addAtom(EffectRef Derived,
   const auto Previous = Atoms;
   Atoms.push_back(Atom);
   impl_->canonicalize_atoms(Atoms);
-  const auto status = impl_->settle_constraints();
+  const auto status = impl_->equality_observes(Derived)
+                          ? impl_->settle_constraints()
+                          : EffectConstraintResult::Solved;
   if (status == EffectConstraintResult::Conflict)
     Atoms = Previous;
   else if (Atoms != Previous)
@@ -885,15 +917,18 @@ EffectConstraintResult EffectSolver::include(EffectRef source,
               [](EffectRef left, EffectRef right) {
                 return left.index < right.index;
               });
-    const auto status = impl_->settle_constraints();
-    if (status == EffectConstraintResult::Conflict)
+    const auto status = impl_->equality_observes(derived)
+                            ? impl_->settle_constraints()
+                            : EffectConstraintResult::Solved;
+    if (status == EffectConstraintResult::Conflict) {
       inputs.erase(std::remove(inputs.begin(), inputs.end(), source),
                    inputs.end());
-    else
+    } else
       ++impl_->generation;
     return status;
   }
-  return impl_->settle_constraints();
+  return impl_->equality_observes(derived) ? impl_->settle_constraints()
+                                           : EffectConstraintResult::Solved;
 }
 
 EffectConstraintResult EffectSolver::equate(EffectRef left, EffectRef right) {
@@ -973,7 +1008,7 @@ EffectGraphTemplate EffectSolver::freeze(std::vector<EffectRef> roots) const {
         std::function<bool(EffectRef)> touches = [&](EffectRef current) {
           impl_->require(current);
           if (reachable.contains(current.index))
-            return true;
+            return impl_->is_symbolic(current);
           if (!seen.insert(current.index).second)
             return false;
           const auto &node = impl_->nodes[current.index];

@@ -1411,6 +1411,54 @@ TypeTableAppendTransaction::resolved(EffectRowId Provisional) const {
   return State.EffectResolution[Index];
 }
 
+std::expected<StructuralType, std::string>
+TypeTableAppendTransaction::preparedType(TypeId Provisional) const {
+  const auto &State = *Implementation_;
+  if (!State.Prepared || State.Committed)
+    return std::unexpected("type lookup requires a prepared open transaction");
+  auto Resolved = resolved(Provisional);
+  if (!Resolved)
+    return std::unexpected(Resolved.error());
+  if (Resolved->value() >= State.PreparedTypeIndex.size())
+    return std::unexpected("resolved type is absent from the prepared table");
+  return State.PreparedTypeIndex[Resolved->value()]->Value;
+}
+
+std::expected<void, std::string>
+TypeTableAppendTransaction::validatePreparedCatalog(
+    const StructuralDeclarationCatalog &Catalog,
+    std::span<const TypeId> RuntimeRoots) const {
+  const auto &State = *Implementation_;
+  if (!State.Prepared || State.Committed)
+    return std::unexpected(
+        "catalog validation requires a prepared open transaction");
+
+  TypeTable View;
+  View.Domain_ = State.Domain;
+  View.TypeParameterCount_ =
+      State.BaseTypeParameters + State.AddedTypeParameters;
+  View.EffectVariableCount_ =
+      State.BaseEffectVariables + State.AddedEffectVariables;
+  for (const auto *Stored : State.PreparedTypeIndex) {
+    View.TypeStorage_.push_back(*Stored);
+    View.Types_.push_back(&View.TypeStorage_.back());
+  }
+  for (const auto *Stored : State.PreparedEffectIndex) {
+    View.EffectStorage_.push_back(*Stored);
+    View.Effects_.push_back(&View.EffectStorage_.back());
+  }
+
+  std::vector<TypeId> ResolvedRoots;
+  ResolvedRoots.reserve(RuntimeRoots.size());
+  for (const auto Root : RuntimeRoots) {
+    auto Resolved = resolved(Root);
+    if (!Resolved)
+      return std::unexpected(Resolved.error());
+    ResolvedRoots.push_back(*Resolved);
+  }
+  return Catalog.validate(View, ResolvedRoots);
+}
+
 void TypeTableAppendTransaction::commitPrepared() noexcept {
   auto &State = *Implementation_;
   if (!State.Prepared || State.Committed)

@@ -71,6 +71,12 @@ struct MonoType {
   std::string type_name;
   std::optional<model::NominalTypeKey> resolved_key;
   std::vector<const MonoType *> args;
+  /// Present only for `Promise success`. The result ownership and complete
+  /// await row are semantic contracts, not properties reconstructed from the
+  /// success type's shape.
+  std::optional<model::ResultOwnership> promise_result_contract;
+  EffectRef promise_effects;
+  const EffectSolver *promise_effect_solver = nullptr;
 
   // Arrow
   const MonoType *param_type = nullptr;
@@ -137,6 +143,15 @@ struct MonoType {
     t.type_name = display_name.empty() ? key.Name : std::move(display_name);
     t.resolved_key = std::move(key);
     t.args = std::move(a);
+    return t;
+  }
+  static MonoType make_promise(const MonoType *success,
+                               model::ResultOwnership result_contract,
+                               EffectRef effects, const EffectSolver *solver) {
+    MonoType t = make_app("Promise", {success});
+    t.promise_result_contract = result_contract;
+    t.promise_effects = effects;
+    t.promise_effect_solver = solver;
     return t;
   }
   /// Create a Tuple type

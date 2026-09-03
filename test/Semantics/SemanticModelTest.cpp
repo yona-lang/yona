@@ -105,3 +105,67 @@ TEST_CASE("SemanticModel safely indexes constructor case patterns") {
     CHECK_FALSE(Model.occurrences().empty());
   }());
 }
+
+TEST_CASE("Semantic model structural type projection survives checker "
+          "destruction") {
+  const std::string Source = "let value = 1 in value";
+  yona::parser::Parser Parser;
+  auto Result = Parser.parseExpression(Source, "durable.yona");
+  REQUIRE(Result.has_value());
+  auto Parsed = std::move(Result.value());
+
+  yona::compiler::DiagnosticEngine Diagnostics;
+  Diagnostics.setSources(Parsed.Sources);
+  std::optional<yona::semantics::SemanticModel> Model;
+  {
+    yona::compiler::typechecker::TypeChecker Checker(Diagnostics);
+    REQUIRE(Checker.check(Parsed.Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+    Model.emplace(Parsed.Sources, Parsed.Source, Parsed.Expression.get(),
+                  &Checker, &Diagnostics);
+  }
+
+  REQUIRE(Model.has_value());
+  REQUIRE(Model->rootFacts());
+  CHECK(Model->types().format(Model->rootFacts()->Type) == "Int");
+  CHECK(Model->sharedTypeArena().get() != nullptr);
+  CHECK(Model->sources() == Parsed.Sources);
+
+  auto *Let = dynamic_cast<yona::ast::LetExpr *>(Parsed.Expression.get());
+  REQUIRE(Let);
+  REQUIRE(Let->expr);
+  const auto Binding = Model->bindingFor(Let->expr);
+  REQUIRE(Binding.has_value());
+  CHECK(Binding->isValid());
+}
+
+TEST_CASE("Semantic model structural effect operation catalog survives "
+          "checker destruction") {
+  yona::parser::Parser Parser;
+  auto Result = Parser.parseExpression("1", "effects-durable.yona");
+  REQUIRE(Result.has_value());
+  auto Parsed = std::move(Result.value());
+
+  yona::compiler::DiagnosticEngine Diagnostics;
+  Diagnostics.setSources(Parsed.Sources);
+  std::optional<yona::semantics::SemanticModel> Model;
+  {
+    yona::compiler::typechecker::TypeChecker Checker(Diagnostics);
+    auto &Arena = Checker.arena();
+    auto *Int = Arena.make_con(yona::compiler::typechecker::TyCon::Int);
+    Checker.register_effect("State", "s", {{"get", {}, Int}});
+    REQUIRE(Checker.check(Parsed.Expression.get()));
+    REQUIRE(Checker.solve_constraints());
+    Model.emplace(Parsed.Sources, Parsed.Source, Parsed.Expression.get(),
+                  &Checker, &Diagnostics);
+  }
+
+  REQUIRE(Model.has_value());
+  REQUIRE(Model->effectOperations().size() == 1);
+  CHECK(Model->effectOperations().front().Key.Effect.Module ==
+        yona::model::ModuleIdentity{"Main"});
+  CHECK(Model->effectOperations().front().Key.Effect.Name == "State");
+  CHECK(Model->effectOperations().front().Key.Operation == "get");
+  CHECK(Model->types().format(Model->effectOperations().front().Result) ==
+        "Int");
+}

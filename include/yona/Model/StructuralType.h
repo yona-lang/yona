@@ -544,6 +544,11 @@ public:
   resolved(TypeId Provisional) const;
   [[nodiscard]] std::expected<EffectRowId, std::string>
   resolved(EffectRowId Provisional) const;
+  [[nodiscard]] std::expected<StructuralType, std::string>
+  preparedType(TypeId Provisional) const;
+  [[nodiscard]] std::expected<void, std::string>
+  validatePreparedCatalog(const StructuralDeclarationCatalog &Catalog,
+                          std::span<const TypeId> RuntimeRoots = {}) const;
   void commitPrepared() noexcept;
 
 private:

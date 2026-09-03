@@ -19,6 +19,7 @@ struct ModuleFunctionComponent {
 
 using ModuleExportResolver =
     std::function<std::vector<std::string>(const std::string &module_fqn)>;
+using ModuleImportObserver = std::function<void(const std::string &module_fqn)>;
 
 /// Return module-function dependency components in callee-first order.
 /// Lexical binders shadow module names, and function-valued references count
@@ -29,7 +30,8 @@ using ModuleExportResolver =
 /// Concurrent calls require an immutable module and thread-safe resolver.
 std::vector<ModuleFunctionComponent>
 module_function_components(ast::ModuleDecl *module,
-                           ModuleExportResolver resolve_exports = {});
+                           ModuleExportResolver resolve_exports = {},
+                           ModuleImportObserver observe_import = {});
 
 } // namespace yona::compiler::typechecker
 

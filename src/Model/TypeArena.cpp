@@ -397,6 +397,16 @@ MonoTypePtr TypeArena::make_app(model::NominalTypeKey Key,
                                   std::move(DisplayName)));
 }
 
+MonoTypePtr TypeArena::make_promise(MonoTypePtr Success,
+                                    model::ResultOwnership ResultContract,
+                                    EffectRef AwaitEffects) {
+  if (!Success)
+    throw std::invalid_argument("Promise success type must not be null");
+  (void)effect_solver_.summarize(AwaitEffects);
+  return alloc(MonoType::make_promise(Success, ResultContract, AwaitEffects,
+                                      &effect_solver_));
+}
+
 MonoTypePtr TypeArena::make_tuple(std::vector<MonoTypePtr> elems) {
   return alloc(MonoType::make_tuple(std::move(elems)));
 }
