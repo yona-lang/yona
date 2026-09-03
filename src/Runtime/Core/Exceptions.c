@@ -169,7 +169,7 @@ static void unwindFramesTo(YonaFrame *Stop) {
 // YonaRuntimeTryBegin: push a jmp_buf slot, return pointer to it.
 // The caller must call YONA_SJLJ_SETJMP / llvm.eh.sjlj.setjmp on the returned
 // pointer directly (setjmp must execute in the caller's stack frame). Buffer
-// is laid out as void*[5]; see yona_sjlj_buf_t above.
+// uses the target-aware YonaSjLjBufT layout declared in Platform/SjLj.h.
 void *YonaRuntimeTryBegin(void) {
   if (YonaExc.Depth >= YONA_MAX_TRY_DEPTH) {
     fprintf(stderr, "Fatal: try/catch nesting depth exceeded\n");
