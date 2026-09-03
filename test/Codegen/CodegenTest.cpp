@@ -3261,7 +3261,8 @@ TEST_SUITE("Regex") {
     REQUIRE(yona::test::link::ensure_runtime_objects());
 
     // Compile the Regex module
-    auto regex_yona = yona::test::lib_dir() / "Std" / "Regex.yona";
+    auto regex_yona = yona::test::repo_root() / "test" / "Fixtures" /
+                      "LegacyOracle" / "Std" / "Regex.yona";
     REQUIRE(fs::exists(regex_yona));
     ifstream f(regex_yona);
     string regex_mod_src((istreambuf_iterator<char>(f)),

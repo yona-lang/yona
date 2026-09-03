@@ -1,0 +1,18 @@
+## Regex — PCRE2-backed regular expressions.
+##
+## ```
+## let re = compile "[a-z]+" in
+## matches re "hello 123"
+## ```
+module Std\Regex
+
+export compile, matches, find, findAll
+export replace, replaceAll, split
+
+extern compile    : String -> Int                       = "YonaStdRegexCompile"
+extern matches    : Int -> String -> Bool               = "YonaStdRegexMatches"
+extern find       : Int -> String -> Seq                = "YonaStdRegexFind"
+extern findAll    : Int -> String -> Seq                = "YonaStdRegexFindAll"
+extern replace    : Int -> String -> String -> String   = "YonaStdRegexReplace"
+extern replaceAll : Int -> String -> String -> String   = "YonaStdRegexReplaceAll"
+extern split      : Int -> String -> Seq                = "YonaStdRegexSplit"

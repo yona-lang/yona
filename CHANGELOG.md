@@ -6,8 +6,11 @@
 
 - AArch64 `try`/`catch` and async worker exceptions now preserve the complete
   AAPCS64 callee-saved register context across the runtime SJLJ trampoline.
-  Heap values live at a `try` boundary therefore retain their valid ownership
-  after a native call raises.
+  The restore path keeps its buffer base and branch target in caller-saved
+  registers, so heap values live at a `try` boundary retain valid ownership
+  after a native call raises. The temporary legacy compiler oracle now reads
+  pinned Prelude and Regex snapshots, isolating it from replacement ABI source
+  migrations.
 
 - Added a pinned Fedora ARM64 QEMU container and focused-test script so ARM
   regressions can be reproduced locally without relying on hosted CI.

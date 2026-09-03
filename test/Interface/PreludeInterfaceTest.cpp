@@ -60,7 +60,8 @@ bool compile_prelude_interface(const std::string &source,
 TEST_CASE("Prelude interface regeneration is byte-identical across bootstrap "
           "passes") {
   const auto repo = yona::test::repo_root();
-  const auto source_path = repo / "lib" / "Prelude.yona";
+  const auto source_path = repo / "test" / "Fixtures" / "LegacyOracle" /
+                           "Prelude.yona";
   const auto scratch = repo / "test" / "_scratch" / "prelude-interface";
   const auto pass_one = scratch / "pass-one.yonai";
   const auto pass_two = scratch / "pass-two.yonai";

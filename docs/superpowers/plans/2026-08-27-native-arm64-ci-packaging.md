@@ -143,7 +143,9 @@ release archives.
   `raise` crossed `try`/`catch`. The target-specific SJLJ context now saves and
   restores AAPCS64's callee-saved GPR and SIMD registers in both generated
   code and runtime async workers; the focused endpoint-ownership regression is
-  green under emulation.
+  green under emulation. The restore helper first fixes its buffer base in
+  caller-saved `x16` and loads SP/PC through `x17`, so restoring `x19`-`x28`
+  cannot redirect later context loads.
 - Generated Windows fixture executables now carry an embedded `asInvoker`
   manifest, avoiding installer-heuristic elevation failures. The Windows line
   iterator state also reserves its native finalizer field, matching the shared

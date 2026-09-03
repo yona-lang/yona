@@ -145,7 +145,7 @@ must not update either snapshot. This lets Task 15 migrate the live Prelude
 and Regex declarations without asking the old compiler to parse or lower the
 replacement ABI.
 
-- [ ] **Step 1: Tighten the static contract test around the latent restore bug**
+- [x] **Step 1: Tighten the static contract test around the latent restore bug**
 
 Add these checks after loading `SjLj.h` in
 `test/CMake/native_arm64_ci_packaging_contract.py`:
@@ -165,7 +165,7 @@ if re.search(r'yonaSjLjLongJump.*?\[%0', sjlj, re.DOTALL):
     )
 ```
 
-- [ ] **Step 2: Run the contract and confirm the intended red failure**
+- [x] **Step 2: Run the contract and confirm the intended red failure**
 
 Run:
 
@@ -175,7 +175,7 @@ python3 test/CMake/native_arm64_ci_packaging_contract.py
 
 Expected: failure containing `restore base in caller-saved x16`.
 
-- [ ] **Step 3: Restore through fixed caller-saved registers**
+- [x] **Step 3: Restore through fixed caller-saved registers**
 
 Use `x16` as the immutable buffer base and `x17` for saved SP/PC. The core
 inline assembly in `yonaSjLjLongJump` must be:
@@ -208,7 +208,7 @@ __asm__ volatile("mov x16, %0\n\t"
 Keep the complete x19-x28/d8-d15 save logic already present in both the
 runtime macro and generated legacy `try` lowering.
 
-- [ ] **Step 4: Verify the focused native and emulated baseline**
+- [x] **Step 4: Verify the focused native and emulated baseline**
 
 Run:
 
@@ -224,7 +224,7 @@ selected cases passing with balanced allocation counts.
 Remove the completed AArch64 SJLJ restore entry from `docs/todo-list.md`; the
 changelog and ARM64 plan retain its history until SJLJ itself is deleted.
 
-- [ ] **Step 5: Commit only the isolated baseline files**
+- [x] **Step 5: Commit only the isolated baseline files**
 
 ```bash
 git add CHANGELOG.md docs/platform-architecture.md \
@@ -240,6 +240,19 @@ git add CHANGELOG.md docs/platform-architecture.md \
 git add docs/superpowers/plans/2026-09-01-typed-ir-codegen-rewrite.md
 git commit -m "fix: preserve aarch64 exception context"
 ```
+
+**Task 1 verification (2026-09-03):** The required RED contract exited 1 with
+`AArch64 longjmp must keep the restore base in caller-saved x16` and the
+forbidden unconstrained-operand diagnostic. After implementation,
+`python3 test/CMake/native_arm64_ci_packaging_contract.py` passed. The required
+`scripts/test-arm64-qemu.sh -tc='*channel*ownership*,*async*exception*'` run
+passed 2/2 selected cases and 24/24 assertions, including balanced allocation
+checks. A second frozen-source run with
+`-tc='Prelude interface regeneration*,Regex module*'` passed 2/2 cases and
+58/58 assertions. The snapshots remained byte-identical to the Task 1 sources
+at SHA-256 `a864cf8e7457e1036b1701ab220341abc663aafe65c67131422075fd49a41dd7`
+and `832718332da4210473fb31e017505c9937079122ec40970252c7863395b7a0c1`;
+`cmake --preset x64-debug-linux` and `git diff --check` also passed.
 
 ### Task 2: Introduce structural types and preserve semantic identities
 

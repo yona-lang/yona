@@ -696,6 +696,10 @@ endforeach()
 set(YONA_BUILD_ARTIFACT_DIR "${CMAKE_CURRENT_BINARY_DIR}/artifacts")
 set(YONA_BUILD_PRELUDE_OBJECT "${YONA_BUILD_ARTIFACT_DIR}/Prelude${CMAKE_C_OUTPUT_EXTENSION}")
 set(YONA_BUILD_PRELUDE_INTERFACE "${YONA_BUILD_ARTIFACT_DIR}/Prelude.yonai")
+set(YONA_LEGACY_ORACLE_PRELUDE_SOURCE
+	"${CMAKE_CURRENT_SOURCE_DIR}/test/Fixtures/LegacyOracle/Prelude.yona")
+set(YONA_REPLACEMENT_PRELUDE_SOURCE
+	"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yona")
 set(YONA_TEST_PCRE2_INCLUDE_DIR "")
 if(YONA_PCRE2_INCLUDE_DIRS)
 	list(GET YONA_PCRE2_INCLUDE_DIRS 0 YONA_TEST_PCRE2_INCLUDE_DIR)
@@ -712,12 +716,12 @@ add_custom_command(
 		-I "${CMAKE_CURRENT_SOURCE_DIR}/lib"
 		--emit-obj
 		-o "${YONA_BUILD_PRELUDE_OBJECT}"
-		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yona"
+		"${YONA_LEGACY_ORACLE_PRELUDE_SOURCE}"
 	DEPENDS yonac
 		yona_runtime
-		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yona"
+		"${YONA_LEGACY_ORACLE_PRELUDE_SOURCE}"
 		"${CMAKE_CURRENT_SOURCE_DIR}/lib/Prelude.yonai"
-	COMMENT "Building active-build Prelude object"
+	COMMENT "Building frozen legacy-oracle Prelude object"
 	VERBATIM
 )
 add_custom_target(yona_build_prelude_object DEPENDS "${YONA_BUILD_PRELUDE_OBJECT}")

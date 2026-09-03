@@ -69,27 +69,28 @@ typedef struct {
 __attribute__((noreturn, always_inline)) static inline void
 yonaSjLjLongJump(void *Buffer) {
   YonaSjLjBufT *YonaSjLjBuffer = (YonaSjLjBufT *)Buffer;
-  __asm__ volatile("ldr d8, [%0, #104]\n\t"
-                   "ldr d9, [%0, #112]\n\t"
-                   "ldr d10, [%0, #120]\n\t"
-                   "ldr d11, [%0, #128]\n\t"
-                   "ldr d12, [%0, #136]\n\t"
-                   "ldr d13, [%0, #144]\n\t"
-                   "ldr d14, [%0, #152]\n\t"
-                   "ldr d15, [%0, #160]\n\t"
-                   "ldp x19, x20, [%0, #24]\n\t"
-                   "ldp x21, x22, [%0, #40]\n\t"
-                   "ldp x23, x24, [%0, #56]\n\t"
-                   "ldp x25, x26, [%0, #72]\n\t"
-                   "ldp x27, x28, [%0, #88]\n\t"
-                   "ldr x29, [%0]\n\t"
-                   "ldr x2, [%0, #16]\n\t"
-                   "mov sp, x2\n\t"
-                   "ldr x2, [%0, #8]\n\t"
-                   "br x2"
+  __asm__ volatile("mov x16, %0\n\t"
+                   "ldr d8, [x16, #104]\n\t"
+                   "ldr d9, [x16, #112]\n\t"
+                   "ldr d10, [x16, #120]\n\t"
+                   "ldr d11, [x16, #128]\n\t"
+                   "ldr d12, [x16, #136]\n\t"
+                   "ldr d13, [x16, #144]\n\t"
+                   "ldr d14, [x16, #152]\n\t"
+                   "ldr d15, [x16, #160]\n\t"
+                   "ldp x19, x20, [x16, #24]\n\t"
+                   "ldp x21, x22, [x16, #40]\n\t"
+                   "ldp x23, x24, [x16, #56]\n\t"
+                   "ldp x25, x26, [x16, #72]\n\t"
+                   "ldp x27, x28, [x16, #88]\n\t"
+                   "ldr x29, [x16]\n\t"
+                   "ldr x17, [x16, #16]\n\t"
+                   "mov sp, x17\n\t"
+                   "ldr x17, [x16, #8]\n\t"
+                   "br x17"
                    :
                    : "r"(YonaSjLjBuffer)
-                   : "x2", "memory");
+                   : "x16", "x17", "memory");
   __builtin_unreachable();
 }
 

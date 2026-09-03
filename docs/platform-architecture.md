@@ -18,7 +18,10 @@
 - `src/Runtime/Platform/KqueueMacOs.c` — the single kqueue, worker pool, and `io_ctx` table.
 - `include/yona/Runtime/Platform/SjLj.h` — `YONA_SJLJ_SETJMP` /
   `yonaSjLjLongJump` (AArch64 inline asm saves FP/SP/PC plus the complete
-  AAPCS64 callee-saved GPR/SIMD context; `__builtin_*` elsewhere).
+  AAPCS64 callee-saved GPR/SIMD context and restores through fixed
+  caller-saved `x16`/`x17`; `__builtin_*` elsewhere). This path is retained
+  only as the frozen legacy compiler oracle until explicit control outcomes
+  replace generated-program SJLJ.
 
 ## Platform boundary
 

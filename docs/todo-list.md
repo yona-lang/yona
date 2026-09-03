@@ -69,11 +69,6 @@ Program of record:
 - [ ] **TCO cleanup state is global to the generated function.** Repro: combine
   multiple recursive branches with a base return; the first emitted tail call
   suppresses cleanup on syntactically later CFG paths.
-- [ ] **AArch64 SJLJ restore can overwrite its buffer base register.** Repro:
-  compile the inline long-jump helper under enough register pressure for its
-  unconstrained input operand to occupy `x19`-`x28`; restoring that register
-  redirects subsequent context loads. This path disappears when explicit
-  control outcomes replace generated-program SJLJ.
 - [ ] **Case guards are not required to be Bool.** Repro: use an `Int` or
   managed value as a `case` clause guard; semantic inference accepts it and
   leaves backend behavior to an invalid implicit convention.
