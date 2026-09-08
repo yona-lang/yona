@@ -96,7 +96,10 @@ target_link_libraries(yona_semantics PRIVATE
 # backends. Syntax and semantics must never depend on this target.
 add_library(yona_typed_ir OBJECT
   "${PROJECT_SOURCE_DIR}/src/TypedIr/Builder.cpp"
+  "${PROJECT_SOURCE_DIR}/src/TypedIr/Parser.cpp"
+  "${PROJECT_SOURCE_DIR}/src/TypedIr/Printer.cpp"
   "${PROJECT_SOURCE_DIR}/src/TypedIr/TypedIr.cpp"
+  "${PROJECT_SOURCE_DIR}/src/TypedIr/Verifier.cpp"
 )
 yona_configure_object_component(yona_typed_ir)
 target_link_libraries(yona_typed_ir PRIVATE yona_semantics)

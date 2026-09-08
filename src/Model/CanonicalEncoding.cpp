@@ -218,8 +218,9 @@ bool validUtf8(std::span<const std::byte> BytesValue) {
 
 class Reader final {
 public:
-  Reader(std::span<const std::byte> BytesValue, std::string Path)
-      : Bytes_(BytesValue), Path_(std::move(Path)) {}
+  Reader(std::span<const std::byte> BytesValue, std::string Path,
+         CanonicalDecodeBudget *Budget = nullptr)
+      : Bytes_(BytesValue), Path_(std::move(Path)), Budget_(Budget) {}
 
   [[nodiscard]] ValueResult<std::uint8_t> u8(std::string_view Field) {
     if (Offset_ >= Bytes_.size())
@@ -252,7 +253,19 @@ public:
       return std::unexpected(error(CanonicalEncodingErrorCode::SizeLimit,
                                    fieldPath(Field),
                                    "count exceeds UINT32_MAX"));
+    if (Budget_)
+      if (auto Claimed = Budget_->claim(*Count, fieldPath(Field)); !Claimed)
+        return std::unexpected(Claimed.error());
     return static_cast<std::uint32_t>(*Count);
+  }
+  [[nodiscard]] ValueResult<std::uint32_t> u32Count(std::string_view Field) {
+    auto Count = u32(Field);
+    if (!Count)
+      return std::unexpected(Count.error());
+    if (Budget_)
+      if (auto Claimed = Budget_->claim(*Count, fieldPath(Field)); !Claimed)
+        return std::unexpected(Claimed.error());
+    return *Count;
   }
   [[nodiscard]] ValueResult<std::string> text(std::string_view Field) {
     auto Size = count(Field);
@@ -273,7 +286,7 @@ public:
     if (Size > Bytes_.size() - Offset_)
       return truncated<Reader>(Field);
     Reader ResultReader(Bytes_.subspan(Offset_, static_cast<std::size_t>(Size)),
-                        fieldPath(Field));
+                        fieldPath(Field), Budget_);
     Offset_ += static_cast<std::size_t>(Size);
     return ResultReader;
   }
@@ -302,6 +315,7 @@ private:
 
   std::span<const std::byte> Bytes_;
   std::string Path_;
+  CanonicalDecodeBudget *Budget_ = nullptr;
   std::size_t Offset_ = 0;
 };
 
@@ -409,7 +423,7 @@ struct DecodedLayout {
 };
 
 ValueResult<DecodedLayout> readBinders(Reader &In, TypeTable &Types) {
-  auto Count = In.u32("binderCount");
+  auto Count = In.u32Count("binderCount");
   if (!Count)
     return std::unexpected(Count.error());
   DecodedLayout Layout;
@@ -480,7 +494,7 @@ ValueResult<DecodedLayout> readBinders(Reader &In, TypeTable &Types) {
     PreviousKind = Kind;
     PreviousIdentity = IdentityBytes;
 
-    auto TypeCount = In.u32("binder.typeParameterCount");
+    auto TypeCount = In.u32Count("binder.typeParameterCount");
     auto EffectCount = In.count("binder.effectVariableKinds");
     if (!TypeCount)
       return std::unexpected(TypeCount.error());
@@ -942,7 +956,7 @@ ValueResult<Bytes> DecodeContext::readTypeRecord(Reader &In,
     break;
   }
   case 17: {
-    auto TypeParameterCount = Payload.u32("function.typeParameterCount");
+    auto TypeParameterCount = Payload.u32Count("function.typeParameterCount");
     auto EffectVariableCount = Payload.count("function.effectVariableKinds");
     if (!TypeParameterCount)
       return std::unexpected(TypeParameterCount.error());
@@ -1167,9 +1181,20 @@ ValueResult<Bytes> DecodeContext::readEffectRecord(Reader &In,
 
 } // namespace
 
+std::expected<void, CanonicalEncodingError>
+CanonicalDecodeBudget::claim(std::uint64_t Units, std::string Path) {
+  if (Units > Remaining_)
+    return std::unexpected(CanonicalEncodingError{
+        CanonicalEncodingErrorCode::SizeLimit, std::move(Path),
+        "canonical decode budget exceeded"});
+  Remaining_ -= static_cast<std::size_t>(Units);
+  return {};
+}
+
 std::expected<DecodedInterfaceTables, CanonicalEncodingError>
 decodeInterfaceTables(std::span<const std::byte> TypeSectionPayload,
-                      std::span<const std::byte> EffectSectionPayload) {
+                      std::span<const std::byte> EffectSectionPayload,
+                      CanonicalDecodeBudget *Budget) {
   try {
     Reader TypeVersionReader(TypeSectionPayload, "typeSection");
     Reader EffectVersionReader(EffectSectionPayload, "effectSection");
@@ -1185,16 +1210,18 @@ decodeInterfaceTables(std::span<const std::byte> TypeSectionPayload,
                                    "encodingVersion",
                                    "unsupported canonical encoding version"));
 
-    Reader TypeReader(TypeSectionPayload, "typeSection");
-    Reader EffectReader(EffectSectionPayload, "effectSection");
+    CanonicalDecodeBudget LocalBudget;
+    auto *ActiveBudget = Budget ? Budget : &LocalBudget;
+    Reader TypeReader(TypeSectionPayload, "typeSection", ActiveBudget);
+    Reader EffectReader(EffectSectionPayload, "effectSection", ActiveBudget);
     static_cast<void>(TypeReader.u32("encodingVersion"));
     static_cast<void>(EffectReader.u32("encodingVersion"));
     TypeTable Types;
     auto Layout = readBinders(TypeReader, Types);
     if (!Layout)
       return std::unexpected(Layout.error());
-    auto TypeCount = TypeReader.u32("typeCount");
-    auto EffectCount = EffectReader.u32("effectCount");
+    auto TypeCount = TypeReader.u32Count("typeCount");
+    auto EffectCount = EffectReader.u32Count("effectCount");
     if (!TypeCount)
       return std::unexpected(TypeCount.error());
     if (!EffectCount)

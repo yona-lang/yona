@@ -827,7 +827,11 @@ add_executable(tests
 	"${PROJECT_SOURCE_DIR}/test/Runtime/JsonAbiTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Syntax/LexerTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Toolchain/LinkerPlanTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/TypedIr/BuilderTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/TypedIr/PrinterParserTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/TypedIr/PropertyTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/TypedIr/TypedIrTest.cpp"
+	"${PROJECT_SOURCE_DIR}/test/TypedIr/VerifierTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Lsp/LspTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Lsp/ProtocolTest.cpp"
 	"${PROJECT_SOURCE_DIR}/test/Model/ModuleIdentityTest.cpp"
@@ -974,6 +978,12 @@ set_tests_properties(doctest_tests PROPERTIES
 	LABELS "unit"
 	ENVIRONMENT "${_ctest_env}"
 )
+add_test(NAME focused_test_runner_contract
+	COMMAND "${YONA_PYTHON_EXECUTABLE}"
+		"${CMAKE_CURRENT_SOURCE_DIR}/test/CMake/focused_test_runner_contract.py")
+set_tests_properties(focused_test_runner_contract PROPERTIES
+	WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+	LABELS "unit;cmake")
 
 # Independently addressable standard-library capability tiers. The complete
 # doctest run still executes these fixtures; the labeled slices let capable CI

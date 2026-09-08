@@ -2335,6 +2335,14 @@ review the aggregate Task 2 range before checking off the task.
 
 ### Task 3: Replace the bootstrap container with canonical SSA Typed IR
 
+> Checkpoint (`typed-ir-task3`): the canonical storage model, checked ID-only
+> builder, verifier foundation, deterministic TIRF codec, focused-test runner,
+> and scalar seeded round trips are implemented and buildable. The Task remains
+> intentionally unchecked: the continuation audit is recorded in
+> `.superpowers/sdd/typed-ir-progress.md`, including the outstanding malformed
+> verifier matrix, operation-instance substitution checks, exact phase/linkage
+> rules, and rebuilding parsed modules through the checked builder path.
+
 **Files:**
 
 - Create: `include/yona/TypedIr/Ids.h`

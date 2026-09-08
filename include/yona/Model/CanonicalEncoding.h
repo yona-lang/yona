@@ -49,6 +49,22 @@ struct CanonicalEncodingError {
   std::string Message;
 };
 
+inline constexpr std::size_t DefaultCanonicalDecodeUnits = 1u << 20u;
+
+class CanonicalDecodeBudget final {
+public:
+  explicit CanonicalDecodeBudget(
+      std::size_t Units = DefaultCanonicalDecodeUnits) noexcept
+      : Remaining_(Units) {}
+
+  [[nodiscard]] std::expected<void, CanonicalEncodingError>
+  claim(std::uint64_t Units, std::string Path);
+  [[nodiscard]] std::size_t remaining() const noexcept { return Remaining_; }
+
+private:
+  std::size_t Remaining_;
+};
+
 enum class CanonicalRootKind : std::uint8_t {
   Type = 0,
   Effect = 1,
@@ -122,7 +138,8 @@ struct DecodedInterfaceTables {
 
 [[nodiscard]] std::expected<DecodedInterfaceTables, CanonicalEncodingError>
 decodeInterfaceTables(std::span<const std::byte> TypeSectionPayload,
-                      std::span<const std::byte> EffectSectionPayload);
+                      std::span<const std::byte> EffectSectionPayload,
+                      CanonicalDecodeBudget *Budget = nullptr);
 
 } // namespace yona::model
 

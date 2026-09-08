@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added an internal checkpoint of the canonical SSA Typed IR foundation with
+  strong module/function-local IDs, an ID-only builder, deterministic text
+  round trips, whole-module verification scaffolding, and a focused-test
+  runner. The backend cutover remains in progress under the typed-IR rewrite
+  plan.
+
 - Added checker-owned structural semantic projection with scoped type/effect
   binders, qualified declarations and evidence, explicit call ownership, and a
   durable `SemanticModel` snapshot independent of `TypeChecker` lifetime.
